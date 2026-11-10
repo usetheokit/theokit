@@ -14,7 +14,7 @@ tone instruction in this file quietly makes `usePersonality` do nothing. Tone be
 
 ## Why this file is here and not at the root
 
-This project installs `@theokit/sdk@^5.13.0`, where **both** locations work: 5.x added a root
+This project installs `@theokit/sdk@^5.15.3`, where **both** locations work: 5.x added a root
 `THEO.md` (`usetheokit/theokit-sdk#531`) at priority 55, and `.theokit/THEO.md` at 60 still wins a
 conflict. The scaffold keeps the file here because it wins, not because the root is unreadable.
 

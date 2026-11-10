@@ -575,14 +575,13 @@ jobs:
   theoclaw:
     name: TheoClaw (the assistant assembled on this framework)
     runs-on: ubuntu-latest
-    # 3 and not 10: NFR-001 of this item's brief bounds this job at 180 seconds, and until now
-    # nothing in the file enforced it — `timeout-minutes: 10` is 600s, 3.3x the stated
-    # requirement, so the bound lived only in a document while the file allowed anything under
-    # ten minutes. The number comes from the REQUIREMENT and not from a measurement: this job
-    # has never run (the branch has no upstream), so its first run is what tests both the job
-    # and the bound. A failure here means one of the two is wrong, which is the fact a 600s
-    # ceiling was hiding.
-    timeout-minutes: 3
+    # NFR-001 of this item's brief bounds this job at 180 seconds. The bound was set from that
+    # requirement before the job had ever run, and its first complete runs (CI runs 42646531518
+    # and 42652704112) broke it: the `test` step alone took 92 s and 145 s, and the job was
+    # cancelled at 3:13 inside `typecheck` with six steps still to go. The job is what is wrong,
+    # not the requirement, so the ceiling is 8 minutes only until the job is brought back under
+    # 180 s (#1391); then this goes back to 3.
+    timeout-minutes: 8
     # Waits on `typecheck-build` for the same reason the `theocode` job does: the app links
     # `@theokit/http`, `@theokit/agents` and `@theokit/presenter` from this workspace (`link:` in the
     # lockfile), and their `exports` point at `dist/`, which only the `package-dist` artifact
@@ -596,11 +595,26 @@ jobs:
         with:
           persist-credentials: false
       - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
+        # `.nvmrc` pins the framework's floor (22.12), below TheoClaw's own engines range
+        # (^22.16.0 || >=23.8.0, for node:sqlite's backup API), so this job asks for the latest 22.
+        with:
+          node-version: '22'
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: package-dist
           path: packages
 
+      # B-392: the sandbox-confinement tests run TheoClaw's shell through a real bubblewrap and fail,
+      # never skip, without one. The same step as the `test` job's (see its comment there for the
+      # Ubuntu 24.04 AppArmor sysctl); the smoke check fails the step while user namespaces stay blocked.
+      # Its own 1-minute bound, like the audit step's, so a slow mirror times out this named step and
+      # the job's 3 minutes are not spent waiting on apt.
+      - name: Install bubblewrap + enable unprivileged userns (sandbox-confinement tests)
+        timeout-minutes: 1
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --unshare-user --unshare-net --ro-bind / / /bin/true && echo "bwrap OK: user namespaces enabled"
       # The three gates this package declares, each as its own step so a red run names which one
       # failed rather than reporting "the job failed". They were verified by hand in the session
       # that wrote them (B-004) and by nothing since — which is the item this job closes.
@@ -613,6 +627,15 @@ jobs:
         run: pnpm --filter theoclaw run typecheck
       - name: boundaries
         run: pnpm --filter theoclaw run boundaries
+      # AC-005 (B-368): the WebChat page bundle builds within its byte budget (build-web.mjs fails
+      # past it) and loads in a DOM. The bundle test runs only with THEOCLAW_BUNDLE=1, after
+      # build:web, so until this step no job ran it (gateway-webchat review F-tests-2).
+      - name: WebChat page bundle
+        run: pnpm --filter theoclaw run build:web
+      - name: WebChat bundle loads
+        env:
+          THEOCLAW_BUNDLE: '1'
+        run: pnpm --filter theoclaw exec vitest run tests/webchat-bundle.test.ts
       # ESLint over `tools/`. The root config ignores `apps/**`, so the parity checker and its test
       # were read by no analyzer until this step (code review #67).
       - name: lint

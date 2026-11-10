@@ -212,6 +212,38 @@ describe('applySurface (M45)', () => {
     expect(tsconfig.include.some((g) => g.startsWith('src/app/'))).toBe(false)
   })
 
+  it('the desktop template registers cancel_turn and the webview passes it', () => {
+    scaffold(targetDir, 'my-desk')
+    applySurface({ targetDir, projectName: 'my-desk', surface: 'desktop' })
+
+    // A desktop stop button aborts through `@theokit/tauri`'s cancelCommand (B-376): the shell must
+    // expose the command, and the webview must name it, or the abort stays a no-op.
+    const lib = read('src-tauri/src/lib.rs')
+    expect(lib).toContain('fn cancel_turn(')
+    expect(lib).toContain('generate_handler![run_turn, approve, cancel_turn]')
+    expect(read('frontend/src/App.tsx')).toContain("cancelCommand: 'cancel_turn'")
+  })
+
+  it('the desktop pins an @theokit/tauri range whose lowest release carries cancelCommand', () => {
+    scaffold(targetDir, 'my-desk')
+    applySurface({ targetDir, projectName: 'my-desk', surface: 'desktop' })
+
+    // `cancelCommand` ships in @theokit/tauri 1.1.0 (B-376): packages/tauri is at 1.0.0 and
+    // .changeset/tauri-cancel-command.md bumps it a minor. 1.0.0 and the 0.x line lack it, and a range
+    // that still admits them installs a transport whose abort is a no-op for the template above.
+    // A caret range's lowest release is its own version, so that version must be >= 1.1.0.
+    const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> }
+    const range = pkg.dependencies['@theokit/tauri']
+    const caret = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(range ?? '')
+    expect(caret, `@theokit/tauri range '${range}' is not a caret range`).not.toBeNull()
+    const [major, minor] = [Number(caret![1]), Number(caret![2])]
+    const lowestCarriesCancel = major > 1 || (major === 1 && minor >= 1)
+    expect(
+      lowestCarriesCancel,
+      `@theokit/tauri range '${range}' admits a release below 1.1.0, which lacks cancelCommand`,
+    ).toBe(true)
+  })
+
   it('desktop scaffolds a Tauri app: sidecar + src-tauri + React webview on @theokit/ui + @theokit/tauri', () => {
     scaffold(targetDir, 'my-desk')
     applySurface({ targetDir, projectName: 'my-desk', surface: 'desktop' })

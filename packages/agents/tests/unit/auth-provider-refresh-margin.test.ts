@@ -166,6 +166,20 @@ describe('#1286 — AuthProvider refreshes early when asked to, deciding on the 
     expect(fresh.expiresAt).toBe(NOW + 10 * DAY)
   })
 
+  it("still adds the SDK's one-minute skew on top of the margin", async () => {
+    const config = store()
+    stored(config, 2 * DAY + 30_000)
+    const endpoint = tokenEndpoint()
+
+    await new AuthProvider(CONFIG, config, { refreshBeforeMs: 2 * DAY }).ensureFresh(
+      resolved('stored-access', NOW + 2 * DAY + 30_000),
+      endpoint.deps,
+      {},
+    )
+
+    expect(endpoint.calls()).toBe(1)
+  })
+
   it('refuses a margin that is not a finite number of milliseconds at or above zero', () => {
     const config = store()
     for (const refreshBeforeMs of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {

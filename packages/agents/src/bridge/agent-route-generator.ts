@@ -24,7 +24,15 @@ export interface AgentRouteContext {
    */
   walkResult: { route: string }
   compiledOptions: CompiledAgentOptions
-  createRun: (message: string, sessionId: string) => AsyncIterable<StreamEvent>
+  /**
+   * `signal` is the request's own: it aborts when the client leaves, so a run that spends model
+   * tokens can stop instead of finishing for nobody (`mountAgent` forwards it the same way).
+   */
+  createRun: (
+    message: string,
+    sessionId: string,
+    signal?: AbortSignal,
+  ) => AsyncIterable<StreamEvent>
   getRun?: (runId: string) => Promise<{ id: string; status: string; result?: string } | null>
 }
 
@@ -53,9 +61,11 @@ export function generateAgentRoutes(ctx: AgentRouteContext): AgentRoute[] {
         )
       }
 
-      const rawSessionId = body?.sessionId
-      const sessionId = typeof rawSessionId === 'string' ? rawSessionId : `session-${Date.now()}`
-      return streamAgentResponse(createRun(message, sessionId))
+      // `sessionId` wins when both are sent; `id` is how HttpTransport sends the chat id.
+      const pick = (v: unknown): string | undefined =>
+        typeof v === 'string' && v.length > 0 ? v : undefined
+      const sessionId = pick(body?.sessionId) ?? pick(body?.id) ?? `session-${Date.now()}`
+      return streamAgentResponse(createRun(message, sessionId, request.signal))
     },
   })
 

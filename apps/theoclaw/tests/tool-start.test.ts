@@ -168,17 +168,31 @@ describe('the tool settings at start', () => {
 
 describe('the tool options each agent receives', () => {
   it('the factory startTheoClaw calls receives the tool options with shell withheld', async () => {
-    const result = await start({}, tempCwd(cleanups), { detect: notEnforced })
+    // Memory, and so `session_search`, is on only with transcripts kept (#1457).
+    const result = await start({ THEOCLAW_TRANSCRIPTS: 'on' }, tempCwd(cleanups), { detect: notEnforced })
     const options = await runControlTurn(result)
     expect(effectiveToolNames(theoClawAgentOptions({ model: 'm', apiKey: 'k', toolOptions: options })).names).not.toContain('shell')
+    // B-386: a `/control` agent also holds `run_code` and `delegate_all`; B-396: and the three schedule tools;
+    // B-611: and `delegate`, `question` and the two task tools; B-384: and `show_widget`.
     expect(options.tools.map((tool) => tool.name).sort()).toEqual([
+      'cancel_scheduled_job',
+      'delegate',
+      'delegate_all',
       'list_dir',
+      'list_scheduled_jobs',
+      'question',
       'read_file',
+      'run_code',
+      'schedule_job',
+      'session_search',
+      'show_widget',
+      'task_complete',
+      'task_declare',
       'todolist',
       'view_image',
       'web_fetch',
     ])
-    expect(options.plugins.map((plugin) => plugin.name)).toEqual(['theoclaw-path-veto'])
+    expect(options.plugins.map((plugin) => plugin.name)).toEqual(['theoclaw-path-veto', 'theoclaw-provenance-guard', 'theoclaw-loop-detection'])
   })
 
   it('composeTheoClaw opens every chat session agent with shell withheld and no tool', async () => {

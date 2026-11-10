@@ -125,11 +125,15 @@ describe('PostgresJobBackend (T3.1)', () => {
   })
 
   it('migrate() is idempotent (safe to call repeatedly)', async () => {
+    const { jobId } = await backend.enqueue({ name: 'test', input: {}, maxAttempts: 3 })
     await backend.migrate()
     await backend.migrate()
-    // Schema still works
-    const r = await pool.query('SELECT COUNT(*) as c FROM theokit_jobs')
+    // Existing data survives re-migration (an aggregate query always returns
+    // one row, so assert on the count value and the row itself).
+    const r = await pool.query<{ id: string }>('SELECT id FROM theokit_jobs WHERE id = $1', [jobId])
     expect(r.rows.length).toBe(1)
+    const c = await pool.query<{ c: string | number }>('SELECT COUNT(*) as c FROM theokit_jobs')
+    expect(Number(c.rows[0].c)).toBe(1)
   })
 })
 

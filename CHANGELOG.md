@@ -6,10 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Removed
+
+- `@theokit/agents` (breaking): `HookGateUnsupportedError` and `CompatImportUnsupportedError` are removed from `@theokit/agents/bridge`, with the `HOOK_GATE_SINCE` and `COMPAT_IMPORT_SINCE` guards behind them. Both refused an `@theokit/sdk` older than 5.4.0, which the declared floor (`^5.11.0`) no longer admits, so no installable version could reach them. Removed rather than kept deprecated: nothing could throw them. `assembleM8CreateOptions` no longer takes `{ sdkVersion }`; code that caught either error by class can drop the `catch` (B-488)
+
 ## [create-theokit 3.0.32, theokit 0.79.0] - 2026-11-06
 
-Released with no entry under `[Unreleased]`. Per-package detail is in each package's
-own `CHANGELOG.md`.
+### Added
+
+- `theokit`: `jobs.worker.shutdownTimeoutMs` sets how long `theokit start` waits on `SIGTERM` for the job in progress to finish before it closes storage and exits. It was fixed at 20 seconds, so a restart cut any longer job; the default stays 20 seconds (#1292)
+
+### Changed
+
+- `create-theokit`: the scaffold pins `theokit` at `^0.79.0` (was `^0.78.1`), so a project created from it installs the version just cut
 
 ## [@theokit/agents 16.3.0, create-theokit 3.0.31] - 2026-11-06
 

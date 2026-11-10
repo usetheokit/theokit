@@ -62,6 +62,10 @@ export interface ChatMessage {
   readonly text: string
   readonly format?: 'plain' | 'markdown' | 'html'
   readonly replyTo?: string
+  /** True on a provisional message: the final message of the turn replaces it. */
+  readonly preview?: true
+  /** True on a final message that replaces the previews already emitted this turn. */
+  readonly replacesPreview?: true
 }
 
 /** How one chat presenter is built. Everything but `channel` has a conservative default. */
@@ -84,8 +88,18 @@ export interface ChatPresenterOptions {
   readonly onError?: string
   /** Reply threading, when the surface supports it. */
   readonly replyTo?: string
+  /**
+   * Whether the channel's adapter can edit a sent message. Only then does a turn emit previews
+   * (messages marked `preview`) that the final message replaces. Defaults to false: one message.
+   */
+  readonly supportsEdit?: boolean
+  /** Minimum milliseconds between previews while streaming. Defaults to 1000. */
+  readonly previewIntervalMs?: number
+  /** Clock in milliseconds, injectable for tests. Defaults to `Date.now`. */
+  readonly now?: () => number
 }
 
+const DEFAULT_PREVIEW_INTERVAL_MS = 1000
 const DEFAULT_ERROR = 'Something went wrong on my side and I could not finish that.'
 
 /**
@@ -101,6 +115,8 @@ export class ChatPresenter implements Presenter<ChatMessage> {
   readonly #options: ChatPresenterOptions
   #text = ''
   #failed = false
+  #lastPreviewAt: number | undefined
+  #previewed = false
 
   constructor(options: ChatPresenterOptions) {
     this.#options = options
@@ -116,7 +132,7 @@ export class ChatPresenter implements Presenter<ChatMessage> {
     switch (event.type) {
       case 'text':
         this.#text += event.text
-        return []
+        return this.#preview()
 
       // The model's thinking, and the arguments of a tool call as they stream. Neither is addressed
       // to the user. `reasoning` is the `"TheOi!"` defect; `partial-tool-call` has no meaning where
@@ -142,6 +158,27 @@ export class ChatPresenter implements Presenter<ChatMessage> {
     }
   }
 
+  /** A provisional message, rate-limited by the configured interval; only on an edit-capable channel. */
+  #preview(): ChatMessage[] {
+    if (this.#options.supportsEdit !== true || this.#text.length === 0) return []
+    const now = (this.#options.now ?? Date.now)()
+    const interval = this.#options.previewIntervalMs ?? DEFAULT_PREVIEW_INTERVAL_MS
+    if (this.#lastPreviewAt !== undefined && now - this.#lastPreviewAt < interval) return []
+    this.#lastPreviewAt = now
+    this.#previewed = true
+    const translate = this.#options.translate ?? ((t: string): string => t)
+    return [{ ...this.#base(translate(this.#text)), preview: true }]
+  }
+
+  #base(text: string): ChatMessage {
+    return {
+      channel: this.#options.channel,
+      text,
+      format: this.#options.format ?? 'markdown',
+      ...(this.#options.replyTo === undefined ? {} : { replyTo: this.#options.replyTo }),
+    }
+  }
+
   /** Emit whatever the turn produced, or nothing when it produced neither text nor a failure. */
   #emit(): ChatMessage[] {
     const translate = this.#options.translate ?? ((t: string): string => t)
@@ -150,20 +187,14 @@ export class ChatPresenter implements Presenter<ChatMessage> {
         ? (this.#options.onError ?? DEFAULT_ERROR)
         : translate(this.#text)
 
+    const replaces = this.#previewed
     this.#text = ''
     this.#failed = false
+    this.#previewed = false
+    this.#lastPreviewAt = undefined
 
     if (body.length === 0) return []
 
-    return [
-      {
-        channel: this.#options.channel,
-        text: body,
-        ...(this.#options.format === undefined
-          ? { format: 'markdown' as const }
-          : { format: this.#options.format }),
-        ...(this.#options.replyTo === undefined ? {} : { replyTo: this.#options.replyTo }),
-      },
-    ]
+    return [replaces ? { ...this.#base(body), replacesPreview: true } : this.#base(body)]
   }
 }

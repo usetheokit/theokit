@@ -146,14 +146,14 @@ describe('the chat path through startTheoClaw', () => {
   // NFR-002, 20 of 20: each repetition is its own session (its own sender), all run at once.
   it('two messages during one running turn get two replies in order', { timeout: 60_000 }, async () => {
     const stub = await startModelStub({
-      delayMs: 2000,
+      delayMs: 500,
       reply: (request) => `answer to ${stub.userTexts(request).at(-1) ?? ''}`,
     })
     const received: AgentOptions[] = []
     const control = throwingAgentFactory()
     const { adapters, builders } = fakeBuilders()
     const app = await startTheoClaw({
-      env: { ...OPEN_DMS, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_TRANSCRIPTS: 'on', OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
       agentFactory: control.factory,
       getOrCreate: (id, options) => {
         received.push(options)
@@ -205,7 +205,7 @@ describe('the chat path through startTheoClaw', () => {
     const ids: string[] = []
     const { adapters, builders } = fakeBuilders()
     const app = await startTheoClaw({
-      env: { ...OPEN_DMS, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_TRANSCRIPTS: 'on', OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
       agentFactory: throwingAgentFactory().factory,
       getOrCreate: (id, options) => {
         ids.push(id)
@@ -233,7 +233,7 @@ describe('the chat path through startTheoClaw', () => {
 
   it('startTheoClaw creates the transcript directory with mode 0700', async () => {
     const app = await startTheoClaw({
-      env: { ...OPEN_DMS, THEOCLAW_WORKSPACE: fresh },
+      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_TRANSCRIPTS: 'on', THEOCLAW_WORKSPACE: fresh },
       agentFactory: throwingAgentFactory().factory,
       builders: fakeBuilders().builders,
       signals: new EventEmitter(),
@@ -250,7 +250,7 @@ describe('the chat path through startTheoClaw', () => {
     mkdirSync(join(workspace, '.theoclaw'))
     chmodSync(join(workspace, '.theoclaw'), 0o750)
     const app = await startTheoClaw({
-      env: { ...OPEN_DMS, THEOCLAW_WORKSPACE: workspace },
+      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_TRANSCRIPTS: 'on', THEOCLAW_WORKSPACE: workspace },
       agentFactory: throwingAgentFactory().factory,
       builders: fakeBuilders().builders,
       signals: new EventEmitter(),
@@ -270,7 +270,7 @@ describe('the chat path through composeTheoClaw', () => {
       const ids: string[] = []
       const { adapters, builders } = fakeBuilders()
       const { loop } = composeTheoClaw({
-        env: OPEN_DMS,
+        env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off' },
         agentFactory: throwingAgentFactory().factory,
         getOrCreate: async (id) => {
           ids.push(id)

@@ -55,6 +55,15 @@ describe('resolveInstance', () => {
     })
   })
 
+  it('two profiles on one host keep separate state directories and report distinct labels', () => {
+    const a = resolveInstance({ THEOCLAW_PROFILE: 'a' }, { homeDir: HOME })
+    const b = resolveInstance({ THEOCLAW_PROFILE: 'b' }, { homeDir: HOME })
+    expect(a.label).not.toBe(b.label)
+    expect(a.stateDirectory).not.toBe(b.stateDirectory)
+    expect(a.workspace).not.toBe(b.workspace)
+    expect(a.overrides.THEOKIT_HOME).not.toBe(b.overrides.THEOKIT_HOME)
+  })
+
   it('the profile directory sits under the SDK profiles root', () => {
     scratch = mkdtempSync(join(tmpdir(), 'theoclaw-resolve-'))
     process.env.HOME = scratch

@@ -58,8 +58,8 @@ const OWN_PROCESS_GROUP = process.platform !== 'win32'
 
 /** Stdio transport backed by a spawned subprocess (the default for `createACPTool`). */
 export class NodeAcpTransport implements AcpToolTransport {
-  // stdin=pipe, stdout=pipe, stderr=inherit → the third stream is null.
-  private readonly proc: ChildProcessByStdio<Writable, Readable, null>
+  // stdin=pipe, stdout=pipe, stderr=inherit (null) or pipe (to the caller's sink).
+  private readonly proc: ChildProcessByStdio<Writable, Readable, Readable | null>
   private closed: AcpTransportClosedError | undefined
   private readonly listeners: ((error: AcpTransportClosedError) => void)[] = []
   /** Settles when the process has exited (or never started). */
@@ -69,16 +69,25 @@ export class NodeAcpTransport implements AcpToolTransport {
     private readonly command: string,
     args: string[] = [],
     cwd?: string,
+    /** The agent's whole environment. Omitted: the parent's. Given: only these variables. */
+    env?: Record<string, string | undefined>,
+    /** Receives what the agent writes to stderr. Omitted: it goes to the parent's stderr. */
+    onStderr?: (chunk: string) => void,
   ) {
     // `detached` makes the agent the leader of a new process group (POSIX), the group close signals.
     this.proc = spawn(command, args, {
       cwd,
-      stdio: ['pipe', 'pipe', 'inherit'],
+      ...(env === undefined ? {} : { env }),
+      stdio: ['pipe', 'pipe', onStderr === undefined ? 'inherit' : 'pipe'],
       detached: OWN_PROCESS_GROUP,
-    })
+    }) as ChildProcessByStdio<Writable, Readable, Readable | null>
     // A pipe cuts stdout wherever it likes; a streaming decoder carries a multibyte character split
     // across two chunks instead of turning each half into U+FFFD.
     this.proc.stdout.setEncoding('utf8')
+    if (onStderr !== undefined && this.proc.stderr !== null) {
+      this.proc.stderr.setEncoding('utf8')
+      this.proc.stderr.on('data', onStderr)
+    }
     // 'exit', not 'close': a grandchild holding stdout open delays 'close' but not the exit.
     this.exited = new Promise((resolve) => {
       this.proc.once('exit', () => {
@@ -132,6 +141,7 @@ export class NodeAcpTransport implements AcpToolTransport {
       // the pipes must not keep the host's event loop alive.
       this.proc.stdin.destroy()
       this.proc.stdout.destroy()
+      this.proc.stderr?.destroy()
       this.proc.unref()
     }
   }

@@ -38,7 +38,10 @@ const tauri = (globalThis as { __TAURI__?: { core: TauriCore } }).__TAURI__
 if (tauri === undefined) {
   throw new Error('Tauri globals unavailable — run inside the desktop shell (`npm run dev`).')
 }
-const transport = new ChannelTransport({ source: createTauriChannelSource(tauri.core) })
+// `cancel_turn` (src-tauri/src/lib.rs) kills the in-flight sidecar, so the stop button stops the turn.
+const transport = new ChannelTransport({
+  source: createTauriChannelSource(tauri.core, { cancelCommand: 'cancel_turn' }),
+})
 
 // The window is frameless (`decorations: false` in tauri.conf.json) so the OS title bar can't clash with
 // the app background — the app owns its top bar. These drive the native window from our custom controls.

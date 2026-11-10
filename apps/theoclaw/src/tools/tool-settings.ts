@@ -4,8 +4,16 @@ import { dirname, join } from 'node:path'
 
 import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
+import type { InteractiveBackend } from '@theokit/agents/interactive'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import { readSandboxMode, readSandboxSessions, sandboxModeForSession } from '../sandbox/sandbox-mode.js'
+import { browserLine, readBrowser } from './browser-server.js'
+import type { BrowserDeps, BrowserSettings } from './browser-server.js'
+import { computerLine, readComputer } from './computer-settings.js'
+import type { ComputerDeps, ComputerSettings } from './computer-settings.js'
+import { externalToolPaths, resolveExternalTools } from './external-tools.js'
+import type { ExternalTools } from './external-tools.js'
 import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
 
 /** Where web search goes, chosen from the keys present at start. */
@@ -27,21 +35,43 @@ export interface ToolSettings {
   readonly sandboxEnforced: boolean
   /** Built once at start; every agent's tools share it (plan D3, revision 1.2). */
   readonly sandbox: SandboxBackend
+  /** The backend's mode, which the tools are bound with: `sandboxMode` with host tools on, else `read-only`. */
   readonly mode: SandboxMode
+  /** The mode the operator chose with `THEOCLAW_SANDBOX` (default `workspace-write`). */
+  readonly sandboxMode: SandboxMode
+  /** The interactive shell confined to this mode's sandbox, present only once `withInteractiveShell` proved it on this host. */
+  readonly interactive?: InteractiveBackend
   readonly fetchImpl: typeof fetch
+  /** The DNS lookup `web_fetch` screens a host with; absent in the process, so the SDK's own runs. */
+  readonly lookup?: WebFetchLookup
   readonly search: SearchSettings
-  /** Values the output mask must hide (the search keys). */
+  /** The browser server's CLI with `THEOCLAW_BROWSER=on`; absent when the browser is off. */
+  readonly browser?: BrowserSettings
+  /** The X display the `computer` tool drives with `THEOCLAW_COMPUTER=on`; absent when it is off. */
+  readonly computer?: ComputerSettings
+  /** The MCP servers and ACP agents of `THEOCLAW_EXTERNAL_TOOLS`, for the `/control` agent only. */
+  readonly external: ExternalTools
+  /** Values the output mask must hide (the search keys, the external tools' header and env values). */
   readonly secrets: readonly string[]
   /** One line each for what is off, or what the start changed, written at start. */
   readonly offLines: readonly string[]
 }
 
+/** A DNS lookup shaped as `dns/promises.lookup` with `{ all: true }` (B-398 FR-003). */
+type WebFetchLookup = (host: string, options: { readonly all: true }) => Promise<{ readonly address: string; readonly family: number }[]>
+
 /** What the tests inject; the process passes nothing. */
 export interface ToolDeps {
   readonly detect?: () => BwrapDetection
   readonly fetchImpl?: typeof fetch
+  /** Lets a test serve a page to `web_fetch` offline: its SSRF screen resolves the host through it. */
+  readonly lookup?: WebFetchLookup
   /** Where the sandbox fallback warning goes. Default: the SDK's (`console.warn`). */
   readonly warn?: (message: string) => void
+  /** The browser CLI resolver and browsers directory. Default: the installed package and Playwright's own. */
+  readonly browser?: BrowserDeps
+  /** How `xdotool` is found. Default: the first executable on `PATH`. */
+  readonly computer?: ComputerDeps
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -118,6 +148,7 @@ function nonBlank(value: string | undefined): string | undefined {
 }
 
 const SEARCH_OFF_LINE = 'tools: web search is off (no BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
+const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
 
 /**
  * Brave when `BRAVE_API_KEY` is set (it wins over the generic adapter); the generic adapter when
@@ -139,16 +170,46 @@ function readSearch(env: Env): SearchSettings {
 }
 
 /**
+ * `read-only` confines the shell and the file tools, and the browser server is the one built-in
+ * server that runs outside the sandbox and writes: its screenshot, console and PDF tools write the
+ * file they are given. MCP servers the operator names (`THEOCLAW_EXTERNAL_TOOLS`, an import) run
+ * outside the sandbox in every mode and are not refused here.
+ */
+function refuseBrowserUnderReadOnly(hostTools: boolean, sandboxMode: SandboxMode, browser: BrowserSettings | undefined): void {
+  if (!hostTools || sandboxMode !== 'read-only' || browser === undefined) return
+  throw new TheoClawConfigError(
+    'THEOCLAW_BROWSER=on is refused with THEOCLAW_SANDBOX=read-only: the browser server runs unsandboxed and writes the screenshots, console logs and PDFs it is asked for; unset THEOCLAW_BROWSER or choose workspace-write',
+    { variable: 'THEOCLAW_BROWSER' },
+  )
+}
+
+/**
  * Read the tool settings from the environment and the working directory, before any runner
- * starts. Throws `TheoClawConfigError` for a bad `THEOCLAW_HOST_TOOLS` or a bad tool root. Builds
- * the process's one sandbox backend: `read-only` with host tools off, `workspace-write` with them on.
+ * starts. Throws `TheoClawConfigError` for a bad `THEOCLAW_HOST_TOOLS`, a bad `THEOCLAW_SANDBOX` (with
+ * host tools off too), a bad tool root, or a `THEOCLAW_BROWSER=on` the host cannot run. Builds the
+ * process's one sandbox backend: `read-only` with host tools off, the mode `THEOCLAW_SANDBOX` chose
+ * with them on.
  */
 export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}): ToolSettings {
   const hostTools = readHostTools(env)
+  const sandboxMode = readSandboxMode(env)
   const search = readSearch(env)
+  const browser = readBrowser(env, deps.browser)
+  const computer = readComputer(env, { hostTools, sandboxMode }, deps.computer)
+  const external = resolveExternalTools(env)
+  if (hostTools && external.acpAgents.length > 0) {
+    // An ACP agent runs unsandboxed in the tool root, one new process per call: with the shell able
+    // to write there, a steered turn plants what the next call loads (a project settings file, a
+    // relative argument, `node_modules/.bin`) outside the sandbox.
+    throw new TheoClawConfigError(
+      'THEOCLAW_EXTERNAL_TOOLS names ACP agents, which THEOCLAW_HOST_TOOLS=on refuses: the sandboxed shell can write files/, where each agent runs unsandboxed',
+      { variable: 'THEOCLAW_EXTERNAL_TOOLS' },
+    )
+  }
+  refuseBrowserUnderReadOnly(hostTools, sandboxMode, browser)
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
-  const mode: SandboxMode = hostTools ? 'workspace-write' : 'read-only'
+  const mode: SandboxMode = hostTools ? sandboxMode : 'read-only'
   const sandbox = createSandboxBackend({
     mode,
     workDir: toolRoot,
@@ -163,6 +224,8 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     offLines.push(`tools: git_diff is off (sandbox not enforced: ${detail})`)
   }
   if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
+  if (mode === 'danger-full-access') offLines.push(SANDBOX_OFF_LINE)
+  offLines.push(browserLine(browser), computerLine(computer))
   return {
     workspace,
     toolRoot,
@@ -171,12 +234,39 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     sandboxEnforced,
     sandbox,
     mode,
+    sandboxMode,
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
+    ...(deps.lookup === undefined ? {} : { lookup: deps.lookup }),
     search,
+    browser,
+    ...(computer === undefined ? {} : { computer }),
+    external,
     // Every search key set, the unused one too: a key is a secret whether or not it is chosen.
-    secrets: [env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY].flatMap((value) => nonBlank(value) ?? []),
+    secrets: [
+      ...[env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY].flatMap((value) => nonBlank(value) ?? []),
+      ...external.secrets,
+    ],
     offLines,
   }
+}
+
+/**
+ * The settings of one session under `THEOCLAW_SANDBOX_SESSIONS`: `settings` itself when the session
+ * runs the chosen mode, else a copy with a backend of its own mode. With host tools off the mode is
+ * already `read-only` for every session.
+ */
+export function toolSettingsForSession(settings: ToolSettings, env: Env, sessionKey: string, deps: ToolDeps = {}): ToolSettings {
+  const sandboxMode = sandboxModeForSession(settings.sandboxMode, readSandboxSessions(env), sessionKey)
+  if (sandboxMode === settings.sandboxMode || !settings.hostTools) return settings
+  const sandbox = createSandboxBackend({
+    mode: sandboxMode,
+    workDir: settings.toolRoot,
+    ...(deps.detect === undefined ? {} : { detect: deps.detect }),
+    ...(deps.warn === undefined ? {} : { warn: deps.warn }),
+  })
+  // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
+  const { interactive: _chosenMode, ...rest } = settings
+  return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: sandbox instanceof LinuxSandbox }
 }
 
 function realPathOrSelf(path: string): string {
@@ -195,12 +285,30 @@ export interface ProtectedPath {
 }
 
 /**
+ * Every path `checkHostToolsPosture` must keep out of the shell's reach at start: the state
+ * directory, where the pairing list lives (a shell that could write it could pair anyone), and the
+ * external tools file with every process it names (`externalToolPaths`), and every process a
+ * migration import starts (`imported`, from `importedMcpPaths`).
+ */
+export function hostToolsProtectedPaths(
+  env: Env,
+  stateDir: string | undefined,
+  settings: ToolSettings,
+  imported: readonly ProtectedPath[],
+): ProtectedPath[] {
+  const state = stateDir === undefined ? [] : [{ path: stateDir, variable: 'THEOCLAW_STATE_DIR' }]
+  return [...state, ...externalToolPaths(env, settings.external), ...imported]
+}
+
+/**
  * With host tools on, refuse a start the sandbox cannot make safe: a backend that is not a
- * `LinuxSandbox` (the shell would run unconfined); a workspace inside a root the
- * `workspace-write` sandbox also leaves writable (`/tmp`), where the shell could rewrite
- * `.theokit/settings.json`, whose hooks the SDK runs outside the sandbox on the next agent; or any
- * of `protectedPaths` inside any root the shell can write, the tool root included. The caller names
- * every protected path, an empty list included, so none can be left out by omission.
+ * `LinuxSandbox` (the shell would run unconfined); a workspace inside a root the `workspace-write`
+ * sandbox also leaves writable (`/tmp`), where the shell could rewrite `.theokit/settings.json`,
+ * whose hooks the SDK runs outside the sandbox on the next agent; or any of `protectedPaths` inside
+ * any root the shell can write, the tool root included. Under `danger-full-access` the shell is
+ * unconfined by choice, so only the tool-root half of the last check holds: the file writers are
+ * bound to the tool root whatever the mode. The caller names every protected path, an empty list
+ * included, so none can be left out by omission.
  */
 export function checkHostToolsPosture(
   settings: ToolSettings,
@@ -208,13 +316,27 @@ export function checkHostToolsPosture(
   deps: ToolDeps = {},
 ): void {
   if (!settings.hostTools) return
-  if (!settings.sandboxEnforced) {
-    const { detail } = resolveSandboxPosture({ mode: 'workspace-write', ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
-    throw new TheoClawConfigError(`THEOCLAW_HOST_TOOLS=on needs an enforced sandbox: ${detail}`, {
-      variable: 'THEOCLAW_HOST_TOOLS',
-    })
+  if (settings.sandboxMode === 'danger-full-access') {
+    for (const target of protectedPaths) refuseWritableProtectedPath(target, [settings.toolRoot])
+    return
   }
+  if (!settings.sandboxEnforced) {
+    const { sandboxMode } = settings
+    const { detail } = resolveSandboxPosture({ mode: sandboxMode, ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
+    throw new TheoClawConfigError(
+      `THEOCLAW_HOST_TOOLS=on needs an enforced sandbox (THEOCLAW_SANDBOX=${sandboxMode}): ${detail}; install bubblewrap and allow unprivileged user namespaces, or set THEOCLAW_SANDBOX=danger-full-access to run the shell unconfined on purpose`,
+      { variable: 'THEOCLAW_SANDBOX' },
+    )
+  }
+  // The `workspace-write` roots under `read-only` too: `read-only`'s are none, which would make the
+  // refusals below vacuous; `danger-full-access` returned above, its roots being every path.
   const roots = writableRootsFor('workspace-write', settings.toolRoot) ?? []
+  refuseWorkspaceUnderWritableRoot(settings, roots)
+  for (const target of protectedPaths) refuseWritableProtectedPath(target, roots)
+}
+
+/** Refuse a workspace inside a writable root other than the tool root (`/tmp`). */
+function refuseWorkspaceUnderWritableRoot(settings: ToolSettings, roots: readonly string[]): void {
   for (const root of roots) {
     // The workspace is a real path, so the root is compared as one too: bwrap binds what a
     // symlinked `/tmp` points at.
@@ -224,7 +346,6 @@ export function checkHostToolsPosture(
       { variable: 'THEOCLAW_HOST_TOOLS' },
     )
   }
-  for (const target of protectedPaths) refuseWritableProtectedPath(target, roots)
 }
 
 /** Refuse a protected path whose real path (symlinks followed) lies inside any of `roots`. */
@@ -239,7 +360,7 @@ function refuseWritableProtectedPath({ path, variable }: ProtectedPath, roots: r
   const root = roots.find((candidate) => isWithin(real, realPathOrSelf(candidate)))
   if (root === undefined) return
   throw new TheoClawConfigError(
-    `THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: it lies under ${root}, which the sandboxed shell can write`,
+    `THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: it lies under ${root}, which the host tools can write`,
     { variable },
   )
 }

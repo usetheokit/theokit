@@ -31,6 +31,13 @@ export interface AgentCard {
   defaultInputModes: string[]
   defaultOutputModes: string[]
   skills: A2ASkill[]
+  /** How a caller authenticates, by scheme name (A2A `securitySchemes`). Absent when not given. */
+  securitySchemes?: Record<
+    string,
+    { type: 'http'; scheme: 'bearer' } | { type: 'apiKey'; in: 'header'; name: string }
+  >
+  /** Which schemes a call must satisfy (A2A `security`). Absent when not given. */
+  security?: Record<string, string[]>[]
 }
 
 export interface BuildAgentCardOptions {
@@ -38,6 +45,10 @@ export interface BuildAgentCardOptions {
   baseUrl: string
   /** Human description of the agent. Defaults to a generated sentence when omitted (spec requires non-empty). */
   description?: string
+  /** Copied onto the card when given; a card built without it is unchanged. */
+  securitySchemes?: AgentCard['securitySchemes']
+  /** Copied onto the card when given; a card built without it is unchanged. */
+  security?: AgentCard['security']
 }
 
 /** Strip a single trailing slash so `${baseUrl}${route}` never doubles the separator. */
@@ -64,6 +75,8 @@ export function buildAgentCard(
     defaultInputModes: ['text'],
     defaultOutputModes: ['text'],
     skills: entry.tools.map((t) => ({ id: t.name, name: t.name, description: t.description })),
+    ...(options.securitySchemes ? { securitySchemes: options.securitySchemes } : {}),
+    ...(options.security ? { security: options.security } : {}),
   }
 }
 

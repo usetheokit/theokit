@@ -1,10 +1,12 @@
 import { request } from "node:http";
+import { createServer, connect as tcpConnect, type Server } from "node:net";
 
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 
 import { createContainer } from "../src/composition.js";
 import { TheoClawConfigError } from "../src/control-plane/errors.js";
+import { MAX_MESSAGE_BYTES } from "../src/control-plane/limits.js";
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from "../src/control-plane/listener.js";
 import { createTurnRunner, type TurnAgent } from "../src/control-plane/turn.js";
 
@@ -39,6 +41,9 @@ interface StubScript {
   readonly sendError?: Error;
   /** Called right before the first message is yielded. */
   readonly onFirstYield?: () => void;
+  /** What `wait()` reports the run used and cost (B-400). */
+  readonly usage?: { readonly inputTokens: number; readonly outputTokens: number };
+  readonly cost?: { readonly amountUsd: number | undefined };
 }
 
 function stubAgent(script: StubScript): TurnAgent {
@@ -53,7 +58,12 @@ function stubAgent(script: StubScript): TurnAgent {
             if (index === 0 && script.gate !== undefined) await script.gate.promise;
           }
         },
-        wait: async () => ({ status: script.status ?? "finished" }),
+        wait: async () => ({
+          status: script.status ?? "finished",
+          ...(script.usage === undefined ? {} : { usage: script.usage }),
+          ...(script.cost === undefined ? {} : { cost: script.cost }),
+        }),
+        cancel: async () => undefined,
       };
     },
   };
@@ -66,7 +76,7 @@ let settled: Promise<unknown>[] = [];
 const clients: WebSocket[] = [];
 
 /** A control plane whose agents follow `scripts` in order, one per turn. */
-async function startPlane(scripts: StubScript[], token: string = TOKEN): Promise<ControlPlaneHandle> {
+async function startPlane(scripts: StubScript[], token: string = TOKEN, model?: string): Promise<ControlPlaneHandle> {
   const agents = createContainer<TurnAgent>({
     factory: () => {
       const script = scripts[builtAgents] ?? scripts[scripts.length - 1]!;
@@ -74,7 +84,7 @@ async function startPlane(scripts: StubScript[], token: string = TOKEN): Promise
       return stubAgent(script);
     },
   });
-  const runner = createTurnRunner(agents.withAgent);
+  const runner = createTurnRunner(agents.withAgent, [], model);
   const runTurn: typeof runner = (message, emit) => {
     const outcome = runner(message, emit);
     settled.push(outcome);
@@ -228,6 +238,56 @@ describe("the /control socket", () => {
     expect(builtAgents).toBe(1);
   });
 
+  it("through a loopback forwarder, accepts only the owner's token whatever identity headers claim", async () => {
+    await startPlane([{ messages: [text("hi"), finished] }]);
+    const target = handle!.address();
+    // A stand-in for an SSH local forward or a trusted proxy: every connection arrives from loopback.
+    const forwarder: Server = createServer((inbound) => {
+      const outbound = tcpConnect(target.port, target.host);
+      inbound.pipe(outbound).pipe(inbound);
+      inbound.on("error", () => outbound.destroy());
+      outbound.on("error", () => inbound.destroy());
+    });
+    await new Promise<void>((resolve) => forwarder.listen(0, "127.0.0.1", resolve));
+    const forwardedPort = (forwarder.address() as { port: number }).port;
+    try {
+      const status = (headers: Record<string, string>) =>
+        new Promise<number | undefined>((resolve, reject) => {
+          const req = request({
+            host: "127.0.0.1",
+            port: forwardedPort,
+            path: "/control",
+            headers: {
+              Connection: "Upgrade",
+              Upgrade: "websocket",
+              "Sec-WebSocket-Version": "13",
+              "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+              "X-Forwarded-For": "127.0.0.1",
+              Forwarded: "for=127.0.0.1",
+              ...headers,
+            },
+          });
+          req.on("response", (response) => {
+            response.resume();
+            resolve(response.statusCode);
+          });
+          req.on("upgrade", (_r, socket) => {
+            socket.destroy();
+            resolve(101);
+          });
+          req.on("error", reject);
+          req.end();
+        });
+
+      expect(await status({})).toBe(401);
+      expect(await status({ Authorization: `Bearer ${TOKEN}x` })).toBe(401);
+      expect(await status({ Authorization: `Bearer ${TOKEN}` })).toBe(101);
+      expect(builtAgents).toBe(0);
+    } finally {
+      await new Promise<void>((resolve) => forwarder.close(() => resolve()));
+    }
+  });
+
   it("streams a stub agent's events as JSON frames ending in done", async () => {
     await startPlane([{ messages: [text("first"), text("second"), finished] }]);
     const client = await connect();
@@ -243,6 +303,38 @@ describe("the /control socket", () => {
     expect(texts).toEqual(["first", "second"]);
     expect(frames.at(-1)).toEqual({ type: "done" });
     expect(builtAgents).toBe(1);
+  });
+
+  it("the done frame of a finished turn carries the usage record", async () => {
+    await startPlane(
+      [{ messages: [text("hi"), finished], usage: { inputTokens: 12, outputTokens: 3 }, cost: { amountUsd: 0.001 } }],
+      TOKEN,
+      "stub/model",
+    );
+    const client = await connect();
+
+    client.send({ type: "chat", message: "hello" });
+    const frames = await client.until(turnEnded, "the end of the turn");
+
+    expect(finalFrames(frames)).toEqual([
+      { type: "done", usage: { inputTokens: 12, outputTokens: 3 }, model: "stub/model", costUsd: 0.001 },
+    ]);
+  });
+
+  it("the done frame of an unpriced turn says so and carries no cost", async () => {
+    await startPlane(
+      [{ messages: [text("hi"), finished], usage: { inputTokens: 2, outputTokens: 1 }, cost: { amountUsd: undefined } }],
+      TOKEN,
+      "stub/model",
+    );
+    const client = await connect();
+
+    client.send({ type: "chat", message: "hello" });
+    const frames = await client.until(turnEnded, "the end of the turn");
+
+    expect(finalFrames(frames)).toEqual([
+      { type: "done", usage: { inputTokens: 2, outputTokens: 1 }, model: "stub/model", costUnpriced: true },
+    ]);
   });
 
   it("a successful turn ends with exactly one final frame, done", async () => {
@@ -339,8 +431,9 @@ describe("the /control socket", () => {
     client.send({ type: "chat", message: "too soon" });
     await client.until((frames) => frames.some((frame) => frame.code === "busy"), "the busy reply");
     gate.open();
-    await client.until(turnEnded, "the end of the turn");
+    const frames = await client.until(turnEnded, "the end of the turn");
 
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
     expect(builtAgents).toBe(1);
   });
 
@@ -369,8 +462,9 @@ describe("the /control socket", () => {
     client.socket.once("message", () => (firstFrameAt = performance.now()));
 
     client.send({ type: "chat", message: "hello" });
-    await client.until(turnEnded, "the end of the turn");
+    const frames = await client.until(turnEnded, "the end of the turn");
 
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
     expect(firstFrameAt).toBeGreaterThan(0);
     expect(firstFrameAt - firstYieldAt).toBeLessThan(500);
   });
@@ -428,12 +522,25 @@ describe("the /control socket", () => {
     const client = await connect();
     const closed = new Promise<number>((resolve) => client.socket.once("close", (code) => resolve(code)));
 
-    client.socket.send("x".repeat(65_537));
+    client.socket.send("x".repeat(MAX_MESSAGE_BYTES + 1));
 
     expect(await closed).toBe(1009);
     const { host, port } = handle!.address();
     expect((await fetch(`http://${host}:${port}/health`)).status).toBe(200);
     expect(stderrLines.join("\n")).toContain("control socket error");
+  });
+
+  it("serves a chat frame of exactly MAX_MESSAGE_BYTES bytes", async () => {
+    await startPlane([{ messages: [text("hi"), finished] }]);
+    const client = await connect();
+    const envelope = JSON.stringify({ type: "chat", message: "" });
+    const frame = JSON.stringify({ type: "chat", message: "x".repeat(MAX_MESSAGE_BYTES - envelope.length) });
+    expect(frame.length).toBe(MAX_MESSAGE_BYTES);
+
+    client.socket.send(frame);
+
+    const frames = await client.until(turnEnded, "the end of the at-bound turn");
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
   });
 
   it("refuses a control token shorter than 32 characters without printing it", async () => {

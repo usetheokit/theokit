@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { RunningTheoClaw } from '../../src/composition.js'
 import type { SessionAgent } from '../../src/sessions/session-agents.js'
 import { capturingStream, fakeBuilders } from '../composition-fixtures.js'
-import { messageEvent, waitFor } from '../fakes.js'
+import { messageEvent, turnText, waitFor } from '../fakes.js'
 import type { FakeAdapter } from '../fakes.js'
 
 /**
@@ -67,11 +67,12 @@ function transcripts(directory: string): string[] {
 function watched(agent: SessionAgent, runs: RunRecord[]): SessionAgent {
   return {
     send: async (text) => {
-      const record: RunRecord = { text, sentAt: Date.now(), endedAt: undefined, status: undefined }
+      const record: RunRecord = { text: turnText(text), sentAt: Date.now(), endedAt: undefined, status: undefined }
       runs.push(record)
       const run = await agent.send(text)
       return {
         stream: () => run.stream(),
+        cancel: () => run.cancel(),
         wait: async () => {
           const result = await run.wait()
           record.endedAt = Date.now()
@@ -99,6 +100,7 @@ async function startLive(workspace: string) {
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
       THEOCLAW_PORT: '0',
       THEOCLAW_WORKSPACE: workspace,
+      THEOCLAW_TRANSCRIPTS: 'on',
       THEOCLAW_TELEGRAM_TOKEN: 'live-stand-in-telegram-token',
       // Every start names its owners (B-371); each live sender is one, so a group answers it too, and
       // a group answers without a mention, since these events carry no bot identity to mention.
@@ -109,7 +111,11 @@ async function startLive(workspace: string) {
     agentFactory: () => {
       throw new Error('the /control factory must not build a chat agent')
     },
-    getOrCreate: async (id, options) => watched(await Agent.getOrCreate(id, options), runs),
+    getOrCreate: async (id, options) => {
+      const agent = await Agent.getOrCreate(id, options)
+      // The per-turn memory review (B-381) runs a forked agent named `<id>-review-<n>`; it is not a chat session run.
+      return id.includes('-review-') ? agent : watched(agent, runs)
+    },
     builders,
     signals,
     exit,

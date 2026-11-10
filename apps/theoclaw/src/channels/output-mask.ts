@@ -1,5 +1,5 @@
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import { maskSecrets } from './channel-loop.js'
+import { createStreamMask } from './stream-mask.js'
 
 /** The part of a writable stream the mask wraps: `process.stdout` and `process.stderr` both fit. */
 export interface MaskableStream {
@@ -31,48 +31,11 @@ function toByteText(chunk: string | Uint8Array, encoding: BufferEncoding | undef
   return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength).toString('latin1')
 }
 
-/** The length of the longest end of `text` that could still grow into one of `secrets`. */
-function heldLength(text: string, secrets: readonly string[]): number {
-  let held = 0
-  for (const secret of secrets) {
-    for (let length = Math.min(secret.length - 1, text.length); length > held; length -= 1) {
-      if (text.endsWith(secret.slice(0, length))) {
-        held = length
-        break
-      }
-    }
-  }
-  return held
-}
-
-/**
- * Where to cut `raw` between what can be released now and what must wait for the next write: no
- * later than the start of an end that could still grow into a credential, and never inside a
- * complete one. Cutting on the raw bytes, before masking, keeps a short credential that is the
- * start of a longer one from being released while the longer one may still be arriving.
- */
-function releasableLength(raw: string, secrets: readonly string[]): number {
-  let cut = raw.length - heldLength(raw, secrets)
-  for (let moved = true; moved; ) {
-    moved = false
-    for (const secret of secrets) {
-      for (let at = raw.indexOf(secret); at !== -1 && at < cut; at = raw.indexOf(secret, at + 1)) {
-        if (at + secret.length > cut) {
-          cut = at
-          moved = true
-        }
-      }
-    }
-  }
-  return cut
-}
-
 /** Wrap one stream's `write`; `restore` puts it back only while this wrapper is still in place. */
 function maskStream(stream: MaskableStream, secrets: readonly string[]): { flush(): void; restore(): void } {
   const original = stream.write
-  let pending = ''
-  const emit = (text: string, callback?: WriteCallback): boolean =>
-    original.call(stream, asBytes(maskSecrets(text, secrets)), undefined, callback)
+  const mask = createStreamMask(secrets)
+  const emit = (masked: string, callback?: WriteCallback): boolean => original.call(stream, asBytes(masked), undefined, callback)
   // A write held back whole still has its callback called at once, before its bytes reach the
   // stream: the caller is told the write was taken, which it was. `stream.end(chunk)` does not go
   // through `write` and is not masked; nothing in the app ends stdout or stderr.
@@ -88,20 +51,15 @@ function maskStream(stream: MaskableStream, secrets: readonly string[]): { flush
     }
     const encoding = typeof encodingOrCallback === 'string' ? encodingOrCallback : undefined
     const done = typeof encodingOrCallback === 'function' ? encodingOrCallback : callback
-    const raw = pending + toByteText(chunk, encoding)
-    const cut = releasableLength(raw, secrets)
-    pending = raw.slice(cut)
-    return emit(raw.slice(0, cut), done)
+    return emit(mask.push(toByteText(chunk, encoding)), done)
   }) as NodeJS.WriteStream['write']
   stream.write = wrapper
   wrapped.add(stream)
   let restored = false
   return {
     flush: () => {
-      if (pending === '') return
-      const rest = pending
-      pending = ''
-      emit(rest)
+      const rest = mask.flush()
+      if (rest !== '') emit(rest)
     },
     restore: () => {
       if (restored) return

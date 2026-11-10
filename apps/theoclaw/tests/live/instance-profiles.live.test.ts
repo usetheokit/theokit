@@ -16,6 +16,7 @@ import {
   waitForListener,
   waitForStartLine,
 } from './support/instance-process.js'
+import { turnFailedError } from './support/turn-failed.js'
 
 /**
  * B-514 (OC-28, profile half): two TheoClaw processes on one host, profiles `a` and `b`, one scratch
@@ -38,7 +39,9 @@ function modelEnv(): Record<string, string> {
   }
   if (!existsSync(ENTRY)) throw new Error(`${ENTRY} is missing: run pnpm --filter theoclaw run build`)
   // B-371: the start refuses an instance with no owner; nobody messages this one but the test.
-  return { ...env, THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_DM_POLICY: 'allowlist', THEOCLAW_MDNS: 'off' }
+  // The isolation check reads each profile's turn record, and since #1457 a transcript is kept only
+  // when THEOCLAW_TRANSCRIPTS is on, as #1478 did for the sessions and memory suites.
+  return { ...env, THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_DM_POLICY: 'allowlist', THEOCLAW_MDNS: 'off', THEOCLAW_TRANSCRIPTS: 'on' }
 }
 
 /** Every regular file under `root`, as paths relative to it. */
@@ -68,7 +71,7 @@ async function turn(instance: StartedInstance, message: string): Promise<void> {
           resolve()
         } else if (frame.type === 'error') {
           clearTimeout(timer)
-          reject(new Error(`turn failed: ${frame.code ?? ''} ${frame.message ?? ''}`))
+          reject(turnFailedError(frame, instance.output(), [instance.token]))
         }
       })
       socket.on('error', (error) => {

@@ -1,0 +1,63 @@
+# TheoClaw's login service on macOS and Windows against a real model (B-692, OC-32). The live
+# daemon test installs the host's own service (a launchd agent on macos-latest, a Task Scheduler
+# task on windows-latest) from an onboarded configuration file, answers one /control turn through
+# it and uninstalls it. No development host runs either platform, which is why it runs here.
+#
+# GitHub dispatches only a workflow present on the default branch, so a pre-merge run goes through
+# live-model.yml's dispatch with `-f suite=theoclaw-daemon`, which calls this file at the
+# dispatched ref (workflow_call). It also runs on push to develop and on its own dispatch.
+name: TheoClaw daemon
+
+on:
+  workflow_call:
+    secrets:
+      OPENROUTER_API_KEY:
+        required: true
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'apps/theoclaw/**'
+      - '.github/workflows/theoclaw-daemon.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  theoclaw-daemon:
+    name: TheoClaw daemon on ${{ matrix.os }} (real provider)
+    runs-on: ${{ matrix.os }}
+    # One 120 s test per leg, plus the checkout, the install and the build.
+    timeout-minutes: 30
+    strategy:
+      # A leg that fails must not hide the other platform's result.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    env:
+      THEOCLAW_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # This job handles the provider key, so ADR-0021 pins the action by commit.
+      - uses: usetheokit/shared-workflows/actions/setup@95ef5a1ea79f0c4065fa7ca0466b0b07b4c7799d # v1
+        with:
+          # TheoClaw needs Node 22.16 or later and `.nvmrc` holds the framework's 22.12 floor.
+          node-version: '22'
+      - name: Install TheoClaw's workspace
+        shell: bash
+        run: pnpm install --frozen-lockfile --filter 'theoclaw...'
+      - name: Build TheoClaw and its workspace dependencies
+        shell: bash
+        # The type build ran out of heap on macos-latest with Node's default limit (#1273).
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: node scripts/live-model-build.mjs theoclaw
+      - name: Daemon live test (THEOCLAW_LIVE)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          THEOCLAW_LIVE: '1'
+        # bash -eo pipefail: the suite's exit code survives the pipe
+        shell: bash
+        run: pnpm --filter theoclaw exec vitest run tests/live/daemon.live.test.ts --reporter=verbose 2>&1 | node scripts/redact-key-shapes.mjs

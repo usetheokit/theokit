@@ -67,8 +67,8 @@ function nameInUse(name: string): Error & { readonly code: 'NAME_IN_USE' } {
  * writing `console.log`; TheoClaw's withdrawals go through `unpublishAll`, never `stop`. So a `stop`
  * outside a withdrawal is the conflict, reported before the library tears the service down (plan D1).
  * The probe answers asynchronously, so the wrap is in place before any answer can arrive. `withdrawing`
- * is never cleared: a probe answer can still arrive after `unpublishAll` resolved, and that late `stop`
- * is TheoClaw's withdrawal, not a conflict. `onConflict` never throws: it goes through `deliver`.
+ * is per service and never cleared for the services a withdrawal covered: a probe answer can still arrive
+ * after `unpublishAll` resolved, and that late `stop` is TheoClaw's withdrawal, not a conflict. `onConflict` never throws: it goes through `deliver`.
  */
 function observeConflict(published: Service, withdrawing: () => boolean, onConflict: () => void): void {
   const stop = published.stop?.bind(published)
@@ -116,7 +116,12 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
     throw error
   }
 
-  let withdrawing = false
+  // A withdrawal covers the services published before it, never one published after (a late probe
+  // answer for those is TheoClaw's own withdrawal; a conflict on a later publish is still a conflict).
+  const live = new Set<{ withdrawn: boolean }>()
+  const withdrawAll = (): void => {
+    for (const entry of live) entry.withdrawn = true
+  }
   return {
     publish: (service: PublishedService) => {
       const published = bonjour.publish({
@@ -125,11 +130,13 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
         port: service.port,
         txt: { ...service.txt },
       })
-      observeConflict(published, () => withdrawing, () => report(nameInUse(service.name), 'publish'))
+      const entry = { withdrawn: false }
+      live.add(entry)
+      observeConflict(published, () => entry.withdrawn, () => report(nameInUse(service.name), 'publish'))
     },
     unpublishAll: () =>
       new Promise<void>((resolve, reject) => {
-        withdrawing = true
+        withdrawAll()
         bonjour.unpublishAll((error?: unknown) => {
           if (error) reject(new TheoClawDiscoveryError(error, 'send-respond'))
           else resolve()
@@ -137,7 +144,7 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
       }),
     destroy: () =>
       new Promise<void>((resolve, reject) => {
-        withdrawing = true
+        withdrawAll()
         try {
           bonjour.destroy(() => resolve())
         } catch (error) {

@@ -96,7 +96,8 @@ export function createNodeAdapter(): RuntimeAdapter {
       })
 
       return {
-        listen: (port: number, cb?: () => void) => server.listen(port, cb),
+        listen: (port: number, cb?: () => void, host = '127.0.0.1') =>
+          server.listen(port, host, cb),
         close: (cb?: () => void) => server.close(cb),
         address: () => {
           const addr = server.address()

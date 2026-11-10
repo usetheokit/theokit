@@ -1,5 +1,6 @@
 import type { PlatformName } from '@theokit/gateway'
 
+import type { SupportedPlatform } from '../channels/platforms.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 
 /** What a DM from someone who is neither an owner nor paired gets (OC-18). */
@@ -46,10 +47,12 @@ const UNAUTHENTICATED_BECAUSE = {
   line: null,
   whatsapp: null,
   teams: null,
+  // The ship name is proven by the Eyre session the adapter holds; messages carry the author's @p.
+  tlon_urbit: null,
   // The Twilio signature proves the request came from Twilio, not who sent the text.
   sms: 'the caller id of a text message',
-} as const satisfies Record<PlatformName, string | null>
-const PLATFORMS = Object.keys(UNAUTHENTICATED_BECAUSE) as PlatformName[]
+} as const satisfies Record<SupportedPlatform, string | null>
+const PLATFORMS = Object.keys(UNAUTHENTICATED_BECAUSE) as SupportedPlatform[]
 const DM_POLICIES: readonly DmPolicy[] = ['pairing', 'allowlist', 'open', 'disabled']
 const GROUP_ACTIVATIONS: readonly GroupActivation[] = ['mention', 'always']
 const DEFAULT_REFUSAL_TEXT = 'This assistant answers its owner only.'
@@ -68,7 +71,7 @@ function oneOf<T extends string>(env: Env, variable: string, accepted: readonly 
   throw new TheoClawConfigError(`${variable} must be one of ${accepted.join(', ')}`, { variable })
 }
 
-function isPlatform(name: string): name is PlatformName {
+function isPlatform(name: string): name is SupportedPlatform {
   return (PLATFORMS as readonly string[]).includes(name)
 }
 
@@ -76,7 +79,7 @@ function isPlatform(name: string): name is PlatformName {
  * Split `platform:id` at its FIRST colon, so a Matrix id keeps its own colons. The error names the
  * platform and never the id, which can identify a person.
  */
-function splitAddress(entry: string, variable: string): { platform: PlatformName; id: string } {
+function splitAddress(entry: string, variable: string): { platform: SupportedPlatform; id: string } {
   const colon = entry.indexOf(':')
   // With no colon the whole entry may be the id itself, so it is never quoted.
   if (colon < 0) throw new TheoClawConfigError(`${variable} has an entry with no platform: prefix`, { variable })
@@ -108,7 +111,7 @@ export function isPolicyOwner(policy: Pick<AuthorizationPolicy, 'owners'>, platf
  * Refuse an entry on a platform whose sender id nothing authenticates. `refusal` says what the
  * entry may not do and `risk` what a forger could; the message never quotes the id.
  */
-function requireAuthenticated(platform: PlatformName, variable: string, refusal: string, risk: string): void {
+function requireAuthenticated(platform: SupportedPlatform, variable: string, refusal: string, risk: string): void {
   const doubt = UNAUTHENTICATED_BECAUSE[platform]
   if (doubt !== null) throw new TheoClawConfigError(`${variable} ${refusal}: ${doubt} is not authenticated, so ${risk}`, { variable })
 }

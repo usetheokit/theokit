@@ -112,8 +112,19 @@ describe('M90 — the infra subpath surface is locked', () => {
     // is +2, both in `sandbox`, nothing removed: `shellEscapePosix` and the type
     // `SandboxNetworkPolicy`. `SandboxBackend.dispose` and `.networkPolicy` are members of a class that
     // was already on the surface, so they add no symbol.
+    //
+    // 194 since `@theokit/sdk-tools` moved to ^0.29.0: +7, the text-to-speech tool (#1411) —
+    // `createTextToSpeechTool`, `DEFAULT_MAX_AUDIO_BYTES`, `DEFAULT_MAX_TEXT_CHARS` and the types
+    // `CreateTextToSpeechToolOptions`, `SynthesizedAudio`, `TextToSpeechCallback`,
+    // `TextToSpeechResult`. Upstream names differ from the issue text (`TextToSpeechToolOptions`
+    // is `CreateTextToSpeechToolOptions`; `TextToSpeechFailure` is not exported), and the gate
+    // forbids inventing names, so the layer mirrors upstream exactly.
+    //
+    // 200 since the floor moved to `@theokit/sdk` ^5.15.1: +6, nothing removed. In `persistence`,
+    // `SqliteSessionStore` and the type `SqliteSessionStoreOptions`; in `sandbox`, `DockerSandbox`
+    // and the types `DockerRunner`, `DockerRunResult`, `DockerSandboxConfig`.
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(187)
+    expect(total).toBe(200)
   })
 
   /**

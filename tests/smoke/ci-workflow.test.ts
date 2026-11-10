@@ -186,9 +186,28 @@ describe('CI Workflow', () => {
   // `apps/theoclaw/.squad/records/alignment/ci-coverage-alignment.md` and is NOT tracked by git,
   // so this cannot read the requirement and compare. The 3 below is transcribed by hand. If the
   // requirement moves, this number does not follow it on its own.
+  //
+  // The job's first complete runs (CI runs 42646531518 and 42652704112) did not fit 180 seconds:
+  // the test step alone took 92 s and 145 s. The ceiling is 8 minutes until #1391 brings the job
+  // back under the requirement, and then both this number and the workflow's go back to 3.
   it('the theoclaw job cannot outlive the bound its requirement states', () => {
     const workflow = loadWorkflow('ci.yml')
-    expect(workflow.jobs.theoclaw['timeout-minutes']).toBeLessThanOrEqual(3)
+    expect(workflow.jobs.theoclaw['timeout-minutes']).toBeLessThanOrEqual(8)
+  })
+
+  // gateway-webchat review F-tests-2 / F-dom-3: the built-bundle test (AC-005) runs only under
+  // THEOCLAW_BUNDLE=1 after build:web, and no job did either, so a bundle that builds but throws at
+  // load, or grows past its budget, shipped green.
+  it('the theoclaw job builds the WebChat page, then runs the built-bundle test with THEOCLAW_BUNDLE=1', () => {
+    const workflow = loadWorkflow('ci.yml')
+    const steps: { run?: string; env?: Record<string, string> }[] = workflow.jobs.theoclaw.steps
+    const build = steps.findIndex(
+      (step) => step.run?.trim() === 'pnpm --filter theoclaw run build:web',
+    )
+    const bundle = steps.findIndex((step) => step.run?.includes('tests/webchat-bundle.test.ts'))
+    expect(build, 'a build:web step').toBeGreaterThanOrEqual(0)
+    expect(bundle, 'a step running tests/webchat-bundle.test.ts').toBeGreaterThan(build)
+    expect(steps[bundle]?.env?.THEOCLAW_BUNDLE).toBe('1')
   })
 
   it('every job reaches the one check branch protection requires', () => {

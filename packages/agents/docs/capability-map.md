@@ -10,9 +10,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1100 export(s) across 23 entry point(s).
+1168 export(s) across 25 entry point(s).
 
-Measured against `@theokit/sdk@5.9.2`.
+Measured against `@theokit/sdk@5.11.0`.
 
 ## `@theokit/agents`
 
@@ -40,6 +40,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `assistantText` | value |
 | `auditEnvReachability` | value |
 | `AuthenticationError` | value |
+| `BodyTooLargeError` | value |
 | `BudgetExceededError` | value |
 | `buildAgentCard` | value |
 | `buildMcpToolDescriptors` | value |
@@ -51,7 +52,6 @@ Measured against `@theokit/sdk@5.9.2`.
 | `CheckpointCapability` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
-| `CompatImportUnsupportedError` | value |
 | `compileAgentDefinition` | value |
 | `compileAgentModule` | value |
 | `compileContextWindow` | value |
@@ -72,10 +72,13 @@ Measured against `@theokit/sdk@5.9.2`.
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
 | `createDraft` | value |
+| `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
+| `createToolInvokeRoute` | value |
+| `createToolSeen` | value |
 | `CredentialPoolExhaustedError` | value |
 | `declareAgentShape` | value |
 | `DEFAULT_HANDLER_TIMEOUT_MS` | value |
@@ -95,6 +98,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `extractThinkTagStream` | value |
 | `extractToolUses` | value |
 | `FieldCapability` | value |
+| `flushPendingToolResults` | value |
 | `foldLayers` | value |
 | `foldTurnLifecycle` | value |
 | `formatGoalEvent` | value |
@@ -107,7 +111,6 @@ Measured against `@theokit/sdk@5.9.2`.
 | `GuardrailsCapability` | value |
 | `GuardrailViolationError` | value |
 | `HookApprovalCapability` | value |
-| `HookGateUnsupportedError` | value |
 | `HumanInTheLoopCapability` | value |
 | `humanizeModelName` | value |
 | `InProcessApprovalRequiredError` | value |
@@ -135,6 +138,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `MainLoopCapability` | value |
 | `MalformedGuardrailResultError` | value |
 | `mapWithConcurrency` | value |
+| `MAX_REQUEST_BODY_BYTES` | value |
 | `MCP_PROTOCOL_VERSION` | value |
 | `McpFileError` | value |
 | `mcpRegistry` | value |
@@ -160,10 +164,12 @@ Measured against `@theokit/sdk@5.9.2`.
 | `promptInjectionDetector` | value |
 | `Provider` | value |
 | `RateLimitError` | value |
+| `readCappedBody` | value |
 | `reasoningEffortOf` | value |
 | `recordWiring` | value |
 | `reflectionStrategyConfigSchema` | value |
 | `refreshModelCatalog` | value |
+| `renderTranscript` | value |
 | `resolveCompactionStrategy` | value |
 | `resolveCompatSources` | value |
 | `resolveDecomposition` | value |
@@ -212,6 +218,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `Toolset` | value |
 | `ToolsetError` | value |
 | `translateSdkEvent` | value |
+| `translateTimelineEvent` | value |
 | `UngatedCapabilityError` | value |
 | `unicodeNormalizer` | value |
 | `UnknownAgentError` | value |
@@ -355,6 +362,10 @@ Measured against `@theokit/sdk@5.9.2`.
 | `ModelCapabilities` | type |
 | `ModelOption` | type |
 | `NamedTool` | type |
+| `OpenAIChatMessage` | type |
+| `OpenAIChatRequest` | type |
+| `OpenAICompatibleRoutesOptions` | type |
+| `OpenAITextPart` | type |
 | `OutputModerationOptions` | type |
 | `ParsedModelId` | type |
 | `PartialToolCallEvent` | type |
@@ -389,6 +400,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
 | `SdkSendOptions` | type |
+| `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
 | `Segment` | type |
 | `SessionRecord` | type |
@@ -409,15 +421,18 @@ Measured against `@theokit/sdk@5.9.2`.
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
 | `TimeoutAction` | type |
+| `ToolArgsValidator` | type |
 | `ToolboxOptions` | type |
 | `ToolboxSource` | type |
 | `ToolboxWalkResult` | type |
 | `ToolCallEvent` | type |
 | `ToolCallVeto` | type |
+| `ToolCallVetoPort` | type |
 | `ToolComNome` | type |
 | `ToolDeclaration` | type |
 | `ToolHooks` | type |
 | `ToolHooksPlugin` | type |
+| `ToolInvokeRouteOptions` | type |
 | `ToolOptions` | type |
 | `ToolResultContentBlock` | type |
 | `ToolResultEvent` | type |
@@ -444,9 +459,9 @@ Measured against `@theokit/sdk@5.9.2`.
 | `agentsPlugin` | value |
 | `applyPosture` | value |
 | `APPROVAL_MODES` | value |
+| `BodyTooLargeError` | value |
 | `BudgetExceededError` | value |
 | `buildModelSelection` | value |
-| `CompatImportUnsupportedError` | value |
 | `compileAgentDefinition` | value |
 | `compileAgentModule` | value |
 | `compileContextWindow` | value |
@@ -457,10 +472,13 @@ Measured against `@theokit/sdk@5.9.2`.
 | `ContextualTool` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
+| `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
+| `createToolInvokeRoute` | value |
+| `createToolSeen` | value |
 | `delegate` | value |
 | `delegateBackground` | value |
 | `delegateWithScoring` | value |
@@ -469,9 +487,9 @@ Measured against `@theokit/sdk@5.9.2`.
 | `DelegationError` | value |
 | `DelegationTimeoutError` | value |
 | `extractThinkTagStream` | value |
+| `flushPendingToolResults` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
-| `HookGateUnsupportedError` | value |
 | `isAgentContext` | value |
 | `isAgentDefinition` | value |
 | `isApprovalRequired` | value |
@@ -483,12 +501,15 @@ Measured against `@theokit/sdk@5.9.2`.
 | `isToolResult` | value |
 | `loadMcpJson` | value |
 | `loadPersonalMcpServers` | value |
+| `MAX_REQUEST_BODY_BYTES` | value |
 | `McpFileError` | value |
 | `mcpRegistry` | value |
 | `mcpToolApprovals` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
+| `readCappedBody` | value |
 | `reasoningEffortOf` | value |
+| `renderTranscript` | value |
 | `resolveCompatSources` | value |
 | `resolveMcpServers` | value |
 | `resolveSettingSources` | value |
@@ -498,6 +519,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `streamAgentUIMessages` | value |
 | `toAgentFactory` | value |
 | `translateSdkEvent` | value |
+| `translateTimelineEvent` | value |
 | `UntrustedSettingSourceError` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
@@ -555,6 +577,10 @@ Measured against `@theokit/sdk@5.9.2`.
 | `McpRegistryConfig` | type |
 | `McpRequestContext` | type |
 | `McpSelection` | type |
+| `OpenAIChatMessage` | type |
+| `OpenAIChatRequest` | type |
+| `OpenAICompatibleRoutesOptions` | type |
+| `OpenAITextPart` | type |
 | `PartialToolCallEvent` | type |
 | `PermissionsPluginOptions` | type |
 | `ProcessInputContext` | type |
@@ -567,6 +593,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
 | `SdkSendOptions` | type |
+| `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
 | `Segment` | type |
 | `SettingSourceCapability` | type |
@@ -576,11 +603,14 @@ Measured against `@theokit/sdk@5.9.2`.
 | `StreamEvent` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
+| `ToolArgsValidator` | type |
 | `ToolboxWalkResult` | type |
 | `ToolCallEvent` | type |
 | `ToolCallVeto` | type |
+| `ToolCallVetoPort` | type |
 | `ToolHooks` | type |
 | `ToolHooksPlugin` | type |
+| `ToolInvokeRouteOptions` | type |
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
 
@@ -874,6 +904,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `createApplyPatchTool` | value |
 | `createBraveWebSearchAdapter` | value |
 | `createCurrentTimeTool` | value |
+| `createDelegateAllTool` | value |
 | `createDelegateTool` | value |
 | `createEditFileTool` | value |
 | `createGenericHttpSearchAdapter` | value |
@@ -881,11 +912,14 @@ Measured against `@theokit/sdk@5.9.2`.
 | `createGitStatusTool` | value |
 | `createGlobTool` | value |
 | `createInteractiveShellTool` | value |
+| `createJobStore` | value |
 | `createListDirTool` | value |
 | `createPlanModeTool` | value |
 | `createQuestionTool` | value |
 | `createReadFileTool` | value |
 | `createRunVitestTool` | value |
+| `createScheduler` | value |
+| `createScheduleTools` | value |
 | `createSearchTextTool` | value |
 | `createSessionArtifactStore` | value |
 | `createShellTool` | value |
@@ -915,6 +949,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `renderToolList` | value |
 | `replaceUnique` | value |
 | `resolveAndScreen` | value |
+| `ScheduleStoreError` | value |
 | `screenedFetch` | value |
 | `SsrfBlockedError` | value |
 | `todoItemsToPlanNodes` | value |
@@ -929,6 +964,7 @@ Measured against `@theokit/sdk@5.9.2`.
 | `CreateApplyPatchToolOptions` | type |
 | `CreateBraveWebSearchAdapterOptions` | type |
 | `CreateCurrentTimeToolOptions` | type |
+| `CreateDelegateAllToolOptions` | type |
 | `CreateDelegateToolOptions` | type |
 | `CreateEditFileToolOptions` | type |
 | `CreateGenericHttpSearchAdapterOptions` | type |
@@ -939,6 +975,8 @@ Measured against `@theokit/sdk@5.9.2`.
 | `CreateListDirToolOptions` | type |
 | `CreateReadFileToolOptions` | type |
 | `CreateRunVitestToolOptions` | type |
+| `CreateSchedulerOptions` | type |
+| `CreateScheduleToolsOptions` | type |
 | `CreateSearchTextToolOptions` | type |
 | `CreateShellToolOptions` | type |
 | `CreateViewImageToolOptions` | type |
@@ -946,7 +984,11 @@ Measured against `@theokit/sdk@5.9.2`.
 | `CreateWebSearchToolOptions` | type |
 | `CreateWriteFileToolOptions` | type |
 | `DelegateRosterEntry` | type |
+| `DeliverPort` | type |
+| `DeliveryResult` | type |
 | `EnvContextOptions` | type |
+| `FireOutcome` | type |
+| `JobStore` | type |
 | `PlanModeTool` | type |
 | `PlanModeToolOptions` | type |
 | `PlanModeToolWithStore` | type |
@@ -955,6 +997,11 @@ Measured against `@theokit/sdk@5.9.2`.
 | `QuestionToolOptions` | type |
 | `RepoMapOptions` | type |
 | `ResolveAndScreenOptions` | type |
+| `RunPort` | type |
+| `RunResult` | type |
+| `ScheduledJob` | type |
+| `Scheduler` | type |
+| `ScheduleTarget` | type |
 | `ScreenedFetchOptions` | type |
 | `SessionArtifactStore` | type |
 | `SessionArtifactStoreOptions` | type |
@@ -963,12 +1010,37 @@ Measured against `@theokit/sdk@5.9.2`.
 | `TodoItem` | type |
 | `TodolistTool` | type |
 | `ToolGuidanceMap` | type |
+| `TransientJobOptions` | type |
 | `TruncationMode` | type |
 | `TruncationOptions` | type |
 | `TruncationResult` | type |
 | `VitestSummary` | type |
 | `WebSearchCallback` | type |
 | `WebSearchResult` | type |
+
+## `@theokit/agents/code-mode`
+
+| Symbol | Kind |
+|---|---|
+| `CodeModeInvalidArgumentsError` | value |
+| `CodeModePermissionDeniedError` | value |
+| `createCodeMode` | value |
+| `CodeModeApi` | type |
+| `CodeModeCallOptions` | type |
+| `CodeModeConfig` | type |
+| `CodeModePermission` | type |
+| `CodeModeTool` | type |
+| `Sandbox` | type |
+
+## `@theokit/agents/code-mode-quickjs`
+
+| Symbol | Kind |
+|---|---|
+| `CodeModeSandboxConfigError` | value |
+| `CodeModeSandboxError` | value |
+| `createQuickJsSandbox` | value |
+| `CodeModeSandboxErrorCode` | type |
+| `QuickJsSandboxOptions` | type |
 
 ## `@theokit/agents/client`
 
@@ -1126,8 +1198,10 @@ Measured against `@theokit/sdk@5.9.2`.
 
 | Symbol | Kind |
 |---|---|
+| `createA2AJsonRpcHandler` | value |
 | `createA2ATool` | value |
 | `A2AAuth` | type |
+| `A2AJsonRpcHandlerOptions` | type |
 | `A2AToolConfig` | type |
 
 ## `@theokit/agents/evals`

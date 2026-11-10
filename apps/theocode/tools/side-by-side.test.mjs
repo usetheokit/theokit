@@ -230,6 +230,38 @@ describe('runTask', () => {
     expect(record.verdict).toBe('theocode_lost')
   })
 
+  it('a side whose tree cannot run the verification prints no totals and fails instead of aborting the run', async () => {
+    const LOADS = [
+      "const { add } = await import('./sum.mjs')",
+      "console.log('# pass ' + (add(2, 3) === 5 ? 2 : 0))",
+      "console.log('# fail ' + (add(2, 3) === 5 ? 0 : 2))",
+      '',
+    ].join('\n')
+    const inner = fakeExec({ 'fake-theocode': 'claims', 'fake-claude': 'solves' })
+    /** @type {import('./side-by-side.mjs').Exec} */
+    const exec = async (cmd, args, options) => {
+      const result = await inner(cmd, args, options)
+      if (cmd === 'fake-theocode') await writeFile(join(options.cwd, 'sum.mjs'), 'export const add = (\n')
+      return result
+    }
+    const record = await runTask({
+      taskDir: await writeTask({
+        verify: ['node', 'verify-loads.mjs'],
+        extraVerify: { 'verify-loads.mjs': LOADS },
+      }),
+      theocode,
+      competitorName: 'claude',
+      competitor: claude,
+      notLikeForLike: null,
+      exec,
+      workRoot: join(root, 'work'),
+    })
+    expect(record.sides[0].counts).toBeNull()
+    expect(record.sides[0].outcome).toBe('failed')
+    expect(record.sides[1].outcome).toBe('solved')
+    expect(record.verdict).toBe('theocode_lost')
+  })
+
   it('claude with an effort is refused before any agent runs', async () => {
     const ran = []
     const exec = fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'solves' })

@@ -7,11 +7,13 @@
  *   node scripts/live-model-build.mjs agents|theoclaw    one build
  *   node scripts/live-model-build.mjs --print-selector agents|theoclaw
  *
- * Exit 1 names the selector whose build failed, could not start or was killed, or the TheoClaw
- * entry the build did not produce; exit 2 names an argument it does not take.
+ * The theoclaw target also builds the WebChat page (`build:web`), which TheoClaw's live tests serve.
+ *
+ * Exit 1 names the build that failed, could not start or was killed, or the TheoClaw entry or
+ * WebChat bundle the build did not produce; exit 2 names an argument it does not take.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -22,6 +24,13 @@ const SELECTORS = { agents: '@theokit/agents...', theoclaw: 'theoclaw...' }
 
 /** Spawned by TheoClaw's control-plane and instance-profiles live tests. */
 const THEOCLAW_ENTRY = 'apps/theoclaw/dist/main.js'
+
+/**
+ * The WebChat page bundle `build:web` writes, which TheoClaw serves at GET /webchat: without it the
+ * page answers 503 and tests/live/webchat.live.test.ts fails (gateway-webchat review F-wire-1).
+ */
+const WEBCHAT_BUNDLE = 'apps/theoclaw/dist/web/assets/app.js'
+const WEBCHAT_BUILD = 'the WebChat page (build:web)'
 
 const USAGE = 'expected agents, theoclaw or --print-selector agents|theoclaw'
 
@@ -55,26 +64,42 @@ function parseTargets(argv) {
   return process.exit(0)
 }
 
-/** @param {keyof typeof SELECTORS} target */
-function build(target) {
-  const selector = SELECTORS[target]
+/**
+ * Run `pnpm <args>`; `label` names it in the failure.
+ * @param {string[]} args @param {string} label
+ */
+function pnpm(args, label) {
   // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
-  const result = spawnSync('pnpm', ['--filter', selector, 'build'], {
+  const result = spawnSync('pnpm', args, {
     cwd: ROOT,
     stdio: 'inherit',
     env: { ...process.env, TURBO_CONCURRENCY: '1' },
+    // On Windows `pnpm` is a .cmd shim, which spawnSync starts only through a shell (ENOENT otherwise).
+    // The arguments are this script's own selectors, never input.
+    shell: process.platform === 'win32',
   })
   // A build that could not start or was killed has status null: never read it as a pass.
-  if (result.error !== undefined)
-    fail(`building ${selector} could not run: ${result.error.message}`)
+  if (result.error !== undefined) fail(`building ${label} could not run: ${result.error.message}`)
   if (result.status !== 0) {
     const how = result.status === null ? `signal ${result.signal}` : `status ${result.status}`
-    fail(`building ${selector} failed with ${how}`)
+    fail(`building ${label} failed with ${how}`)
   }
 }
 
-const targets = parseTargets(process.argv.slice(2))
-for (const target of targets) build(target)
-if (targets.includes('theoclaw') && !existsSync(join(ROOT, THEOCLAW_ENTRY))) {
-  fail(`${THEOCLAW_ENTRY} is missing after building ${SELECTORS.theoclaw}`)
+/** @param {string} entry @param {string} built */
+function requireOutput(entry, built) {
+  if (!existsSync(join(ROOT, entry))) fail(`${entry} is missing after building ${built}`)
 }
+
+/** @param {keyof typeof SELECTORS} target */
+function build(target) {
+  pnpm(['--filter', SELECTORS[target], 'build'], SELECTORS[target])
+  if (target !== 'theoclaw') return
+  requireOutput(THEOCLAW_ENTRY, SELECTORS.theoclaw)
+  // A bundle left by an earlier build must not stand in for the one build:web fails to write.
+  rmSync(join(ROOT, WEBCHAT_BUNDLE), { force: true })
+  pnpm(['--filter', 'theoclaw', 'run', 'build:web'], WEBCHAT_BUILD)
+  requireOutput(WEBCHAT_BUNDLE, WEBCHAT_BUILD)
+}
+
+for (const target of parseTargets(process.argv.slice(2))) build(target)

@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -57,9 +57,12 @@ function spawnEntry(overrides: Readonly<Record<string, string | undefined>> = {}
     (entry): entry is [string, string] => entry[1] !== undefined,
   );
   workspace = mkdtempSync(join(tmpdir(), "theoclaw-entry-"));
+  // A scratch XDG_CONFIG_HOME, so a configuration file the developer onboarded (B-374) cannot
+  // supply a variable a refusal case below leaves unset.
+  const configHome = join(workspace, "config");
   const child = spawn(process.execPath, ["--import", TSX_LOADER, ENTRY], {
     cwd: workspace,
-    env: { PATH: process.env.PATH, ...Object.fromEntries(variables) },
+    env: { PATH: process.env.PATH, XDG_CONFIG_HOME: configHome, ...Object.fromEntries(variables) },
     stdio: ["ignore", "pipe", "pipe"],
   });
   running = child;
@@ -116,6 +119,22 @@ describe("the process entry", () => {
     expect(run.output()).toMatch(/^theoclaw: .*THEOCLAW_MODEL/m);
     expect(run.output()).not.toContain(MODEL_KEY);
     expect(run.output()).not.toContain(TOKEN);
+  });
+
+  it("the entry process ignores a configuration file outside its XDG_CONFIG_HOME", { timeout: 20_000 }, async () => {
+    // A file at the HOME default path would supply THEOCLAW_MODEL if the entry read it; the scratch
+    // XDG_CONFIG_HOME points the entry elsewhere, so the refusal still happens.
+    const home = mkdtempSync(join(tmpdir(), "theoclaw-entry-home-"));
+    try {
+      mkdirSync(join(home, ".config", "theoclaw"), { recursive: true });
+      writeFileSync(join(home, ".config", "theoclaw", "theoclaw.env"), 'THEOCLAW_MODEL="from-home"\n');
+      const run = spawnEntry({ THEOCLAW_MODEL: undefined, HOME: home });
+
+      expect(await run.exited).toEqual({ code: 1, signal: null });
+      expect(run.output()).toMatch(/^theoclaw: .*THEOCLAW_MODEL/m);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it("the process entry refuses a public bind without THEOCLAW_PUBLIC_BIND with exit 1", { timeout: 20_000 }, async () => {
