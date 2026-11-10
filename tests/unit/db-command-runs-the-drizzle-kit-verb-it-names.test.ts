@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { dbCommand } from '../../packages/theo/src/cli/commands/db.js'
+import { dbCommand, resolveToolBin } from '../../packages/theo/src/cli/commands/db.js'
 
 /**
  * `theokit db migrate` ran `drizzle-kit push`, which diffs the schema straight into the database and
@@ -33,18 +33,18 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
   it('migrate applies the generated migration files with drizzle-kit migrate', async () => {
     const result = await dbCommand('migrate', dir, run)
     expect(result.status).toBe('success')
-    expect(ran).toEqual([['npx', 'drizzle-kit', 'migrate']])
+    expect(ran).toEqual([['drizzle-kit', 'migrate']])
   })
 
   it('push keeps the schema-diff behaviour under its own name', async () => {
     const result = await dbCommand('push', dir, run)
     expect(result.status).toBe('success')
-    expect(ran).toEqual([['npx', 'drizzle-kit', 'push']])
+    expect(ran).toEqual([['drizzle-kit', 'push']])
   })
 
   it('generate still writes migration files', async () => {
     await dbCommand('generate', dir, run)
-    expect(ran).toEqual([['npx', 'drizzle-kit', 'generate']])
+    expect(ran).toEqual([['drizzle-kit', 'generate']])
   })
 
   it('seed runs the seed file under the configured serverDir', async () => {
@@ -56,7 +56,7 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
     writeFileSync(join(dir, 'src', 'server', 'db', 'seed.ts'), '')
     const result = await dbCommand('seed', dir, run)
     expect(result.status).toBe('success')
-    expect(ran).toEqual([['npx', 'tsx', 'src/server/db/seed.ts']])
+    expect(ran).toEqual([['tsx', 'src/server/db/seed.ts']])
   })
 
   it('seed applies theo.config.ts storage in the child process through a preload (#1439)', async () => {
@@ -70,14 +70,14 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
     let preloadBody = ''
     const spy = (cmd: string, args: readonly string[]): void => {
       ran.push([cmd, ...args])
-      const file = args[2] ?? ''
+      const file = args[1] ?? ''
       preloadBody = existsSync(file) ? readFileSync(file, 'utf8') : ''
     }
     const result = await dbCommand('seed', dir, spy)
     expect(result.status).toBe('success')
-    expect(ran[0]?.slice(0, 3)).toEqual(['npx', 'tsx', '--import'])
-    expect(ran[0]?.[3]).toMatch(/seed-preload\.mjs$/)
-    expect(ran[0]?.[4]).toBe('src/server/db/seed.ts')
+    expect(ran[0]?.slice(0, 2)).toEqual(['tsx', '--import'])
+    expect(ran[0]?.[2]).toMatch(/seed-preload\.mjs$/)
+    expect(ran[0]?.[3]).toBe('src/server/db/seed.ts')
     expect(preloadBody).toContain('getStorageManager().configure(')
     expect(preloadBody).toContain('"main"')
   })
@@ -86,5 +86,16 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
     const result = await dbCommand('nope', dir, run)
     expect(result.status).toBe('invalid_action')
     expect(result.message).toContain('push')
+  })
+
+  it('resolves a tool to its JS bin so it runs with node, not a shell or a .cmd shim', () => {
+    const pkgDir = join(dir, 'node_modules', 'tsx')
+    mkdirSync(join(pkgDir, 'dist'), { recursive: true })
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: 'tsx', bin: { tsx: './dist/cli.mjs' } }),
+    )
+    expect(resolveToolBin(dir, 'tsx')).toBe(join(pkgDir, 'dist', 'cli.mjs'))
+    expect(() => resolveToolBin(dir, 'drizzle-kit')).toThrow(/drizzle-kit not found/)
   })
 })

@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join, resolve } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
 import { storageSchema } from '../../config/schema.js'
@@ -15,16 +16,35 @@ interface DbCommandResult {
   action?: DbAction
 }
 
+type DbTool = 'drizzle-kit' | 'tsx'
+
 /**
- * Runs a command in the project, without a shell: the executable and its argv, so a path with a
+ * Runs one of the project's own tools, without a shell: the tool name and its argv, so a path with a
  * space or a quote is never parsed. Injected so a test can see the command without running it.
  */
-type RunCommand = (file: string, args: readonly string[], cwd: string) => void
+type RunCommand = (tool: DbTool, args: readonly string[], cwd: string) => void
 
-const runInherited: RunCommand = (file, args, cwd) => {
-  // npx is a .cmd shim on Windows, which execFile only finds by its full name.
-  const exe = process.platform === 'win32' && file === 'npx' ? 'npx.cmd' : file
-  execFileSync(exe, [...args], { cwd, stdio: 'inherit' })
+/**
+ * The JS entry of a tool installed in the project, read from its package.json `bin`. Running it with
+ * `process.execPath` needs neither a shell nor `npx`/`.cmd` shims, which Node refuses to spawn
+ * without a shell on Windows (CVE-2024-27980).
+ */
+export function resolveToolBin(cwd: string, tool: DbTool): string {
+  const req = createRequire(join(cwd, 'package.json'))
+  let pkgPath: string
+  try {
+    pkgPath = req.resolve(`${tool}/package.json`)
+  } catch {
+    throw new Error(`${tool} not found. Run: npm install -D ${tool}`)
+  }
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { bin?: string | Record<string, string> }
+  const rel = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.[tool]
+  if (rel === undefined) throw new Error(`${tool} has no "${tool}" bin in its package.json`)
+  return resolve(dirname(pkgPath), rel)
+}
+
+const runInherited: RunCommand = (tool, args, cwd) => {
+  execFileSync(process.execPath, [resolveToolBin(cwd, tool), ...args], { cwd, stdio: 'inherit' })
 }
 
 function assertFileExists(cwd: string, relPath: string, hint: string): void {
@@ -77,7 +97,7 @@ async function runSeed(cwd: string, run: RunCommand): Promise<string> {
     )
   }
   try {
-    run('npx', hasStorage ? ['tsx', '--import', preload, seedPath] : ['tsx', seedPath], cwd)
+    run('tsx', hasStorage ? ['--import', preload, seedPath] : [seedPath], cwd)
   } finally {
     if (hasStorage) rmSync(preload, { force: true })
   }
@@ -106,7 +126,7 @@ export async function dbCommand(
     assertFileExists(cwd, 'drizzle.config.ts', 'Create a drizzle.config.ts for your project.')
     assertBinExists(cwd, 'drizzle-kit')
     console.log(`\n  ▸ Running ${verb.args.join(' ')}...\n`)
-    run('npx', verb.args, cwd)
+    run('drizzle-kit', verb.args.slice(1), cwd)
     return { status: 'success', message: verb.message, action: dbAction }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
