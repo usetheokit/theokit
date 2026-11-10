@@ -90,6 +90,11 @@ export async function runPrompts(projectName: string): Promise<ProjectOptions> {
   }
 }
 
-export function getDefaults(projectName: string): ProjectOptions {
-  return { projectName, ...DEFAULTS }
+/**
+ * `bare` has no Tailwind: the bare transform drops `tailwindcss` + `@tailwindcss/vite`, and a
+ * default `tailwind: true` would add them back afterwards (an unpinned vite 8 then fails
+ * `npm install` with ERESOLVE against @theokit/ui's optional vite peer).
+ */
+export function getDefaults(projectName: string, bare = false): ProjectOptions {
+  return { projectName, ...DEFAULTS, ...(bare ? { tailwind: false } : {}) }
 }
