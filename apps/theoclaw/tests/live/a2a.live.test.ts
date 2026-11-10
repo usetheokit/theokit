@@ -15,6 +15,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { runControlTurn } from './support/control-turn.js'
+import { throwUnlessFinished } from './support/turn-failed.js'
 import { ENTRY, killInstance, startInstance, type StartedInstance, waitForListener, waitForStartLine } from './support/instance-process.js'
 
 const LIVE = process.env.THEOCLAW_LIVE === '1'
@@ -83,7 +84,7 @@ describe.skipIf(!LIVE)('A2A between two TheoClaw instances', () => {
         'Do not read any file yourself. Then reply with the content peer b returned.',
       240_000,
     )
-    expect(turn.status, `A's turn: ${turn.error}`).toBe('finished')
+    throwUnlessFinished(turn, a.output(), [a.token])
     expect(turn.text).toContain(phrase)
     expect(answeredLines(b.output()), b.output()).toHaveLength(1)
 

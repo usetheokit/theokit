@@ -16,6 +16,7 @@ import {
   waitForListener,
   waitForStartLine,
 } from './support/instance-process.js'
+import { turnFailedError } from './support/turn-failed.js'
 
 /**
  * B-514 (OC-28, profile half): two TheoClaw processes on one host, profiles `a` and `b`, one scratch
@@ -68,7 +69,7 @@ async function turn(instance: StartedInstance, message: string): Promise<void> {
           resolve()
         } else if (frame.type === 'error') {
           clearTimeout(timer)
-          reject(new Error(`turn failed: ${frame.code ?? ''} ${frame.message ?? ''}`))
+          reject(turnFailedError(frame, instance.output(), [instance.token]))
         }
       })
       socket.on('error', (error) => {

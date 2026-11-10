@@ -24,6 +24,7 @@ import { type RunningTheoClaw, startTheoClaw } from '../../src/composition.js'
 import { createTheoClawAgent, type TheoClawAgentOptions } from '../../src/agent/create-agent.js'
 import { createAgentFactory } from '../../src/control-plane/agent-factory.js'
 import { useForwardCleanup } from './support/forward-cleanup.js'
+import { turnFailedError } from './support/turn-failed.js'
 import { findBinary, openSshForward, type SshForward, waitForForward } from './support/ssh-forward.js'
 
 /**
@@ -198,7 +199,7 @@ async function turnThrough(port: number, token: string): Promise<Frame[]> {
         }
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}`))
+        if (frame.type === 'error') reject(turnFailedError(frame, joinedStreams(outputLog).map((s) => s.text).join('\n'), tokensIssued))
       })
     })
     socket.send(JSON.stringify({ type: 'chat', message: 'Reply with the word pong.' }))
