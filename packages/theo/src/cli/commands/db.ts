@@ -1,8 +1,9 @@
 import { execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
+import { storageSchema } from '../../config/schema.js'
 
 type DbAction = 'migrate' | 'push' | 'generate' | 'seed'
 
@@ -52,11 +53,29 @@ const DRIZZLE_KIT_VERBS = {
 async function runSeed(cwd: string, run: RunCommand): Promise<string> {
   // The seed file lives under the configured `serverDir`; a hardcoded `server/` missed the
   // scaffold's `src/server` layout.
-  const { serverDir } = await loadConfig(cwd)
+  const { serverDir, storage } = await loadConfig(cwd)
   const seedPath = join(serverDir, 'db', 'seed.ts')
   assertFileExists(cwd, seedPath, `Create ${seedPath} with your seed data.`)
   console.log('\n  ▸ Running seed...\n')
-  run(`npx tsx ${seedPath}`, cwd)
+  // #1439 — the seed is a bare child process, so `config.storage` never reached its storage manager
+  // and any seed importing a `usePostgres('main', ...)` module threw "Database not configured".
+  // A preload applies the parsed storage config through the project's own `theokit` instance.
+  const preloadDir = resolve(cwd, 'node_modules', '.cache', 'theokit')
+  const preload = join(preloadDir, 'seed-preload.mjs')
+  const hasStorage = storage !== undefined
+  if (hasStorage) {
+    mkdirSync(preloadDir, { recursive: true })
+    const parsed = JSON.stringify(storageSchema.parse(storage))
+    writeFileSync(
+      preload,
+      `import { getStorageManager } from 'theokit/server/storage'\ngetStorageManager().configure(${parsed})\n`,
+    )
+  }
+  try {
+    run(hasStorage ? `npx tsx --import ${preload} ${seedPath}` : `npx tsx ${seedPath}`, cwd)
+  } finally {
+    if (hasStorage) rmSync(preload, { force: true })
+  }
   return 'Database seeded successfully'
 }
 
