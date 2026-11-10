@@ -1,4 +1,5 @@
 import type { TurnAgent } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import type { MemoryStore, StoredTurn } from './memory-store.js'
 
 /** Runs a reviewer over one turn; the reviewer saves facts through `save_memory`. */
@@ -33,7 +34,7 @@ export function agentReviewer(open: () => Promise<TurnAgent & { dispose?(): Prom
   return async (prompt) => {
     const agent = await open()
     try {
-      const run = await agent.send(prompt)
+      const run = await agent.send(prompt, untrustedContentSendOptions())
       for await (const event of run.stream()) void event
       await run.wait()
     } finally {

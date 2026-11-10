@@ -1,6 +1,7 @@
 import type { AgentOptions, CustomTool } from '@theokit/sdk'
 
 import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { MemoryStore } from './memory-store.js'
 import { saveMemoryTool, sessionSearchTool } from './memory-tools.js'
 import { afterTurn, agentReviewer, type RunReviewer } from './turn-review.js'
@@ -69,7 +70,7 @@ export function createMemory(dir: string, report: (line: string) => void): Memor
         get(target, property) {
           if (property === 'send') {
             return async (message: TurnMessage, options?: Parameters<TurnAgent['send']>[1]) =>
-              wrapRun(await target.send(message, options), textOf(message), surface, sessionKey, reviewer)
+              wrapRun(await target.send(message, { ...options, ...untrustedContentSendOptions() }), textOf(message), surface, sessionKey, reviewer)
           }
           const value: unknown = Reflect.get(target, property, target)
           return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value

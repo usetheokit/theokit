@@ -27,7 +27,7 @@ function scripted(options: AgentOptions, answer: string, fact?: string) {
     send: async (message: string) => {
       sent.push(message)
       const save = (options.tools as unknown as Callable[] | undefined)?.find((tool) => tool.name === 'save_memory')
-      if (save !== undefined && fact !== undefined) await save.handler({ fact })
+      if (save !== undefined && fact !== undefined) await save.handler({ query: fact })
       return {
         stream: async function* () {},
         wait: async () => ({ status: 'finished', result: answer }),
