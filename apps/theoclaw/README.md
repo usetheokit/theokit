@@ -123,6 +123,7 @@ so a file kept outside the repository and sourced from your shell profile is als
 | `THEOCLAW_PORT` | Port of the one listener that serves the webhook routes, `/health` and `/control`. Digits only, 0 to 65535. |
 | `THEOCLAW_STATE_DIR` | Where pairings are kept. Required under the default `THEOCLAW_DM_POLICY=pairing`; see below. |
 | `THEOCLAW_OWNERS` | Who the instance serves: comma-separated `platform:senderId`, e.g. `telegram:42,matrix:@me:matrix.org`. Required even with no platform configured; see [Who may talk to the instance](#who-may-talk-to-the-instance). |
+| `THEOCLAW_TRANSCRIPTS` | `on` or `off` (default `off`). Off, a chat turn's transcript is kept in a temp directory removed when the session's agent is disposed and the memory store is off, so a message is stored in no file. On, each chat's transcript is kept under `<THEOCLAW_WORKSPACE>/.theoclaw/`, a conversation survives a restart, and memory follows `THEOCLAW_MEMORY`. |
 | `THEOCLAW_WORKSPACE` | Absolute path of an existing directory. Each chat's transcript and the session generations are kept under `<THEOCLAW_WORKSPACE>/.theoclaw/` (created with mode 0700). Startup fails and names the variable when it is unset, relative or not a directory. Under `THEOCLAW_PROFILE` the profile sets it to its own `workspace` and an explicit value is refused (see [Several instances on one host](#several-instances-on-one-host)). |
 
 ### Who may talk to the instance

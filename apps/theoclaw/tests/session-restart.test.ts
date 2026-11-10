@@ -60,7 +60,7 @@ function transcripts(directory: string): string[] {
 async function startOverStub(workspace: string, stub: ModelStub) {
   const { adapters, builders } = fakeBuilders()
   const app = await startTheoClaw({
-    env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+    env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_TRANSCRIPTS: 'on', OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
     agentFactory: () => {
       throw new Error('the /control factory must not build a chat agent')
     },
@@ -130,7 +130,7 @@ describe('/new and /reset', () => {
     const ids: string[] = []
     const { adapters, builders } = fakeBuilders()
     const { loop, sessions } = composeTheoClaw({
-      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_WORKSPACE: freshWorkspace() },
+      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_TRANSCRIPTS: 'on', THEOCLAW_WORKSPACE: freshWorkspace() },
       agentFactory: () => {
         throw new Error('the /control factory must not build a chat agent')
       },
@@ -217,7 +217,7 @@ describe('sessions.json', () => {
     const spy = vi.fn(builders)
 
     const start = startTheoClaw({
-      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_WORKSPACE: workspace },
+      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_TRANSCRIPTS: 'on', THEOCLAW_WORKSPACE: workspace },
       agentFactory: () => {
         throw new Error('unused')
       },
@@ -261,7 +261,7 @@ describe('a restart', () => {
     const exit = vi.fn()
     const { adapters, builders } = fakeBuilders()
     const app = await module.startTheoClaw({
-      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      env: { ...OPEN_DMS, THEOCLAW_MEMORY: 'off', THEOCLAW_TRANSCRIPTS: 'on', OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
       agentFactory: () => {
         throw new Error('the /control factory must not build a chat agent')
       },

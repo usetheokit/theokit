@@ -9,7 +9,7 @@ import type { AgentOptions, Plugin } from '@theokit/sdk'
 
 import { createMemory, type MemoryWiring, memoryEnabled, reviewerOptions } from '../memory/wiring.js'
 import { createContainer } from '../agent-container.js'
-import { createChannelAgentFactory, isIncognito, sessionAgentOptions } from '../control-plane/agent-factory.js'
+import { createChannelAgentFactory, isIncognito, keepsTranscripts, sessionAgentOptions } from '../control-plane/agent-factory.js'
 import { Generations } from './generations.js'
 import { type SessionAgent, SessionAgents, type SessionLease } from './session-agents.js'
 import { createSessionRouter } from './session-key.js'
@@ -45,8 +45,9 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
   const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
   const router = createSessionRouter(settings)
   const incognito = isIncognito(options.env)
+  const transient = incognito || !keepsTranscripts(options.env)
   const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
-  const memory = memoryEnabled(options.env, incognito) ? createMemory(join(settings.workspace, '.theoclaw', 'memory'), options.write) : undefined
+  const memory = memoryEnabled(options.env, transient) ? createMemory(join(settings.workspace, '.theoclaw', 'memory'), options.write) : undefined
   let reviews = 0
   const recalled = recalledPrompt(memory)
   const sessions = new SessionAgents({
@@ -64,9 +65,9 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
         const opened = await build(id, {})
         // The reviewer is a fork: its own agent id and only `save_memory`, opened after each turn.
         const agent = memory === undefined ? opened : memory.wrap(opened, surfaceOf(id), keyOf(id), () => build(`${id}-review-${++reviews}`, reviewerOptions(memory.store, sessionOptions)))
-        return incognito ? withIncognitoCleanup(agent, dir) : agent
+        return transient ? withIncognitoCleanup(agent, dir) : agent
       } catch (error) {
-        if (incognito) removeIncognitoDir(dir)
+        if (transient) removeIncognitoDir(dir)
         throw error
       }
     },

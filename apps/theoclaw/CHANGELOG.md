@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- A chat or channel turn (SMS and the rest) no longer leaves its text in a transcript file by default (#1457). Each session's transcript goes to a temp directory removed when the agent is disposed, and the memory store, which records turns, is off with it. `THEOCLAW_TRANSCRIPTS=on` restores the transcripts under `<THEOCLAW_WORKSPACE>/.theoclaw/` (a conversation then survives a restart) and the memory default. Trigger and WebChat agents write theirs under the workspace instead of the home directory.
+
 ### Added
 
 - A changed start-only setting (`THEOCLAW_PORT`, a token, a channel or a policy) in the configuration file of a running instance now restarts TheoClaw onto the new file instead of only being reported (B-716, OC-94). Under systemd or launchd the process exits 75 and the manager restarts it; otherwise it starts its own successor, which waits for the old process to exit. A new file that would be refused at the start (a bad port or token) is refused whole and the instance keeps running. Offline-tested; the live check `tests/live/config-restart.live.test.ts` has not been run.
