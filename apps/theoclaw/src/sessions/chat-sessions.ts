@@ -7,6 +7,8 @@ import type { MessageEvent } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, Plugin } from '@theokit/sdk'
 
+import { isAuthenticatedSender, senderKey } from '../authorization/policy.js'
+import { OWNER_SCOPE } from '../memory/memory-store.js'
 import { createMemory, type MemoryWiring, memoryEnabled, reviewerOptions } from '../memory/wiring.js'
 import { createContainer } from '../agent-container.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -55,6 +57,8 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
   }
   const memory = memoryEnabled(options.env, transient) ? createMemory(join(settings.workspace, '.theoclaw', 'memory'), options.write) : undefined
   let reviews = 0
+  const owners = ownerKeys(options.env)
+  const currentEvent = new AsyncLocalStorage<MessageEvent>()
   const recalled = recalledPrompt(memory)
   const sessions = new SessionAgents({
     router,
@@ -63,14 +67,15 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
     // those keys are re-pinned, `local` merged so the session's cwd and the hook gate both hold (B-397).
     getOrCreate: async (id, sessionOptions) => {
       const dir = sessionOptions.local?.sessionDir
+      const scope = scopeOf(currentEvent.getStore(), owners)
       const build = (agentId: string, extra: AgentOptions): Promise<SessionAgent> =>
         createChannelAgentFactory(options.env, (channel) =>
-          open(agentId, { ...sessionOptions, ...channel, ...extra, ...recalled(channel.systemPrompt, extra), local: { ...sessionOptions.local, ...channel.local } }),
+          open(agentId, { ...sessionOptions, ...channel, ...extra, ...recalled(channel.systemPrompt, extra, scope), local: { ...sessionOptions.local, ...channel.local } }),
         )()
       try {
         const opened = await build(id, {})
         // The reviewer is a fork: its own agent id and only `save_memory`, opened after each turn.
-        const agent = memory === undefined ? opened : memory.wrap(opened, surfaceOf(id), keyOf(id), () => build(`${id}-review-${++reviews}`, reviewerOptions(memory.store, sessionOptions)))
+        const agent = memory === undefined ? opened : memory.wrap(opened, surfaceOf(id), keyOf(id), () => build(`${id}-review-${++reviews}`, reviewerOptions(memory.store, sessionOptions, scope)))
         return transient ? withIncognitoCleanup(agent, dir) : agent
       } catch (error) {
         if (transient) removeIncognitoDir(dir)
@@ -86,7 +91,6 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
     settings,
     write: options.write,
   })
-  const currentEvent = new AsyncLocalStorage<MessageEvent>()
   const boundary = createContainer<SessionLease>({
     factory: () => {
       const event = currentEvent.getStore()
@@ -106,10 +110,30 @@ const surfaceOf = (id: string): string => keyOf(id).split('-')[0] ?? 'chat'
  * (which passes `tools`) does not. Read when the agent opens, so a new session sees the latest.
  */
 function recalledPrompt(memory: MemoryWiring | undefined) {
-  return (prompt: string, extra: AgentOptions): { systemPrompt?: string } => {
-    const facts = memory?.store.recallSection() ?? ''
+  return (prompt: string, extra: AgentOptions, scope: string): { systemPrompt?: string } => {
+    const facts = memory?.store.recallSection(scope) ?? ''
     return facts === '' || extra.tools !== undefined ? {} : { systemPrompt: `${prompt}\n\n${facts}` }
   }
+}
+
+/** The `platform:senderId` keys `THEOCLAW_OWNERS` names, compared the way the owner policy does. */
+function ownerKeys(env: Readonly<Record<string, string | undefined>>): ReadonlySet<string> {
+  const keys = (env.THEOCLAW_OWNERS ?? '').split(',').flatMap((entry) => {
+    const at = entry.indexOf(':')
+    return at < 1 ? [] : [senderKey(entry.slice(0, at).trim(), entry.slice(at + 1).trim())]
+  })
+  return new Set(keys)
+}
+
+/**
+ * Whose facts a session reads and writes: an owner's sessions share the owner scope; any other DM
+ * sender has a scope of their own, and a group, thread or topic one per channel. Facts never cross scopes.
+ */
+function scopeOf(event: MessageEvent | undefined, owners: ReadonlySet<string>): string {
+  if (event === undefined) return OWNER_SCOPE
+  const sender = senderKey(event.platform, event.sender.id)
+  if (event.channel.type === 'dm') return isAuthenticatedSender(event.platform) && owners.has(sender) ? OWNER_SCOPE : sender
+  return `${event.platform}:channel:${event.channel.id}`
 }
 
 /** An incognito agent whose private transcript directory is removed once it is disposed. */

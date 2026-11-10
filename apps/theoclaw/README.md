@@ -125,6 +125,8 @@ so a file kept outside the repository and sourced from your shell profile is als
 | `THEOCLAW_TRANSCRIPTS` | `on` or `off` (default `off`). Off, a chat turn's transcript is kept in a temp directory removed when the session's agent is disposed and the memory store is off, so a message is stored in no file; the cost is that a conversation does not survive a restart, `session_search` finds nothing, and memory is off (`THEOCLAW_MEMORY=on` with transcripts off refuses to start). On, each chat's transcript is kept under `<THEOCLAW_WORKSPACE>/.theoclaw/`, a conversation survives a restart, and memory follows `THEOCLAW_MEMORY`. |
 | `THEOCLAW_WORKSPACE` | Absolute path of an existing directory. Each chat's transcript and the session generations are kept under `<THEOCLAW_WORKSPACE>/.theoclaw/` (created with mode 0700). Startup fails and names the variable when it is unset, relative or not a directory. Under `THEOCLAW_PROFILE` the profile sets it to its own `workspace` and an explicit value is refused (see [Several instances on one host](#several-instances-on-one-host)). |
 
+Remembered facts are scoped to who said them: all owners (`THEOCLAW_OWNERS`) and `/control` share one scope, every other DM sender has their own, and a group or thread has one per channel. A fact is recalled only into sessions of its scope. Facts saved before scopes existed count as the owner's.
+
 ### Who may talk to the instance
 
 Only the owners in `THEOCLAW_OWNERS`, and the senders an owner pairs, reach the agent. Everyone else
