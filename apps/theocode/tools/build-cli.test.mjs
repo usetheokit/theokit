@@ -48,6 +48,11 @@ describe('bundleOptions', () => {
     expect(options.external).toContain('proper-lockfile')
   })
 
+  it('test_readline_promises_stays_external_while_the_sdk_drops_the_node_scheme', () => {
+    // usetheokit/theokit-sdk#960: the SDK imports a bare `readline/promises`, which esbuild cannot resolve.
+    expect(bundleOptions().external).toContain('readline/promises')
+  })
+
   it('test_native_deps_stay_external', () => {
     // node-pty is loaded via createRequire and esbuild cannot follow it; better-sqlite3 is
     // optional and the SDK falls back to node:sqlite; `.node` addons are not bundlable at all.
