@@ -11,7 +11,7 @@ import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { createEventMask } from './event-mask.js'
-import { outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
+import { describeStreamedError, outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
 
 /** Where a session turn's translated events go, and who learns of the run once it exists. */
 export interface SessionTurnOptions {
@@ -35,7 +35,7 @@ async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<
   let streamedError: string | undefined
   const forward = (events: readonly TurnEvent[]): void => {
     for (const event of events) {
-      if (event.type === 'error') streamedError ??= String(event.code)
+      if (event.type === 'error') streamedError ??= describeStreamedError(event)
       options.emit(event)
     }
   }
@@ -67,5 +67,7 @@ export async function runSessionTurn(agent: TurnAgent, options: SessionTurnOptio
   if (!options.signal.aborted) mask.flush()
   options.onEventsEnded()
   const model = options.model === undefined ? undefined : maskSecrets(options.model, options.secrets ?? [])
-  return outcomeOf(await run.wait(), streamedError, model)
+  const outcome = outcomeOf(await run.wait(), streamedError, model)
+  // The error's message reaches the log; a configured value inside it is masked there too.
+  return outcome.ok ? outcome : { ...outcome, reason: maskSecrets(outcome.reason, options.secrets ?? []) }
 }
