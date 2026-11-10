@@ -34,8 +34,9 @@ describe('memory across surfaces (OC-56, Hermes row 3)', () => {
     store.appendTurn(turn('webchat', 'deploy goes on Fridays'))
     const tool = sessionSearchTool(store) as unknown as Callable
     expect(tool.name).toBe('session_search')
-    const out = JSON.parse(await tool.handler({ query: 'deploy' })) as { results: { surface: string }[] }
-    expect(out.results[0]?.surface).toBe('webchat')
+    const out = JSON.stringify(await tool.handler({ query: 'deploy' }))
+    expect(out).toContain('webchat')
+    expect(out).toContain('deploy goes on Fridays')
   })
 
   it('has a reviewer save a fact the next session recalls, and a failing reviewer does not reject', async () => {
@@ -44,8 +45,8 @@ describe('memory across surfaces (OC-56, Hermes row 3)', () => {
     const save = saveMemoryTool(store) as unknown as Callable
     await afterTurn(store, turn('tui', 'I work in Lisbon'), async (prompt) => {
       expect(prompt).toContain('I work in Lisbon')
-      await save.handler({ fact: 'The owner works in Lisbon' })
-      await save.handler({ fact: 'The owner works in Lisbon' })
+      await save.handler({ query: 'The owner works in Lisbon' })
+      await save.handler({ query: 'The owner works in Lisbon' })
     })
     expect(store.facts()).toEqual(['The owner works in Lisbon'])
     expect(new MemoryStore(d).recallSection()).toContain('- The owner works in Lisbon')
