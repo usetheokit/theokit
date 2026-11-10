@@ -226,12 +226,21 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     const text = entry.interrupted ? `${REDIRECT_NOTE}${message}` : message
     entry.interrupted = false
     let outcome: TurnOutcome
+    const startedAt = Date.now()
+    let firstEvent = true
+    options.report(`theoclaw: control session ${session} turn started`)
     try {
       outcome = await runSessionTurn(agent, {
         message: text,
         runId: randomUUID(),
         signal: turn.controller.signal,
-        emit,
+        emit: (event) => {
+          if (firstEvent) {
+            firstEvent = false
+            options.report(`theoclaw: control session ${session} first event after ${Date.now() - startedAt} ms`)
+          }
+          emit(event)
+        },
         secrets: options.secrets ?? [],
         ...(options.model === undefined ? {} : { model: options.model }),
         onRun: (run) => {
