@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
@@ -15,11 +15,16 @@ interface DbCommandResult {
   action?: DbAction
 }
 
-/** Runs a shell command in the project. Injected so a test can see the command without running it. */
-type RunCommand = (command: string, cwd: string) => void
+/**
+ * Runs a command in the project, without a shell: the executable and its argv, so a path with a
+ * space or a quote is never parsed. Injected so a test can see the command without running it.
+ */
+type RunCommand = (file: string, args: readonly string[], cwd: string) => void
 
-const runInherited: RunCommand = (command, cwd) => {
-  execSync(command, { cwd, stdio: 'inherit' })
+const runInherited: RunCommand = (file, args, cwd) => {
+  // npx is a .cmd shim on Windows, which execFile only finds by its full name.
+  const exe = process.platform === 'win32' && file === 'npx' ? 'npx.cmd' : file
+  execFileSync(exe, [...args], { cwd, stdio: 'inherit' })
 }
 
 function assertFileExists(cwd: string, relPath: string, hint: string): void {
@@ -45,9 +50,9 @@ function assertBinExists(cwd: string, bin: string): void {
  * behaviour stays available, under its real name, as `push`.
  */
 const DRIZZLE_KIT_VERBS = {
-  migrate: { command: 'npx drizzle-kit migrate', message: 'Migrations applied' },
-  push: { command: 'npx drizzle-kit push', message: 'Schema pushed to the database' },
-  generate: { command: 'npx drizzle-kit generate', message: 'Migration files generated' },
+  migrate: { args: ['drizzle-kit', 'migrate'], message: 'Migrations applied' },
+  push: { args: ['drizzle-kit', 'push'], message: 'Schema pushed to the database' },
+  generate: { args: ['drizzle-kit', 'generate'], message: 'Migration files generated' },
 } as const
 
 async function runSeed(cwd: string, run: RunCommand): Promise<string> {
@@ -72,7 +77,7 @@ async function runSeed(cwd: string, run: RunCommand): Promise<string> {
     )
   }
   try {
-    run(hasStorage ? `npx tsx --import ${preload} ${seedPath}` : `npx tsx ${seedPath}`, cwd)
+    run('npx', hasStorage ? ['tsx', '--import', preload, seedPath] : ['tsx', seedPath], cwd)
   } finally {
     if (hasStorage) rmSync(preload, { force: true })
   }
@@ -100,8 +105,8 @@ export async function dbCommand(
     const verb = DRIZZLE_KIT_VERBS[dbAction]
     assertFileExists(cwd, 'drizzle.config.ts', 'Create a drizzle.config.ts for your project.')
     assertBinExists(cwd, 'drizzle-kit')
-    console.log(`\n  ▸ Running ${verb.command.replace('npx ', '')}...\n`)
-    run(verb.command, cwd)
+    console.log(`\n  ▸ Running ${verb.args.join(' ')}...\n`)
+    run('npx', verb.args, cwd)
     return { status: 'success', message: verb.message, action: dbAction }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

@@ -13,9 +13,9 @@ import { dbCommand } from '../../packages/theo/src/cli/commands/db.js'
  */
 describe('theokit db runs the drizzle-kit command its verb names', () => {
   let dir: string
-  let ran: string[]
-  const run = (command: string): void => {
-    ran.push(command)
+  let ran: string[][]
+  const run = (file: string, args: readonly string[]): void => {
+    ran.push([file, ...args])
   }
 
   beforeEach(() => {
@@ -33,18 +33,18 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
   it('migrate applies the generated migration files with drizzle-kit migrate', async () => {
     const result = await dbCommand('migrate', dir, run)
     expect(result.status).toBe('success')
-    expect(ran).toEqual(['npx drizzle-kit migrate'])
+    expect(ran).toEqual([['npx', 'drizzle-kit', 'migrate']])
   })
 
   it('push keeps the schema-diff behaviour under its own name', async () => {
     const result = await dbCommand('push', dir, run)
     expect(result.status).toBe('success')
-    expect(ran).toEqual(['npx drizzle-kit push'])
+    expect(ran).toEqual([['npx', 'drizzle-kit', 'push']])
   })
 
   it('generate still writes migration files', async () => {
     await dbCommand('generate', dir, run)
-    expect(ran).toEqual(['npx drizzle-kit generate'])
+    expect(ran).toEqual([['npx', 'drizzle-kit', 'generate']])
   })
 
   it('seed runs the seed file under the configured serverDir', async () => {
@@ -56,7 +56,7 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
     writeFileSync(join(dir, 'src', 'server', 'db', 'seed.ts'), '')
     const result = await dbCommand('seed', dir, run)
     expect(result.status).toBe('success')
-    expect(ran).toEqual(['npx tsx src/server/db/seed.ts'])
+    expect(ran).toEqual([['npx', 'tsx', 'src/server/db/seed.ts']])
   })
 
   it('seed applies theo.config.ts storage in the child process through a preload (#1439)', async () => {
@@ -68,14 +68,16 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
     mkdirSync(join(dir, 'src', 'server', 'db'), { recursive: true })
     writeFileSync(join(dir, 'src', 'server', 'db', 'seed.ts'), '')
     let preloadBody = ''
-    const spy = (command: string): void => {
-      ran.push(command)
-      const file = command.split(' ')[3] ?? ''
+    const spy = (cmd: string, args: readonly string[]): void => {
+      ran.push([cmd, ...args])
+      const file = args[2] ?? ''
       preloadBody = existsSync(file) ? readFileSync(file, 'utf8') : ''
     }
     const result = await dbCommand('seed', dir, spy)
     expect(result.status).toBe('success')
-    expect(ran[0]).toMatch(/^npx tsx --import .*seed-preload\.mjs src\/server\/db\/seed\.ts$/)
+    expect(ran[0]?.slice(0, 3)).toEqual(['npx', 'tsx', '--import'])
+    expect(ran[0]?.[3]).toMatch(/seed-preload\.mjs$/)
+    expect(ran[0]?.[4]).toBe('src/server/db/seed.ts')
     expect(preloadBody).toContain('getStorageManager().configure(')
     expect(preloadBody).toContain('"main"')
   })
