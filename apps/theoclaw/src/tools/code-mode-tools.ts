@@ -13,6 +13,7 @@ import type { CustomTool } from '@theokit/sdk'
 import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from '../control-plane/errors.js'
+import { describeStreamedError } from '../control-plane/turn.js'
 import { vetoToolCall } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
 
@@ -105,7 +106,7 @@ function cappedScriptTools(tools: readonly CustomTool[]): CustomTool[] {
 async function streamedErrorOf(run: TurnRun): Promise<string | undefined> {
   let streamed: string | undefined
   for await (const message of run.stream()) {
-    if (message.type === 'error') streamed ??= String((message as { code?: unknown }).code ?? 'error')
+    if (message.type === 'error') streamed ??= describeStreamedError(message)
   }
   return streamed
 }

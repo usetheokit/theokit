@@ -414,8 +414,26 @@ describe("the events of one streamed message", () => {
     expect(outcome).toEqual({
       ok: false,
       code: "turn_failed",
-      reason: "the run streamed an error (AGENT_ERROR)",
+      reason: "the run streamed an error (AGENT_ERROR: the model failed)",
     });
+  });
+
+  it("a configured secret inside the error's message is not in the reason", async () => {
+    const key = "sk-or-v1-abcdef0123456789abcdef0123456789";
+    const stub = scriptedAgent([{ type: "status", status: "ERROR", message: `bad key ${key} (HTTP 401)` }]);
+
+    const outcome = await runTheoClawTurn({
+      withAgent: stub.withAgent,
+      message: "hello",
+      runId: "run-1",
+      emit: () => {},
+      secrets: [key],
+    });
+
+    expect(outcome).toMatchObject({ ok: false, code: "turn_failed" });
+    const reason = (outcome as { reason: string }).reason;
+    expect(reason).toContain("AGENT_ERROR: bad key");
+    expect(reason).not.toContain(key);
   });
 });
 

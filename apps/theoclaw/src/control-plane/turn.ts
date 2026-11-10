@@ -54,6 +54,13 @@ function failed(reason: string): TurnOutcome {
 
 function ignore(): void {}
 
+/** A streamed error as the turn's reason shows it: its code, and the message when it has one. */
+export function describeStreamedError(event: object): string {
+  const { code, message } = event as { code?: unknown; message?: unknown }
+  const text = String(code ?? 'error')
+  return typeof message === 'string' && message !== '' ? `${text}: ${message}` : text
+}
+
 interface AbortWatch {
   /** Resolves once the signal aborts; `undefined` without a signal, so an uncancellable turn races nothing. */
   readonly aborted: Promise<typeof ABORTED> | undefined
@@ -106,7 +113,7 @@ function emitMessage(message: { readonly type: string }, options: TurnOptions): 
   let streamedError: string | undefined
   for (const event of translateSdkEvent(message as SdkMessage, options.runId)) {
     if (options.signal?.aborted === true) break
-    if (event.type === 'error') streamedError ??= String(event.code)
+    if (event.type === 'error') streamedError ??= describeStreamedError(event)
     options.emit(event)
   }
   return streamedError
