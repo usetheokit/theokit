@@ -91,14 +91,31 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
     expect(schtasks(run).at(-1)).toBe('/Delete /TN theoclaw /F')
   })
 
+  it('uninstall_stops_the_task_process_tree_read_before_end_and_warns_about_survivors', async () => {
+    const h = harness({
+      platform: 'win32',
+      env: { ...WINDOWS_ENV, THEOCLAW_PROFILE: 'ox' },
+      answers: { 'powershell.exe -NonInteractive': [{ stdout: '11,12\r\n' }, { stdout: '12\r\n' }] },
+    })
+    expect(await daemonUninstall(h.io, h.runner)).toBe(0)
+    const order = h.calls.map((call) => `${call.command} ${call.args[0]}`)
+    expect(order).toEqual([
+      'powershell.exe -NonInteractive',
+      'schtasks /End',
+      'powershell.exe -NonInteractive',
+      'schtasks /Delete',
+    ])
+    const [find, stop] = h.calls.filter((call) => call.command === 'powershell.exe').map((c) => c.args.at(-1)!)
+    expect(find).toContain(`--profile ox`)
+    expect(find).toContain('--config')
+    expect(stop).toContain('$ids = @(11,12)')
+    expect(h.stderr()).toContain('processes 12 of theoclaw-ox')
+  })
+
   it('uninstall_deletes_the_task_and_status_reads_the_scheduled_task_state', async () => {
     const h = harness({ platform: 'win32', env: WINDOWS_ENV })
     expect(await daemonUninstall(h.io, h.runner)).toBe(0)
     expect(schtasks(h)).toEqual(['/End /TN theoclaw', '/Delete /TN theoclaw /F'])
-    // Between /End and /Delete, whatever still runs from the instance's config is killed (#1496).
-    const kill = h.calls.find((call) => call.command === 'powershell.exe')
-    expect(kill?.args.at(-1)).toContain('taskkill /F /T')
-    expect(kill?.args.at(-1)).toContain('Win32_Process')
 
     const gone = harness({
       platform: 'win32',

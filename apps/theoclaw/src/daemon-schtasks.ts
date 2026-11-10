@@ -116,25 +116,44 @@ async function fail(
   return 1
 }
 
+const quote = (text: string): string => `'${text.replaceAll("'", "''")}'`
+
+/**
+ * The ids of the task's process and of everything below it, read before `/End`: once a parent has
+ * exited its children cannot be found from it any more. The root is the process started with this
+ * instance's exact arguments (entry, config and profile), so another instance or a hand-run start on
+ * the same config file is not taken for it.
+ */
+async function taskProcesses(runner: Runner, commandLine: string): Promise<string[]> {
+  const script = [
+    `$cl = ${quote(commandLine)}`,
+    '$all = @(Get-CimInstance Win32_Process)',
+    '$ids = @($all | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains($cl) } | ForEach-Object { $_.ProcessId })',
+    'do { $n = $ids.Count; $ids = @($ids + ($all | Where-Object { $ids -contains $_.ParentProcessId -and $_.ProcessId -ne $PID } | ForEach-Object { $_.ProcessId }) | Select-Object -Unique) } while ($ids.Count -gt $n)',
+    '$ids -join ","',
+  ].join('\n')
+  const found = await runner('powershell.exe', ['-NonInteractive', '-NoProfile', '-Command', script])
+  return found.code === 0 ? found.stdout.trim().split(',').filter((id) => /^\d+$/.test(id)) : []
+}
+
 /**
  * `/End` returns before the task's process is gone, and a child of it can outlive it; the service's cwd
  * is the profile workspace, so a survivor keeps that directory locked (EBUSY on removal, #1496). This
- * kills, with its tree, every process whose command line names the instance's configuration file,
- * and returns once none is left (or after about 10 s). A failure here changes nothing for the caller.
+ * stops the given processes and waits (about 10 s) for them to be gone. It returns the ids still alive.
  */
-async function stopStragglers(runner: Runner, configPath: string): Promise<void> {
-  const quoted = configPath.replaceAll("'", "''")
+async function stopProcesses(runner: Runner, ids: readonly string[]): Promise<string[]> {
   const script = [
-    `$p = '${quoted}'`,
-    '$self = $PID',
+    `$ids = @(${ids.join(',')})`,
     'for ($i = 0; $i -lt 50; $i++) {',
-    "  $found = @(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $self -and $_.Name -ne 'powershell.exe' -and $_.CommandLine -and $_.CommandLine.Contains($p) })",
-    '  if ($found.Count -eq 0) { break }',
-    '  foreach ($f in $found) { taskkill /F /T /PID $f.ProcessId | Out-Null }',
+    '  $alive = @(Get-Process -Id $ids -ErrorAction SilentlyContinue)',
+    '  if ($alive.Count -eq 0) { break }',
+    '  $alive | Stop-Process -Force -ErrorAction SilentlyContinue',
     '  Start-Sleep -Milliseconds 200',
     '}',
+    '(@(Get-Process -Id $ids -ErrorAction SilentlyContinue) | ForEach-Object { $_.Id }) -join ","',
   ].join('\n')
-  await runner('powershell.exe', ['-NonInteractive', '-NoProfile', '-Command', script])
+  const result = await runner('powershell.exe', ['-NonInteractive', '-NoProfile', '-Command', script])
+  return result.code === 0 ? result.stdout.trim().split(',').filter((id) => /^\d+$/.test(id)) : ids.slice()
 }
 
 export const schtasksBackend: DaemonBackend = {
@@ -167,8 +186,13 @@ export const schtasksBackend: DaemonBackend = {
 
   async uninstall(io, runner, target) {
     const { label } = target
+    const commandLine = taskArguments({ ...target, workingDirectory: '', nodePath: io.nodePath, entryPath: io.entry, user: '' })
+    const processes = await taskProcesses(runner, commandLine)
     await schtasks(runner, '/End', '/TN', label)
-    await stopStragglers(runner, target.configPath)
+    const alive = processes.length === 0 ? [] : await stopProcesses(runner, processes)
+    if (alive.length > 0) {
+      io.stderr.write(`theoclaw daemon: processes ${alive.join(', ')} of ${label} are still running\n`)
+    }
     const deleted = await schtasks(runner, '/Delete', '/TN', label, '/F')
     // A refused or impossible /Delete leaves the task in place. It counts as removed only when the
     // scheduler is asked and says there is no such task: a command that cannot start (127) or a
