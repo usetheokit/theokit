@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -57,6 +57,27 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
     const result = await dbCommand('seed', dir, run)
     expect(result.status).toBe('success')
     expect(ran).toEqual(['npx tsx src/server/db/seed.ts'])
+  })
+
+  it('seed applies theo.config.ts storage in the child process through a preload (#1439)', async () => {
+    writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
+    writeFileSync(
+      join(dir, 'theo.config.ts'),
+      `export default { serverDir: 'src/server', storage: { servers: { primary: { host: 'localhost', port: 5432, user: 'postgres', password: 'x' } }, databases: { main: { server: 'primary', database: 'app' } } } }\n`,
+    )
+    mkdirSync(join(dir, 'src', 'server', 'db'), { recursive: true })
+    writeFileSync(join(dir, 'src', 'server', 'db', 'seed.ts'), '')
+    let preloadBody = ''
+    const spy = (command: string): void => {
+      ran.push(command)
+      const file = command.split(' ')[3] ?? ''
+      preloadBody = existsSync(file) ? readFileSync(file, 'utf8') : ''
+    }
+    const result = await dbCommand('seed', dir, spy)
+    expect(result.status).toBe('success')
+    expect(ran[0]).toMatch(/^npx tsx --import .*seed-preload\.mjs src\/server\/db\/seed\.ts$/)
+    expect(preloadBody).toContain('getStorageManager().configure(')
+    expect(preloadBody).toContain('"main"')
   })
 
   it('lists push among the valid actions when the verb is unknown', async () => {
