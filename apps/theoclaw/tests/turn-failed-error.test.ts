@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { turnFailedError } from './live/support/turn-failed.js'
+import { throwUnlessFinished, turnFailedError } from './live/support/turn-failed.js'
 
 describe('turnFailedError', () => {
   const frame = { type: 'error', code: 'turn_failed' }
@@ -36,5 +36,22 @@ describe('turnFailedError', () => {
     } finally {
       delete process.env.THEOCLAW_TEST_API_KEY
     }
+  })
+})
+
+describe('throwUnlessFinished', () => {
+  it('names the reason from the output for a failed turn and hides the token', () => {
+    const turn = { status: 'failed', error: '[{"type":"error","code":"turn_failed"}]' }
+    const output = 'theoclaw: turn failed: provider answered 429 token tok-secret-1234\n'
+    expect(() => throwUnlessFinished(turn, output, ['tok-secret-1234'])).toThrow(
+      /provider answered 429/,
+    )
+    expect(() => throwUnlessFinished(turn, output, ['tok-secret-1234'])).not.toThrow(
+      /tok-secret-1234/,
+    )
+  })
+
+  it('does nothing for a finished turn', () => {
+    expect(() => throwUnlessFinished({ status: 'finished', error: '' }, '')).not.toThrow()
   })
 })

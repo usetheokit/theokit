@@ -21,3 +21,13 @@ export function turnFailedError(
   ])
   return new Error(text)
 }
+
+/** Throws, with the instance's reason, unless a `runControlTurn` result finished. */
+export function throwUnlessFinished(
+  turn: { readonly status: string; readonly error: string },
+  output: string,
+  secrets: readonly string[] = [],
+): void {
+  if (turn.status !== 'finished')
+    throw turnFailedError({ status: turn.status, error: turn.error }, output, secrets)
+}

@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { runControlTurn } from "./support/control-turn.js";
+import { throwUnlessFinished } from "./support/turn-failed.js";
 
 /**
  * AC-006 (B-372): OC-22 and OC-23 against a real model, through the BUILT entry (`dist/main.js`),
@@ -85,6 +86,7 @@ describe.skipIf(!LIVE)("the control plane against a real model", () => {
     // Anything after the final frame would be a second ending; 500 ms is the window the plan names.
     const turn = await runControlTurn(port, TOKEN, "Reply with the single word: pong", 60_000, 500);
     if (turn.status === "timeout") throw new Error(`no final frame within 60 s: ${JSON.stringify(turn.frames)}`);
+    throwUnlessFinished(turn, output, [TOKEN]);
 
     expect(turn.text.trim().length, `frames: ${JSON.stringify(turn.frames)}`).toBeGreaterThan(0);
     // One final frame, a done; since B-400 it carries the turn's usage record.

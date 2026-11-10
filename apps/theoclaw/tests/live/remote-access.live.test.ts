@@ -25,12 +25,7 @@ import { createTheoClawAgent, type TheoClawAgentOptions } from '../../src/agent/
 import { createAgentFactory } from '../../src/control-plane/agent-factory.js'
 import { useForwardCleanup } from './support/forward-cleanup.js'
 import { turnFailedError } from './support/turn-failed.js'
-import {
-  findBinary,
-  openSshForward,
-  type SshForward,
-  waitForForward,
-} from './support/ssh-forward.js'
+import { findBinary, openSshForward, type SshForward, waitForForward } from './support/ssh-forward.js'
 
 /**
  * OC-24 (B-512): the owner reaches the loopback control plane from another machine through an SSH
@@ -61,9 +56,7 @@ function append(key: string, chunk: string): void {
 }
 
 /** Each stream's chunks joined in order: a token split across two chunks of one stream is still found. */
-function joinedStreams(
-  log: ReadonlyMap<string, readonly string[]>,
-): Array<{ readonly key: string; readonly text: string }> {
+function joinedStreams(log: ReadonlyMap<string, readonly string[]>): Array<{ readonly key: string; readonly text: string }> {
   return [...log].map(([key, chunks]) => ({ key, text: chunks.join('') }))
 }
 
@@ -75,11 +68,7 @@ function leakedTokens(): string[] {
 /** Rejects naming `what` once `ms` pass, through an abort signal rather than a timer callback. */
 function within<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
   const over = new Promise<never>((_, reject) =>
-    AbortSignal.timeout(ms).addEventListener(
-      'abort',
-      () => reject(new Error(`${what} did not finish within ${ms} ms`)),
-      { once: true },
-    ),
+    AbortSignal.timeout(ms).addEventListener('abort', () => reject(new Error(`${what} did not finish within ${ms} ms`)), { once: true }),
   )
   return Promise.race([work, over])
 }
@@ -96,10 +85,7 @@ interface Claw {
 async function startClaw(withToken: boolean): Promise<Claw> {
   const model = process.env.THEOCLAW_MODEL
   const modelKey = process.env.THEOKIT_API_KEY ?? process.env.OPENROUTER_API_KEY
-  if (!model || !modelKey)
-    throw new Error(
-      'THEOCLAW_LIVE=1 needs THEOCLAW_MODEL and THEOKIT_API_KEY or OPENROUTER_API_KEY',
-    )
+  if (!model || !modelKey) throw new Error('THEOCLAW_LIVE=1 needs THEOCLAW_MODEL and THEOKIT_API_KEY or OPENROUTER_API_KEY')
   const token = withToken ? randomBytes(24).toString('hex') : undefined
   if (token !== undefined) tokensIssued.push(token)
   // Every start needs the workspace its chat sessions are kept in (B-378).
@@ -109,9 +95,7 @@ async function startClaw(withToken: boolean): Promise<Claw> {
     THEOCLAW_MODEL: model,
     THEOCLAW_WORKSPACE: workspace,
     ...(process.env.THEOKIT_API_KEY ? { THEOKIT_API_KEY: process.env.THEOKIT_API_KEY } : {}),
-    ...(process.env.OPENROUTER_API_KEY
-      ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
-      : {}),
+    ...(process.env.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY } : {}),
     THEOCLAW_OWNERS: 'telegram:owner',
     THEOCLAW_DM_POLICY: 'allowlist',
     THEOCLAW_PORT: '0',
@@ -120,34 +104,28 @@ async function startClaw(withToken: boolean): Promise<Claw> {
   }
   const index = starts++
   const created: TheoClawAgentOptions[] = []
-  const agent = createAgentFactory(
-    env,
-    (options) => (created.push(options), createTheoClawAgent(options)),
-  )
+  const agent = createAgentFactory(env, (options) => (created.push(options), createTheoClawAgent(options)))
   let builds = 0
   const signals = new EventEmitter()
   let onExit: (code: number) => void = () => undefined
   const exited = new Promise<number>((resolve) => (onExit = resolve))
   const starting = startTheoClaw({
-    env,
-    agentFactory: (toolOptions) => ((builds += 1), agent(toolOptions)),
-    builders: () => [],
-    stdout: (line) => append(`theoclaw:${index}:stdout`, `${line}\n`),
-    stderr: (line) => append(`theoclaw:${index}:stderr`, `${line}\n`),
-    // No stream to mask: the worker's own streams must not stay wrapped after the test.
-    streams: [],
-    signals,
-    exit: (code) => onExit(code),
-  })
+      env,
+      agentFactory: (toolOptions) => ((builds += 1), agent(toolOptions)),
+      builders: () => [],
+      stdout: (line) => append(`theoclaw:${index}:stdout`, `${line}\n`),
+      stderr: (line) => append(`theoclaw:${index}:stderr`, `${line}\n`),
+      // No stream to mask: the worker's own streams must not stay wrapped after the test.
+      streams: [],
+      signals,
+      exit: (code) => onExit(code),
+    })
   let running: RunningTheoClaw
   try {
     running = await within(starting, START_MS, 'the TheoClaw start')
   } catch (error) {
     // A start that resolves after its bound must not stay listening for the rest of the file.
-    void starting.then(
-      () => signals.emit('SIGTERM'),
-      () => undefined,
-    )
+    void starting.then(() => signals.emit('SIGTERM'), () => undefined)
     throw error
   }
   stops.push(async () => {
@@ -210,11 +188,7 @@ async function turnThrough(port: number, token: string): Promise<Frame[]> {
     const signal = AbortSignal.timeout(TURN_MS)
     const done = new Promise<void>((resolve, reject) => {
       signal.addEventListener('abort', () =>
-        reject(
-          new Error(
-            `no done frame within ${TURN_MS} ms; last frame: ${JSON.stringify(frames.at(-1) ?? null)}`,
-          ),
-        ),
+        reject(new Error(`no done frame within ${TURN_MS} ms; last frame: ${JSON.stringify(frames.at(-1) ?? null)}`)),
       )
       socket.on('message', (raw) => {
         let frame: Frame
@@ -225,16 +199,7 @@ async function turnThrough(port: number, token: string): Promise<Frame[]> {
         }
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error')
-          reject(
-            turnFailedError(
-              frame,
-              joinedStreams(outputLog)
-                .map((s) => s.text)
-                .join('\n'),
-              tokensIssued,
-            ),
-          )
+        if (frame.type === 'error') reject(turnFailedError(frame, joinedStreams(outputLog).map((s) => s.text).join('\n'), tokensIssued))
       })
     })
     socket.send(JSON.stringify({ type: 'chat', message: 'Reply with the word pong.' }))
@@ -259,9 +224,7 @@ async function attemptChat(port: number, token: string | undefined): Promise<voi
     signal.addEventListener('abort', () => resolve(), { once: true })
     socket.once('unexpected-response', () => resolve())
     socket.once('error', () => resolve())
-    socket.once('open', () =>
-      socket.send(JSON.stringify({ type: 'chat', message: 'Reply with the word pong.' })),
-    )
+    socket.once('open', () => socket.send(JSON.stringify({ type: 'chat', message: 'Reply with the word pong.' })))
     socket.on('message', (raw) => {
       if (/"type":"(done|error)"/.test(String(raw))) resolve()
     })
@@ -271,12 +234,7 @@ async function attemptChat(port: number, token: string | undefined): Promise<voi
 
 function isNonEmptyText(frame: Frame): boolean {
   const event = frame.event as { type?: unknown; content?: unknown } | undefined
-  return (
-    frame.type === 'event' &&
-    event?.type === 'text_delta' &&
-    typeof event.content === 'string' &&
-    event.content.trim() !== ''
-  )
+  return frame.type === 'event' && event?.type === 'text_delta' && typeof event.content === 'string' && event.content.trim() !== ''
 }
 
 function connectErrorCode(port: number): Promise<string> {
@@ -303,8 +261,7 @@ function snapshotSshDir(): Record<string, string> | 'absent' {
     const fd = openSync(join(dir, path), constants.O_RDONLY | constants.O_NOFOLLOW)
     try {
       const opened = fstatSync(fd)
-      snapshot[path] =
-        `${opened.mtimeMs} ${createHash('sha256').update(readFileSync(fd)).digest('hex')}`
+      snapshot[path] = `${opened.mtimeMs} ${createHash('sha256').update(readFileSync(fd)).digest('hex')}`
     } finally {
       closeSync(fd)
     }
@@ -325,8 +282,7 @@ async function releasedPort(): Promise<number> {
   const server = createServer()
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
-  if (address === null || typeof address === 'string')
-    throw new Error('no TCP address for the probe server')
+  if (address === null || typeof address === 'string') throw new Error('no TCP address for the probe server')
   await new Promise<void>((resolve) => server.close(() => resolve()))
   return address.port
 }
@@ -336,8 +292,7 @@ async function echoServer(): Promise<{ readonly port: number; readonly server: S
   const server = createServer((socket) => socket.pipe(socket))
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
-  if (address === null || typeof address === 'string')
-    throw new Error('no TCP address for the echo server')
+  if (address === null || typeof address === 'string') throw new Error('no TCP address for the echo server')
   return { port: address.port, server }
 }
 
@@ -363,23 +318,17 @@ describe.skipIf(!LIVE)('remote access over an SSH local forward', () => {
 
   it('fails naming the binary when ssh cannot be found', async () => {
     const binDir = binDirWith(['sshd', 'ssh-keygen'])
-    await expect(openSshForward({ targetPort: 1, binDir })).rejects.toThrow(
-      /binary not found: ssh /,
-    )
+    await expect(openSshForward({ targetPort: 1, binDir })).rejects.toThrow(/binary not found: ssh /)
   })
 
   it('fails naming the binary when sshd cannot be found', async () => {
     const binDir = binDirWith(['ssh', 'ssh-keygen'])
-    await expect(openSshForward({ targetPort: 1, binDir })).rejects.toThrow(
-      /binary not found: sshd /,
-    )
+    await expect(openSshForward({ targetPort: 1, binDir })).rejects.toThrow(/binary not found: sshd /)
   })
 
   it('fails naming the binary when ssh-keygen cannot be found', async () => {
     const binDir = binDirWith(['sshd', 'ssh'])
-    await expect(openSshForward({ targetPort: 1, binDir })).rejects.toThrow(
-      /binary not found: ssh-keygen /,
-    )
+    await expect(openSshForward({ targetPort: 1, binDir })).rejects.toThrow(/binary not found: ssh-keygen /)
   })
 
   it('fails naming the port after the 10000 ms deadline when the forward never opens', async () => {
@@ -397,13 +346,7 @@ describe.skipIf(!LIVE)('remote access over an SSH local forward', () => {
       const forward = await openSshForward({ targetPort: echo.port })
       const a = forward.spawnedArgs()
       expect(a.ssh).toEqual(
-        expect.arrayContaining([
-          '-F',
-          '/dev/null',
-          'IdentitiesOnly=yes',
-          'StrictHostKeyChecking=yes',
-          'GlobalKnownHostsFile=/dev/null',
-        ]),
+        expect.arrayContaining(['-F', '/dev/null', 'IdentitiesOnly=yes', 'StrictHostKeyChecking=yes', 'GlobalKnownHostsFile=/dev/null']),
       )
       expect(a.ssh).toContain(`UserKnownHostsFile=${join(forward.tempDir, 'known_hosts')}`)
       expect(a.sshd[a.sshd.indexOf('-f') + 1]?.startsWith(forward.tempDir)).toBe(true)
@@ -474,9 +417,7 @@ describe.skipIf(!LIVE)('remote access over an SSH local forward', () => {
   it('the turn crossed the test sshd and stops when it stops', async () => {
     const claw = await startClaw(true)
     const forward = await forwardTo(claw)
-    expect((await turnThrough(forward.localPort, claw.token!)).at(-1)).toMatchObject({
-      type: 'done',
-    })
+    expect((await turnThrough(forward.localPort, claw.token!)).at(-1)).toMatchObject({ type: 'done' })
     const log = forward.sshdLog()
     expect(log).toMatch(/Accepted publickey for \S+/)
     await forward.close()
@@ -486,15 +427,9 @@ describe.skipIf(!LIVE)('remote access over an SSH local forward', () => {
 
   it('never prints the control token in any process output', () => {
     const streams = joinedStreams(outputLog)
-    const ours = streams
-      .filter((s) => s.key.startsWith('theoclaw:'))
-      .map((s) => s.text)
-      .join('')
+    const ours = streams.filter((s) => s.key.startsWith('theoclaw:')).map((s) => s.text).join('')
     expect(ours.length).toBeGreaterThan(0)
-    const sshd = streams
-      .filter((s) => s.key.startsWith('sshd:'))
-      .map((s) => s.text)
-      .join('')
+    const sshd = streams.filter((s) => s.key.startsWith('sshd:')).map((s) => s.text).join('')
     expect(sshd.length).toBeGreaterThan(0)
     const leaks = tokensIssued.filter((t) => streams.some((s) => s.text.includes(t)))
     expect(leaks).toEqual([])

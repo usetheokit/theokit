@@ -40,11 +40,9 @@ function lanAddress(): string {
     .flatMap((entries) => entries ?? [])
     .filter((entry) => entry.family === 'IPv4' && !entry.internal)
     .map((entry) => entry.address)
-  const isPrivate = (address: string): boolean =>
-    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(address)
+  const isPrivate = (address: string): boolean => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(address)
   const chosen = addresses.find(isPrivate) ?? addresses[0]
-  if (chosen === undefined)
-    throw new Error('no non-internal IPv4 address on this host; the LAN tests cannot run')
+  if (chosen === undefined) throw new Error('no non-internal IPv4 address on this host; the LAN tests cannot run')
   return chosen
 }
 
@@ -98,9 +96,7 @@ async function start(lan: boolean): Promise<Started> {
   const model = process.env.THEOCLAW_MODEL
   const modelKey = process.env.THEOKIT_API_KEY ?? process.env.OPENROUTER_API_KEY
   if (!model || !modelKey) {
-    throw new Error(
-      'THEOCLAW_LIVE=1 needs THEOCLAW_MODEL and THEOKIT_API_KEY or OPENROUTER_API_KEY',
-    )
+    throw new Error('THEOCLAW_LIVE=1 needs THEOCLAW_MODEL and THEOKIT_API_KEY or OPENROUTER_API_KEY')
   }
   const token = randomBytes(24).toString('base64url')
   // A scratch working directory, so the start makes its tool root `files/` there, not in the checkout;
@@ -111,9 +107,7 @@ async function start(lan: boolean): Promise<Started> {
     THEOCLAW_MODEL: model,
     THEOCLAW_WORKSPACE: cwd,
     ...(process.env.THEOKIT_API_KEY ? { THEOKIT_API_KEY: process.env.THEOKIT_API_KEY } : {}),
-    ...(process.env.OPENROUTER_API_KEY
-      ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
-      : {}),
+    ...(process.env.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY } : {}),
     THEOCLAW_OWNERS: 'telegram:owner',
     THEOCLAW_DM_POLICY: 'allowlist',
     THEOCLAW_PORT: '0',
@@ -137,16 +131,7 @@ async function start(lan: boolean): Promise<Started> {
     signals,
     exit: (code) => onExit(code),
   })
-  const started: Started = {
-    running,
-    token,
-    output: () => written.join(''),
-    called,
-    resolved: performance.now(),
-    signals,
-    exited,
-    stopped: false,
-  }
+  const started: Started = { running, token, output: () => written.join(''), called, resolved: performance.now(), signals, exited, stopped: false }
   cleanups.push(async () => {
     if (!started.stopped) await stop(started)
   })
@@ -170,28 +155,20 @@ async function controlTurn(started: Started): Promise<string[]> {
         const frame = JSON.parse(String(raw)) as Record<string, unknown>
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error')
-          reject(turnFailedError(frame, started.output(), [started.token]))
+        if (frame.type === 'error') reject(turnFailedError(frame, started.output(), [started.token]))
       })
       socket.once('error', reject)
     })
     await new Promise<void>((resolve, reject) => {
       socket.once('open', () => resolve())
-      socket.once('unexpected-response', () =>
-        reject(new Error('the /control upgrade was refused')),
-      )
+      socket.once('unexpected-response', () => reject(new Error('the /control upgrade was refused')))
     })
     socket.send(JSON.stringify({ type: 'chat', message: 'Reply with the single word: pong' }))
     await withinMs(done, 60_000, 'the done frame')
     return frames
       .filter((frame) => frame.type === 'event')
       .map((frame) => frame.event as { type: string; content?: unknown })
-      .filter(
-        (event) =>
-          event.type === 'text_delta' &&
-          typeof event.content === 'string' &&
-          event.content.trim() !== '',
-      )
+      .filter((event) => event.type === 'text_delta' && typeof event.content === 'string' && event.content.trim() !== '')
       .map((event) => String(event.content))
   } finally {
     socket.close()
@@ -221,9 +198,7 @@ describe.skipIf(!LIVE)('LAN discovery on a real multicast socket', () => {
         const answer = await waitForSrv(socket, name, { after: sent, withinMs: ANSWER_MS })
         expect(answer.port).toBe(started.running.address().port)
         // The gap between queries is the plan's cadence (NFR-001), not a wait for a condition.
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.max(0, sent + QUERY_GAP_MS - performance.now())),
-        )
+        await new Promise((resolve) => setTimeout(resolve, Math.max(0, sent + QUERY_GAP_MS - performance.now())))
       }
 
       // EC-3: the turn runs after the announcement, so its seconds cannot hide the first record.
@@ -238,10 +213,7 @@ describe.skipIf(!LIVE)('LAN discovery on a real multicast socket', () => {
     cleanups.push(() => control.close())
     const started = await start(false)
 
-    const { answers } = await expectNoSrv(socket, instanceName(started.running), {
-      windowMs: SILENCE_MS,
-      control,
-    })
+    const { answers } = await expectNoSrv(socket, instanceName(started.running), { windowMs: SILENCE_MS, control })
 
     expect(answers).toHaveLength(0)
   })
