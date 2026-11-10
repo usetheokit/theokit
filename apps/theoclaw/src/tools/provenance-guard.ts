@@ -6,6 +6,8 @@ import type { GeneralPlugin } from './general-plugin.js'
 const UNTRUSTED_SOURCES: ReadonlySet<string> = new Set(['web_fetch', 'web_search'])
 /** The shortest run of characters taken as a value copied from a result. */
 const MIN_RUN = 8
+/** The most texts each list keeps; the oldest are dropped, so memory and the scan stay bounded. */
+const KEEP = 50
 /** A run of characters a copied value is made of: an id, a token, a URL, a path. */
 const RUN = new RegExp(`[A-Za-z0-9_\\-.:/@#+=%]{${MIN_RUN},}`, 'g')
 
@@ -31,8 +33,11 @@ function looksLikeValue(run: string): boolean {
  * saw in an untrusted tool result (`web_fetch`, `web_search`, an `mcp_` tool). A string argument with
  * a run of 8+ characters found in such a result and in none of the person's messages is denied with the
  * reason, so a fetched page cannot choose a tool's arguments whatever the model makes of its orders.
- * The person's own messages (`pre_user_send`) are the only trusted text it remembers; it keeps both
- * lists for the agent's lifetime.
+ * Trusted text is the person's messages (`pre_user_send`) and the results of every other tool
+ * (`read_file` and the like); the system prompt is not visible to a plugin. The sources themselves
+ * are exempt, so a search followed by a fetch of a result's URL, or a followed link, still runs.
+ * Blind spots, by design: a value under 8 characters, or a plain lowercase word, is not checked, and
+ * only the last 50 texts of each kind are remembered.
  */
 export function provenanceGuardPlugin(): GeneralPlugin {
   const untrusted: string[] = []
@@ -45,18 +50,21 @@ export function provenanceGuardPlugin(): GeneralPlugin {
       ctx.on('pre_user_send', (context: unknown) => {
         const prompt = (context as { prompt?: unknown } | undefined)?.prompt
         if (typeof prompt === 'string') trusted.push(prompt)
+        if (trusted.length > KEEP) trusted.shift()
         return undefined
       })
       ctx.on('post_tool_call', (context: unknown) => {
         const done = (context ?? {}) as { name?: unknown; result?: { stdout?: unknown } }
-        if (typeof done.name !== 'string' || !isUntrustedSource(done.name)) return undefined
+        if (typeof done.name !== 'string') return undefined
         const out = done.result?.stdout
-        untrusted.push(typeof out === 'string' ? out : JSON.stringify(out ?? ''))
+        const list = isUntrustedSource(done.name) ? untrusted : trusted
+        list.push(typeof out === 'string' ? out : JSON.stringify(out ?? ''))
+        if (list.length > KEEP) list.shift()
         return undefined
       })
       ctx.on('pre_tool_call', (context: unknown) => {
         const call = (context ?? {}) as Partial<PreToolCallContext>
-        if (call.name === undefined || untrusted.length === 0) return undefined
+        if (call.name === undefined || isUntrustedSource(call.name) || untrusted.length === 0) return undefined
         for (const text of stringsIn(call.args)) {
           for (const [run] of text.matchAll(RUN)) {
             if (!looksLikeValue(run)) continue

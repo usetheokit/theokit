@@ -57,3 +57,36 @@ it('lets the call run when the person gave the value', async () => {
   const { added } = await turn(`summarise the page, and note ${TOKEN}`)
   expect(added).toEqual([`buy ${TOKEN}`])
 })
+
+it('lets a fetch of a URL a search returned run', async () => {
+  const urls: string[] = []
+  const stub = await startModelStub([
+    { toolCalls: [{ name: 'web_search', args: {} }] },
+    { toolCalls: [{ name: 'web_fetch', args: { url: 'https://example.org/page-7' } }] },
+    { text: 'done' },
+  ])
+  cleanups.push(() => stub.close())
+  const search: CustomTool = {
+    name: 'web_search',
+    description: 'searches',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => 'result: https://example.org/page-7',
+  }
+  const fetchTool: CustomTool = {
+    name: 'web_fetch',
+    description: 'fetches',
+    inputSchema: { type: 'object', properties: { url: { type: 'string' } } },
+    handler: (args) => {
+      urls.push(String((args as { url?: unknown }).url))
+      return 'page'
+    },
+  }
+  const agent = await createTheoClawAgent({
+    ...theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key' }),
+    tools: [search, fetchTool],
+    plugins: [provenanceGuardPlugin()],
+  })
+  cleanups.push(() => agent[Symbol.asyncDispose]())
+  await runTheoClawTurn({ withAgent: (work) => work(agent), message: 'look it up', runId: 'prov-2', emit: () => undefined })
+  expect(urls).toEqual(['https://example.org/page-7'])
+})
