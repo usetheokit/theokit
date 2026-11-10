@@ -102,12 +102,16 @@ export const TEN_PLATFORMS: readonly PlatformName[] = [
 
 /**
  * Poll `condition` until it holds, failing with `what` once `timeoutMs` passes. Tests wait for a
- * condition, never for a guessed duration (`rules/testing.md` § 3).
+ * condition, never for a guessed duration (`rules/testing.md` § 3). A function for `what` is read at
+ * the deadline, so a description that shows a screen shows the screen that failed, not the one the
+ * wait began on.
  */
-export async function waitFor(condition: () => boolean, timeoutMs: number, what: string): Promise<void> {
+export async function waitFor(condition: () => boolean, timeoutMs: number, what: string | (() => string)): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!condition()) {
-    if (Date.now() > deadline) throw new Error(`timed out after ${timeoutMs} ms waiting for ${what}`)
+    if (Date.now() > deadline) {
+      throw new Error(`timed out after ${timeoutMs} ms waiting for ${typeof what === 'function' ? what() : what}`)
+    }
     await new Promise((resolve) => setImmediate(resolve))
   }
 }
