@@ -95,6 +95,7 @@ describe('THEOCLAW_BROWSER', () => {
       type: 'stdio',
       command: process.execPath,
       args: [PROXY, CLI, '--headless', '--isolated', '--config', CONFIG],
+      sequential: true,
     })
     expect(settings.offLines).toContain(ON_LINE)
     expect(settings.offLines).not.toContain(OFF_LINE)

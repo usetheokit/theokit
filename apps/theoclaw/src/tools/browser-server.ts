@@ -130,5 +130,7 @@ export function browserServer(settings: BrowserSettings): McpServerConfig {
     type: 'stdio',
     command: process.execPath,
     args: [PROXY_PATH, settings.cliPath, '--headless', '--isolated', '--config', CONFIG_PATH],
+    // One step's calls run in the order listed: a wait or snapshot must not run while a navigate loads.
+    sequential: true,
   }
 }

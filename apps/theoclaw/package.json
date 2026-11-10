@@ -55,7 +55,7 @@
     "@theokit/gateway-whatsapp": "0.5.0",
     "@theokit/http": "workspace:*",
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": "5.14.0",
+    "@theokit/sdk": "5.15.0",
     "@theokit/tui": "0.80.0",
     "@theokit/ui": "1.12.2",
     "@usetheo/ui": "0.28.2",
