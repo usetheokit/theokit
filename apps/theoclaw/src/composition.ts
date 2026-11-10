@@ -351,9 +351,12 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
   return tools
 }
 
-/** The exec gate's options: needs an asker and a state directory to keep saved approvals in. */
+/**
+ * The exec gate's options: needs a state directory to keep saved approvals in. Without an asker (the
+ * `/control` agents have no chat to ask in) a command no saved approval or reviewer allowed is refused.
+ */
 function execApprovalFor(given: TheoClawOptions['execApproval'], stateDir: string | undefined): ExecApprovalOptions | undefined {
-  if (given?.ask === undefined || stateDir === undefined) return undefined
+  if (stateDir === undefined) return undefined
   return { ...given, store: createExecApprovalStore(stateDir) }
 }
 
