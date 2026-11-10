@@ -1,5 +1,11 @@
 # theo
 
+## 0.79.0
+
+### Minor Changes
+
+- 19bbeec: `jobs.worker.shutdownTimeoutMs` sets how long `theokit start` waits on `SIGTERM` for the job in progress to finish before it closes storage and exits. It was fixed at 20 seconds, so a restart cut any longer job. The default stays 20 seconds. (#1292)
+
 ## 0.78.1
 
 ### Patch Changes
@@ -416,8 +422,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                          [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                          were found and every /api/agents/* route will 404.
+                                            [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                            were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
