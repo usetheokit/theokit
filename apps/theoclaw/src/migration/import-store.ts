@@ -45,6 +45,11 @@ const PREVIOUS_PREFIX = 'import.previous-'
 const LOCK = 'import.lock'
 const FILES = { manifest: 'manifest.json', instructions: 'instructions.md', memories: 'memories.md', mcp: '.mcp.json' } as const
 
+/** The files `writeImport` would create under `<stateDir>/import` (dry run), relative to it. */
+export function plannedImportFiles(setup: ForeignSetup): string[] {
+  return [FILES.instructions, FILES.memories, FILES.mcp, ...setup.skills.map((skill) => `skills/${skill.name}/SKILL.md`), FILES.manifest]
+}
+
 function writePrivate(path: string, text: string): void {
   writeFileSync(path, text, { mode: 0o600 })
   // After the write, so a umask or an existing file's mode cannot widen it.

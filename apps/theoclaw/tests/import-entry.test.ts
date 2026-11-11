@@ -129,6 +129,22 @@ describe('the import entry', () => {
     expect(existsSync(join(stateDir, 'import', 'manifest.json'))).toBe(true)
   })
 
+  it('--dry-run lists the files it would write and writes none; without it they appear', () => {
+    const claude = copyFixture('claude-code', join(dir, 'claude'))
+    const args = ['--from', 'claude-code', '--home', join(claude, 'home'), '--project', join(claude, 'project')]
+
+    const dry = runImport([...args, '--dry-run'], { stateDir })
+    expect(dry.status, dry.stderr).toBe(0)
+    expect(dry.stdout).toContain(`would write ${join(stateDir, 'import', 'manifest.json')}`)
+    expect(dry.stdout).toContain(`would write ${join(stateDir, 'import', 'instructions.md')}`)
+    expect(dry.stdout).toContain('would import claude-code: 2 skills')
+    expect(existsSync(stateDir)).toBe(false)
+
+    const real = runImport(args, { stateDir })
+    expect(real.status, real.stderr).toBe(0)
+    expect(existsSync(join(stateDir, 'import', 'instructions.md'))).toBe(true)
+  })
+
   it('an empty source imports with every count at 0 (EC-8)', () => {
     const empty = join(dir, 'empty-hermes')
     mkdirSync(empty)
