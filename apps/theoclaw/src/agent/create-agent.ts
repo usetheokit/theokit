@@ -12,16 +12,19 @@ import { UNTRUSTED_CONTENT_NOTICE } from './untrusted-content.js'
 
 /**
  * The SDK's local options TheoClaw sets. `hooks` is on every agent (B-397 FR-007): the SDK reads a
- * hook gate only here, and throws on a top-level `hooks`. No agent sets `settingSources`, so the SDK
- * loads no project hook today and the gate is defense in depth (plan D3). Whoever adds `cwd` or
+ * hook gate only here, and throws on a top-level `hooks`. `settingSources` has `project` once a
+ * hook fingerprint is approved; the gate still vets every hook command. Whoever adds `cwd` or
  * `sessionDir` merges them into this object, so the gate is never dropped.
  */
 export interface TheoClawLocalOptions {
   readonly hooks: HookApprovalGate
   readonly cwd?: string
   readonly sessionDir?: string
-  /** `['plugins']` only for an agent given a plugin workspace (OC-75); absent loads no plugin folder. */
-  readonly settingSources?: Array<'plugins'>
+  /**
+   * `'plugins'` for an agent given a plugin workspace (OC-75), `'project'` when the owner approved
+   * at least one hook fingerprint (OC-87); absent loads neither.
+   */
+  readonly settingSources?: Array<'plugins' | 'project'>
 }
 
 /** The options every TheoClaw agent is created with, every one of them. */
@@ -99,7 +102,8 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     systemPrompt: UNTRUSTED_CONTENT_NOTICE,
     local: {
       hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
-      ...(input.pluginWorkspace === undefined ? {} : { cwd: input.pluginWorkspace, settingSources: ['plugins' as const] }),
+      ...(input.pluginWorkspace === undefined ? {} : { cwd: input.pluginWorkspace }),
+      ...settingSourcesFor(input),
     },
     ...(input.telemetry === undefined ? {} : { telemetry: input.telemetry }),
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
@@ -111,6 +115,17 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
   const skilled = withSkillRead(withProviders(imported, input.providers))
   const suffix = input.toolOptions?.systemPromptSuffix
   return suffix === undefined || suffix === '' ? skilled : { ...skilled, systemPrompt: `${skilled.systemPrompt}\n\n${suffix}` }
+}
+
+/**
+ * The setting sources an agent loads: `plugins` for a plugin workspace, and `project` only once an
+ * approved hook fingerprint exists, so the SDK reads project hooks that the gate then vets one by one.
+ */
+function settingSourcesFor(input: TheoClawAgentInput<string | ModelSelection>): { settingSources?: Array<'plugins' | 'project'> } {
+  const sources: Array<'plugins' | 'project'> = []
+  if (input.pluginWorkspace !== undefined) sources.push('plugins')
+  if (input.approvedHooks !== undefined && input.approvedHooks.size > 0) sources.push('project')
+  return sources.length === 0 ? {} : { settingSources: sources }
 }
 
 /** `options` with the custom provider plugins after its own. */

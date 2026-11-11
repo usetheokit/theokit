@@ -286,12 +286,13 @@ describe("sessionAgentOptions", () => {
     });
   });
 
-  it("keeps the env's hook gate beside cwd and sessionDir, and loads no project setting (B-397 D3)", () => {
+  it("keeps the env's hook gate beside cwd and sessionDir, and loads the project setting only for approved hooks (OC-87)", () => {
     const local = sessionAgentOptions({ ...MODEL_ENV, THEOCLAW_APPROVED_HOOKS: APPROVED }, "/ws").local;
     expect(local.cwd).toBe("/ws");
     expect(local.hooks.approve?.(LISTED_HOOK)).toBe(true);
     expect(local.hooks.approve?.(UNLISTED_HOOK)).toBe(false);
-    expect(local).not.toHaveProperty("settingSources");
+    expect(local.settingSources).toEqual(["project"]);
+    expect(sessionAgentOptions(MODEL_ENV, "/ws").local).not.toHaveProperty("settingSources");
   });
 
   it("refuses a missing model with the start's own words", () => {
