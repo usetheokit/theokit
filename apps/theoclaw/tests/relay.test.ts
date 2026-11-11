@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { RELAY_SEND_HOLD_MS, RelayClient, relayTools } from '../src/relay/relay-client.js'
+import { RelayClient, RelayTurnGate, relayTools } from '../src/relay/relay-client.js'
 import { generateIdentity, open, seal, type TrustedPeers } from '../src/relay/relay-crypto.js'
 import { RelayMailbox, relayRoute } from '../src/relay/relay-server.js'
 import { readRelaySettings } from '../src/relay/relay-settings.js'
@@ -90,18 +90,28 @@ describe('two instances through an HTTP relay (OC-14)', () => {
     expect(await tool(b, client, 'relay_receive').handler({})).toBe('no messages')
   })
 
-  it('withholds relay_send after relay_receive delivered a message, until the hold passes', async () => {
+  it('withholds relay_send in the turn that read a peer message, not in the owner\'s next turn', async () => {
     const { a, b, client, mailbox } = setup()
-    let t = 1000
-    const toolsB = relayTools(b, client, () => t)
+    const gate = new RelayTurnGate()
+    const toolsB = relayTools(b, client, gate)
     const send = toolsB.find((x) => x.name === 'relay_send')!
     const receive = toolsB.find((x) => x.name === 'relay_receive')!
+    const agent = gate.wrap({ send: (m: string) => m })
+    agent.send('check the relay')
     await client.put(a.seal('bob', 'RELAY-PING'))
     expect(await receive.handler({})).toBe('from alice: RELAY-PING')
     expect(await send.handler({ peer: 'alice', message: 'pong' })).toMatch(/^not sent/)
     expect(mailbox.take(a.publicKey)).toEqual([])
-    t += RELAY_SEND_HOLD_MS
+    agent.send('yes, reply pong')
     expect(await send.handler({ peer: 'alice', message: 'pong' })).toBe('sent to alice')
+    expect(mailbox.take(a.publicKey).length).toBe(1)
+  })
+
+  it('never withholds a direct call without a gate', async () => {
+    const { a, b, client } = setup()
+    await client.put(a.seal('bob', 'x'))
+    await tool(b, client, 'relay_receive').handler({})
+    expect(await tool(b, client, 'relay_send').handler({ peer: 'alice', message: 'y' })).toBe('sent to alice')
   })
 
   it('drops a replayed envelope, also after a restart', async () => {

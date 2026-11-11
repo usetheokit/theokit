@@ -45,7 +45,7 @@ import { resolveSecretRefs, secretRefKind, type SecretStores } from './secret-re
 import { a2aLines, readA2ASettings } from './a2a/a2a-settings.js'
 import { a2aRoute } from './a2a/a2a-route.js'
 import { peerTools } from './a2a/peer-tools.js'
-import { RelayClient, relayTools } from './relay/relay-client.js'
+import { RelayClient, RelayTurnGate, relayTools } from './relay/relay-client.js'
 import { RelayMailbox, relayRoute } from './relay/relay-server.js'
 import { readRelaySettings, relaySecrets } from './relay/relay-settings.js'
 import { RelayState } from './relay/relay-state.js'
@@ -539,16 +539,19 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const relayDir = join(sessionSettings.workspace, '.theoclaw')
   const relayState = relay.client === undefined ? undefined : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
   if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
-  const relayTool = relayState === undefined || relay.client === undefined || relay.peers.size === 0 ? [] : relayTools(relayState, new RelayClient(relay.client.url, relay.client.token))
+  const relayClient = relayState === undefined || relay.client === undefined || relay.peers.size === 0 ? undefined : new RelayClient(relay.client!.url, relay.client!.token)
+  // A turn that read a peer's relay message may not send back; the owner's next turn may (OC-14).
+  const relayToolsFor = (gate?: RelayTurnGate): CustomTool[] => (relayState === undefined || relayClient === undefined ? [] : relayTools(relayState, relayClient, gate))
   const relayHandler = relay.serveToken === undefined ? undefined : relayRoute(relay.serveToken, new RelayMailbox(100, join(relayDir, 'relay-mailbox.json')))
-  const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers), ...relayTool]
+  const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
   const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
   const memory = composed.memory
-  const controlExtras = [...extraTools, ...(memory?.tools ?? [])]
+  const controlExtras = [...extraTools, ...relayToolsFor(), ...(memory?.tools ?? [])]
   const buildControlAgent = async (): Promise<TurnAgent> => {
-    const control = controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval)
+    const relayGate = new RelayTurnGate()
+    const control = controlAgentToolOptions(tools, buildWorker, [...extraTools, ...relayToolsFor(relayGate), ...(memory?.tools ?? [])], execApproval)
     const recalled = (await memory?.recall()) ?? ''
-    const agent = await options.agentFactory(recalled === '' ? control : { ...control, systemPromptSuffix: recalled })
+    const agent = relayGate.wrap(await options.agentFactory(recalled === '' ? control : { ...control, systemPromptSuffix: recalled }))
     // TUI, desktop and `/control` turns share the chat surfaces' memory; the reviewer has `save_memory` alone.
     return memory === undefined ? agent : memory.wrap(agent, 'control', 'control', async () => options.agentFactory({ tools: [saveMemoryTool(memory.store)], plugins: [] }))
   }
