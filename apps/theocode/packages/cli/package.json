@@ -1,6 +1,6 @@
 {
   "name": "@theocode/cli",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "type": "module",
   "description": "Surface 2 — the headless CLI.",

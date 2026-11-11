@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 16.4.0, create-theokit 3.0.33, @theokit/http 2.4.0, @theokit/presenter 0.11.0, @theokit/tauri 1.1.0, theokit 0.80.0] - 2026-11-10
+
 ### Removed
 
 - `@theokit/agents` (breaking): `HookGateUnsupportedError` and `CompatImportUnsupportedError` are removed from `@theokit/agents/bridge`, with the `HOOK_GATE_SINCE` and `COMPAT_IMPORT_SINCE` guards behind them. Both refused an `@theokit/sdk` older than 5.4.0, which the declared floor (`^5.11.0`) no longer admits, so no installable version could reach them. Removed rather than kept deprecated: nothing could throw them. `assembleM8CreateOptions` no longer takes `{ sdkVersion }`; code that caught either error by class can drop the `catch` (B-488)
