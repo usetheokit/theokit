@@ -31,7 +31,7 @@ import { scrubbedAgentTransport } from './acp-transport.js'
 import { acpPermissionHandler, type AcpPermissionOptions } from './acp-permission.js'
 import { browserServer } from './browser-server.js'
 import { codeModeTool, delegateAllTool, delegateTool, runWorker, type CreateWorker } from './code-mode-tools.js'
-import { codingWorkerPort, codingWorkersAvailable } from './coding-worker.js'
+import { cloudWorkerPort, codingWorkerPort, codingWorkersAvailable } from './coding-worker.js'
 import { computerTool } from './computer-tool.js'
 import { execApprovalPlugin, type ExecApprovalOptions } from './exec-approval.js'
 import { questionTool, taskTools } from './control-tools.js'
@@ -196,10 +196,14 @@ export function agentToolOptions(
       createCoder !== undefined && codingWorkersAvailable(settings)
         ? codingWorkerPort(settings, readOnlyTools, (workerTools, task, signal) => runWorker(() => createCoder(workerTools), task, signal))
         : undefined
+    const cloud =
+      createCoder !== undefined && codingWorkersAvailable(settings)
+        ? cloudWorkerPort(settings, readOnlyTools, (workerTools, task, signal) => runWorker(() => createCoder(workerTools), task, signal))
+        : undefined
     tools.push(
       codeModeTool(readOnlyTools(settings), settings),
-      delegateAllTool(createWorker, coder),
-      delegateTool(createWorker, coder),
+      delegateAllTool(createWorker, coder, cloud),
+      delegateTool(createWorker, coder, cloud),
       questionTool(),
       ...taskTools(),
     )

@@ -232,19 +232,20 @@ export async function runWorker(
 }
 
 /** The `worker` entry, and a `coder` entry (a coding task in its own git worktree, OC-83) where one is available. */
-function rosterOf(createWorker: CreateWorker, coder: DelegationPort | undefined) {
+function rosterOf(createWorker: CreateWorker, coder: DelegationPort | undefined, cloud?: DelegationPort) {
   return [
     { name: 'worker', target: workerPort(createWorker) },
     ...(coder === undefined ? [] : [{ name: 'coder', target: coder }]),
+    ...(cloud === undefined ? [] : [{ name: 'cloud', target: cloud }]),
   ]
 }
 
 /** `delegate_all` over one `worker` roster entry: up to four read-only workers at once. */
-export function delegateAllTool(createWorker: CreateWorker, coder?: DelegationPort): CustomTool {
-  return createDelegateAllTool({ roster: rosterOf(createWorker, coder) })
+export function delegateAllTool(createWorker: CreateWorker, coder?: DelegationPort, cloud?: DelegationPort): CustomTool {
+  return createDelegateAllTool({ roster: rosterOf(createWorker, coder, cloud) })
 }
 
 /** `delegate` over the same `worker` roster entry: one read-only worker, its answer returned to the parent (B-611). */
-export function delegateTool(createWorker: CreateWorker, coder?: DelegationPort): CustomTool {
-  return createDelegateTool({ roster: rosterOf(createWorker, coder) })
+export function delegateTool(createWorker: CreateWorker, coder?: DelegationPort, cloud?: DelegationPort): CustomTool {
+  return createDelegateTool({ roster: rosterOf(createWorker, coder, cloud) })
 }
