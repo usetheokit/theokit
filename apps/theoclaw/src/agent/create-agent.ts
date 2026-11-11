@@ -1,6 +1,7 @@
 import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 
+import { custodianSkills } from '../skills/custodian.js'
 import { loadSkillDirectory, SkillRegistry } from '../skills/registry.js'
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
@@ -79,6 +80,8 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   readonly skillsDir?: string
   /** The user's skills directory; a workspace skill of the same name wins over it. */
   readonly userSkillsDir?: string
+  /** The system agent (the owner's `/control` agent) also gets the custodian skills (OC-137). */
+  readonly custodian?: boolean
 }
 
 /**
@@ -102,7 +105,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
-  const discovered = discoverSkills(input.skillsDir, input.userSkillsDir)
+  const discovered = mergeSkills(input.custodian === true ? custodianSkills() : [], discoverSkills(input.skillsDir, input.userSkillsDir))
   const withSkills: TheoClawAgentOptions<Model> = discovered.length === 0 ? withTools : { ...withTools, skills: { inline: discovered } }
   const imported = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
   const skilled = withSkillRead(withProviders(imported, input.providers))

@@ -45,6 +45,8 @@ function recording(): { create: (options: TheoClawAgentOptions) => Promise<TurnA
 }
 
 /** FR-008, FR-009, FR-012 (AC-012, AC-013): what an import gives the `/control` agent, and the channel agent. */
+const CUSTODIAN = new Set(['diagnose-gateway', 'add-model-provider', 'configure-channel', 'cloud-image-bake'])
+
 describe('an import reaching the agents', () => {
   let dir = ''
   const imports: Record<string, { setup: ImportedSetup; expected: Expected }> = {}
@@ -111,7 +113,7 @@ describe('an import reaching the agents', () => {
       expect(options.systemPrompt).toContain(expected.instruction)
       expect(options.systemPrompt).toContain(`## Imported memory (read-only)\n\n`)
       expect(options.systemPrompt!.indexOf(expected.memory)).toBeGreaterThan(options.systemPrompt!.indexOf('## Imported memory (read-only)'))
-      expect([...(options.skills?.inline ?? [])].map((skill) => skill.name).sort()).toEqual([...expected.skills].sort())
+      expect([...(options.skills?.inline ?? [])].map((skill) => skill.name).filter((name) => !CUSTODIAN.has(name)).sort()).toEqual([...expected.skills].sort())
       expect(options.tools?.map((tool) => tool.name)).toContain('skill_read')
       expect(options.mcpServers).toBeUndefined()
       expect(options.memory).toEqual({ enabled: false })
@@ -164,6 +166,9 @@ describe('an import reaching the agents', () => {
 
     const { sessionDir: _a, ...a } = withEmpty.options[0]!.local ?? {}
     const { sessionDir: _b, ...b } = without.options[0]!.local ?? {}
-    expect({ ...withEmpty.options[0], local: a }).toEqual({ ...without.options[0], local: b })
+    const { skills: _s1, tools: _t1, ...x } = withEmpty.options[0]!
+    const { skills: _s2, tools: _t2, ...y } = without.options[0]!
+    expect({ ...x, local: a }).toEqual({ ...y, local: b })
+    expect(withEmpty.options[0]!.skills?.inline.map((skill) => skill.name)).toEqual(without.options[0]!.skills?.inline.map((skill) => skill.name))
   })
 })

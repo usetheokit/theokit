@@ -145,6 +145,7 @@ export function createAgentFactory(
         approvedHooks: parseApprovedHooks(env),
         providers: customProviderPlugins(parseCustomProviders(env)),
         ...skillsDirOf(env),
+        custodian: true,
         ...thinkingOf(env),
         ...agentTelemetry(readTelemetrySettings(env)),
         ...(toolOptions === undefined ? {} : { toolOptions }),
