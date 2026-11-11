@@ -75,3 +75,20 @@ describe('workspace skills (OC-70)', () => {
     expect(await readBody(options as never, 'only-imported')).toContain('imported only')
   })
 })
+
+describe('custodian skills (OC-137)', () => {
+  it('are offered to the /control agent only, not to a chat agent', async () => {
+    const env = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k', HOME: tmp() }
+    let seen: { skills?: { inline: Array<{ name: string }> } } = {}
+    const create = ((options: typeof seen) => {
+      seen = options
+      return Promise.resolve({ dispose: () => Promise.resolve() })
+    }) as unknown as CreateAgent
+    await createAgentFactory(env, create)()
+    expect(seen.skills?.inline.map((s) => s.name)).toEqual(
+      expect.arrayContaining(['diagnose-gateway', 'add-model-provider', 'configure-channel', 'cloud-image-bake']),
+    )
+    expect(await readBody(seen as never, 'diagnose-gateway')).toContain('theoclaw doctor')
+    expect(agentOptionsFor(env).skills).toBeUndefined()
+  })
+})
