@@ -25,6 +25,14 @@ describe('the theoclaw command line', () => {
     expect(process.env[unset]).toBeUndefined()
   })
 
+  it('--version prints the package version and exits 0', async () => {
+    const v = harness()
+    const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')) as { version: string }
+    expect(await runCli(['--version'], v.io)).toBe(0)
+    expect(v.stdout()).toBe(`${pkg.version}\n`)
+    expect(v.stderr()).toBe('')
+  })
+
   it('help names start, onboard and help, and an undefined one exits 2', async () => {
     const help = harness()
     expect(await runCli(['--help'], help.io)).toBe(0)

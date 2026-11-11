@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import './runtime.js'
 import { spawn } from 'node:child_process'
-import { realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Writable } from 'node:stream'
@@ -76,6 +76,7 @@ const USAGE = `usage: theoclaw <command>
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
   theoclaw mcp              serve TheoClaw's tools as an MCP server on stdin/stdout (claude mcp add theoclaw -- theoclaw mcp)
   theoclaw --help           this text
+  theoclaw --version        print the version
 `
 
 /**
@@ -189,6 +190,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
+  '--version': (_args, io) => {
+    const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as { version: string }
+    io.stdout.write(`${pkg.version}\n`)
+    return Promise.resolve(0)
+  },
   '--help': (_args, io) => {
     io.stdout.write(USAGE)
     return Promise.resolve(0)
