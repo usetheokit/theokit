@@ -64,7 +64,7 @@ export function chatSecrets(env) {
     .filter(Boolean)
 }
 
-/** Makes the DM, joins the bot by API (gateways#347), and returns the transport plus the owner entry for the human. */
+/** Makes the DM (Mattermost lists the human's id and username as owners: the adapter's sender id format is unverified), joins the bot by API (gateways#347), and returns the transport plus the owner entry for the human. */
 export async function chatSetup(surface, env) {
   if (surface === 'matrix') {
     const homeserver = env[`${P}MATRIX_HOMESERVER_URL`]
@@ -111,7 +111,7 @@ export async function chatSetup(surface, env) {
     'mattermost direct channel',
   )
   return {
-    owner: `mattermost:${me.id}`,
+    owner: [`mattermost:${me.id}`, ...(me.username ? [`mattermost:${me.username}`] : [])].join(','),
     transport: mattermostTransport({
       baseUrl,
       token: human,

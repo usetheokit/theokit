@@ -16,32 +16,19 @@ afterEach(() => dirs.splice(0).forEach((d) => rmSync(d, { recursive: true, force
 describe('gate', () => {
   const ship = (id, path = 'a.ts') => ({ id, status: 'shipped', check: { path } })
   const run = (over) =>
-    gate({
-      ledger: [ship('OC-1')],
-      baseLedger: [{ id: 'OC-1', status: 'open' }],
-      changed: new Set(),
-      lastChange: () => '2026-11-01T00:00:00Z',
-      readResult: () => undefined,
-      ...over,
-    })
+    gate({ ledger: [ship('OC-1')], baseLedger: [{ id: 'OC-1', status: 'open' }], changed: new Set(), lastChange: () => '2026-11-01T00:00:00Z', readResult: () => undefined, ...over })
 
   it('names a newly shipped item with no result', () => {
     expect(run({})).toEqual([{ id: 'OC-1', why: 'no results/OC-1.json' }])
   })
   it('passes with a works result dated after the last change', () => {
-    expect(run({ readResult: () => ({ verdict: 'works', date: '2026-11-02T00:00:00Z' }) })).toEqual(
-      [],
-    )
+    expect(run({ readResult: () => ({ verdict: 'works', date: '2026-11-02T00:00:00Z' }) })).toEqual([])
   })
   it('fails when a named file changed after the result', () => {
-    expect(
-      run({ readResult: () => ({ verdict: 'works', date: '2026-10-01T00:00:00Z' }) }),
-    ).toHaveLength(1)
+    expect(run({ readResult: () => ({ verdict: 'works', date: '2026-10-01T00:00:00Z' }) })).toHaveLength(1)
   })
   it('refuses a result that is not works', () => {
-    expect(
-      run({ readResult: () => ({ verdict: 'partial', date: '2026-12-01T00:00:00Z' }) }),
-    ).toHaveLength(1)
+    expect(run({ readResult: () => ({ verdict: 'partial', date: '2026-12-01T00:00:00Z' }) })).toHaveLength(1)
   })
   it('skips shipped items the change does not touch, and checks them when a named file changes', () => {
     const base = [ship('OC-1')]
@@ -55,9 +42,7 @@ describe('gate', () => {
 
 describe('harness', () => {
   it('ships one scenario per surface', () => {
-    expect(new Set(SCENARIOS.map((s) => s.surface))).toEqual(
-      new Set(['control', 'webchat', 'cli', 'matrix', 'mattermost']),
-    )
+    expect(new Set(SCENARIOS.map((s) => s.surface))).toEqual(new Set(['control', 'webchat', 'cli', 'matrix', 'mattermost']))
   })
   it('judges a reply', () => {
     expect(verdictFor({}, { text: 'pong', matched: true, failed: false })).toBe('works')
@@ -65,29 +50,16 @@ describe('harness', () => {
     expect(verdictFor({}, { text: '', matched: false, failed: true })).toBe('broken')
   })
   it('redacts every configured secret', () => {
-    const secrets = secretValues({ OPENROUTER_API_KEY: 'sk-secret-value-1', HOME: '/x' }, [
-      'tok-abcdefgh',
-    ])
-    expect(JSON.stringify(redact({ a: 'x sk-secret-value-1 tok-abcdefgh' }, secrets))).not.toMatch(
-      /sk-secret|tok-abcdefgh/,
-    )
+    const secrets = secretValues({ OPENROUTER_API_KEY: 'sk-secret-value-1', HOME: '/x' }, ['tok-abcdefgh'])
+    expect(JSON.stringify(redact({ a: 'x sk-secret-value-1 tok-abcdefgh' }, secrets))).not.toMatch(/sk-secret|tok-abcdefgh/)
   })
   it('writes a result through a transport and keeps secrets out of it', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'parity-test-'))
     dirs.push(dir)
-    const env = {
-      PATH: process.env.PATH,
-      THEOCLAW_PARITY_MODEL: 'm',
-      OPENROUTER_API_KEY: 'sk-secret-value-1',
-    }
+    const env = { PATH: process.env.PATH, THEOCLAW_PARITY_MODEL: 'm', OPENROUTER_API_KEY: 'sk-secret-value-1' }
     const makeTransport = () => ({
       async send() {},
-      awaitReply: async (match) => ({
-        text: 'pong sk-secret-value-1',
-        matched: match.test('pong'),
-        failed: false,
-        raw: [],
-      }),
+      awaitReply: async (match) => ({ text: 'pong sk-secret-value-1', matched: match.test('pong'), failed: false, raw: [] }),
     })
     const result = await runScenario(SCENARIOS[0], { env, makeTransport, resultsDir: dir })
     const text = readFileSync(join(dir, 'OC-22.json'), 'utf8')
@@ -97,10 +69,7 @@ describe('harness', () => {
   })
   it('skips and names a scenario with no model', async () => {
     const lines = []
-    const code = await runCli(['--all'], {
-      env: {},
-      out: { log: (l) => lines.push(l), error: (l) => lines.push(l) },
-    })
+    const code = await runCli(['--all'], { env: {}, out: { log: (l) => lines.push(l), error: (l) => lines.push(l) } })
     expect(code).toBe(0)
     expect(lines.filter((l) => l.startsWith('skip OC-22'))).toHaveLength(1)
   })
@@ -189,8 +158,28 @@ describe('chat platforms', () => {
     await transport.send({ message: 'ping' })
     const reply = await transport.awaitReply(/pong/, 2_000)
     server.close()
-    expect(owner).toBe('mattermost:meid')
+    expect(owner).toContain('mattermost:meid')
     expect(reply).toMatchObject({ text: 'pong', matched: true })
+  })
+
+  it('masks the chat tokens in a result file', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'parity-test-'))
+    dirs.push(dir)
+    const env = {
+      PATH: process.env.PATH,
+      THEOCLAW_PARITY_MODEL: 'm',
+      OPENROUTER_API_KEY: 'sk-secret-value-1',
+      THEOCLAW_PARITY_MATRIX_HUMAN_TOKEN: 'human-token-123',
+      THEOCLAW_PARITY_MATRIX_BOT_TOKEN: 'bot-token-12345',
+    }
+    const makeTransport = () => ({
+      async send() {},
+      awaitReply: async () => ({ text: 'pong human-token-123 bot-token-12345', matched: true, failed: false, raw: [] }),
+    })
+    const scenario = SCENARIOS.find((s) => s.id === 'matrix-dm-pong')
+    await runScenario(scenario, { env, makeTransport, resultsDir: dir })
+    const text = readFileSync(join(dir, 'matrix-dm-pong.json'), 'utf8')
+    expect(text).not.toMatch(/human-token-123|bot-token-12345/)
   })
 
   it('does not match when the bot stays silent', async () => {
