@@ -49,6 +49,7 @@ import { auditCommand } from './ops/audit.js'
 import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
 import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
+import { statePortCommand } from './state/port-command.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { mcpRelayCommand } from './mcp-relay/command.js'
@@ -123,6 +124,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
   theoclaw backup --to <name>        write the backup, encrypted when the location is, into a named storage location
   theoclaw restore --from <name>     restore the newest backup of a storage location
+  theoclaw state port --to <postgres url> [--force]
+                            copy the scheduled jobs from the current engine to PostgreSQL; the source is kept
   theoclaw storage init <name> [--path <absolute dir>] [--no-encrypt]
   theoclaw storage list|test [<name>]  named storage locations (encrypted by default); test writes and reads back a probe
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
@@ -535,6 +538,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
+  state: (args, io) => statePortCommand(args, io),
   storage: storageCommand,
   '--version': (_args, io) => {
     io.stdout.write(`${readVersion()}\n`)

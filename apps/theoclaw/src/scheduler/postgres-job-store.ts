@@ -158,3 +158,30 @@ function storeOver(pool: PoolLike, jobs: Map<string, ScheduledJob>): JobStore {
       }),
   }
 }
+
+/** The target already holds jobs and `--force` was not given. */
+export class PortRefusedError extends Error {}
+
+/**
+ * #1640 — copy `jobs` into the PostgreSQL table at `dsn`. A target that already holds jobs is
+ * refused unless `force`; with it the jobs are upserted by id and nothing in the target is deleted.
+ */
+export async function portJobs(
+  dsn: string,
+  jobs: readonly ScheduledJob[],
+  options: { readonly force: boolean },
+  deps: DatabaseDeps = {},
+): Promise<number> {
+  const opened = await openPostgresJobStore(dsn, deps)
+  try {
+    if (!options.force && opened.store.list().length > 0) {
+      throw new PortRefusedError(
+        'the target database already holds theoclaw schedules; nothing was copied (use --force to overwrite)',
+      )
+    }
+    for (const job of jobs) await opened.store.put(job)
+    return jobs.length
+  } finally {
+    await opened.close()
+  }
+}
