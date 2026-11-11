@@ -1,3 +1,4 @@
+import { parseThinkingLevel } from '../agent/failover.js'
 import { customProviderOf } from '../agent/custom-providers.js'
 import { readBearerToken } from './bearer.js'
 import { type BindEnvironment, parsePort, resolveBindAddress } from './bind.js'
@@ -78,6 +79,11 @@ export function requireModel(env: BindEnvironment): {
  */
 export function readControlPlaneSettings(env: BindEnvironment): ControlPlaneSettings {
   const { model, modelKey } = requireModel(env)
+  try {
+    parseThinkingLevel(env.THEOCLAW_THINKING)
+  } catch (error) {
+    throw new TheoClawConfigError(error instanceof Error ? error.message : 'THEOCLAW_THINKING is invalid', { variable: 'THEOCLAW_THINKING' })
+  }
   const port = parsePort(env.THEOCLAW_PORT)
   const controlToken = readBearerToken(env, 'THEOCLAW_CONTROL_TOKEN')
   const webchatToken = readBearerToken(env, 'THEOCLAW_WEBCHAT_TOKEN')

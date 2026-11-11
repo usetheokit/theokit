@@ -185,6 +185,19 @@ export class SessionAgents {
     this.#disposeIfRetired(id, entry)
   }
 
+  /**
+   * Close the event's current agent once no turn holds it, so its next message opens one again on the
+   * same id (same generation, same transcript) with the options read then; `/think` uses it.
+   */
+  rebuild(event: MessageEvent): void {
+    const key = this.deps.router.resolveAgentId(event)
+    const id = agentIdFor(key, this.deps.generations.current(key))
+    const entry = this.#entries.get(id)
+    if (entry === undefined) return
+    entry.retired = true
+    this.#disposeIfRetired(id, entry)
+  }
+
   #disposeIfRetired(id: string, entry: Entry): void {
     if (entry.retired && entry.leases === 0 && entry.agent !== undefined && entry.disposing === undefined) {
       void this.#dispose(id, entry, entry.agent)

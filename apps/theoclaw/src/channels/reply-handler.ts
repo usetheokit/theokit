@@ -17,6 +17,7 @@ import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-com
 import type { SessionLease } from '../sessions/session-agents.js'
 import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import type { UsageMode } from './usage-hook.js'
+import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
 import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
 import { showTyping, type TypingOptions } from './typing.js'
 
@@ -35,6 +36,15 @@ export const RESET_FAILED_REPLY = 'I could not start a new conversation; this on
  * which this handler already holds.
  */
 const RESET_COMMANDS: ReadonlySet<string> = new Set(['/new', '/reset'])
+
+const THINK_COMMAND = /^\/think(?:\s+(\S+))?$/i
+
+function answerThink(think: (event: MessageEvent, level: ThinkingLevel) => void, event: MessageEvent, arg: string | undefined): string {
+  const level = arg?.toLowerCase()
+  if (level === undefined || !(THINKING_LEVELS as readonly string[]).includes(level)) return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
+  think(event, level as ThinkingLevel)
+  return `Thinking level set to ${level}.`
+}
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
@@ -55,6 +65,8 @@ export interface ReplyHandlerOptions {
   readonly withAgent: <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
   /** Start the event's session afresh; `SessionAgents.reset`. */
   readonly reset: (event: MessageEvent) => Promise<void>
+  /** `/think <level>`: set the session's thinking level; without it, `/think` is an ordinary message. */
+  readonly think?: (event: MessageEvent, level: ThinkingLevel) => void
   /** Without it, every channel is its own conversation. */
   readonly broadcast?: BroadcastOptions
   /**
@@ -360,6 +372,12 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
         throw error
       }
       await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
+      return
+    }
+    const think = options.think === undefined ? null : THINK_COMMAND.exec(text)
+    if (options.think !== undefined && think !== null) {
+      const reply = answerThink(options.think, event, think[1])
+      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
       return
     }
     if (options.compact !== undefined && compactOf(text) !== undefined) {

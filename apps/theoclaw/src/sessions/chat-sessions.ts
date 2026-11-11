@@ -17,6 +17,7 @@ import { createChannelAgentFactory, isIncognito, keepsTranscripts, sessionAgentO
 import { SessionRouter } from '@theokit/gateway'
 import { MAIN_AGENT, readAgentRouter } from '../routing/routing-env.js'
 import { Generations } from './generations.js'
+import type { ThinkingLevel } from '../agent/failover.js'
 import { type SessionAgent, SessionAgents, type SessionLease } from './session-agents.js'
 import { createSessionRouter } from './session-key.js'
 import { readSessionSettings, type SessionSettings } from './session-settings.js'
@@ -51,6 +52,8 @@ export function chatSessions(options: ChatSessionsOptions): {
   readonly sessions: SessionAgents
   readonly withAgent: ChatBoundary
   readonly keyOf: (event: MessageEvent) => string
+  /** Set the session's thinking level; its agent is rebuilt for the next turn. */
+  readonly think: (event: MessageEvent, level: ThinkingLevel) => void
   readonly memory: MemoryWiring | undefined
 } {
   const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
@@ -74,6 +77,12 @@ export function chatSessions(options: ChatSessionsOptions): {
   const owners = ownerKeys(options.env)
   const currentEvent = new AsyncLocalStorage<MessageEvent>()
   const recalled = recalledPrompt(memory)
+  const thinking = new Map<string, ThinkingLevel>()
+  // Spread after the channel's options, which carry the instance-wide THEOCLAW_THINKING, so the session's level wins.
+  const thinkingExtra = (key: string): AgentOptions & { thinking?: ThinkingLevel } => {
+    const level = thinking.get(key)
+    return level === undefined ? {} : { thinking: level }
+  }
   const sessions = new SessionAgents({
     router,
     // Opened by the chat path's own factory, whose protected options are applied last, so the
@@ -96,7 +105,7 @@ export function chatSessions(options: ChatSessionsOptions): {
           }),
         )()
       try {
-        const opened = await build(id, {})
+        const opened = await build(id, thinkingExtra(keyOf(id)))
         // The reviewer is a fork: its own agent id and only `save_memory`, opened after each turn.
         const agent = memory === undefined ? opened : memory.wrap(opened, surfaceOf(id), keyOf(id), () => build(`${id}-review-${++reviews}`, reviewerOptions(memory.store, sessionOptions, scope)))
         return transient ? withIncognitoCleanup(agent, dir) : agent
@@ -127,6 +136,10 @@ export function chatSessions(options: ChatSessionsOptions): {
     sessions,
     memory,
     keyOf: (event) => router.resolveAgentId(event),
+    think: (event: MessageEvent, level: ThinkingLevel) => {
+      thinking.set(router.resolveAgentId(event), level)
+      sessions.rebuild(event)
+    },
     withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)),
   }
 }

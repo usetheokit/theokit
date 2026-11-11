@@ -4,13 +4,14 @@ const HELP_COMMAND = /^(?:(?:<@[^>]+>|@\S+)\s+)?\/(?:help|commands)(?:@\S+)?$/
 
 /** The commands a chat answers itself, never passing them to the model (OC-105). */
 /** Every command the list names; a test sends each through its real handler. */
-export const HELP_COMMANDS = ['/new', '/reset', '/goal', '/compact', '/usage', '/activation', '/approve', '/deny', '/elevated', '/acp'] as const
+export const HELP_COMMANDS = ['/new', '/reset', '/goal', '/think', '/compact', '/usage', '/activation', '/approve', '/deny', '/elevated', '/acp'] as const
 
 export const HELP_TEXT = [
   'Commands answered without the model:',
   '/help - this list',
   '/new, /reset - start a new conversation',
   '/goal <what you want done> - run a goal to its end',
+  '/think off|low|medium|high - the thinking level of this session (only these four)',
   '/compact - summarize the conversation so far to free context (THEOCLAW_COMPACT_AT does it on its own)',
   '/usage off|tokens|cost|full - the usage footer of replies',
   '/activation mention|always - how a group activates the bot (groups only)',
