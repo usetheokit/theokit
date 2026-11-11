@@ -45,6 +45,8 @@ function closedError(code: number): TheoClawControlError {
 /** Open the socket, or reject naming the address or the HTTP status; the token never appears. */
 function open(url: string, token: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
+    // The control token read from the state directory goes to the instance's own control socket:
+    // that is the feature (CodeQL js/file-access-to-http). The URL comes from the resolved instance.
     const socket = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } })
     socket.once('open', () => resolve(socket))
     socket.once('unexpected-response', (_request, response) => {

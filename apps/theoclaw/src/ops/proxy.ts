@@ -59,6 +59,9 @@ export function validateProxy(proxyUrl: string, target: string, timeoutMs = TIME
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:')
     return Promise.resolve({ ok: false, message: `unsupported proxy scheme ${url.protocol}` })
+  if (!/^[A-Za-z0-9.-]+:\d{1,5}$/.test(target))
+    return Promise.resolve({ ok: false, message: `the target ${target} is not host:port` })
+  // The operator's own proxy URL is the host this command exists to reach (CodeQL js/request-forgery).
   const shown = `${url.protocol}//${url.host}`
   return new Promise((resolve) => {
     const socket = net.connect({ host: url.hostname, port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80) })
@@ -109,7 +112,13 @@ export function startCaptureProxy(file: string, port: number): Promise<http.Serv
       res.writeHead(400).end('absolute URL expected')
       return
     }
+    if (url.protocol !== 'http:') {
+      res.writeHead(400).end('only http: URLs are forwarded; use CONNECT for https')
+      return
+    }
     record(req.method ?? 'GET', `${url.host}${url.pathname}`)
+    // CodeQL js/request-forgery: forwarding to the URL the client names is what a forward proxy
+    // does. The listener binds 127.0.0.1 only, and only the http: scheme is forwarded.
     const upstream = http.request(url, { method: req.method, headers: req.headers }, (answer) => {
       res.writeHead(answer.statusCode ?? 502, answer.headers)
       answer.pipe(res)

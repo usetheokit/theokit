@@ -1,4 +1,4 @@
-import { mkdirSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -78,6 +78,22 @@ describe('theoclaw sessions', () => {
     expect(statSync(file).mode & 0o222).toBe(0)
     expect((await run(['sessions', 'open', 'nope', '--from', shared], workspace)).code).toBe(1)
     expect((await run(['sessions', 'share', 'matrix-dm'], workspace)).code).toBe(2)
+  })
+})
+
+describe('theoclaw sessions share and a replaced file', () => {
+  it('does not follow a symlink put where the shared file goes', async () => {
+    const workspace = workspaceWithSession()
+    const shared = scratchDir()
+    const victim = join(scratchDir(), 'victim.txt')
+    writeFileSync(victim, 'keep me')
+    mkdirSync(join(shared, 'shared-sessions'), { recursive: true })
+    const file = join(shared, 'shared-sessions', 'matrix-dm-_owner_localhost-g0.json')
+    symlinkSync(victim, file)
+    const shareRun = await run(['sessions', 'share', 'matrix-dm', '--to', shared], workspace)
+    expect(shareRun.code).toBe(0)
+    expect(readFileSync(victim, 'utf8')).toBe('keep me')
+    expect(readFileSync(file, 'utf8')).toContain('hello there')
   })
 })
 

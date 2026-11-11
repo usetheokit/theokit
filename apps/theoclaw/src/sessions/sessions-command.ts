@@ -1,4 +1,14 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  fchmodSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  writeSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
@@ -156,13 +166,20 @@ function shareCommand(verb: 'share' | 'open', args: readonly string[], io: Sessi
   }
   mkdirSync(shared, { recursive: true })
   const file = join(shared, `${session.id}.json`)
-  if (existsSync(file)) chmodSync(file, 0o600)
-  writeFileSync(
-    file,
-    `${JSON.stringify({ id: session.id, messages: readMessages(session.transcript) })}\n`,
-    { mode: 0o600 },
-  )
-  chmodSync(file, 0o444)
+  // Write a fresh file and rename it over the target: no check-then-use on `file`, and a symlink
+  // or read-only file put there in the meantime is replaced, never followed.
+  const temp = `${file}.${process.pid}.tmp`
+  const fd = openSync(temp, 'wx', 0o600)
+  try {
+    writeSync(
+      fd,
+      `${JSON.stringify({ id: session.id, messages: readMessages(session.transcript) })}\n`,
+    )
+    fchmodSync(fd, 0o444)
+  } finally {
+    closeSync(fd)
+  }
+  renameSync(temp, file)
   io.stdout.write(`shared ${session.id} read-only to ${shared}\n`)
   return 0
 }

@@ -25,9 +25,13 @@ describe('theoclaw meetings', () => {
         },
       },
     }
-    await expect(meetingsCommand(['join', 'https://example.com/x'], io)).rejects.toThrow(
-      /meet\.google\.com/,
-    )
+    const refusal = /^theoclaw meetings join: expected a https:\/\/meet\.google\.com\//
+    for (const bad of [
+      'https://example.com/x',
+      'https://example.com/?u=https://meet.google.com/abc-defg-hij',
+      'https://meet.google.com.evil.example/abc-defg-hij',
+    ])
+      await expect(meetingsCommand(['join', bad], io)).rejects.toThrow(refusal)
     expect(await meetingsCommand(['join', 'https://meet.google.com/abc-defg-hij'], io)).toBe(0)
     const id = chunks.join('').trim()
     chunks.length = 0

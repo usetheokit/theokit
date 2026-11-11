@@ -42,6 +42,12 @@ async function run(dir: string, base: string | undefined, token: string | null =
 }
 
 describe('theoclaw skills publish', () => {
+  it('refuses a registry that is not an http(s) URL', async () => {
+    const r = await run(skill(), 'file:///etc/passwd')
+    expect(r.code).not.toBe(0)
+    expect(r.err).toContain('must be an http(s) URL')
+  })
+
   it('publishes byte-identical files', async () => {
     const { seen, base } = await registry(201)
     const r = await run(skill(), base)

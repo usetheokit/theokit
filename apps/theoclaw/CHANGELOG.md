@@ -19,6 +19,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Clears six CodeQL alerts (#1726): `sessions share` writes via a temp file and rename, `skills publish` needs an http(s) registry URL, `proxy validate` needs a `host:port` target, the capture proxy forwards only `http:` URLs.
 - WebChat has a language switch in its settings (English or Svenska), using the `@theokit/ui` 1.13.0 i18n layer, so switching to Svenska shows "Inställningar". (#1547)
 - `theoclaw skills install <name>[@<version>]` downloads a skill from the registry, checks its sha256 and installs it into `<THEOCLAW_WORKSPACE>/skills/<name>/`. (#1631)
 - A `/control` chat turn no longer writes its transcript under `HOME/.theokit/projects` (#1434): it goes to a temp directory removed when the agent is disposed, unless `THEOCLAW_TRANSCRIPTS=on`. The SDK still records the agent in `<cwd>/.theokit/agents/registry.json`, without message text.

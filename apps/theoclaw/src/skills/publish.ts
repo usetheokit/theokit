@@ -90,11 +90,14 @@ export async function publishSkill(dir: string, options: PublishOptions): Promis
   const token = (options.env.THEOCLAW_SKILLS_TOKEN ?? '').trim()
   if (registry === '') throw new PublishError('THEOCLAW_SKILLS_REGISTRY is not set')
   if (token === '') throw new PublishError('THEOCLAW_SKILLS_TOKEN is not set')
+  if (!/^https?:\/\/[^/\s]/i.test(registry)) throw new PublishError('THEOCLAW_SKILLS_REGISTRY must be an http(s) URL')
   const pkg = buildSkillPackage(dir)
   const url = `${registry.replace(/\/+$/, '')}/v1/skills/${encodeURIComponent(pkg.name)}/${encodeURIComponent(pkg.version)}`
   const id = `${pkg.name}@${pkg.version}`
   let response: Response
   try {
+    // The publisher's skill archive (at most MAX_PACKAGE_BYTES, regular files only) goes to the
+    // registry the operator configured: that is the feature (CodeQL js/file-access-to-http).
     response = await (options.fetch ?? fetch)(url, {
       method: 'PUT',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
