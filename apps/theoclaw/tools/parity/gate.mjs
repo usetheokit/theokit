@@ -34,7 +34,9 @@ export function gate({ ledger, baseLedger, changed, lastChange, readResult }) {
     else if (result.verdict !== 'works') problems.push({ id: entry.id, why: `verdict is ${result.verdict}, not works` })
     else {
       const since = lastChange(files)
-      if (!(Date.parse(result.date) > Date.parse(since))) problems.push({ id: entry.id, why: `result dated ${result.date} is not after the last change (${since})` })
+      const dated = Date.parse(result.date)
+      const sinceMs = Date.parse(since)
+      if (Number.isNaN(dated) || Number.isNaN(sinceMs) || dated <= sinceMs) problems.push({ id: entry.id, why: `result dated ${result.date} is not after the last change (${since})` })
     }
   }
   return problems
@@ -42,6 +44,7 @@ export function gate({ ledger, baseLedger, changed, lastChange, readResult }) {
 
 function git(args) {
   // From the repository root: the ledger's paths and `git diff --name-only` are root-relative.
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- git is resolved from PATH on dev machines and CI; no fixed install path exists
   const out = spawnSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' })
   return out.status === 0 ? out.stdout.replace(/\n$/, '') : undefined
 }

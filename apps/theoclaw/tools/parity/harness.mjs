@@ -36,6 +36,7 @@ export function verdictFor(scenario, reply) {
 }
 
 function git(args) {
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- git is resolved from PATH on dev machines and CI; no fixed install path exists
   const out = spawnSync('git', args, { cwd: APP_DIR, encoding: 'utf8' })
   return out.status === 0 ? out.stdout.trim() : 'unknown'
 }
