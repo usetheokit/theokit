@@ -25,6 +25,7 @@ import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import type { RetryPolicy } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
+import { readAdvisorSettings } from './channels/advisor.js'
 import { readCompactSettings, type CompactSettings } from './channels/compact-command.js'
 import { createAcpSessions, type AcpSessions } from './channels/acp-command.js'
 import { createUsageHook } from './channels/usage-hook.js'
@@ -248,6 +249,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
   const usage = createUsageHook({ keyOf: chat.keyOf })
   const model = options.env.THEOCLAW_MODEL
+  const advisor = readAdvisorSettings(options.env, maskedWrite)
   const execChat = createChatExecApproval({
     env: options.env,
     keyOf: chat.keyOf,
@@ -297,6 +299,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       },
       goal: events.goal,
       compact: readCompactSettings(options.env, maskedWrite, options.compact),
+      ...(advisor === undefined ? {} : { advisor }),
       typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
     }), configuredVoiceReplies(options.env)),
     hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.workflowResume === undefined ? {} : { workflowResume: options.workflowResume }), ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
