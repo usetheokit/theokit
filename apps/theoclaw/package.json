@@ -120,6 +120,7 @@
     "build:web": "node tools/build-web.mjs",
     "start": "node dist/main.js",
     "import": "node dist/import-main.js",
+    "skills-registry": "node dist/skills-registry-main.js",
     "test": "vitest run",
     "test:live": "vitest run tests/live --no-file-parallelism --retry=1",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json && tsc -p tsconfig.web.json",
