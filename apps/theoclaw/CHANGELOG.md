@@ -15,6 +15,14 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 - A `/control` chat turn no longer writes its transcript under `HOME/.theokit/projects` (#1434): it goes to a temp directory removed when the agent is disposed, unless `THEOCLAW_TRANSCRIPTS=on`. The SDK still records the agent in `<cwd>/.theokit/agents/registry.json`, without message text.
 - A chat or channel turn (SMS and the rest) no longer leaves its text in a transcript file by default (#1457). Each session's transcript goes to a temp directory removed when the agent is disposed, and the memory store, which records turns, is off with it. `THEOCLAW_TRANSCRIPTS=on` restores the transcripts under `<THEOCLAW_WORKSPACE>/.theoclaw/` (a conversation then survives a restart) and the memory default. Trigger and WebChat agents write theirs under the workspace instead of the home directory.
+- `theoclaw attach` launches Claude Code with a temporary MCP config bound to one session that expires in an hour (`--print-config` prints it); `theoclaw resume` prints the last session's messages. (#1575)
+- The custodian skills go only to the owner's `/control` agent, not to its `delegate_all` workers. (#1686)
+- The `/mcp` endpoint follows the Streamable HTTP transport: it negotiates the protocol version, answers notifications with 202, answers `ping`, rejects batches with a JSON-RPC error and sets `isError: false` on successful tool calls. (#1637)
+- `theoclaw mcp-relay grant|list|revoke` keeps per-client grants for remote MCP clients in `mcp-relay-grants.json` (token stored as a SHA-256 hash only; default tools `list_dir` and `read_file`). (#1634)
+- Add a parity harness (`pnpm --filter theoclaw parity -- --id <id>`) and a gate (`parity:gate`) that refuses unmeasured `shipped` items.
+- The README documents running the published container image `ghcr.io/usetheokit/theoclaw:<version>` and how to tell whether a version has one. (#1555)
+- `GET /rpc/pending_devices` lists the pending paired devices over HTTP behind the control bearer token; other `/rpc/` methods answer 400. (#1568)
+- `theoclaw orders add|list|remove` keeps standing orders in the workspace's `STANDING-ORDERS.md`; every new chat session's system prompt carries them until removed. (#1614)
 
 ### Added
 
@@ -447,6 +455,14 @@ run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspa
   `shipped 0 · out 12 · open 101` and exits 1: that red run is the count. The command is not a CI
   step yet; the checker's tests run in the existing `test` step, and a new `lint` script and CI
   step run ESLint over `tools/`, which the root config's `apps/**` ignore left unread.
+- An activity ledger records each exec decision (command, run id, who approved, when) in `activity.jsonl` in the state directory; `theoclaw audit [--run <id>]` prints it. (#1573)
+- `THEOCLAW_DATABASE=postgres://...` keeps the scheduled jobs in PostgreSQL, through the TheoKit storage manager, instead of `schedules.json`. (#1565)
+- With `THEOCLAW_MCP_RELAY_URL` and `THEOCLAW_MCP_RELAY_TOKEN` set, the instance dials out to an MCP relay, pulls JSON-RPC jobs and answers them with the `/control` tools limited to each job's granted tools. (#1636)
+- `theoclaw proxy validate` checks that the operator's HTTPS proxy is reachable, and `theoclaw proxy start` runs a local capture proxy; a process started with `THEOCLAW_DEBUG_PROXY_URL` (or `THEOCLAW_PROXY_URL`) routes its requests through it, and `theoclaw proxy sessions` lists them. (#1571)
+- Add a reference skill registry server (publish, search, versions, download).
+- `theoclaw skills search <term>` lists the skills in the registry named by `THEOCLAW_SKILLS_REGISTRY` that match the term, one `name  latest  description` line each. (#1630)
+- `theoclaw visitors grant <email> --for 7d | revoke | list` manages expiring WebChat visitor grants; with `THEOCLAW_VISITOR_ACCESS=on`, a trusted-proxy identity (for example the e-mail Cloudflare Access forwards) opens WebChat before its grant expires and is refused after. (#1582)
+- WebChat answers `/status`, `/model`, `/think`, `/compact`, `/stop` and `/steer` without a model turn (no usage line), routed with the `@theokit/agents` command router. `/status` and `/model` are answered on channels too. (#1563)
 
 ### Fixed
 
