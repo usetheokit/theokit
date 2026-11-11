@@ -99,6 +99,7 @@ import { loadUserWorkflows } from './workflows/user-workflows.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { webchatEvent } from './webchat/chat-id.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
+import { createVoiceCallRoute, readVoiceCallSettings, voiceCallSecrets } from './voice/phone-call.js'
 import { createWebchatRoutes } from './webchat/routes.js'
 import { webchatTurnFor } from './webchat/session-commands.js'
 import { isGranted, visitorAccessOn, visitorsPath } from './webchat/visitors.js'
@@ -262,7 +263,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   })
   const platforms = resolvePlatforms(options.env)
   const { configured, skipped } = platforms
-  const secrets = [...(options.secrets ?? platforms.secrets), options.env.THEOCLAW_VOICE_OPENAI_API_KEY?.trim() ?? '']
+  const secrets = [...(options.secrets ?? platforms.secrets), options.env.THEOCLAW_VOICE_OPENAI_API_KEY?.trim() ?? '', ...voiceCallSecrets(options.env)]
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
@@ -338,8 +339,10 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const routes = new Map<PlatformName, WebhookRoute>(
     [...webhooks].map(([platform, { methods }]) => [platform, { methods, handle: startedRoute(loop, platform, handles) }]),
   )
+  const voiceCall = readVoiceCallSettings(options.env)
   const router = createWebhookRouter({
     routes,
+    ...(voiceCall === undefined ? {} : { named: new Map([['voice', { methods: ['POST'], handle: createVoiceCallRoute({ settings: voiceCall, withChatAgent: chat.withAgent, write: maskedWrite, secrets }) }]]) }),
     isStarted: (platform) => loop.started.has(platform),
     write: maskedWrite,
     triggers: composedTriggers(options, events, loop, maskedWrite, secrets),
@@ -532,6 +535,8 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const fileStore = database.engine === 'files' ? loadScheduleStore(sessionSettings.workspace) : undefined
   const heartbeat = readHeartbeatSettings(options.env, platforms)
   const a2a = readA2ASettings(options.env)
+  // Read here as well so a half-set pair refuses the start before anything is installed.
+  readVoiceCallSettings(options.env)
   const relay = readRelaySettings(options.env)
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
