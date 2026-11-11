@@ -84,12 +84,15 @@ describe('custodian skills (OC-137)', () => {
       seen = options
       return Promise.resolve({ dispose: () => Promise.resolve() })
     }) as unknown as CreateAgent
-    await createAgentFactory(env, create)()
+    await createAgentFactory(env, create, undefined, { custodian: true })()
     expect(seen.skills?.inline.map((s) => s.name)).toEqual(
       expect.arrayContaining(['diagnose-gateway', 'add-model-provider', 'configure-channel', 'cloud-image-bake']),
     )
     expect(await readBody(seen as never, 'diagnose-gateway')).toContain('theoclaw doctor')
     expect(agentOptionsFor(env).skills?.inline.map((s) => s.name).sort()).toEqual(['git-helper', 'summarize-text'])
+    seen = {}
+    await createAgentFactory(env, create)()
+    expect(seen.skills?.inline.map((s) => s.name).sort()).toEqual(['git-helper', 'summarize-text'])
   })
 })
 

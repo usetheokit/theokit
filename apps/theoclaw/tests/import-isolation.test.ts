@@ -186,7 +186,8 @@ describe('the workers of a /control agent that carries an import', () => {
     expect(built).toHaveLength(2)
     const worker = built[1]!
     expect(worker.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
-    expect(worker).not.toHaveProperty('skills')
+    // Only the built-in skills every agent carries (#1692); never the custodian ones, which are the /control agent's alone (#1577).
+    expect(worker.skills?.inline.map((skill) => skill.name).sort()).toEqual(['git-helper', 'summarize-text'])
     expect(worker).not.toHaveProperty('mcpServers')
     expect(worker.tools?.map((tool) => tool.name)).not.toContain('delegate_all')
   })
