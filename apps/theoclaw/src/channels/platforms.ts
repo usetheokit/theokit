@@ -1,4 +1,8 @@
+import { join } from 'node:path'
+
 import type { PlatformName } from '@theokit/gateway'
+
+import { TheoClawConfigError } from '../control-plane/errors.js'
 
 /**
  * For each platform, the setting its adapter reads and the environment variable that supplies it.
@@ -58,8 +62,45 @@ export type SupportedPlatform = keyof typeof PLATFORM_VARIABLES
 
 type PlatformVariables = typeof PLATFORM_VARIABLES
 
+/** The environment variable that picks WhatsApp's backend: `cloud` (the default) or `baileys` (QR-linked WhatsApp Web). */
+export const WHATSAPP_BACKEND_VARIABLE = 'THEOCLAW_WHATSAPP_BACKEND'
+/** Where the Baileys pairing is kept; defaults to `whatsapp-session` under `THEOCLAW_STATE_DIR`. */
+export const WHATSAPP_SESSION_DIR_VARIABLE = 'THEOCLAW_WHATSAPP_SESSION_DIR'
+
+/** WhatsApp through Baileys: no credential, a directory holding the pairing a QR scan made. */
+export interface WhatsAppBaileysSettings {
+  readonly sessionDir: string
+}
+
+type CloudSettings<P extends SupportedPlatform> = { readonly [K in keyof PlatformVariables[P]]: string }
+
 /** The settings one platform's adapter is built from, keyed by the adapter's own option names. */
-export type PlatformSettings<P extends SupportedPlatform> = { readonly [K in keyof PlatformVariables[P]]: string }
+export type PlatformSettings<P extends SupportedPlatform> = P extends 'whatsapp'
+  ? CloudSettings<'whatsapp'> | WhatsAppBaileysSettings
+  : CloudSettings<P>
+
+/** The Baileys settings when WhatsApp is set up that way, narrowing the union. */
+export function isBaileys(settings: PlatformSettings<'whatsapp'>): settings is WhatsAppBaileysSettings {
+  return 'sessionDir' in settings
+}
+
+/** The session directory, from the environment; undefined when neither it nor a state directory is set. */
+export function whatsappSessionDir(env: Readonly<Record<string, string | undefined>>): string | undefined {
+  const explicit = (env[WHATSAPP_SESSION_DIR_VARIABLE] ?? '').trim()
+  if (explicit !== '') return explicit
+  const state = (env.THEOCLAW_STATE_DIR ?? '').trim()
+  return state === '' ? undefined : join(state, 'whatsapp-session')
+}
+
+/** Whether `THEOCLAW_WHATSAPP_BACKEND` selects Baileys. Any other non-empty value is refused. */
+export function whatsappUsesBaileys(env: Readonly<Record<string, string | undefined>>): boolean {
+  const backend = (env[WHATSAPP_BACKEND_VARIABLE] ?? '').trim().toLowerCase()
+  if (backend === '' || backend === 'cloud') return false
+  if (backend === 'baileys') return true
+  throw new TheoClawConfigError(`${WHATSAPP_BACKEND_VARIABLE} must be cloud or baileys, not "${backend}"`, {
+    variable: WHATSAPP_BACKEND_VARIABLE,
+  })
+}
 
 /** A platform whose every variable is set, with the settings read from them. */
 export type ConfiguredPlatform = {
@@ -99,6 +140,12 @@ export function resolvePlatforms(env: Readonly<Record<string, string | undefined
   const skipped: SkippedPlatform[] = []
   const secrets: string[] = []
   for (const { platform } of PLATFORMS) {
+    if (platform === 'whatsapp' && whatsappUsesBaileys(env)) {
+      const sessionDir = whatsappSessionDir(env)
+      if (sessionDir === undefined) skipped.push({ platform, missing: [WHATSAPP_SESSION_DIR_VARIABLE, 'THEOCLAW_STATE_DIR'] })
+      else configured.push({ platform, settings: { sessionDir } })
+      continue
+    }
     const read = Object.entries(PLATFORM_VARIABLES[platform]).map(
       ([setting, variable]) => [setting, variable, (env[variable] ?? '').trim()] as const,
     )

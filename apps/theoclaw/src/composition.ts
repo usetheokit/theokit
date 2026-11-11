@@ -27,7 +27,9 @@ import { createAcpSessions, type AcpSessions } from './channels/acp-command.js'
 import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
-import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
+import { type ConfiguredPlatform, isBaileys, resolvePlatforms } from './channels/platforms.js'
+import { qrWriter } from './channels/whatsapp-qr.js'
+
 import { readDisplayConfig } from './channels/display-config.js'
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createSdkChannelAgentFactory, isIncognito, webchatAgentFactory } from './control-plane/agent-factory.js'
@@ -191,6 +193,9 @@ function reportUnservedPlatforms(
   }
 }
 
+/** How long a WhatsApp pairing may wait for the QR scan. */
+const PAIRING_WAIT_MS = 120_000
+
 /**
  * Wire the app: the configured platforms, one runner each, the reply handler, and the routes.
  * Returns at once; the loop keeps starting slow platforms while the router already serves (EC-2).
@@ -243,7 +248,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const events = options.events ?? readEventSettings(options.env, configured.map((entry) => entry.platform))
   const handles = new WeakMap<BasePlatformAdapter, Handle>()
   const loop = startChannelLoop({
-    platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention' }).map((build) =>
+    platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention', onQr: qrWriter(options.write), connectTimeoutMs: PAIRING_WAIT_MS }).map((build) =>
       withRoute(build, webhooks.get(build.platform), handles),
     ),
     handler: withVoiceReplies(createReplyHandler({
@@ -266,7 +271,12 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,
-    ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
+    // A first Baileys start waits for a QR scan, which the 30 s default would cut short.
+    ...(options.startTimeoutMs !== undefined
+      ? { startTimeoutMs: options.startTimeoutMs }
+      : configured.some((entry) => entry.platform === 'whatsapp' && isBaileys(entry.settings))
+        ? { startTimeoutMs: PAIRING_WAIT_MS }
+        : {}),
   })
   const routes = new Map<PlatformName, WebhookRoute>(
     [...webhooks].map(([platform, { methods }]) => [platform, { methods, handle: startedRoute(loop, platform, handles) }]),

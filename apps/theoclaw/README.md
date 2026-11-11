@@ -193,6 +193,7 @@ otherwise startup skips it and prints `<platform>: not configured (missing ...)`
 | E-mail | `EMAIL_ADDRESS`, `EMAIL_PASSWORD`, `EMAIL_IMAP_HOST`, `EMAIL_SMTP_HOST` | IMAP in, SMTP out |
 | LINE | `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN` | webhook `/webhooks/line`; replies use the push API |
 | WhatsApp Cloud | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | webhook `/webhooks/whatsapp` |
+| WhatsApp Web (Baileys, unofficial) | `THEOCLAW_WHATSAPP_BACKEND=baileys`, optional `THEOCLAW_WHATSAPP_SESSION_DIR` (default: `whatsapp-session` under `THEOCLAW_STATE_DIR`); install the `baileys` package. Run `theoclaw whatsapp login` and scan the QR (Linked devices); `theoclaw start` prints the QR too while unlinked. Use a number made for this: Meta's terms do not sanction it. | none (a socket, no public URL) |
 | Microsoft Teams | `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_TENANT_ID` | Bot Framework webhook; needs a work tenant |
 | SMS (Twilio) | `SMS_TWILIO_ACCOUNT_SID`, `SMS_TWILIO_AUTH_TOKEN`, `SMS_TWILIO_FROM_NUMBER`, `SMS_PUBLIC_URL` | webhook `/webhooks/sms` |
 
