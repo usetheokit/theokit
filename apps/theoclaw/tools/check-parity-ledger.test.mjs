@@ -17,7 +17,7 @@ import {
 } from './check-parity-ledger.mjs'
 
 const TODAY = '2026-10-06'
-const OC_IDS = Array.from({ length: 106 }, (_, i) => `OC-${i + 1}`)
+const OC_IDS = Array.from({ length: 107 }, (_, i) => `OC-${i + 1}`)
 const H_IDS = Array.from({ length: 7 }, (_, i) => `H-${i + 1}`)
 const ALL_IDS = [...OC_IDS, ...H_IDS]
 
@@ -43,7 +43,7 @@ function validOut(id) {
 
 function run(ledger, overrides = {}) {
   return checkLedger({
-    inventoryText: inventoryText(106),
+    inventoryText: inventoryText(107),
     hermesText: hermesText(7),
     ledgerText: typeof ledger === 'string' ? ledger : JSON.stringify(ledger),
     repoRoot: '/nonexistent-repo-root',
@@ -102,7 +102,7 @@ describe('check-parity-ledger: the id set', () => {
   })
 
   it('fails when a source lists the same row twice', () => {
-    const text = inventoryText(106, ['| OC-5 | capability 5 again | yes |'])
+    const text = inventoryText(107, ['| OC-5 | capability 5 again | yes |'])
     const result = run(ALL_IDS.map(validOut), { inventoryText: text })
     expect(result.violations).toContainEqual(expect.objectContaining({ id: 'OC-5', rule: 'source-parse' }))
   })
@@ -443,7 +443,7 @@ function cliRepo({ withInventory = true } = {}) {
     'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
     [LEDGER_PATH]: JSON.stringify(ledger),
   }
-  if (withInventory) files[INVENTORY_PATH] = inventoryText(106)
+  if (withInventory) files[INVENTORY_PATH] = inventoryText(107)
   return tempRepo(files)
 }
 
@@ -521,7 +521,7 @@ describe('check-parity-ledger: the command run by node', () => {
       { id: 'OC-2', status: 'open' },
     ]
     const root = tempRepo({
-      [INVENTORY_PATH]: inventoryText(106),
+      [INVENTORY_PATH]: inventoryText(107),
       [HERMES_PATH]: hermesText(7),
       [LEDGER_PATH]: JSON.stringify(ledger),
       'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
@@ -541,7 +541,7 @@ describe('check-parity-ledger: the command run by node', () => {
       shipped('OC-1', 'apps/theoclaw/tests/e2e/proof.test.ts', 'proves OC-1', localDate()),
     ]
     const root = tempRepo({
-      [INVENTORY_PATH]: inventoryText(106),
+      [INVENTORY_PATH]: inventoryText(107),
       [HERMES_PATH]: hermesText(7),
       [LEDGER_PATH]: JSON.stringify(ledger),
       'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
