@@ -367,7 +367,7 @@ writes their prompt.
 | Tool | When |
 |---|---|
 | `read_file`, `list_dir`, `view_image`, `web_fetch`, `todolist` | always |
-| `web_search` | with `BRAVE_API_KEY`, or with both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` |
+| `web_search` | with `THEOCLAW_SEARCH=searxng:<url>` (keyless, your SearXNG with `format=json` enabled) or `THEOCLAW_SEARCH=tavily` (with `TAVILY_API_KEY`), which win over the rest; else with `BRAVE_API_KEY`, or with both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` |
 | `git_diff` | when `files/` is itself a git repository and the sandbox is enforced |
 | `shell_exec` | with `THEOCLAW_HOST_TOOLS=on` |
 | `write_file`, `edit_file`, `apply_patch` | with `THEOCLAW_HOST_TOOLS=on`, unless `THEOCLAW_SANDBOX=read-only` |

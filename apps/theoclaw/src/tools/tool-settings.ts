@@ -18,7 +18,7 @@ import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
 
 /** Where web search goes, chosen from the keys present at start. */
 export interface SearchSettings {
-  readonly kind: 'brave' | 'generic' | 'off'
+  readonly kind: 'brave' | 'generic' | 'searxng' | 'tavily' | 'off'
   readonly url?: string
   readonly key?: string
 }
@@ -147,8 +147,30 @@ function nonBlank(value: string | undefined): string | undefined {
   return trimmed === undefined || trimmed === '' ? undefined : trimmed
 }
 
-const SEARCH_OFF_LINE = 'tools: web search is off (no BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
+const SEARCH_OFF_LINE = 'tools: web search is off (no THEOCLAW_SEARCH, BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
 const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
+
+/** `THEOCLAW_SEARCH=searxng:<url>` or `tavily` (key in `TAVILY_API_KEY`); it wins over every other search variable. */
+function readChosenSearch(chosen: string, env: Env): SearchSettings {
+  const bad = (message: string): TheoClawConfigError => new TheoClawConfigError(message, { variable: 'THEOCLAW_SEARCH' })
+  if (chosen === 'tavily') {
+    const key = nonBlank(env.TAVILY_API_KEY)
+    if (key === undefined) throw bad('THEOCLAW_SEARCH=tavily needs TAVILY_API_KEY')
+    return { kind: 'tavily', key }
+  }
+  if (chosen.startsWith('searxng:')) {
+    const url = chosen.slice('searxng:'.length).trim()
+    let valid = false
+    try {
+      valid = ['http:', 'https:'].includes(new URL(url).protocol)
+    } catch {
+      valid = false
+    }
+    if (!valid) throw bad('THEOCLAW_SEARCH=searxng:<url> needs an http(s) URL, e.g. searxng:http://localhost:8888')
+    return { kind: 'searxng', url }
+  }
+  throw bad(`THEOCLAW_SEARCH must be searxng:<url> or tavily, got ${JSON.stringify(chosen)}`)
+}
 
 /**
  * Brave when `BRAVE_API_KEY` is set (it wins over the generic adapter); the generic adapter when
@@ -156,6 +178,8 @@ const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unc
  * naming the other; neither is off. A blank value counts as unset.
  */
 function readSearch(env: Env): SearchSettings {
+  const chosen = nonBlank(env.THEOCLAW_SEARCH)
+  if (chosen !== undefined) return readChosenSearch(chosen, env)
   const brave = nonBlank(env.BRAVE_API_KEY)
   if (brave !== undefined) return { kind: 'brave', key: brave }
   const url = nonBlank(env.THEOKIT_SEARCH_API_URL)
@@ -243,7 +267,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     external,
     // Every search key set, the unused one too: a key is a secret whether or not it is chosen.
     secrets: [
-      ...[env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY].flatMap((value) => nonBlank(value) ?? []),
+      ...[env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY, env.TAVILY_API_KEY].flatMap((value) => nonBlank(value) ?? []),
       ...external.secrets,
     ],
     offLines,
