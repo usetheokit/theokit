@@ -15,6 +15,9 @@ export interface ControlPlaneSettings {
   readonly webchatToken: string | undefined
 }
 
+const SUBSCRIPTION_PREFIX = 'openai-chatgpt/'
+const KEYLESS_MODEL_KEY = 'local'
+
 function nonBlank(value: string | undefined): string | undefined {
   const trimmed = value?.trim()
   return trimmed === undefined || trimmed === '' ? undefined : trimmed
@@ -32,7 +35,10 @@ export function resolveModelKey(env: BindEnvironment): string | undefined {
  * The model and its key, or the refusal naming what is missing. Shared by the start and the agent
  * factory, so both refuse with the same words.
  */
-export function requireModel(env: BindEnvironment): { readonly model: string; readonly modelKey: string } {
+export function requireModel(env: BindEnvironment): {
+  readonly model: string
+  readonly modelKey: string
+} {
   const model = nonBlank(env.THEOCLAW_MODEL)
   if (model === undefined) {
     throw new TheoClawConfigError('THEOCLAW_MODEL must name the model TheoClaw runs', {
@@ -44,10 +50,16 @@ export function requireModel(env: BindEnvironment): { readonly model: string; re
   if (custom !== undefined) {
     const customKey = nonBlank(env[custom.keyEnv])
     if (customKey === undefined) {
-      throw new TheoClawConfigError(`set ${custom.keyEnv} to the ${custom.name} provider key`, { variable: custom.keyEnv })
+      throw new TheoClawConfigError(`set ${custom.keyEnv} to the ${custom.name} provider key`, {
+        variable: custom.keyEnv,
+      })
     }
     return { model, modelKey: customKey }
   }
+  // The ChatGPT subscription route authenticates with the stored login, so it needs no API key. 'local'
+  // is the SDK's keyless sentinel: it builds the agent and never reaches a provider as a credential.
+  if (model.startsWith(SUBSCRIPTION_PREFIX))
+    return { model, modelKey: resolveModelKey(env) ?? KEYLESS_MODEL_KEY }
   const modelKey = resolveModelKey(env)
   if (modelKey === undefined) {
     // `variable` names the preferred of the two; the message names both.
