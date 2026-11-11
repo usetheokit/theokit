@@ -547,7 +547,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const controlExtras = [...extraTools, ...(memory?.tools ?? [])]
   const buildControlAgent = async (): Promise<TurnAgent> => {
     const control = controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval)
-    const recalled = memory?.store.recallSection() ?? ''
+    const recalled = (await memory?.recall()) ?? ''
     const agent = await options.agentFactory(recalled === '' ? control : { ...control, systemPromptSuffix: recalled })
     // TUI, desktop and `/control` turns share the chat surfaces' memory; the reviewer has `save_memory` alone.
     return memory === undefined ? agent : memory.wrap(agent, 'control', 'control', async () => options.agentFactory({ tools: [saveMemoryTool(memory.store)], plugins: [] }))
