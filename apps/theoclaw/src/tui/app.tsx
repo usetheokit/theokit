@@ -26,6 +26,7 @@ export interface TheoClawTuiProps {
 
 const COMMANDS: readonly ChatComposerCommand[] = [
   { name: 'interrupt', description: 'stop the running turn (same as Esc)' },
+  { name: 'steer', description: 'redirect the running turn: /steer <text>' },
   { name: 'new', description: 'start a fresh session' },
   { name: 'quit', description: 'close the connection and exit' },
 ]
@@ -83,6 +84,12 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
     const trimmed = text.trim()
     if (trimmed === '') return
     if (trimmed === '/interrupt') return interrupt()
+    if (trimmed === '/steer' || trimmed.startsWith('/steer ')) {
+      const steer = trimmed.slice('/steer'.length).trim()
+      if (steer === '') return setView((current) => addNotice(current, 'warning', 'usage: /steer <text>'))
+      if (!running.current) return setView((current) => addNotice(current, 'warning', 'no turn is running: send it as a message'))
+      return client.steer(session, steer)
+    }
     if (trimmed === '/quit') return void client.close().then(onExit)
     if (trimmed === '/new') {
       // The running turn stays on this session: switching now would leave Esc nothing to stop.

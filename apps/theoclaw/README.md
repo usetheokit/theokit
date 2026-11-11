@@ -270,6 +270,9 @@ output.
 
 ### Goals
 
+Sending `/steer <text>` while a turn runs injects the text into that turn (for example `/steer only the first three`); the turn's one reply
+follows it. With no turn running it is an ordinary message. The TUI has `/steer` too.
+
 Sending `/goal <what you want done>` runs the chat agent's goal loop: it works turn after turn until
 a judge on the chat's own model says the goal is done or blocked, or the turns spend
 `THEOCLAW_GOAL_TOKEN_BUDGET` tokens (a positive whole number, default 20000). TheoClaw answers once,

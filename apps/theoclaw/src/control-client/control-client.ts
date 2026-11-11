@@ -9,7 +9,7 @@ export type ControlFrame =
   | { readonly type: 'done'; readonly session: string }
   | { readonly type: 'interrupted'; readonly session: string }
   | { readonly type: 'error'; readonly code: string; readonly session?: string }
-  | { readonly type: 'interrupt_ok' | 'no_turn'; readonly session: string }
+  | { readonly type: 'interrupt_ok' | 'steer_ok' | 'no_turn'; readonly session: string }
 
 /** The connection to the instance failed or ended in a way a surface reports. Never carries the token. */
 export class TheoClawControlError extends Error {
@@ -24,6 +24,8 @@ export interface ControlClient {
   chat(message: string, session: string): AsyncIterable<ControlFrame>
   /** Ask the instance to stop the session's running turn. */
   interrupt(session: string): void
+  /** Inject `message` into the session's running turn (queue mode steer, OC-52). */
+  steer(session: string, message: string): void
   close(): Promise<void>
 }
 
@@ -98,7 +100,7 @@ export async function createControlClient(options: { readonly url: string; reado
       for (;;) {
         const frame = await queue.next()
         // Answers to an interrupt this client sent for another session's turn are not this turn's.
-        if (frame.type === 'interrupt_ok' || frame.type === 'no_turn') continue
+        if (frame.type === 'interrupt_ok' || frame.type === 'steer_ok' || frame.type === 'no_turn') continue
         if (frame.session !== undefined && frame.session !== session) continue
         yield frame
         if (FINAL.has(frame.type)) return
@@ -106,6 +108,9 @@ export async function createControlClient(options: { readonly url: string; reado
     },
     interrupt: (session) => {
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'interrupt', session }))
+    },
+    steer: (session, message) => {
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'steer', session, message }))
     },
     close: () =>
       new Promise((resolve) => {

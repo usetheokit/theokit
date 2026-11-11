@@ -86,6 +86,19 @@ describe("createControlClient (T3.1)", () => {
     expect(agents[0]!.signals[0]!.aborted).toBe(true);
   });
 
+  it("steer injects text into the running turn and its steer_ok is not a frame of the turn", async () => {
+    const hold = deferred<void>();
+    const { url, agents } = await startInstance({ frames: [assistant("x"), finished()], before: hold.promise });
+    const client = await connected(url);
+    const turn = frames(client.chat("list", "owner"));
+    await waitFor(() => agents[0]?.signals.length === 1, 2000, "the turn to start");
+    client.steer("owner", "only three");
+    await waitFor(() => agents[0]?.sent.length === 2, 2000, "the steer to arrive");
+    expect(agents[0]!.sent).toEqual(["list", "only three"]);
+    hold.resolve();
+    expect((await turn).map((f) => f.type)).not.toContain("steer_ok");
+  });
+
   it("a wrong token rejects with the 401 and prints no token", async () => {
     const { url } = await startInstance({ frames: [finished()] });
     const wrong = "w".repeat(40);
