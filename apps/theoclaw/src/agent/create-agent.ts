@@ -71,6 +71,8 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   /** SDK telemetry for every agent while `THEOCLAW_OTEL=on` (B-400 FR-006). */
   readonly telemetry?: AgentTelemetry
   readonly thinking?: ThinkingLevel
+  /** The `THEOCLAW_PROVIDERS` plugins (OC-119); added to every agent so `<provider>/<model>` resolves. */
+  readonly providers?: readonly Plugin[]
   /** A workspace whose `.theokit/plugins/` holds installed, trusted plugins (OC-75); absent loads none. */
   readonly pluginWorkspace?: string
   /** A directory holding `<skill>/SKILL.md` folders (`<workspace>/skills`), offered to the agent; absent offers none. */
@@ -103,9 +105,14 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
   const discovered = discoverSkills(input.skillsDir, input.userSkillsDir)
   const withSkills: TheoClawAgentOptions<Model> = discovered.length === 0 ? withTools : { ...withTools, skills: { inline: discovered } }
   const imported = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
-  const skilled = withSkillRead(imported)
+  const skilled = withSkillRead(withProviders(imported, input.providers))
   const suffix = input.toolOptions?.systemPromptSuffix
   return suffix === undefined || suffix === '' ? skilled : { ...skilled, systemPrompt: `${skilled.systemPrompt}\n\n${suffix}` }
+}
+
+/** `options` with the custom provider plugins after its own. */
+function withProviders<Model extends string | ModelSelection>(options: TheoClawAgentOptions<Model>, providers: readonly Plugin[] | undefined): TheoClawAgentOptions<Model> {
+  return providers === undefined || providers.length === 0 ? options : { ...options, plugins: [...(options.plugins ?? []), ...providers] }
 }
 
 /** `base` plus the tool options: the tools, the plugins, and the browser and external servers. */

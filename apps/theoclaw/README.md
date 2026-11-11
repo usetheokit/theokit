@@ -542,6 +542,11 @@ LD_LIBRARY_PATH=~/.cache/chromium-user-libs PLAYWRIGHT_BROWSERS_PATH=~/.cache/ms
 
 ### MCP servers and ACP agents
 
+`THEOCLAW_PROVIDERS` registers OpenAI-compatible providers (Particle, a Neon AI Gateway branch URL, any
+Chat Completions endpoint): a JSON array of `{"name","baseUrl","keyEnv"}`, for example
+`[{"name":"particle","baseUrl":"https://api.particle.ai/v1","keyEnv":"PARTICLE_API_KEY"}]`. Then
+`THEOCLAW_MODEL=particle/particle-1` runs on the key in `PARTICLE_API_KEY`.
+
 `THEOCLAW_EXTERNAL_TOOLS` names one JSON file of MCP servers and ACP coding agents for the
 `/control` agent; chat replies still get none of them. The start reads and validates the file
 before any runner starts, and refuses it naming the file and the key:

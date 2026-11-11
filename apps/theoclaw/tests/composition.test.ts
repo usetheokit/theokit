@@ -443,7 +443,7 @@ describe('the chat path names no per-message factory', () => {
   it('names channelAgentFactory nowhere and calls Agent.create only in the /control factory', () => {
     const files = sources(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
     expect(files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
-    // `main.ts` builds the `create` it hands `createAgentFactory` alone; only the `/control` one takes the import (FR-009).
+    // `main.ts` and `main-acp.ts` each build the `create` they hand `createAgentFactory` alone; only the `/control` one takes the import (FR-009).
     expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), 'main-acp.ts', 'main.ts'].sort(),
     )
