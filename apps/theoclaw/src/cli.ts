@@ -17,6 +17,9 @@ import { type OnboardInput, onboard } from './onboard.js'
 import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
 import { statusCommand } from './ops/status.js'
+import { loginWhatsApp } from './channels/whatsapp-qr.js'
+import { loadConfiguration } from './config-file.js'
+import { whatsappSessionDir } from './channels/platforms.js'
 import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
 
@@ -67,6 +70,7 @@ const USAGE = `usage: theoclaw <command>
                             the last log lines (file, launchd log or user journal), secrets masked
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
+  theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
   theoclaw --help           this text
 `
 
@@ -140,6 +144,22 @@ function backupCommand(name: 'backup' | 'restore'): Command {
   }
 }
 
+/** `whatsapp login`: print the pairing QR and wait for the scan; the pairing is kept in the session directory. */
+async function whatsappCommand(args: readonly string[], io: CliIo): Promise<number> {
+  if (args.length !== 1 || args[0] !== 'login') throw new UsageError('theoclaw whatsapp: expected login')
+  const env: NodeJS.ProcessEnv = { ...io.env }
+  loadConfiguration(env, io.homeDir)
+  const sessionDir = whatsappSessionDir(env)
+  if (sessionDir === undefined) throw new TheoClawConfigError('whatsapp login needs THEOCLAW_WHATSAPP_SESSION_DIR or THEOCLAW_STATE_DIR')
+  const linked = await loginWhatsApp(sessionDir, (text) => io.stdout.write(`${text}\n`))
+  if (!linked) {
+    io.stderr.write('theoclaw: WhatsApp was not linked (the QR was not scanned in time, or the connection failed)\n')
+    return 1
+  }
+  io.stdout.write(`theoclaw: WhatsApp linked; set THEOCLAW_WHATSAPP_BACKEND=baileys and run theoclaw start\n`)
+  return 0
+}
+
 const COMMANDS: Readonly<Record<string, Command>> = {
   start: startChild,
   onboard: async (args, io) => {
@@ -155,6 +175,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   status: (_args, io) => statusCommand(io, io.runner),
   logs: (args, io) => logsCommand(args, io, io.runner),
+  whatsapp: whatsappCommand,
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
   '--help': (_args, io) => {

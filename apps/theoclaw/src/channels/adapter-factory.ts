@@ -13,6 +13,7 @@ import { TlonUrbitAdapter } from '@theokit/gateway-tlon-urbit'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 
 import type { PlatformBuild } from './channel-loop.js'
+import { isBaileys } from './platforms.js'
 import type { ConfiguredPlatform, PlatformSettings, SupportedPlatform } from './platforms.js'
 
 /**
@@ -30,6 +31,25 @@ export interface AdapterBuildOptions {
    * (`THEOCLAW_GROUP_ACTIVATION`). Unset leaves each adapter's own default, which is `true`.
    */
   readonly requireMention?: boolean
+  /** Where a WhatsApp pairing QR goes; unset leaves the package default (stderr). */
+  readonly onQr?: (qr: string) => void
+  /** How long the Baileys backend waits for the session to open (the QR scan); the package default is 60 s. */
+  readonly connectTimeoutMs?: number
+}
+
+/**
+ * The QR-linked WhatsApp Web backend (`THEOCLAW_WHATSAPP_BACKEND=baileys`): no Meta app, no webhook.
+ * The QR goes to `options.onQr`, else stderr (the package default).
+ */
+export function whatsappBaileysAdapter(sessionDir: string, options: AdapterBuildOptions): WhatsAppAdapter {
+  return WhatsAppAdapter.from(
+    { backend: 'baileys', baileys: {
+        sessionDir,
+        ...(options.onQr === undefined ? {} : { onQr: options.onQr }),
+        ...(options.connectTimeoutMs === undefined ? {} : { connectTimeoutMs: options.connectTimeoutMs }),
+      } },
+    mention(options),
+  )
 }
 
 type AdapterConstructors = {
@@ -55,8 +75,16 @@ const ADAPTERS: AdapterConstructors = {
   line: (settings) => new LineAdapter(settings),
   // The verify token answers Meta's subscription check in the route; it is not an adapter option,
   // so the three Cloud fields are picked by name rather than spread.
-  whatsapp: ({ accessToken, phoneNumberId, appSecret }, options) =>
-    WhatsAppAdapter.from({ backend: 'cloud', cloud: { accessToken, phoneNumberId, appSecret } }, mention(options)),
+  whatsapp: (settings, options) =>
+    isBaileys(settings)
+      ? whatsappBaileysAdapter(settings.sessionDir, options)
+      : WhatsAppAdapter.from(
+          {
+            backend: 'cloud',
+            cloud: { accessToken: settings.accessToken, phoneNumberId: settings.phoneNumberId, appSecret: settings.appSecret },
+          },
+          mention(options),
+        ),
   teams: (settings) => new TeamsAdapter(settings),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),

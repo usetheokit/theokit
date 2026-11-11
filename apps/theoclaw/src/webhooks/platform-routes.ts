@@ -3,6 +3,7 @@ import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 
 import { smsOptions } from '../channels/adapter-factory.js'
 import type { ChannelLoop, PlatformBuild } from '../channels/channel-loop.js'
+import { isBaileys } from '../channels/platforms.js'
 import type { PlatformSettings, SupportedPlatform } from '../channels/platforms.js'
 import { describeError } from '../control-plane/errors.js'
 import { createLineRoute } from './line.js'
@@ -67,7 +68,7 @@ export interface WebhookDeps {
 type WebhookPlatformFor<P extends SupportedPlatform> = (
   settings: PlatformSettings<P>,
   deps: WebhookDeps,
-) => WebhookPlatform
+) => WebhookPlatform | undefined
 
 /**
  * Each platform's webhook, or `null` for one that has none. Keyed by every platform name, so a new
@@ -85,14 +86,19 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
     methods: ['POST'],
     buildRoute: (adapter) => createLineRoute({ channelSecret, adapter }),
   }),
-  whatsapp: ({ appSecret, verifyToken }, { write }) => ({
-    methods: ['GET', 'POST'],
-    buildRoute: (adapter) => {
-      if (!convertsEnvelopes(adapter))
-        throw new Error('the built adapter cannot convert a webhook envelope')
-      return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
-    },
-  }),
+  whatsapp: (settings, { write }) => {
+    // The Baileys backend is a socket, not a webhook: nothing for Meta to call.
+    if (isBaileys(settings)) return undefined
+    const { appSecret, verifyToken } = settings
+    return {
+      methods: ['GET', 'POST'],
+      buildRoute: (adapter) => {
+        if (!convertsEnvelopes(adapter))
+          throw new Error('the built adapter cannot convert a webhook envelope')
+        return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
+      },
+    }
+  },
   teams: (settings, { write, verifierFactory }) => {
     const verify = teamsVerifier(settings, verifierFactory, write)
     return {
