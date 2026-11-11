@@ -7,6 +7,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  rmSync,
   writeSync,
 } from 'node:fs'
 import { join } from 'node:path'
@@ -176,10 +177,17 @@ function shareCommand(verb: 'share' | 'open', args: readonly string[], io: Sessi
       `${JSON.stringify({ id: session.id, messages: readMessages(session.transcript) })}\n`,
     )
     fchmodSync(fd, 0o444)
-  } finally {
     closeSync(fd)
+    renameSync(temp, file)
+  } catch (error) {
+    try {
+      closeSync(fd)
+    } catch {
+      // already closed
+    }
+    rmSync(temp, { force: true })
+    throw error
   }
-  renameSync(temp, file)
   io.stdout.write(`shared ${session.id} read-only to ${shared}\n`)
   return 0
 }

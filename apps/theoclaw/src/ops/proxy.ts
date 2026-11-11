@@ -27,7 +27,8 @@ export interface ProxyIo {
   readonly signals?: { on(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown }
 }
 
-const USAGE = 'theoclaw proxy: expected validate [--proxy-url <url>] [--target <host:port>] | start [--port <n>] | sessions'
+const USAGE =
+  'theoclaw proxy: expected validate [--proxy-url <url>] [--target <host:port>] | start [--port <n>] | sessions'
 const DEFAULT_TARGET = 'api.openai.com:443'
 const TIMEOUT_MS = 5000
 
@@ -50,7 +51,11 @@ export interface Validation {
 }
 
 /** CONNECT through the proxy to the target; any HTTP status line from the proxy proves it is reachable. */
-export function validateProxy(proxyUrl: string, target: string, timeoutMs = TIMEOUT_MS): Promise<Validation> {
+export function validateProxy(
+  proxyUrl: string,
+  target: string,
+  timeoutMs = TIMEOUT_MS,
+): Promise<Validation> {
   let url: URL
   try {
     url = new URL(proxyUrl)
@@ -59,12 +64,15 @@ export function validateProxy(proxyUrl: string, target: string, timeoutMs = TIME
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:')
     return Promise.resolve({ ok: false, message: `unsupported proxy scheme ${url.protocol}` })
-  if (!/^[A-Za-z0-9.-]+:\d{1,5}$/.test(target))
+  if (!/^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\]):\d{1,5}$/.test(target))
     return Promise.resolve({ ok: false, message: `the target ${target} is not host:port` })
   // The operator's own proxy URL is the host this command exists to reach (CodeQL js/request-forgery).
   const shown = `${url.protocol}//${url.host}`
   return new Promise((resolve) => {
-    const socket = net.connect({ host: url.hostname, port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80) })
+    const socket = net.connect({
+      host: url.hostname,
+      port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
+    })
     let done = false
     const finish = (result: Validation): void => {
       if (done) return
@@ -72,9 +80,15 @@ export function validateProxy(proxyUrl: string, target: string, timeoutMs = TIME
       socket.destroy()
       resolve(result)
     }
-    socket.setTimeout(timeoutMs, () => finish({ ok: false, message: `${shown} did not answer within ${timeoutMs} ms` }))
-    socket.on('error', (error) => finish({ ok: false, message: `${shown} is unreachable: ${error.message}` }))
-    socket.on('connect', () => socket.write(`CONNECT ${target} HTTP/1.1\r\nHost: ${target}\r\n\r\n`))
+    socket.setTimeout(timeoutMs, () =>
+      finish({ ok: false, message: `${shown} did not answer within ${timeoutMs} ms` }),
+    )
+    socket.on('error', (error) =>
+      finish({ ok: false, message: `${shown} is unreachable: ${error.message}` }),
+    )
+    socket.on('connect', () =>
+      socket.write(`CONNECT ${target} HTTP/1.1\r\nHost: ${target}\r\n\r\n`),
+    )
     let head = ''
     socket.on('data', (chunk: Buffer) => {
       head += chunk.toString('latin1')
@@ -87,7 +101,10 @@ export function validateProxy(proxyUrl: string, target: string, timeoutMs = TIME
       finish(
         status === 200
           ? { ok: true, message: `${shown} is reachable and tunnels to ${target}` }
-          : { ok: false, message: `${shown} is reachable but refused the tunnel to ${target} (HTTP ${status})` },
+          : {
+              ok: false,
+              message: `${shown} is reachable but refused the tunnel to ${target} (HTTP ${status})`,
+            },
       )
     })
   })
@@ -103,7 +120,11 @@ export interface Capture {
 export function startCaptureProxy(file: string, port: number): Promise<http.Server> {
   mkdirSync(join(file, '..'), { recursive: true, mode: 0o700 })
   const record = (method: string, target: string): void =>
-    appendFileSync(file, `${JSON.stringify({ at: new Date().toISOString(), method, target } satisfies Capture)}\n`, { mode: 0o600 })
+    appendFileSync(
+      file,
+      `${JSON.stringify({ at: new Date().toISOString(), method, target } satisfies Capture)}\n`,
+      { mode: 0o600 },
+    )
   const server = http.createServer((req, res) => {
     let url: URL
     try {
@@ -173,7 +194,8 @@ export async function proxyCommand(args: readonly string[], io: ProxyIo): Promis
   loadConfiguration(env, io.homeDir)
   const file = capturePath(env, io.homeDir)
   if (verb === 'validate') {
-    const url = option(rest, '--proxy-url') ?? env.THEOCLAW_PROXY_URL ?? env.HTTPS_PROXY ?? env.https_proxy
+    const url =
+      option(rest, '--proxy-url') ?? env.THEOCLAW_PROXY_URL ?? env.HTTPS_PROXY ?? env.https_proxy
     if (url === undefined || url.trim() === '') {
       io.stdout.write('proxy validation requires --proxy-url, THEOCLAW_PROXY_URL or HTTPS_PROXY\n')
       return 1
@@ -194,7 +216,9 @@ export async function proxyCommand(args: readonly string[], io: ProxyIo): Promis
     if (!/^\d{1,5}$/.test(raw)) throw new UsageError(USAGE)
     const server = await startCaptureProxy(file, Number(raw))
     const address = server.address() as net.AddressInfo
-    io.stdout.write(`Debug proxy: http://127.0.0.1:${address.port}\nCaptures: ${file}\nStart theoclaw with THEOCLAW_DEBUG_PROXY_URL set to this URL.\n`)
+    io.stdout.write(
+      `Debug proxy: http://127.0.0.1:${address.port}\nCaptures: ${file}\nStart theoclaw with THEOCLAW_DEBUG_PROXY_URL set to this URL.\n`,
+    )
     await new Promise<void>((resolve) => {
       for (const signal of ['SIGINT', 'SIGTERM'] as const) io.signals?.on(signal, resolve)
       if (io.signals === undefined) server.once('close', resolve)

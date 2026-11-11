@@ -30,7 +30,9 @@ describe('theoclaw proxy', () => {
       const target = `127.0.0.1:${port(origin)}`
       const result = await validateProxy(`http://127.0.0.1:${port(proxy)}`, target)
       expect(result.ok).toBe(true)
-      expect(readCaptures(file).map((c) => `${c.method} ${c.target}`)).toEqual([`CONNECT ${target}`])
+      expect(readCaptures(file).map((c) => `${c.method} ${c.target}`)).toEqual([
+        `CONNECT ${target}`,
+      ])
     } finally {
       proxy.close()
       origin.close()
@@ -45,17 +47,53 @@ describe('theoclaw proxy', () => {
     const proxy = await startCaptureProxy(file, 0)
     try {
       const body = await new Promise<string>((resolve) =>
-        http.get({ host: '127.0.0.1', port: port(proxy), path: `http://127.0.0.1:${port(origin)}/v1/x` }, (res) => {
-          let t = ''
-          res.on('data', (d) => (t += d))
-          res.on('end', () => resolve(t))
-        }),
+        http.get(
+          { host: '127.0.0.1', port: port(proxy), path: `http://127.0.0.1:${port(origin)}/v1/x` },
+          (res) => {
+            let t = ''
+            res.on('data', (d) => (t += d))
+            res.on('end', () => resolve(t))
+          },
+        ),
       )
       expect(body).toBe('hi')
       expect(readCaptures(file)[0]?.target).toBe(`127.0.0.1:${port(origin)}/v1/x`)
     } finally {
       proxy.close()
       origin.close()
+    }
+  })
+
+  it('validate refuses a target that is not host:port, and accepts a bracketed IPv6 one', async () => {
+    const refused = await validateProxy('http://127.0.0.1:9', 'a.example\r\nX: y')
+    expect(refused).toMatchObject({ ok: false })
+    expect(refused.message).toContain('not host:port')
+    expect((await validateProxy('http://127.0.0.1:9', 'a.example')).message).toContain(
+      'not host:port',
+    )
+    expect((await validateProxy('http://127.0.0.1:9', '[::1]:443')).message).not.toContain(
+      'not host:port',
+    )
+  })
+
+  it('the capture proxy refuses to forward a non-http URL', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'proxy-')), 'c', 'captures.jsonl')
+    const proxy = await startCaptureProxy(file, 0)
+    try {
+      const answer = await new Promise<string>((resolve) => {
+        const socket = net.connect(port(proxy), '127.0.0.1', () =>
+          socket.write(
+            'GET https://example.com/ HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n',
+          ),
+        )
+        let text = ''
+        socket.on('data', (d) => (text += d.toString()))
+        socket.on('close', () => resolve(text))
+      })
+      expect(answer).toMatch(/^HTTP\/1\.1 400/)
+      expect(readCaptures(file)).toEqual([])
+    } finally {
+      proxy.close()
     }
   })
 
