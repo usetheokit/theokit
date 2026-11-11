@@ -50,6 +50,7 @@ import { update } from './update.js'
 import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
+import { installSkill } from './skills/install.js'
 import { PublishError, publishSkill } from './skills/publish.js'
 
 /**
@@ -136,6 +137,8 @@ const USAGE = `usage: theoclaw <command>
                             list the stored chat transcripts or print one's messages (an id prefix is enough)
   theoclaw meetings join <meet link> [--minutes <n>] | list | show <id>
                             join a Google Meet as a guest in headless Chrome and keep the captions as notes; list or print the notes
+  theoclaw skills install <name>[@<version>]
+                            download a skill from THEOCLAW_SKILLS_REGISTRY, verify its sha256 and install it into <THEOCLAW_WORKSPACE>/skills/<name>
   theoclaw skills publish <dir>
                             upload a skill folder (SKILL.md with name, description, version) to THEOCLAW_SKILLS_REGISTRY with THEOCLAW_SKILLS_TOKEN
   theoclaw worker pair <control url> <setup code> [--name <n>] [--inference worker|gateway] | run <message> | status
@@ -374,11 +377,22 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   claws: (args, io) => clawsCommand(args, io),
   meetings: (args, io) => meetingsCommand(args, io),
   skills: async (args, io) => {
-    const [verb, dir, ...extra] = args
-    if (verb !== 'publish' || dir === undefined || dir.startsWith('-') || extra.length > 0)
-      throw new UsageError('theoclaw skills: expected publish <dir>')
+    const [verb, arg, ...extra] = args
+    const valid = arg !== undefined && !arg.startsWith('-') && extra.length === 0
+    if ((verb !== 'publish' && verb !== 'install') || !valid)
+      throw new UsageError('theoclaw skills: expected publish <dir> or install <name>[@<version>]')
     try {
-      io.stdout.write(`${await publishSkill(resolve(io.cwd, dir), { env: io.env })}\n`)
+      if (verb === 'install') {
+        const env: NodeJS.ProcessEnv = { ...io.env }
+        loadConfiguration(env, io.homeDir)
+        const workspace = (env.THEOCLAW_WORKSPACE ?? '').trim()
+        if (workspace === '') {
+          throw new TheoClawConfigError('THEOCLAW_WORKSPACE is not set', { variable: 'THEOCLAW_WORKSPACE' })
+        }
+        io.stdout.write(`${await installSkill(arg, { env, workspace: resolve(io.cwd, workspace) })}\n`)
+        return 0
+      }
+      io.stdout.write(`${await publishSkill(resolve(io.cwd, arg), { env: io.env })}\n`)
       return 0
     } catch (error) {
       if (!(error instanceof PublishError)) throw error
