@@ -52,6 +52,21 @@ function route(adapter: DeliverableWhatsAppAdapter, lines: string[] = []) {
 }
 
 describe('createWhatsAppRoute', () => {
+  it('logs a failed delivery status with code, title and masked recipient', async () => {
+    const { adapter } = fakeWhatsApp(() => [])
+    const lines: string[] = []
+    const status = (s: string) => ({ id: 'wamid.1', status: s, recipient_id: '5511987654321', errors: [{ code: 130497, title: 'Restricted' }] })
+    const body = JSON.stringify({
+      object: 'whatsapp_business_account',
+      entry: [{ changes: [{ value: { statuses: [status('failed'), status('delivered')] } }] }],
+    })
+
+    const response = await route(adapter, lines)(signedPost(body))
+
+    expect(response.status).toBe(200)
+    expect(lines).toEqual(['whatsapp: delivery failed to ***4321: error 130497 Restricted'])
+  })
+
   it('answers the subscription challenge as text', async () => {
     const { adapter } = fakeWhatsApp(() => [])
     const url = `http://localhost/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=${VERIFY_TOKEN}&hub.challenge=1234`
