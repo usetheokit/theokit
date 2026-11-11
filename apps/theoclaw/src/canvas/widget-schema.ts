@@ -19,7 +19,6 @@ export const widgetSchema = z.discriminatedUnion('kind', [
     rows: z.array(z.array(text).max(20)).max(MAX_ITEMS),
   }),
   z.object({ kind: z.literal('metric'), title: text.optional(), label: text, value: text }),
-  z.object({ kind: z.literal('html'), title: text.optional(), html: z.string().min(1).max(20000) }),
 ])
 
 export type Widget = z.infer<typeof widgetSchema>

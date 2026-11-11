@@ -30,8 +30,6 @@ export interface ForeignSkill {
   readonly name: string
   readonly description: string
   readonly body: string
-  /** Binaries from `metadata.requires.bins`; the skill is offered only while all are on PATH. */
-  readonly requiresBins: readonly string[]
   /** Relative to the source. */
   readonly path: string
 }
@@ -116,15 +114,6 @@ function isDirectory(path: string): boolean {
 /** A whole `---` line opens and closes the frontmatter, as the runtime's own reader requires. */
 const FRONTMATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
 
-/** The `metadata.requires.bins` strings of a skill's frontmatter; none when absent or malformed. */
-export function requiredBins(metadata: unknown): string[] {
-  if (typeof metadata !== 'object' || metadata === null) return []
-  const requires = (metadata as Record<string, unknown>).requires
-  if (typeof requires !== 'object' || requires === null) return []
-  const bins = (requires as Record<string, unknown>).bins
-  return Array.isArray(bins) ? bins.filter((bin): bin is string => typeof bin === 'string' && bin !== '') : []
-}
-
 type ParsedSkill = { readonly skill: Omit<ForeignSkill, 'path'> } | { readonly reason: string }
 
 /** The skill `text` declares, or why it is not carried. `taken` holds the names already read. */
@@ -139,11 +128,11 @@ function parseSkill(text: string, taken: ReadonlySet<string>): ParsedSkill {
     // Unparsable YAML declares no name: FR-003 has one reason for both.
     return lacks
   }
-  const { name, description, metadata } = (typeof frontmatter === 'object' && frontmatter !== null ? frontmatter : {}) as Record<string, unknown>
+  const { name, description } = (typeof frontmatter === 'object' && frontmatter !== null ? frontmatter : {}) as Record<string, unknown>
   if (typeof name !== 'string' || typeof description !== 'string') return lacks
   if (!SAFE_SKILL_NAME.test(name)) return { reason: 'skill name is not a safe directory name' }
   if (taken.has(name)) return { reason: 'duplicated name' }
-  return { skill: { name, description, body: text.slice(match[0].length), requiresBins: requiredBins(metadata) } }
+  return { skill: { name, description, body: text.slice(match[0].length) } }
 }
 
 /**

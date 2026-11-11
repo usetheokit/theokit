@@ -5,7 +5,6 @@ import {
   createOpenAICompatibleRoutes,
   createToolInvokeRoute,
   type OpenAIChatRequest,
-  type OpenAICompletion,
   renderTranscript,
 } from '@theokit/agents/bridge'
 import { z } from 'zod'
@@ -13,7 +12,6 @@ import { z } from 'zod'
 import { bearerCheck } from '../control-plane/bearer.js'
 import type { PartialHandler } from '../control-plane/http-dispatch.js'
 import { runTheoClawTurn, type TurnEvent, type WithAgent } from '../control-plane/turn.js'
-import { handleMcpRequest } from '../mcp/serve-tools.js'
 import { vetoToolCall } from '../tools/path-veto.js'
 import type { ToolSettings } from '../tools/tool-settings.js'
 
@@ -34,7 +32,7 @@ export interface TheoClawApiOptions {
   readonly stderr: (line: string) => void
 }
 
-const API_PATHS: ReadonlySet<string> = new Set(['/v1/models', '/v1/chat/completions', '/tools/invoke', '/mcp'])
+const API_PATHS: ReadonlySet<string> = new Set(['/v1/models', '/v1/chat/completions', '/tools/invoke'])
 
 function unauthorized(): Response {
   return Response.json(
@@ -63,30 +61,19 @@ export function validateToolArgs(tool: CustomTool, args: Record<string, unknown>
  * The `complete` port over one TheoClaw turn: the transcript as the message, the text of every
  * `text_delta` joined. A failed turn's reason goes to stderr only; the client gets 502.
  */
-function completeWith(options: TheoClawApiOptions): (
-  request: OpenAIChatRequest,
-  onDelta?: (text: string) => void,
-  signal?: AbortSignal,
-) => Promise<OpenAICompletion> {
-  return async (request, onDelta, signal) => {
+function completeWith(options: TheoClawApiOptions): (request: OpenAIChatRequest) => Promise<string> {
+  return async (request) => {
     const text: string[] = []
     const emit = (event: TurnEvent): void => {
-      if (event.type === 'text_delta' && typeof event.content === 'string') {
-        text.push(event.content)
-        onDelta?.(event.content)
-      }
+      if (event.type === 'text_delta' && typeof event.content === 'string') text.push(event.content)
     }
     const message = renderTranscript(request.messages)
-    const outcome = await runTheoClawTurn({ withAgent: options.withAgent, message, runId: randomUUID(), emit, model: options.model, ...(signal === undefined ? {} : { signal }) })
+    const outcome = await runTheoClawTurn({ withAgent: options.withAgent, message, runId: randomUUID(), emit })
     if (!outcome.ok) {
       options.stderr(`theoclaw: http api turn failed: ${outcome.reason}`)
       throw new Error(outcome.reason)
     }
-    const usage = outcome.usage
-    return {
-      text: text.join(''),
-      ...(usage === undefined ? {} : { usage: { promptTokens: usage.inputTokens, completionTokens: usage.outputTokens } }),
-    }
+    return text.join('')
   }
 }
 
@@ -117,7 +104,6 @@ export function createTheoClawApi(options: TheoClawApiOptions): PartialHandler {
     const { pathname } = new URL(request.url)
     if (!API_PATHS.has(pathname)) return undefined
     if (!accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
-    if (pathname === '/mcp') return handleMcpRequest(options.controlTools(), options.toolSettings, request)
     return pathname === '/tools/invoke' ? toolRouteFor(options)(request) : openai(request)
   }
 }

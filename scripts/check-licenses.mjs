@@ -68,23 +68,6 @@ const ALLOWED_WITH_REASON = new Map([
     'Attribution-only, and it covers DATA rather than code: caniuse-lite ships browser-support tables ' +
       'consumed by the build. No source of this project derives from it.',
   ],
-  [
-    'BSD',
-    'duck@0.1.12 (via mammoth -> lop). The bare string names no clause count; the tarball LICENSE was ' +
-      'read and is the 2-clause BSD text (source and binary redistribution keep the copyright notice ' +
-      'and disclaimer, no endorsement clause). Attribution only.',
-  ],
-  [
-    'MIT AND Zlib',
-    'pako@1.0.11 (via mammoth -> jszip). Tarball LICENSE read: MIT text, with zlib-derived parts under ' +
-      'the Zlib licence. Both are permissive; the only obligations are keeping the notices and not ' +
-      'misrepresenting the origin of the software.',
-  ],
-  [
-    'Apache 2.0',
-    'qrcode-terminal@0.12.0. A non-SPDX spelling of Apache-2.0: the tarball LICENSE was read and is the ' +
-      'unmodified Apache License, Version 2.0 (attribution and notice retention, patent grant).',
-  ],
 ])
 
 /**

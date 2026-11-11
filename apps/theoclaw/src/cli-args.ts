@@ -47,23 +47,3 @@ export function parseUpdate(args: readonly string[]): { channel?: string } {
     throw new UsageError(`theoclaw update: ${describeError(error)}`)
   }
 }
-
-/** `theoclaw call <number> --message <text>`. */
-export function parseCall(args: readonly string[]): { to: string; message: string } {
-  const usage = 'theoclaw call: expected <number> --message <text>'
-  let parsed
-  try {
-    parsed = parseArgs({
-      args: [...args],
-      strict: true,
-      allowPositionals: true,
-      options: { message: { type: 'string' } },
-    })
-  } catch (error) {
-    throw new UsageError(`theoclaw call: ${describeError(error)}`)
-  }
-  const [to, ...extra] = parsed.positionals
-  const message = parsed.values.message
-  if (to === undefined || extra.length > 0 || message === undefined) throw new UsageError(usage)
-  return { to, message }
-}

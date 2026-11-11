@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { open, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -72,8 +72,6 @@ export function createExecApprovalStore(dir: string): ExecApprovalStore {
 export type ReviewerVerdict = 'allow' | 'deny' | 'ask'
 /** The person's answer: run once, run and remember, or refuse. */
 export type PersonAnswer = 'once' | 'always' | 'deny'
-/** An answer, optionally with who gave it (`telegram:42`), for the activity ledger. */
-export type PersonReply = PersonAnswer | { readonly answer: PersonAnswer; readonly by: string }
 
 /** Which agent ran the command, so a chat asker finds the session's chat. */
 export interface ExecCall {
@@ -85,80 +83,22 @@ export interface ExecApprovalOptions {
   /** Asked before the person; a throw or an unknown verdict counts as `ask`. */
   readonly reviewer?: (command: string) => Promise<ReviewerVerdict>
   /** Asks the person in the chat. Absent: a command nothing approved is refused. */
-  readonly ask?: (command: string, call?: ExecCall) => Promise<PersonReply>
+  readonly ask?: (command: string, call?: ExecCall) => Promise<PersonAnswer>
   /** True when the call's session waived the question (`/elevated on`): the command runs unasked. */
   readonly waived?: (call?: ExecCall) => boolean
-  /** Where each decision is recorded; absent: nothing is recorded. */
-  readonly ledger?: ActivityLedger
 }
 
 export interface ExecDecision {
   readonly allowed: boolean
   readonly reason: string
-  /** Who or what decided: `person:<id>`, `saved approval`, `reviewer`, `elevated mode`, or `none`. */
-  readonly by?: string
-}
-
-const LEDGER_FILE = 'activity.jsonl'
-
-/** One decision receipt: a command, the run that asked for it, who decided and when. */
-export interface ActivityRecord {
-  readonly at: string
-  readonly runId: string
-  readonly agentId?: string
-  readonly tool: string
-  readonly command: string
-  readonly allowed: boolean
-  readonly decidedBy: string
-  readonly reason: string
-}
-
-/** An append-only JSON-lines file of decision receipts in the state directory. */
-export interface ActivityLedger {
-  append(record: ActivityRecord): void
-}
-
-export function createActivityLedger(dir: string): ActivityLedger {
-  const path = join(dir, LEDGER_FILE)
-  return {
-    append(record) {
-      try {
-        mkdirSync(dir, { recursive: true, mode: 0o700 })
-        appendFileSync(path, `${JSON.stringify(record)}\n`, { mode: 0o600 })
-      } catch {
-        // A ledger that cannot be written must not stop the gate.
-      }
-    },
-  }
-}
-
-/** The receipts in `dir`, oldest first; a missing file is none and a damaged line is skipped. */
-export function readActivityLedger(dir: string): ActivityRecord[] {
-  let text: string
-  try {
-    text = readFileSync(join(dir, LEDGER_FILE), 'utf8')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw error
-  }
-  const records: ActivityRecord[] = []
-  for (const line of text.split('\n')) {
-    if (line.trim() === '') continue
-    try {
-      records.push(JSON.parse(line) as ActivityRecord)
-    } catch {
-      // skip
-    }
-  }
-  return records
 }
 
 /** Standing approval first, then the reviewer, then the person. Never throws. */
 export function createExecApproval(options: ExecApprovalOptions): (command: string, call?: ExecCall) => Promise<ExecDecision> {
   const { store, reviewer, ask, waived } = options
   return async (command, call) => {
-    if (waived?.(call) === true) return { allowed: true, reason: 'elevated mode waives the approval', by: 'elevated mode' }
-    if (store.has(command)) return { allowed: true, reason: 'a saved approval matches', by: 'saved approval' }
+    if (waived?.(call) === true) return { allowed: true, reason: 'elevated mode waives the approval' }
+    if (store.has(command)) return { allowed: true, reason: 'a saved approval matches' }
     if (reviewer !== undefined) {
       let verdict: ReviewerVerdict = 'ask'
       try {
@@ -166,20 +106,17 @@ export function createExecApproval(options: ExecApprovalOptions): (command: stri
       } catch {
         verdict = 'ask' // A reviewer failure falls back to the person.
       }
-      if (verdict === 'deny') return { allowed: false, reason: 'the reviewer denied it', by: 'reviewer' }
-      if (verdict === 'allow') return { allowed: true, reason: 'the reviewer allowed it', by: 'reviewer' }
+      if (verdict === 'deny') return { allowed: false, reason: 'the reviewer denied it' }
+      if (verdict === 'allow') return { allowed: true, reason: 'the reviewer allowed it' }
     }
     if (ask === undefined) return { allowed: false, reason: 'nobody can approve it' }
     let answer: PersonAnswer
-    let by = 'person'
     try {
-      const reply = await ask(command, call)
-      answer = typeof reply === 'string' ? reply : reply.answer
-      if (typeof reply !== 'string') by = `person:${reply.by}`
+      answer = await ask(command, call)
     } catch {
       return { allowed: false, reason: 'the question could not be asked' }
     }
-    if (answer === 'deny') return { allowed: false, reason: 'the person refused it', by }
+    if (answer === 'deny') return { allowed: false, reason: 'the person refused it' }
     if (answer === 'always') {
       try {
         await store.add(command)
@@ -187,7 +124,7 @@ export function createExecApproval(options: ExecApprovalOptions): (command: stri
         // Run this once; the approval is simply not remembered.
       }
     }
-    return { allowed: true, reason: 'the person approved it', by }
+    return { allowed: true, reason: 'the person approved it' }
   }
 }
 
@@ -205,16 +142,6 @@ export function execApprovalPlugin(options: ExecApprovalOptions): GeneralPlugin 
         const command = (call.args as { command?: unknown } | undefined)?.command
         if (typeof command !== 'string' || command === '') return { block: true, message: 'theoclaw: the command is missing' }
         const decision = await decide(command, { agentId: call.agentId })
-        options.ledger?.append({
-          at: new Date().toISOString(),
-          runId: typeof call.runId === 'string' ? call.runId : 'unknown',
-          ...(call.agentId === undefined ? {} : { agentId: call.agentId }),
-          tool: call.name,
-          command,
-          allowed: decision.allowed,
-          decidedBy: decision.by ?? 'none',
-          reason: decision.reason,
-        })
         return decision.allowed ? undefined : { block: true, message: `theoclaw: exec refused: ${decision.reason}` }
       })
     },

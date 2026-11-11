@@ -3,18 +3,13 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createOpenAICompatibleRoutes,
   type OpenAIChatRequest,
-  type OpenAICompletion,
   renderTranscript,
 } from '../../src/bridge/index.js'
 
 const BASE = 'http://127.0.0.1:8080'
 const ONE_MIB = 1_048_576
 
-type Complete = (
-  request: OpenAIChatRequest,
-  onDelta?: (text: string) => void,
-  signal?: AbortSignal,
-) => Promise<string | OpenAICompletion>
+type Complete = (request: OpenAIChatRequest) => Promise<string>
 
 function routes(
   complete: Complete = vi.fn<Complete>(async () => 'hello'),
@@ -131,75 +126,16 @@ describe('createOpenAICompatibleRoutes', () => {
     expect(complete).not.toHaveBeenCalled()
   })
 
-  it('streams chunks ending in [DONE], with usage on the last chunk', async () => {
-    const complete = vi.fn<Complete>(async (_request, onDelta) => {
-      onDelta?.('he')
-      onDelta?.('llo')
-      return { text: 'hello', usage: { promptTokens: 3, completionTokens: 2 } }
-    })
+  it('refuses stream true with stream_unsupported', async () => {
+    const complete = vi.fn<Complete>(async () => 'hello')
 
     const response = await routes(complete)(
       chat({ model: 'm', stream: true, messages: [{ role: 'user', content: 'hi' }] }),
     )
 
-    expect(response?.headers.get('content-type')).toBe('text/event-stream')
-    const frames = (await response!.text()).split('\n\n').filter((f) => f !== '')
-    expect(frames.at(-1)).toBe('data: [DONE]')
-    const chunks = frames.slice(0, -1).map((f) => JSON.parse(f.slice('data: '.length)))
-    expect(chunks.every((c) => c.object === 'chat.completion.chunk')).toBe(true)
-    expect(chunks.map((c) => c.choices[0].delta.content).join('')).toBe('hello')
-    expect(chunks.at(-1).choices[0].finish_reason).toBe('stop')
-    expect(chunks.at(-1).usage).toEqual({ prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 })
-  })
-
-  it('ends a stream with an error frame and [DONE] when the turn fails midway', async () => {
-    const complete = vi.fn<Complete>(async (_request, onDelta) => {
-      onDelta?.('par')
-      throw new Error('boom')
-    })
-
-    const response = await routes(complete)(
-      chat({ model: 'm', stream: true, messages: [{ role: 'user', content: 'hi' }] }),
-    )
-
-    const frames = (await response!.text()).split('\n\n').filter((f) => f !== '')
-    expect(frames.at(-1)).toBe('data: [DONE]')
-    expect(frames.at(-2)).toContain('"turn_failed"')
-    expect(frames.join('')).not.toContain('boom')
-  })
-
-  it('aborts the turn signal when the streaming client cancels', async () => {
-    let seen: AbortSignal | undefined
-    const complete = vi.fn<Complete>(async (_request, onDelta, signal) => {
-      seen = signal
-      onDelta?.('x')
-      await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))
-      onDelta?.('late')
-      return 'x'
-    })
-
-    const response = await routes(complete)(
-      chat({ model: 'm', stream: true, messages: [{ role: 'user', content: 'hi' }] }),
-    )
-    const reader = response!.body!.getReader()
-    await reader.read()
-    await reader.cancel()
-
-    await vi.waitFor(() => expect(seen?.aborted).toBe(true))
-  })
-
-  it('puts usage in the non-stream body', async () => {
-    const complete = vi.fn<Complete>(async () => ({
-      text: 'hello',
-      usage: { promptTokens: 3, completionTokens: 2 },
-    }))
-
-    const response = await routes(complete)(
-      chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }] }),
-    )
-
-    const body = (await json(response)) as { usage: unknown }
-    expect(body.usage).toEqual({ prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 })
+    expect(response?.status).toBe(400)
+    expect(errorOf(await json(response)).type).toBe('stream_unsupported')
+    expect(complete).not.toHaveBeenCalled()
   })
 
   it('answers 502 turn_failed without the rejection message', async () => {

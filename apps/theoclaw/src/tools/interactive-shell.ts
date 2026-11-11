@@ -123,7 +123,6 @@ export async function withInteractiveShell(settings: ToolSettings, deps: Interac
   if (!settings.hostTools) return settings
   const off = (why: string): ToolSettings => ({ ...settings, offLines: [...settings.offLines, `tools: interactive_shell is off (${why})`] })
   if (!settings.sandboxEnforced) return off('sandbox not enforced')
-  if (settings.backend === 'docker') return off('THEOCLAW_SANDBOX_BACKEND=docker has no interactive shell')
   const interactive = createConfinedInteractive(settings, deps)
   if (!(await probeInteractiveShell(settings, interactive))) {
     return off('no confined session could be proven on this host: needs node-pty and THEOCLAW_SANDBOX=workspace-write')

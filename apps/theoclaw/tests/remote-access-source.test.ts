@@ -24,8 +24,7 @@ function sourceFiles(): string[] {
 
 describe('remote access source guards', () => {
   it('no TheoClaw source reads a peer address', () => {
-    // trusted-proxy.ts is the one reader of a peer address, behind an explicit allowlist (OC-24).
-    const files = sourceFiles().filter((file) => !file.endsWith('trusted-proxy.ts'))
+    const files = sourceFiles()
     expect(files.length, 'no source files found under src/').toBeGreaterThan(0)
     const hits = files.flatMap((file) => {
       const text = readFileSync(file, 'utf8').toLowerCase()

@@ -62,7 +62,6 @@ function policy(overrides: Partial<AuthorizationPolicy> = {}): AuthorizationPoli
     refusalText: REFUSAL,
     stateDir: undefined,
     broadcastGroups: [],
-    allowed: new Set(),
     ...overrides,
   }
 }

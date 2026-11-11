@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import { isAuthenticatedSender, isPolicyOwner, parseAuthorizationPolicy } from '../src/authorization/policy.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
-import { requireGroupPlatformsConfigured } from '../src/composition.js'
 
 /** The parse error of `env`, so a test asserts its type, its message and the variable it names. */
 function refusal(env: Record<string, string | undefined>): TheoClawConfigError {
@@ -80,16 +79,6 @@ describe('parseAuthorizationPolicy', () => {
     })
     expect([...policy.owners]).toEqual(['matrix:@paulo:matrix.org', 'telegram:42'])
     expect(policy.broadcastGroups[0]?.members[0]).toEqual({ platform: 'matrix', channelId: '!room:matrix.org' })
-  })
-
-  it('resolves accessGroup allowlist entries and refuses an undefined group', () => {
-    const policy = parseAuthorizationPolicy({
-      ...OWNER,
-      THEOCLAW_ACCESS_GROUPS: 'family=matrix:@a:hs,telegram:7',
-      THEOCLAW_ALLOWLIST: 'matrix:accessGroup:family,discord:9',
-    })
-    expect([...policy.allowed]).toEqual(['matrix:@a:hs', 'discord:9'])
-    expect(() => parseAuthorizationPolicy({ ...OWNER, THEOCLAW_ALLOWLIST: 'matrix:accessGroup:nope' })).toThrow(/does not define/)
   })
 
   it('parses two broadcast groups and refuses a one-member group', () => {
@@ -180,17 +169,5 @@ describe('isPolicyOwner', () => {
     const policy = { ...parsed, owners: new Set(['email:owner@example.com', 'sms:+15550001111']) }
     expect(isPolicyOwner(policy, 'email', 'OWNER@example.com')).toBe(false)
     expect(isPolicyOwner(policy, 'sms', '+15550001111')).toBe(false)
-  })
-})
-
-describe('requireGroupPlatformsConfigured', () => {
-  const policy = parseAuthorizationPolicy({ ...OWNER, THEOCLAW_BROADCAST_GROUPS: 'team=telegram:-100,discord:200' })
-
-  it('refuses a group naming a platform that is not configured, and names it', () => {
-    expect(() => requireGroupPlatformsConfigured(policy, ['telegram'])).toThrow(/names discord, which is not configured/)
-  })
-
-  it('accepts a group whose platforms are all configured', () => {
-    expect(() => requireGroupPlatformsConfigured(policy, ['telegram', 'discord'])).not.toThrow()
   })
 })

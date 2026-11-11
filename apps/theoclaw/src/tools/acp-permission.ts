@@ -1,11 +1,11 @@
-import type { PersonReply } from './exec-approval.js'
+import type { PersonAnswer } from './exec-approval.js'
 
 /** How long the owner has to answer before the request is refused. */
 export const ACP_PERMISSION_TIMEOUT_MS = 120_000
 
 export interface AcpPermissionOptions {
   /** Asks the owner in the chat; the same asker as shell exec approval. Absent: every request is refused. */
-  readonly ask?: (question: string) => Promise<PersonReply>
+  readonly ask?: (question: string) => Promise<PersonAnswer>
   readonly timeoutMs?: number
 }
 
@@ -37,8 +37,7 @@ export function acpPermissionHandler(agent: string, options: AcpPermissionOption
       timer = setTimeout(() => resolve('deny'), timeoutMs)
     })
     try {
-      const reply = await Promise.race([ask(describeRequest(agent, params)), timeout])
-      const answer = typeof reply === 'string' ? reply : reply.answer
+      const answer = await Promise.race([ask(describeRequest(agent, params)), timeout])
       return { granted: answer === 'once' || answer === 'always' }
     } catch {
       return { granted: false }

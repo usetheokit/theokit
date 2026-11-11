@@ -217,7 +217,7 @@ describe('startTheoClaw with the scheduler', () => {
       const options = await runControlTurn(app)
       const names = options.tools.map((tool) => tool.name)
       for (const name of SCHEDULE_TOOLS) expect(names).toContain(name)
-      expect((agentOptionsFor({ THEOCLAW_MODEL: 'openrouter/m', THEOKIT_API_KEY: 'k' }).tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
+      expect(agentOptionsFor({ THEOCLAW_MODEL: 'openrouter/m', THEOKIT_API_KEY: 'k' }).tools).toBeUndefined()
       expect(app.output()).toContain('scheduler: 0 jobs, heartbeat off')
     } finally {
       await stop(app)

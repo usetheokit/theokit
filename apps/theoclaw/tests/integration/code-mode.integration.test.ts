@@ -127,7 +127,7 @@ describe('run_code and delegate_all on a /control agent, over the model stub', (
     await controlTurn(settings, stub, 'ask a worker')
 
     expect(stub.requests).toHaveLength(3)
-    expect(advertisedTools(stub.requests[1])).toEqual([...readOnlyTools(settings).map((tool) => tool.name), 'skill_read'].sort())
+    expect(advertisedTools(stub.requests[1])).toEqual(readOnlyTools(settings).map((tool) => tool.name).sort())
     expect(toolMessages(stub, 2).join('\n')).toContain('worker-token-7f3a')
   })
 })

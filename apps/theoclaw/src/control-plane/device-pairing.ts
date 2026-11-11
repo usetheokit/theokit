@@ -32,15 +32,13 @@ export type DeviceApproval =
 export interface PendingDevice {
   readonly id: string
   readonly name: string
-  /** A coarse city for the device's address (OC-129); absent when none is known. */
-  readonly city?: string
 }
 
 export interface DevicePairing {
   /** A one-time setup code, valid for ten minutes. */
   issueSetupCode(): string
   /** Redeem `code` for a pairing request carrying the device's own `token`; the code is spent. */
-  request(code: string, name: string, token: string, city?: string): PairingRequest
+  request(code: string, name: string, token: string): PairingRequest
   pending(): readonly PendingDevice[]
   /** Approve a pending request: its token is accepted from here on and survives a restart. */
   approve(id: string): Promise<DeviceApproval>
@@ -64,7 +62,6 @@ interface Device {
   readonly name: string
   /** SHA-256 of the token, hex. The token itself is never stored. */
   readonly digest: string
-  readonly city?: string
 }
 
 const BEARER = /^bearer (.+)$/i
@@ -176,7 +173,7 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
       codes.set(code, clock())
       return code
     },
-    request(code, name, token, city) {
+    request(code, name, token) {
       const issuedAt = codes.get(code)
       if (issuedAt === undefined || clock() - issuedAt >= CODE_TTL_MS) {
         codes.delete(code)
@@ -191,13 +188,13 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
       if (waiting.size >= MAX_PENDING) return { ok: false, reason: 'too_many_pending' }
       codes.delete(code)
       const id = randomBytes(8).toString('hex')
-      waiting.set(id, { id, name: trimmed, digest: digestOf(token), ...(city === undefined ? {} : { city }) })
+      waiting.set(id, { id, name: trimmed, digest: digestOf(token) })
       waitingSince.set(id, clock())
       return { ok: true, id }
     },
     pending() {
       dropExpiredRequests()
-      return [...waiting.values()].map(({ id, name, city }) => ({ id, name, ...(city === undefined ? {} : { city }) }))
+      return [...waiting.values()].map(({ id, name }) => ({ id, name }))
     },
     approve(id) {
       return serialized(async () => {

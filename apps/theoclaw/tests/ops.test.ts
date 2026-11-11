@@ -1,5 +1,5 @@
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -172,17 +172,6 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     expect(statSync(state).mode & 0o777).toBe(0o700)
     expect(readFileSync(path, 'utf8')).toBe(text)
     expect(h.stdout()).not.toContain(KEY)
-  })
-
-  it('doctor fails naming a workspace policy rule that forbids THEOCLAW_DM_POLICY=open', async () => {
-    const { h, path } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_DM_POLICY="open"\n`)
-    const policy = join(dirname(path), 'policy.json')
-    writeFileSync(policy, JSON.stringify({ rules: [{ id: 'no-open-dm', variable: 'THEOCLAW_DM_POLICY', forbid: ['open'] }] }))
-    expect(await runCli(['doctor'], h.io)).toBe(3)
-    expect(h.stdout()).toContain('policy no-open-dm: THEOCLAW_DM_POLICY')
-    const ok = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_DM_POLICY="pairing"\n`)
-    writeFileSync(join(dirname(ok.path), 'policy.json'), readFileSync(policy))
-    expect(await runCli(['doctor'], ok.h.io)).toBe(0)
   })
 
   it('doctor refuses an unknown flag', async () => {

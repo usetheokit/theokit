@@ -3,11 +3,8 @@ import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 
 import { smsOptions } from '../channels/adapter-factory.js'
 import type { ChannelLoop, PlatformBuild } from '../channels/channel-loop.js'
-import { isBaileys } from '../channels/platforms.js'
 import type { PlatformSettings, SupportedPlatform } from '../channels/platforms.js'
 import { describeError } from '../control-plane/errors.js'
-import { createGoogleChatRoute } from './google-chat.js'
-import type { GoogleChatInbound } from './google-chat.js'
 import { createLineRoute } from './line.js'
 import type { WebhookRoute } from './router.js'
 import { createSmsRoute } from './sms.js'
@@ -70,7 +67,7 @@ export interface WebhookDeps {
 type WebhookPlatformFor<P extends SupportedPlatform> = (
   settings: PlatformSettings<P>,
   deps: WebhookDeps,
-) => WebhookPlatform | undefined
+) => WebhookPlatform
 
 /**
  * Each platform's webhook, or `null` for one that has none. Keyed by every platform name, so a new
@@ -82,33 +79,18 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
   slack: null,
   matrix: null,
   mattermost: null,
-  signal: null,
-  imessage: null,
   tlon_urbit: null,
   email: null,
   line: ({ channelSecret }) => ({
     methods: ['POST'],
     buildRoute: (adapter) => createLineRoute({ channelSecret, adapter }),
   }),
-  whatsapp: (settings, { write }) => {
-    // The Baileys backend is a socket, not a webhook: nothing for Meta to call.
-    if (isBaileys(settings)) return undefined
-    const { appSecret, verifyToken } = settings
-    return {
-      methods: ['GET', 'POST'],
-      buildRoute: (adapter) => {
-        if (!convertsEnvelopes(adapter))
-          throw new Error('the built adapter cannot convert a webhook envelope')
-        return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
-      },
-    }
-  },
-  google_chat: () => ({
-    methods: ['POST'],
+  whatsapp: ({ appSecret, verifyToken }, { write }) => ({
+    methods: ['GET', 'POST'],
     buildRoute: (adapter) => {
-      if (typeof (adapter as { handleRequest?: unknown }).handleRequest !== 'function')
-        throw new Error('the built adapter cannot answer a Google Chat request')
-      return createGoogleChatRoute(adapter as BasePlatformAdapter & GoogleChatInbound)
+      if (!convertsEnvelopes(adapter))
+        throw new Error('the built adapter cannot convert a webhook envelope')
+      return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
     },
   }),
   teams: (settings, { write, verifierFactory }) => {

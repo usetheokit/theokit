@@ -19,9 +19,6 @@ export function parseFallbackModel(value: string | undefined): string | undefine
   return trimmed === undefined || trimmed === '' ? undefined : trimmed
 }
 
-/** Stream items that are not model output: a run that has shown only these may still fall over. */
-const PRE_OUTPUT_TYPES: ReadonlySet<string> = new Set(['run_started', 'error'])
-
 type SendOptions = Parameters<TurnAgent['send']>[1]
 
 /**
@@ -41,19 +38,9 @@ function failoverRun(
     async *stream() {
       let streamed = false
       let primaryError: unknown
-      // Bookkeeping items (`run_started`) and streamed errors are held back until real output
-      // arrives, so a primary that fails on its first request still falls over.
-      const held: { readonly type: string }[] = []
       try {
         for await (const item of first.stream()) {
-          if (!streamed && PRE_OUTPUT_TYPES.has(item.type)) {
-            held.push(item)
-            continue
-          }
-          if (!streamed) {
-            streamed = true
-            yield* held
-          }
+          streamed = true
           yield item
         }
       } catch (error) {
@@ -66,10 +53,7 @@ function failoverRun(
         primaryError !== undefined
           ? { status: 'failed' }
           : await first.wait().catch(() => ({ status: 'failed' }))
-      if (outcome.status === 'finished') {
-        yield* held
-        return
-      }
+      if (outcome.status === 'finished') return
       try {
         active = await (
           await secondary()

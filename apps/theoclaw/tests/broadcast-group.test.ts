@@ -42,7 +42,6 @@ function setup(config: readonly BroadcastGroupConfig[], options: { failTurns?: b
           },
           ...(options.failTurns ? { result: { status: 'error', error: { code: 'MODEL_DOWN' } } } : {}),
         }) as unknown as TurnAgent,
-        agentId: 'a-1',
         release: () => undefined,
       }),
     broadcast: {

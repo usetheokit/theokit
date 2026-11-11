@@ -3,20 +3,15 @@
  * commands whose fingerprint the owner listed in `THEOCLAW_APPROVED_HOOKS`.
  */
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { Agent } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createTheoClawAgent, theoClawAgentOptions, type TheoClawAgentOptions } from '../src/agent/create-agent.js'
+import { theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { createHookApprovalGate, hookFingerprint, parseApprovedHooks } from '../src/agent/hook-approval.js'
-import { createAgentFactory } from '../src/control-plane/agent-factory.js'
-import { agentToolOptions } from '../src/tools/tool-registry.js'
-import { resolveToolSettings } from '../src/tools/tool-settings.js'
-import { makeHostToolsWorkspace } from './host-tools-workspace.js'
-import { notEnforced } from './tool-start-fixtures.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { waitFor } from './fakes.js'
 import { startModelStub } from './model-stub.js'
@@ -139,15 +134,15 @@ afterEach(async () => {
 
 /**
  * One turn of a real SDK agent built from TheoClaw's own options, in `workspace`. The project
- * setting source comes from TheoClaw's own options (on once a fingerprint is approved); the
- * ungated control sets it itself. `gated: false` drops the gate,
+ * setting source is turned on here, because TheoClaw's agents load none (plan D3), and without it
+ * the SDK would read no hook at all and the refusal could not fail. `gated: false` drops the gate,
  * which is the control that proves the hooks do run when nothing refuses them.
  */
 async function runOneTurn(workspace: HookWorkspace, approvedHooks: ReadonlySet<string>, gated = true): Promise<void> {
   const stub = await startModelStub([{ text: 'done' }])
   realCleanups.push(() => stub.close())
   const options = theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', approvedHooks })
-  const local = gated ? { ...options.local, cwd: workspace.cwd } : { cwd: workspace.cwd, settingSources: ['project' as const] }
+  const local = { ...(gated ? options.local : {}), cwd: workspace.cwd, settingSources: ['project' as const] }
   const agent = await Agent.create({ ...options, local })
   realCleanups.push(() => agent[Symbol.asyncDispose]())
   const run = await agent.send('say done')
@@ -172,58 +167,5 @@ describe('a real SDK agent with the gate (NFR-004)', () => {
     const workspace = hookWorkspace()
     await runOneTurn(workspace, new Set(), false)
     await waitFor(() => existsSync(workspace.stopMarker), 10_000, 'the ungated Stop hook to touch its marker')
-  })
-})
-
-/** A workspace whose only hook is a PreToolUse command appending its stdin (the tool call) to a log. */
-function toolLogWorkspace(): { cwd: string; log: string; fingerprint: string } {
-  const cwd = mkdtempSync(join(tmpdir(), 'theoclaw-toollog-'))
-  const log = join(cwd, 'tools.log')
-  const command = `cat >> ${log}`
-  mkdirSync(join(cwd, '.theokit'))
-  writeFileSync(
-    join(cwd, '.theokit', 'settings.json'),
-    JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'list_dir', hooks: [{ type: 'command', command }] }] } }),
-  )
-  return { cwd, log, fingerprint: hookFingerprint({ sourceEvent: 'PreToolUse', command, timeoutMs: 30_000 }) }
-}
-
-/**
- * A `list_dir` turn on the agent the `/control` entry point (`createAgentFactory`) builds from the
- * environment and the start's tool options; only the model (a stub) and the cwd (the hook workspace)
- * are changed, and the SDK's real hook loader reads the workspace's `.theokit/settings.json`.
- */
-async function listDirTurn(workspace: { cwd: string }, approved: readonly string[]): Promise<void> {
-  const stub = await startModelStub([{ toolCalls: [{ name: 'list_dir', args: { path: '.' } }] }, { text: 'done' }])
-  realCleanups.push(() => stub.close())
-  const env = { THEOCLAW_MODEL: 'stub', OPENROUTER_API_KEY: 'stub-key', THEOCLAW_APPROVED_HOOKS: approved.join(',') }
-  const tools = makeHostToolsWorkspace()
-  const settings = resolveToolSettings({}, tools.path, { detect: notEnforced, warn: () => undefined })
-  const create = (options: TheoClawAgentOptions) =>
-    createTheoClawAgent({ ...options, model: { id: 'lmstudio/stub', url: stub.url }, local: { ...options.local, cwd: workspace.cwd } })
-  const agent = await createAgentFactory(env, create)(agentToolOptions(settings))
-  realCleanups.push(async () => void (await (agent as unknown as AsyncDisposable)[Symbol.asyncDispose]()))
-  const run = await agent.send('list the directory')
-  expect((await run.wait()).status).toBe('finished')
-}
-
-describe('a preToolUse hook through the /control entry point (OC-87)', () => {
-  it('logs the list_dir tool once its fingerprint is approved', { timeout: 30_000 }, async () => {
-    const workspace = toolLogWorkspace()
-    await listDirTurn(workspace, [workspace.fingerprint])
-    await waitFor(() => existsSync(workspace.log), 10_000, 'the approved PreToolUse hook to write its log')
-    expect(readFileSync(workspace.log, 'utf8')).toContain('list_dir')
-  })
-
-  it('writes nothing while no fingerprint is approved', async () => {
-    const workspace = toolLogWorkspace()
-    await listDirTurn(workspace, [])
-    expect(existsSync(workspace.log)).toBe(false)
-  })
-
-  it('writes nothing when the approved list holds only an unrelated fingerprint', async () => {
-    const workspace = toolLogWorkspace()
-    await listDirTurn(workspace, [sha256('unrelated')])
-    expect(existsSync(workspace.log)).toBe(false)
   })
 })

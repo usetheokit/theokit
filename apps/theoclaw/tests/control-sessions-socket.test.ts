@@ -120,22 +120,6 @@ describe("the control socket speaks sessions and interrupt (T2.3)", () => {
     expect(other.frames).toEqual([{ type: "interrupt_ok", session: "owner" }]);
   });
 
-  it("a steer frame injects its text into the running turn with queueMode steer, and says no_turn when none runs", async () => {
-    const hold = deferred<void>();
-    const plane = await startSessionPlane(() => ({ frames: [assistant("1. a 2. b 3. c"), finished()], before: hold.promise }));
-    const client = await peer(plane);
-    client.send({ type: "steer", message: "only three", session: "owner" });
-    await client.until(hasType("no_turn"), "no_turn without a turn");
-    client.send({ type: "chat", message: "list fruits", session: "owner" });
-    await waitFor(() => plane.agents[0]?.sent.length === 1, 2000, "the send");
-    client.send({ type: "steer", message: "only the first three", session: "owner" });
-    await client.until(hasType("steer_ok"), "steer_ok");
-    expect(plane.agents[0]?.sent).toEqual(["list fruits", "only the first three"]);
-    expect(plane.agents[0]?.queueModes).toEqual([undefined, "steer"]);
-    hold.resolve();
-    await client.until(hasType("done"), "the turn's own done frame");
-  });
-
   it("a turn interrupted from one surface is redirected at once, and the other surface gets the same answer", async () => {
     const hold = deferred<void>();
     let streams = 0;

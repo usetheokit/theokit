@@ -1,6 +1,6 @@
 import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
 
-import type { ExecApprovalOptions, PersonReply } from '../tools/exec-approval.js'
+import type { ExecApprovalOptions, PersonAnswer } from '../tools/exec-approval.js'
 
 /** The variable that sets the default of `/elevated`: `on` waives the exec question for every session. */
 export const ELEVATED_VARIABLE = 'THEOCLAW_ELEVATED'
@@ -37,7 +37,7 @@ export interface ChatExecApproval {
 }
 
 interface Pending {
-  readonly answer: (answer: PersonReply) => void
+  readonly answer: (answer: PersonAnswer) => void
 }
 
 function initialElevated(env: ChatExecApprovalOptions['env']): boolean {
@@ -63,12 +63,12 @@ export function createChatExecApproval(options: ChatExecApprovalOptions): ChatEx
   const ask = async (
     command: string,
     call?: { readonly agentId?: string },
-  ): Promise<PersonReply> => {
+  ): Promise<PersonAnswer> => {
     const key = AGENT_ID.exec(call?.agentId ?? '')?.[1]
     const event = key === undefined ? undefined : latest.get(key)
     if (key === undefined || event === undefined || pending.has(key)) return 'deny'
     let timer: NodeJS.Timeout | undefined
-    const answered = new Promise<PersonReply>((resolve) => {
+    const answered = new Promise<PersonAnswer>((resolve) => {
       pending.set(key, { answer: resolve })
       timer = setTimeout(() => resolve('deny'), timeoutMs)
     })
@@ -110,7 +110,7 @@ export function createChatExecApproval(options: ChatExecApprovalOptions): ChatEx
     }
     const waiting = pending.get(key)
     if (waiting === undefined) return { block: true, message: 'Nothing is waiting for approval.' }
-    waiting.answer({ answer: deny ? 'deny' : approve?.[1] === 'always' ? 'always' : 'once', by: `${event.platform}:${event.sender.id}` })
+    waiting.answer(deny ? 'deny' : approve?.[1] === 'always' ? 'always' : 'once')
     return { block: true, message: deny ? 'Denied.' : 'Approved.' }
   }
 

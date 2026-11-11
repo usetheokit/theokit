@@ -112,12 +112,7 @@ async function rebuild(io: UpdateIo, runner: Runner, dist: string, label: string
 async function run(io: UpdateIo, runner: Runner, branch: string): Promise<void> {
   const dist = dirname(io.entry)
   const label = resolveInstance(io.env, { homeDir: io.homeDir }).label
-  // Not inside a git checkout: an install from the npm registry, which this command cannot move.
-  const top = await runner('git', ['-C', dist, 'rev-parse', '--show-toplevel'])
-  if (top.code !== 0 || top.stdout.trim() === '') {
-    throw new StepFailed('this is not a git checkout (an npm install?); update with `npm i -g theoclaw@latest`, then restart the service')
-  }
-  const root = top.stdout.trim()
+  const root = await must(runner, dist, 'git rev-parse --show-toplevel', 'rev-parse', '--show-toplevel')
   const before = await must(runner, root, 'git rev-parse HEAD', 'rev-parse', 'HEAD')
   await advance(runner, root, branch)
   const head = await must(runner, root, 'git rev-parse HEAD', 'rev-parse', 'HEAD')

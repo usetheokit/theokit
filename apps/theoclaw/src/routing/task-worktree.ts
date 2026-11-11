@@ -17,11 +17,6 @@ export interface TaskWorktree {
 export interface DelegatedTask<T> {
   readonly id: string
   readonly work: (worktree: TaskWorktree) => Promise<T>
-  /**
-   * Keep the worktree and branch when the work succeeds, so the branch's commits can be reviewed;
-   * `remove(id)` is the cleanup. A failed task is always cleaned up.
-   */
-  readonly keep?: boolean
 }
 
 export interface WorktreeRunnerOptions {
@@ -41,23 +36,12 @@ export function createWorktreeRunner(options: WorktreeRunnerOptions) {
       if (!SAFE_ID.test(task.id) || task.id.includes('..')) throw new Error(`unsafe task id: ${task.id}`)
       const worktree: TaskWorktree = { path: join(options.root, task.id), branch: `task/${task.id}` }
       await git('worktree', 'add', '-b', worktree.branch, worktree.path)
-      let succeeded = false
       try {
-        const result = await task.work(worktree)
-        succeeded = true
-        return result
+        return await task.work(worktree)
       } finally {
-        if (!(succeeded && task.keep === true)) {
-          await git('worktree', 'remove', '--force', worktree.path)
-          await git('branch', '-D', worktree.branch)
-        }
+        await git('worktree', 'remove', '--force', worktree.path)
+        await git('branch', '-D', worktree.branch)
       }
-    },
-    /** Clean up a kept task: remove its worktree and, unless `keepBranch`, its branch. */
-    async remove(id: string, keepBranch = false): Promise<void> {
-      if (!SAFE_ID.test(id) || id.includes('..')) throw new Error(`unsafe task id: ${id}`)
-      await git('worktree', 'remove', '--force', join(options.root, id))
-      if (!keepBranch) await git('branch', '-D', `task/${id}`)
     },
   }
 }

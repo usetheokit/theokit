@@ -87,8 +87,7 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
       return approval(text, pairing)
     }
     const paired = isAuthenticatedSender(event.platform) && (pairing?.isPaired(event.platform, event.sender.id) ?? false)
-    const listed = isAuthenticatedSender(event.platform) && policy.allowed.has(senderKey(event.platform, event.sender.id))
-    if (isOwner || paired || listed) return undefined
+    if (isOwner || paired) return undefined
     return isDm ? refuseDm(event, senderKey(event.platform, event.sender.id), now) : SILENT
   }
 

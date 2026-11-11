@@ -58,14 +58,12 @@ interface StubScript {
   /** After the first message the stream waits on this; `silent` never resolves it. */
   readonly afterFirst?: Promise<void> | "silent";
   readonly status?: string;
-  /** What the finished run reports besides its status (usage, cost). */
-  readonly result?: Record<string, unknown>;
   /** Called when the first message is handed to the turn. */
   readonly onFirstMessage?: () => void;
 }
 
 /** A turn runner over the real request boundary, whose agents follow `script`; counts builds and cancels. */
-function stubRunner(script: StubScript, model?: string) {
+function stubRunner(script: StubScript) {
   const calls = { built: 0, cancels: 0 };
   const factory = (): TurnAgent => {
     calls.built += 1;
@@ -81,7 +79,7 @@ function stubRunner(script: StubScript, model?: string) {
               if (index === 0 && script.afterFirst !== undefined) await script.afterFirst;
             }
           },
-          wait: async () => ({ status: script.status ?? "finished", ...script.result }),
+          wait: async () => ({ status: script.status ?? "finished" }),
           cancel: async () => {
             calls.cancels += 1;
           },
@@ -89,7 +87,7 @@ function stubRunner(script: StubScript, model?: string) {
       },
     };
   };
-  const runTurn = createTurnRunner(createContainer<TurnAgent>({ factory }).withAgent, [], model);
+  const runTurn = createTurnRunner(createContainer<TurnAgent>({ factory }).withAgent);
   return { calls, runTurn };
 }
 
@@ -375,24 +373,6 @@ describe("POST /webchat/chat", () => {
 
     expect(firstMessageAt).toBeGreaterThan(0);
     expect(firstByteAt - firstMessageAt).toBeLessThan(500);
-  });
-});
-
-describe("the WebChat finish event (OC-97)", () => {
-  it("carries the run's token counts and model", async () => {
-    const stub = stubRunner(
-      { messages: () => [text("hi"), finished], result: { usage: { inputTokens: 81, outputTokens: 11 } } },
-      "openai-chatgpt/gpt-5.6-luna",
-    );
-    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
-
-    const frames = dataFrames(await (await handle(chatRequest({ message: "hi", id: "chat-1" }))).text());
-    const finish = chunksOfType(frames, "finish").at(-1);
-
-    expect(finish?.messageMetadata).toMatchObject({
-      usage: { inputTokens: 81, outputTokens: 11 },
-      model: "openai-chatgpt/gpt-5.6-luna",
-    });
   });
 });
 
