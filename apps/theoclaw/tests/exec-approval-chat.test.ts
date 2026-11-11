@@ -125,14 +125,14 @@ describe('chat exec approval', () => {
   it('lets a waiting exec take the owner bare /approve past the pairing command', async () => {
     const { chat, say, exec } = setup()
     const hooks = channelHooks({
-      policy: { owners: new Set(['telegram:owner']), dmPolicy: 'open' } as never,
+      policy: { owners: new Set(['telegram:owner']), dmPolicy: 'open', allowed: new Set() } as never,
       write: () => undefined,
       execApproval: chat,
     })
     expect(hooks.map((hook) => hook.name)).toContain('theoclaw-exec-approval-chat')
     await say(OWNER, 'hi')
     const pairing = createOwnerPolicyHook({
-      policy: { owners: new Set(['telegram:owner']), dmPolicy: 'open' } as never,
+      policy: { owners: new Set(['telegram:owner']), dmPolicy: 'open', allowed: new Set() } as never,
       execPending: chat.hasPending,
     })
     const event = messageEvent('telegram', '/approve', OWNER)

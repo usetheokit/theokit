@@ -17,6 +17,7 @@ function policy(dmPolicy: DmPolicy, owners: string[] = ['telegram:owner']): Auth
     refusalText: 'owner only',
     stateDir: undefined,
     broadcastGroups: [],
+    allowed: new Set(),
   }
 }
 

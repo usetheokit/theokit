@@ -144,6 +144,8 @@ policy below; owners and paired senders are answered there as in a direct messag
 | `THEOCLAW_REFUSAL_TEXT` | The refusal under `allowlist`. Default `This assistant answers its owner only.` |
 | `THEOCLAW_GROUP_ACTIVATION` | Slack, Mattermost, WhatsApp and Telegram only: `mention` (default) answers a group message only when it mentions the bot; `always` answers every message from an owner or a paired sender. The other six platforms answer an owner or a paired sender in a group either way. |
 | `THEOCLAW_BROADCAST_GROUPS` | Channels that share one agent thread: `"name=platform:channelId,platform:channelId;name2=..."`. Double-quote the value in the env file: the shell loader (`set -a; . ./.env`) cuts an unquoted value at the first `;`. Each group needs two channels or more, a channel belongs to one group, and an `email:` or `sms:` channel is refused for the reason above. The thread keeps the last 20 turns, at most 16384 characters, and every answer reaches every member channel. |
+| `THEOCLAW_ACCESS_GROUPS` | Named sender lists: `"family=matrix:@a:hs,matrix:@b:hs;..."`. Double-quote the value. An `email:` or `sms:` sender is refused. |
+| `THEOCLAW_ALLOWLIST` | Senders answered besides the owners and paired senders: `platform:senderId` or `platform:accessGroup:<name>` (members on that platform only), comma-separated. A group not defined in `THEOCLAW_ACCESS_GROUPS` stops the start. |
 
 **Pairing.** Under `pairing` a stranger's first direct message is answered with a 6-digit code,
 valid for one hour. The owner approves it by sending `/approve <code>` to the bot in a direct
