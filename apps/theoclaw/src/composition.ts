@@ -21,6 +21,7 @@ import {
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
 import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
+import type { RetryPolicy } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
 import { createAcpSessions, type AcpSessions } from './channels/acp-command.js'
@@ -124,6 +125,8 @@ export interface TheoClawOptions {
   readonly acp?: AcpSessions
   readonly write: (line: string) => void
   readonly startTimeoutMs?: number
+  /** Overrides the background retry of a channel whose start failed (default: 1 s doubling to 30 s, 40 tries). */
+  readonly retry?: RetryPolicy
   /** Who the instance serves, parsed from this same `env`; parsed here when absent (`startTheoClaw` parses it first). */
   readonly policy?: AuthorizationPolicy
   /**
@@ -271,6 +274,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,
+    retry: options.retry ?? { initialDelayMs: 1000, maxDelayMs: 30_000, maxAttempts: 40 },
     // A first Baileys start waits for a QR scan, which the 30 s default would cut short.
     ...(options.startTimeoutMs !== undefined
       ? { startTimeoutMs: options.startTimeoutMs }
