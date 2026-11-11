@@ -130,6 +130,14 @@ describe('the tool catalogue', () => {
     expect(await advertisedBy(agentToolOptions(settings))).toEqual(READ_ONLY)
   })
 
+  it('does not offer view_image on the openai-chatgpt/ route, whose wire carries tool results as text', () => {
+    const settings = resolveToolSettings({ THEOCLAW_MODEL: 'openai-chatgpt/gpt-5.6-luna' }, tempWorkspace(), { detect: notEnforced, ...quiet })
+    const names = buildTools(settings).map((tool) => tool.name)
+    expect(names).not.toContain('view_image')
+    expect(names).toContain('read_file')
+    expect(settings.offLines.some((line) => line.includes('view_image is off'))).toBe(true)
+  })
+
   it('advertises the four host-changing tools and no interactive shell when THEOCLAW_HOST_TOOLS is on', async () => {
     const settings = resolveToolSettings({ THEOCLAW_HOST_TOOLS: 'on' }, hostWorkspace(), { detect: enforced, ...quiet })
     const names = await advertisedBy(agentToolOptions(settings))

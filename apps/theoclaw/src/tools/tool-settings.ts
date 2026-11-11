@@ -42,6 +42,8 @@ export interface ToolSettings {
   /** The interactive shell confined to this mode's sandbox, present only once `withInteractiveShell` proved it on this host. */
   readonly interactive?: InteractiveBackend
   readonly fetchImpl: typeof fetch
+  /** False when the model's wire carries tool results as text only (`openai-chatgpt/`), so `view_image` is not offered. Absent means true. */
+  readonly imageResults?: boolean
   /** The DNS lookup `web_fetch` screens a host with; absent in the process, so the SDK's own runs. */
   readonly lookup?: WebFetchLookup
   readonly search: SearchSettings
@@ -248,6 +250,9 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     offLines.push(`tools: git_diff is off (sandbox not enforced: ${detail})`)
   }
   if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
+  if (nonBlank(env.THEOCLAW_MODEL)?.startsWith('openai-chatgpt/') === true) {
+    offLines.push('tools: view_image is off (the openai-chatgpt/ route carries tool results as text only)')
+  }
   if (mode === 'danger-full-access') offLines.push(SANDBOX_OFF_LINE)
   offLines.push(browserLine(browser), computerLine(computer))
   return {
@@ -260,6 +265,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     mode,
     sandboxMode,
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
+    ...(nonBlank(env.THEOCLAW_MODEL)?.startsWith('openai-chatgpt/') === true ? { imageResults: false } : {}),
     ...(deps.lookup === undefined ? {} : { lookup: deps.lookup }),
     search,
     browser,

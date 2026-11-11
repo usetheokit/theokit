@@ -138,7 +138,6 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
   const tools: CustomTool[] = [
     scope.bind(createReadFileTool)(),
     scope.bind(createListDirTool)(),
-    scope.bind(createViewImageTool)(),
     // Documents and PDFs are read from the tool root, GitHub links over the settings' fetch (OC-69).
     createReadPdfTool({ projectRoot: settings.toolRoot }),
     createExtractDocumentTool({ projectRoot: settings.toolRoot }),
@@ -149,6 +148,8 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
     createTodolistTool() as unknown as CustomTool,
     widgetTool(),
   ]
+  // The ChatGPT subscription wire rejects an image in a tool result, so `view_image` is not offered there.
+  if (settings.imageResults !== false) tools.splice(2, 0, scope.bind(createViewImageTool)())
   const search = webSearchTool(settings)
   if (search !== undefined) tools.push(search)
   if (settings.gitRepository && settings.sandboxEnforced) tools.push(scope.bind(createGitDiffTool)())
