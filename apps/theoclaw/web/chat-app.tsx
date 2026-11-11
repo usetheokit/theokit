@@ -1,11 +1,13 @@
 import { useAgent, type UseAgentReturn } from '@theokit/agents/client/react'
 import { ChatComposer } from '@theokit/ui/chat-composer'
 import { ChatThread } from '@theokit/ui/chat-thread'
+import { I18nProvider, useI18n } from '@theokit/ui'
 import { useState } from 'react'
 
 import { parseWidget } from '../src/canvas/widget-schema.js'
 import { WEBCHAT_API, webchatAgentOptions } from './agent-options.js'
 import { WidgetView } from './widget-view.js'
+import { readLocale, writeLocale } from './locale-store.js'
 import { readToken, writeToken } from './token-store.js'
 
 type ThreadMessage = UseAgentReturn['thread'][number]
@@ -53,6 +55,27 @@ function TokenForm({ onToken }: { readonly onToken: (token: string) => void }) {
   )
 }
 
+/** The settings: the language switch, English or Svenska, kept for the tab. */
+function Settings() {
+  const { t, locale, setLocale } = useI18n()
+  const choose = (value: string): void => {
+    writeLocale(value)
+    setLocale(value)
+  }
+  return (
+    <section aria-label={t('settings.label')}>
+      <h2>{t('settings.label')}</h2>
+      <label>
+        {t('language.label')}
+        <select value={locale} onChange={(event) => choose(event.target.value)}>
+          <option value="en">English</option>
+          <option value="sv">Svenska</option>
+        </select>
+      </label>
+    </section>
+  )
+}
+
 /** The chat itself: the thread of messages and the composer, over `useAgent`. */
 function Chat({ token }: { readonly token: string }) {
   const { thread, send, status, abort } = useAgent(WEBCHAT_API, webchatAgentOptions(token))
@@ -64,6 +87,7 @@ function Chat({ token }: { readonly token: string }) {
   }
   return (
     <main>
+      <Settings />
       <ChatThread>
         {thread.map((message: ThreadMessage) => (
           <div key={message.id} data-role={message.role}>
@@ -92,5 +116,9 @@ export function ChatApp() {
     writeToken(value)
     setToken(value)
   }
-  return token === undefined ? <TokenForm onToken={keep} /> : <Chat token={token} />
+  return (
+    <I18nProvider locale={readLocale()}>
+      {token === undefined ? <TokenForm onToken={keep} /> : <Chat token={token} />}
+    </I18nProvider>
+  )
 }

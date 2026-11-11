@@ -19,6 +19,7 @@ import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
 import { resolveInstance, type TheoClawInstance } from './instance.js'
 import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
+import { applyProxyEnvironment } from './ops/proxy.js'
 import { claimInstance } from './backup/instance-lock.js'
 import { readTelemetrySettings, registerTelemetry, type RegisteredTelemetry } from './telemetry/otel.js'
 
@@ -64,6 +65,7 @@ try {
   // The configuration file next (B-374): it fills only what the environment leaves unset.
   const configFile = loadConfiguration(process.env, homedir())
   // B-718: mirror the output to THEOCLAW_LOG_FILE, which `theoclaw logs` reads where there is no user unit.
+  applyProxyEnvironment(process.env)
   teeToLogFile(process.env, [process.stdout, process.stderr])
   // Hot reload (B-399): a change to the model settings applies to the next agent, without a restart.
   // A changed start-only setting (port, token, channel, policy) restarts the process (B-716).
@@ -111,7 +113,7 @@ startTheoClaw({
   telemetryLog: (line) => telemetry.log(line),
   instance,
   // The import reaches the `/control` agents only; WebChat's, the workers' and the chat path's factories take none (FR-009).
-  agentFactory: createAgentFactory(process.env, create, imported),
+  agentFactory: createAgentFactory(process.env, create, imported, { custodian: true }),
   importFreeAgentFactory: createAgentFactory(process.env, create),
   importedPaths: importedMcpPaths(imported),
   ...(imported === undefined ? {} : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),

@@ -121,6 +121,21 @@ describe('createOwnerPolicyHook', () => {
     expect(app.handled).toHaveLength(0)
   })
 
+  it('an accessGroup allowlist entry admits a member and refuses a non-member', async () => {
+    const app = await instance({
+      platform: 'matrix',
+      env: {
+        THEOCLAW_DM_POLICY: 'allowlist',
+        THEOCLAW_ACCESS_GROUPS: 'family=matrix:@mom:hs,matrix:@dad:hs',
+        THEOCLAW_ALLOWLIST: 'matrix:accessGroup:family',
+      },
+    })
+    await app.send(messageEvent('matrix', 'hi', '@mom:hs'))
+    await app.send(messageEvent('matrix', 'hi', '@stranger:hs'))
+    expect(app.handled.map((e) => e.sender.id)).toEqual(['@mom:hs'])
+    expect(app.replies()).toEqual([app.policy.refusalText])
+  })
+
   it('open policy lets an unlisted DM through', async () => {
     const app = await instance({ env: { THEOCLAW_DM_POLICY: 'open' } })
     await app.send(messageEvent('telegram', 'hello', 'stranger'))

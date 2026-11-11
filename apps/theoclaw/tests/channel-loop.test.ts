@@ -87,7 +87,7 @@ describe('startChannelLoop', () => {
 
     expect(loop.started.size).toBe(9)
     expect(loop.failed).toEqual(['sms'])
-    expect(lines).toEqual(['sms: start failed: SMSAdapter: signing secret missing'])
+    expect(lines.filter((l) => !l.endsWith(": connected"))).toEqual(['sms: start failed: SMSAdapter: signing secret missing'])
   })
 
   it('stop all stops every started runner', async () => {
@@ -147,7 +147,7 @@ describe('startChannelLoop', () => {
     await harness.loop.ready
 
     expect(harness.loop.failed).toEqual(['matrix'])
-    expect(harness.lines).toEqual(['matrix: start timed out after 50 ms'])
+    expect(harness.lines.filter((l) => !l.endsWith(": connected"))).toEqual(['matrix: start timed out after 50 ms'])
   })
 
   it('an abandoned start that later connects is stopped', async () => {
@@ -244,5 +244,52 @@ describe('maskSecrets', () => {
 
   it('ignores an empty value instead of masking between every character', () => {
     expect(maskSecrets('plain line', [''])).toBe('plain line')
+  })
+})
+
+describe('startChannelLoop retry', () => {
+  it('keeps retrying a platform that is down and reports it connected once it is up', async () => {
+    let up = false
+    const lines: string[] = []
+    const adapter = new FakeAdapter('matrix', { connect: async () => up })
+    const loop = startChannelLoop({
+      platforms: [{ platform: 'matrix', build: () => adapter }],
+      handler: async () => undefined,
+      secrets: [],
+      write: (line) => lines.push(line),
+      retry: { initialDelayMs: 5, maxDelayMs: 10, maxAttempts: 50 },
+    })
+    await loop.ready
+    expect(loop.failed).toEqual(['matrix'])
+    up = true
+    await waitFor(() => loop.started.has('matrix'), 2000, 'matrix to connect')
+    expect(loop.failed).toEqual([])
+    expect(lines.some((line) => line.startsWith('matrix: retry 1/50'))).toBe(true)
+    expect(lines).toContain('matrix: connected')
+    await loop.stopAll()
+  })
+
+  it('stops retrying when the loop is stopped', async () => {
+    const adapter = new FakeAdapter('matrix', { connect: async () => false })
+    const loop = startChannelLoop({
+      platforms: [{ platform: 'matrix', build: () => adapter }],
+      handler: async () => undefined,
+      secrets: [],
+      write: () => undefined,
+      retry: { initialDelayMs: 5, maxDelayMs: 5, maxAttempts: 50 },
+    })
+    await loop.ready
+    await loop.stopAll()
+    const seen = adapter.connects
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    expect(adapter.connects).toBe(seen)
+  })
+})
+
+describe('startChannelLoop connect log', () => {
+  it('writes "<platform>: connected" on the first successful start', async () => {
+    const harness = startTen()
+    await harness.loop.ready
+    expect(harness.lines).toContain('telegram: connected')
   })
 })

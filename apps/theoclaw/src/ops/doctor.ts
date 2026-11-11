@@ -4,6 +4,7 @@ import type { Writable } from 'node:stream'
 import { auditConfiguration, fixFindings } from '../security-audit.js'
 import { configurationPath, loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import { checkPolicy } from './policy.js'
 import { requireModel } from '../control-plane/settings.js'
 
 /**
@@ -85,6 +86,7 @@ export function doctor(io: DoctorIo, options: { readonly fix?: boolean } = {}): 
     const defect = value === undefined || value.trim() === '' ? undefined : credentialDefect(value)
     if (defect !== undefined) failures.push(`${key} ${defect}`)
   }
+  failures.push(...checkPolicy(env, path))
   const warnings = (() => {
     try {
       return auditConfiguration(io.env, io.homeDir).map((finding) => `${finding.id}: ${finding.message}`)

@@ -178,10 +178,13 @@ describe('the tool options each agent receives', () => {
       'cancel_scheduled_job',
       'delegate',
       'delegate_all',
+      'extract_document',
+      'github_link_preview',
       'list_dir',
       'list_scheduled_jobs',
       'question',
       'read_file',
+      'read_pdf',
       'run_code',
       'schedule_job',
       'session_search',
@@ -218,8 +221,8 @@ describe('the tool options each agent receives', () => {
     await loop.stopAll()
     await sessions.disposeAll()
     expect(received[0]?.withheldBuiltinTools).toEqual(['shell'])
-    expect(received[0]?.tools).toBeUndefined()
+    expect((received[0]?.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
     expect(received[0]?.plugins).toBeUndefined()
-    expect(effectiveToolNames({ ...received[0] }).names).toEqual([])
+    expect(effectiveToolNames({ ...received[0] }).names).toEqual(['skill_read'])
   })
 })

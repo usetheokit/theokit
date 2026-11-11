@@ -26,6 +26,18 @@ describe('theoclaw update, settings and git failures', () => {
     expect(h.installs()).toBe(0)
   })
 
+  it('an install outside a git checkout is refused with the npm command', async () => {
+    const w = world()
+    const h = harness(w)
+    const notGit: Runner = (command, args) =>
+      args.includes('--show-toplevel') ? Promise.resolve({ code: 128, stdout: '', stderr: 'fatal: not a git repository' }) : h.runner(command, args)
+
+    expect(await update({}, h.io, notGit)).toBe(1)
+    expect(h.stderr()).toContain('npm i -g theoclaw@latest')
+    expect(h.stderr()).not.toContain('fatal')
+    expect(h.installs()).toBe(0)
+  })
+
   it('a channel set only in the configuration file is the one update follows', async () => {
     const w = world()
     installedAt(w, w.c0)

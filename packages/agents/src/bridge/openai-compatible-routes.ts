@@ -1,6 +1,6 @@
 /**
  * An OpenAI-compatible surface over a `complete` port — Web Standard, like the agent route
- * generator: `GET /v1/models` and a non-streaming `POST /v1/chat/completions`. The handler knows
+ * generator: `GET /v1/models` and `POST /v1/chat/completions`. The handler knows
  * nothing about the agent that answers; the caller passes `complete`, which turns one parsed request
  * into the assistant's text (plan D1). Errors follow the OpenAI shape `{error:{message,type,param,code}}`.
  */
@@ -31,8 +31,28 @@ export interface OpenAIChatRequest {
 export interface OpenAICompatibleRoutesOptions {
   /** The model ids `/v1/models` lists and a chat request may name, in order. */
   readonly models: readonly string[]
-  /** One request in, the assistant's text out; a rejection answers 502 `turn_failed`. */
-  readonly complete: (request: OpenAIChatRequest) => Promise<string>
+  /**
+   * One request in, the assistant's text out (or the text with its token usage); a rejection
+   * answers 502 `turn_failed`. For `stream: true` the handler passes `onDelta`: calling it with
+   * each piece of text sends a chunk at once; a `complete` that never calls it still answers, with
+   * the whole text as one chunk. `signal` aborts when the streaming client disconnects.
+   */
+  readonly complete: (
+    request: OpenAIChatRequest,
+    onDelta?: (text: string) => void,
+    signal?: AbortSignal,
+  ) => Promise<string | OpenAICompletion>
+}
+
+/** The assistant's text and what the turn cost in tokens. */
+export interface OpenAICompletion {
+  readonly text: string
+  readonly usage?: { readonly promptTokens: number; readonly completionTokens: number }
+}
+
+interface ChatParsed {
+  readonly request: OpenAIChatRequest
+  readonly stream: boolean
 }
 
 function isTextPart(part: unknown): part is OpenAITextPart {
@@ -123,7 +143,7 @@ async function readJson(request: Request): Promise<unknown> {
 async function parseChat(
   request: Request,
   models: readonly string[],
-): Promise<OpenAIChatRequest | Response> {
+): Promise<ChatParsed | Response> {
   const raw = await readJson(request)
   if (raw instanceof Response) return raw
   const parsed = CHAT_BODY.safeParse(raw)
@@ -131,8 +151,6 @@ async function parseChat(
     const issue = parsed.error.issues[0]
     return openAIError(400, 'invalid_body', issue.message, issuePath(issue).map(String).join('.'))
   }
-  if (parsed.data.stream === true)
-    return openAIError(400, 'stream_unsupported', 'stream: true is not supported', 'stream')
   if (!models.includes(parsed.data.model)) {
     return openAIError(
       404,
@@ -141,16 +159,100 @@ async function parseChat(
       'model',
     )
   }
-  return { model: parsed.data.model, messages: parsed.data.messages }
+  return {
+    request: { model: parsed.data.model, messages: parsed.data.messages },
+    stream: parsed.data.stream === true,
+  }
 }
 
-function completion(model: string, content: string): Response {
+function usageBody(
+  usage: OpenAICompletion['usage'],
+): { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined {
+  if (usage === undefined) return undefined
+  return {
+    prompt_tokens: usage.promptTokens,
+    completion_tokens: usage.completionTokens,
+    total_tokens: usage.promptTokens + usage.completionTokens,
+  }
+}
+
+function completion(model: string, result: OpenAICompletion): Response {
+  const usage = usageBody(result.usage)
   return Response.json({
     id: `chatcmpl-${crypto.randomUUID()}`,
     object: 'chat.completion',
     created: Math.floor(Date.now() / 1000),
     model,
-    choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
+    choices: [
+      { index: 0, message: { role: 'assistant', content: result.text }, finish_reason: 'stop' },
+    ],
+    ...(usage === undefined ? {} : { usage }),
+  })
+}
+
+function normalize(result: string | OpenAICompletion): OpenAICompletion {
+  return typeof result === 'string' ? { text: result } : result
+}
+
+/**
+ * The `chat.completion.chunk` stream of one request: a role chunk, a chunk per delta, a final
+ * chunk with `finish_reason` (and `usage` when known), then `data: [DONE]`. A turn that fails
+ * after the stream began ends it with an `error` frame, still closed by `[DONE]`.
+ */
+function streamCompletion(
+  parsed: OpenAIChatRequest,
+  options: OpenAICompatibleRoutesOptions,
+): Response {
+  const encoder = new TextEncoder()
+  const id = `chatcmpl-${crypto.randomUUID()}`
+  const created = Math.floor(Date.now() / 1000)
+  const chunk = (delta: object, finish: string | null, extra: object = {}): object => ({
+    id,
+    object: 'chat.completion.chunk',
+    created,
+    model: parsed.model,
+    choices: [{ index: 0, delta, finish_reason: finish }],
+    ...extra,
+  })
+  const gone = new AbortController()
+  const body = new ReadableStream<Uint8Array>({
+    cancel() {
+      gone.abort()
+    },
+    async start(controller) {
+      const send = (data: object | string): void => {
+        if (gone.signal.aborted) return
+        const text = typeof data === 'string' ? data : JSON.stringify(data)
+        controller.enqueue(encoder.encode(`data: ${text}\n\n`))
+      }
+      send(chunk({ role: 'assistant', content: '' }, null))
+      const streamed = { any: false }
+      try {
+        const result = normalize(
+          await options.complete(
+            parsed,
+            (text) => {
+              if (text === '') return
+              streamed.any = true
+              send(chunk({ content: text }, null))
+            },
+            gone.signal,
+          ),
+        )
+        if (!streamed.any && result.text !== '') send(chunk({ content: result.text }, null))
+        const usage = usageBody(result.usage)
+        send(chunk({}, 'stop', usage === undefined ? {} : { usage }))
+      } catch {
+        send({
+          error: { message: 'the model turn failed', type: 'turn_failed', param: null, code: null },
+        })
+      }
+      send('[DONE]')
+      if (!gone.signal.aborted) controller.close()
+    },
+  })
+  return new Response(body, {
+    headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
   })
 }
 
@@ -160,15 +262,16 @@ async function chatCompletion(
 ): Promise<Response> {
   const parsed = await parseChat(request, options.models)
   if (parsed instanceof Response) return parsed
-  let content: string
+  if (parsed.stream) return streamCompletion(parsed.request, options)
+  let result: OpenAICompletion
   try {
-    content = await options.complete(parsed)
+    result = normalize(await options.complete(parsed.request))
   } catch {
     // The caller's `complete` logs its own failure; the client learns only that the turn failed,
     // never the provider's message (FR-007).
     return openAIError(502, 'turn_failed', 'the model turn failed')
   }
-  return completion(parsed.model, content)
+  return completion(parsed.request.model, result)
 }
 
 function listModels(models: readonly string[]): Response {
@@ -186,7 +289,7 @@ function methodNotAllowed(allow: string): Response {
  * `GET /v1/models` and `POST /v1/chat/completions`; another method on either path is 405, and any
  * other path answers `undefined`, so the caller can try its next handler (FR-001). A chat request is
  * checked in order: size (413), JSON (400), shape (400 `invalid_body`, `param` naming the first
- * issue), `stream: true` (400 `stream_unsupported`), model (404 `model_not_found`), then `complete`.
+ * issue), model (404 `model_not_found`), then `complete`; `stream: true` answers SSE chunks ending in `[DONE]`.
  */
 export function createOpenAICompatibleRoutes(
   options: OpenAICompatibleRoutesOptions,

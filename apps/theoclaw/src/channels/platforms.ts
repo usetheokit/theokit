@@ -1,4 +1,8 @@
+import { join } from 'node:path'
+
 import type { PlatformName } from '@theokit/gateway'
+
+import { TheoClawConfigError } from '../control-plane/errors.js'
 
 /**
  * For each platform, the setting its adapter reads and the environment variable that supplies it.
@@ -36,6 +40,12 @@ const PLATFORM_VARIABLES = {
     clientSecret: 'THEOCLAW_TEAMS_CLIENT_SECRET',
     tenantId: 'THEOCLAW_TEAMS_TENANT_ID',
   },
+  google_chat: {
+    serviceAccountFile: 'THEOCLAW_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE',
+    audience: 'THEOCLAW_GOOGLE_CHAT_AUDIENCE',
+  },
+  signal: { account: 'THEOCLAW_SIGNAL_ACCOUNT' },
+  imessage: { enabled: 'THEOCLAW_IMESSAGE_ENABLED' },
   tlon_urbit: {
     shipUrl: 'THEOCLAW_TLON_URBIT_SHIP_URL',
     ship: 'THEOCLAW_TLON_URBIT_SHIP',
@@ -58,8 +68,57 @@ export type SupportedPlatform = keyof typeof PLATFORM_VARIABLES
 
 type PlatformVariables = typeof PLATFORM_VARIABLES
 
+/** Optional: the signal-cli binary; the adapter looks `signal-cli` up on `PATH` when unset. */
+export const SIGNAL_CLI_PATH_VARIABLE = 'THEOCLAW_SIGNAL_CLI_PATH'
+
+/** Optional: the `imsg` binary, or a script running `imsg rpc` on a Mac over ssh; `imsg` on `PATH` when unset. */
+export const IMESSAGE_CLI_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_CLI_PATH'
+/** Optional: the Messages database `imsg` reads. */
+export const IMESSAGE_DB_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_DB_PATH'
+
+/** The environment variable that picks WhatsApp's backend: `cloud` (the default) or `baileys` (QR-linked WhatsApp Web). */
+export const WHATSAPP_BACKEND_VARIABLE = 'THEOCLAW_WHATSAPP_BACKEND'
+/** Where the Baileys pairing is kept; defaults to `whatsapp-session` under `THEOCLAW_STATE_DIR`. */
+export const WHATSAPP_SESSION_DIR_VARIABLE = 'THEOCLAW_WHATSAPP_SESSION_DIR'
+
+/** WhatsApp through Baileys: no credential, a directory holding the pairing a QR scan made. */
+export interface WhatsAppBaileysSettings {
+  readonly sessionDir: string
+}
+
+type CloudSettings<P extends SupportedPlatform> = { readonly [K in keyof PlatformVariables[P]]: string }
+
 /** The settings one platform's adapter is built from, keyed by the adapter's own option names. */
-export type PlatformSettings<P extends SupportedPlatform> = { readonly [K in keyof PlatformVariables[P]]: string }
+export type PlatformSettings<P extends SupportedPlatform> = P extends 'whatsapp'
+  ? CloudSettings<'whatsapp'> | WhatsAppBaileysSettings
+  : P extends 'signal'
+    ? CloudSettings<'signal'> & { readonly signalCliPath?: string }
+    : P extends 'imessage'
+      ? { readonly cliPath?: string; readonly dbPath?: string }
+      : CloudSettings<P>
+
+/** The Baileys settings when WhatsApp is set up that way, narrowing the union. */
+export function isBaileys(settings: PlatformSettings<'whatsapp'>): settings is WhatsAppBaileysSettings {
+  return 'sessionDir' in settings
+}
+
+/** The session directory, from the environment; undefined when neither it nor a state directory is set. */
+export function whatsappSessionDir(env: Readonly<Record<string, string | undefined>>): string | undefined {
+  const explicit = (env[WHATSAPP_SESSION_DIR_VARIABLE] ?? '').trim()
+  if (explicit !== '') return explicit
+  const state = (env.THEOCLAW_STATE_DIR ?? '').trim()
+  return state === '' ? undefined : join(state, 'whatsapp-session')
+}
+
+/** Whether `THEOCLAW_WHATSAPP_BACKEND` selects Baileys. Any other non-empty value is refused. */
+export function whatsappUsesBaileys(env: Readonly<Record<string, string | undefined>>): boolean {
+  const backend = (env[WHATSAPP_BACKEND_VARIABLE] ?? '').trim().toLowerCase()
+  if (backend === '' || backend === 'cloud') return false
+  if (backend === 'baileys') return true
+  throw new TheoClawConfigError(`${WHATSAPP_BACKEND_VARIABLE} must be cloud or baileys, not "${backend}"`, {
+    variable: WHATSAPP_BACKEND_VARIABLE,
+  })
+}
 
 /** A platform whose every variable is set, with the settings read from them. */
 export type ConfiguredPlatform = {
@@ -94,11 +153,20 @@ export const PLATFORMS: readonly PlatformSpec[] = (Object.keys(PLATFORM_VARIABLE
  * unset, empty or only whitespace counts as missing (`export X=` in a shell yields `""`); a value
  * is passed on trimmed, so a trailing newline from an environment file never reaches an adapter.
  */
-export function resolvePlatforms(env: Readonly<Record<string, string | undefined>>): ResolvedPlatforms {
+export function resolvePlatforms(
+  env: Readonly<Record<string, string | undefined>>,
+  os: string = process.platform,
+): ResolvedPlatforms {
   const configured: ConfiguredPlatform[] = []
   const skipped: SkippedPlatform[] = []
   const secrets: string[] = []
   for (const { platform } of PLATFORMS) {
+    if (platform === 'whatsapp' && whatsappUsesBaileys(env)) {
+      const sessionDir = whatsappSessionDir(env)
+      if (sessionDir === undefined) skipped.push({ platform, missing: [WHATSAPP_SESSION_DIR_VARIABLE, 'THEOCLAW_STATE_DIR'] })
+      else configured.push({ platform, settings: { sessionDir } })
+      continue
+    }
     const read = Object.entries(PLATFORM_VARIABLES[platform]).map(
       ([setting, variable]) => [setting, variable, (env[variable] ?? '').trim()] as const,
     )
@@ -107,9 +175,27 @@ export function resolvePlatforms(env: Readonly<Record<string, string | undefined
       skipped.push({ platform, missing })
       continue
     }
+    if (platform === 'imessage') {
+      // iMessage needs Messages signed in on a Mac; refuse it elsewhere rather than loop on a missing `imsg`.
+      if (os !== 'darwin') {
+        throw new TheoClawConfigError(
+          `iMessage runs only on macOS with Messages signed in (this is ${os}); unset THEOCLAW_IMESSAGE_ENABLED`,
+          { variable: 'THEOCLAW_IMESSAGE_ENABLED' },
+        )
+      }
+      const cliPath = (env[IMESSAGE_CLI_PATH_VARIABLE] ?? '').trim()
+      const dbPath = (env[IMESSAGE_DB_PATH_VARIABLE] ?? '').trim()
+      configured.push({
+        platform,
+        settings: { ...(cliPath === '' ? {} : { cliPath }), ...(dbPath === '' ? {} : { dbPath }) },
+      })
+      continue // the enabling flag is no secret; masking it would blank every "1" in the output
+    }
     // Safe: `settings` has exactly the keys of this platform's row, which `PlatformSettings<P>`
     // is derived from; TypeScript cannot pair a loop variable of a union with its own row.
     const settings = Object.fromEntries(read.map(([setting, , value]) => [setting, value]))
+    const signalCliPath = (env[SIGNAL_CLI_PATH_VARIABLE] ?? '').trim()
+    if (platform === 'signal' && signalCliPath !== '') settings.signalCliPath = signalCliPath
     configured.push({ platform, settings } as ConfiguredPlatform)
     secrets.push(...read.map(([, , value]) => value))
   }

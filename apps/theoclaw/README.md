@@ -1,7 +1,7 @@
 # TheoClaw
 
 A personal AI assistant that lives where its user already writes: one agent answering on Telegram,
-Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams and SMS.
+Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams, Google Chat, Signal, iMessage and SMS.
 
 ## Install
 
@@ -20,8 +20,7 @@ and builds TheoClaw and its workspace packages in the clone, then writes the lau
 `~/.local/bin/theoclaw` (`THEOCLAW_BIN_DIR` picks another directory). It says so when that
 directory is not on your `PATH`. With no `pnpm` installed, it puts corepack's `pnpm` in
 `~/.local/share/theoclaw/bin` for the build. It never writes into Node's global directory. Running
-it again rebuilds and rewrites the same launcher. Publishing to the npm registry is not available
-yet.
+it again rebuilds and rewrites the same launcher.
 
 Then write the configuration and start:
 
@@ -29,6 +28,8 @@ Then write the configuration and start:
 theoclaw onboard     # asks for the model, the key (not shown), the port, the owners and the workspace
 theoclaw start
 ```
+
+`theoclaw acp` serves the `/control` agent over the Agent Client Protocol on stdio, so an editor such as Zed can use it as an agent server (command `theoclaw`, args `acp`). Tool calls ask the editor for permission.
 
 `theoclaw onboard --yes --model <id> --api-key-env <NAME> --port <n> --owners <platform:id,...>`
 does the same without prompts, and reads the key from the variable `--api-key-env` names. The key
@@ -52,11 +53,11 @@ absolute path, in the configured `THEOCLAW_WORKSPACE`, and restarts on failure. 
 side. `install` refuses when the configuration file or the build is missing. Each platform has its
 own backend:
 
-| Platform | Service | Definition | Output |
-|---|---|---|---|
-| Linux | a `systemd --user` unit | `~/.config/systemd/user/<name>.service` | `journalctl --user -u <name>` |
-| macOS | a launchd agent, loaded into `gui/<uid>` | `~/Library/LaunchAgents/<name>.plist` | `~/Library/Logs/theoclaw/<name>.log` |
-| Windows | a Task Scheduler task, started at your logon | the task `<name>`, registered from an XML file that is removed again | not captured |
+| Platform | Service                                      | Definition                                                           | Output                               |
+| -------- | -------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------ |
+| Linux    | a `systemd --user` unit                      | `~/.config/systemd/user/<name>.service`                              | `journalctl --user -u <name>`        |
+| macOS    | a launchd agent, loaded into `gui/<uid>`     | `~/Library/LaunchAgents/<name>.plist`                                | `~/Library/Logs/theoclaw/<name>.log` |
+| Windows  | a Task Scheduler task, started at your logon | the task `<name>`, registered from an XML file that is removed again | not captured                         |
 
 A systemd user unit stops when you log out unless lingering is on. `install` prints the command
 when it is off: `loginctl enable-linger "$USER"`. The macOS agent and the Windows task start when
@@ -69,10 +70,21 @@ cannot run `install.sh`, so rebuild by hand and run `theoclaw daemon install` ag
 
 ## Container
 
+A release that publishes a new `theoclaw` version to npm also publishes the image
+`ghcr.io/usetheokit/theoclaw:<version>` (and `:latest`). It is available from the first release
+after this change; a release that does not bump theoclaw publishes no image. To tell whether a
+version has an image, run `docker manifest inspect ghcr.io/usetheokit/theoclaw:<version>`: it
+exits 0 when the image exists and non-zero when it does not.
+
+```bash
+docker run -d --name theoclaw --user "$(id -u):$(id -g)" \
+  -v ~/.config/theoclaw:/data -p 127.0.0.1:8787:8787 ghcr.io/usetheokit/theoclaw:<version>
+```
+
+Until a release has published an image, or to run unreleased code, build it from a checkout:
+
 ```bash
 docker build -f apps/theoclaw/Dockerfile -t theoclaw .     # from the repository root
-docker run -d --name theoclaw --user "$(id -u):$(id -g)" \
-  -v ~/.config/theoclaw:/data -p 127.0.0.1:8787:8787 theoclaw
 ```
 
 The image runs `/app/apps/theoclaw/dist/main.js` as a non-root user, reads the configuration file
@@ -116,15 +128,19 @@ so a file kept outside the repository and sourced from your shell profile is als
 
 ### Required
 
-| Variable | Meaning |
-|---|---|
-| `THEOCLAW_MODEL` | Model id the agent runs, e.g. `openrouter/google/gemini-2.5-flash-lite`. There is no default: startup fails and names the variable. |
-| `THEOKIT_API_KEY` or `OPENROUTER_API_KEY` | The model key, passed to the SDK; `THEOKIT_API_KEY` wins when both are set. |
-| `THEOCLAW_PORT` | Port of the one listener that serves the webhook routes, `/health` and `/control`. Digits only, 0 to 65535. |
-| `THEOCLAW_STATE_DIR` | Where pairings are kept. Required under the default `THEOCLAW_DM_POLICY=pairing`; see below. |
-| `THEOCLAW_OWNERS` | Who the instance serves: comma-separated `platform:senderId`, e.g. `telegram:42,matrix:@me:matrix.org`. Required even with no platform configured; see [Who may talk to the instance](#who-may-talk-to-the-instance). |
-| `THEOCLAW_TRANSCRIPTS` | `on` or `off` (default `off`). Off, a chat turn's transcript is kept in a temp directory removed when the session's agent is disposed and the memory store is off, so a message is stored in no file; the cost is that a conversation does not survive a restart, `session_search` finds nothing, and memory is off (`THEOCLAW_MEMORY=on` with transcripts off refuses to start). On, each chat's transcript is kept under `<THEOCLAW_WORKSPACE>/.theoclaw/`, a conversation survives a restart, and memory follows `THEOCLAW_MEMORY`. |
-| `THEOCLAW_WORKSPACE` | Absolute path of an existing directory. Each chat's transcript and the session generations are kept under `<THEOCLAW_WORKSPACE>/.theoclaw/` (created with mode 0700). Startup fails and names the variable when it is unset, relative or not a directory. Under `THEOCLAW_PROFILE` the profile sets it to its own `workspace` and an explicit value is refused (see [Several instances on one host](#several-instances-on-one-host)). |
+| Variable                                  | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `THEOCLAW_MODEL`                          | Model id the agent runs, e.g. `openrouter/google/gemini-2.5-flash-lite`. There is no default: startup fails and names the variable.                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `THEOKIT_API_KEY` or `OPENROUTER_API_KEY` | The model key, passed to the SDK; `THEOKIT_API_KEY` wins when both are set.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `THEOCLAW_PORT`                           | Port of the one listener that serves the webhook routes, `/health` and `/control`. Digits only, 0 to 65535.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `THEOCLAW_STATE_DIR`                      | Where pairings are kept. Required under the default `THEOCLAW_DM_POLICY=pairing`; see below.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `THEOCLAW_OWNERS`                         | Who the instance serves: comma-separated `platform:senderId`, e.g. `telegram:42,matrix:@me:matrix.org`. Required even with no platform configured; see [Who may talk to the instance](#who-may-talk-to-the-instance).                                                                                                                                                                                                                                                                                                                  |
+| `THEOCLAW_TRANSCRIPTS`                    | `on` or `off` (default `off`). Off, a chat turn's transcript is kept in a temp directory removed when the session's agent is disposed and the memory store is off, so a message is stored in no file; the cost is that a conversation does not survive a restart, `session_search` finds nothing, and memory is off (`THEOCLAW_MEMORY=on` with transcripts off refuses to start). On, each chat's transcript is kept under `<THEOCLAW_WORKSPACE>/.theoclaw/`, a conversation survives a restart, and memory follows `THEOCLAW_MEMORY`. |
+| `THEOCLAW_DATABASE`                       | `sqlite` (default, same as `files`) or a `postgres://user:password@host:port/db` URL (a secret ref works). With a URL the scheduled jobs (the store with a schema) are rows in the `theoclaw_schedules` table instead of `.theoclaw/schedules.json`, and survive a restart; sessions, memory and the rest stay in files and SQLite. The start fails if the database cannot be reached, with no fallback to the files. Needs the `pg` package installed beside theoclaw. Existing jobs are not moved across.                            |
+| `THEOCLAW_MEMORY_BACKEND`                 | `builtin` (default), `mem0`, `honcho`, `supermemory` or `sdk-memory`. The hosted three mirror each saved fact to the service and recall from it when a session opens (key in `MEM0_API_KEY`, `HONCHO_API_KEY` or `SUPERMEMORY_API_KEY`; install `@theokit/memory-<name>` and its peer SDK). `sdk-memory` gives agents `@theokit/sdk-memory`'s provider. The built-in store stays the fallback.                                                                                                                                         |
+| `THEOCLAW_WORKSPACE`                      | Absolute path of an existing directory. Each chat's transcript and the session generations are kept under `<THEOCLAW_WORKSPACE>/.theoclaw/` (created with mode 0700). Startup fails and names the variable when it is unset, relative or not a directory. Under `THEOCLAW_PROFILE` the profile sets it to its own `workspace` and an explicit value is refused (see [Several instances on one host](#several-instances-on-one-host)).                                                                                                  |
+
+Remembered facts are scoped to who said them: all owners (`THEOCLAW_OWNERS`) and `/control` share one scope, every other DM sender has their own, and a group or thread has one per channel. A fact is recalled only into sessions of its scope. Facts saved before scopes existed count as the owner's.
 
 ### Who may talk to the instance
 
@@ -132,14 +148,16 @@ Only the owners in `THEOCLAW_OWNERS`, and the senders an owner pairs, reach the 
 is refused before the agent runs. In a group a refused sender never gets a reply, under every
 policy below; owners and paired senders are answered there as in a direct message.
 
-| Variable | Meaning |
-|---|---|
-| `THEOCLAW_OWNERS` | Required. `platform:senderId` entries, comma-separated; the platform is one of the ten below, and an id may contain colons (Matrix). An `email:` or `sms:` entry is refused: nothing authenticates the From header of an e-mail or the caller id of a text, so anyone could write as the owner. For the same reason an e-mail or SMS sender is never an owner or paired, and under every policy but `open` gets no reply at all, since the reply would go to whatever address the sender wrote; the start says so for each such channel configured. |
-| `THEOCLAW_DM_POLICY` | What a direct message from anyone else gets: `pairing` (default) a pairing code, `allowlist` the refusal text, `disabled` nothing, `open` the agent. A refused sender is answered at most once an hour; after that, silence. |
-| `THEOCLAW_STATE_DIR` | Directory holding `pairing.json` (mode 0600, the directory created 0700). Required under `pairing`, optional otherwise; pairings made earlier still apply when it is set. A `pairing.json` that does not parse stops the start. With `THEOCLAW_HOST_TOOLS=on` it may not lie under `files/` or `/tmp`, which the sandboxed shell can write. |
-| `THEOCLAW_REFUSAL_TEXT` | The refusal under `allowlist`. Default `This assistant answers its owner only.` |
-| `THEOCLAW_GROUP_ACTIVATION` | Slack, Mattermost, WhatsApp and Telegram only: `mention` (default) answers a group message only when it mentions the bot; `always` answers every message from an owner or a paired sender. The other six platforms answer an owner or a paired sender in a group either way. |
-| `THEOCLAW_BROADCAST_GROUPS` | Channels that share one agent thread: `"name=platform:channelId,platform:channelId;name2=..."`. Double-quote the value in the env file: the shell loader (`set -a; . ./.env`) cuts an unquoted value at the first `;`. Each group needs two channels or more, a channel belongs to one group, and an `email:` or `sms:` channel is refused for the reason above. The thread keeps the last 20 turns, at most 16384 characters, and every answer reaches every member channel. |
+| Variable                    | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `THEOCLAW_OWNERS`           | Required. `platform:senderId` entries, comma-separated; the platform is one of the ten below, and an id may contain colons (Matrix). An `email:` or `sms:` entry is refused: nothing authenticates the From header of an e-mail or the caller id of a text, so anyone could write as the owner. For the same reason an e-mail or SMS sender is never an owner or paired, and under every policy but `open` gets no reply at all, since the reply would go to whatever address the sender wrote; the start says so for each such channel configured. |
+| `THEOCLAW_DM_POLICY`        | What a direct message from anyone else gets: `pairing` (default) a pairing code, `allowlist` the refusal text, `disabled` nothing, `open` the agent. A refused sender is answered at most once an hour; after that, silence.                                                                                                                                                                                                                                                                                                                        |
+| `THEOCLAW_STATE_DIR`        | Directory holding `pairing.json` (mode 0600, the directory created 0700). Required under `pairing`, optional otherwise; pairings made earlier still apply when it is set. A `pairing.json` that does not parse stops the start. With `THEOCLAW_HOST_TOOLS=on` it may not lie under `files/` or `/tmp`, which the sandboxed shell can write.                                                                                                                                                                                                         |
+| `THEOCLAW_REFUSAL_TEXT`     | The refusal under `allowlist`. Default `This assistant answers its owner only.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `THEOCLAW_GROUP_ACTIVATION` | Slack, Mattermost, WhatsApp and Telegram only: `mention` (default) answers a group message only when it mentions the bot; `always` answers every message from an owner or a paired sender. The other six platforms answer an owner or a paired sender in a group either way.                                                                                                                                                                                                                                                                        |
+| `THEOCLAW_BROADCAST_GROUPS` | Channels that share one agent thread: `"name=platform:channelId,platform:channelId;name2=..."`. Double-quote the value in the env file: the shell loader (`set -a; . ./.env`) cuts an unquoted value at the first `;`. Each group needs two channels or more, a channel belongs to one group, and an `email:` or `sms:` channel is refused for the reason above. The thread keeps the last 20 turns, at most 16384 characters, and every answer reaches every member channel.                                                                       |
+| `THEOCLAW_ACCESS_GROUPS`    | Named sender lists: `"family=matrix:@a:hs,matrix:@b:hs;..."`. Double-quote the value. An `email:` or `sms:` sender is refused.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `THEOCLAW_ALLOWLIST`        | Senders answered besides the owners and paired senders: `platform:senderId` or `platform:accessGroup:<name>` (members on that platform only), comma-separated. A group not defined in `THEOCLAW_ACCESS_GROUPS` stops the start.                                                                                                                                                                                                                                                                                                                     |
 
 **Pairing.** Under `pairing` a stranger's first direct message is answered with a 6-digit code,
 valid for one hour. The owner approves it by sending `/approve <code>` to the bot in a direct
@@ -163,13 +181,13 @@ forum topic is one conversation for all its members, and a direct message follow
 with that turn in its history. Sending exactly `/new` or `/reset` starts the chat afresh: TheoClaw
 answers `Started a new conversation.` and runs no model turn; the earlier transcript stays on disk.
 
-| Variable | Meaning |
-|---|---|
-| `THEOCLAW_DM_SCOPE` | How direct messages are grouped: `main` (one conversation for every direct message), `per-peer` (one per person, across platforms, through `THEOCLAW_PEER_LINKS`), `per-channel-peer` (the default: one per platform and sender) or `per-account-channel-peer` (the same, keyed with `THEOCLAW_ACCOUNT_LABEL` as well). |
-| `THEOCLAW_PEER_LINKS` | `<platform>:<senderId>=<name>` pairs separated by commas; senders linked to one name share a session under `per-peer`. A name holds letters, digits and underscores. |
-| `THEOCLAW_ACCOUNT_LABEL` | Required by `per-account-channel-peer`. |
-| `THEOCLAW_SESSION_IDLE_MINUTES` | Minutes a chat's agent stays open with no turn, 1 to 1440, default 30. Its conversation is kept: the next message resumes it from disk. |
-| `THEOCLAW_MAX_OPEN_SESSIONS` | Chat agents kept open at once, 1 to 10000, default 200; above it the least recently used idle one is closed. |
+| Variable                        | Meaning                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `THEOCLAW_DM_SCOPE`             | How direct messages are grouped: `main` (one conversation for every direct message), `per-peer` (one per person, across platforms, through `THEOCLAW_PEER_LINKS`), `per-channel-peer` (the default: one per platform and sender) or `per-account-channel-peer` (the same, keyed with `THEOCLAW_ACCOUNT_LABEL` as well). |
+| `THEOCLAW_PEER_LINKS`           | `<platform>:<senderId>=<name>` pairs separated by commas; senders linked to one name share a session under `per-peer`. A name holds letters, digits and underscores.                                                                                                                                                    |
+| `THEOCLAW_ACCOUNT_LABEL`        | Required by `per-account-channel-peer`.                                                                                                                                                                                                                                                                                 |
+| `THEOCLAW_SESSION_IDLE_MINUTES` | Minutes a chat's agent stays open with no turn, 1 to 1440, default 30. Its conversation is kept: the next message resumes it from disk.                                                                                                                                                                                 |
+| `THEOCLAW_MAX_OPEN_SESSIONS`    | Chat agents kept open at once, 1 to 10000, default 200; above it the least recently used idle one is closed.                                                                                                                                                                                                            |
 
 **What is stored, and who can write it.** Every sender who reaches the agent starts a conversation:
 an owner, a paired sender, and under `THEOCLAW_DM_POLICY=open` anyone who can message the bot. Every
@@ -182,24 +200,28 @@ off. To forget every conversation, stop TheoClaw and delete that directory.
 Every platform is optional. A platform runs when all of its variables are set and non-blank;
 otherwise startup skips it and prints `<platform>: not configured (missing ...)` with the names.
 
-| Platform | Variables | Transport |
-|---|---|---|
-| Telegram | `TELEGRAM_TOKEN` | long polling |
-| Discord | `DISCORD_TOKEN` | gateway; the bot needs the Message Content intent |
-| Slack | `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` | Socket Mode; the app token needs `connections:write` |
-| Matrix | `MATRIX_HOMESERVER_URL`, `MATRIX_ACCESS_TOKEN`, `MATRIX_USER_ID` | client-server API |
-| Mattermost | `MATTERMOST_BASE_URL`, `MATTERMOST_ACCESS_TOKEN` | REST and WebSocket, bot account |
-| E-mail | `EMAIL_ADDRESS`, `EMAIL_PASSWORD`, `EMAIL_IMAP_HOST`, `EMAIL_SMTP_HOST` | IMAP in, SMTP out |
-| LINE | `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN` | webhook `/webhooks/line`; replies use the push API |
-| WhatsApp Cloud | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | webhook `/webhooks/whatsapp` |
-| Microsoft Teams | `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_TENANT_ID` | Bot Framework webhook; needs a work tenant |
-| SMS (Twilio) | `SMS_TWILIO_ACCOUNT_SID`, `SMS_TWILIO_AUTH_TOKEN`, `SMS_TWILIO_FROM_NUMBER`, `SMS_PUBLIC_URL` | webhook `/webhooks/sms` |
+| Platform                           | Variables                                                                                                                                                                                                                                                                                                                                              | Transport                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| Telegram                           | `TELEGRAM_TOKEN`                                                                                                                                                                                                                                                                                                                                       | long polling                                         |
+| Discord                            | `DISCORD_TOKEN`                                                                                                                                                                                                                                                                                                                                        | gateway; the bot needs the Message Content intent    |
+| Slack                              | `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`                                                                                                                                                                                                                                                                                                                   | Socket Mode; the app token needs `connections:write` |
+| Matrix                             | `MATRIX_HOMESERVER_URL`, `MATRIX_ACCESS_TOKEN`, `MATRIX_USER_ID`                                                                                                                                                                                                                                                                                       | client-server API                                    |
+| Mattermost                         | `MATTERMOST_BASE_URL`, `MATTERMOST_ACCESS_TOKEN`                                                                                                                                                                                                                                                                                                       | REST and WebSocket, bot account                      |
+| E-mail                             | `EMAIL_ADDRESS`, `EMAIL_PASSWORD`, `EMAIL_IMAP_HOST`, `EMAIL_SMTP_HOST`                                                                                                                                                                                                                                                                                | IMAP in, SMTP out                                    |
+| LINE                               | `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`                                                                                                                                                                                                                                                                                                     | webhook `/webhooks/line`; replies use the push API   |
+| WhatsApp Cloud                     | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`                                                                                                                                                                                                                                                    | webhook `/webhooks/whatsapp`                         |
+| WhatsApp Web (Baileys, unofficial) | `THEOCLAW_WHATSAPP_BACKEND=baileys`, optional `THEOCLAW_WHATSAPP_SESSION_DIR` (default: `whatsapp-session` under `THEOCLAW_STATE_DIR`); install the `baileys` package. Run `theoclaw whatsapp login` and scan the QR (Linked devices); `theoclaw start` prints the QR too while unlinked. Use a number made for this: Meta's terms do not sanction it. | none (a socket, no public URL)                       |
+| Microsoft Teams                    | `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_TENANT_ID`                                                                                                                                                                                                                                                                                            | Bot Framework webhook; needs a work tenant           |
+| Google Chat                        | `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` (path of the service account's JSON key), `GOOGLE_CHAT_AUDIENCE` (the exact HTTP endpoint URL set in the Chat app)                                                                                                                                                                                                  | webhook `/webhooks/google_chat`; spaces and DMs      |
+| Signal                             | `SIGNAL_ACCOUNT` (the linked number, E.164); optional `SIGNAL_CLI_PATH` (default: `signal-cli` on `PATH`). Owners are written `signal:+<number>`                                                                                                                                                                                                       | none (a `signal-cli jsonRpc` child)                  |
+| iMessage                           | `IMESSAGE_ENABLED=1`; optional `IMESSAGE_CLI_PATH` (default: `imsg` on `PATH`, or a script running `imsg rpc` over ssh), `IMESSAGE_DB_PATH`. macOS only with Messages signed in; refused on other systems. Owners are written `imessage:<handle>`                                                                                                      | none (an `imsg rpc` child)                           |
+| SMS (Twilio)                       | `SMS_TWILIO_ACCOUNT_SID`, `SMS_TWILIO_AUTH_TOKEN`, `SMS_TWILIO_FROM_NUMBER`, `SMS_PUBLIC_URL`                                                                                                                                                                                                                                                          | webhook `/webhooks/sms`                              |
 
 Names in the table omit the `THEOCLAW_` prefix.
 
 ### Webhooks need a public URL
 
-LINE, WhatsApp, Teams and SMS deliver messages by calling an HTTPS URL, so `THEOCLAW_PORT` has to
+LINE, WhatsApp, Teams, Google Chat and SMS deliver messages by calling an HTTPS URL, so `THEOCLAW_PORT` has to
 be reachable from the internet. The listener binds `127.0.0.1` by default, so a tunnel is the
 simplest way, for example a Cloudflare named tunnel pointing a stable hostname at
 `http://localhost:$THEOCLAW_PORT`. Binding a public address instead takes `THEOCLAW_HOST` and
@@ -224,25 +246,25 @@ calls a webhook. `THEOCLAW_TRIGGERS` names the triggers, comma-separated; each n
 letter followed by up to 31 of `a-z`, `0-9` or `-`. Every trigger then has its own variables, with
 the name upper-cased and `-` written as `_`:
 
-| Variable | Meaning |
-|---|---|
-| `THEOCLAW_TRIGGER_<NAME>_SECRET` | The signing secret, at least 16 characters. |
-| `THEOCLAW_TRIGGER_<NAME>_REPLY_TO` | `<platform>:<channel id>`, for example `telegram:123456`; the platform must be configured. |
-| `THEOCLAW_TRIGGER_<NAME>_INSTRUCTIONS` | Optional text put before the delivered body. |
+| Variable                               | Meaning                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `THEOCLAW_TRIGGER_<NAME>_SECRET`       | The signing secret, at least 16 characters.                                                |
+| `THEOCLAW_TRIGGER_<NAME>_REPLY_TO`     | `<platform>:<channel id>`, for example `telegram:123456`; the platform must be configured. |
+| `THEOCLAW_TRIGGER_<NAME>_INSTRUCTIONS` | Optional text put before the delivered body.                                               |
 
 A bad trigger refuses the start and names the variable, never its value. A trigger is called with
 `POST /hooks/<name>`, signed the way GitHub signs a webhook: an `x-hub-signature-256` header holding
 `sha256=` and the hex HMAC-SHA256 of the raw body, keyed by the secret. A GitHub webhook pointed at
 `https://<host>/hooks/<name>` with the same secret works as it is.
 
-| Answer | When |
-|---|---|
-| `202` | Accepted: one run starts on a fresh agent with no tool, and its answer is sent once to `REPLY_TO`. |
-| `401` | The signature is missing or wrong. Nothing runs and nothing about the body is written. |
-| `400` | `x-theoclaw-delivery` is longer than 256 characters. |
-| `200` | A delivery whose `x-theoclaw-delivery` id was already accepted: nothing runs again. |
-| `503` | The reply platform has not started yet. The id is not kept, so a retry runs. |
-| `404`, `405`, `413` | An unknown trigger name, a method other than POST, a body over 1 MiB. |
+| Answer              | When                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `202`               | Accepted: one run starts on a fresh agent with no tool, and its answer is sent once to `REPLY_TO`. |
+| `401`               | The signature is missing or wrong. Nothing runs and nothing about the body is written.             |
+| `400`               | `x-theoclaw-delivery` is longer than 256 characters.                                               |
+| `200`               | A delivery whose `x-theoclaw-delivery` id was already accepted: nothing runs again.                |
+| `503`               | The reply platform has not started yet. The id is not kept, so a retry runs.                       |
+| `404`, `405`, `413` | An unknown trigger name, a method other than POST, a body over 1 MiB.                              |
 
 Each trigger remembers its last 1000 delivery ids in memory, so a retry after a restart runs again,
 and a run in flight when the process stops sends no reply. A failed run writes
@@ -253,8 +275,9 @@ and a run in flight when the process stops sends no reply. A failed run writes
 
 Every TheoClaw agent refuses to spawn a hook command unless the owner approved it. The SDK reads
 hook commands from the working directory's `.theokit/hooks.json` and `.theokit/settings.json`, and
-TheoClaw's agents load no project setting today, so no project hook runs either way: the approval
-gate is there for the day a project source is turned on. `THEOCLAW_APPROVED_HOOKS` lists the
+TheoClaw's agents load the project setting source only when `THEOCLAW_APPROVED_HOOKS` lists at least
+one fingerprint, so with none set no project hook runs; with some set, a hook runs only if its own
+fingerprint is listed. `THEOCLAW_APPROVED_HOOKS` lists the
 approved commands by fingerprint, comma-separated: the hex sha256 of the hook's event as the file
 spells it, its command and its timeout in milliseconds (30000 unless the file sets `timeout`), one
 per line. For a `Stop` hook running `touch x`:
@@ -275,6 +298,23 @@ with the final status (`completed`, `budget_limited`, `failed`, `paused` or `blo
 the last answer. A bare `/goal` answers a usage line and runs nothing. In a broadcast group the goal
 runs in the sender's own session and its answer is not sent to the other members.
 
+### Compaction
+
+Sending `/compact` summarizes the conversation so far with the SDK's `Agent.compact` and answers
+one line, `⚙️ Compacted (<before> → <after> tokens)`; the next turn recalls the summary. Any text
+after `/compact` is accepted but the SDK's summarizer takes no instructions. `THEOCLAW_COMPACT_AT`
+(a positive whole number of tokens, unset: off) compacts a chat session on its own after a turn
+whose input reached that many tokens. A session without a saved transcript answers that it could
+not compact.
+
+### Advisor
+
+Experimental, off by default. With `THEOCLAW_ADVISOR=on`, each chat turn is reviewed on the
+session's model against a fork of the recent conversation; a second fork verifies any draft
+correction, and only approved advice (at most 120 words) steers the running turn through the SDK's
+`steer` queue mode. The log gets `advisor: steered session <id>: <advice>` or
+`advisor: no correction for session <id>`. A review that fails is logged and never fails the turn.
+
 ### LAN discovery
 
 A TheoClaw bound to a LAN address (`THEOCLAW_HOST` with `THEOCLAW_PUBLIC_BIND=yes`) announces itself
@@ -283,8 +323,8 @@ SRV record carries the port the listener holds, and its TXT record holds only `p
 TheoClaw bound to a loopback address announces nothing, and a stopped one withdraws its service
 before the listener closes.
 
-| Variable | Meaning |
-|---|---|
+| Variable        | Meaning                                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `THEOCLAW_MDNS` | `off` turns discovery off; unset, empty or `on` leaves it on. Any other value stops the start and names the variable. |
 
 Browse for it from another machine on the same network:
@@ -314,19 +354,19 @@ It prints `theoclaw: control plane listening on 127.0.0.1:8787`, read from the b
 one gateway runner per configured platform, and stops cleanly on Ctrl-C: the runners first, then
 the listener. `GET /health` answers `{"status":"ok"}`.
 
-| Variable | Meaning |
-|---|---|
-| `THEOCLAW_MODEL` | Required. The model each turn runs. |
-| `THEOKIT_API_KEY` or `OPENROUTER_API_KEY` | Required. The model key, passed to the SDK; `THEOKIT_API_KEY` wins when both are set. |
-| `THEOCLAW_PORT` | Required. Digits only, 0 to 65535; 0 picks a free port. A port in use is refused by name. |
-| `THEOCLAW_WORKSPACE` | Required. An absolute, existing directory; chat sessions are kept under its `.theoclaw/`. |
-| `THEOCLAW_HOST` | Optional. The address to bind; default `127.0.0.1`. `localhost`, `::1` and `127.x.y.z` are loopback. The generic `HOST` is ignored. |
-| `THEOCLAW_PUBLIC_BIND` | Must be exactly `yes` to bind a non-loopback `THEOCLAW_HOST`. The bearer token is then the whole gate. |
-| `THEOCLAW_CONTROL_TOKEN` | Optional, 32 characters or more. Without it the `/control` socket is off and every upgrade answers 404. |
-| `THEOCLAW_WEBCHAT_TOKEN` | Optional, 32 characters or more. Without it `/webchat` is off and every `/webchat` path answers 404. |
-| `THEOCLAW_A2A_TOKEN` | Optional, 32 characters or more. Without it `/a2a` and `/.well-known/agent-card.json` are off and answer 404. |
-| `THEOCLAW_A2A_PEERS` | Optional. Comma-separated `<name>=<base url>` peers the `/control` agent can send a task to; a name is lower case, `^[a-z][a-z0-9_]{0,31}$`. A URL is `https:`, or `http:` only on the loopback. |
-| `THEOCLAW_A2A_PEER_TOKEN_<NAME>` | Required for each peer in `THEOCLAW_A2A_PEERS`, 32 characters or more: the peer's own `THEOCLAW_A2A_TOKEN`. `<NAME>` is the peer's name in upper case. |
+| Variable                                  | Meaning                                                                                                                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `THEOCLAW_MODEL`                          | Required. The model each turn runs.                                                                                                                                                              |
+| `THEOKIT_API_KEY` or `OPENROUTER_API_KEY` | Required. The model key, passed to the SDK; `THEOKIT_API_KEY` wins when both are set.                                                                                                            |
+| `THEOCLAW_PORT`                           | Required. Digits only, 0 to 65535; 0 picks a free port. A port in use is refused by name.                                                                                                        |
+| `THEOCLAW_WORKSPACE`                      | Required. An absolute, existing directory; chat sessions are kept under its `.theoclaw/`.                                                                                                        |
+| `THEOCLAW_HOST`                           | Optional. The address to bind; default `127.0.0.1`. `localhost`, `::1` and `127.x.y.z` are loopback. The generic `HOST` is ignored.                                                              |
+| `THEOCLAW_PUBLIC_BIND`                    | Must be exactly `yes` to bind a non-loopback `THEOCLAW_HOST`. The bearer token is then the whole gate.                                                                                           |
+| `THEOCLAW_CONTROL_TOKEN`                  | Optional, 32 characters or more. Without it the `/control` socket is off and every upgrade answers 404.                                                                                          |
+| `THEOCLAW_WEBCHAT_TOKEN`                  | Optional, 32 characters or more. Without it `/webchat` is off and every `/webchat` path answers 404.                                                                                             |
+| `THEOCLAW_A2A_TOKEN`                      | Optional, 32 characters or more. Without it `/a2a` and `/.well-known/agent-card.json` are off and answer 404.                                                                                    |
+| `THEOCLAW_A2A_PEERS`                      | Optional. Comma-separated `<name>=<base url>` peers the `/control` agent can send a task to; a name is lower case, `^[a-z][a-z0-9_]{0,31}$`. A URL is `https:`, or `http:` only on the loopback. |
+| `THEOCLAW_A2A_PEER_TOKEN_<NAME>`          | Required for each peer in `THEOCLAW_A2A_PEERS`, 32 characters or more: the peer's own `THEOCLAW_A2A_TOKEN`. `<NAME>` is the peer's name in upper case.                                           |
 
 ### The `/control` socket
 
@@ -352,13 +392,13 @@ root `files/` under the process's working directory, or a profiled instance's wo
 or non-directory `files` is refused). Chat replies get no tool: anyone who can message the bot
 writes their prompt.
 
-| Tool | When |
-|---|---|
-| `read_file`, `list_dir`, `view_image`, `web_fetch`, `todolist` | always |
-| `web_search` | with `BRAVE_API_KEY`, or with both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` |
-| `git_diff` | when `files/` is itself a git repository and the sandbox is enforced |
-| `shell_exec` | with `THEOCLAW_HOST_TOOLS=on` |
-| `write_file`, `edit_file`, `apply_patch` | with `THEOCLAW_HOST_TOOLS=on`, unless `THEOCLAW_SANDBOX=read-only` |
+| Tool                                                           | When                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read_file`, `list_dir`, `view_image`, `web_fetch`, `todolist` | always                                                                                                                                                                                                                                                              |
+| `web_search`                                                   | with `THEOCLAW_SEARCH=searxng:<url>` (keyless, your SearXNG with `format=json` enabled) or `THEOCLAW_SEARCH=tavily` (with `TAVILY_API_KEY`), which win over the rest; else with `BRAVE_API_KEY`, or with both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` |
+| `git_diff`                                                     | when `files/` is itself a git repository and the sandbox is enforced                                                                                                                                                                                                |
+| `shell_exec`                                                   | with `THEOCLAW_HOST_TOOLS=on`                                                                                                                                                                                                                                       |
+| `write_file`, `edit_file`, `apply_patch`                       | with `THEOCLAW_HOST_TOOLS=on`, unless `THEOCLAW_SANDBOX=read-only`                                                                                                                                                                                                  |
 
 `THEOCLAW_HOST_TOOLS` is `on` or unset; any other value is refused. With it on, under the default
 `THEOCLAW_SANDBOX=workspace-write` (the modes are below), the shell runs in a bubblewrap sandbox
@@ -375,11 +415,11 @@ when `git_diff` is off because the sandbox is not enforced.
 `THEOCLAW_SANDBOX` chooses the shell's sandbox when host tools are on (B-392). Any other value
 stops the start before any runner, with host tools off too.
 
-| Mode | The shell can write | The file-writing tools |
-|---|---|---|
-| `read-only` | nothing | not registered: they take no sandbox, so only leaving them out keeps the mode true |
-| `workspace-write` (default) | `files/` and `/tmp`, which the SDK keeps writable | registered |
-| `danger-full-access` | every path the process user can write: no sandbox | registered |
+| Mode                        | The shell can write                               | The file-writing tools                                                             |
+| --------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `read-only`                 | nothing                                           | not registered: they take no sandbox, so only leaving them out keeps the mode true |
+| `workspace-write` (default) | `files/` and `/tmp`, which the SDK keeps writable | registered                                                                         |
+| `danger-full-access`        | every path the process user can write: no sandbox | registered                                                                         |
 
 Under `read-only` and `workspace-write` the start refuses when the sandbox is not enforced, naming
 `THEOCLAW_SANDBOX`, the reason and the fix (install bubblewrap and allow unprivileged user
@@ -413,11 +453,11 @@ THEOCLAW_LIVE=1 THEOCLAW_HOST_TOOLS=on pnpm --filter theoclaw exec vitest run te
 morning at 9, post a summary of the news to telegram channel -100123"). Chat agents never hold
 them.
 
-| Tool | What it does |
-|---|---|
-| `schedule_job` | stores a job: a cron (5 fields or `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`), a prompt, a configured platform and a channel id, optionally a name and an IANA timezone (UTC by default) |
-| `list_scheduled_jobs` | lists the jobs with their id, name, cron and target |
-| `cancel_scheduled_job` | removes a job by id |
+| Tool                   | What it does                                                                                                                                                                                        |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schedule_job`         | stores a job: a cron (5 fields or `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`), a prompt, a configured platform and a channel id, optionally a name and an IANA timezone (UTC by default) |
+| `list_scheduled_jobs`  | lists the jobs with their id, name, cron and target                                                                                                                                                 |
+| `cancel_scheduled_job` | removes a job by id                                                                                                                                                                                 |
 
 Jobs are kept in `<workspace>/.theoclaw/schedules.json` (mode 0600), so they survive a restart; a
 file that does not parse refuses the start, as `sessions.json` does. At most 50 jobs are kept, and
@@ -480,12 +520,12 @@ veto refuses a `filename` into the state directories as well.
 loads any reachable URL, runs that page's JavaScript inside Chromium, and can upload a file from
 its own temporary directory to a page.
 
-| Variable | Meaning |
-|---|---|
-| `THEOCLAW_BROWSER` | `on` or unset; any other value is refused. With `on` the start refuses, naming the fix, when `@playwright/mcp` does not resolve or no Chromium build is in the browsers directory. |
-| `THEOCLAW_COMPUTER` | `on` or unset; any other value is refused. With `on` the start refuses, naming what is missing, without `THEOCLAW_HOST_TOOLS=on`, under `read-only`, without `DISPLAY`, without `xdotool` on `PATH`, or when `THEOCLAW_COMPUTER_FRAMEBUFFER` is not a readable Xvfb XWD file. |
-| `THEOCLAW_COMPUTER_FRAMEBUFFER` | The XWD file Xvfb keeps under `-fbdir` (`<dir>/Xvfb_screen0`); read by `THEOCLAW_COMPUTER=on`. |
-| `PLAYWRIGHT_BROWSERS_PATH` | Optional. Where Playwright keeps its browsers; default `~/.cache/ms-playwright`. `0` (browsers inside the package) is refused. |
+| Variable                        | Meaning                                                                                                                                                                                                                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `THEOCLAW_BROWSER`              | `on` or unset; any other value is refused. With `on` the start refuses, naming the fix, when `@playwright/mcp` does not resolve or no Chromium build is in the browsers directory.                                                                                            |
+| `THEOCLAW_COMPUTER`             | `on` or unset; any other value is refused. With `on` the start refuses, naming what is missing, without `THEOCLAW_HOST_TOOLS=on`, under `read-only`, without `DISPLAY`, without `xdotool` on `PATH`, or when `THEOCLAW_COMPUTER_FRAMEBUFFER` is not a readable Xvfb XWD file. |
+| `THEOCLAW_COMPUTER_FRAMEBUFFER` | The XWD file Xvfb keeps under `-fbdir` (`<dir>/Xvfb_screen0`); read by `THEOCLAW_COMPUTER=on`.                                                                                                                                                                                |
+| `PLAYWRIGHT_BROWSERS_PATH`      | Optional. Where Playwright keeps its browsers; default `~/.cache/ms-playwright`. `0` (browsers inside the package) is refused.                                                                                                                                                |
 
 Install the Chromium build the server's own Playwright expects, once per host:
 
@@ -528,6 +568,11 @@ LD_LIBRARY_PATH=~/.cache/chromium-user-libs PLAYWRIGHT_BROWSERS_PATH=~/.cache/ms
 
 ### MCP servers and ACP agents
 
+`THEOCLAW_PROVIDERS` registers OpenAI-compatible providers (Particle, a Neon AI Gateway branch URL, any
+Chat Completions endpoint): a JSON array of `{"name","baseUrl","keyEnv"}`, for example
+`[{"name":"particle","baseUrl":"https://api.particle.ai/v1","keyEnv":"PARTICLE_API_KEY"}]`. Then
+`THEOCLAW_MODEL=particle/particle-1` runs on the key in `PARTICLE_API_KEY`.
+
 `THEOCLAW_EXTERNAL_TOOLS` names one JSON file of MCP servers and ACP coding agents for the
 `/control` agent; chat replies still get none of them. The start reads and validates the file
 before any runner starts, and refuses it naming the file and the key:
@@ -539,7 +584,12 @@ before any runner starts, and refuses it naming the file and the key:
     "files": { "command": "/usr/local/bin/files-mcp", "args": ["--root", "/srv/files"] }
   },
   "acpAgents": [
-    { "name": "coder", "description": "A coding agent; send it a task.", "command": "/usr/local/bin/coder-acp", "timeoutMs": 600000 }
+    {
+      "name": "coder",
+      "description": "A coding agent; send it a task.",
+      "command": "/usr/local/bin/coder-acp",
+      "timeoutMs": 600000
+    }
   ]
 }
 ```
@@ -595,6 +645,14 @@ set -a; . ~/.config/theoclaw/dev.env; set +a
 pnpm --filter theoclaw run build
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/control-plane.live.test.ts
 ```
+
+### Terminal UI
+
+```sh
+theoclaw tui [--session <id>]
+```
+
+Opens the terminal UI on the running instance. The control token and port come from the configuration file (variables already in the environment win); `--session` picks the conversation (default `owner`; 1 to 64 letters, digits, `-` or `_`). It exits 1 with one line when the token, port or session id is invalid or the instance is not reachable. It does not replay earlier turns: the view starts empty.
 
 ### WebChat
 
@@ -664,6 +722,10 @@ A peer's text is the worker's user message, and its answer reaches `/control` as
 peer you do not trust can steer what the worker reads from your tool root and what `/control` does
 next. Give the token only to instances you run.
 
+## Place a phone call
+
+`theoclaw call <number> --message "text"` places one outbound call through Twilio's REST API; Twilio reads the message aloud and the command prints the call SID. Set `THEOCLAW_VOICE_CALL_TWILIO_ACCOUNT_SID`, `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and `THEOCLAW_VOICE_CALL_FROM_NUMBER` (E.164) in the environment or the configuration file. The number must be E.164 and listed in `THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS` (comma-separated E.164); with the list unset the command refuses. The auth token is never printed.
+
 ## Remote access over SSH
 
 TheoClaw binds `127.0.0.1` by default, and TheoClaw needs no public bind for this: to reach the
@@ -683,8 +745,19 @@ address instead.
 Every request a forward delivers arrives from `127.0.0.1`, so the bearer token is the whole gate,
 and no TheoClaw route grants anything to a loopback peer (`tests/remote-access-source.test.ts`
 fails if TheoClaw's source starts reading `remoteAddress` or a forwarding header). Closing the forward and opening a new one needs no
-restart. SSH is the one supported remote path: Tailscale serve or funnel and a trusted proxy that
-passes the user's identity in a header are not supported.
+restart. SSH needs no extra setting; the trusted-proxy mode below is the other remote path.
+
+### Trusted proxy (and Tailscale serve)
+
+For WebChat behind a reverse proxy that authenticates the user, set
+`THEOCLAW_TRUSTED_PROXY_ADDRESSES` (comma-separated peer addresses of the proxy, e.g. `127.0.0.1`)
+and `THEOCLAW_TRUSTED_PROXY_HEADER` (the identity header the proxy sets, e.g. `X-Remote-User`; Tailscale
+serve sets `Tailscale-User-Login`). A `POST /webchat/chat` from an allowlisted peer that carries a
+non-empty identity header needs no bearer token; the same request from any other peer, or without the
+header, is 401. The header is removed from every request from a non-allowlisted peer. `THEOCLAW_WEBCHAT_TOKEN`
+must still be set (it turns WebChat on and stays the direct path). With Tailscale: bind loopback, run
+`tailscale serve --bg <THEOCLAW_PORT>`, and allowlist `127.0.0.1`. The proxy must strip any client-sent copy
+of the header. Only WebChat chat posts honor the header; `/control` still needs its bearer token.
 
 The live check runs a real `sshd` of its own from a temp directory, never the host's and never
 `~/.ssh`, and needs `ssh`, `sshd` and `ssh-keygen` on `PATH`:
@@ -706,7 +779,10 @@ Point the official OpenAI client at the instance, with the control token as its 
 ```ts
 import OpenAI from 'openai'
 
-const client = new OpenAI({ baseURL: 'http://127.0.0.1:<THEOCLAW_PORT>/v1', apiKey: process.env.THEOCLAW_CONTROL_TOKEN })
+const client = new OpenAI({
+  baseURL: 'http://127.0.0.1:<THEOCLAW_PORT>/v1',
+  apiKey: process.env.THEOCLAW_CONTROL_TOKEN,
+})
 const models = await client.models.list() // THEOCLAW_MODEL, the one model served
 const reply = await client.chat.completions.create({
   model: process.env.THEOCLAW_MODEL!,
@@ -717,7 +793,8 @@ const reply = await client.chat.completions.create({
 - `GET /v1/models` lists `THEOCLAW_MODEL`; `POST /v1/chat/completions` runs one TheoClaw turn and
   answers its text as one `chat.completion` choice. A request naming another model answers 404
   `model_not_found`.
-- Streaming is not supported: `stream: true` answers 400 `stream_unsupported`. Other OpenAI
+- `stream: true` answers `chat.completion.chunk` server-sent events ending in `data: [DONE]`; the
+  last chunk and a non-stream body carry `usage` (`prompt_tokens`, `completion_tokens`). Other OpenAI
   parameters (`temperature`, `max_tokens`, ...) are accepted and ignored. Only text content parts
   are read.
 - The instance keeps no conversation between requests: each request's `messages` are the whole
@@ -811,12 +888,12 @@ THEOCLAW_STATE_DIR=~/.local/state/theoclaw pnpm --filter theoclaw run import -- 
 THEOCLAW_STATE_DIR=~/.local/state/theoclaw pnpm --filter theoclaw run import -- --from hermes
 ```
 
-| Flag | Default | Meaning |
-|---|---|---|
-| `--from claude-code\|hermes` | required | which kind of setup to read |
-| `--source <dir>` | `~/.claude` for `claude-code`, `~/.hermes` for `hermes` | the setup's directory |
-| `--project <dir>` | none | `claude-code` only: the project whose scope and auto memory are read |
-| `--home <dir>` | your home | `claude-code` only: where `.claude.json` is read |
+| Flag                         | Default                                                 | Meaning                                                              |
+| ---------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------- |
+| `--from claude-code\|hermes` | required                                                | which kind of setup to read                                          |
+| `--source <dir>`             | `~/.claude` for `claude-code`, `~/.hermes` for `hermes` | the setup's directory                                                |
+| `--project <dir>`            | none                                                    | `claude-code` only: the project whose scope and auto memory are read |
+| `--home <dir>`               | your home                                               | `claude-code` only: where `.claude.json` is read                     |
 
 With `THEOCLAW_PROFILE` set, the import goes to that profile's state directory, as the start's does.
 
@@ -965,3 +1042,26 @@ model configuration. Audio is transcribed by `gpt-4o-mini-transcribe`; replies u
 apply. Audio failures fall back to text. See [voice verification](parity/voice-verification.md)
 for limits and the outstanding real-account recording check. Continuous talk and
 wake word are tracked separately in B-722.
+
+### Answering phone calls (Twilio Voice)
+
+Setting `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and `THEOCLAW_VOICE_CALL_PUBLIC_URL` (the exact URL
+Twilio posts to, e.g. `https://host/webhooks/voice`) turns on `POST /webhooks/voice`. Point the
+number's voice webhook at it. Twilio does the speech recognition and synthesis (TwiML `<Gather>`
+and `<Say>`), so no media stream is needed. Each request is checked against `X-Twilio-Signature`
+(401 otherwise); one agent turn runs per utterance, in a session of its own per call, and the
+spoken reply is masked and cut at 1000 characters. Two silences in a row, or "goodbye", end the call.
+`THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS` lists the E.164 numbers answered (comma-separated); any
+other caller is refused and hung up on, and with the list unset every caller is refused. **Caller
+ID is not strong authentication**: it can be spoofed, so treat an allowed number as a convenience
+filter, not an owner. The call's agent never gets the owner tool profile. Setting only one of the
+two required variables fails the start; with neither, `/webhooks/voice` answers 404.
+
+Aged tool results are pruned: every send passes the SDK's `pruneToolResults`, so a tool result older
+than 4 tool rounds is trimmed from the next request. `THEOCLAW_PRUNE_TOOL_RESULT_ROUNDS` sets the count.
+
+## Standalone executable (no Node needed)
+
+`pnpm build && pnpm build:sea` writes `dist/sea/theoclaw`, a single executable (Node SEA) that runs
+`./theoclaw --help` on a machine without Node. Commands that start the service (`start`, `acp`) still
+spawn `main.js` from a checkout or npm install.

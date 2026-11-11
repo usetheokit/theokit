@@ -1,6 +1,11 @@
 import type { CustomTool, McpServerConfig, Plugin } from '@theokit/sdk'
 import { createACPTool } from 'theokit/server/agent'
 import { bindToolScope } from '@theokit/agents/tool-scope'
+import { createExtractDocumentTool } from '@theokit/sdk-tools/extract-document'
+import { createGithubLinkPreviewTool } from '@theokit/sdk-tools/github-link-preview'
+import { createSearxngWebSearchAdapter, createTavilyWebSearchAdapter } from '@theokit/sdk-tools/web-search-adapters'
+import { createReadPdfTool } from '@theokit/sdk-tools/read-pdf'
+import { createScreenshotLogbookTool } from '@theokit/sdk-tools/screenshot-logbook'
 import {
   createApplyPatchTool,
   createBraveWebSearchAdapter,
@@ -24,7 +29,8 @@ import type { TurnAgent } from '../agent-port.js'
 import { scrubbedAgentTransport } from './acp-transport.js'
 import { acpPermissionHandler, type AcpPermissionOptions } from './acp-permission.js'
 import { browserServer } from './browser-server.js'
-import { codeModeTool, delegateAllTool, delegateTool, type CreateWorker } from './code-mode-tools.js'
+import { codeModeTool, delegateAllTool, delegateTool, runWorker, type CreateWorker } from './code-mode-tools.js'
+import { cloudWorkerPort, codingWorkerPort, codingWorkersAvailable } from './coding-worker.js'
 import { computerTool } from './computer-tool.js'
 import { execApprovalPlugin, type ExecApprovalOptions } from './exec-approval.js'
 import { questionTool, taskTools } from './control-tools.js'
@@ -66,6 +72,8 @@ function acpTools(settings: ToolSettings, permission: AcpPermissionOptions): Cus
 function webSearchTool(settings: ToolSettings): CustomTool | undefined {
   const { kind, url, key } = settings.search
   if (kind === 'brave') return createWebSearchTool({ search: createBraveWebSearchAdapter({ apiKey: key, fetchImpl: settings.fetchImpl }) })
+  if (kind === 'searxng') return createWebSearchTool({ search: createSearxngWebSearchAdapter({ baseUrl: url, fetchImpl: settings.fetchImpl }) })
+  if (kind === 'tavily') return createWebSearchTool({ search: createTavilyWebSearchAdapter({ apiKey: key, fetchImpl: settings.fetchImpl }) })
   if (kind === 'generic') {
     return createWebSearchTool({ search: createGenericHttpSearchAdapter({ apiKey: key, endpoint: url, fetchImpl: settings.fetchImpl }) })
   }
@@ -84,6 +92,17 @@ function scopeOf(settings: ToolSettings): ReturnType<typeof bindToolScope> {
     sandbox: settings.sandbox,
     mode: settings.mode,
   })
+}
+
+/** The sandboxed shell over the settings' backend; `shell_exec`. */
+export function shellToolFor(settings: ToolSettings): CustomTool {
+  return scopeOf(settings).bind(createShellTool)()
+}
+
+/** The two read-only file tools: the `minimal` tool profile. */
+export function fileReadTools(settings: ToolSettings): CustomTool[] {
+  const scope = scopeOf(settings)
+  return [scope.bind(createReadFileTool)(), scope.bind(createListDirTool)()]
 }
 
 /**
@@ -118,13 +137,18 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
   const tools: CustomTool[] = [
     scope.bind(createReadFileTool)(),
     scope.bind(createListDirTool)(),
-    scope.bind(createViewImageTool)(),
+    // Documents and PDFs are read from the tool root, GitHub links over the settings' fetch (OC-69).
+    createReadPdfTool({ projectRoot: settings.toolRoot }),
+    createExtractDocumentTool({ projectRoot: settings.toolRoot }),
+    createGithubLinkPreviewTool({ fetchImpl: settings.fetchImpl }),
     webFetchTool(settings),
     // `TodolistTool` types its handler with the todo input union; the SDK validates the model's
     // arguments against the tool's own `inputSchema` before calling it, so the wider type is safe.
     createTodolistTool() as unknown as CustomTool,
     widgetTool(),
   ]
+  // The ChatGPT subscription wire rejects an image in a tool result, so `view_image` is not offered there.
+  if (settings.imageResults !== false) tools.splice(2, 0, scope.bind(createViewImageTool)())
   const search = webSearchTool(settings)
   if (search !== undefined) tools.push(search)
   if (settings.gitRepository && settings.sandboxEnforced) tools.push(scope.bind(createGitDiffTool)())
@@ -132,7 +156,7 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
     // The file writers take a project root and no sandbox, so `read-only` can only leave them out
     // (plan D3); the shell stays, confined by the read-only backend.
     if (settings.sandboxMode !== 'read-only') {
-      tools.push(scope.bind(createWriteFileTool)(), scope.bind(createEditFileTool)(), scope.bind(createApplyPatchTool)())
+      tools.push(scope.bind(createWriteFileTool)(), scope.bind(createEditFileTool)(), scope.bind(createApplyPatchTool)(), createScreenshotLogbookTool({ projectRoot: settings.toolRoot }))
     }
     tools.push(scope.bind(createShellTool)())
     if (settings.interactive !== undefined) {
@@ -159,6 +183,7 @@ export function agentToolOptions(
   createWorker?: CreateWorker,
   buildDescriber?: () => Promise<TurnAgent>,
   execApproval?: ExecApprovalOptions,
+  createCoder?: (tools: CustomTool[]) => Promise<TurnAgent>,
 ): AgentToolOptions {
   const tools = [...buildTools(settings, execApproval === undefined ? {} : { ask: execApproval.ask }), ...extra]
   if (createWorker !== undefined && buildDescriber !== undefined && settings.computer !== undefined) {
@@ -166,16 +191,25 @@ export function agentToolOptions(
     tools.push(computerTool(settings.computer, buildDescriber))
   }
   if (createWorker !== undefined) {
+    // A coding task gets its own git worktree and branch (OC-83): only where files may be written in a repository.
+    const coder =
+      createCoder !== undefined && codingWorkersAvailable(settings)
+        ? codingWorkerPort(settings, readOnlyTools, (workerTools, task, signal) => runWorker(() => createCoder(workerTools), task, signal))
+        : undefined
+    const cloud =
+      createCoder !== undefined && codingWorkersAvailable(settings)
+        ? cloudWorkerPort(settings, readOnlyTools, (workerTools, task, signal) => runWorker(() => createCoder(workerTools), task, signal))
+        : undefined
     tools.push(
       codeModeTool(readOnlyTools(settings), settings),
-      delegateAllTool(createWorker),
-      delegateTool(createWorker),
+      delegateAllTool(createWorker, coder, cloud),
+      delegateTool(createWorker, coder, cloud),
       questionTool(),
       ...taskTools(),
     )
   }
-  // The exec gate is installed only with host tools on and an asker wired: without one there is
-  // nobody to approve, and refusing every shell call would turn the shell off, which is not its job.
+  // The exec gate is installed only with host tools on and exec options given (the composition gives them with a state
+  // directory). Without an asker it refuses what no saved approval or reviewer allowed.
   const plugins = [pathVetoPlugin(settings), provenanceGuardPlugin(), loopDetectionPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
   const base = { tools, plugins }
   const servers = mcpServersOf(settings)
@@ -219,5 +253,6 @@ export function controlAgentToolOptions(
     // The screenshot's describer holds no tool and no plugin: it can only answer (B-676 D1).
     async () => build({ tools: [], plugins: [] }),
     execApproval,
+    async (tools) => build({ ...workerToolOptions(settings), tools }),
   )
 }

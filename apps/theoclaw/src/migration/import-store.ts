@@ -7,6 +7,7 @@ import { stringify as stringifyYaml } from 'yaml'
 
 import { describeError, TheoClawConfigError } from '../control-plane/errors.js'
 import { type DroppedEntry, type ForeignSetup, readSkillsDir, SAFE_SKILL_NAME } from './foreign-setup.js'
+import { binaryOnPath } from '../skills/registry.js'
 
 /** The MCP servers of an import, as `loadMcpJson` returns them (the shape of `@theokit/agents`'s `McpServersMap`). */
 export type ImportedMcpServers = Record<string, McpServerConfig>
@@ -43,6 +44,11 @@ const STAGING_PREFIX = 'import.staging-'
 const PREVIOUS_PREFIX = 'import.previous-'
 const LOCK = 'import.lock'
 const FILES = { manifest: 'manifest.json', instructions: 'instructions.md', memories: 'memories.md', mcp: '.mcp.json' } as const
+
+/** The files `writeImport` would create under `<stateDir>/import` (dry run), relative to it. */
+export function plannedImportFiles(setup: ForeignSetup): string[] {
+  return [FILES.instructions, FILES.memories, FILES.mcp, ...setup.skills.map((skill) => `skills/${skill.name}/SKILL.md`), FILES.manifest]
+}
 
 function writePrivate(path: string, text: string): void {
   writeFileSync(path, text, { mode: 0o600 })
@@ -150,7 +156,7 @@ function recoverForRead(stateDir: string, onWarn: (warning: string) => void): vo
 
 /** A skill as staged: its parsed name and description re-emitted, then its body. */
 function skillFile(skill: ForeignSetup['skills'][number]): string {
-  return `---\n${stringifyYaml({ name: skill.name, description: skill.description })}---\n${skill.body}`
+  return `---\n${stringifyYaml({ name: skill.name, description: skill.description, ...(skill.requiresBins.length === 0 ? {} : { metadata: { requires: { bins: [...skill.requiresBins] } } }) })}---\n${skill.body}`
 }
 
 function stage(dir: string, setup: ForeignSetup, now: Date): void {
@@ -344,6 +350,7 @@ export function readImport(
   if (staged.map((skill) => skill.name).sort().join('\n') !== [...manifest.skills].sort().join('\n')) {
     throw unreadable(manifestPath, 'names other skills than the ones staged')
   }
-  const skills = staged.map((skill) => Skill.create({ name: skill.name, description: skill.description, instructions: skill.body }))
+  // A skill whose required binary is not on PATH is not offered; reading again after installing it offers it.
+  const skills = staged.filter((skill) => skill.requiresBins.every((bin) => binaryOnPath(bin))).map((skill) => Skill.create({ name: skill.name, description: skill.description, instructions: skill.body }))
   return { kind: manifest.kind, instructions, memory, mcpServers, skills, counts: manifest.counts }
 }

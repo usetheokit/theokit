@@ -45,6 +45,44 @@ function envelopeOf(raw: Buffer): ReturnType<typeof parseWebhookPayload> {
   return parseWebhookPayload(json)
 }
 
+function record(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+}
+
+/** A phone number reduced to its last four digits. */
+function maskRecipient(id: unknown): string {
+  const digits = String(id ?? '').replaceAll(/\D/g, '')
+  return digits.length === 0 ? 'unknown' : `***${digits.slice(-4)}`
+}
+
+/**
+ * Writes one line per `failed` delivery status in an envelope: Meta accepts a send with a 200 and
+ * reports a refusal only here. `sent`, `delivered` and `read` write nothing.
+ */
+export function logFailedStatuses(envelope: unknown, write: (line: string) => void): void {
+  const entries = record(envelope)?.entry
+  if (!Array.isArray(entries)) return
+  for (const entry of entries) {
+    const changes = record(entry)?.changes
+    if (!Array.isArray(changes)) continue
+    for (const change of changes) {
+      const statuses = record(record(change)?.value)?.statuses
+      if (!Array.isArray(statuses)) continue
+      for (const raw of statuses) {
+        const status = record(raw)
+        if (status?.status !== 'failed') continue
+        const errors = Array.isArray(status.errors) ? status.errors : [undefined]
+        for (const error of errors) {
+          const e = record(error)
+          write(
+            `whatsapp: delivery failed to ${maskRecipient(status.recipient_id)}: error ${String(e?.code ?? 'unknown')} ${String(e?.title ?? 'no title')}`,
+          )
+        }
+      }
+    }
+  }
+}
+
 /**
  * The WhatsApp Cloud webhook (FR-006). GET answers Meta's subscription check. POST verifies
  * `x-hub-signature-256` over the raw body (401), parses the envelope (400), and delivers every
@@ -63,6 +101,7 @@ export function createWhatsAppRoute(options: WhatsAppRouteOptions): (request: Re
     }
     const envelope = envelopeOf(raw)
     if (envelope === null) return answer(400)
+    logFailedStatuses(envelope, options.write)
     let events: ReturnType<DeliverableWhatsAppAdapter['toDeliverableEvents']>
     try {
       events = options.adapter.toDeliverableEvents(envelope)

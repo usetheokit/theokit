@@ -1,5 +1,7 @@
 import type { DevicePairing } from './device-pairing.js'
+import type { CityLookup } from './geo-city.js'
 import { MAX_MESSAGE_BYTES } from './limits.js'
+import { PEER_ADDRESS_HEADER } from './trusted-proxy.js'
 
 /** The path a new device posts its setup code to (OC-91). */
 export const PAIR_PATH = '/control/pair'
@@ -53,13 +55,13 @@ async function readBounded(request: Request): Promise<string | undefined> {
  * nothing yet), `401` for an unknown, spent or expired code, `400` for a body or a name or token the
  * store refuses, `413` for a body over the size limit, `429` while too many requests wait, `405` for another method. No answer echoes the token.
  */
-export async function pairRoute(devices: DevicePairing, request: Request): Promise<Response> {
+export async function pairRoute(devices: DevicePairing, request: Request, cityOf?: CityLookup): Promise<Response> {
   if (request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } })
   const text = await readBounded(request)
   if (text === undefined) return Response.json({ error: 'too_large' }, { status: 413 })
   const body = readPairBody(text)
   if (body === undefined) return Response.json({ error: 'bad_body' }, { status: 400 })
-  const result = devices.request(body.code, body.name, body.token)
+  const result = devices.request(body.code, body.name, body.token, cityOf?.(request.headers.get(PEER_ADDRESS_HEADER) ?? undefined))
   if (result.ok) return Response.json({ id: result.id }, { status: 202 })
   const status = result.reason === 'unknown_or_expired' ? 401 : result.reason === 'too_many_pending' ? 429 : 400
   return Response.json({ error: result.reason }, { status })

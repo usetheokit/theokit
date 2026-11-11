@@ -2,11 +2,13 @@ import { chmodSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import type { Stats } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
+import { createSandboxBackend, DockerSandbox, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import { createDockerBackend, readSandboxBackend } from '../sandbox/sandbox-backend.js'
+import type { DockerBackendDeps, SandboxBackendName } from '../sandbox/sandbox-backend.js'
 import { readSandboxMode, readSandboxSessions, sandboxModeForSession } from '../sandbox/sandbox-mode.js'
 import { browserLine, readBrowser } from './browser-server.js'
 import type { BrowserDeps, BrowserSettings } from './browser-server.js'
@@ -18,7 +20,7 @@ import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
 
 /** Where web search goes, chosen from the keys present at start. */
 export interface SearchSettings {
-  readonly kind: 'brave' | 'generic' | 'off'
+  readonly kind: 'brave' | 'generic' | 'searxng' | 'tavily' | 'off'
   readonly url?: string
   readonly key?: string
 }
@@ -33,6 +35,8 @@ export interface ToolSettings {
   readonly gitRepository: boolean
   /** True when the one backend built at start is a kernel-confined `LinuxSandbox`. */
   readonly sandboxEnforced: boolean
+  /** Which backend `THEOCLAW_SANDBOX_BACKEND` chose; absent means `bwrap`. */
+  readonly backend?: SandboxBackendName
   /** Built once at start; every agent's tools share it (plan D3, revision 1.2). */
   readonly sandbox: SandboxBackend
   /** The backend's mode, which the tools are bound with: `sandboxMode` with host tools on, else `read-only`. */
@@ -42,6 +46,8 @@ export interface ToolSettings {
   /** The interactive shell confined to this mode's sandbox, present only once `withInteractiveShell` proved it on this host. */
   readonly interactive?: InteractiveBackend
   readonly fetchImpl: typeof fetch
+  /** False when the model's wire carries tool results as text only (`openai-chatgpt/`), so `view_image` is not offered. Absent means true. */
+  readonly imageResults?: boolean
   /** The DNS lookup `web_fetch` screens a host with; absent in the process, so the SDK's own runs. */
   readonly lookup?: WebFetchLookup
   readonly search: SearchSettings
@@ -61,7 +67,7 @@ export interface ToolSettings {
 type WebFetchLookup = (host: string, options: { readonly all: true }) => Promise<{ readonly address: string; readonly family: number }[]>
 
 /** What the tests inject; the process passes nothing. */
-export interface ToolDeps {
+export interface ToolDeps extends DockerBackendDeps {
   readonly detect?: () => BwrapDetection
   readonly fetchImpl?: typeof fetch
   /** Lets a test serve a page to `web_fetch` offline: its SSRF screen resolves the host through it. */
@@ -147,8 +153,30 @@ function nonBlank(value: string | undefined): string | undefined {
   return trimmed === undefined || trimmed === '' ? undefined : trimmed
 }
 
-const SEARCH_OFF_LINE = 'tools: web search is off (no BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
+const SEARCH_OFF_LINE = 'tools: web search is off (no THEOCLAW_SEARCH, BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
 const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
+
+/** `THEOCLAW_SEARCH=searxng:<url>` or `tavily` (key in `TAVILY_API_KEY`); it wins over every other search variable. */
+function readChosenSearch(chosen: string, env: Env): SearchSettings {
+  const bad = (message: string): TheoClawConfigError => new TheoClawConfigError(message, { variable: 'THEOCLAW_SEARCH' })
+  if (chosen === 'tavily') {
+    const key = nonBlank(env.TAVILY_API_KEY)
+    if (key === undefined) throw bad('THEOCLAW_SEARCH=tavily needs TAVILY_API_KEY')
+    return { kind: 'tavily', key }
+  }
+  if (chosen.startsWith('searxng:')) {
+    const url = chosen.slice('searxng:'.length).trim()
+    let valid = false
+    try {
+      valid = ['http:', 'https:'].includes(new URL(url).protocol)
+    } catch {
+      valid = false
+    }
+    if (!valid) throw bad('THEOCLAW_SEARCH=searxng:<url> needs an http(s) URL, e.g. searxng:http://localhost:8888')
+    return { kind: 'searxng', url }
+  }
+  throw bad(`THEOCLAW_SEARCH must be searxng:<url> or tavily, got ${JSON.stringify(chosen)}`)
+}
 
 /**
  * Brave when `BRAVE_API_KEY` is set (it wins over the generic adapter); the generic adapter when
@@ -156,6 +184,8 @@ const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unc
  * naming the other; neither is off. A blank value counts as unset.
  */
 function readSearch(env: Env): SearchSettings {
+  const chosen = nonBlank(env.THEOCLAW_SEARCH)
+  if (chosen !== undefined) return readChosenSearch(chosen, env)
   const brave = nonBlank(env.BRAVE_API_KEY)
   if (brave !== undefined) return { kind: 'brave', key: brave }
   const url = nonBlank(env.THEOKIT_SEARCH_API_URL)
@@ -193,6 +223,7 @@ function refuseBrowserUnderReadOnly(hostTools: boolean, sandboxMode: SandboxMode
 export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}): ToolSettings {
   const hostTools = readHostTools(env)
   const sandboxMode = readSandboxMode(env)
+  const backend = readSandboxBackend(env)
   const search = readSearch(env)
   const browser = readBrowser(env, deps.browser)
   const computer = readComputer(env, { hostTools, sandboxMode }, deps.computer)
@@ -210,13 +241,8 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
   const mode: SandboxMode = hostTools ? sandboxMode : 'read-only'
-  const sandbox = createSandboxBackend({
-    mode,
-    workDir: toolRoot,
-    ...(deps.detect === undefined ? {} : { detect: deps.detect }),
-    ...(deps.warn === undefined ? {} : { warn: deps.warn }),
-  })
-  const sandboxEnforced = sandbox instanceof LinuxSandbox
+  const sandbox = buildBackend(backend, mode, toolRoot, deps)
+  const sandboxEnforced = isEnforced(sandbox)
   const gitRepository = isRepository(toolRoot)
   const offLines = [...lines]
   if (gitRepository && !sandboxEnforced) {
@@ -224,6 +250,9 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     offLines.push(`tools: git_diff is off (sandbox not enforced: ${detail})`)
   }
   if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
+  if (nonBlank(env.THEOCLAW_MODEL)?.startsWith('openai-chatgpt/') === true) {
+    offLines.push('tools: view_image is off (the openai-chatgpt/ route carries tool results as text only)')
+  }
   if (mode === 'danger-full-access') offLines.push(SANDBOX_OFF_LINE)
   offLines.push(browserLine(browser), computerLine(computer))
   return {
@@ -232,10 +261,12 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     hostTools,
     gitRepository,
     sandboxEnforced,
+    backend,
     sandbox,
     mode,
     sandboxMode,
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
+    ...(nonBlank(env.THEOCLAW_MODEL)?.startsWith('openai-chatgpt/') === true ? { imageResults: false } : {}),
     ...(deps.lookup === undefined ? {} : { lookup: deps.lookup }),
     search,
     browser,
@@ -243,7 +274,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     external,
     // Every search key set, the unused one too: a key is a secret whether or not it is chosen.
     secrets: [
-      ...[env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY].flatMap((value) => nonBlank(value) ?? []),
+      ...[env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY, env.TAVILY_API_KEY].flatMap((value) => nonBlank(value) ?? []),
       ...external.secrets,
     ],
     offLines,
@@ -258,15 +289,25 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
 export function toolSettingsForSession(settings: ToolSettings, env: Env, sessionKey: string, deps: ToolDeps = {}): ToolSettings {
   const sandboxMode = sandboxModeForSession(settings.sandboxMode, readSandboxSessions(env), sessionKey)
   if (sandboxMode === settings.sandboxMode || !settings.hostTools) return settings
-  const sandbox = createSandboxBackend({
-    mode: sandboxMode,
-    workDir: settings.toolRoot,
+  const sandbox = buildBackend(settings.backend ?? 'bwrap', sandboxMode, settings.toolRoot, deps)
+  // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
+  const { interactive: _chosenMode, ...rest } = settings
+  return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: isEnforced(sandbox) }
+}
+
+/** The one backend of a mode: the chosen `THEOCLAW_SANDBOX_BACKEND` over the tool root. */
+function buildBackend(backend: SandboxBackendName, mode: SandboxMode, toolRoot: string, deps: ToolDeps): SandboxBackend {
+  if (backend === 'docker') return createDockerBackend(mode, toolRoot, deps)
+  return createSandboxBackend({
+    mode,
+    workDir: toolRoot,
     ...(deps.detect === undefined ? {} : { detect: deps.detect }),
     ...(deps.warn === undefined ? {} : { warn: deps.warn }),
   })
-  // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
-  const { interactive: _chosenMode, ...rest } = settings
-  return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: sandbox instanceof LinuxSandbox }
+}
+
+function isEnforced(sandbox: SandboxBackend): boolean {
+  return sandbox instanceof LinuxSandbox || sandbox instanceof DockerSandbox
 }
 
 function realPathOrSelf(path: string): string {
@@ -330,7 +371,7 @@ export function checkHostToolsPosture(
   }
   // The `workspace-write` roots under `read-only` too: `read-only`'s are none, which would make the
   // refusals below vacuous; `danger-full-access` returned above, its roots being every path.
-  const roots = writableRootsFor('workspace-write', settings.toolRoot) ?? []
+  const roots = settings.backend === 'docker' ? [settings.toolRoot] : (writableRootsFor('workspace-write', settings.toolRoot) ?? [])
   refuseWorkspaceUnderWritableRoot(settings, roots)
   for (const target of protectedPaths) refuseWritableProtectedPath(target, roots)
 }
