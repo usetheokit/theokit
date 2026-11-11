@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import type { PreToolCallContext } from '@theokit/sdk'
 
+import type { ActivityLedger } from '../audit/activity-ledger.js'
 import { describeError } from '../control-plane/errors.js'
 import type { GeneralPlugin } from './general-plugin.js'
 
@@ -86,19 +87,22 @@ export interface ExecApprovalOptions {
   readonly ask?: (command: string, call?: ExecCall) => Promise<PersonAnswer>
   /** True when the call's session waived the question (`/elevated on`): the command runs unasked. */
   readonly waived?: (call?: ExecCall) => boolean
+  /** Where each decision is recorded with who made it and when. */
+  readonly ledger?: ActivityLedger
 }
 
 export interface ExecDecision {
   readonly allowed: boolean
   readonly reason: string
+  readonly approver: string
 }
 
 /** Standing approval first, then the reviewer, then the person. Never throws. */
 export function createExecApproval(options: ExecApprovalOptions): (command: string, call?: ExecCall) => Promise<ExecDecision> {
   const { store, reviewer, ask, waived } = options
   return async (command, call) => {
-    if (waived?.(call) === true) return { allowed: true, reason: 'elevated mode waives the approval' }
-    if (store.has(command)) return { allowed: true, reason: 'a saved approval matches' }
+    if (waived?.(call) === true) return { allowed: true, reason: 'elevated mode waives the approval', approver: 'elevated' }
+    if (store.has(command)) return { allowed: true, reason: 'a saved approval matches', approver: 'saved-approval' }
     if (reviewer !== undefined) {
       let verdict: ReviewerVerdict = 'ask'
       try {
@@ -106,17 +110,17 @@ export function createExecApproval(options: ExecApprovalOptions): (command: stri
       } catch {
         verdict = 'ask' // A reviewer failure falls back to the person.
       }
-      if (verdict === 'deny') return { allowed: false, reason: 'the reviewer denied it' }
-      if (verdict === 'allow') return { allowed: true, reason: 'the reviewer allowed it' }
+      if (verdict === 'deny') return { allowed: false, reason: 'the reviewer denied it', approver: 'reviewer' }
+      if (verdict === 'allow') return { allowed: true, reason: 'the reviewer allowed it', approver: 'reviewer' }
     }
-    if (ask === undefined) return { allowed: false, reason: 'nobody can approve it' }
+    if (ask === undefined) return { allowed: false, reason: 'nobody can approve it', approver: 'none' }
     let answer: PersonAnswer
     try {
       answer = await ask(command, call)
     } catch {
-      return { allowed: false, reason: 'the question could not be asked' }
+      return { allowed: false, reason: 'the question could not be asked', approver: 'none' }
     }
-    if (answer === 'deny') return { allowed: false, reason: 'the person refused it' }
+    if (answer === 'deny') return { allowed: false, reason: 'the person refused it', approver: 'person' }
     if (answer === 'always') {
       try {
         await store.add(command)
@@ -124,7 +128,7 @@ export function createExecApproval(options: ExecApprovalOptions): (command: stri
         // Run this once; the approval is simply not remembered.
       }
     }
-    return { allowed: true, reason: 'the person approved it' }
+    return { allowed: true, reason: 'the person approved it', approver: 'person' }
   }
 }
 
@@ -142,6 +146,16 @@ export function execApprovalPlugin(options: ExecApprovalOptions): GeneralPlugin 
         const command = (call.args as { command?: unknown } | undefined)?.command
         if (typeof command !== 'string' || command === '') return { block: true, message: 'theoclaw: the command is missing' }
         const decision = await decide(command, { agentId: call.agentId })
+        options.ledger?.record({
+          time: new Date().toISOString(),
+          runId: call.runId ?? 'unknown',
+          ...(call.agentId === undefined ? {} : { agentId: call.agentId }),
+          tool: call.name,
+          command,
+          allowed: decision.allowed,
+          approver: decision.approver,
+          reason: decision.reason,
+        })
         return decision.allowed ? undefined : { block: true, message: `theoclaw: exec refused: ${decision.reason}` }
       })
     },

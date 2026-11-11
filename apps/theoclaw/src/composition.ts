@@ -24,6 +24,7 @@ import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import type { RetryPolicy } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
+import { createActivityLedger } from './audit/activity-ledger.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
 import { readAdvisorSettings } from './channels/advisor.js'
 import { readCompactSettings, type CompactSettings } from './channels/compact-command.js'
@@ -415,7 +416,7 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
  */
 function execApprovalFor(given: TheoClawOptions['execApproval'], stateDir: string | undefined): ExecApprovalOptions | undefined {
   if (stateDir === undefined) return undefined
-  return { ...given, store: createExecApprovalStore(stateDir) }
+  return { ...given, store: createExecApprovalStore(stateDir), ledger: createActivityLedger(stateDir) }
 }
 
 /** The store of `policy.stateDir`, or none without one. Throws on a state file it cannot read. */
