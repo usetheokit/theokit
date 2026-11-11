@@ -186,7 +186,7 @@ describe('the workers of a /control agent that carries an import', () => {
     expect(built).toHaveLength(2)
     const worker = built[1]!
     expect(worker.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
-    expect(worker).not.toHaveProperty('skills')
+    expect(worker.skills?.inline.map((skill) => skill.name) ?? []).not.toContain('imported-skill')
     expect(worker).not.toHaveProperty('mcpServers')
     expect(worker.tools?.map((tool) => tool.name)).not.toContain('delegate_all')
   })

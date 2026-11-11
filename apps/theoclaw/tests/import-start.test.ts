@@ -65,7 +65,7 @@ describe('an import reaching the agents', () => {
       expected: {
         instruction: 'Fixture project instruction: the project is called Lighthouse.',
         memory: "Fixture memory: the owner's favourite colour is teal.",
-        skills: ['user-skill', 'shared-skill'],
+        skills: ['user-skill', 'shared-skill', 'git-helper', 'summarize-text'],
         servers: ['db', 'search', 'shared'],
       },
     }
@@ -74,7 +74,7 @@ describe('an import reaching the agents', () => {
       expected: {
         instruction: "Fixture Hermes agents note: the owner's team is called Orbit.",
         memory: 'Fixture Hermes memory: the owner runs on Tuesdays.',
-        skills: ['hermes-skill'],
+        skills: ['hermes-skill', 'git-helper', 'summarize-text'],
         servers: ['files', 'web'],
       },
     }
@@ -164,6 +164,7 @@ describe('an import reaching the agents', () => {
 
     const { sessionDir: _a, ...a } = withEmpty.options[0]!.local ?? {}
     const { sessionDir: _b, ...b } = without.options[0]!.local ?? {}
-    expect({ ...withEmpty.options[0], local: a }).toEqual({ ...without.options[0], local: b })
+    const { skills: _s, tools: _t, ...rest } = withEmpty.options[0]!
+    expect({ ...rest, local: a }).toEqual({ ...without.options[0], local: b })
   })
 })

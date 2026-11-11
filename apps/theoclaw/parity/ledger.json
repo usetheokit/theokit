@@ -545,7 +545,7 @@
   {
     "id": "OC-74",
     "status": "open",
-    "note": "registry and two bundled skills built (src/skills/registry.ts); not yet wired into the /control agent ; open because no end-to-end check against a real model exists yet, and none was run"
+    "note": "registry and two bundled skills built (src/skills/registry.ts); wired into every agent with tools or an import (create-agent.ts withBundledSkills); open because no end-to-end check against a real model exists yet, and none was run"
   },
   {
     "id": "OC-75",

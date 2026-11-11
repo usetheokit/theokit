@@ -1,7 +1,9 @@
 import { Agent, SkillReadTool } from '@theokit/sdk'
+
 import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 
 import type { ImportedSetup } from '../migration/import-store.js'
+import { SkillRegistry } from '../skills/registry.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import type { ThinkingLevel } from './failover.js'
@@ -78,9 +80,7 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
  * The one place an agent's options are assembled: memory off, the builtin `shell` withheld and the
  * hook gate, always, plus the tool options when the agent has tools.
  */
-export function theoClawAgentOptions<Model extends string | ModelSelection>(
-  input: TheoClawAgentInput<Model>,
-): TheoClawAgentOptions<Model> {
+export function theoClawAgentOptions<Model extends string | ModelSelection>(input: TheoClawAgentInput<Model>): TheoClawAgentOptions<Model> {
   const base = {
     model: input.model,
     apiKey: input.apiKey,
@@ -96,15 +96,25 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
   const imported = input.imported === undefined ? withTools : withImport(withTools, input.imported)
+  // Chat reply agents hold no tool (agent-factory); only an agent with tools or an import gets the skills.
+  const withSkills = input.toolOptions === undefined && input.imported === undefined ? imported : withBundledSkills(imported)
   const suffix = input.toolOptions?.systemPromptSuffix
-  return suffix === undefined || suffix === '' ? imported : { ...imported, systemPrompt: `${imported.systemPrompt}\n\n${suffix}` }
+  return suffix === undefined || suffix === '' ? withSkills : { ...withSkills, systemPrompt: `${withSkills.systemPrompt}\n\n${suffix}` }
+}
+
+/** OC-74: every agent is offered the bundled skills whose binaries are present, with `skill_read`; an imported skill of the same name wins. */
+function withBundledSkills<Model extends string | ModelSelection>(options: TheoClawAgentOptions<Model>): TheoClawAgentOptions<Model> {
+  const existing = options.skills?.inline ?? []
+  const names = new Set(existing.map((skill) => skill.name))
+  const bundled = new SkillRegistry().inlineSkills().filter((skill) => !names.has(skill.name))
+  if (bundled.length === 0) return options
+  const all = [...existing, ...bundled]
+  const tools = (options.tools ?? []).filter((tool) => tool.name !== 'skill_read')
+  return { ...options, skills: { inline: all }, tools: [...tools, SkillReadTool.create(all)] }
 }
 
 /** `base` plus the tool options: the tools, the plugins, and the browser and external servers. */
-function withToolOptions<Model extends string | ModelSelection>(
-  base: TheoClawAgentOptions<Model>,
-  toolOptions: AgentToolOptions,
-): TheoClawAgentOptions<Model> {
+function withToolOptions<Model extends string | ModelSelection>(base: TheoClawAgentOptions<Model>, toolOptions: AgentToolOptions): TheoClawAgentOptions<Model> {
   const { tools, plugins, mcpServers } = toolOptions
   // Copied one level: the SDK takes mutable arrays and maps, so each agent gets its own list and
   // its own server map; a server's own `headers`, `env` and `args` are shared, and the SDK reads them only.
@@ -127,10 +137,7 @@ function importedPrompt(setup: ImportedSetup): string {
  * inline with a `skill_read` tool, and the MCP servers only when they are on. Memory stays off and
  * `shell` withheld, as for every agent.
  */
-function withImport<Model extends string | ModelSelection>(
-  options: TheoClawAgentOptions<Model>,
-  imported: AgentImport,
-): TheoClawAgentOptions<Model> {
+function withImport<Model extends string | ModelSelection>(options: TheoClawAgentOptions<Model>, imported: AgentImport): TheoClawAgentOptions<Model> {
   const { setup, mcp } = imported
   const hasSkills = setup.skills.length > 0
   const hasServers = mcp && Object.keys(setup.mcpServers).length > 0
@@ -145,9 +152,7 @@ function withImport<Model extends string | ModelSelection>(
 }
 
 /** Create the agent those options describe, through the SDK. */
-export function createTheoClawAgent<Model extends string | ModelSelection>(
-  options: TheoClawAgentOptions<Model>,
-): Promise<SDKAgent> {
+export function createTheoClawAgent<Model extends string | ModelSelection>(options: TheoClawAgentOptions<Model>): Promise<SDKAgent> {
   return Agent.create({
     model: options.model,
     apiKey: options.apiKey,
