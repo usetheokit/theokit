@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
@@ -44,6 +44,13 @@ export function keepsTranscripts(env: BindEnvironment): boolean {
   throw new TheoClawConfigError('THEOCLAW_TRANSCRIPTS must be on or off', { variable: 'THEOCLAW_TRANSCRIPTS' })
 }
 
+/** `<workspace>/skills` and the user's `~/.theoclaw/skills` for every agent (OC-70). */
+function skillsDirOf(env: BindEnvironment): { skillsDir?: string; userSkillsDir: string } {
+  const workspace = env.THEOCLAW_WORKSPACE?.trim()
+  const userSkillsDir = join(env.HOME?.trim() || homedir(), '.theoclaw', 'skills')
+  return workspace === undefined || workspace === '' ? { userSkillsDir } : { skillsDir: join(workspace, 'skills'), userSkillsDir }
+}
+
 /**
  * The options every TheoClaw agent is built with, the model key passed explicitly (plan D4): the
  * SDK refuses `OPENROUTER_API_KEY` from the environment, so the key is resolved here by the same
@@ -59,7 +66,7 @@ export function keepsTranscripts(env: BindEnvironment): boolean {
  */
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
-  return theoClawAgentOptions({ model, apiKey: modelKey, approvedHooks: parseApprovedHooks(env), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
+  return theoClawAgentOptions({ model, apiKey: modelKey, ...skillsDirOf(env), approvedHooks: parseApprovedHooks(env), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
 }
 
 /**
@@ -135,6 +142,7 @@ export function createAgentFactory(
         model,
         apiKey: modelKey,
         approvedHooks: parseApprovedHooks(env),
+        ...skillsDirOf(env),
         ...thinkingOf(env),
         ...agentTelemetry(readTelemetrySettings(env)),
         ...(toolOptions === undefined ? {} : { toolOptions }),

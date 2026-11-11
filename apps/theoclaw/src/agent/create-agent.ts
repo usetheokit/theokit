@@ -1,6 +1,7 @@
 import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 
+import { loadSkillDirectory, SkillRegistry } from '../skills/registry.js'
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
@@ -72,6 +73,10 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   readonly thinking?: ThinkingLevel
   /** A workspace whose `.theokit/plugins/` holds installed, trusted plugins (OC-75); absent loads none. */
   readonly pluginWorkspace?: string
+  /** A directory holding `<skill>/SKILL.md` folders (`<workspace>/skills`), offered to the agent; absent offers none. */
+  readonly skillsDir?: string
+  /** The user's skills directory; a workspace skill of the same name wins over it. */
+  readonly userSkillsDir?: string
 }
 
 /**
@@ -95,9 +100,12 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
-  const imported = input.imported === undefined ? withTools : withImport(withTools, input.imported)
+  const discovered = discoverSkills(input.skillsDir, input.userSkillsDir)
+  const withSkills: TheoClawAgentOptions<Model> = discovered.length === 0 ? withTools : { ...withTools, skills: { inline: discovered } }
+  const imported = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
+  const skilled = withSkillRead(imported)
   const suffix = input.toolOptions?.systemPromptSuffix
-  return suffix === undefined || suffix === '' ? imported : { ...imported, systemPrompt: `${imported.systemPrompt}\n\n${suffix}` }
+  return suffix === undefined || suffix === '' ? skilled : { ...skilled, systemPrompt: `${skilled.systemPrompt}\n\n${suffix}` }
 }
 
 /** `base` plus the tool options: the tools, the plugins, and the browser and external servers. */
@@ -137,11 +145,31 @@ function withImport<Model extends string | ModelSelection>(
   return {
     ...options,
     systemPrompt: importedPrompt(setup),
-    ...(hasSkills ? { skills: { inline: [...setup.skills] }, tools: [...(options.tools ?? []), SkillReadTool.create(setup.skills)] } : {}),
+    ...(hasSkills ? { skills: { inline: mergeSkills(setup.skills, options.skills?.inline ?? []) } } : {}),
     // The browser server and the external tools file's servers keep their names: an imported
     // server with one of them does not replace it.
     ...(hasServers ? { mcpServers: { ...setup.mcpServers, ...options.mcpServers } } : {}),
   }
+}
+
+/** User skills, then workspace skills (which win by name); a skill whose required binary is missing is left out. */
+function discoverSkills(workspaceDir: string | undefined, userDir: string | undefined): InlineSkill[] {
+  if (workspaceDir === undefined && userDir === undefined) return []
+  const bundled = userDir === undefined ? [] : loadSkillDirectory(userDir, 'bundled')
+  return new SkillRegistry({ ...(workspaceDir === undefined ? {} : { workspaceDir }), bundled }).inlineSkills()
+}
+
+/** Every agent with skills gets `skill_read`, so the model can read a body the prompt block lists by name only. */
+function withSkillRead<Model extends string | ModelSelection>(options: TheoClawAgentOptions<Model>): TheoClawAgentOptions<Model> {
+  const inline = options.skills?.inline ?? []
+  return inline.length === 0 ? options : { ...options, tools: [...(options.tools ?? []), SkillReadTool.create(inline)] }
+}
+
+/** Imported skills, then workspace skills: a workspace skill replaces an imported one of the same name. */
+function mergeSkills(imported: readonly InlineSkill[], workspace: readonly InlineSkill[]): InlineSkill[] {
+  const byName = new Map<string, InlineSkill>()
+  for (const skill of [...imported, ...workspace]) byName.set(skill.name, skill)
+  return [...byName.values()]
 }
 
 /** Create the agent those options describe, through the SDK. */
