@@ -13,6 +13,9 @@ import { resolveToolSettings, type ToolSettings } from '../tools/tool-settings.j
 /** The `serverInfo.name` TheoClaw answers an MCP client with. */
 export const MCP_SERVER_NAME = 'theoclaw'
 
+/** Protocol revisions this endpoint speaks, newest first; a client's own is echoed, else the newest. */
+const MCP_PROTOCOL_VERSIONS: readonly string[] = ['2025-06-18', '2025-03-26', '2024-11-05']
+
 /**
  * `tools` with the state-directory veto in front of each handler. An MCP call skips the SDK's
  * `pre_tool_call` plugins, so the veto the agents get from `pathVetoPlugin` is applied here (OC-67).
@@ -50,7 +53,39 @@ export async function handleMcpRequest(
       { status: 400 },
     )
   }
-  return handleMcpToolsJsonRpc(vetoedTools(tools, settings), MCP_SERVER_NAME, body)
+  if (Array.isArray(body))
+    return Response.json(
+      {
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32600, message: 'Batch requests are not supported' },
+      },
+      { status: 400 },
+    )
+  const message =
+    typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : undefined
+  // A notification (a method, no id) or a client's response (no method) takes no reply: 202, empty body.
+  if (message !== undefined && message.jsonrpc === '2.0' && !('id' in message))
+    return new Response(null, { status: 202 })
+  if (message?.jsonrpc === '2.0' && message.method === 'ping')
+    return Response.json({ jsonrpc: '2.0', id: message.id, result: {} })
+  const reply = await handleMcpToolsJsonRpc(vetoedTools(tools, settings), MCP_SERVER_NAME, body)
+  if (message?.method === 'tools/call') {
+    const done = (await reply.json()) as { result?: { isError?: boolean } }
+    if (done.result !== undefined) done.result.isError ??= false
+    return Response.json(done)
+  }
+  // The handshake reply is the one that names a protocol version: negotiate it against the client's.
+  const asked = (message?.params as { protocolVersion?: unknown } | undefined)?.protocolVersion
+  if (message === undefined || asked === undefined) return reply
+  const envelope = (await reply.json()) as { result?: { protocolVersion?: string } }
+  if (envelope.result?.protocolVersion !== undefined) {
+    envelope.result.protocolVersion =
+      typeof asked === 'string' && MCP_PROTOCOL_VERSIONS.includes(asked)
+        ? asked
+        : MCP_PROTOCOL_VERSIONS[0]
+  }
+  return Response.json(envelope)
 }
 
 export interface McpCommandIo {
