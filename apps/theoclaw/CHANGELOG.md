@@ -17,6 +17,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The parity harness takes `--side openclaw|theoclaw|both` (default `theoclaw`): it installs a pinned OpenClaw into a scratch directory, runs the same `/control` or CLI scenario on the same `openai-chatgpt/` model and stores both verdicts, replies and versions in `results/<id>.json`. Without the subscription login it exits non-zero before starting either product. (#1673)
 - A test runs `theoclaw skills publish`, `search` and `install` against the reference registry and shows the installed skill is offered on the next turn of an open session. (OC-72, #1586)
 - `THEOCLAW_ACK_REACTION=👀` reacts to each inbound message when its turn starts, through the adapter's `react` method; the gateway packages are raised to the releases that ship typing and reactions on Discord, Slack and Matrix (Teams still has no typing indicator). (#1542)
 - WebChat has a language switch in its settings (English or Svenska), using the `@theokit/ui` 1.13.0 i18n layer, so switching to Svenska shows "Inställningar". (#1547)

@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { chatBotEnv, chatSecrets, chatSetup, missingChatVariables } from './chat-platforms.mjs'
+import { missingSubscription, openclawMessage, runOpenclaw } from './openclaw.mjs'
 import { SCENARIOS } from './scenarios.mjs'
 import { cliTransport, controlTransport, webchatTransport } from './transport.mjs'
 
@@ -20,14 +21,23 @@ const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i
 
 /** Every configured secret value in `env` plus `extra`, long enough that masking it cannot eat prose. */
 export function secretValues(env, extra = []) {
-  const values = Object.entries(env).filter(([name, value]) => SECRET_NAME.test(name) && typeof value === 'string' && value.length >= 8).map(([, value]) => value)
+  const values = Object.entries(env)
+    .filter(
+      ([name, value]) => SECRET_NAME.test(name) && typeof value === 'string' && value.length >= 8,
+    )
+    .map(([, value]) => value)
   return [...values, ...extra].filter((value) => value.length >= 8)
 }
 
 /** Replaces every secret value anywhere in a JSON-able value. */
 export function redact(value, secrets) {
   let text = JSON.stringify(value) ?? 'null'
-  for (const secret of secrets) text = text.split(JSON.stringify(secret).slice(1, -1)).join('[redacted]').split(secret).join('[redacted]')
+  for (const secret of secrets)
+    text = text
+      .split(JSON.stringify(secret).slice(1, -1))
+      .join('[redacted]')
+      .split(secret)
+      .join('[redacted]')
   return JSON.parse(text)
 }
 
@@ -45,13 +55,24 @@ function git(args) {
 function versions() {
   const own = JSON.parse(readFileSync(join(APP_DIR, 'package.json'), 'utf8'))
   const dep = (name) => own.dependencies[name]
-  return { theoclaw: own.version, '@theokit/sdk': dep('@theokit/sdk'), '@theokit/gateway': dep('@theokit/gateway'), '@theokit/agents': dep('@theokit/agents'), node: process.version }
+  return {
+    theoclaw: own.version,
+    '@theokit/sdk': dep('@theokit/sdk'),
+    '@theokit/gateway': dep('@theokit/gateway'),
+    '@theokit/agents': dep('@theokit/agents'),
+    node: process.version,
+  }
 }
 
 async function startProcess(home, env) {
   const entry = join(APP_DIR, 'dist', 'main.js')
-  if (!existsSync(entry)) throw new Error(`${entry} is missing: run pnpm --filter theoclaw run build`)
-  const child = spawn(process.execPath, [entry], { cwd: home, env, stdio: ['ignore', 'pipe', 'pipe'] })
+  if (!existsSync(entry))
+    throw new Error(`${entry} is missing: run pnpm --filter theoclaw run build`)
+  const child = spawn(process.execPath, [entry], {
+    cwd: home,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   let output = ''
   child.stdout.on('data', (chunk) => (output += chunk))
   child.stderr.on('data', (chunk) => (output += chunk))
@@ -59,7 +80,8 @@ async function startProcess(home, env) {
   for (;;) {
     const match = output.match(/theoclaw: control plane listening on 127\.0\.0\.1:(\d+)/)
     if (match) return { child, port: Number(match[1]), output: () => output }
-    if (child.exitCode !== null) throw new Error(`theoclaw exited before listening: ${output.slice(-500)}`)
+    if (child.exitCode !== null)
+      throw new Error(`theoclaw exited before listening: ${output.slice(-500)}`)
     if (Date.now() > deadline) {
       child.kill('SIGKILL')
       throw new Error(`no listening line within 20 s: ${output.slice(-500)}`)
@@ -104,7 +126,10 @@ async function buildTransport(scenario, { env, home, childEnv, token, makeTransp
 }
 
 /** Runs a scenario against a built theoclaw; `makeTransport` overrides the real surface (tests). */
-export async function runScenario(scenario, { env = process.env, makeTransport, resultsDir = RESULTS_DIR, now = () => new Date() } = {}) {
+export async function runScenario(
+  scenario,
+  { env = process.env, makeTransport, resultsDir = RESULTS_DIR, now = () => new Date() } = {},
+) {
   const model = env.THEOCLAW_PARITY_MODEL
   if (!model) throw new Error('THEOCLAW_PARITY_MODEL is not set')
   const key = env.THEOKIT_API_KEY ?? env.OPENROUTER_API_KEY
@@ -135,7 +160,10 @@ export async function runScenario(scenario, { env = process.env, makeTransport, 
     running = built.running
     const transport = built.transport
     await transport.send(scenario.send)
-    reply = await transport.awaitReply(new RegExp(scenario.expect.match, scenario.expect.flags), TURN_TIMEOUT_MS)
+    reply = await transport.awaitReply(
+      new RegExp(scenario.expect.match, scenario.expect.flags),
+      TURN_TIMEOUT_MS,
+    )
   } catch (cause) {
     error = cause instanceof Error ? cause.message : String(cause)
   } finally {
@@ -164,21 +192,95 @@ export async function runScenario(scenario, { env = process.env, makeTransport, 
   return result
 }
 
+const SIDES = ['theoclaw', 'openclaw', 'both']
+
+/** Runs the scenario's turn on OpenClaw and merges the outcome into `results/<id>.json` under `openclaw` (#1673). */
+export async function runOpenclawSide(
+  scenario,
+  { env = process.env, runner = runOpenclaw, resultsDir = RESULTS_DIR, both = false } = {},
+) {
+  const model = env.THEOCLAW_PARITY_MODEL
+  let side
+  if (!['control', 'cli'].includes(scenario.surface) || openclawMessage(scenario) === undefined) {
+    side = {
+      verdict: 'skipped',
+      reason: `no OpenClaw equivalent for the ${scenario.surface} surface of ${scenario.id}`,
+      model,
+    }
+  } else {
+    let reply
+    let error
+    try {
+      reply = await runner(scenario, { env })
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : String(cause)
+    }
+    side = {
+      verdict: reply === undefined ? 'broken' : verdictFor(scenario, reply),
+      reply: reply?.text ?? '',
+      version: reply?.version,
+      model,
+      ...(error === undefined ? {} : { error }),
+    }
+  }
+  const path = join(resultsDir, `${scenario.id}.json`)
+  const existing = existsSync(path)
+    ? JSON.parse(readFileSync(path, 'utf8'))
+    : { id: scenario.id, surface: scenario.surface, sent: scenario.send, model }
+  const mine =
+    both || existing.theoclaw !== undefined
+      ? {
+          theoclaw: {
+            verdict: existing.verdict,
+            reply: existing.reply,
+            version: existing.versions?.theoclaw,
+            model: existing.model,
+          },
+        }
+      : {}
+  const result = redact({ ...existing, ...mine, openclaw: side }, secretValues(env))
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`)
+  return result
+}
+
 /** Why a scenario cannot run here, or undefined when it can. */
 export function skipReason(scenario, env = process.env) {
   if (!env.THEOCLAW_PARITY_MODEL) return 'THEOCLAW_PARITY_MODEL is not set'
-  if (!(env.THEOKIT_API_KEY ?? env.OPENROUTER_API_KEY)) return 'no model credential (THEOKIT_API_KEY or OPENROUTER_API_KEY)'
+  if (env.THEOCLAW_PARITY_MODEL.startsWith('openai-chatgpt/')) return chatSkipReason(scenario, env)
+  if (!(env.THEOKIT_API_KEY ?? env.OPENROUTER_API_KEY))
+    return 'no model credential (THEOKIT_API_KEY or OPENROUTER_API_KEY)'
+  return chatSkipReason(scenario, env)
+}
+
+function chatSkipReason(scenario, env) {
   const missingChat = missingChatVariables(scenario.surface, env)
   if (missingChat.length > 0) return `missing ${missingChat.join(', ')}`
-  if (!['control', 'webchat', 'cli', 'matrix', 'mattermost'].includes(scenario.surface)) return `no transport for the ${scenario.surface} surface`
+  if (!['control', 'webchat', 'cli', 'matrix', 'mattermost'].includes(scenario.surface))
+    return `no transport for the ${scenario.surface} surface`
   return undefined
 }
 
-export async function runCli(argv, { out = console, env = process.env, scenarios = SCENARIOS, run = runScenario } = {}) {
+export async function runCli(
+  argv,
+  {
+    out = console,
+    env = process.env,
+    scenarios = SCENARIOS,
+    run = runScenario,
+    runOpenclawTurn = runOpenclawSide,
+  } = {},
+) {
   const args = argv.filter((arg) => arg !== '--')
+  const sideAt = args.indexOf('--side')
+  const side = sideAt >= 0 ? args[sideAt + 1] : 'theoclaw'
+  if (!SIDES.includes(side)) {
+    out.error('usage: parity --side openclaw|theoclaw|both')
+    return 2
+  }
   const idAt = args.indexOf('--id')
   const all = args.includes('--all')
-  if (all === (idAt >= 0)) {
+  if (all === idAt >= 0) {
     out.error('usage: parity --id <OC id> | --all')
     return 2
   }
@@ -186,6 +288,14 @@ export async function runCli(argv, { out = console, env = process.env, scenarios
   if (picked.length === 0) {
     out.error(`no scenario for ${args[idAt + 1]}`)
     return 2
+  }
+  if (side !== 'theoclaw') {
+    // Before either product starts: a missing login is named here, not found halfway through a turn.
+    const missing = missingSubscription(env)
+    if (missing.length > 0) {
+      out.error(`cannot run --side ${side}: ${missing.join('; ')}`)
+      return 2
+    }
   }
   let code = 0
   for (const scenario of picked) {
@@ -195,9 +305,23 @@ export async function runCli(argv, { out = console, env = process.env, scenarios
       if (!all) code = 2
       continue
     }
+    code = Math.max(code, await runSides(scenario, side, { env, out, run, runOpenclawTurn }))
+  }
+  return code
+}
+
+/** Runs one scenario on the chosen side(s); 1 when a verdict is not `works`. */
+async function runSides(scenario, side, { env, out, run, runOpenclawTurn }) {
+  let code = 0
+  if (side !== 'openclaw') {
     const result = await run(scenario, { env })
     out.log(`${scenario.id} (${scenario.surface}): ${result.verdict}`)
     if (result.verdict !== 'works') code = 1
+  }
+  if (side !== 'theoclaw') {
+    const result = await runOpenclawTurn(scenario, { env, both: side === 'both' })
+    out.log(`${scenario.id} (${scenario.surface}) on openclaw: ${result.openclaw.verdict}`)
+    if (!['works', 'skipped'].includes(result.openclaw.verdict)) code = 1
   }
   return code
 }
