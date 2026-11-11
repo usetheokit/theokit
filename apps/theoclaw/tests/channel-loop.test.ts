@@ -246,3 +246,42 @@ describe('maskSecrets', () => {
     expect(maskSecrets('plain line', [''])).toBe('plain line')
   })
 })
+
+describe('startChannelLoop retry', () => {
+  it('keeps retrying a platform that is down and reports it connected once it is up', async () => {
+    let up = false
+    const lines: string[] = []
+    const adapter = new FakeAdapter('matrix', { connect: async () => up })
+    const loop = startChannelLoop({
+      platforms: [{ platform: 'matrix', build: () => adapter }],
+      handler: async () => undefined,
+      secrets: [],
+      write: (line) => lines.push(line),
+      retry: { initialDelayMs: 5, maxDelayMs: 10, maxAttempts: 50 },
+    })
+    await loop.ready
+    expect(loop.failed).toEqual(['matrix'])
+    up = true
+    await waitFor(() => loop.started.has('matrix'), 2000, 'matrix to connect')
+    expect(loop.failed).toEqual([])
+    expect(lines.some((line) => line.startsWith('matrix: retry 1/50'))).toBe(true)
+    expect(lines).toContain('matrix: connected')
+    await loop.stopAll()
+  })
+
+  it('stops retrying when the loop is stopped', async () => {
+    const adapter = new FakeAdapter('matrix', { connect: async () => false })
+    const loop = startChannelLoop({
+      platforms: [{ platform: 'matrix', build: () => adapter }],
+      handler: async () => undefined,
+      secrets: [],
+      write: () => undefined,
+      retry: { initialDelayMs: 5, maxDelayMs: 5, maxAttempts: 50 },
+    })
+    await loop.ready
+    await loop.stopAll()
+    const seen = adapter.connects
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    expect(adapter.connects).toBe(seen)
+  })
+})
