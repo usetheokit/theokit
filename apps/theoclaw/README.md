@@ -1043,6 +1043,20 @@ apply. Audio failures fall back to text. See [voice verification](parity/voice-v
 for limits and the outstanding real-account recording check. Continuous talk and
 wake word are tracked separately in B-722.
 
+### Parity harness: Matrix and Mattermost
+
+`pnpm --filter theoclaw parity -- --id matrix-dm-pong` (or `mattermost-dm-pong`) sends a DM as a
+scripted human account and reads the bot's reply. Credentials come only from the environment, and
+the harness masks them in its output and result files. Without a platform's variables, `--all`
+skips its scenarios, names them and exits zero.
+
+- Matrix (a local Synapse; make both users with the shared-secret admin API,
+  `/_synapse/admin/v1/register`): `THEOCLAW_PARITY_MATRIX_HOMESERVER_URL`,
+  `THEOCLAW_PARITY_MATRIX_HUMAN_USER_ID`, `THEOCLAW_PARITY_MATRIX_HUMAN_TOKEN`,
+  `THEOCLAW_PARITY_MATRIX_BOT_USER_ID`, `THEOCLAW_PARITY_MATRIX_BOT_TOKEN`. The harness joins the bot to the DM room by API.
+- Mattermost: `THEOCLAW_PARITY_MATTERMOST_BASE_URL`, `THEOCLAW_PARITY_MATTERMOST_HUMAN_TOKEN`
+  (a personal access token) and `THEOCLAW_PARITY_MATTERMOST_BOT_TOKEN`.
+
 ### Answering phone calls (Twilio Voice)
 
 Setting `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and `THEOCLAW_VOICE_CALL_PUBLIC_URL` (the exact URL
