@@ -59,7 +59,7 @@ describe('postgres job store', () => {
   it('keeps a job as a row that survives a restart', async () => {
     const first = await (
       await import('../src/scheduler/postgres-job-store.js')
-    ).openPostgresJobStore(dsn, fakePool, new StorageManager())
+    ).openPostgresJobStore(dsn, { makePool: fakePool, manager: new StorageManager() })
     await first.store.put(job)
     expect(table.size).toBe(1)
     await first.store.setPreviousOutput('j1', 'hello')
@@ -67,7 +67,7 @@ describe('postgres job store', () => {
     vi.resetModules() // a new process: a new storage manager, the same database
     const second = await (
       await import('../src/scheduler/postgres-job-store.js')
-    ).openPostgresJobStore(dsn, fakePool, new StorageManager())
+    ).openPostgresJobStore(dsn, { makePool: fakePool, manager: new StorageManager() })
     expect(second.store.get('j1')).toMatchObject({ prompt: 'say hi', previousOutput: 'hello' })
     expect(await second.store.remove('j1')).toBe(true)
     expect(table.size).toBe(0)
@@ -76,11 +76,10 @@ describe('postgres job store', () => {
   it('refuses to start, without falling back to the file, when the database fails', async () => {
     const { openPostgresJobStore } = await import('../src/scheduler/postgres-job-store.js')
     await expect(
-      openPostgresJobStore(
-        dsn,
-        () => ({ query: () => Promise.reject(new Error('ECONNREFUSED')) }),
-        new StorageManager(),
-      ),
+      openPostgresJobStore(dsn, {
+        makePool: () => ({ query: () => Promise.reject(new Error('ECONNREFUSED')) }),
+        manager: new StorageManager(),
+      }),
     ).rejects.toThrow(/unreachable.*ECONNREFUSED/)
   })
 })

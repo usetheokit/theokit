@@ -6,19 +6,38 @@ import type { JobStore, ScheduledJob } from '@theokit/agents/tools'
 import { getStorageManager, type StorageManager } from 'theokit/server/storage'
 import type { PoolLike } from 'theokit/server/storage'
 
+import { TheoClawConfigError } from '../control-plane/errors.js'
+
 /** `THEOCLAW_DATABASE`: unset, `sqlite` or `files` keep the files; a `postgres://` URL selects PostgreSQL. */
 export type DatabaseSetting =
   | { readonly engine: 'files' }
   | { readonly engine: 'postgres'; readonly dsn: string }
 
-export function readDatabaseSetting(
-  env: Readonly<Record<string, string | undefined>>,
-): DatabaseSetting {
+export function readDatabaseSetting(env: Readonly<Record<string, string | undefined>>): DatabaseSetting {
   const raw = env.THEOCLAW_DATABASE?.trim()
-  if (raw === undefined || raw === '' || raw === 'sqlite' || raw === 'files')
-    return { engine: 'files' }
-  if (/^postgres(ql)?:\/\//i.test(raw)) return { engine: 'postgres', dsn: raw }
-  throw new Error('THEOCLAW_DATABASE must be sqlite, files, or a postgres:// URL')
+  if (raw === undefined || raw === '' || raw === 'sqlite' || raw === 'files') return { engine: 'files' }
+  if (/^postgres(ql)?:\/\//i.test(raw)) {
+    try {
+      new URL(raw)
+    } catch {
+      throw new TheoClawConfigError('THEOCLAW_DATABASE is not a valid postgres:// URL', { variable: 'THEOCLAW_DATABASE' })
+    }
+    return { engine: 'postgres', dsn: raw }
+  }
+  throw new TheoClawConfigError('THEOCLAW_DATABASE must be sqlite, files, or a postgres:// URL', { variable: 'THEOCLAW_DATABASE' })
+}
+
+/** The values of the setting that must never reach a log line: the whole URL and its password. */
+export function databaseSecrets(setting: DatabaseSetting): string[] {
+  if (setting.engine !== 'postgres') return []
+  const password = new URL(setting.dsn).password
+  return [setting.dsn, ...(password === '' ? [] : [password, decodeURIComponent(password)])]
+}
+
+/** Test seams: the pool the store talks to and the storage manager that owns it. */
+export interface DatabaseDeps {
+  readonly makePool?: (config: Record<string, unknown>) => PoolLike
+  readonly manager?: StorageManager
 }
 
 const TABLE = 'theoclaw_schedules'
@@ -57,9 +76,10 @@ export interface OpenedScheduleStore {
 
 export async function openPostgresJobStore(
   dsn: string,
-  makePool: (config: Record<string, unknown>) => PoolLike = lazyPgPool,
-  manager: StorageManager = getStorageManager(),
+  deps: DatabaseDeps = {},
 ): Promise<OpenedScheduleStore> {
+  const makePool = deps.makePool ?? lazyPgPool
+  const manager = deps.manager ?? getStorageManager()
   const url = new URL(dsn)
   const database = decodeURIComponent(url.pathname.replace(/^\//, '')) || 'postgres'
   const sslmode = url.searchParams.get('sslmode')

@@ -23,8 +23,6 @@ import { type ChannelLoop, maskSecrets } from '../channels/channel-loop.js'
 import { type AgentToolOptions, workerToolOptions } from '../tools/tool-registry.js'
 import type { ToolSettings } from '../tools/tool-settings.js'
 
-import { type OpenedScheduleStore, openPostgresJobStore, readDatabaseSetting } from './postgres-job-store.js'
-
 /** Where the durable jobs are kept: beside `sessions.json`, in the directory the start makes with 0700. */
 export function scheduleFile(workspace: string): string {
   return join(workspace, '.theoclaw', 'schedules.json')
@@ -36,19 +34,6 @@ export function scheduleFile(workspace: string): string {
  */
 export function loadScheduleStore(workspace: string): JobStore {
   return createJobStore(scheduleFile(workspace))
-}
-
-/**
- * The job store the start uses: the file, or PostgreSQL when `THEOCLAW_DATABASE` is a postgres URL
- * (#1565). A database that cannot be opened refuses the start; it never falls back to the file.
- */
-export function openScheduleStore(
-  workspace: string,
-  env: Readonly<Record<string, string | undefined>>,
-): OpenedScheduleStore | Promise<OpenedScheduleStore> {
-  const setting = readDatabaseSetting(env)
-  if (setting.engine === 'postgres') return openPostgresJobStore(setting.dsn)
-  return { store: loadScheduleStore(workspace), close: () => Promise.resolve() }
 }
 
 /** Builds one agent from tool options: the start's worker factory. */
