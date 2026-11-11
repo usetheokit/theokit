@@ -87,3 +87,21 @@ describe('chat platform transports', () => {
     expect(lines.join('\n')).not.toContain(USER_TOKEN)
   })
 })
+
+describe('a bot that never replies', () => {
+  it('returns an empty, unmatched reply when the deadline passes', async () => {
+    const server = createServer((req, res) => {
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify(req.url.includes('/posts?') ? { posts: {} } : { id: 'x', create_at: 1 }))
+    })
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const base = `http://127.0.0.1:${server.address().port}`
+      const t = mattermostTransport({ baseUrl: base, userId: 'me', userToken: 'tok-aaaaaaaa', botUserId: 'bot' })
+      await t.send({ message: 'x' })
+      expect(await t.awaitReply(/pong/, 1500)).toMatchObject({ text: '', matched: false })
+    } finally {
+      server.close()
+    }
+  })
+})

@@ -1040,6 +1040,8 @@ Telegram voice notes can receive spoken replies when
 model configuration. Audio is transcribed by `gpt-4o-mini-transcribe`; replies use
 `gpt-4o-mini-tts` with an AI-generated voice caption. Owner and group rules still
 apply. Audio failures fall back to text. See [voice verification](parity/voice-verification.md)
+for limits and the outstanding real-account recording check. Continuous talk and
+wake word are tracked separately in B-722.
 
 ### Parity harness: Matrix and Mattermost
 
@@ -1049,8 +1051,6 @@ apply. Audio failures fall back to text. See [voice verification](parity/voice-v
 - Mattermost: `THEOCLAW_PARITY_MATTERMOST_BASE_URL`, `_USER_ID`, `_USER_TOKEN` (a personal access token), `_BOT_USER_ID`, `_BOT_TOKEN`.
 
 Also set `THEOCLAW_PARITY_MODEL` and a model key, as for the other scenarios.
-for limits and the outstanding real-account recording check. Continuous talk and
-wake word are tracked separately in B-722.
 
 ### Answering phone calls (Twilio Voice)
 
