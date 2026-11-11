@@ -719,7 +719,8 @@ const reply = await client.chat.completions.create({
 - `GET /v1/models` lists `THEOCLAW_MODEL`; `POST /v1/chat/completions` runs one TheoClaw turn and
   answers its text as one `chat.completion` choice. A request naming another model answers 404
   `model_not_found`.
-- Streaming is not supported: `stream: true` answers 400 `stream_unsupported`. Other OpenAI
+- `stream: true` answers `chat.completion.chunk` server-sent events ending in `data: [DONE]`; the
+  last chunk and a non-stream body carry `usage` (`prompt_tokens`, `completion_tokens`). Other OpenAI
   parameters (`temperature`, `max_tokens`, ...) are accepted and ignored. Only text content parts
   are read.
 - The instance keeps no conversation between requests: each request's `messages` are the whole
