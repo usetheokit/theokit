@@ -45,6 +45,7 @@ const PLATFORM_VARIABLES = {
     audience: 'THEOCLAW_GOOGLE_CHAT_AUDIENCE',
   },
   signal: { account: 'THEOCLAW_SIGNAL_ACCOUNT' },
+  imessage: { enabled: 'THEOCLAW_IMESSAGE_ENABLED' },
   tlon_urbit: {
     shipUrl: 'THEOCLAW_TLON_URBIT_SHIP_URL',
     ship: 'THEOCLAW_TLON_URBIT_SHIP',
@@ -70,6 +71,11 @@ type PlatformVariables = typeof PLATFORM_VARIABLES
 /** Optional: the signal-cli binary; the adapter looks `signal-cli` up on `PATH` when unset. */
 export const SIGNAL_CLI_PATH_VARIABLE = 'THEOCLAW_SIGNAL_CLI_PATH'
 
+/** Optional: the `imsg` binary, or a script running `imsg rpc` on a Mac over ssh; `imsg` on `PATH` when unset. */
+export const IMESSAGE_CLI_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_CLI_PATH'
+/** Optional: the Messages database `imsg` reads. */
+export const IMESSAGE_DB_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_DB_PATH'
+
 /** The environment variable that picks WhatsApp's backend: `cloud` (the default) or `baileys` (QR-linked WhatsApp Web). */
 export const WHATSAPP_BACKEND_VARIABLE = 'THEOCLAW_WHATSAPP_BACKEND'
 /** Where the Baileys pairing is kept; defaults to `whatsapp-session` under `THEOCLAW_STATE_DIR`. */
@@ -87,7 +93,9 @@ export type PlatformSettings<P extends SupportedPlatform> = P extends 'whatsapp'
   ? CloudSettings<'whatsapp'> | WhatsAppBaileysSettings
   : P extends 'signal'
     ? CloudSettings<'signal'> & { readonly signalCliPath?: string }
-    : CloudSettings<P>
+    : P extends 'imessage'
+      ? { readonly cliPath?: string; readonly dbPath?: string }
+      : CloudSettings<P>
 
 /** The Baileys settings when WhatsApp is set up that way, narrowing the union. */
 export function isBaileys(settings: PlatformSettings<'whatsapp'>): settings is WhatsAppBaileysSettings {
@@ -145,7 +153,10 @@ export const PLATFORMS: readonly PlatformSpec[] = (Object.keys(PLATFORM_VARIABLE
  * unset, empty or only whitespace counts as missing (`export X=` in a shell yields `""`); a value
  * is passed on trimmed, so a trailing newline from an environment file never reaches an adapter.
  */
-export function resolvePlatforms(env: Readonly<Record<string, string | undefined>>): ResolvedPlatforms {
+export function resolvePlatforms(
+  env: Readonly<Record<string, string | undefined>>,
+  os: string = process.platform,
+): ResolvedPlatforms {
   const configured: ConfiguredPlatform[] = []
   const skipped: SkippedPlatform[] = []
   const secrets: string[] = []
@@ -163,6 +174,22 @@ export function resolvePlatforms(env: Readonly<Record<string, string | undefined
     if (missing.length > 0) {
       skipped.push({ platform, missing })
       continue
+    }
+    if (platform === 'imessage') {
+      // iMessage needs Messages signed in on a Mac; refuse it elsewhere rather than loop on a missing `imsg`.
+      if (os !== 'darwin') {
+        throw new TheoClawConfigError(
+          `iMessage runs only on macOS with Messages signed in (this is ${os}); unset THEOCLAW_IMESSAGE_ENABLED`,
+          { variable: 'THEOCLAW_IMESSAGE_ENABLED' },
+        )
+      }
+      const cliPath = (env[IMESSAGE_CLI_PATH_VARIABLE] ?? '').trim()
+      const dbPath = (env[IMESSAGE_DB_PATH_VARIABLE] ?? '').trim()
+      configured.push({
+        platform,
+        settings: { ...(cliPath === '' ? {} : { cliPath }), ...(dbPath === '' ? {} : { dbPath }) },
+      })
+      continue // the enabling flag is no secret; masking it would blank every "1" in the output
     }
     // Safe: `settings` has exactly the keys of this platform's row, which `PlatformSettings<P>`
     // is derived from; TypeScript cannot pair a loop variable of a union with its own row.

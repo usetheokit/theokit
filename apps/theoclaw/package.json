@@ -47,6 +47,7 @@
     "@theokit/gateway-discord": "0.3.0",
     "@theokit/gateway-email": "0.3.1",
     "@theokit/gateway-google-chat": "0.1.0",
+    "@theokit/gateway-imessage": "0.1.0",
     "@theokit/gateway-line": "0.4.0",
     "@theokit/gateway-matrix": "0.3.0",
     "@theokit/gateway-mattermost": "0.3.1",

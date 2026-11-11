@@ -1,7 +1,7 @@
 # TheoClaw
 
 A personal AI assistant that lives where its user already writes: one agent answering on Telegram,
-Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams, Google Chat, Signal and SMS.
+Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams, Google Chat, Signal, iMessage and SMS.
 
 ## Install
 
@@ -202,6 +202,7 @@ otherwise startup skips it and prints `<platform>: not configured (missing ...)`
 | Microsoft Teams | `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_TENANT_ID` | Bot Framework webhook; needs a work tenant |
 | Google Chat | `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` (path of the service account's JSON key), `GOOGLE_CHAT_AUDIENCE` (the exact HTTP endpoint URL set in the Chat app) | webhook `/webhooks/google_chat`; spaces and DMs |
 | Signal | `SIGNAL_ACCOUNT` (the linked number, E.164); optional `SIGNAL_CLI_PATH` (default: `signal-cli` on `PATH`). Owners are written `signal:+<number>` | none (a `signal-cli jsonRpc` child) |
+| iMessage | `IMESSAGE_ENABLED=1`; optional `IMESSAGE_CLI_PATH` (default: `imsg` on `PATH`, or a script running `imsg rpc` over ssh), `IMESSAGE_DB_PATH`. macOS only with Messages signed in; refused on other systems. Owners are written `imessage:<handle>` | none (an `imsg rpc` child) |
 | SMS (Twilio) | `SMS_TWILIO_ACCOUNT_SID`, `SMS_TWILIO_AUTH_TOKEN`, `SMS_TWILIO_FROM_NUMBER`, `SMS_PUBLIC_URL` | webhook `/webhooks/sms` |
 
 Names in the table omit the `THEOCLAW_` prefix.

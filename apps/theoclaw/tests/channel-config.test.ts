@@ -85,7 +85,7 @@ describe('resolvePlatforms', () => {
     expect(JSON.stringify(resolved.skipped)).not.toContain('bot-token-value')
   })
 
-  it('lists all thirteen platforms', () => {
+  it('lists all fourteen platforms', () => {
     expect(PLATFORMS.map((spec) => spec.platform)).toEqual([
       'telegram',
       'discord',
@@ -98,6 +98,7 @@ describe('resolvePlatforms', () => {
       'teams',
       'google_chat',
       'signal',
+      'imessage',
       'tlon_urbit',
       'sms',
     ])
@@ -181,5 +182,18 @@ describe('signal settings', () => {
       account: '+5511999990000',
       signalCliPath: '/opt/signal-cli',
     })
+  })
+})
+
+describe('imessage settings', () => {
+  it('runs on macOS when enabled, with optional imsg path and database', () => {
+    const on = resolvePlatforms({ THEOCLAW_IMESSAGE_ENABLED: '1', THEOCLAW_IMESSAGE_CLI_PATH: '/opt/imsg' }, 'darwin')
+    expect(on.configured.find((p) => p.platform === 'imessage')?.settings).toEqual({ cliPath: '/opt/imsg' })
+    expect(on.secrets).toEqual([])
+  })
+
+  it('is refused on other systems, and absent when not enabled', () => {
+    expect(() => resolvePlatforms({ THEOCLAW_IMESSAGE_ENABLED: '1' }, 'linux')).toThrow(/macOS/)
+    expect(resolvePlatforms({}, 'linux').skipped.some((s) => s.platform === 'imessage')).toBe(true)
   })
 })

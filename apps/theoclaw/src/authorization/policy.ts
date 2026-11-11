@@ -53,6 +53,8 @@ const UNAUTHENTICATED_BECAUSE = {
   google_chat: null,
   // signal-cli authenticates the sender's number; messages carry it.
   signal: null,
+  // Messages is signed in on the owner's Mac; messages carry the sender's handle.
+  imessage: null,
   // The ship name is proven by the Eyre session the adapter holds; messages carry the author's @p.
   tlon_urbit: null,
   // The Twilio signature proves the request came from Twilio, not who sent the text.
