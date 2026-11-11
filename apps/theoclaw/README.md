@@ -277,6 +277,15 @@ with the final status (`completed`, `budget_limited`, `failed`, `paused` or `blo
 the last answer. A bare `/goal` answers a usage line and runs nothing. In a broadcast group the goal
 runs in the sender's own session and its answer is not sent to the other members.
 
+### Compaction
+
+Sending `/compact` summarizes the conversation so far with the SDK's `Agent.compact` and answers
+one line, `⚙️ Compacted (<before> → <after> tokens)`; the next turn recalls the summary. Any text
+after `/compact` is accepted but the SDK's summarizer takes no instructions. `THEOCLAW_COMPACT_AT`
+(a positive whole number of tokens, unset: off) compacts a chat session on its own after a turn
+whose input reached that many tokens. A session without a saved transcript answers that it could
+not compact.
+
 ### LAN discovery
 
 A TheoClaw bound to a LAN address (`THEOCLAW_HOST` with `THEOCLAW_PUBLIC_BIND=yes`) announces itself

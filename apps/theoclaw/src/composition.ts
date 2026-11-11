@@ -23,6 +23,7 @@ import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
+import { readCompactSettings, type CompactSettings } from './channels/compact-command.js'
 import { createAcpSessions, type AcpSessions } from './channels/acp-command.js'
 import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
@@ -120,6 +121,8 @@ export interface TheoClawOptions {
   readonly sessionSettings?: SessionSettings
   /** Defaults to the ten real adapters; tests pass fakes. */
   readonly builders?: (configured: readonly ConfiguredPlatform[], options: AdapterBuildOptions) => PlatformBuild[]
+  /** Compacts a session's transcript for `/compact`; default `Agent.compact`. Tests pass a fake. */
+  readonly compact?: CompactSettings['run']
   /** The ACP sessions `/acp` manages (B-685); `startTheoClaw` builds them from the external tools file. */
   readonly acp?: AcpSessions
   readonly write: (line: string) => void
@@ -266,6 +269,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
         write: maskedWrite,
       },
       goal: events.goal,
+      compact: readCompactSettings(options.env, maskedWrite, options.compact),
       typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
     }), configuredVoiceReplies(options.env)),
     hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
