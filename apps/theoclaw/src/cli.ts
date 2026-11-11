@@ -18,6 +18,7 @@ import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
 import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
+import { pathCommand } from './ops/oc-path.js'
 import { clawsCommand } from './routing/claws.js'
 import { triageCommand } from './ops/triage.js'
 import { statusCommand } from './ops/status.js'
@@ -79,6 +80,8 @@ const USAGE = `usage: theoclaw <command>
                             write a sanitized diagnostics archive (.tar.gz) and a prompt for a coding agent; no secret value is written
   theoclaw claws add|update <dir> | remove <id> | list
                             install, replace, remove or list packaged agents (claw.json, persona files, skills)
+  theoclaw path resolve|find|validate <oc://agent/file[#fragment]> | set <oc://...> <value> [--dry-run]
+                            read or edit a workspace Markdown section (#Rules) or JSON leaf (#a.b.0)
   theoclaw logs [--lines <n>] [--file <path>]
                             the last log lines (file, launchd log or user journal), secrets masked
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
@@ -275,6 +278,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   logs: (args, io) => logsCommand(args, io, io.runner),
   triage: (args, io) => triageCommand(args, io),
   claws: (args, io) => clawsCommand(args, io),
+  path: (args, io) => pathCommand(args, io),
   whatsapp: whatsappCommand,
   tui: tuiCommand,
   mcp: async (args, io) => {
