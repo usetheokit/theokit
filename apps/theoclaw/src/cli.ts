@@ -3,7 +3,7 @@ import './runtime.js'
 import { spawn } from 'node:child_process'
 import { readFileSync, realpathSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
 import { isSea } from 'node:sea'
 import { fileURLToPath } from 'node:url'
@@ -44,6 +44,7 @@ import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
 import { sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
+import { PublishError, publishSkill } from './skills/publish.js'
 
 /**
  * The `theoclaw` command (B-374, plan D2). A second leaf entry beside `src/main.ts`: it never
@@ -118,6 +119,8 @@ const USAGE = `usage: theoclaw <command>
                             list the stored chat transcripts or print one's messages (an id prefix is enough)
   theoclaw meetings join <meet link> [--minutes <n>] | list | show <id>
                             join a Google Meet as a guest in headless Chrome and keep the captions as notes; list or print the notes
+  theoclaw skills publish <dir>
+                            upload a skill folder (SKILL.md with name, description, version) to THEOCLAW_SKILLS_REGISTRY with THEOCLAW_SKILLS_TOKEN
   theoclaw worker pair <control url> <setup code> [--name <n>] [--inference worker|gateway] | run <message> | status
                             pair this device as a worker; with inference worker its model calls run here and log in worker.log
   theoclaw --help           this text
@@ -343,6 +346,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   triage: (args, io) => triageCommand(args, io),
   claws: (args, io) => clawsCommand(args, io),
   meetings: (args, io) => meetingsCommand(args, io),
+  skills: async (args, io) => {
+    const [verb, dir, ...extra] = args
+    if (verb !== 'publish' || dir === undefined || dir.startsWith('-') || extra.length > 0)
+      throw new UsageError('theoclaw skills: expected publish <dir>')
+    try {
+      io.stdout.write(`${await publishSkill(resolve(io.cwd, dir), { env: io.env })}\n`)
+      return 0
+    } catch (error) {
+      if (!(error instanceof PublishError)) throw error
+      io.stderr.write(`theoclaw: ${error.message}\n`)
+      return 1
+    }
+  },
   worker: async (args, io) => (await import('./worker/worker.js')).workerCommand(args, io),
   path: (args, io) => pathCommand(args, io),
   whatsapp: whatsappCommand,
