@@ -45,3 +45,26 @@ describe('agent routing in the chat path', () => {
     expect(() => readAgentRouter({ THEOCLAW_ROUTES: 'matrix:@p=ghost' }, '/w')).toThrow(/unconfigured agent/)
   })
 })
+
+describe("/think (OC-48)", () => {
+  it("rebuilds the session agent with the new level, over the instance-wide one", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "theoclaw-think-"));
+    const opened: { id: string; thinking: unknown }[] = [];
+    let disposed = 0;
+    const { withAgent, think } = chatSessions({
+      env: { THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k", THEOCLAW_WORKSPACE: dir, THEOCLAW_THINKING: "low" },
+      write: () => undefined,
+      getOrCreate: async (id, options) => {
+        opened.push({ id, thinking: (options as { thinking?: unknown }).thinking });
+        return { send: () => { throw new Error("no turn"); }, dispose: async () => void (disposed += 1) } as never;
+      },
+    });
+    const event = { platform: "telegram", sender: { id: "u" }, channel: { type: "dm", id: "u" } } as unknown as MessageEvent;
+    await withAgent(event, (lease) => lease.release());
+    think(event, "high");
+    await withAgent(event, (lease) => lease.release());
+    expect(opened.map((o) => o.thinking)).toEqual(["low", "high"]);
+    expect(opened[1]?.id).toBe(opened[0]?.id);
+    expect(disposed).toBe(1);
+  });
+});

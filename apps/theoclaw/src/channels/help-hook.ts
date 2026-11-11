@@ -11,7 +11,7 @@ export const HELP_TEXT = [
   '/help - this list',
   '/new, /reset - start a new conversation',
   '/goal <what you want done> - run a goal to its end',
-  '/think off|low|medium|high - the thinking level of this session',
+  '/think off|low|medium|high - the thinking level of this session (only these four)',
   '/compact - summarize the conversation so far to free context (THEOCLAW_COMPACT_AT does it on its own)',
   '/usage off|tokens|cost|full - the usage footer of replies',
   '/activation mention|always - how a group activates the bot (groups only)',

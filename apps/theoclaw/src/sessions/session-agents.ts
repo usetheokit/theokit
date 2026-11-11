@@ -190,10 +190,8 @@ export class SessionAgents {
    * same id (same generation, same transcript) with the options read then; `/think` uses it.
    */
   rebuild(event: MessageEvent): void {
-    const id = agentIdFor(
-      this.deps.router.resolveAgentId(event),
-      this.deps.generations.current(this.deps.router.resolveAgentId(event)),
-    )
+    const key = this.deps.router.resolveAgentId(event)
+    const id = agentIdFor(key, this.deps.generations.current(key))
     const entry = this.#entries.get(id)
     if (entry === undefined) return
     entry.retired = true
@@ -201,12 +199,7 @@ export class SessionAgents {
   }
 
   #disposeIfRetired(id: string, entry: Entry): void {
-    if (
-      entry.retired &&
-      entry.leases === 0 &&
-      entry.agent !== undefined &&
-      entry.disposing === undefined
-    ) {
+    if (entry.retired && entry.leases === 0 && entry.agent !== undefined && entry.disposing === undefined) {
       void this.#dispose(id, entry, entry.agent)
     }
   }
@@ -222,10 +215,7 @@ export class SessionAgents {
     clearInterval(this.#sweep)
     await this.#waitForReleases()
     for (const entry of this.#entries.values()) {
-      if (entry.leases > 0)
-        this.deps.write(
-          `theoclaw: stopping with a turn still running in session ${entry.sessionKey}`,
-        )
+      if (entry.leases > 0) this.deps.write(`theoclaw: stopping with a turn still running in session ${entry.sessionKey}`)
     }
     await Promise.all(
       [...this.#entries].map(async ([id, entry]) => {
@@ -264,16 +254,14 @@ export class SessionAgents {
   #idleEntries(): [string, Entry, SessionAgent][] {
     const idle: [string, Entry, SessionAgent][] = []
     for (const [id, entry] of this.#entries) {
-      if (entry.agent !== undefined && entry.disposing === undefined && entry.leases === 0)
-        idle.push([id, entry, entry.agent])
+      if (entry.agent !== undefined && entry.disposing === undefined && entry.leases === 0) idle.push([id, entry, entry.agent])
     }
     return idle
   }
 
   #openCount(): number {
     let open = 0
-    for (const entry of this.#entries.values())
-      if (entry.agent !== undefined && entry.disposing === undefined) open += 1
+    for (const entry of this.#entries.values()) if (entry.agent !== undefined && entry.disposing === undefined) open += 1
     return open
   }
 
@@ -301,9 +289,7 @@ export class SessionAgents {
       this.#warnedAboveBound = false
     } else if (!this.#warnedAboveBound) {
       this.#warnedAboveBound = true
-      this.deps.write(
-        `theoclaw: ${open} chat sessions are open, above THEOCLAW_MAX_OPEN_SESSIONS=${max}, every one with a turn in flight`,
-      )
+      this.deps.write(`theoclaw: ${open} chat sessions are open, above THEOCLAW_MAX_OPEN_SESSIONS=${max}, every one with a turn in flight`)
     }
   }
 
@@ -312,9 +298,7 @@ export class SessionAgents {
       try {
         await agent.dispose()
       } catch (error) {
-        this.deps.write(
-          `theoclaw: disposing the agent of session ${entry.sessionKey} failed: ${describeError(error)}`,
-        )
+        this.deps.write(`theoclaw: disposing the agent of session ${entry.sessionKey} failed: ${describeError(error)}`)
       } finally {
         if (this.#entries.get(id) === entry) this.#entries.delete(id)
       }

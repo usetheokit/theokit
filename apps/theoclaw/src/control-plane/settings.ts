@@ -33,10 +33,7 @@ export function resolveModelKey(env: BindEnvironment): string | undefined {
  * The model and its key, or the refusal naming what is missing. Shared by the start and the agent
  * factory, so both refuse with the same words.
  */
-export function requireModel(env: BindEnvironment): {
-  readonly model: string
-  readonly modelKey: string
-} {
+export function requireModel(env: BindEnvironment): { readonly model: string; readonly modelKey: string } {
   const model = nonBlank(env.THEOCLAW_MODEL)
   if (model === undefined) {
     throw new TheoClawConfigError('THEOCLAW_MODEL must name the model TheoClaw runs', {
@@ -48,9 +45,7 @@ export function requireModel(env: BindEnvironment): {
   if (custom !== undefined) {
     const customKey = nonBlank(env[custom.keyEnv])
     if (customKey === undefined) {
-      throw new TheoClawConfigError(`set ${custom.keyEnv} to the ${custom.name} provider key`, {
-        variable: custom.keyEnv,
-      })
+      throw new TheoClawConfigError(`set ${custom.keyEnv} to the ${custom.name} provider key`, { variable: custom.keyEnv })
     }
     return { model, modelKey: customKey }
   }
@@ -75,10 +70,7 @@ export function readControlPlaneSettings(env: BindEnvironment): ControlPlaneSett
   try {
     parseThinkingLevel(env.THEOCLAW_THINKING)
   } catch (error) {
-    throw new TheoClawConfigError(
-      error instanceof Error ? error.message : 'THEOCLAW_THINKING is invalid',
-      { variable: 'THEOCLAW_THINKING' },
-    )
+    throw new TheoClawConfigError(error instanceof Error ? error.message : 'THEOCLAW_THINKING is invalid', { variable: 'THEOCLAW_THINKING' })
   }
   const port = parsePort(env.THEOCLAW_PORT)
   const controlToken = readBearerToken(env, 'THEOCLAW_CONTROL_TOKEN')

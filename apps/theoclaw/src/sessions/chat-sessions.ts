@@ -10,20 +10,10 @@ import type { AgentOptions, Plugin } from '@theokit/sdk'
 import { isAuthenticatedSender, senderKey } from '../authorization/policy.js'
 import { OWNER_SCOPE } from '../memory/memory-store.js'
 import { memoryBackend } from '../memory/backend.js'
-import {
-  createMemory,
-  type MemoryWiring,
-  memoryEnabled,
-  reviewerOptions,
-} from '../memory/wiring.js'
+import { createMemory, type MemoryWiring, memoryEnabled, reviewerOptions } from '../memory/wiring.js'
 import { createContainer } from '../agent-container.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import {
-  createChannelAgentFactory,
-  isIncognito,
-  keepsTranscripts,
-  sessionAgentOptions,
-} from '../control-plane/agent-factory.js'
+import { createChannelAgentFactory, isIncognito, keepsTranscripts, sessionAgentOptions } from '../control-plane/agent-factory.js'
 import { SessionRouter } from '@theokit/gateway'
 import { MAIN_AGENT, readAgentRouter } from '../routing/routing-env.js'
 import { Generations } from './generations.js'
@@ -49,10 +39,7 @@ export function sessionsFile(workspace: string): string {
 }
 
 /** The chat path's request boundary: it holds the request's event and leases that session's agent. */
-export type ChatBoundary = <R>(
-  event: MessageEvent,
-  work: (lease: SessionLease) => R | Promise<R>,
-) => Promise<R>
+export type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
 
 /**
  * The chat path's sessions and the request boundary over them. `@theokit/di-agent`'s factory takes
@@ -73,38 +60,29 @@ export function chatSessions(options: ChatSessionsOptions): {
   const agentRouter = readAgentRouter(options.env, settings.workspace)
   const baseRouter = createSessionRouter(settings)
   // A routed agent keeps its own sessions even where the DM scope would share one with the main agent.
-  const router =
-    agentRouter === undefined
-      ? baseRouter
-      : new SessionRouter((event) => {
-          const agent = agentRouter.route({ platform: event.platform, peer: event.sender.id }).id
-          return `${baseRouter.resolveAgentId(event)}${agent === MAIN_AGENT ? '' : `-as-${agent}`}`
-        })
+  const router = agentRouter === undefined ? baseRouter : new SessionRouter((event) => {
+    const agent = agentRouter.route({ platform: event.platform, peer: event.sender.id }).id
+    return `${baseRouter.resolveAgentId(event)}${agent === MAIN_AGENT ? '' : `-as-${agent}`}`
+  })
   const incognito = isIncognito(options.env)
   const transient = incognito || !keepsTranscripts(options.env)
-  const open =
-    options.getOrCreate ??
-    ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
+  const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
   if (!incognito && transient && options.env.THEOCLAW_MEMORY?.trim().toLowerCase() === 'on') {
-    throw new TheoClawConfigError(
-      'THEOCLAW_MEMORY=on needs THEOCLAW_TRANSCRIPTS=on: memory recalls from the chat transcripts, and with transcripts off none is kept',
-      {
-        variable: 'THEOCLAW_MEMORY',
-      },
-    )
+    throw new TheoClawConfigError('THEOCLAW_MEMORY=on needs THEOCLAW_TRANSCRIPTS=on: memory recalls from the chat transcripts, and with transcripts off none is kept', {
+      variable: 'THEOCLAW_MEMORY',
+    })
   }
-  const memory = memoryEnabled(options.env, transient)
-    ? createMemory(
-        join(settings.workspace, '.theoclaw', 'memory'),
-        options.write,
-        memoryBackend(options.env, settings.workspace),
-      )
-    : undefined
+  const memory = memoryEnabled(options.env, transient) ? createMemory(join(settings.workspace, '.theoclaw', 'memory'), options.write, memoryBackend(options.env, settings.workspace)) : undefined
   let reviews = 0
   const owners = ownerKeys(options.env)
   const currentEvent = new AsyncLocalStorage<MessageEvent>()
   const recalled = recalledPrompt(memory)
   const thinking = new Map<string, ThinkingLevel>()
+  // Spread after the channel's options, which carry the instance-wide THEOCLAW_THINKING, so the session's level wins.
+  const thinkingExtra = (key: string): AgentOptions & { thinking?: ThinkingLevel } => {
+    const level = thinking.get(key)
+    return level === undefined ? {} : { thinking: level }
+  }
   const sessions = new SessionAgents({
     router,
     // Opened by the chat path's own factory, whose protected options are applied last, so the
@@ -127,17 +105,9 @@ export function chatSessions(options: ChatSessionsOptions): {
           }),
         )()
       try {
-        const opened = await build(id, {})
+        const opened = await build(id, thinkingExtra(keyOf(id)))
         // The reviewer is a fork: its own agent id and only `save_memory`, opened after each turn.
-        const agent =
-          memory === undefined
-            ? opened
-            : memory.wrap(opened, surfaceOf(id), keyOf(id), () =>
-                build(
-                  `${id}-review-${++reviews}`,
-                  reviewerOptions(memory.store, sessionOptions, scope),
-                ),
-              )
+        const agent = memory === undefined ? opened : memory.wrap(opened, surfaceOf(id), keyOf(id), () => build(`${id}-review-${++reviews}`, reviewerOptions(memory.store, sessionOptions, scope)))
         return transient ? withIncognitoCleanup(agent, dir) : agent
       } catch (error) {
         if (transient) removeIncognitoDir(dir)
@@ -146,18 +116,10 @@ export function chatSessions(options: ChatSessionsOptions): {
     },
     optionsFor: (event) => {
       // A bound peer or platform is answered by its own agent: that agent's workspace and persona.
-      const workspace =
-        agentRouter?.route({ platform: event.platform, peer: event.sender.id }).workspace ??
-        settings.workspace
-      const level = thinking.get(router.resolveAgentId(event))
-      const base = {
-        ...sessionAgentOptions(options.env, workspace),
-        ...(level === undefined ? {} : { thinking: level }),
-      }
+      const workspace = agentRouter?.route({ platform: event.platform, peer: event.sender.id }).workspace ?? settings.workspace
+      const base = sessionAgentOptions(options.env, workspace)
       const plugins = options.plugins?.() ?? []
-      return plugins.length === 0
-        ? base
-        : { ...base, plugins: [...(base.plugins ?? []), ...plugins] }
+      return plugins.length === 0 ? base : { ...base, plugins: [...(base.plugins ?? []), ...plugins] }
     },
     generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
     settings,
@@ -214,8 +176,7 @@ function ownerKeys(env: Readonly<Record<string, string | undefined>>): ReadonlyS
 function scopeOf(event: MessageEvent | undefined, owners: ReadonlySet<string>): string {
   if (event === undefined) return OWNER_SCOPE
   const sender = senderKey(event.platform, event.sender.id)
-  if (event.channel.type === 'dm')
-    return isAuthenticatedSender(event.platform) && owners.has(sender) ? OWNER_SCOPE : sender
+  if (event.channel.type === 'dm') return isAuthenticatedSender(event.platform) && owners.has(sender) ? OWNER_SCOPE : sender
   return `${event.platform}:channel:${event.channel.id}`
 }
 
@@ -233,15 +194,12 @@ export function withIncognitoCleanup(agent: SessionAgent, dir: string | undefine
         }
       }
       const value: unknown = Reflect.get(target, property, target)
-      return typeof value === 'function'
-        ? (value as (...args: unknown[]) => unknown).bind(target)
-        : value
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
     },
   })
 }
 
 /** Only a directory under the temp root is ever removed, whatever `dir` holds. */
 function removeIncognitoDir(dir: string | undefined): void {
-  if (dir !== undefined && resolve(dir).startsWith(resolve(tmpdir()) + sep))
-    rmSync(dir, { recursive: true, force: true })
+  if (dir !== undefined && resolve(dir).startsWith(resolve(tmpdir()) + sep)) rmSync(dir, { recursive: true, force: true })
 }
