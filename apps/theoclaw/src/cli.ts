@@ -34,6 +34,7 @@ import { logsCommand } from './ops/logs.js'
 import { pathCommand } from './ops/oc-path.js'
 import { meetingsCommand } from './meetings/meetings.js'
 import { clawsCommand } from './routing/claws.js'
+import { proxyCommand } from './ops/proxy.js'
 import { triageCommand } from './ops/triage.js'
 import { statusCommand } from './ops/status.js'
 import { loginWhatsApp } from './channels/whatsapp-qr.js'
@@ -97,6 +98,8 @@ const USAGE = `usage: theoclaw <command>
                             install, replace, remove or list packaged agents (claw.json, persona files, skills)
   theoclaw path resolve|find|validate <oc://agent/file[#fragment]> | set <oc://...> <value> [--dry-run]
                             read or edit a workspace Markdown section (#Rules) or JSON leaf (#a.b.0)
+  theoclaw proxy validate [--proxy-url <url>] [--target <host:port>] | start [--port <n>] | sessions
+                            check the operator's HTTPS proxy is reachable; run a local capture proxy (THEOCLAW_DEBUG_PROXY_URL routes a turn through it) and list what it saw
   theoclaw logs [--lines <n>] [--file <path>]
                             the last log lines (file, launchd log or user journal), secrets masked
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
@@ -342,6 +345,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       throw new UsageError('theoclaw transcripts: expected list | show <id> | export <id> [--json]')
     return Promise.resolve(sessionsCommand([verb === 'list' ? 'list' : 'export', ...rest], io))
   },
+  proxy: (args, io) => proxyCommand(args, io),
   logs: (args, io) => logsCommand(args, io, io.runner),
   triage: (args, io) => triageCommand(args, io),
   claws: (args, io) => clawsCommand(args, io),
