@@ -649,7 +649,12 @@
   },
   {
     "id": "OC-87",
-    "status": "open"
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/hook-list.test.ts",
+      "test": "prints an approved and an unapproved hook with the fingerprints THEOCLAW_APPROVED_HOOKS accepts"
+    },
+    "verified_on": "2026-11-11"
   },
   {
     "id": "OC-88",

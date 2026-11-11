@@ -52,6 +52,8 @@ import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { mcpRelayCommand } from './mcp-relay/command.js'
+import { parseApprovedHooks } from './agent/hook-approval.js'
+import { formatHookLine, listProjectHooks } from './agent/hook-list.js'
 import { installSkill } from './skills/install.js'
 import { PublishError, publishSkill } from './skills/publish.js'
 import { RegistryError, searchSkills } from './skills/registry-client.js'
@@ -119,6 +121,7 @@ const USAGE = `usage: theoclaw <command>
                             expiring WebChat visitor grants; enforced for trusted-proxy identities when THEOCLAW_VISITOR_ACCESS=on
   theoclaw logs [--lines <n>] [--file <path>]
                             the last log lines (file, launchd log or user journal), secrets masked
+  theoclaw hooks list       the project hooks in .theokit/settings.json, each with its fingerprint and whether THEOCLAW_APPROVED_HOOKS approves it
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
   theoclaw backup --to <name>        write the backup, encrypted when the location is, into a named storage location
@@ -532,6 +535,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       io.stderr.write(`theoclaw call: ${describeError(error)}\n`)
       return 1
     }
+  },
+  hooks: (args, io) => {
+    if (args.length !== 1 || args[0] !== 'list') throw new UsageError('theoclaw hooks: expected list')
+    const env: NodeJS.ProcessEnv = { ...io.env }
+    loadConfiguration(env, io.homeDir)
+    const hooks = listProjectHooks(io.cwd, parseApprovedHooks(env))
+    io.stdout.write(hooks.length === 0 ? 'no hooks\n' : hooks.map((h) => `${formatHookLine(h)}\n`).join(''))
+    return Promise.resolve(0)
   },
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),

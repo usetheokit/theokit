@@ -286,6 +286,8 @@ per line. For a `Stop` hook running `touch x`:
 node -e "console.log(require('node:crypto').createHash('sha256').update(process.argv[1]).digest('hex'))" "$(printf 'Stop\ntouch x\n30000')"
 ```
 
+`theoclaw hooks list` prints one line per hook in `.theokit/settings.json`: its event, its fingerprint and `approved` or `not approved`.
+
 An item that is not 64 hex characters refuses the start. Approved fingerprints are hidden from the
 output.
 
