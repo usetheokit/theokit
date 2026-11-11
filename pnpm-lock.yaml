@@ -362,7 +362,7 @@ importers:
         specifier: 10.2.1
         version: 10.2.1
       pg:
-        specifier: ^8.23.0
+        specifier: 8.23.0
         version: 8.23.0
       qrcode-terminal:
         specifier: 0.12.0
