@@ -4,11 +4,12 @@ const HELP_COMMAND = /^(?:(?:<@[^>]+>|@\S+)\s+)?\/(?:help|commands)(?:@\S+)?$/
 
 /** The commands a chat answers itself, never passing them to the model (OC-105). */
 /** Every command the list names; a test sends each through its real handler. */
-export const HELP_COMMANDS = ['/new', '/reset', '/goal', '/steer', '/think', '/compact', '/usage', '/activation', '/approve', '/deny', '/elevated', '/acp'] as const
+export const HELP_COMMANDS = ['/status', '/model', '/new', '/reset', '/goal', '/steer', '/think', '/compact', '/usage', '/activation', '/approve', '/deny', '/elevated', '/acp'] as const
 
 export const HELP_TEXT = [
   'Commands answered without the model:',
   '/help - this list',
+  '/status, /model - the model and surface of this chat',
   '/new, /reset - start a new conversation',
   '/goal <what you want done> - run a goal to its end',
   '/steer <text> - redirect the turn that is running',
