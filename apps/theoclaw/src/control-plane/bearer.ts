@@ -31,12 +31,9 @@ export function readBearerToken(env: BindEnvironment, variable: string): string 
     throw new TheoClawConfigError(`${variable} must not begin or end with whitespace`, { variable })
   }
   if (token.length < MIN_BEARER_TOKEN_LENGTH) {
-    throw new TheoClawConfigError(
-      `${variable} must be at least ${MIN_BEARER_TOKEN_LENGTH} characters`,
-      {
-        variable,
-      },
-    )
+    throw new TheoClawConfigError(`${variable} must be at least ${MIN_BEARER_TOKEN_LENGTH} characters`, {
+      variable,
+    })
   }
   return token
 }

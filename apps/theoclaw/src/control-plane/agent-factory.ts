@@ -6,11 +6,7 @@ import { join } from 'node:path'
 import { customProviderPlugins, parseCustomProviders } from '../agent/custom-providers.js'
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
 import type { ThinkingLevel } from '../agent/failover.js'
-import type {
-  AgentImport,
-  TheoClawAgentOptions,
-  TheoClawLocalOptions,
-} from '../agent/create-agent.js'
+import type { AgentImport, TheoClawAgentOptions, TheoClawLocalOptions } from '../agent/create-agent.js'
 import { parseFallbackModel, parseThinkingLevel, withFailover } from '../agent/failover.js'
 import { parseApprovedHooks } from '../agent/hook-approval.js'
 import { readPersonaPrompt } from '../agent/persona-files.js'
@@ -34,9 +30,7 @@ export function isIncognito(env: BindEnvironment): boolean {
   const value = env.THEOCLAW_INCOGNITO?.trim()
   if (value === undefined || value === '' || value === 'off') return false
   if (value === 'on') return true
-  throw new TheoClawConfigError('THEOCLAW_INCOGNITO must be on or off', {
-    variable: 'THEOCLAW_INCOGNITO',
-  })
+  throw new TheoClawConfigError('THEOCLAW_INCOGNITO must be on or off', { variable: 'THEOCLAW_INCOGNITO' })
 }
 
 /**
@@ -48,18 +42,14 @@ export function keepsTranscripts(env: BindEnvironment): boolean {
   const value = env.THEOCLAW_TRANSCRIPTS?.trim()
   if (value === undefined || value === '' || value === 'off') return false
   if (value === 'on') return true
-  throw new TheoClawConfigError('THEOCLAW_TRANSCRIPTS must be on or off', {
-    variable: 'THEOCLAW_TRANSCRIPTS',
-  })
+  throw new TheoClawConfigError('THEOCLAW_TRANSCRIPTS must be on or off', { variable: 'THEOCLAW_TRANSCRIPTS' })
 }
 
 /** `<workspace>/skills` and the user's `~/.theoclaw/skills` for every agent (OC-70). */
 function skillsDirOf(env: BindEnvironment): { skillsDir?: string; userSkillsDir: string } {
   const workspace = env.THEOCLAW_WORKSPACE?.trim()
   const userSkillsDir = join(env.HOME?.trim() || homedir(), '.theoclaw', 'skills')
-  return workspace === undefined || workspace === ''
-    ? { userSkillsDir }
-    : { skillsDir: join(workspace, 'skills'), userSkillsDir }
+  return workspace === undefined || workspace === '' ? { userSkillsDir } : { skillsDir: join(workspace, 'skills'), userSkillsDir }
 }
 
 /**
@@ -77,15 +67,7 @@ function skillsDirOf(env: BindEnvironment): { skillsDir?: string; userSkillsDir:
  */
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
-  return theoClawAgentOptions({
-    model,
-    apiKey: modelKey,
-    ...skillsDirOf(env),
-    approvedHooks: parseApprovedHooks(env),
-    providers: customProviderPlugins(parseCustomProviders(env)),
-    ...thinkingOf(env),
-    ...agentTelemetry(readTelemetrySettings(env)),
-  })
+  return theoClawAgentOptions({ model, apiKey: modelKey, ...skillsDirOf(env), approvedHooks: parseApprovedHooks(env), providers: customProviderPlugins(parseCustomProviders(env)), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
 }
 
 /**
@@ -95,16 +77,10 @@ export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
  * the state the operator configured. Incognito sends it to a temp path instead. Absent a workspace
  * (a test), the options are returned as they were.
  */
-export function withSessionHome(
-  env: BindEnvironment,
-  options: TheoClawAgentOptions,
-): TheoClawAgentOptions {
+export function withSessionHome(env: BindEnvironment, options: TheoClawAgentOptions): TheoClawAgentOptions {
   const workspace = env.THEOCLAW_WORKSPACE?.trim()
-  if (workspace === undefined || workspace === '' || options.local.sessionDir !== undefined)
-    return options
-  const sessionDir = isIncognito(env)
-    ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`)
-    : join(workspace, '.theoclaw')
+  if (workspace === undefined || workspace === '' || options.local.sessionDir !== undefined) return options
+  const sessionDir = isIncognito(env) ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : join(workspace, '.theoclaw')
   return { ...options, local: { ...options.local, sessionDir } }
 }
 
@@ -118,16 +94,10 @@ function thinkingOf(env: BindEnvironment): { thinking?: ThinkingLevel } {
  * to a secondary built lazily from the same options with the fallback model (OC-47). The fallback
  * runs on the same key; a secondary on another provider's key is not supported.
  */
-function createWithFailover(
-  env: BindEnvironment,
-  create: CreateAgent,
-  options: TheoClawAgentOptions,
-): Promise<TurnAgent> {
+function createWithFailover(env: BindEnvironment, create: CreateAgent, options: TheoClawAgentOptions): Promise<TurnAgent> {
   const fallback = parseFallbackModel(env.THEOCLAW_MODEL_FALLBACK)
   return create(options).then((primary) =>
-    fallback === undefined || fallback === options.model
-      ? primary
-      : withFailover(primary, () => create({ ...options, model: fallback })),
+    fallback === undefined || fallback === options.model ? primary : withFailover(primary, () => create({ ...options, model: fallback })),
   )
 }
 
@@ -141,21 +111,14 @@ export function sessionAgentOptions(env: BindEnvironment, workspace: string): Se
   const incognito = isIncognito(env)
   const transient = incognito || !keepsTranscripts(env)
   const { telemetry, ...withoutTelemetry } = agentOptionsFor(env)
-  const options: TheoClawAgentOptions =
-    incognito || telemetry === undefined ? withoutTelemetry : { ...withoutTelemetry, telemetry }
+  const options: TheoClawAgentOptions = incognito || telemetry === undefined ? withoutTelemetry : { ...withoutTelemetry, telemetry }
   const persona = readPersonaPrompt(workspace)
   return {
     ...options,
     systemPrompt: persona === '' ? options.systemPrompt : `${options.systemPrompt}\n\n${persona}`,
     // Incognito: the transcript goes to a fresh path under the temp root, never the workspace, created by
     // the SDK only when it writes; the chat sessions remove it when the agent is disposed.
-    local: {
-      ...options.local,
-      cwd: workspace,
-      sessionDir: transient
-        ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`)
-        : join(workspace, '.theoclaw'),
-    },
+    local: { ...options.local, cwd: workspace, sessionDir: transient ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : join(workspace, '.theoclaw') },
   }
 }
 
@@ -177,25 +140,19 @@ export function createAgentFactory(
     const transient = isIncognito(env) || !keepsTranscripts(env)
     const dir = transient ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : undefined
     const options = theoClawAgentOptions({
-      model,
-      apiKey: modelKey,
-      approvedHooks: parseApprovedHooks(env),
-      providers: customProviderPlugins(parseCustomProviders(env)),
-      ...skillsDirOf(env),
-      ...thinkingOf(env),
-      ...agentTelemetry(readTelemetrySettings(env)),
-      ...(toolOptions === undefined ? {} : { toolOptions }),
-      // Installed plugins reach only the owner's `/control` agent, never a chat agent (OC-75).
-      ...(env.THEOCLAW_PLUGIN_WORKSPACE === undefined || env.THEOCLAW_PLUGIN_WORKSPACE === ''
-        ? {}
-        : { pluginWorkspace: env.THEOCLAW_PLUGIN_WORKSPACE }),
-      ...(imported === undefined ? {} : { imported }),
-    })
-    const agent = await createWithFailover(
-      env,
-      create,
-      dir === undefined ? options : { ...options, local: { ...options.local, sessionDir: dir } },
-    )
+        model,
+        apiKey: modelKey,
+        approvedHooks: parseApprovedHooks(env),
+        providers: customProviderPlugins(parseCustomProviders(env)),
+        ...skillsDirOf(env),
+        ...thinkingOf(env),
+        ...agentTelemetry(readTelemetrySettings(env)),
+        ...(toolOptions === undefined ? {} : { toolOptions }),
+        // Installed plugins reach only the owner's `/control` agent, never a chat agent (OC-75).
+        ...(env.THEOCLAW_PLUGIN_WORKSPACE === undefined || env.THEOCLAW_PLUGIN_WORKSPACE === '' ? {} : { pluginWorkspace: env.THEOCLAW_PLUGIN_WORKSPACE }),
+        ...(imported === undefined ? {} : { imported }),
+      })
+    const agent = await createWithFailover(env, create, dir === undefined ? options : { ...options, local: { ...options.local, sessionDir: dir } })
     return dir === undefined ? agent : removingOnDispose(agent, dir)
   }
 }
@@ -217,8 +174,7 @@ export function createChannelAgentFactory<A>(
 
 /** The chat path's factory over the SDK, for a caller given no `create` of its own: a trigger run's default (B-397). */
 export function createSdkChannelAgentFactory(env: BindEnvironment): () => Promise<TurnAgent> {
-  return async () =>
-    createWithFailover(env, createTheoClawAgent, withSessionHome(env, agentOptionsFor(env)))
+  return async () => createWithFailover(env, createTheoClawAgent, withSessionHome(env, agentOptionsFor(env)))
 }
 
 /**

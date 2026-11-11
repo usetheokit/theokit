@@ -23,12 +23,7 @@ export function controlOptions(
   return {
     token,
     runTurn: createTurnRunner(withAgent, secrets, model),
-    sessions: createControlSessions({
-      build,
-      report,
-      secrets,
-      ...(model === undefined ? {} : { model }),
-    }),
+    sessions: createControlSessions({ build, report, secrets, ...(model === undefined ? {} : { model }) }),
     ...(devices === undefined ? {} : { devices }),
   }
 }
@@ -42,9 +37,7 @@ export function devicePairingFor(
   controlToken: string | undefined,
   write: (line: string) => void,
 ): DevicePairing | undefined {
-  return stateDir === undefined || controlToken === undefined
-    ? undefined
-    : createDevicePairing({ dir: stateDir, write })
+  return stateDir === undefined || controlToken === undefined ? undefined : createDevicePairing({ dir: stateDir, write })
 }
 
 /**
@@ -56,7 +49,6 @@ export function adminRpcFor(
   controlToken: string | undefined,
   devices: DevicePairing | undefined,
 ): ((request: Request) => Promise<Response>) | undefined {
-  if (env.THEOCLAW_ADMIN_HTTP_RPC !== '1' || controlToken === undefined || devices === undefined)
-    return undefined
+  if (env.THEOCLAW_ADMIN_HTTP_RPC !== '1' || controlToken === undefined || devices === undefined) return undefined
   return rpcRoute(controlToken, devices)
 }

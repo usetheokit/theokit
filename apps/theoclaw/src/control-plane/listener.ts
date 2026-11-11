@@ -3,11 +3,7 @@ import type { Duplex } from 'node:stream'
 
 import { nodeIncomingToRequest, writeResponseToNode } from '@theokit/http/runtime/node'
 
-import {
-  attachControlSocket,
-  type ControlSocket,
-  type ControlSocketOptions,
-} from './control-socket.js'
+import { attachControlSocket, type ControlSocket, type ControlSocketOptions } from './control-socket.js'
 import { describeError, TheoClawBindError } from './errors.js'
 import { stampTrustedIdentity, type TrustedProxy } from './trusted-proxy.js'
 
@@ -61,11 +57,7 @@ export function refuseUpgrade(
  * registered before the handler runs, so a client that leaves while the handler awaits is seen too;
  * a finished response emits `close` after `finish`, which `writableFinished` keeps from aborting.
  */
-function withDepartureSignal(
-  incoming: IncomingMessage,
-  outgoing: ServerResponse,
-  proxy?: TrustedProxy,
-): Request {
+function withDepartureSignal(incoming: IncomingMessage, outgoing: ServerResponse, proxy?: TrustedProxy): Request {
   stampTrustedIdentity(incoming, proxy)
   const controller = new AbortController()
   outgoing.once('close', () => {
@@ -83,10 +75,7 @@ function serve(options: ListenOptions) {
   return (incoming: IncomingMessage, outgoing: ServerResponse): void => {
     void (async () => {
       try {
-        await writeResponseToNode(
-          await options.handler(withDepartureSignal(incoming, outgoing, options.trustedProxy)),
-          outgoing,
-        )
+        await writeResponseToNode(await options.handler(withDepartureSignal(incoming, outgoing, options.trustedProxy)), outgoing)
       } catch (error) {
         options.stderr(`theoclaw: request failed: ${describeError(error)}`)
         if (!outgoing.headersSent) outgoing.writeHead(500)
@@ -176,14 +165,10 @@ export async function listenControlPlane(options: ListenOptions): Promise<Contro
       ? undefined
       : attachControlSocket(server, options.control, refuse, options.stderr)
   if (control === undefined) {
-    server.on('upgrade', (_request: IncomingMessage, socket: Duplex) =>
-      refuse(socket, '404 Not Found'),
-    )
+    server.on('upgrade', (_request: IncomingMessage, socket: Duplex) => refuse(socket, '404 Not Found'))
   }
   await listen(server, options)
   // After the bind, a server-level error (an accept failure such as EMFILE) is written, not thrown.
-  server.on('error', (error) =>
-    options.stderr(`theoclaw: control plane server error: ${describeError(error)}`),
-  )
+  server.on('error', (error) => options.stderr(`theoclaw: control plane server error: ${describeError(error)}`))
   return handleFor(server, control, options.control?.sessions)
 }

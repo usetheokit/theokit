@@ -75,4 +75,26 @@ describe('admin HTTP RPC', () => {
     const { handler } = setup({ THEOCLAW_ADMIN_HTTP_RPC: '1' })
     expect((await handler(call('/rpc/secrets.store.get', TOKEN))).status).toBe(400)
   })
+
+  it('issues a pair code over POST only, and answers 405 for the wrong verb', async () => {
+    const { handler } = setup({ THEOCLAW_ADMIN_HTTP_RPC: '1' })
+    const issued = await handler(call('/rpc/pair_code', TOKEN, { method: 'POST' }))
+    expect(issued.status).toBe(200)
+    expect(((await issued.json()) as { payload: { code: string } }).payload.code).toBeTruthy()
+    expect((await handler(call('/rpc/pair_code', TOKEN))).status).toBe(405)
+    expect((await handler(call('/rpc/pending_devices', TOKEN, { method: 'POST' }))).status).toBe(405)
+    expect((await handler(call('/rpc/pending_devices', TOKEN, { method: 'DELETE' }))).status).toBe(405)
+  })
+
+  it('refuses approve_device with a missing or unknown id', async () => {
+    const { handler } = setup({ THEOCLAW_ADMIN_HTTP_RPC: '1' })
+    expect((await handler(call('/rpc/approve_device', TOKEN, { method: 'POST' }))).status).toBe(400)
+    const unknown = await handler(call('/rpc/approve_device', TOKEN, { method: 'POST', body: JSON.stringify({ id: 'nope' }) }))
+    expect(unknown.status).toBe(400)
+  })
+
+  it('answers 400, not 500, for a malformed path', async () => {
+    const { handler } = setup({ THEOCLAW_ADMIN_HTTP_RPC: '1' })
+    expect((await handler(call('/rpc/%E0%A4%A', TOKEN))).status).toBe(400)
+  })
 })

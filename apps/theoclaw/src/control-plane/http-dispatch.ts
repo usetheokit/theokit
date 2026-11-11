@@ -36,12 +36,9 @@ export function serveHandler(
     if (pathname === '/health') return healthHandler(request)
     if (pathname === PAIR_PATH && devices !== undefined) return pairRoute(devices, request)
     if (isRpcPath(pathname) && rpc !== undefined) return rpc(request)
-    if (isA2APath(pathname))
-      return a2a === undefined ? new Response(null, { status: 404 }) : a2a(request)
-    if (isRelayPath(pathname))
-      return relay === undefined ? new Response(null, { status: 404 }) : relay(request)
-    if (isWebchatPath(pathname))
-      return webchat === undefined ? new Response(null, { status: 404 }) : webchat(request)
+    if (isA2APath(pathname)) return a2a === undefined ? new Response(null, { status: 404 }) : a2a(request)
+    if (isRelayPath(pathname)) return relay === undefined ? new Response(null, { status: 404 }) : relay(request)
+    if (isWebchatPath(pathname)) return webchat === undefined ? new Response(null, { status: 404 }) : webchat(request)
     return (await api?.(request)) ?? router(request)
   }
 }

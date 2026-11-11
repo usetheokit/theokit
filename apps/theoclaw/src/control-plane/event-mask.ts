@@ -16,9 +16,7 @@ function maskValue(value: unknown, secrets: readonly string[]): unknown {
   if (typeof value === 'string') return maskSecrets(value, secrets)
   if (Array.isArray(value)) return value.map((item) => maskValue(item, secrets))
   if (typeof value === 'object' && value !== null) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, maskValue(item, secrets)]),
-    )
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, maskValue(item, secrets)]))
   }
   return value
 }
@@ -29,10 +27,7 @@ function maskValue(value: unknown, secrets: readonly string[]): unknown {
  * a `text_delta` of its own, so the client keeps the model's order (EC-2), and is then emitted with
  * every string in it masked. A value split across a tool event is two releases, each masked alone.
  */
-export function createEventMask(
-  secrets: readonly string[],
-  emit: (event: TurnEvent) => void,
-): EventMask {
+export function createEventMask(secrets: readonly string[], emit: (event: TurnEvent) => void): EventMask {
   const stream = createStreamMask(secrets)
   const flush = (): void => {
     const held = stream.flush()

@@ -38,12 +38,7 @@ export interface ControlSessionsOptions {
 
 export interface ControlSessions {
   /** One turn on `session`, owned by `owner` (the socket that sent it). Never rejects. */
-  run(
-    session: string,
-    message: string,
-    emit: (event: TurnEvent) => void,
-    owner: object,
-  ): Promise<SessionOutcome>
+  run(session: string, message: string, emit: (event: TurnEvent) => void, owner: object): Promise<SessionOutcome>
   /** Stop the session's running turn: `no_turn` when nothing runs there. */
   interrupt(session: string): 'cancelled' | 'no_turn'
   /** Stop every running turn `owner` sent (its socket closed, FR-005). */
@@ -93,15 +88,7 @@ function running(owner: object): Running {
   const ended = new Promise<void>((resolve) => {
     end = resolve
   })
-  return {
-    controller: new AbortController(),
-    owner,
-    cancelRequested: false,
-    eventsEnded: false,
-    run: undefined,
-    ended,
-    end,
-  }
+  return { controller: new AbortController(), owner, cancelRequested: false, eventsEnded: false, run: undefined, ended, end }
 }
 
 /** The agent's disposal through `Symbol.asyncDispose`, the boundary `agent-port.ts` documents. */
@@ -139,11 +126,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
   function evictIdle(): Entry | undefined {
     let victim: [string, Entry] | undefined
     for (const pair of entries) {
-      if (
-        pair[1].running === undefined &&
-        (victim === undefined || pair[1].lastUsed < victim[1].lastUsed)
-      )
-        victim = pair
+      if (pair[1].running === undefined && (victim === undefined || pair[1].lastUsed < victim[1].lastUsed)) victim = pair
     }
     if (victim !== undefined) entries.delete(victim[0])
     return victim?.[1]
@@ -265,12 +248,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     return turn.cancelRequested ? INTERRUPTED : outcome
   }
 
-  async function run(
-    session: string,
-    message: string,
-    emit: (event: TurnEvent) => void,
-    owner: object,
-  ): Promise<SessionOutcome> {
+  async function run(session: string, message: string, emit: (event: TurnEvent) => void, owner: object): Promise<SessionOutcome> {
     if (closed) return { ok: false, code: 'turn_failed', reason: 'the control plane is closing' }
     if (!SESSION_ID.test(session)) return { ok: false, code: 'bad_frame' }
     // The turn exists before the drain, so an interrupt or a closed socket reaches it while it waits.
@@ -292,9 +270,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     try {
       return await turnOn(session, admission, turn, message, emit)
     } catch (error) {
-      return turn.cancelRequested
-        ? INTERRUPTED
-        : { ok: false, code: 'turn_failed', reason: describeError(error) }
+      return turn.cancelRequested ? INTERRUPTED : { ok: false, code: 'turn_failed', reason: describeError(error) }
     } finally {
       turn.eventsEnded = true
       if (entry.running === turn) entry.running = undefined
@@ -319,20 +295,14 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     close: async () => {
       closed = true
       for (const turn of waiting.keys()) stop(turn)
-      const turns = [...entries.values()].flatMap((entry) =>
-        entry.running === undefined ? [] : [entry.running],
-      )
+      const turns = [...entries.values()].flatMap((entry) => (entry.running === undefined ? [] : [entry.running]))
       for (const turn of turns) stop(turn)
       // A turn whose build is held disposes its own agent when the build arrives (`turnOn`).
       await Promise.race([Promise.all(turns.map((turn) => turn.ended)), delay(drainMs)])
-      const agents = [...entries.values()].flatMap((entry) =>
-        entry.agent === undefined ? [] : [entry.agent],
-      )
+      const agents = [...entries.values()].flatMap((entry) => (entry.agent === undefined ? [] : [entry.agent]))
       entries.clear()
       const results = await Promise.allSettled(agents.map(dispose))
-      const failure = results.find(
-        (result): result is PromiseRejectedResult => result.status === 'rejected',
-      )
+      const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
       if (failure !== undefined) throw failure.reason
     },
   }
