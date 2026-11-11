@@ -9,7 +9,7 @@ import { scheduleFile } from '../src/scheduler/scheduler-wiring.js'
 import { notEnforced, runControlTurn, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
 import type { ToolStart } from './tool-start-fixtures.js'
 
-const DSN = 'postgres://claw:s3cret-pw@db.example:5432/claw'
+const DSN = 'postgres://claw:s3cret-pw@db.example:5432/claw' // trufflehog:ignore -- fake DSN, db.example never resolves
 const cleanups: (() => void)[] = []
 const started: ToolStart[] = []
 afterEach(async () => {
