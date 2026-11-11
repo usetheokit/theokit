@@ -12,7 +12,11 @@ import {
 import type { DelegationPort, DelegationResult } from '@theokit/agents'
 import type { CustomTool } from '@theokit/sdk'
 
-import { cloneMachineProvider, createCloudRunner, type CloudMachineProvider } from '../routing/cloud-worker.js'
+import {
+  cloneMachineProvider,
+  createCloudRunner,
+  type CloudMachineProvider,
+} from '../routing/cloud-worker.js'
 import { createWorktreeRunner } from '../routing/task-worktree.js'
 import type { TurnMessage } from '../agent-port.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -108,7 +112,9 @@ export function cloudWorkerPort(
     task: TurnMessage,
     signal: AbortSignal | undefined,
   ) => Promise<DelegationResult>,
-  provider: CloudMachineProvider = cloneMachineProvider(join(settings.workspace, '.theoclaw', 'cloud-workers')),
+  provider: CloudMachineProvider = cloneMachineProvider(
+    join(settings.workspace, '.theoclaw', 'cloud-workers'),
+  ),
 ): DelegationPort {
   const runner = createCloudRunner({ repo: settings.toolRoot, provider })
   return {
@@ -122,8 +128,11 @@ export function cloudWorkerPort(
           options?.signal,
         )
       })
-      const note = `\n\n[cloud worker ${id}: ${outcome.committed ? `commit on branch ${outcome.branch}` : 'no changes to commit'}; machine torn down]`
-      return { ...(result as DelegationResult), response: (result as DelegationResult).response + note }
+      const note = `\n\n[cloud worker ${id}: ${outcome.committed ? `commit on branch ${outcome.branch}` : 'no changes to commit'}; ${outcome.recipe ? `environment ${outcome.recipe}; ` : ''}machine torn down]`
+      return {
+        ...(result as DelegationResult),
+        response: (result as DelegationResult).response + note,
+      }
     },
   }
 }
