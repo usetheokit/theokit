@@ -7,6 +7,7 @@ import { LineAdapter } from '@theokit/gateway-line'
 import { MatrixAdapter } from '@theokit/gateway-matrix'
 import { MattermostAdapter } from '@theokit/gateway-mattermost'
 import { SlackAdapter } from '@theokit/gateway-slack'
+import { SignalAdapter } from '@theokit/gateway-signal'
 import { SMSAdapter } from '@theokit/gateway-sms'
 import type { TwilioOptions } from '@theokit/gateway-sms'
 import { TeamsAdapter } from '@theokit/gateway-teams'
@@ -160,6 +161,7 @@ const ADAPTERS: AdapterConstructors = {
         ),
   teams: (settings) => new TeamsAdapter(settings),
   google_chat: (settings) => new GoogleChatAdapter(googleChatOptions(settings)),
+  signal: (settings) => new SignalAdapter(settings),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }

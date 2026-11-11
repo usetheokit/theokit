@@ -51,6 +51,8 @@ const UNAUTHENTICATED_BECAUSE = {
   teams: null,
   // Chat signs every request and names the sender's user resource.
   google_chat: null,
+  // signal-cli authenticates the sender's number; messages carry it.
+  signal: null,
   // The ship name is proven by the Eyre session the adapter holds; messages carry the author's @p.
   tlon_urbit: null,
   // The Twilio signature proves the request came from Twilio, not who sent the text.

@@ -44,6 +44,7 @@ const PLATFORM_VARIABLES = {
     serviceAccountFile: 'THEOCLAW_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE',
     audience: 'THEOCLAW_GOOGLE_CHAT_AUDIENCE',
   },
+  signal: { signalCliPath: 'THEOCLAW_SIGNAL_CLI_PATH', account: 'THEOCLAW_SIGNAL_ACCOUNT' },
   tlon_urbit: {
     shipUrl: 'THEOCLAW_TLON_URBIT_SHIP_URL',
     ship: 'THEOCLAW_TLON_URBIT_SHIP',
