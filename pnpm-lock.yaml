@@ -278,8 +278,8 @@ importers:
         specifier: 0.3.0
         version: 0.3.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(matrix-js-sdk@42.4.0)
       '@theokit/gateway-mattermost':
-        specifier: 0.2.1
-        version: 0.2.1(@mattermost/client@11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(ws@8.22.0)
+        specifier: 0.3.1
+        version: 0.3.1(@mattermost/client@11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(ws@8.22.0)
       '@theokit/gateway-slack':
         specifier: 0.3.1
         version: 0.3.1(@slack/bolt@5.1.0(@types/express@5.0.6)(undici@7.30.1))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
@@ -3339,8 +3339,8 @@ packages:
       matrix-js-sdk:
         optional: true
 
-  '@theokit/gateway-mattermost@0.2.1':
-    resolution: {integrity: sha512-cZwUW5FEmWrmK+FDkRgi5HTUXUYKuFht/99SVczykVF3YGj6xAsKsIOV8E74Sw1pheeJen1Efxsh0FjxSBatKA==}
+  '@theokit/gateway-mattermost@0.3.1':
+    resolution: {integrity: sha512-Zz4bXQUqTrOATO/DJ8cAb87nAjk4wCqLl+toOmHwyCqjnEZypF0Q6e7Nr+ql81prBUQMNGDRiL6YT9ofwFWS0Q==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@mattermost/client': ^9.0.0 || ^11.0.0
@@ -10964,7 +10964,7 @@ snapshots:
     optionalDependencies:
       matrix-js-sdk: 42.4.0
 
-  '@theokit/gateway-mattermost@0.2.1(@mattermost/client@11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(ws@8.22.0)':
+  '@theokit/gateway-mattermost@0.3.1(@mattermost/client@11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(ws@8.22.0)':
     dependencies:
       '@theokit/gateway': 0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
     optionalDependencies:

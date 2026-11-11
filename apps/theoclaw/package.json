@@ -48,7 +48,7 @@
     "@theokit/gateway-email": "0.3.1",
     "@theokit/gateway-line": "0.4.0",
     "@theokit/gateway-matrix": "0.3.0",
-    "@theokit/gateway-mattermost": "0.2.1",
+    "@theokit/gateway-mattermost": "0.3.1",
     "@theokit/gateway-slack": "0.3.1",
     "@theokit/gateway-sms": "0.3.1",
     "@theokit/gateway-teams": "0.3.0",
