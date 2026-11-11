@@ -100,6 +100,7 @@ import { webchatEvent } from './webchat/chat-id.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
 import { createWebchatRoutes } from './webchat/routes.js'
 import { webchatTurnFor } from './webchat/session-commands.js'
+import { isGranted, visitorAccessOn, visitorsPath } from './webchat/visitors.js'
 import { configuredVoiceReplies, withVoiceReplies } from './voice/voice-replies.js'
 
 export { createContainer, type AgentComposition, type AgentCompositionOptions } from './agent-container.js'
@@ -484,7 +485,15 @@ function startWebchat(
   }
   // `/status`, `/model`, `/think`, `/compact`, `/stop` and `/steer` are answered here, without a model turn (OC-105).
   const turnFor = webchatTurnFor({ model: settings.model, runnerFor, withChatAgent, think, compact: readCompactSettings(options.env, write, options.compact) })
-  return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy })
+  const grants = visitorAccessOn(options.env) ? visitorsPath(options.env) : undefined
+  return createWebchatRoutes({
+    token,
+    turnFor,
+    assetsDir,
+    write,
+    trustedProxy,
+    ...(grants === undefined ? {} : { visitorAllowed: (identity: string) => isGranted(grants, identity) }),
+  })
 }
 
 /**

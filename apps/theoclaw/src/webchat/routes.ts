@@ -25,6 +25,8 @@ export interface WebchatRoutesOptions {
   readonly token: string
   /** Trusted-proxy mode is on: a chat post marked by the listener needs no bearer token. */
   readonly trustedProxy?: boolean
+  /** Visitor access (OC-143): says whether a proxy-authenticated identity holds an unexpired grant. Default: every identity is let in. */
+  readonly visitorAllowed?: (identity: string) => boolean
   /** The turn runner of one chat: its turns share the chat's session agent, and no other chat's. */
   readonly turnFor: (chatId: string) => TurnRunner
   /** Where the built page assets are (`build:web` writes them). */
@@ -77,6 +79,10 @@ function tooLarge(): Response {
 
 function clientLeft(): Response {
   return new Response(null, { status: 400, headers: NO_STORE })
+}
+
+function forbidden(): Response {
+  return new Response(null, { status: 403, headers: NO_STORE })
 }
 
 function unauthorized(): Response {
@@ -267,6 +273,9 @@ export function createWebchatRoutes(
       options.trustedProxy === true && (request.headers.get(TRUSTED_IDENTITY_HEADER) ?? '') !== ''
     if (!viaProxy && !accepts(request.headers.get('authorization') ?? undefined))
       return unauthorized()
+    if (viaProxy && options.visitorAllowed !== undefined) {
+      if (!options.visitorAllowed(request.headers.get(TRUSTED_IDENTITY_HEADER) ?? '')) return forbidden()
+    }
     const identity = viaProxy ? (request.headers.get(TRUSTED_IDENTITY_HEADER) ?? '') : ''
     return boundedChat(
       request,
