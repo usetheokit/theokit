@@ -22,7 +22,7 @@ on:
   pull_request:
     # `develop` for the same reason as ci.yml: it is the base of the first promotion leg,
     # and a required check has to be emitted there before it can be required there.
-    branches: [main, develop]
+    branches: [main, develop, workspace]
   schedule:
     - cron: '23 5 * * 1' # weekly, Monday 05:23 UTC
 
