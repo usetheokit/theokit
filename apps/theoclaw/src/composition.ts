@@ -42,6 +42,7 @@ import { createSdkChannelAgentFactory, isIncognito, webchatAgentFactory } from '
 import type { CreateAgent } from './control-plane/agent-factory.js'
 import { controlOptions, devicePairingFor } from './control-plane/control-wiring.js'
 import { loadCityLookup } from './control-plane/geo-city.js'
+import { rpcFirst } from './control-plane/rpc-route.js'
 import { readTrustedProxy } from './control-plane/trusted-proxy.js'
 import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
@@ -633,7 +634,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
       composed.router,
       startWebchat(options, settings, secretValues, stderr, composed.withChatAgent, composed.think, trustedProxy !== undefined),
       devices,
-      api,
+      rpcFirst(settings.controlToken, devices, api),
       a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),
       relayHandler,
       geoDb === undefined ? undefined : loadCityLookup(geoDb),
