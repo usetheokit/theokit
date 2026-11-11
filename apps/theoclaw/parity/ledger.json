@@ -534,7 +534,7 @@
   {
     "id": "OC-72",
     "status": "open",
-    "note": "gating built: a skill whose required binary is not on PATH is not offered (tests/skill-registry.test.ts) ; open because no end-to-end check against a real model exists yet, and none was run"
+    "note": "`theoclaw skills install <name>[@<version>]` downloads, sha256-verifies and installs a registry skill (src/skills/install.ts); gating built: a skill whose required binary is not on PATH is not offered (tests/skill-registry.test.ts) ; open because no end-to-end check against a real model exists yet, and none was run"
   },
   {
     "id": "OC-73",

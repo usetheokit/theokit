@@ -52,6 +52,7 @@ import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { mcpRelayCommand } from './mcp-relay/command.js'
+import { installSkill } from './skills/install.js'
 import { PublishError, publishSkill } from './skills/publish.js'
 import { RegistryError, searchSkills } from './skills/registry-client.js'
 
@@ -145,6 +146,8 @@ const USAGE = `usage: theoclaw <command>
                             join a Google Meet as a guest in headless Chrome and keep the captions as notes; list or print the notes
   theoclaw skills search <term>
                             list registry skills matching <term> (name, latest version, description) from THEOCLAW_SKILLS_REGISTRY
+  theoclaw skills install <name>[@<version>]
+                            download, verify (sha256) and install a registry skill into <THEOCLAW_WORKSPACE>/skills/<name>
   theoclaw skills publish <dir>
                             upload a skill folder (SKILL.md with name, description, version) to THEOCLAW_SKILLS_REGISTRY with THEOCLAW_SKILLS_TOKEN
   theoclaw worker pair <control url> <setup code> [--name <n>] [--inference worker|gateway] | run <message> | status
@@ -410,9 +413,37 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         return 1
       }
     }
+    if (args[0] === 'install') {
+      const [, spec, ...more] = args
+      if (spec === undefined || spec.startsWith('-') || more.length > 0)
+        throw new UsageError('theoclaw skills: expected install <name>[@<version>]')
+      const env: NodeJS.ProcessEnv = { ...io.env }
+      loadConfiguration(env, io.homeDir)
+      const base = (env.THEOCLAW_SKILLS_REGISTRY ?? '').trim()
+      if (base === '')
+        throw new TheoClawConfigError(
+          'THEOCLAW_SKILLS_REGISTRY is not set (the skills registry URL)',
+        )
+      const workspace = (env.THEOCLAW_WORKSPACE ?? '').trim()
+      if (workspace === '')
+        throw new TheoClawConfigError(
+          'THEOCLAW_WORKSPACE is not set (the workspace to install into)',
+        )
+      try {
+        const done = await installSkill(base, join(resolve(io.cwd, workspace), 'skills'), spec)
+        io.stdout.write(`Installed ${done.name}@${done.version} -> ${done.dir}\n`)
+        return 0
+      } catch (error) {
+        if (!(error instanceof RegistryError)) throw error
+        io.stderr.write(`theoclaw: ${error.message}\n`)
+        return 1
+      }
+    }
     const [verb, dir, ...extra] = args
     if (verb !== 'publish' || dir === undefined || dir.startsWith('-') || extra.length > 0)
-      throw new UsageError('theoclaw skills: expected search <term> or publish <dir>')
+      throw new UsageError(
+        'theoclaw skills: expected search <term>, install <name>[@<version>] or publish <dir>',
+      )
     try {
       io.stdout.write(`${await publishSkill(resolve(io.cwd, dir), { env: io.env })}\n`)
       return 0
