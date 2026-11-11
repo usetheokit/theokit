@@ -1015,3 +1015,9 @@ wake word are tracked separately in B-722.
 
 Aged tool results are pruned: every send passes the SDK's `pruneToolResults`, so a tool result older
 than 4 tool rounds is trimmed from the next request. `THEOCLAW_PRUNE_TOOL_RESULT_ROUNDS` sets the count.
+
+## Standalone executable (no Node needed)
+
+`pnpm build && pnpm build:sea` writes `dist/sea/theoclaw`, a single executable (Node SEA) that runs
+`./theoclaw --help` on a machine without Node. Commands that start the service (`start`, `acp`) still
+spawn `main.js` from a checkout or npm install.

@@ -5,6 +5,7 @@ import { readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Writable } from 'node:stream'
+import { isSea } from 'node:sea'
 import { fileURLToPath } from 'node:url'
 
 import { backupInstance, BackupRefusal, restoreInstance, uploadBackup, downloadBackup } from './backup/backup.js'
@@ -221,8 +222,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
   '--version': (_args, io) => {
-    const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as { version: string }
-    io.stdout.write(`${pkg.version}\n`)
+    io.stdout.write(`${readVersion()}\n`)
     return Promise.resolve(0)
   },
   '--help': (_args, io) => {
@@ -253,7 +253,16 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
   }
 }
 
+/** The standalone build inlines the version (tools/build-sea.mjs); a checkout reads package.json. */
+declare const __THEOCLAW_VERSION__: string | undefined
+function readVersion(): string {
+  if (typeof __THEOCLAW_VERSION__ === 'string') return __THEOCLAW_VERSION__
+  const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as { version: string }
+  return pkg.version
+}
+
 function isMain(): boolean {
+  if (isSea()) return true
   const script = process.argv[1]
   if (script === undefined) return false
   try {
