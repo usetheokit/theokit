@@ -256,7 +256,7 @@ describe('the API in the started process', () => {
     const streamed = await post(true)
     const frames = (await streamed.text()).split('\n\n').filter((frame) => frame !== '')
     expect(frames.at(-1)).toBe('data: [DONE]')
-    const chunks = frames.slice(0, -1).map((frame) => JSON.parse(frame.slice('data: '.length)) as Record<string, any>)
+    const chunks = frames.slice(0, -1).map((frame) => JSON.parse(frame.slice('data: '.length)) as { choices: Array<{ delta: { content?: string } }>; usage?: unknown })
     expect(chunks.map((chunk) => chunk.choices[0].delta.content ?? '').join('')).toBe('pong')
     expect(chunks.filter((chunk) => chunk.choices[0].delta.content).length).toBeGreaterThan(1)
     expect(chunks.at(-1)?.usage).toMatchObject({ prompt_tokens: 11, completion_tokens: 4 })

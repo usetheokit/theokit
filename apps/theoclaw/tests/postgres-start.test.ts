@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 
 import { StorageManager, type PoolLike } from 'theokit/server/storage'
 import { afterEach, describe, expect, it } from 'vitest'
