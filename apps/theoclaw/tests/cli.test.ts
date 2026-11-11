@@ -25,6 +25,14 @@ describe('the theoclaw command line', () => {
     expect(process.env[unset]).toBeUndefined()
   })
 
+  it('--version prints the package version and exits 0', async () => {
+    const v = harness()
+    const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')) as { version: string }
+    expect(await runCli(['--version'], v.io)).toBe(0)
+    expect(v.stdout()).toBe(`${pkg.version}\n`)
+    expect(v.stderr()).toBe('')
+  })
+
   it('help names start, onboard and help, and an undefined one exits 2', async () => {
     const help = harness()
     expect(await runCli(['--help'], help.io)).toBe(0)
@@ -76,6 +84,35 @@ describe('the theoclaw command line', () => {
 
     expect(await done).toBe(0)
     expect(readFileSync(log, 'utf8')).toMatch(/^SIGTERM$/m)
+  })
+
+  it('acp runs the ACP entry beside the main entry with the arguments given', async () => {
+    const dir = scratchDir()
+    const out = join(dir, 'acp.out')
+    writeFileSync(join(dir, 'main-acp.js'), `import { writeFileSync } from 'node:fs'\nwriteFileSync(${JSON.stringify(out)}, process.argv.slice(2).join(' '))\n`)
+    writeFileSync(join(dir, 'package.json'), '{"type":"module"}')
+    const h = harness(join(dir, 'main.js'))
+
+    expect(await runCli(['acp', '--profile', 'zed'], h.io)).toBe(0)
+    expect(readFileSync(out, 'utf8')).toBe('--profile zed')
+    const help = harness()
+    await runCli(['--help'], help.io)
+    expect(help.stdout()).toContain('theoclaw acp')
+  })
+
+  it('import runs the import entry beside the main entry as --from <kind>, and refuses another kind', async () => {
+    const dir = scratchDir()
+    const out = join(dir, 'import.out')
+    writeFileSync(join(dir, 'import-main.js'), `import { writeFileSync } from 'node:fs'\nwriteFileSync(${JSON.stringify(out)}, process.argv.slice(2).join(' '))\n`)
+    writeFileSync(join(dir, 'package.json'), '{"type":"module"}')
+    const h = harness(join(dir, 'main.js'))
+
+    expect(await runCli(['import', 'claude-code', '--dry-run'], h.io)).toBe(0)
+    expect(readFileSync(out, 'utf8')).toBe('--from claude-code --dry-run')
+    expect(await runCli(['import', 'openclaw'], harness().io)).toBe(2)
+    const help = harness()
+    await runCli(['--help'], help.io)
+    expect(help.stdout()).toContain('theoclaw import')
   })
 
   // Audit finding (post-GREEN): the entry runs in its own session, so a closed terminal reaches only

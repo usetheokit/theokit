@@ -11,11 +11,15 @@ import type { StreamMask } from './stream-mask.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import { type DisplayConfig, resolveDisplay } from './display-config.js'
 import { createProgressGate, type ProgressGate } from './progress.js'
+import { compactIfNeeded } from './compact-command.js'
 import { deliverText } from './deliver.js'
 import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-command.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import type { UsageMode } from './usage-hook.js'
+import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
+import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
+import { AdvisorHistory, reviewQuietly, steerNote, type AdvisorSettings } from './advisor.js'
 import { showTyping, type TypingOptions } from './typing.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
@@ -33,6 +37,33 @@ export const RESET_FAILED_REPLY = 'I could not start a new conversation; this on
  * which this handler already holds.
  */
 const RESET_COMMANDS: ReadonlySet<string> = new Set(['/new', '/reset'])
+
+/** `/steer <text>`: redirect the turn already running; the text after the command is what is injected. */
+const STEER_COMMAND = /^\/steer(?:\s+([\s\S]*))?$/i
+
+export const STEER_USAGE_REPLY = 'Usage: /steer <text> (redirects the turn that is running)'
+export const STEER_IDLE_REPLY = 'Nothing is running to steer; send your message as usual.'
+export const STEERED_REPLY = 'Steering the running turn.'
+
+/** How many turns each session agent is running now, so `/steer` knows whether there is one to redirect. */
+const runningTurns = new WeakMap<object, number>()
+
+function turnStarted(agent: object): void {
+  runningTurns.set(agent, (runningTurns.get(agent) ?? 0) + 1)
+}
+
+function turnEnded(agent: object): void {
+  runningTurns.set(agent, Math.max(0, (runningTurns.get(agent) ?? 1) - 1))
+}
+
+const THINK_COMMAND = /^\/think(?:\s+(\S+))?$/i
+
+function answerThink(think: (event: MessageEvent, level: ThinkingLevel) => void, event: MessageEvent, arg: string | undefined): string {
+  const level = arg?.toLowerCase()
+  if (level === undefined || !(THINKING_LEVELS as readonly string[]).includes(level)) return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
+  think(event, level as ThinkingLevel)
+  return `Thinking level set to ${level}.`
+}
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
@@ -53,6 +84,8 @@ export interface ReplyHandlerOptions {
   readonly withAgent: <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
   /** Start the event's session afresh; `SessionAgents.reset`. */
   readonly reset: (event: MessageEvent) => Promise<void>
+  /** `/think <level>`: set the session's thinking level; without it, `/think` is an ordinary message. */
+  readonly think?: (event: MessageEvent, level: ThinkingLevel) => void
   /** Without it, every channel is its own conversation. */
   readonly broadcast?: BroadcastOptions
   /**
@@ -68,8 +101,12 @@ export interface ReplyHandlerOptions {
   readonly incognito?: boolean
   /** A finished turn's usage: its line, and the footer its conversation's `/usage` asks for (FR-005). */
   readonly usage?: ReplyUsageOptions
+  /** `/compact` and the `THEOCLAW_COMPACT_AT` threshold (OC-53); without it, `/compact` is an ordinary message. */
+  readonly compact?: CompactSettings
   /** A typing indicator shown while a turn or goal runs (OC-106); without it, none. */
   readonly typing?: TypingOptions
+  /** `THEOCLAW_ADVISOR=on` (OC-118): a reviewer that steers the running turn; without it, none. */
+  readonly advisor?: AdvisorSettings
 }
 
 export interface ReplyUsageOptions {
@@ -145,6 +182,42 @@ async function send(
   if (!result.ok) throw new ReplyDeliveryError(ctx.event.platform, result.error?.code ?? 'unknown', cause)
 }
 
+/** The advisor's review of one running turn: its advice steers the turn while it runs, never after. */
+interface AdvisorWatch {
+  start(agent: TurnAgent, prompt: string): void
+  stop(): void
+  record(answer: string): void
+}
+
+function watchTurn(settings: AdvisorSettings, history: AdvisorHistory, key: string): AdvisorWatch {
+  let running = true
+  let prompt = ''
+  return {
+    start(agent, text) {
+      prompt = text
+      void reviewQuietly(settings, history.of(key), text).then(async (advice) => {
+        if (advice === undefined) {
+          settings.write(`advisor: no correction for session ${key}`)
+          return
+        }
+        if (!running) return
+        try {
+          await agent.send(steerNote(advice), { ...untrustedContentSendOptions(), queueMode: 'steer' })
+          settings.write(`advisor: steered session ${key}: ${advice}`)
+        } catch {
+          settings.write(`advisor: could not steer session ${key}`)
+        }
+      })
+    },
+    stop() {
+      running = false
+    },
+    record(answer) {
+      history.record(key, { user: prompt, answer })
+    },
+  }
+}
+
 type TurnOutcome =
   | { readonly failed: false; readonly answer: string; readonly result?: Awaited<ReturnType<TurnRun['wait']>> }
   | { readonly failed: true; readonly error: unknown }
@@ -198,11 +271,13 @@ async function streamTurn(
   secrets: readonly string[],
   gate: ProgressGate,
   sendProgress: (line: string) => Promise<void>,
+  advisor?: AdvisorWatch,
 ): Promise<TurnOutcome> {
   // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
   const streamed: StreamedTurn = { answer: '', error: undefined, mask: createStreamMask(secrets), progress: [], gate }
   try {
     const run = await agent.send(prompt, untrustedContentSendOptions())
+    advisor?.start(agent, prompt)
     try {
       for await (const frame of run.stream()) {
         presentFrame(frame, presenter, streamed)
@@ -210,10 +285,12 @@ async function streamTurn(
       }
       for (const line of streamed.gate.flush()) await sendProgress(line)
     } finally {
+      advisor?.stop()
       flushMask(presenter, streamed)
     }
     const result = await run.wait()
     if (result.status !== 'error' && streamed.error === undefined) {
+      advisor?.record(streamed.answer)
       return { failed: false, answer: streamed.answer === '' ? NO_ANSWER_REPLY : streamed.answer, result }
     }
     presenter.present(AGENT_ERROR)
@@ -230,6 +307,14 @@ async function streamTurn(
  * The agent is the session's, owned by `SessionAgents`; the lease is released once the turn has
  * replied, failed or not.
  */
+const advisorHistories = new WeakMap<AdvisorSettings, AdvisorHistory>()
+
+function advisorHistoryOf(settings: AdvisorSettings): AdvisorHistory {
+  const found = advisorHistories.get(settings) ?? new AdvisorHistory()
+  advisorHistories.set(settings, found)
+  return found
+}
+
 async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
   const presenter = presenterFor(event)
   const secrets = options.secrets ?? []
@@ -246,18 +331,22 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
   try {
     return await options.withAgent(event, async (lease) => {
       started = true
+      turnStarted(lease.agent)
       const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
       try {
-        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress)
+        const advisor = options.advisor === undefined ? undefined : watchTurn(options.advisor, advisorHistoryOf(options.advisor), lease.agentId ?? event.channel.id)
+        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress, advisor)
         // Masked before rendering (in the stream) and again after it, so a value is caught in the
         // model's text and in the platform's own format; the answer a broadcast group records and
         // fans out is masked before any member renders it.
         const reply = withFooter(finishTurn(presenter), options.usage, event, outcome)
         await send(ctx, { ...reply, text: maskSecrets(reply.text, secrets) }, outcome)
         if (outcome.failed) throw outcome.error
+        if (options.compact !== undefined && lease.agentId !== undefined) await compactIfNeeded(options.compact, lease.agentId, outcome.result)
         return maskSecrets(outcome.answer, secrets)
       } finally {
         await stopTyping()
+        turnEnded(lease.agent)
         lease.release()
       }
     })
@@ -269,6 +358,19 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
     await send(ctx, finishTurn(presenter), { failed: true, error })
     throw error
   }
+}
+
+/** Inject `note` into the session's running turn; with none running, nothing is sent and the person is told. */
+async function answerSteer(options: ReplyHandlerOptions, event: MessageEvent, note: string): Promise<string> {
+  return options.withAgent(event, async (lease) => {
+    try {
+      if ((runningTurns.get(lease.agent) ?? 0) === 0) return STEER_IDLE_REPLY
+      await lease.agent.send(note, { ...untrustedContentSendOptions(), queueMode: 'steer' })
+      return STEERED_REPLY
+    } finally {
+      lease.release()
+    }
+  })
 }
 
 /**
@@ -320,9 +422,11 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
   }
   const outcome = await options.withAgent(event, async (lease) => {
     const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
+    turnStarted(lease.agent)
     try {
       return await runGoal(lease.agent, goal, settings)
     } finally {
+      turnEnded(lease.agent)
       await stopTyping()
       lease.release()
     }
@@ -355,6 +459,24 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
         throw error
       }
       await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
+      return
+    }
+    const steer = STEER_COMMAND.exec(text)
+    if (steer !== null) {
+      const note = (steer[1] ?? '').trim()
+      const reply = note === '' ? STEER_USAGE_REPLY : await answerSteer(options, event, note)
+      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
+      return
+    }
+    const think = options.think === undefined ? null : THINK_COMMAND.exec(text)
+    if (options.think !== undefined && think !== null) {
+      const reply = answerThink(options.think, event, think[1])
+      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
+      return
+    }
+    if (options.compact !== undefined && compactOf(text) !== undefined) {
+      const reply = await options.withAgent(event, (lease) => runCompact(options.compact as CompactSettings, lease.agentId).finally(() => lease.release()))
+      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
       return
     }
     const goal = options.goal === undefined ? undefined : goalOf(text)

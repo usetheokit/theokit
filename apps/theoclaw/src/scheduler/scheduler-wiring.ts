@@ -52,12 +52,18 @@ function runAgentToolOptions(tools: ToolSettings): AgentToolOptions {
  * that ends `error` or `cancelled`, or with no answer, is a failure naming its status or code.
  */
 function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPort {
-  const { withAgent } = createContainer<TurnAgent>({ factory: () => buildRunAgent(runAgentToolOptions(tools)) })
+  const { withAgent } = createContainer<TurnAgent>({
+    factory: () => buildRunAgent(runAgentToolOptions(tools)),
+  })
   return (prompt, signal) =>
     withAgent(async (agent) => {
       const run = await agent.send(prompt, { ...untrustedContentSendOptions(), signal })
       const outcome = await run.wait()
-      if (outcome.status === 'error' || outcome.status === 'cancelled' || outcome.result === undefined) {
+      if (
+        outcome.status === 'error' ||
+        outcome.status === 'cancelled' ||
+        outcome.result === undefined
+      ) {
         return { ok: false, error: outcome.error?.code ?? `the run ended ${outcome.status}` }
       }
       return { ok: true, text: outcome.result }
@@ -70,7 +76,10 @@ function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPo
  * broadcast answer are (OC-90), so a configured value never reaches a channel. An adapter that throws
  * is reported as `adapter_threw`: `DeliveryRouter.send` does not catch it.
  */
-function createDeliverPort(loop: Pick<ChannelLoop, 'started'>, secrets: readonly string[] = []): DeliverPort {
+function createDeliverPort(
+  loop: Pick<ChannelLoop, 'started'>,
+  secrets: readonly string[] = [],
+): DeliverPort {
   return async (target, text) => {
     const router = new DeliveryRouter()
     for (const { adapter } of loop.started.values()) router.register(adapter)
@@ -103,6 +112,8 @@ export interface WireSchedulerOptions {
   /** The platforms a job may target: the configured ones. */
   readonly platforms: readonly string[]
   readonly heartbeat?: TransientSchedule
+  /** The scheduled team report (OC-142). */
+  readonly teamReport?: TransientSchedule
   readonly write: (line: string) => void
   /** The configured values masked out of every delivered answer (OC-90). */
   readonly secrets?: readonly string[]
@@ -139,9 +150,16 @@ export function wireScheduler(options: WireSchedulerOptions): RunningScheduler {
     scheduleTools: createScheduleTools({ scheduler, platforms: options.platforms }),
     async start() {
       if (stopped) return
-      if (heartbeat !== undefined) {
-        const job = { id: heartbeat.id, cron: heartbeat.cron, prompt: '', target: heartbeat.target, createdAt: Date.now() }
-        await scheduler.add(job, { durable: false, prompt: heartbeat.prompt })
+      for (const transient of [heartbeat, options.teamReport]) {
+        if (transient === undefined) continue
+        const job = {
+          id: transient.id,
+          cron: transient.cron,
+          prompt: '',
+          target: transient.target,
+          createdAt: Date.now(),
+        }
+        await scheduler.add(job, { durable: false, prompt: transient.prompt })
       }
       await scheduler.start()
       options.write(

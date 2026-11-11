@@ -1,5 +1,37 @@
 # theo
 
+## 0.80.0
+
+### Minor Changes
+
+- 1aea7a2: `jobs.worker.shutdownTimeoutMs` sets how long `theokit start` waits on `SIGTERM` for the job in progress to finish before it closes storage and exits. It was fixed at 20 seconds, so a restart cut any longer job. The default stays 20 seconds. (#1292)
+
+### Patch Changes
+
+- 42b14d3: `@theokit/agents` adds three things an agent uses inside its own turn. `@theokit/agents/code-mode` exports `createCodeMode`, moved from `theokit`. A script that calls tools as `api.<name>(input)` returns only its result to the model, and every call still passes the required permission gate. `@theokit/agents/code-mode-quickjs` exports `createQuickJsSandbox`, which runs each script in a fresh QuickJS-WASM runtime with nothing of the host visible (no `require`, `process`, `fetch` or timers). A run is bounded at 10 s wall clock (host calls included), 32 MiB of memory and 16 api calls. Every failure is a typed `CodeModeSandboxError` whose `code` is `script_error`, `timeout`, `memory_limit`, `call_limit` `unserialisable_result` or `cancelled`. A run ends with `cancelled` when the `signal` passed to `Sandbox.run(code, api, { signal })` aborts, and each host call receives a signal of its own that aborts when the run ends for any reason, so a tool still in flight after a timeout is told to stop. `createCodeMode`'s tool forwards the run's `ctx.signal` to the sandbox and to each tool a script calls. Its two VM packages, `quickjs-emscripten-core` and `@jitl/quickjs-wasmfile-release-sync` at 0.32.0, are optional peers, and no other entry point loads them. `@theokit/agents/tools` adds `createDelegateAllTool`, `delegate_all`: 1 to 4 delegations started together and answered together in input order. A refused task comes back as `{ agent, ok: false, error, message }` beside the others, and the same `defaults` apply to each task, so a `budget` bounds each task, not the call. It hands the run's `ctx.signal` to each `DelegationPort`, whose `run(message, { signal })` takes it as an optional second argument. (B-386)
+
+  `theokit/server/agent` keeps every export name. Its `code-mode` module now re-exports `@theokit/agents/code-mode`, so `createCodeMode` takes the SDK's `CustomTool` (a theokit tool is still accepted). Its `tool.handler` still resolves to a `string` (the new `CodeModeTool` type). `CodeModePermissionDeniedError` now extends `TheokitAgentError`, with `code: 'CODE_MODE_PERMISSION_DENIED'` and `isRetryable: false`. Its name and message are unchanged.
+
+- a08d373: The `@theokit/sdk` floor is now 5.14.0, in `@theokit/agents`, `theokit` and the `create-theokit` template. TheoClaw's plugin install (`installPlugin`, B-391) needs the SDK to import a trusted manifest entry, which 5.14.0 added; the bottom-of-range install now agrees with the root override.
+- dee3337: The `@theokit/sdk` floor is now 5.15.1, in `@theokit/agents`, `theokit` and the `create-theokit` template. 5.15.1 recovers several Gemini `<ctrl42>call` calls under one marker and keeps that text out of `text_delta` while streaming. `@theokit/agents/persistence` now re-exports `SqliteSessionStore` and `SqliteSessionStoreOptions`, and `@theokit/agents/sandbox` re-exports `DockerSandbox`, `DockerRunner`, `DockerRunResult` and `DockerSandboxConfig`, which the SDK added in 5.15.0.
+- ef05872: The `@theokit/sdk` floor is now 5.15.3, in `@theokit/agents`, `theokit` and the `create-theokit` template. 5.15.3 bounds the wait for a model response's headers (30 s by default), so a request whose response never starts fails with a retryable `NetworkError` and is retried, instead of holding the turn for up to 300 s.
+- Updated dependencies [be2ce10]
+- Updated dependencies [42b14d3]
+- Updated dependencies [ef5a02e]
+- Updated dependencies [7e0f84c]
+- Updated dependencies [3ad5b56]
+- Updated dependencies [bbe27df]
+- Updated dependencies [93cf651]
+- Updated dependencies [2fbeb17]
+- Updated dependencies [1c3553b]
+- Updated dependencies [1c3553b]
+- Updated dependencies [a08d373]
+- Updated dependencies [dee3337]
+- Updated dependencies [ef05872]
+  - @theokit/agents@16.4.0
+  - @theokit/http@2.4.0
+  - @theokit/presenter@0.11.0
+
 ## 0.79.0
 
 ### Minor Changes
@@ -422,8 +454,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                            [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                            were found and every /api/agents/* route will 404.
+                                              [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                              were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 

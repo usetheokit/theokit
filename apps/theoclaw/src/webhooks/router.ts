@@ -19,6 +19,8 @@ export interface RouterOptions {
    * answers 404. A trigger route answers 503 itself, since it waits on its reply platform only.
    */
   readonly triggers?: ReadonlyMap<string, WebhookRoute>
+  /** Routes at `/webhooks/<name>` that are not gateway platforms (the phone-call webhook); they take precedence. */
+  readonly named?: ReadonlyMap<string, WebhookRoute>
 }
 
 /**
@@ -76,7 +78,12 @@ function resolveRoute(
   const path = new URL(request.url).pathname.replace(/(.)\/$/, '$1')
   const trigger = resolveTrigger(path, request, options)
   if (trigger !== undefined) return trigger
-  const platform = WEBHOOK_PATH.exec(path)?.[1] as PlatformName | undefined
+  const name = WEBHOOK_PATH.exec(path)?.[1]
+  const named = name === undefined ? undefined : options.named?.get(name)
+  if (name !== undefined && named !== undefined) {
+    return named.methods.includes(request.method) ? { label: name, route: named } : answer(405)
+  }
+  const platform = name as PlatformName | undefined
   const route = platform === undefined ? undefined : options.routes.get(platform)
   if (platform === undefined || route === undefined) return answer(404)
   if (!options.isStarted(platform)) return answer(503)

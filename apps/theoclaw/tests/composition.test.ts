@@ -443,14 +443,14 @@ describe('the chat path names no per-message factory', () => {
   it('names channelAgentFactory nowhere and calls Agent.create only in the /control factory', () => {
     const files = sources(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
     expect(files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
-    // `main.ts` builds the `create` it hands `createAgentFactory` alone; only the `/control` one takes the import (FR-009).
+    // `main.ts` and `main-acp.ts` each build the `create` they hand `createAgentFactory` alone; only the `/control` one takes the import (FR-009).
     expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path).sort()).toEqual(
-      [join('agent', 'create-agent.ts'), 'main.ts'].sort(),
+      [join('agent', 'create-agent.ts'), 'main-acp.ts', 'main.ts'].sort(),
     )
     expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
     )
-    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toMatch(/agentFactory: createAgentFactory\(process\.env, create, imported\),\n\s+importFreeAgentFactory: createAgentFactory\(process\.env, create\),\n\s+importedPaths: importedMcpPaths\(imported\),/)
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toMatch(/agentFactory: createAgentFactory\(process\.env, create, imported, \{ custodian: true \}\),\n\s+importFreeAgentFactory: createAgentFactory\(process\.env, create\),\n\s+importedPaths: importedMcpPaths\(imported\),/)
   })
 })
 
@@ -491,7 +491,7 @@ describe('the digest workflow tool at start', () => {
     const telegram = adapters.get('telegram') as FakeAdapter
     for (let sender = 0; sender < 20; sender += 1) await telegram.deliver(messageEvent('telegram', 'hello', `sender-${sender}`))
     await waitFor(() => chatOptions.length === 20, 5000, 'twenty chat agents to be opened')
-    expect(chatOptions.every((options) => options.tools === undefined)).toBe(true)
+    expect(chatOptions.every((options) => (options.tools ?? []).every((tool) => tool.name === 'skill_read'))).toBe(true)
   })
 
   it('the process entry builds the draft agents through the tool-less chat factory', () => {

@@ -44,6 +44,12 @@ function refusal(env: Record<string, string | undefined>): Error {
 
 /** AC-003 (B-372): every bad value is refused before anything opens, by name, never by value. */
 describe("readControlPlaneSettings", () => {
+  it("refuses an unknown THEOCLAW_THINKING at start, naming the allowed values", () => {
+    const error = refusal({ ...validEnv(), THEOCLAW_THINKING: "ultra" });
+    expect(error).toBeInstanceOf(TheoClawConfigError);
+    expect(error.message).toBe("THEOCLAW_THINKING must be one of off, low, medium, high");
+  });
+
   it("reads a complete environment", () => {
     expect(readControlPlaneSettings(validEnv())).toEqual({
       host: "127.0.0.1",
