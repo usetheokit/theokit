@@ -45,8 +45,8 @@ vi.mock('@theokit/agents/tool-scope', async (importOriginal) => {
   }
 })
 
-const READ_ONLY = ['list_dir', 'read_file', 'show_widget', 'todolist', 'view_image', 'web_fetch']
-const HOST = ['apply_patch', 'edit_file', 'shell_exec', 'write_file']
+const READ_ONLY = ['extract_document', 'github_link_preview', 'list_dir', 'read_file', 'read_pdf', 'show_widget', 'todolist', 'view_image', 'web_fetch']
+const HOST = ['apply_patch', 'edit_file', 'screenshot_logbook', 'shell_exec', 'write_file']
 
 describe('BUILT_TOOL_NAMES', () => {
   it('names every tool buildTools can register, and only those', () => {
@@ -375,5 +375,16 @@ describe('web_fetch with an injected fetch and lookup', () => {
 
     expect(JSON.stringify(result)).toContain(PAGE)
     expect(hosts).toEqual(['page.test'])
+  })
+})
+
+describe('read_pdf', () => {
+  it('extracts the text of a real PDF in the tool root with no stubbed extractor', async () => {
+    const settings = resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet })
+    writeFileSync(join(settings.toolRoot, 'report.pdf'), Buffer.from('JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMTAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA2NyA+PgpzdHJlYW0KQlQgL0YxIDEyIFRmIDIwIDUwIFRkIChRdWFydGVybHkgcmV2ZW51ZSBncmV3IHR3ZWx2ZSBwZXJjZW50KSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCjAwMDAwMDAyNDEgMDAwMDAgbiAKMDAwMDAwMDM1OCAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDYgL1Jvb3QgMSAwIFIgPj4Kc3RhcnR4cmVmCjQyOAolJUVPRgo=', 'base64'))
+    const tool = buildTools(settings).find((candidate) => candidate.name === 'read_pdf')
+    const result = JSON.stringify(await tool?.handler({ path: 'report.pdf' }))
+    expect(result).toContain('Quarterly revenue')
+    expect(result).not.toContain('pdf_engine_missing')
   })
 })
