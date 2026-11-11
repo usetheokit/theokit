@@ -58,6 +58,17 @@ export function readMessages(file: string): Message[] {
   return messages
 }
 
+/** The chat sessions with a transcript, newest first. */
+export function chatSessions(env: NodeJS.ProcessEnv, homeDir: string): Array<{ id: string; transcript: string; modifiedAt: Date }> {
+  const workspace = env.THEOCLAW_WORKSPACE?.trim() || resolveInstance(env, { homeDir }).workspace
+  if (workspace === undefined || workspace === '') {
+    throw new TheoClawConfigError('THEOCLAW_WORKSPACE must be set to the directory TheoClaw keeps its chat sessions in', { variable: 'THEOCLAW_WORKSPACE' })
+  }
+  return listSessions(workspace, join(workspace, '.theoclaw'))
+    .filter((entry): entry is typeof entry & { id: string } => entry.id !== undefined)
+    .sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime())
+}
+
 export function sessionsCommand(args: readonly string[], io: SessionsIo): number {
   const [verb, ...rest] = args
   const json = rest.includes('--json')

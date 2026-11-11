@@ -4,6 +4,7 @@ import type { Readable, Writable } from 'node:stream'
 import type { CustomTool } from '@theokit/sdk'
 import { handleMcpToolsJsonRpc, serveMcpToolsStdio } from 'theokit/server/agent'
 
+import { assertGrantLive } from '../sessions/attach.js'
 import { loadConfiguration } from '../config-file.js'
 import { vetoToolCall } from '../tools/path-veto.js'
 import { buildTools } from '../tools/tool-registry.js'
@@ -53,6 +54,7 @@ export interface McpCommandIo {
  * `THEOCLAW_HOST_TOOLS=on`, exactly as for an agent.
  */
 export async function serveMcpStdio(io: McpCommandIo): Promise<void> {
+  assertGrantLive(io.env)
   const env: NodeJS.ProcessEnv = { ...io.env }
   loadConfiguration(env, io.homeDir)
   const settings = resolveToolSettings(env, io.cwd)

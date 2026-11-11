@@ -27,6 +27,7 @@ import { whatsappSessionDir } from './channels/platforms.js'
 import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
 import { sessionsCommand } from './sessions/sessions-command.js'
+import { attachCommand, resumeSession } from './sessions/attach.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 
 /**
@@ -92,6 +93,9 @@ const USAGE = `usage: theoclaw <command>
                             copy a Claude Code or Hermes setup into the state directory; --dry-run lists the files and writes none
   theoclaw sessions list|show <id>|export <id> [--json]
                             list the chat sessions, show one's summary, or print its messages (an id prefix is enough)
+  theoclaw attach [--session <id>] [--print-config]
+                            launch Claude Code on a temporary MCP config (theoclaw mcp, bound to a session, expiring in 1 hour); --print-config only prints it
+  theoclaw resume           print the newest chat session's messages and open the TUI on it (no TUI without a terminal)
   theoclaw --help           this text
   theoclaw --version        print the version
 `
@@ -273,6 +277,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   triage: (args, io) => triageCommand(args, io),
   whatsapp: whatsappCommand,
   tui: tuiCommand,
+  attach: (args, io) => attachCommand(args, io),
+  resume: async (args, io) => {
+    const id = resumeSession(args, io)
+    if (id === undefined) return 1
+    return io.isTTY ? tuiCommand(['--session', id], io) : 0
+  },
   mcp: async (args, io) => {
     if (args.length > 0) throw new UsageError('theoclaw mcp: expected no arguments')
     await serveMcpStdio({ env: io.env, homeDir: io.homeDir, cwd: io.cwd, stdin: io.stdin as unknown as NodeJS.ReadableStream, stdout: io.stdout })
