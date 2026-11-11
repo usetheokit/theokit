@@ -445,7 +445,7 @@ describe('the chat path names no per-message factory', () => {
     expect(files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
     // `main.ts` builds the `create` it hands `createAgentFactory` alone; only the `/control` one takes the import (FR-009).
     expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path).sort()).toEqual(
-      [join('agent', 'create-agent.ts'), 'main.ts'].sort(),
+      [join('agent', 'create-agent.ts'), 'main-acp.ts', 'main.ts'].sort(),
     )
     expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
