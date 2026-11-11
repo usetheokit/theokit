@@ -1,0 +1,42 @@
+# Publishes the TheoClaw image to ghcr.io on a theoclaw release tag (#1555).
+# Install as .github/workflows/theoclaw-image.yml. It lives here because changes under .github/
+# need the owner's approval; ADR-0021 also wants the actions pinned by commit before it is installed.
+name: TheoClaw image
+
+on:
+  push:
+    tags: ['theoclaw@*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/usetheokit/theoclaw
+          tags: |
+            type=match,pattern=theoclaw@(.*),group=1
+            type=match,pattern=theoclaw@(\d+\.\d+),group=1
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/theoclaw/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
