@@ -422,9 +422,11 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
   }
   const outcome = await options.withAgent(event, async (lease) => {
     const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
+    turnStarted(lease.agent)
     try {
       return await runGoal(lease.agent, goal, settings)
     } finally {
+      turnEnded(lease.agent)
       await stopTyping()
       lease.release()
     }
