@@ -111,6 +111,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepublishOnly": "pnpm run build && pnpm run build:web && node ../../scripts/check-pack-no-workspace.mjs .",
+    "build:sea": "node tools/build-sea.mjs",
     "build:web": "node tools/build-web.mjs",
     "start": "node dist/main.js",
     "import": "node dist/import-main.js",
