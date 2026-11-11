@@ -31,8 +31,14 @@ export const SECRET_ENV = [
   'PARITY_MATTERMOST_TOKEN',
 ]
 
+const SECRET_NAME = /TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL/i
+/** Every credential value: the named variables plus any variable whose name looks like one. */
 export const secretValues = (env) =>
-  SECRET_ENV.map((k) => env[k]).filter((v) => typeof v === 'string' && v.length > 0)
+  [
+    ...new Set(
+      [...SECRET_ENV, ...Object.keys(env).filter((k) => SECRET_NAME.test(k))].map((k) => env[k]),
+    ),
+  ].filter((v) => typeof v === 'string' && v.length >= 6)
 
 /** `text` with every secret value replaced. */
 export function redact(text, secrets) {
@@ -63,9 +69,11 @@ export function telegramTransport({ env, fetchImpl = fetch, timeoutMs = 120_000,
   }
   return {
     async turn(text) {
+      // Drain stale updates first so an old reply is never taken for this turn's.
+      const stale = await call('getUpdates', { offset: -1, timeout: 0 })
+      let offset = stale.length > 0 ? stale[stale.length - 1].update_id + 1 : 0
       const sent = await call('sendMessage', { chat_id: chat, text })
       const deadline = Date.now() + timeoutMs
-      let offset = 0
       while (Date.now() < deadline) {
         const updates = await call('getUpdates', {
           offset,
@@ -91,17 +99,178 @@ export function telegramTransport({ env, fetchImpl = fetch, timeoutMs = 120_000,
   }
 }
 
-/** One scripted turn per OC id, with the expected observable outcome declared beside it. */
-export const SCENARIOS = {
-  'OC-2': {
-    channel: 'telegram',
-    send: 'Reply with exactly the word PARITY-OK and nothing else.',
+const PROMPT = 'Reply with exactly the word PARITY-OK and nothing else.'
+function channelTurn(channel) {
+  return {
+    channel,
+    send: PROMPT,
     expect: /PARITY-OK/,
     expectation: 'the reply text contains PARITY-OK',
+  }
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** Polls `fetchNew()` (messages newer than the sent one, from the product) until one arrives. */
+async function awaitReply(fetchNew, { timeoutMs, pollMs }) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const text = await fetchNew()
+    if (text) return text
+    await sleep(pollMs)
+  }
+  throw new Error('no reply before the timeout')
+}
+
+async function json(res, what) {
+  if (!res.ok) throw new Error(`${what} failed: ${res.status}`)
+  return res.json()
+}
+
+/** Discord: the driver posts in the test channel; the product bot's next message is the reply. */
+export function discordTransport({ env, fetchImpl = fetch, timeoutMs = 120_000, pollMs = 2000 }) {
+  const token = env.PARITY_DISCORD_TOKEN
+  const channel = env.PARITY_DISCORD_CHANNEL_ID
+  const botId = env.PARITY_DISCORD_BOT_ID
+  if (!token || !channel || !botId)
+    throw new Error('PARITY_DISCORD_TOKEN, _CHANNEL_ID and _BOT_ID must be set')
+  const base = `https://discord.com/api/v10/channels/${channel}/messages`
+  const headers = { authorization: `Bot ${token}`, 'content-type': 'application/json' }
+  return {
+    async turn(text) {
+      const sent = await json(
+        await fetchImpl(base, { method: 'POST', headers, body: JSON.stringify({ content: text }) }),
+        'discord send',
+      )
+      return awaitReply(
+        async () => {
+          const list = await json(
+            await fetchImpl(`${base}?after=${sent.id}&limit=20`, { headers }),
+            'discord read',
+          )
+          return list.find((m) => m.author?.id === botId && m.content)?.content
+        },
+        { timeoutMs, pollMs },
+      )
+    },
+  }
+}
+
+/** Mattermost: the driver posts in the test channel; the product bot's next post is the reply. */
+export function mattermostTransport({
+  env,
+  fetchImpl = fetch,
+  timeoutMs = 120_000,
+  pollMs = 2000,
+}) {
+  const token = env.PARITY_MATTERMOST_TOKEN
+  const url = env.PARITY_MATTERMOST_URL
+  const channel = env.PARITY_MATTERMOST_CHANNEL_ID
+  const botId = env.PARITY_MATTERMOST_BOT_ID
+  if (!token || !url || !channel || !botId)
+    throw new Error('PARITY_MATTERMOST_TOKEN, _URL, _CHANNEL_ID and _BOT_ID must be set')
+  const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' }
+  return {
+    async turn(text) {
+      const sent = await json(
+        await fetchImpl(`${url}/api/v4/posts`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ channel_id: channel, message: text }),
+        }),
+        'mattermost send',
+      )
+      return awaitReply(
+        async () => {
+          const list = await json(
+            await fetchImpl(`${url}/api/v4/channels/${channel}/posts?since=${sent.create_at}`, {
+              headers,
+            }),
+            'mattermost read',
+          )
+          return Object.values(list.posts ?? {}).find(
+            (p) => p.user_id === botId && p.create_at > sent.create_at,
+          )?.message
+        },
+        { timeoutMs, pollMs },
+      )
+    },
+  }
+}
+
+/** Matrix: the driver sends to the test room; the product's next message is the reply. */
+export function matrixTransport({ env, fetchImpl = fetch, timeoutMs = 120_000, pollMs = 2000 }) {
+  const token = env.PARITY_MATRIX_TOKEN
+  const home = env.PARITY_MATRIX_HOMESERVER
+  const room = env.PARITY_MATRIX_ROOM_ID
+  const botId = env.PARITY_MATRIX_BOT_ID
+  if (!token || !home || !room || !botId)
+    throw new Error('PARITY_MATRIX_TOKEN, _HOMESERVER, _ROOM_ID and _BOT_ID must be set')
+  const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' }
+  const rooms = `${home}/_matrix/client/v3/rooms/${encodeURIComponent(room)}`
+  return {
+    async turn(text) {
+      const txn = `parity-${Date.now()}`
+      const sent = await json(
+        await fetchImpl(`${rooms}/send/m.room.message/${txn}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ msgtype: 'm.text', body: text }),
+        }),
+        'matrix send',
+      )
+      return awaitReply(
+        async () => {
+          const page = await json(
+            await fetchImpl(`${rooms}/messages?dir=b&limit=10`, { headers }),
+            'matrix read',
+          )
+          for (const ev of page.chunk ?? []) {
+            if (ev.event_id === sent.event_id) return undefined
+            if (ev.sender === botId && ev.content?.body) return ev.content.body
+          }
+          return undefined
+        },
+        { timeoutMs, pollMs },
+      )
+    },
+  }
+}
+
+/** A command a user would run (WebChat/control/CLI items): argv and stdout, no shell. */
+export function commandTransport({ command, run = defaultRun }) {
+  return { turn: async (text) => run(command, text) }
+}
+
+function defaultRun([file, ...args], text) {
+  return execFileSync(file, [...args, text], { encoding: 'utf8', timeout: 120_000 }).trim()
+}
+
+/**
+ * One scripted turn per OC id, with the expected observable outcome declared beside it. Add an id
+ * here to make it measurable; the gate refuses `shipped` for any id that has no passing result.
+ * `cli` scenarios name the command in `command` (argv); the message is appended as the last arg.
+ */
+export const SCENARIOS = {
+  'OC-2': channelTurn('telegram'),
+  'OC-4': channelTurn('discord'),
+  'OC-8': channelTurn('matrix'),
+  'OC-12': {
+    channel: 'cli',
+    command: ['theoclaw', 'run', '--json'],
+    send: PROMPT,
+    expect: /PARITY-OK/,
+    expectation: 'the finished turn text contains PARITY-OK',
   },
 }
 
-const TRANSPORTS = { telegram: telegramTransport }
+const TRANSPORTS = {
+  telegram: telegramTransport,
+  discord: discordTransport,
+  matrix: matrixTransport,
+  mattermost: mattermostTransport,
+  cli: ({ scenario }) => commandTransport({ command: scenario.command }),
+}
 
 const git = (args, cwd) => {
   try {
@@ -122,6 +291,27 @@ function packageVersions(root) {
   return { theoclaw: pkg.version }
 }
 
+/**
+ * OpenClaw's result for the same turn, for a parity row: `PARITY_OPENCLAW_CMD` is a JSON argv
+ * array run with the message appended, on the same model (`PARITY_MODEL`, default `MODEL`).
+ * `null` when no command is configured.
+ */
+async function runOpenClaw(scenario, env, transports) {
+  if (!env.PARITY_OPENCLAW_CMD) return null
+  try {
+    const command = JSON.parse(env.PARITY_OPENCLAW_CMD)
+    const run = transports.openclaw ?? ((c, t) => commandTransport({ command: c }).turn(t))
+    const received = await run(command, scenario.send)
+    return {
+      verdict: scenario.expect.test(received) ? 'works' : 'fails',
+      received,
+      model: env.PARITY_MODEL ?? MODEL,
+    }
+  } catch (e) {
+    return { verdict: 'fails', error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 /** Runs one scenario and returns the result record (verdict `works` or `fails`). */
 export async function runScenario(
   id,
@@ -134,21 +324,23 @@ export async function runScenario(
   let verdict = 'fails'
   let error = null
   try {
-    reply = await transports[scenario.channel]({ env }).turn(scenario.send)
+    reply = await transports[scenario.channel]({ env, scenario }).turn(scenario.send)
     verdict = scenario.expect.test(reply) ? 'works' : 'fails'
   } catch (e) {
     error = e instanceof Error ? e.message : String(e)
   }
+  const openclaw = await runOpenClaw(scenario, env, transports)
   const record = {
     id,
     verdict,
     real: true,
     channel: scenario.channel,
-    model: MODEL,
+    model: env.PARITY_MODEL ?? MODEL,
     expected: scenario.expectation,
     sent: scenario.send,
     received: reply,
     error,
+    openclaw,
     commit: git(['rev-parse', 'HEAD'], root),
     versions: packageVersions(root),
     date: now.toISOString(),
@@ -168,16 +360,49 @@ export function writeResult(record, root = REPO_ROOT) {
   writeFileSync(join(dir, `${record.id}.json`), `${JSON.stringify(record, null, 2)}\n`)
 }
 
-/** ISO time of the item's last change: files it names, or its ledger entry. `null` when unknown. */
+/** Repo paths an item names: its `files` list and its check's path. */
+export const namedFiles = (entry) =>
+  [...(Array.isArray(entry.files) ? entry.files : []), entry.check?.path].filter(
+    (f) => typeof f === 'string',
+  )
+
+/** The ledger entry for `id` as it stood in each commit, newest first: `[{ commit, time, text }]`. */
+function entryHistory(id, root) {
+  const log = git(['log', '--format=%H %cI', '--', LEDGER], root)
+  return log
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [commit, time] = line.split(' ')
+      let text = ''
+      try {
+        text = JSON.stringify(
+          JSON.parse(git(['show', `${commit}:${LEDGER}`], root)).find((e) => e.id === id) ?? null,
+        )
+      } catch {
+        text = ''
+      }
+      return { commit, time, text }
+    })
+}
+
+/** ISO time of the commit that last changed the ledger entry for `id`. */
+function entryChange(id, root) {
+  const history = entryHistory(id, root)
+  for (let i = 0; i < history.length; i++) {
+    if (i === history.length - 1 || history[i].text !== history[i + 1].text) return history[i].time
+  }
+  return ''
+}
+
+/** ISO time of the item's last change: any file it names, or its ledger entry. `null` when unknown. */
 export function lastChange(entry, root = REPO_ROOT) {
   const times = []
-  const files = entry.check?.path ? [entry.check.path] : []
-  for (const file of files) {
+  for (const file of namedFiles(entry)) {
     if (git(['status', '--porcelain', '--', file], root)) return new Date().toISOString()
     times.push(git(['log', '-1', '--format=%cI', '--', file], root))
   }
-  const range = `/"id": "${entry.id}"/,/^  }/:${LEDGER}`
-  times.push(git(['log', '-1', '--format=%cI', '-s', '-L', range], root).split('\n')[0])
+  times.push(entryChange(entry.id, root))
   const known = times.filter(Boolean).map((t) => new Date(t).getTime())
   return known.length === 0 ? null : new Date(Math.max(...known)).toISOString()
 }
@@ -186,7 +411,7 @@ export function lastChange(entry, root = REPO_ROOT) {
  * Violations: every `shipped` entry needs a passing real result dated after its last change.
  * `resultOf(id)` returns the parsed result or null; `changedAt(entry)` the ISO time or null.
  */
-export function gate(ledger, resultOf, changedAt) {
+export function gate(ledger, resultOf, changedAt, knownCommit = () => true) {
   const violations = []
   for (const entry of ledger) {
     if (entry.status !== 'shipped') continue
@@ -195,6 +420,8 @@ export function gate(ledger, resultOf, changedAt) {
       violations.push({ id: entry.id, detail: 'no result file' })
     } else if (result.verdict !== 'works' || result.real !== true) {
       violations.push({ id: entry.id, detail: `result verdict is ${result.verdict}` })
+    } else if (!result.commit || !knownCommit(result.commit)) {
+      violations.push({ id: entry.id, detail: 'result names no commit of this repository' })
     } else {
       const changed = changedAt(entry)
       const at = Date.parse(result.date)
@@ -220,7 +447,12 @@ export function runGate({ root = REPO_ROOT, write = console.log } = {}) {
       return null
     }
   }
-  const violations = gate(ledger, resultOf, (entry) => lastChange(entry, root))
+  const violations = gate(
+    ledger,
+    resultOf,
+    (entry) => lastChange(entry, root),
+    (commit) => git(['cat-file', '-t', commit], root) === 'commit',
+  )
   for (const v of violations) write(`${v.id} shipped-without-real-result: ${v.detail}`)
   return violations.length > 0 ? 1 : 0
 }

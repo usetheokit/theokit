@@ -43,7 +43,13 @@ const entry = {
   status: 'shipped',
   check: { path: 'apps/theoclaw/tests/a.test.ts', test: 't' },
 }
-const result = (date, verdict = 'works') => ({ id: 'OC-2', verdict, real: true, date })
+const result = (date, verdict = 'works') => ({
+  id: 'OC-2',
+  verdict,
+  real: true,
+  commit: 'abc',
+  date,
+})
 
 describe('parity gate', () => {
   it('names a shipped item without a result', () => {
@@ -78,12 +84,40 @@ describe('parity gate', () => {
     mkdirSync(join(root, RESULTS_DIR), { recursive: true })
     writeFileSync(
       join(root, RESULTS_DIR, 'OC-2.json'),
-      JSON.stringify(result(new Date().toISOString())),
+      JSON.stringify({
+        ...result(new Date().toISOString()),
+        commit: git(root, 'rev-parse', 'HEAD').toString().trim(),
+      }),
     )
     expect(runGate({ root, write: () => {} })).toBe(0)
     writeFileSync(join(root, 'apps/theoclaw/tests/a.test.ts'), 'changed')
     expect(runGate({ root, write: () => {} })).toBe(1)
     expect(lastChange(entry, root)).not.toBeNull()
+  })
+})
+
+describe('parity gate: named files and forged results', () => {
+  it('fails when any file in `files` changed after the result', () => {
+    const multi = { ...entry, files: ['apps/theoclaw/tests/b.ts'] }
+    const root = repo(multi)
+    writeFileSync(join(root, 'apps/theoclaw/tests/b.ts'), 'b')
+    git(root, 'add', '.')
+    git(root, 'commit', '-q', '-m', 'b')
+    mkdirSync(join(root, RESULTS_DIR), { recursive: true })
+    const commit = git(root, 'rev-parse', 'HEAD').toString().trim()
+    const old = { ...result('2000-01-01T00:00:00Z'), commit }
+    writeFileSync(join(root, RESULTS_DIR, 'OC-2.json'), JSON.stringify(old))
+    expect(runGate({ root, write: () => {} })).toBe(1)
+  })
+  it('refuses a result naming a commit the repository does not have', () => {
+    expect(
+      gate(
+        [entry],
+        () => result('2026-11-02T00:00:00Z'),
+        () => '2026-11-01T00:00:00Z',
+        () => false,
+      ),
+    ).toHaveLength(1)
   })
 })
 

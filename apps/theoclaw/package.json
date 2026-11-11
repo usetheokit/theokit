@@ -121,6 +121,7 @@
     "boundaries": "depcruise --config .dependency-cruiser.cjs src tests",
     "lint": "eslint .",
     "parity": "node tools/parity.mjs",
+    "parity:gate": "node tools/parity-harness.mjs --gate",
     "check:versions": "node tools/check-exact-versions.mjs package.json",
     "audit": "node tools/audit-theoclaw.mjs",
     "joinery": "node tools/measure-app-joinery.mjs",
