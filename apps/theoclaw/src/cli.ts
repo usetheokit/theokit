@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import './runtime.js'
 import { spawn } from 'node:child_process'
-import { readFileSync, realpathSync } from 'node:fs'
+import { readFileSync, realpathSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Writable } from 'node:stream'
@@ -9,6 +9,7 @@ import { isSea } from 'node:sea'
 import { fileURLToPath } from 'node:url'
 
 import { backupInstance, BackupRefusal, restoreInstance, uploadBackup, downloadBackup } from './backup/backup.js'
+import { fetchBackup, initStorage, listStorage, scratchDir, storeBackup, testStorage } from './backup/storage.js'
 import { InstanceLockedError } from './backup/instance-lock.js'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './daemon.js'
@@ -76,6 +77,10 @@ const USAGE = `usage: theoclaw <command>
                             the last log lines (file, launchd log or user journal), secrets masked
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
+  theoclaw backup --to <name>        write the backup, encrypted when the location is, into a named storage location
+  theoclaw restore --from <name>     restore the newest backup of a storage location
+  theoclaw storage init <name> [--path <absolute dir>] [--no-encrypt]
+  theoclaw storage list|test [<name>]  named storage locations (encrypted by default); test writes and reads back a probe
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
   theoclaw tui [--session <id>]
                             the terminal UI on the running instance, with the token and port from the configuration file
@@ -137,12 +142,37 @@ function directoryArgument(name: string, args: readonly string[]): string {
   return dir
 }
 
+/** `--to`/`--from <name>` and the rest of the arguments. */
+function takeOption(flag: string, args: readonly string[]): { value?: string; rest: string[] } {
+  const at = args.indexOf(flag)
+  if (at < 0) return { rest: [...args] }
+  const value = args[at + 1]
+  if (value === undefined || value.startsWith('-')) throw new UsageError(`theoclaw: ${flag} expects a storage location name`)
+  return { value, rest: args.filter((_, i) => i !== at && i !== at + 1) }
+}
+
 /** `backup` and `restore` (B-400 FR-008, FR-009): exit 0, or 1 with the refusal on stderr. */
 function backupCommand(name: 'backup' | 'restore'): Command {
   return async (args, io) => {
     const live = name === 'backup' && args.includes('--live')
-    const dir = directoryArgument(name, live ? args.filter((arg) => arg !== '--live') : args)
+    const named = takeOption(name === 'backup' ? '--to' : '--from', live ? args.filter((arg) => arg !== '--live') : args)
+    const location = named.value
+    const scratch = location === undefined ? undefined : scratchDir()
+    if (location !== undefined && named.rest.length > 0) throw new UsageError(`theoclaw ${name}: expected no directory with a storage location`)
+    const dir = scratch ?? directoryArgument(name, named.rest)
     try {
+      if (location !== undefined) {
+        if (name === 'backup') {
+          const { files } = backupInstance(io.env, dir, { homeDir: io.homeDir, live })
+          const archive = storeBackup(io.env, io.homeDir, location, dir)
+          io.stdout.write(`theoclaw: backed up ${files.length} files to ${location} (${archive})\n`)
+        } else {
+          fetchBackup(io.env, io.homeDir, location, dir)
+          const { files } = restoreInstance(io.env, dir, { homeDir: io.homeDir })
+          io.stdout.write(`theoclaw: restored ${files.length} files from ${location}\n`)
+        }
+        return 0
+      }
       const target = io.env.THEOCLAW_BACKUP_TARGET
       if (name === 'restore' && target) await downloadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
       const run = name === 'backup' ? backupInstance : restoreInstance
@@ -154,8 +184,40 @@ function backupCommand(name: 'backup' | 'restore'): Command {
       if (!(error instanceof BackupRefusal) && !(error instanceof InstanceLockedError)) throw error
       io.stderr.write(`theoclaw: ${error.message}\n`)
       return 1
+    } finally {
+      if (scratch !== undefined) rmSync(dirname(scratch), { recursive: true, force: true })
     }
   }
+}
+
+/** `storage init|list|test`: exit 0, 1 on a refusal or a failed test. */
+function storageCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [verb, ...rest] = args
+  try {
+    if (verb === 'init') {
+      const encrypted = !rest.includes('--no-encrypt')
+      const pathOption = takeOption('--path', rest.filter((arg) => arg !== '--no-encrypt'))
+      const [name, ...extra] = pathOption.rest
+      if (name === undefined || extra.length > 0) throw new UsageError('theoclaw storage init: expected <name> [--path <dir>] [--no-encrypt]')
+      const location = initStorage(io.env, io.homeDir, name, { ...(pathOption.value === undefined ? {} : { path: pathOption.value }), encrypted })
+      io.stdout.write(`theoclaw: storage location ${name} initialized at ${location.root}${location.encrypted ? ' (encrypted)' : ''}\n`)
+      return Promise.resolve(0)
+    }
+    if (verb === 'list' && rest.length === 0) {
+      io.stdout.write(`${JSON.stringify(listStorage(io.env, io.homeDir), null, 2)}\n`)
+      return Promise.resolve(0)
+    }
+    if (verb === 'test' && rest.length === 1 && rest[0] !== undefined) {
+      const status = testStorage(io.env, io.homeDir, rest[0])
+      io.stdout.write(`${JSON.stringify(status)}\n`)
+      return Promise.resolve(status.state === 'ok' ? 0 : 1)
+    }
+  } catch (error) {
+    if (!(error instanceof BackupRefusal)) throw error
+    io.stderr.write(`theoclaw: ${error.message}\n`)
+    return Promise.resolve(1)
+  }
+  throw new UsageError('theoclaw storage: expected init <name>, list or test <name>')
 }
 
 /** `whatsapp login`: print the pairing QR and wait for the scan; the pairing is kept in the session directory. */
@@ -221,6 +283,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
+  storage: storageCommand,
   '--version': (_args, io) => {
     io.stdout.write(`${readVersion()}\n`)
     return Promise.resolve(0)
