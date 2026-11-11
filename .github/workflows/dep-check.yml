@@ -23,7 +23,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, workspace]
   workflow_dispatch:
     inputs:
       full:

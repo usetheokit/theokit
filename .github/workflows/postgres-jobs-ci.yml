@@ -14,7 +14,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, workspace]
     paths:
       - 'packages/theo/src/server/jobs/job-backend-postgres.ts'
       - 'tests/integration/job-backend-postgres-real.test.ts'
