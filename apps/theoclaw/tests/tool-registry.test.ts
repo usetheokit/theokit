@@ -127,7 +127,7 @@ function handRolledToolFiles(dir: string): string[] {
 describe('the tool catalogue', () => {
   it('the request the model stub receives advertises the five read-only tools and no shell', async () => {
     const settings = resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet })
-    expect(await advertisedBy(agentToolOptions(settings))).toEqual(READ_ONLY)
+    expect(await advertisedBy(agentToolOptions(settings))).toEqual([...READ_ONLY, 'skill_read'].sort())
   })
 
   it('does not offer view_image on the openai-chatgpt/ route, whose wire carries tool results as text', () => {
@@ -141,7 +141,7 @@ describe('the tool catalogue', () => {
   it('advertises the four host-changing tools and no interactive shell when THEOCLAW_HOST_TOOLS is on', async () => {
     const settings = resolveToolSettings({ THEOCLAW_HOST_TOOLS: 'on' }, hostWorkspace(), { detect: enforced, ...quiet })
     const names = await advertisedBy(agentToolOptions(settings))
-    expect(names).toEqual([...READ_ONLY, ...HOST].sort())
+    expect(names).toEqual([...READ_ONLY, ...HOST, 'skill_read'].sort())
     expect(names).not.toContain('interactive_shell')
     expect(names).not.toContain('shell')
   })
@@ -153,7 +153,7 @@ describe('the tool catalogue', () => {
     makeRepository(join(workspace, 'files'))
     const repository = resolveToolSettings({}, workspace, { detect: enforced, ...quiet })
     expect(repository.gitRepository).toBe(true)
-    expect(await advertisedBy(agentToolOptions(repository))).toEqual([...READ_ONLY, 'git_diff'].sort())
+    expect(await advertisedBy(agentToolOptions(repository))).toEqual([...READ_ONLY, 'git_diff', 'skill_read'].sort())
   })
 
   it('does not advertise git_diff when the sandbox is not enforced, and prints the off line', () => {

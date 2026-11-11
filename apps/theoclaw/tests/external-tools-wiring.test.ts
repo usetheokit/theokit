@@ -127,7 +127,7 @@ describe('the external tools reach the /control agent only', () => {
     for (let i = 0; i < 20; i += 1) await chat()
     expect(options).toHaveLength(20)
     for (const option of options) {
-      expect(option.tools).toBeUndefined()
+      expect((option.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
       expect(option.plugins).toBeUndefined()
       expect(option.mcpServers).toBeUndefined()
     }

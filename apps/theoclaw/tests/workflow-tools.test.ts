@@ -57,7 +57,7 @@ describe('the digest tool', () => {
     const [captured] = draft.created
     expect(captured?.withheldBuiltinTools).toEqual(['shell'])
     expect(captured?.memory).toEqual({ enabled: false })
-    expect(captured?.tools).toBeUndefined()
+    expect((captured?.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
   })
 
   it('returns the points of a completed run to the model', async () => {

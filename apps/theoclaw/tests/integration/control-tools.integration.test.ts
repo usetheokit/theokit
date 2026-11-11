@@ -80,7 +80,7 @@ describe('delegate, question and the task tools on a /control agent, over the mo
     await controlTurn(toolSettings, stub, 'ask a worker')
 
     expect(stub.requests).toHaveLength(3)
-    expect(advertisedTools(stub.requests[1])).toEqual(readOnlyTools(toolSettings).map((tool) => tool.name).sort())
+    expect(advertisedTools(stub.requests[1])).toEqual([...readOnlyTools(toolSettings).map((tool) => tool.name), 'skill_read'].sort())
     expect(toolMessages(stub, 2)).toContain('worker-token-91c2')
   })
 

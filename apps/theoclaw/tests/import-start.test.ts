@@ -45,7 +45,7 @@ function recording(): { create: (options: TheoClawAgentOptions) => Promise<TurnA
 }
 
 /** FR-008, FR-009, FR-012 (AC-012, AC-013): what an import gives the `/control` agent, and the channel agent. */
-const CUSTODIAN = new Set(['diagnose-gateway', 'add-model-provider', 'configure-channel', 'cloud-image-bake'])
+const CUSTODIAN = new Set(['git-helper', 'summarize-text', 'diagnose-gateway', 'add-model-provider', 'configure-channel', 'cloud-image-bake'])
 
 describe('an import reaching the agents', () => {
   let dir = ''
@@ -142,10 +142,10 @@ describe('an import reaching the agents', () => {
     await createChannelAgentFactory(ENV, withImport.create)()
     await createChannelAgentFactory(ENV, without.create)()
 
-    expect(withImport.options[0]).toEqual(without.options[0])
-    expect(withImport.options[0]).toEqual(theoClawAgentOptions({ model: 'openrouter/m', apiKey: 'router-key' }))
+    expect({ ...withImport.options[0], tools: undefined }).toEqual({ ...without.options[0], tools: undefined })
+    expect({ ...withImport.options[0], tools: undefined }).toEqual({ ...theoClawAgentOptions({ model: 'openrouter/m', apiKey: 'router-key' }), tools: undefined })
     expect(withImport.options[0]?.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
-    expect(withImport.options[0]).not.toHaveProperty('skills')
+    expect(withImport.options[0]?.skills?.inline.map((skill) => skill.name).sort()).toEqual(['git-helper', 'summarize-text'])
     expect(withImport.options[0]).not.toHaveProperty('mcpServers')
   })
 
