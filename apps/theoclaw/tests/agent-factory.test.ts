@@ -168,7 +168,7 @@ describe("webchatAgentFactory", () => {
     await webchatAgentFactory(env, create)();
 
     expect(options).toHaveLength(1);
-    expect({ ...options[0], tools: undefined }).toEqual({ ...agentOptionsFor(env), tools: undefined });
+    expect({ ...options[0], tools: undefined, skillsRefresh: undefined }).toEqual({ ...agentOptionsFor(env), tools: undefined, skillsRefresh: undefined });
     expect(effectiveToolNames({ ...options[0] }).names).toEqual(['skill_read']);
   });
 });
