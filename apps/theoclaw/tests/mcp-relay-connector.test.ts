@@ -20,14 +20,18 @@ afterEach(async () => {
 
 const call = (name: string, args: unknown) => ({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })
 
+interface RelayAnswer {
+  error?: unknown
+  result?: { isError?: boolean; tools?: { name: string }[] }
+}
 interface FakeRelay {
   readonly url: string
-  readonly responses: Array<{ id: string; response: any }>
+  readonly responses: Array<{ id: string; response: RelayAnswer }>
   readonly auth: string[]
   readonly polls: () => number
   readonly queue: (job: McpRelayJob) => void
   readonly failNext: (mode: 500 | 'drop', times?: number) => void
-  readonly answered: (id: string) => Promise<any>
+  readonly answered: (id: string) => Promise<RelayAnswer>
 }
 
 async function fakeRelay(): Promise<FakeRelay> {
@@ -117,7 +121,7 @@ describe('MCP relay connector', () => {
     const list = { jsonrpc: '2.0', id: 2, method: 'tools/list' }
     relay.queue({ id: 'l1', client: 'c', allowedTools: ['list_dir'], body: list })
     relay.queue({ id: 'l2', client: 'c', allowedTools: null, body: list })
-    const names = (r: any) => r.result.tools.map((t: { name: string }) => t.name)
+    const names = (r: RelayAnswer) => (r.result?.tools ?? []).map((t) => t.name)
     expect(names(await relay.answered('l1'))).toEqual(['list_dir'])
     expect(names(await relay.answered('l2')).length).toBeGreaterThan(1)
   })

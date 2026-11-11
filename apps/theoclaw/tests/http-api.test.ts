@@ -116,7 +116,7 @@ describe('createTheoClawApi, the token gate', () => {
     for (const path of API_PATHS) {
       const response = await api(new Request(`http://127.0.0.1${path}`, { method: 'POST', body: '{}' }))
       expect(response?.status, path).toBe(401)
-      expect(errorType((await response?.json()) as Record<string, unknown>)).toBe('unauthorized')
+      expect(errorType((await response?.json()) as { choices: { delta: { content?: string } }[]; usage?: unknown })).toBe('unauthorized')
     }
     expect(built.count).toBe(0)
   })
@@ -256,7 +256,7 @@ describe('the API in the started process', () => {
     const streamed = await post(true)
     const frames = (await streamed.text()).split('\n\n').filter((frame) => frame !== '')
     expect(frames.at(-1)).toBe('data: [DONE]')
-    const chunks = frames.slice(0, -1).map((frame) => JSON.parse(frame.slice('data: '.length)) as Record<string, any>)
+    const chunks = frames.slice(0, -1).map((frame) => JSON.parse(frame.slice('data: '.length)) as { choices: { delta: { content?: string } }[]; usage?: unknown })
     expect(chunks.map((chunk) => chunk.choices[0].delta.content ?? '').join('')).toBe('pong')
     expect(chunks.filter((chunk) => chunk.choices[0].delta.content).length).toBeGreaterThan(1)
     expect(chunks.at(-1)?.usage).toMatchObject({ prompt_tokens: 11, completion_tokens: 4 })
