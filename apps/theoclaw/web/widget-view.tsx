@@ -1,3 +1,4 @@
+import { WEBCHAT_SANDBOX_PATH } from '../src/webchat/paths.js'
 import type { Widget } from '../src/canvas/widget-schema.js'
 
 /** One widget, drawn as plain elements: every string is a React text child, so none is parsed as HTML; the `html` kind is the one exception, a sandboxed iframe. */
@@ -52,9 +53,10 @@ export function WidgetView({ widget }: { readonly widget: Widget }) {
           {title}
           <iframe
             title={widget.title ?? 'widget'}
+            src={WEBCHAT_SANDBOX_PATH}
             sandbox="allow-scripts"
             referrerPolicy="no-referrer"
-            srcDoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">${widget.html}`}
+            onLoad={(event) => event.currentTarget.contentWindow?.postMessage(widget.html, '*')}
             style={{ width: '100%', height: 240, border: '1px solid #8884' }}
           />
         </section>
