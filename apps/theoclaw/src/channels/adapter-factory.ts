@@ -1,6 +1,8 @@
 import type { BasePlatformAdapter } from '@theokit/gateway'
 import { DiscordAdapter } from '@theokit/gateway-discord'
 import { EmailAdapter } from '@theokit/gateway-email'
+import type { GoogleChatAdapterOptions } from '@theokit/gateway-google-chat'
+import { GoogleChatAdapter } from '@theokit/gateway-google-chat'
 import { LineAdapter } from '@theokit/gateway-line'
 import { MatrixAdapter } from '@theokit/gateway-matrix'
 import { MattermostAdapter } from '@theokit/gateway-mattermost'
@@ -12,6 +14,8 @@ import { TelegramAdapter } from '@theokit/gateway-telegram'
 import { TlonUrbitAdapter } from '@theokit/gateway-tlon-urbit'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 
+import { readFileSync } from 'node:fs'
+
 import type { PlatformBuild } from './channel-loop.js'
 import { isBaileys } from './platforms.js'
 import type { ConfiguredPlatform, PlatformSettings, SupportedPlatform } from './platforms.js'
@@ -22,6 +26,30 @@ import type { ConfiguredPlatform, PlatformSettings, SupportedPlatform } from './
  */
 export function smsOptions(settings: PlatformSettings<'sms'>): TwilioOptions {
   return { backend: 'twilio', ...settings }
+}
+
+/**
+ * The Google Chat adapter's options, read from the service-account JSON key file. The adapter gets
+ * a stub Express app, so it opens no port of its own: the Chat webhook is served by the instance's
+ * HTTP server at `/webhooks/google_chat`, and `connect()` only fetches the first access token.
+ */
+export function googleChatOptions(settings: PlatformSettings<'google_chat'>): GoogleChatAdapterOptions {
+  let key: unknown
+  try {
+    key = JSON.parse(readFileSync(settings.serviceAccountFile, 'utf8'))
+  } catch (error) {
+    throw new Error(`the Google Chat service-account file could not be read: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  const { client_email: email, private_key: privateKey } = (typeof key === 'object' && key !== null ? key : {}) as Record<string, unknown>
+  if (typeof email !== 'string' || typeof privateKey !== 'string') {
+    throw new Error('the Google Chat service-account file has no client_email and private_key')
+  }
+  return {
+    serviceAccountEmail: email,
+    privateKey,
+    audience: settings.audience,
+    app: { post: () => undefined } as unknown as NonNullable<GoogleChatAdapterOptions['app']>,
+  }
 }
 
 /** Options that apply to every build, from the authorization policy. */
@@ -131,6 +159,7 @@ const ADAPTERS: AdapterConstructors = {
           mention(options),
         ),
   teams: (settings) => new TeamsAdapter(settings),
+  google_chat: (settings) => new GoogleChatAdapter(googleChatOptions(settings)),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }

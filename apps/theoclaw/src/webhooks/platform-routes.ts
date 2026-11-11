@@ -6,6 +6,8 @@ import type { ChannelLoop, PlatformBuild } from '../channels/channel-loop.js'
 import { isBaileys } from '../channels/platforms.js'
 import type { PlatformSettings, SupportedPlatform } from '../channels/platforms.js'
 import { describeError } from '../control-plane/errors.js'
+import { createGoogleChatRoute } from './google-chat.js'
+import type { GoogleChatInbound } from './google-chat.js'
 import { createLineRoute } from './line.js'
 import type { WebhookRoute } from './router.js'
 import { createSmsRoute } from './sms.js'
@@ -99,6 +101,14 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
       },
     }
   },
+  google_chat: () => ({
+    methods: ['POST'],
+    buildRoute: (adapter) => {
+      if (typeof (adapter as { handleRequest?: unknown }).handleRequest !== 'function')
+        throw new Error('the built adapter cannot answer a Google Chat request')
+      return createGoogleChatRoute(adapter as BasePlatformAdapter & GoogleChatInbound)
+    },
+  }),
   teams: (settings, { write, verifierFactory }) => {
     const verify = teamsVerifier(settings, verifierFactory, write)
     return {
