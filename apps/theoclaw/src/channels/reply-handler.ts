@@ -38,6 +38,24 @@ export const RESET_FAILED_REPLY = 'I could not start a new conversation; this on
  */
 const RESET_COMMANDS: ReadonlySet<string> = new Set(['/new', '/reset'])
 
+/** `/steer <text>`: redirect the turn already running; the text after the command is what is injected. */
+const STEER_COMMAND = /^\/steer(?:\s+([\s\S]*))?$/i
+
+export const STEER_USAGE_REPLY = 'Usage: /steer <text> (redirects the turn that is running)'
+export const STEER_IDLE_REPLY = 'Nothing is running to steer; send your message as usual.'
+export const STEERED_REPLY = 'Steering the running turn.'
+
+/** How many turns each session agent is running now, so `/steer` knows whether there is one to redirect. */
+const runningTurns = new WeakMap<object, number>()
+
+function turnStarted(agent: object): void {
+  runningTurns.set(agent, (runningTurns.get(agent) ?? 0) + 1)
+}
+
+function turnEnded(agent: object): void {
+  runningTurns.set(agent, Math.max(0, (runningTurns.get(agent) ?? 1) - 1))
+}
+
 const THINK_COMMAND = /^\/think(?:\s+(\S+))?$/i
 
 function answerThink(think: (event: MessageEvent, level: ThinkingLevel) => void, event: MessageEvent, arg: string | undefined): string {
@@ -313,6 +331,7 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
   try {
     return await options.withAgent(event, async (lease) => {
       started = true
+      turnStarted(lease.agent)
       const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
       try {
         const advisor = options.advisor === undefined ? undefined : watchTurn(options.advisor, advisorHistoryOf(options.advisor), lease.agentId ?? event.channel.id)
@@ -327,6 +346,7 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
         return maskSecrets(outcome.answer, secrets)
       } finally {
         await stopTyping()
+        turnEnded(lease.agent)
         lease.release()
       }
     })
@@ -338,6 +358,19 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
     await send(ctx, finishTurn(presenter), { failed: true, error })
     throw error
   }
+}
+
+/** Inject `note` into the session's running turn; with none running, nothing is sent and the person is told. */
+async function answerSteer(options: ReplyHandlerOptions, event: MessageEvent, note: string): Promise<string> {
+  return options.withAgent(event, async (lease) => {
+    try {
+      if ((runningTurns.get(lease.agent) ?? 0) === 0) return STEER_IDLE_REPLY
+      await lease.agent.send(note, { ...untrustedContentSendOptions(), queueMode: 'steer' })
+      return STEERED_REPLY
+    } finally {
+      lease.release()
+    }
+  })
 }
 
 /**
@@ -424,6 +457,13 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
         throw error
       }
       await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
+      return
+    }
+    const steer = STEER_COMMAND.exec(text)
+    if (steer !== null) {
+      const note = (steer[1] ?? '').trim()
+      const reply = note === '' ? STEER_USAGE_REPLY : await answerSteer(options, event, note)
+      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
       return
     }
     const think = options.think === undefined ? null : THINK_COMMAND.exec(text)
