@@ -135,7 +135,7 @@ describe('the external tools reach the /control agent only', () => {
     const control = recordingCreate()
     await createAgentFactory(MODEL_ENV, control.create)(agentToolOptions(settings))
     expect(Object.keys(control.options[0]?.mcpServers ?? {})).toHaveLength(2)
-    expect(control.options[0]?.tools).toHaveLength(without.tools.length + 2)
+    expect(control.options[0]?.tools).toHaveLength(without.tools.length + 3) // + skill_read for the custodian skills
   })
 
   it('every ACP tool comes from theokit/server/agent', () => {
