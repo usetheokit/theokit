@@ -140,6 +140,7 @@ const USAGE = `usage: theoclaw <command>
   theoclaw sandbox list     list the sandbox containers theoclaw made (docker backend): name, status, image, session, total
   theoclaw sandbox recreate [--all | --session <id>] [--force]
                             remove them so the next command of that session starts a fresh one; asks before removing a running one
+                            (containers are labelled "main" unless the session has a sandbox mode of its own)
   theoclaw sessions list|show <id>|export <id> [--json]
                             list the chat sessions, show one's summary, or print its messages (an id prefix is enough)
   theoclaw sessions share <id> --to <dir> | open <id> --from <dir>

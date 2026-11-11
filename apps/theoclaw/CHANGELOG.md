@@ -17,7 +17,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- `theoclaw sandbox list` and `theoclaw sandbox recreate [--all | --session <id>] [--force]` list and remove the sandbox containers of `THEOCLAW_SANDBOX_BACKEND=docker`; the backend now labels its container and keeps the finished one (one per session) so it can be found. With bwrap both say there is nothing to manage. (#1609)
+- `theoclaw sandbox list` and `theoclaw sandbox recreate [--all | --session <id>] [--force]` list and remove the sandbox containers of `THEOCLAW_SANDBOX_BACKEND=docker`; the backend now labels its container and keeps the finished one (one per session) so it can be found. `--session` matches the label `main` and the sessions that build a backend of their own (`THEOCLAW_SANDBOX_SESSIONS`); other chat sessions share `main`'s containers. With bwrap both say there is nothing to manage. (#1609)
 - `THEOCLAW_ACK_REACTION=👀` reacts to each inbound message when its turn starts, through the adapter's `react` method; the gateway packages are raised to the releases that ship typing and reactions on Discord, Slack and Matrix (Teams still has no typing indicator). (#1542)
 - WebChat has a language switch in its settings (English or Svenska), using the `@theokit/ui` 1.13.0 i18n layer, so switching to Svenska shows "Inställningar". (#1547)
 - `theoclaw mcp-relay serve --port N [--host H]` runs the hosted MCP relay that remote MCP clients connect to: `POST /mcp` with a client grant token, and `/instance/poll` and `/instance/respond` for the instance, guarded by `THEOCLAW_MCP_RELAY_TOKEN`. (#1635)

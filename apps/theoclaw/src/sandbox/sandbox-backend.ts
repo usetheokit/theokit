@@ -60,12 +60,16 @@ const QUICK = { timeoutMs: 10_000, maxOutputBytes: 64 * 1024 } as const
  * Makes the SDK's throwaway container something `sandbox list` can find. The SDK runs each command
  * with `docker run --rm`, so nothing is left to list; this runner labels the container, keeps it
  * after it exits, and removes the session's earlier finished ones, so one container per session stays
- * until `sandbox recreate` removes it.
+ * until `sandbox recreate` removes it. `session` is the key of the session the backend was built for:
+ * the chat sessions share the default session's backend (`main`), and only a session whose sandbox
+ * mode differs (`THEOCLAW_SANDBOX_SESSIONS`) builds its own, so `--session` matches those keys only.
  */
 function keepLabelled(base: DockerRunner, session: string): DockerRunner {
   return async (args, opts) => {
-    if (args[0] !== 'run') return base(args, opts)
-    const name = args[args.indexOf('--name') + 1]
+    const at = args.indexOf('--name')
+    // Not a command's `docker run` with a name: leave it alone.
+    if (args[0] !== 'run' || at < 0 || args[at + 1] === undefined) return base(args, opts)
+    const name = args[at + 1]
     const rest = args.slice(1).filter((arg) => arg !== '--rm')
     const result = await base(['run', '--label', `${SANDBOX_LABEL}=true`, '--label', `${SESSION_LABEL}=${session}`, ...rest], opts)
     await pruneFinished(base, session, name).catch(() => undefined)
