@@ -238,6 +238,30 @@ describe('the API in the started process', () => {
     expect(completion.choices[0]?.message.content).toBe('ab')
   })
 
+  it('streams data: chunks ending in [DONE] and reports usage in both modes', async () => {
+    const result = { status: 'finished', usage: { inputTokens: 11, outputTokens: 4 } }
+    const { base } = await startApi({
+      createChatAgent: async () => new FakeAgent({ frames: [assistant('po'), assistant('ng'), finished()], result }),
+    })
+    const post = (stream: boolean) =>
+      fetch(`${base}/v1/chat/completions`, {
+        method: 'POST',
+        headers: bearer(),
+        body: JSON.stringify({ model: 'test-model', stream, messages: [{ role: 'user', content: 'x' }] }),
+      })
+
+    const plain = (await (await post(false)).json()) as { usage: Record<string, number> }
+    expect(plain.usage).toMatchObject({ prompt_tokens: 11, completion_tokens: 4 })
+
+    const streamed = await post(true)
+    const frames = (await streamed.text()).split('\n\n').filter((frame) => frame !== '')
+    expect(frames.at(-1)).toBe('data: [DONE]')
+    const chunks = frames.slice(0, -1).map((frame) => JSON.parse(frame.slice('data: '.length)) as Record<string, any>)
+    expect(chunks.map((chunk) => chunk.choices[0].delta.content ?? '').join('')).toBe('pong')
+    expect(chunks.filter((chunk) => chunk.choices[0].delta.content).length).toBeGreaterThan(1)
+    expect(chunks.at(-1)?.usage).toMatchObject({ prompt_tokens: 11, completion_tokens: 4 })
+  })
+
   it('answers 404 for shell when host tools are off', async () => {
     const off = await startApi({ hostTools: false })
     const on = await startApi({ hostTools: true })

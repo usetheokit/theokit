@@ -65,8 +65,9 @@ export function validateToolArgs(tool: CustomTool, args: Record<string, unknown>
 function completeWith(options: TheoClawApiOptions): (
   request: OpenAIChatRequest,
   onDelta?: (text: string) => void,
+  signal?: AbortSignal,
 ) => Promise<OpenAICompletion> {
-  return async (request, onDelta) => {
+  return async (request, onDelta, signal) => {
     const text: string[] = []
     const emit = (event: TurnEvent): void => {
       if (event.type === 'text_delta' && typeof event.content === 'string') {
@@ -75,7 +76,7 @@ function completeWith(options: TheoClawApiOptions): (
       }
     }
     const message = renderTranscript(request.messages)
-    const outcome = await runTheoClawTurn({ withAgent: options.withAgent, message, runId: randomUUID(), emit, model: options.model })
+    const outcome = await runTheoClawTurn({ withAgent: options.withAgent, message, runId: randomUUID(), emit, model: options.model, ...(signal === undefined ? {} : { signal }) })
     if (!outcome.ok) {
       options.stderr(`theoclaw: http api turn failed: ${outcome.reason}`)
       throw new Error(outcome.reason)

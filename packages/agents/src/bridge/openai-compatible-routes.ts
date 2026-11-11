@@ -35,11 +35,12 @@ export interface OpenAICompatibleRoutesOptions {
    * One request in, the assistant's text out (or the text with its token usage); a rejection
    * answers 502 `turn_failed`. For `stream: true` the handler passes `onDelta`: calling it with
    * each piece of text sends a chunk at once; a `complete` that never calls it still answers, with
-   * the whole text as one chunk.
+   * the whole text as one chunk. `signal` aborts when the streaming client disconnects.
    */
   readonly complete: (
     request: OpenAIChatRequest,
     onDelta?: (text: string) => void,
+    signal?: AbortSignal,
   ) => Promise<string | OpenAICompletion>
 }
 
@@ -213,9 +214,14 @@ function streamCompletion(
     choices: [{ index: 0, delta, finish_reason: finish }],
     ...extra,
   })
+  const gone = new AbortController()
   const body = new ReadableStream<Uint8Array>({
+    cancel() {
+      gone.abort()
+    },
     async start(controller) {
       const send = (data: object | string): void => {
+        if (gone.signal.aborted) return
         const text = typeof data === 'string' ? data : JSON.stringify(data)
         controller.enqueue(encoder.encode(`data: ${text}\n\n`))
       }
@@ -223,11 +229,15 @@ function streamCompletion(
       const streamed = { any: false }
       try {
         const result = normalize(
-          await options.complete(parsed, (text) => {
-            if (text === '') return
-            streamed.any = true
-            send(chunk({ content: text }, null))
-          }),
+          await options.complete(
+            parsed,
+            (text) => {
+              if (text === '') return
+              streamed.any = true
+              send(chunk({ content: text }, null))
+            },
+            gone.signal,
+          ),
         )
         if (!streamed.any && result.text !== '') send(chunk({ content: result.text }, null))
         const usage = usageBody(result.usage)
@@ -238,7 +248,7 @@ function streamCompletion(
         })
       }
       send('[DONE]')
-      controller.close()
+      if (!gone.signal.aborted) controller.close()
     },
   })
   return new Response(body, {
