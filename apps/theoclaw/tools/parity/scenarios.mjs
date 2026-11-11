@@ -18,6 +18,6 @@ export const SCENARIOS = [
         ['doctor'],
       ],
     },
-    expect: { match: '.', flags: '' },
+    expect: { match: '^ok\\s', flags: 'm' },
   },
 ]

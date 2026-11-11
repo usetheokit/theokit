@@ -9,6 +9,7 @@ import { join } from 'node:path'
 
 import { APP_DIR, RESULTS_DIR } from './harness.mjs'
 
+const REPO_ROOT = join(APP_DIR, '..', '..')
 export const LEDGER_REPO_PATH = 'apps/theoclaw/parity/ledger.json'
 
 /** The files an item names: `files` when set, else its check's path. */
@@ -40,8 +41,9 @@ export function gate({ ledger, baseLedger, changed, lastChange, readResult }) {
 }
 
 function git(args) {
-  const out = spawnSync('git', args, { cwd: APP_DIR, encoding: 'utf8' })
-  return out.status === 0 ? out.stdout.trim() : undefined
+  // From the repository root: the ledger's paths and `git diff --name-only` are root-relative.
+  const out = spawnSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' })
+  return out.status === 0 ? out.stdout.replace(/\n$/, '') : undefined
 }
 
 function baseRef(argv, env) {
@@ -65,11 +67,13 @@ export function runGate(argv, { out = console, env = process.env } = {}) {
     }
     baseLedger = JSON.parse(baseText)
     const diff = git(['diff', '--name-only', `${ref}...HEAD`]) ?? ''
-    const dirty = git(['status', '--porcelain']) ?? ''
-    changed = new Set([...diff.split('\n'), ...dirty.split('\n').map((l) => l.slice(3))].filter(Boolean))
+    const dirty = git(['diff', '--name-only', 'HEAD']) ?? ''
+    const untracked = git(['ls-files', '--others', '--exclude-standard']) ?? ''
+    changed = new Set([diff, dirty, untracked].flatMap((text) => text.split('\n')).filter(Boolean))
   }
   const lastChange = (files) => {
-    if (files.some((f) => (git(['status', '--porcelain', '--', f]) ?? '') !== '')) return new Date().toISOString()
+    const dirty = [git(['diff', '--name-only', 'HEAD', '--', ...files]), git(['ls-files', '--others', '--exclude-standard', '--', ...files])]
+    if (dirty.some((text) => text)) return new Date().toISOString()
     return git(['log', '-1', '--format=%cI', 'HEAD', '--', ...files]) ?? '1970-01-01T00:00:00Z'
   }
   const readResult = (id) => {
