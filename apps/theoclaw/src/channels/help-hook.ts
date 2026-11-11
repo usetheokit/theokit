@@ -16,7 +16,7 @@ export const HELP_TEXT = [
   '/usage off|tokens|cost|full - the usage footer of replies',
   '/activation mention|always - how a group activates the bot (groups only)',
   '/approve [always], /deny - answer an exec waiting for approval',
-  '/elevated on|off - run execs of this session without asking',
+  '/elevated on|off - run this session\'s shell outside the sandbox, without asking',
   '/acp start <agent>|list|stop <id> - run, list and stop ACP agent sessions',
 ].join('\n')
 

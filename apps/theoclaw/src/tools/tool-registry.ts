@@ -95,6 +95,17 @@ function scopeOf(settings: ToolSettings): ReturnType<typeof bindToolScope> {
   })
 }
 
+/** The sandboxed shell over the settings' backend; `shell_exec`. */
+export function shellToolFor(settings: ToolSettings): CustomTool {
+  return scopeOf(settings).bind(createShellTool)()
+}
+
+/** The two read-only file tools: the `minimal` tool profile. */
+export function fileReadTools(settings: ToolSettings): CustomTool[] {
+  const scope = scopeOf(settings)
+  return [scope.bind(createReadFileTool)(), scope.bind(createListDirTool)()]
+}
+
 /**
  * The tools a script (`run_code`) or a `delegate_all` worker may hold: they read the tool root or
  * the web and change nothing on the host (plan D3). Host-changing tools wait for exec approval.
