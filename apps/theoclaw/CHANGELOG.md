@@ -18,6 +18,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Inbound Twilio phone calls (#1627, OC-15): `POST /webhooks/voice`, enabled by `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and `THEOCLAW_VOICE_CALL_PUBLIC_URL`, answers a call with a spoken agent reply through TwiML `<Gather>`/`<Say>`. The signature is checked, only `THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS` are answered (caller ID is not strong authentication), and two silences or a goodbye hang up.
 - `/steer <text>` (#1526, OC-52): in a chat channel, and as a `steer` frame on `/control` (answered `steer_ok`, or `no_turn` when nothing runs), the text is injected into the turn already running (SDK `queueMode: 'steer'`) instead of waiting behind it.
 - `theoclaw worker pair|run|status` (#1590): a paired worker device with `--inference worker` runs model calls locally and records the provider request in its own `worker.log`; with `gateway` the message is proxied to the gateway's `/control` socket.
 
