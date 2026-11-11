@@ -873,6 +873,21 @@ pnpm --filter theoclaw run build
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/instance-profiles.live.test.ts
 ```
 
+## Skills registry
+
+TheoClaw can search, install and publish skills on a skills registry. Self-host the reference
+server with `pnpm skills-registry` (it needs `THEOCLAW_SKILLS_REGISTRY_TOKEN`; optional
+`THEOCLAW_SKILLS_REGISTRY_DIR` and `THEOCLAW_SKILLS_REGISTRY_PORT`, default 8787, bound to 127.0.0.1).
+Clients point at it with `THEOCLAW_SKILLS_REGISTRY`.
+
+- `theoclaw skills search <term>` lists matching skills.
+- `theoclaw skills install <name>[@<version>]` downloads the skill, checks its sha256 and installs it
+  into `<THEOCLAW_WORKSPACE>/skills/<name>/`. An open session offers it on its next turn.
+- `theoclaw skills publish <dir>` uploads a folder whose `SKILL.md` has name, description and version,
+  with `THEOCLAW_SKILLS_TOKEN`.
+
+A public hosted registry is not part of this repository.
+
 ## Import a Claude Code or Hermes setup
 
 TheoClaw can take over the instructions, MCP servers, skills and memories of a Claude Code or a
