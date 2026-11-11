@@ -42,7 +42,7 @@ describe('vetoToolCall', () => {
   })
 })
 
-const API_PATHS = ['/v1/models', '/v1/chat/completions', '/tools/invoke'] as const
+const API_PATHS = ['/v1/models', '/v1/chat/completions', '/tools/invoke', '/mcp'] as const
 const HOST_TOOLS = ['write_file', 'edit_file', 'apply_patch', 'shell_exec'] as const
 
 /** A start on a host-tools-capable workspace, stopped after the test; `hostTools` switches them. */
