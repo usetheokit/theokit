@@ -108,7 +108,7 @@ describe('readSkillsDir', () => {
     const dropped: DroppedEntry[] = []
 
     expect(readSkillsDir(dir, 'skills', dropped)).toEqual([
-      { name: 'one', description: 'The first skill', body: 'Say ONE.\n', path: 'skills/one/SKILL.md' },
+      { name: 'one', description: 'The first skill', body: 'Say ONE.\n', requiresBins: [], path: 'skills/one/SKILL.md' },
     ])
     expect(dropped).toEqual([])
   })
