@@ -285,13 +285,12 @@ describe("sessionAgentOptions", () => {
     });
   });
 
-  it("keeps the env's hook gate beside cwd and sessionDir, and loads the project settings once a hook is approved (B-397 D3, OC-87)", () => {
+  it("keeps the env's hook gate beside cwd and sessionDir, and loads no project setting for a chat agent even with a hook approved (B-397 D3, OC-87)", () => {
     const local = sessionAgentOptions({ ...MODEL_ENV, THEOCLAW_APPROVED_HOOKS: APPROVED }, "/ws").local;
     expect(local.cwd).toBe("/ws");
     expect(local.hooks.approve?.(LISTED_HOOK)).toBe(true);
     expect(local.hooks.approve?.(UNLISTED_HOOK)).toBe(false);
-    expect(local.settingSources).toEqual(["project"]);
-    expect(sessionAgentOptions(MODEL_ENV, "/ws").local).not.toHaveProperty("settingSources");
+    expect(local).not.toHaveProperty("settingSources");
   });
 
   it("refuses a missing model with the start's own words", () => {
@@ -368,5 +367,19 @@ describe("the hook approval gate on every agent's options", () => {
     await expect(createAgentFactory({ ...MODEL_ENV, THEOCLAW_APPROVED_HOOKS: "nope" }, create)()).rejects.toThrow(
       "THEOCLAW_APPROVED_HOOKS",
     );
+  });
+});
+
+describe("the /control factory and project hooks (OC-87)", () => {
+  it("hands its agent 'project' settings when a hook is approved, and not otherwise", async () => {
+    const seen: unknown[] = [];
+    const create = ((options: { local: unknown }) => {
+      seen.push(options.local);
+      return Promise.resolve({ [Symbol.asyncDispose]: () => Promise.resolve() });
+    }) as never;
+    await createAgentFactory({ ...MODEL_ENV, THEOCLAW_APPROVED_HOOKS: APPROVED, THEOCLAW_TRANSCRIPTS: "on" } as never, create)();
+    await createAgentFactory({ ...MODEL_ENV, THEOCLAW_TRANSCRIPTS: "on" } as never, create)();
+    expect((seen[0] as { settingSources?: string[] }).settingSources).toEqual(["project"]);
+    expect(seen[1]).not.toHaveProperty("settingSources");
   });
 });

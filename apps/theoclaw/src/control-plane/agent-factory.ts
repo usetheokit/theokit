@@ -142,6 +142,7 @@ export function createAgentFactory(
         model,
         apiKey: modelKey,
         approvedHooks: parseApprovedHooks(env),
+        projectHooks: true,
         ...skillsDirOf(env),
         ...thinkingOf(env),
         ...agentTelemetry(readTelemetrySettings(env)),

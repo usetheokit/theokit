@@ -3,7 +3,7 @@
  * commands whose fingerprint the owner listed in `THEOCLAW_APPROVED_HOOKS`.
  */
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -11,6 +11,8 @@ import { Agent } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { theoClawAgentOptions } from '../src/agent/create-agent.js'
+import { agentToolOptions } from '../src/tools/tool-registry.js'
+import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { createHookApprovalGate, hookFingerprint, parseApprovedHooks } from '../src/agent/hook-approval.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { waitFor } from './fakes.js'
@@ -168,4 +170,36 @@ describe('a real SDK agent with the gate (NFR-004)', () => {
     await runOneTurn(workspace, new Set(), false)
     await waitFor(() => existsSync(workspace.stopMarker), 10_000, 'the ungated Stop hook to touch its marker')
   })
+})
+
+describe('the /control agent loads an approved project hook (OC-87)', () => {
+  const settings = (cwd: string, command: string): void => {
+    mkdirSync(join(cwd, '.theokit'))
+    writeFileSync(
+      join(cwd, '.theokit', 'settings.json'),
+      JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'list_dir', hooks: [{ type: 'command', command }] }] } }),
+    )
+  }
+
+  async function listDirTurn(cwd: string, approvedHooks: ReadonlySet<string>): Promise<void> {
+    const stub = await startModelStub([{ toolCalls: [{ name: 'list_dir', args: { path: '.' } }] }, { text: 'done' }])
+    realCleanups.push(() => stub.close())
+    const options = theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', approvedHooks, projectHooks: true, pluginWorkspace: cwd, toolOptions: agentToolOptions(resolveToolSettings({}, cwd)) })
+    const agent = await Agent.create(options)
+    realCleanups.push(() => agent[Symbol.asyncDispose]())
+    const run = await agent.send('list it')
+    expect(await run.wait()).toMatchObject({ status: 'finished' })
+  }
+
+  it('writes a line for a list_dir turn once the fingerprint is approved, and none when it is not', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'theoclaw-hook-log-'))
+    const log = join(cwd, 'tools.log')
+    const command = `cat >> ${log}`
+    settings(cwd, command)
+    await listDirTurn(cwd, new Set())
+    expect(existsSync(log)).toBe(false)
+    await listDirTurn(cwd, new Set([hookFingerprint({ sourceEvent: 'PreToolUse', command, timeoutMs: 30_000 })]))
+    await waitFor(() => existsSync(log), 10_000, 'the approved PreToolUse hook to write its log')
+    expect(readFileSync(log, 'utf8')).toContain('list_dir')
+  }, 30_000)
 })

@@ -258,8 +258,10 @@ and a run in flight when the process stops sends no reply. A failed run writes
 
 Every TheoClaw agent refuses to spawn a hook command unless the owner approved it. The SDK reads
 hook commands from the working directory's `.theokit/hooks.json` and `.theokit/settings.json`, and
-TheoClaw's agents load no project setting today, so no project hook runs either way: the approval
-gate is there for the day a project source is turned on. `THEOCLAW_APPROVED_HOOKS` lists the
+TheoClaw's `/control` agent loads those project settings once `THEOCLAW_APPROVED_HOOKS` lists at
+least one fingerprint, and then runs exactly the hooks whose fingerprint is listed (the working
+directory is `THEOCLAW_PLUGIN_WORKSPACE` when set, else the process directory). With nothing
+approved, and for every chat agent, no project hook is read or run. `THEOCLAW_APPROVED_HOOKS` lists the
 approved commands by fingerprint, comma-separated: the hex sha256 of the hook's event as the file
 spells it, its command and its timeout in milliseconds (30000 unless the file sets `timeout`), one
 per line. For a `Stop` hook running `touch x`:

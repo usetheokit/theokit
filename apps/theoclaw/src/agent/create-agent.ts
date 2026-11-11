@@ -71,6 +71,8 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   /** SDK telemetry for every agent while `THEOCLAW_OTEL=on` (B-400 FR-006). */
   readonly telemetry?: AgentTelemetry
   readonly thinking?: ThinkingLevel
+  /** Set only for the owner's `/control` agent: approved hooks in `.theokit/settings.json` load and run (OC-87). */
+  readonly projectHooks?: boolean
   /** A workspace whose `.theokit/plugins/` holds installed, trusted plugins (OC-75); absent loads none. */
   readonly pluginWorkspace?: string
   /** A directory holding `<skill>/SKILL.md` folders (`<workspace>/skills`), offered to the agent; absent offers none. */
@@ -110,14 +112,14 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
 }
 
 /**
- * `'plugins'` for an agent given a plugin workspace (OC-75); `'project'` as well once the owner
+ * `'plugins'` for an agent given a plugin workspace (OC-75); `'project'` as well for the `/control` agent once the owner
  * approved at least one hook fingerprint, so `.theokit/settings.json` hooks are loaded and each
  * still runs only if the gate approves its fingerprint (OC-87). With no approval nothing is loaded.
  */
 function settingSourcesOf(input: TheoClawAgentInput<string | ModelSelection>): { settingSources?: Array<'plugins' | 'project'> } {
   const sources: Array<'plugins' | 'project'> = []
   if (input.pluginWorkspace !== undefined) sources.push('plugins')
-  if (input.approvedHooks !== undefined && input.approvedHooks.size > 0) sources.push('project')
+  if (input.projectHooks === true && input.approvedHooks !== undefined && input.approvedHooks.size > 0) sources.push('project')
   return sources.length === 0 ? {} : { settingSources: sources }
 }
 
