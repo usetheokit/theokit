@@ -11,7 +11,7 @@ import type { TurnRunner } from '../control-plane/turn.js'
 import { chatIdOf, WebchatChatIdError } from './chat-id.js'
 import { createWebchatRun } from './create-run.js'
 import { renderPage, WEBCHAT_ASSETS } from './page.js'
-import { WEBCHAT_ASSETS_PREFIX, WEBCHAT_CHAT_PATH, WEBCHAT_ROUTE } from './paths.js'
+import { WEBCHAT_ASSETS_PREFIX, WEBCHAT_CHAT_PATH, WEBCHAT_ROUTE, WEBCHAT_SANDBOX_PATH } from './paths.js'
 
 export interface WebchatRoutesOptions {
   /** The WebChat token every chat post must carry; at least 32 characters. */
@@ -30,6 +30,15 @@ const PAGE_CSP =
   "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"
 /** The page holds the token in the tab: no framing (clickjacking), no sniffing, no referrer leak. */
 const PAGE_HARDENING = { 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
+/**
+ * The html-widget frame: its own policy lets inline script run (the page's does not, and a frame can
+ * only tighten what it inherits, so the frame is a URL, not srcdoc), with an opaque origin, no network
+ * and no navigation. Only the page may frame it.
+ */
+const SANDBOX_CSP =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'; sandbox allow-scripts"
+const SANDBOX_SHELL =
+  '<!doctype html><meta charset="utf-8"><script>addEventListener("message",function(e){if(e.source!==parent)return;if(typeof e.data!=="string")return;document.open();document.write(e.data);document.close()})</script>'
 const MISSING_BUNDLE = 'run the build:web script of the theoclaw package\n'
 
 /**
@@ -87,6 +96,19 @@ async function page(assetsDir: string | URL): Promise<Response> {
   }
   return new Response(renderPage(), {
     headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PAGE_CSP, ...PAGE_HARDENING, ...NO_STORE },
+  })
+}
+
+/** `GET /webchat/sandbox`: the empty frame an html widget is written into. */
+function sandbox(): Response {
+  return new Response(SANDBOX_SHELL, {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'content-security-policy': SANDBOX_CSP,
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer',
+      ...NO_STORE,
+    },
   })
 }
 
@@ -190,6 +212,7 @@ export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Re
   return async (request) => {
     const { pathname } = new URL(request.url)
     if (request.method === 'GET' && pathname === WEBCHAT_ROUTE) return page(options.assetsDir)
+    if (request.method === 'GET' && pathname === WEBCHAT_SANDBOX_PATH) return sandbox()
     if (request.method === 'GET' && pathname.startsWith(WEBCHAT_ASSETS_PREFIX)) {
       return asset(options.assetsDir, pathname.slice(WEBCHAT_ASSETS_PREFIX.length))
     }

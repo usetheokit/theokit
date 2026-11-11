@@ -9,6 +9,10 @@ describe('show_widget', () => {
     const output = await run({ kind: 'table', title: 'T', columns: ['a', 'b'], rows: [['1', '2']] })
     expect(parseWidget(output)).toEqual({ kind: 'table', title: 'T', columns: ['a', 'b'], rows: [['1', '2']] })
   })
+  it('returns an html widget with its script intact', async () => {
+    const html = '<button onclick="n.textContent=+n.textContent+1">+1</button><b id="n">0</b>'
+    expect(parseWidget(await run({ kind: 'html', title: 'Counter', html }))).toEqual({ kind: 'html', title: 'Counter', html })
+  })
   it('refuses a row whose cells do not match the columns', async () => {
     await expect(run({ kind: 'table', columns: ['a'], rows: [['1', '2']] })).rejects.toThrow()
   })
