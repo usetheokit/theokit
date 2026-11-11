@@ -63,10 +63,20 @@ describe('THEOCLAW_SANDBOX_BACKEND=docker', () => {
     const session = toolSettingsForSession(settings, { ...env, THEOCLAW_SANDBOX_SESSIONS: 'non-main' }, MAIN_SESSION_KEY, {
       dockerRunner: runner,
     })
-    expect(session).toBe(settings)
+    expect(session.mode).toBe(settings.mode)
     const readOnly = settingsFor('read-only', runner).settings
     await readOnly.sandbox.execute('touch x')
     expect(mountOf(calls[0] ?? [])).toBe(`${readOnly.toolRoot}:/workspace:ro`)
+  })
+
+  it('labels each session\'s containers with its own key, even in the default mode', async () => {
+    const { runner, calls } = recorder()
+    const { env, settings } = settingsFor(undefined, runner)
+    const session = toolSettingsForSession(settings, env, 'agent:main:chat-7', { dockerRunner: runner })
+    await session.sandbox.execute('true')
+    const run = calls[0] ?? []
+    expect(run.join(' ')).toContain('--label theoclaw.session=agent:main:chat-7')
+    expect(run).not.toContain('--rm')
   })
 
   it('refuses danger-full-access, naming it, rather than downgrading', () => {

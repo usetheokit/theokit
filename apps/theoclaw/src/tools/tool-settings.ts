@@ -288,7 +288,9 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
  */
 export function toolSettingsForSession(settings: ToolSettings, env: Env, sessionKey: string, deps: ToolDeps = {}): ToolSettings {
   const sandboxMode = sandboxModeForSession(settings.sandboxMode, readSandboxSessions(env), sessionKey)
-  if (sandboxMode === settings.sandboxMode || !settings.hostTools) return settings
+  if (!settings.hostTools) return settings
+  // A docker container is labelled with its session, so every session gets a backend of its own.
+  if (sandboxMode === settings.sandboxMode && settings.backend !== 'docker') return settings
   const sandbox = buildBackend(settings.backend ?? 'bwrap', sandboxMode, settings.toolRoot, deps, sessionKey)
   // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
   const { interactive: _chosenMode, ...rest } = settings

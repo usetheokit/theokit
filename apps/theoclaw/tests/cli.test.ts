@@ -33,10 +33,18 @@ describe('the theoclaw command line', () => {
     expect(v.stderr()).toBe('')
   })
 
+  it('dispatches sandbox: bwrap has nothing to manage, a bad verb is a usage error', async () => {
+    const ok = harness()
+    expect(await runCli(['sandbox', 'list'], ok.io)).toBe(0)
+    expect(ok.stdout()).toContain('nothing to manage')
+    const bad = harness()
+    expect(await runCli(['sandbox', 'nope'], bad.io)).toBe(2)
+  })
+
   it('help names start, onboard and help, and an undefined one exits 2', async () => {
     const help = harness()
     expect(await runCli(['--help'], help.io)).toBe(0)
-    for (const name of ['start', 'onboard', '--help']) expect(help.stdout()).toContain(name)
+    for (const name of ['start', 'onboard', 'sandbox list', '--help']) expect(help.stdout()).toContain(name)
     expect(help.stderr()).toBe('')
 
     const unknown = harness()

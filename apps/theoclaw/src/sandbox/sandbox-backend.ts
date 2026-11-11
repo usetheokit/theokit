@@ -61,7 +61,9 @@ function labelled(base: DockerRunner, sessionKey: string): DockerRunner {
     if (args[0] !== 'run') return base(args, opts)
     const rest = args.slice(1).filter((arg) => arg !== '--rm')
     const result = await base(['run', '--label', `${SANDBOX_LABEL}=1`, '--label', `${SESSION_LABEL}=${sessionKey}`, ...rest], opts)
-    const own = args[args.indexOf('--name') + 1]
+    const nameAt = args.indexOf('--name')
+    const own = nameAt === -1 ? undefined : args[nameAt + 1]
+    if (own === undefined) return result
     const listed = await base(['ps', '-a', '--filter', sessionFilter, '--filter', 'status=exited', '--format', '{{.Names}}'], { timeoutMs: 10_000, maxOutputBytes: 65_536 }).catch(() => undefined)
     const stale = (listed?.stdout ?? '').split('\n').map((name) => name.trim()).filter((name) => name !== '' && name !== own)
     if (stale.length > 0) await base(['rm', '-f', ...stale], { timeoutMs: 10_000, maxOutputBytes: 4096 }).catch(() => undefined)
