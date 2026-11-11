@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -155,6 +155,55 @@ describe('cloud worker delegation', () => {
       expect(g('show', '--stat', branch)).toContain('b.txt')
       expect(existsSync(join(repo, 'b.txt'))).toBe(false)
       expect(readdirSync(machineDir)).toEqual([])
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  function repoWithDevcontainer(workspace: string, post: string) {
+    const repo = join(workspace, 'files')
+    execFileSync('git', ['init', '-q', repo])
+    mkdirSync(join(repo, '.devcontainer'))
+    writeFileSync(join(repo, '.devcontainer', 'devcontainer.json'), `{ // c\n "postCreateCommand": ${JSON.stringify(post)},\n}`)
+    execFileSync('git', ['-C', repo, 'add', '.'])
+    execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'init'])
+    return repo
+  }
+  const fakeWork = async () => ({ response: 'done', toolCalls: [], cost: 0, tokens: 0 })
+
+  it('runs the devcontainer postCreateCommand before the agent starts', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'cl-'))
+    try {
+      const repo = repoWithDevcontainer(workspace, 'echo ready > marker.txt')
+      const settings = { workspace, toolRoot: repo } as unknown as ToolSettings
+      let seen = ''
+      const port = cloudWorkerPort(settings, () => [], async () => {
+        const dir = join(workspace, '.theoclaw', 'cloud-workers')
+        const checkout = readdirSync(dir).map((d) => join(dir, d, 'checkout'))[0] ?? ''
+        seen = readFileSync(join(checkout, 'marker.txt'), 'utf8').trim()
+        return fakeWork()
+      })
+      const result = await port.run('x', {})
+      expect(seen).toBe('ready')
+      expect(result.response).toContain('devcontainer.json ran')
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('does not start the agent when the recipe fails, and tears down', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'cl-'))
+    try {
+      const repo = repoWithDevcontainer(workspace, 'exit 3')
+      const settings = { workspace, toolRoot: repo } as unknown as ToolSettings
+      let started = false
+      const port = cloudWorkerPort(settings, () => [], async () => {
+        started = true
+        return fakeWork()
+      })
+      await expect(port.run('x', {})).rejects.toThrow(/postCreateCommand failed/)
+      expect(started).toBe(false)
+      expect(readdirSync(join(workspace, '.theoclaw', 'cloud-workers'))).toEqual([])
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }

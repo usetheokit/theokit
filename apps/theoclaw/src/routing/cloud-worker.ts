@@ -9,6 +9,8 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
+import { applyRecipe, type EnvironmentRecipe } from './environment-recipe.js'
+
 const run = promisify(execFile)
 
 export interface CloudMachine {
@@ -45,9 +47,11 @@ export function cloneMachineProvider(root: string): CloudMachineProvider {
 export interface CloudRunResult {
   readonly branch: string
   readonly committed: boolean
+  /** The environment recipe that ran before the worker, if the repository has one. */
+  readonly recipe?: EnvironmentRecipe | undefined
 }
 
-export function createCloudRunner(options: { repo: string; provider: CloudMachineProvider }) {
+export function createCloudRunner(options: { repo: string; provider: CloudMachineProvider; recipe?: boolean }) {
   const git = (cwd: string, ...args: string[]) =>
     run('git', ['-C', cwd, '-c', 'user.name=theoclaw', '-c', 'user.email=theoclaw@localhost', ...args])
   return {
@@ -59,14 +63,15 @@ export function createCloudRunner(options: { repo: string; provider: CloudMachin
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) || id.includes('..')) throw new Error(`unsafe task id: ${id}`)
       const machine = await options.provider.provision({ id, repo: options.repo })
       try {
+        const recipe = options.recipe === false ? undefined : await applyRecipe(machine.path)
         await work(machine)
         await git(machine.path, 'add', '-A')
         const dirty = (await git(machine.path, 'status', '--porcelain')).stdout.trim() !== ''
         const branch = `task/${id}`
-        if (!dirty) return { branch, committed: false }
+        if (!dirty) return { branch, committed: false, recipe }
         await git(machine.path, 'commit', '-q', '-m', `theoclaw cloud worker ${id}`)
         await git(options.repo, 'fetch', '-q', machine.remote, `HEAD:refs/heads/${branch}`)
-        return { branch, committed: true }
+        return { branch, committed: true, recipe }
       } finally {
         await machine.teardown()
       }
