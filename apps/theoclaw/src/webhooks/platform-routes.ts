@@ -82,6 +82,7 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
   slack: null,
   matrix: null,
   mattermost: null,
+  signal: null,
   tlon_urbit: null,
   email: null,
   line: ({ channelSecret }) => ({

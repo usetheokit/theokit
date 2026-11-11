@@ -44,6 +44,7 @@ const PLATFORM_VARIABLES = {
     serviceAccountFile: 'THEOCLAW_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE',
     audience: 'THEOCLAW_GOOGLE_CHAT_AUDIENCE',
   },
+  signal: { account: 'THEOCLAW_SIGNAL_ACCOUNT' },
   tlon_urbit: {
     shipUrl: 'THEOCLAW_TLON_URBIT_SHIP_URL',
     ship: 'THEOCLAW_TLON_URBIT_SHIP',
@@ -66,6 +67,9 @@ export type SupportedPlatform = keyof typeof PLATFORM_VARIABLES
 
 type PlatformVariables = typeof PLATFORM_VARIABLES
 
+/** Optional: the signal-cli binary; the adapter looks `signal-cli` up on `PATH` when unset. */
+export const SIGNAL_CLI_PATH_VARIABLE = 'THEOCLAW_SIGNAL_CLI_PATH'
+
 /** The environment variable that picks WhatsApp's backend: `cloud` (the default) or `baileys` (QR-linked WhatsApp Web). */
 export const WHATSAPP_BACKEND_VARIABLE = 'THEOCLAW_WHATSAPP_BACKEND'
 /** Where the Baileys pairing is kept; defaults to `whatsapp-session` under `THEOCLAW_STATE_DIR`. */
@@ -81,7 +85,9 @@ type CloudSettings<P extends SupportedPlatform> = { readonly [K in keyof Platfor
 /** The settings one platform's adapter is built from, keyed by the adapter's own option names. */
 export type PlatformSettings<P extends SupportedPlatform> = P extends 'whatsapp'
   ? CloudSettings<'whatsapp'> | WhatsAppBaileysSettings
-  : CloudSettings<P>
+  : P extends 'signal'
+    ? CloudSettings<'signal'> & { readonly signalCliPath?: string }
+    : CloudSettings<P>
 
 /** The Baileys settings when WhatsApp is set up that way, narrowing the union. */
 export function isBaileys(settings: PlatformSettings<'whatsapp'>): settings is WhatsAppBaileysSettings {
@@ -161,6 +167,8 @@ export function resolvePlatforms(env: Readonly<Record<string, string | undefined
     // Safe: `settings` has exactly the keys of this platform's row, which `PlatformSettings<P>`
     // is derived from; TypeScript cannot pair a loop variable of a union with its own row.
     const settings = Object.fromEntries(read.map(([setting, , value]) => [setting, value]))
+    const signalCliPath = (env[SIGNAL_CLI_PATH_VARIABLE] ?? '').trim()
+    if (platform === 'signal' && signalCliPath !== '') settings.signalCliPath = signalCliPath
     configured.push({ platform, settings } as ConfiguredPlatform)
     secrets.push(...read.map(([, , value]) => value))
   }

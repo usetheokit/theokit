@@ -85,7 +85,7 @@ describe('resolvePlatforms', () => {
     expect(JSON.stringify(resolved.skipped)).not.toContain('bot-token-value')
   })
 
-  it('lists all twelve platforms', () => {
+  it('lists all thirteen platforms', () => {
     expect(PLATFORMS.map((spec) => spec.platform)).toEqual([
       'telegram',
       'discord',
@@ -97,6 +97,7 @@ describe('resolvePlatforms', () => {
       'whatsapp',
       'teams',
       'google_chat',
+      'signal',
       'tlon_urbit',
       'sms',
     ])
@@ -168,5 +169,17 @@ describe('the channel loop output', () => {
     for (let start = 0; start + 4 <= token.length; start += 1) {
       expect(output).not.toContain(token.slice(start, start + 4))
     }
+  })
+})
+
+describe('signal settings', () => {
+  it('needs only the account; the signal-cli path is optional', () => {
+    const only = resolvePlatforms({ THEOCLAW_SIGNAL_ACCOUNT: '+5511999990000' }).configured.find((p) => p.platform === 'signal')
+    expect(only?.settings).toEqual({ account: '+5511999990000' })
+    const both = resolvePlatforms({ THEOCLAW_SIGNAL_ACCOUNT: '+5511999990000', THEOCLAW_SIGNAL_CLI_PATH: '/opt/signal-cli' })
+    expect(both.configured.find((p) => p.platform === 'signal')?.settings).toEqual({
+      account: '+5511999990000',
+      signalCliPath: '/opt/signal-cli',
+    })
   })
 })

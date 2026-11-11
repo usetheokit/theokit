@@ -46,6 +46,7 @@ const PLATFORM_TIERS: Readonly<Record<string, DisplayTier>> = {
   mattermost: 'medium',
   teams: 'medium',
   google_chat: 'low',
+  signal: 'low',
   tlon_urbit: 'low',
   whatsapp: 'low',
   line: 'low',

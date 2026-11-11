@@ -50,6 +50,7 @@
     "@theokit/gateway-line": "0.4.0",
     "@theokit/gateway-matrix": "0.3.0",
     "@theokit/gateway-mattermost": "0.3.1",
+    "@theokit/gateway-signal": "0.1.0",
     "@theokit/gateway-slack": "0.3.1",
     "@theokit/gateway-sms": "0.3.1",
     "@theokit/gateway-teams": "0.3.0",
