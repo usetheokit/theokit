@@ -489,7 +489,8 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
-  const { store: scheduleStore, close: closeScheduleStore } = await openScheduleStore(sessionSettings.workspace, options.env)
+  const openedStore = openScheduleStore(sessionSettings.workspace, options.env)
+  const { store: scheduleStore, close: closeScheduleStore } = openedStore instanceof Promise ? await openedStore : openedStore
   const heartbeat = readHeartbeatSettings(options.env, platforms)
   const a2a = readA2ASettings(options.env)
   const relay = readRelaySettings(options.env)

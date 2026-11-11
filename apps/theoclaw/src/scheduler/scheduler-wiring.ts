@@ -38,14 +38,19 @@ export function loadScheduleStore(workspace: string): JobStore {
 }
 
 /** The job store `THEOCLAW_DATABASE` selects: PostgreSQL for a DSN, else the file under the workspace. */
-export async function openScheduleStore(
+export interface OpenedScheduleStore {
+  readonly store: JobStore
+  readonly close?: () => Promise<void>
+}
+
+/** Synchronous for the file store, so a start without a DSN keeps its first await where it was. */
+export function openScheduleStore(
   workspace: string,
   env: Readonly<Record<string, string | undefined>>,
-): Promise<{ store: JobStore; close?: () => Promise<void> }> {
+): OpenedScheduleStore | Promise<OpenedScheduleStore> {
   const dsn = readDatabaseDsn(env)
   if (dsn === undefined) return { store: loadScheduleStore(workspace) }
-  const opened = await openPostgresScheduleStore(dsn)
-  return { store: opened.store, close: opened.close }
+  return openPostgresScheduleStore(dsn)
 }
 
 /** Builds one agent from tool options: the start's worker factory. */
