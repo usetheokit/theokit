@@ -77,6 +77,7 @@ import { theoClawApiFor } from './http-api/api-routes.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
 import { createExecApprovalStore, execApprovalPlugin, type ExecApprovalOptions } from './tools/exec-approval.js'
 import { controlAgentToolOptions } from './tools/tool-registry.js'
+import { createEmailTrigger } from './triggers/email-trigger.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
 import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
@@ -224,7 +225,6 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const platforms = resolvePlatforms(options.env)
   const { configured, skipped } = platforms
   const secrets = [...(options.secrets ?? platforms.secrets), options.env.THEOCLAW_VOICE_OPENAI_API_KEY?.trim() ?? '']
-  reportUnservedPlatforms(skipped, configured, policy, options.write)
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
@@ -252,6 +252,14 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     if (webhook !== undefined) webhooks.set(entry.platform, webhook)
   }
   const events = options.events ?? readEventSettings(options.env, configured.map((entry) => entry.platform))
+  reportUnservedPlatforms(skipped, configured.filter((entry) => entry.platform !== 'email' || events.emailTrigger === undefined), policy, options.write)
+  const emailTrigger = events.emailTrigger === undefined ? undefined : createEmailTrigger({
+    settings: events.emailTrigger,
+    adapterFor: (platform) => loop.started.get(platform)?.adapter,
+    withAgent: createContainer<TurnAgent>({ factory: options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env) }).withAgent,
+    write: maskedWrite,
+    secrets,
+  })
   const handles = new WeakMap<BasePlatformAdapter, Handle>()
   const loop = startChannelLoop({
     platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention', onQr: qrWriter(options.write), connectTimeoutMs: PAIRING_WAIT_MS }).map((build) =>
@@ -275,7 +283,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       compact: readCompactSettings(options.env, maskedWrite, options.compact),
       typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
     }), configuredVoiceReplies(options.env)),
-    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
+    hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,
     retry: options.retry ?? { initialDelayMs: 1000, maxDelayMs: 30_000, maxAttempts: 40 },
