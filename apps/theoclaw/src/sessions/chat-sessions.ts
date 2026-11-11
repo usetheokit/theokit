@@ -14,6 +14,8 @@ import { createMemory, type MemoryWiring, memoryEnabled, reviewerOptions } from 
 import { createContainer } from '../agent-container.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { createChannelAgentFactory, isIncognito, keepsTranscripts, sessionAgentOptions } from '../control-plane/agent-factory.js'
+import { SessionRouter } from '@theokit/gateway'
+import { MAIN_AGENT, readAgentRouter } from '../routing/routing-env.js'
 import { Generations } from './generations.js'
 import { type SessionAgent, SessionAgents, type SessionLease } from './session-agents.js'
 import { createSessionRouter } from './session-key.js'
@@ -52,7 +54,13 @@ export function chatSessions(options: ChatSessionsOptions): {
   readonly memory: MemoryWiring | undefined
 } {
   const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
-  const router = createSessionRouter(settings)
+  const agentRouter = readAgentRouter(options.env, settings.workspace)
+  const baseRouter = createSessionRouter(settings)
+  // A routed agent keeps its own sessions even where the DM scope would share one with the main agent.
+  const router = agentRouter === undefined ? baseRouter : new SessionRouter((event) => {
+    const agent = agentRouter.route({ platform: event.platform, peer: event.sender.id }).id
+    return `${baseRouter.resolveAgentId(event)}${agent === MAIN_AGENT ? '' : `-as-${agent}`}`
+  })
   const incognito = isIncognito(options.env)
   const transient = incognito || !keepsTranscripts(options.env)
   const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
@@ -97,8 +105,10 @@ export function chatSessions(options: ChatSessionsOptions): {
         throw error
       }
     },
-    optionsFor: () => {
-      const base = sessionAgentOptions(options.env, settings.workspace)
+    optionsFor: (event) => {
+      // A bound peer or platform is answered by its own agent: that agent's workspace and persona.
+      const workspace = agentRouter?.route({ platform: event.platform, peer: event.sender.id }).workspace ?? settings.workspace
+      const base = sessionAgentOptions(options.env, workspace)
       const plugins = options.plugins?.() ?? []
       return plugins.length === 0 ? base : { ...base, plugins: [...(base.plugins ?? []), ...plugins] }
     },
