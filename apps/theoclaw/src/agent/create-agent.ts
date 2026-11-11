@@ -46,6 +46,12 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
   readonly systemPrompt: string
   readonly skills?: { readonly inline: InlineSkill[] }
   /**
+   * Rediscovers `skills.inline` from disk. The SDK evaluates it on every `send()` (a `skills`
+   * resolver, see `withSdkSkills`), so a skill installed into the workspace after a session opened is
+   * offered on that session's next turn, and `skill_read` reads the same fresh list (OC-72).
+   */
+  readonly skillsRefresh?: () => InlineSkill[]
+  /**
    * Only on a `/control` agent: its browser server with `THEOCLAW_BROWSER=on`, the servers its
    * external tools file names, and an import's servers with `THEOCLAW_IMPORTED_MCP` on; never on
    * a chat agent.
@@ -109,8 +115,9 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
-  const discovered = mergeSkills(input.custodian === true ? custodianSkills() : [], discoverSkills(input.skillsDir, input.userSkillsDir))
-  const withSkills: TheoClawAgentOptions<Model> = discovered.length === 0 ? withTools : { ...withTools, skills: { inline: discovered } }
+  const gather = (): InlineSkill[] => mergeSkills(input.custodian === true ? custodianSkills() : [], discoverSkills(input.skillsDir, input.userSkillsDir))
+  const discovered = gather()
+  const withSkills: TheoClawAgentOptions<Model> = discovered.length === 0 ? withTools : { ...withTools, skills: { inline: discovered }, skillsRefresh: gather }
   const imported = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
   const skilled = withSkillRead(withProviders(imported, input.providers))
   const suffix = input.toolOptions?.systemPromptSuffix
@@ -170,7 +177,12 @@ function withImport<Model extends string | ModelSelection>(
   return {
     ...options,
     systemPrompt: importedPrompt(setup),
-    ...(hasSkills ? { skills: { inline: mergeSkills(setup.skills, options.skills?.inline ?? []) } } : {}),
+    ...(hasSkills
+      ? {
+          skills: { inline: mergeSkills(setup.skills, options.skills?.inline ?? []) },
+          ...(options.skillsRefresh === undefined ? {} : { skillsRefresh: () => mergeSkills(setup.skills, options.skillsRefresh?.() ?? []) }),
+        }
+      : {}),
     // The browser server and the external tools file's servers keep their names: an imported
     // server with one of them does not replace it.
     ...(hasServers ? { mcpServers: { ...setup.mcpServers, ...options.mcpServers } } : {}),
@@ -187,7 +199,20 @@ function discoverSkills(workspaceDir: string | undefined, userDir: string | unde
 /** Every agent with skills gets `skill_read`, so the model can read a body the prompt block lists by name only. */
 function withSkillRead<Model extends string | ModelSelection>(options: TheoClawAgentOptions<Model>): TheoClawAgentOptions<Model> {
   const inline = options.skills?.inline ?? []
-  return inline.length === 0 ? options : { ...options, tools: [...(options.tools ?? []), SkillReadTool.create(inline)] }
+  // A function source is re-evaluated on every call, so skill_read stays in step with the refreshed list.
+  return inline.length === 0 ? options : { ...options, tools: [...(options.tools ?? []), SkillReadTool.create(options.skillsRefresh ?? inline)] }
+}
+
+/**
+ * The `skills` the SDK is given to a session that outlives its turns. A `/control` agent and a
+ * WebChat agent are created per turn, so `createTheoClawAgent` reads the folder afresh each time.
+ * Freshness comes from here: with `skillsRefresh` it is a resolver the
+ * SDK runs on every `send()` (also on a cached `getOrCreate` agent), so the skill list is rebuilt per
+ * turn without recreating the session or losing its history.
+ */
+export function withSdkSkills<T extends { skills?: unknown }>(options: T): Omit<T, 'skillsRefresh'> {
+  const { skillsRefresh, ...rest } = options as T & { skillsRefresh?: () => InlineSkill[] }
+  return skillsRefresh === undefined ? rest : { ...rest, skills: (): { inline: InlineSkill[] } => ({ inline: skillsRefresh() }) }
 }
 
 /** Imported skills, then workspace skills: a workspace skill replaces an imported one of the same name. */

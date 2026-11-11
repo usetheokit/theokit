@@ -142,8 +142,8 @@ describe('an import reaching the agents', () => {
     await createChannelAgentFactory(ENV, withImport.create)()
     await createChannelAgentFactory(ENV, without.create)()
 
-    expect({ ...withImport.options[0], tools: undefined }).toEqual({ ...without.options[0], tools: undefined })
-    expect({ ...withImport.options[0], tools: undefined }).toEqual({ ...theoClawAgentOptions({ model: 'openrouter/m', apiKey: 'router-key' }), tools: undefined })
+    expect({ ...withImport.options[0], tools: undefined, skillsRefresh: undefined }).toEqual({ ...without.options[0], tools: undefined, skillsRefresh: undefined })
+    expect({ ...withImport.options[0], tools: undefined, skillsRefresh: undefined }).toEqual({ ...theoClawAgentOptions({ model: 'openrouter/m', apiKey: 'router-key' }), tools: undefined, skillsRefresh: undefined })
     expect(withImport.options[0]?.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
     expect(withImport.options[0]?.skills?.inline.map((skill) => skill.name).sort()).toEqual(['git-helper', 'summarize-text'])
     expect(withImport.options[0]).not.toHaveProperty('mcpServers')
@@ -166,8 +166,8 @@ describe('an import reaching the agents', () => {
 
     const { sessionDir: _a, ...a } = withEmpty.options[0]!.local ?? {}
     const { sessionDir: _b, ...b } = without.options[0]!.local ?? {}
-    const { skills: _s1, tools: _t1, ...x } = withEmpty.options[0]!
-    const { skills: _s2, tools: _t2, ...y } = without.options[0]!
+    const { skills: _s1, skillsRefresh: _r1, tools: _t1, ...x } = withEmpty.options[0]!
+    const { skills: _s2, skillsRefresh: _r2, tools: _t2, ...y } = without.options[0]!
     expect({ ...x, local: a }).toEqual({ ...y, local: b })
     expect(withEmpty.options[0]!.skills?.inline.map((skill) => skill.name)).toEqual(without.options[0]!.skills?.inline.map((skill) => skill.name))
   })

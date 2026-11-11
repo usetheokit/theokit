@@ -16,6 +16,7 @@ import {
   memoryEnabled,
   reviewerOptions,
 } from '../memory/wiring.js'
+import { withSdkSkills } from '../agent/create-agent.js'
 import { createContainer } from '../agent-container.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import {
@@ -87,7 +88,8 @@ export function chatSessions(options: ChatSessionsOptions): {
   const transient = incognito || !keepsTranscripts(options.env)
   const open =
     options.getOrCreate ??
-    ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
+    // The skills folder is re-read on every turn of the session, not only when it opens (OC-72).
+    ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, withSdkSkills(agentOptions)))
   if (!incognito && transient && options.env.THEOCLAW_MEMORY?.trim().toLowerCase() === 'on') {
     throw new TheoClawConfigError(
       'THEOCLAW_MEMORY=on needs THEOCLAW_TRANSCRIPTS=on: memory recalls from the chat transcripts, and with transcripts off none is kept',
