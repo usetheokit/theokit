@@ -87,6 +87,7 @@ import { withInteractiveShell } from './tools/interactive-shell.js'
 import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import type { GenerateObject } from './workflows/triage-workflow.js'
+import { loadUserWorkflows } from './workflows/user-workflows.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { webchatEvent } from './webchat/chat-id.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
@@ -109,6 +110,8 @@ export interface TheoClawOptions {
    * saved approval, the reviewer, then the person. Absent: the shell runs as before.
    */
   readonly execApproval?: Pick<ExecApprovalOptions, 'ask' | 'reviewer' | 'waived'>
+  /** Resumes a suspended workspace workflow run by its token (`/approve <token>`); absent: no such command. */
+  readonly workflowResume?: (token: string, approved: boolean) => Promise<string | undefined>
   /**
    * The session generations, loaded from `<workspace>/.theoclaw/sessions.json`. `startTheoClaw`
    * loads them before anything starts, so a malformed file refuses the start; `composeTheoClaw`
@@ -296,7 +299,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       compact: readCompactSettings(options.env, maskedWrite, options.compact),
       typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
     }), configuredVoiceReplies(options.env)),
-    hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
+    hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.workflowResume === undefined ? {} : { workflowResume: options.workflowResume }), ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,
     retry: options.retry ?? { initialDelayMs: 1000, maxDelayMs: 30_000, maxAttempts: 40 },
@@ -545,8 +548,10 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   acpSessions = acp
   for (const line of a2aLines(a2a)) stderr(line)
   // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
+  const userWorkflows = options.generateObject === undefined ? undefined : loadUserWorkflows({ workspace: sessionSettings.workspace, stateDir: policy.stateDir ?? join(sessionSettings.workspace, '.theoclaw'), generate: options.generateObject, write: stderr })
   const composed = composeTheoClaw({
     ...options,
+    ...(userWorkflows === undefined ? {} : { workflowResume: userWorkflows.resume }),
     acp,
     policy,
     sessionSettings,
@@ -567,7 +572,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // A turn that read a peer's relay message may not send back; the owner's next turn may (OC-14).
   const relayToolsFor = (gate?: RelayTurnGate): CustomTool[] => (relayState === undefined || relayClient === undefined ? [] : relayTools(relayState, relayClient, gate))
   const relayHandler = relay.serveToken === undefined ? undefined : relayRoute(relay.serveToken, new RelayMailbox(100, join(relayDir, 'relay-mailbox.json')))
-  const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
+  const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...(userWorkflows?.tools ?? []), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
   const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
   const memory = composed.memory
   const controlExtras = [...extraTools, ...relayToolsFor(), ...(memory?.tools ?? [])]
