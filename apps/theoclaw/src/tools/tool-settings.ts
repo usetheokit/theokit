@@ -3,7 +3,7 @@ import type { Stats } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { createSandboxBackend, DockerSandbox, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
-import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
+import type { BwrapDetection, DockerRunner, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -74,6 +74,8 @@ export interface ToolDeps {
   readonly browser?: BrowserDeps
   /** How `xdotool` is found. Default: the first executable on `PATH`. */
   readonly computer?: ComputerDeps
+  /** Replaces the `docker` process of the Docker backend (tests). */
+  readonly dockerRunner?: DockerRunner
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -99,7 +101,11 @@ function buildBackend(
 ): SandboxBackend {
   if (backend === 'docker') {
     const image = nonBlank(env.THEOCLAW_SANDBOX_IMAGE)
-    return new DockerSandbox({ workDir, ...(image === undefined ? {} : { image }) })
+    return new DockerSandbox({
+      workDir,
+      ...(image === undefined ? {} : { image }),
+      ...(deps.dockerRunner === undefined ? {} : { runner: deps.dockerRunner }),
+    })
   }
   return createSandboxBackend({
     mode,
@@ -253,6 +259,12 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     throw new TheoClawConfigError(
       `THEOCLAW_SANDBOX_BACKEND=docker runs the shell with the tool root writable, so it needs THEOCLAW_SANDBOX=workspace-write, not ${sandboxMode}`,
       { variable: 'THEOCLAW_SANDBOX_BACKEND' },
+    )
+  }
+  if (sandboxBackend === 'docker' && readSandboxSessions(env) !== 'all') {
+    throw new TheoClawConfigError(
+      'THEOCLAW_SANDBOX_BACKEND=docker cannot be combined with THEOCLAW_SANDBOX_SESSIONS=non-main: the container backend has one mode for every session',
+      { variable: 'THEOCLAW_SANDBOX_SESSIONS' },
     )
   }
   const search = readSearch(env)

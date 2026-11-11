@@ -33,6 +33,27 @@ describe('THEOCLAW_SANDBOX_BACKEND', () => {
     expect(() => checkHostToolsPosture(s, [], { detect: missing })).not.toThrow()
   })
 
+  it('runs a shell command through docker run in the chosen image with the tool root mounted', async () => {
+    const calls: (readonly string[])[] = []
+    const dockerRunner = async (args: readonly string[]) => {
+      calls.push(args)
+      return { stdout: 'PRETTY_NAME="Debian"\n', stderr: '', code: 0, timedOut: false }
+    }
+    const env = { THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX_BACKEND: 'docker', THEOCLAW_SANDBOX_IMAGE: 'debian:12' }
+    const s = resolveToolSettings(env, workspace(), { detect: missing, dockerRunner })
+    const result = await s.sandbox.execute('cat /etc/os-release')
+    expect(result.stdout).toContain('Debian')
+    expect(calls[0]).toContain('run')
+    expect(calls[0]).toContain('debian:12')
+    expect(calls[0]!.join(' ')).toContain(s.toolRoot)
+  })
+
+  it('refuses docker with per-session sandbox modes, which it cannot honor', () => {
+    expect(() =>
+      resolveToolSettings({ THEOCLAW_SANDBOX_BACKEND: 'docker', THEOCLAW_SANDBOX_SESSIONS: 'non-main' }, workspace()),
+    ).toThrow(/THEOCLAW_SANDBOX_SESSIONS/)
+  })
+
   it('refuses an unknown backend and docker outside workspace-write', () => {
     expect(() => resolveToolSettings({ THEOCLAW_SANDBOX_BACKEND: 'podman' }, workspace())).toThrow(/bwrap, docker/)
     expect(() =>
