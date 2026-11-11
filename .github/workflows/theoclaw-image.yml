@@ -7,6 +7,10 @@
 name: TheoClaw image
 
 on:
+  # zizmor: ignore[dangerous-triggers] -- the only workflow that can start this one is Release, which
+  # runs on a push to main or a dispatch, so only someone with write access starts it and no fork
+  # code reaches it. The job checks out that run's head_sha on main with persist-credentials: false,
+  # and publishes only when the run succeeded on main.
   workflow_run:
     workflows: [Release]
     types: [completed]
