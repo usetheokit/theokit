@@ -2,4 +2,4 @@
 "theoclaw": minor
 ---
 
-`/model` and `/status` are answered without a model turn on WebChat and on channels, routed with the `@theokit/agents` command router; WebChat writes no usage line for them. (#1563)
+WebChat answers `/status`, `/model`, `/think`, `/compact`, `/stop` and `/steer` without a model turn (no usage line), routed with the `@theokit/agents` command router. `/status` and `/model` are answered on channels too. (#1563)

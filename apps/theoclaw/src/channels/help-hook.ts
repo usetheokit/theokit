@@ -14,6 +14,7 @@ export const HELP_TEXT = [
   '/goal <what you want done> - run a goal to its end',
   '/steer <text> - redirect the turn that is running',
   '/think off|low|medium|high - the thinking level of this session (only these four)',
+  '/stop - stop the turn that is running (WebChat)',
   '/compact - summarize the conversation so far to free context (THEOCLAW_COMPACT_AT does it on its own)',
   '/usage off|tokens|cost|full - the usage footer of replies',
   '/activation mention|always - how a group activates the bot (groups only)',

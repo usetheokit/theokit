@@ -26,6 +26,8 @@ import type { RetryPolicy } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
 import { readAdvisorSettings } from './channels/advisor.js'
+import type { MessageEvent } from '@theokit/gateway'
+import type { ThinkingLevel } from './agent/failover.js'
 import { readCompactSettings, type CompactSettings } from './channels/compact-command.js'
 import { createAcpSessions, type AcpSessions } from './channels/acp-command.js'
 import { createUsageHook } from './channels/usage-hook.js'
@@ -96,6 +98,7 @@ import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { webchatEvent } from './webchat/chat-id.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
 import { createWebchatRoutes } from './webchat/routes.js'
+import { webchatTurnFor } from './webchat/session-commands.js'
 import { configuredVoiceReplies, withVoiceReplies } from './voice/voice-replies.js'
 
 export { createContainer, type AgentComposition, type AgentCompositionOptions } from './agent-container.js'
@@ -168,6 +171,8 @@ export interface ComposedTheoClaw {
   readonly sessions: SessionAgents
   /** The chat path's request boundary over the sessions; WebChat leases one chat's agent through it. */
   readonly withChatAgent: ChatBoundary
+  /** `/think` of the chat path: sets a session's thinking level. */
+  readonly think: (event: MessageEvent, level: ThinkingLevel) => void
   /** The memory every surface shares; absent under incognito or `THEOCLAW_MEMORY=off`. */
   readonly memory?: MemoryWiring | undefined
 }
@@ -336,7 +341,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     write: maskedWrite,
     triggers: composedTriggers(options, events, loop, maskedWrite, secrets),
   })
-  return { loop, router, sessions: chat.sessions, withChatAgent: chat.withAgent, memory: chat.memory }
+  return { loop, router, sessions: chat.sessions, withChatAgent: chat.withAgent, think: chat.think, memory: chat.memory }
 }
 
 export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
@@ -457,13 +462,14 @@ function startWebchat(
   secrets: readonly string[],
   write: (line: string) => void,
   withChatAgent: ChatBoundary,
+  think: (event: MessageEvent, level: ThinkingLevel) => void,
   trustedProxy = false,
 ): HttpHandler | undefined {
   const token = settings.webchatToken
   if (token === undefined) return undefined
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
   // One session agent per chat id: the chat's turns lease the same agent, so a follow-up sees the earlier messages.
-  const turnFor = (chatId: string): TurnRunner => {
+  const runnerFor = (chatId: string): TurnRunner => {
     const event = webchatEvent(chatId)
     const withAgent: WithAgent = (work) =>
       withChatAgent(event, async (lease) => {
@@ -475,7 +481,9 @@ function startWebchat(
       })
     return createTurnRunner(withAgent, secrets, settings.model)
   }
-  return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy, model: settings.model })
+  // `/status`, `/model`, `/think`, `/compact`, `/stop` and `/steer` are answered here, without a model turn (OC-105).
+  const turnFor = webchatTurnFor({ model: settings.model, runnerFor, withChatAgent, think, compact: readCompactSettings(options.env, write, options.compact) })
+  return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy })
 }
 
 /**
@@ -623,7 +631,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   serving = listen({
     handler: serveHandler(
       composed.router,
-      startWebchat(options, settings, secretValues, stderr, composed.withChatAgent, trustedProxy !== undefined),
+      startWebchat(options, settings, secretValues, stderr, composed.withChatAgent, composed.think, trustedProxy !== undefined),
       devices,
       api,
       a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),

@@ -287,4 +287,14 @@ describe('WebChat slash commands on the started listener', () => {
     expect(servedText(await ordinary.text())).toContain('hello from the agent')
     expect(calls.built).toBe(1)
   })
+
+  it('answers /think, /stop and /steer on the served listener without building an agent for /stop', async () => {
+    const { base, calls } = await start({ token: TOKEN })
+    const ask = async (message: string) => servedText(await (await post(base, '/webchat/chat', `Bearer ${TOKEN}`, { message, id: 'chat-2' })).text())
+
+    expect(await ask('/think low')).toBe('Thinking level set to low.')
+    expect(await ask('/stop')).toBe('Nothing is running to stop.')
+    expect(calls.built).toBe(0)
+    expect(await ask('/steer left')).toContain('Nothing is running')
+  })
 })

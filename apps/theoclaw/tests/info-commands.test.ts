@@ -19,6 +19,7 @@ describe('infoReply', () => {
   })
   it('is listed by /help', () => {
     expect(HELP_TEXT).toContain('/status, /model')
+    expect(infoReply('/status now', 'm', 's')).toContain('Model: m')
   })
 })
 
