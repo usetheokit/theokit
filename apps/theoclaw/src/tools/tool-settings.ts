@@ -2,7 +2,7 @@ import { chmodSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import type { Stats } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
+import { createSandboxBackend, DockerSandbox, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
 
@@ -33,6 +33,8 @@ export interface ToolSettings {
   readonly gitRepository: boolean
   /** True when the one backend built at start is a kernel-confined `LinuxSandbox`. */
   readonly sandboxEnforced: boolean
+  /** The shell's backend: `bwrap` (default, kernel-confined on the host) or `docker` (a throwaway container per command). */
+  readonly sandboxBackend: 'bwrap' | 'docker'
   /** Built once at start; every agent's tools share it (plan D3, revision 1.2). */
   readonly sandbox: SandboxBackend
   /** The backend's mode, which the tools are bound with: `sandboxMode` with host tools on, else `read-only`. */
@@ -77,6 +79,35 @@ export interface ToolDeps {
 type Env = Readonly<Record<string, string | undefined>>
 
 const TOOL_ROOT_MODE = 0o700
+
+/** `THEOCLAW_SANDBOX_BACKEND`: unset or blank is `bwrap`; `docker` runs the shell in a container (`THEOCLAW_SANDBOX_IMAGE`, default `alpine:3`). */
+export function readSandboxBackend(env: Env): 'bwrap' | 'docker' {
+  const value = env.THEOCLAW_SANDBOX_BACKEND?.trim() ?? ''
+  if (value === '' || value === 'bwrap') return 'bwrap'
+  if (value === 'docker') return 'docker'
+  throw new TheoClawConfigError(`THEOCLAW_SANDBOX_BACKEND must be one of bwrap, docker; got "${value}"`, {
+    variable: 'THEOCLAW_SANDBOX_BACKEND',
+  })
+}
+
+function buildBackend(
+  env: Env,
+  backend: 'bwrap' | 'docker',
+  mode: SandboxMode,
+  workDir: string,
+  deps: ToolDeps,
+): SandboxBackend {
+  if (backend === 'docker') {
+    const image = nonBlank(env.THEOCLAW_SANDBOX_IMAGE)
+    return new DockerSandbox({ workDir, ...(image === undefined ? {} : { image }) })
+  }
+  return createSandboxBackend({
+    mode,
+    workDir,
+    ...(deps.detect === undefined ? {} : { detect: deps.detect }),
+    ...(deps.warn === undefined ? {} : { warn: deps.warn }),
+  })
+}
 
 function readHostTools(env: Env): boolean {
   const value = env.THEOCLAW_HOST_TOOLS
@@ -217,6 +248,13 @@ function refuseBrowserUnderReadOnly(hostTools: boolean, sandboxMode: SandboxMode
 export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}): ToolSettings {
   const hostTools = readHostTools(env)
   const sandboxMode = readSandboxMode(env)
+  const sandboxBackend = readSandboxBackend(env)
+  if (sandboxBackend === 'docker' && hostTools && sandboxMode !== 'workspace-write') {
+    throw new TheoClawConfigError(
+      `THEOCLAW_SANDBOX_BACKEND=docker runs the shell with the tool root writable, so it needs THEOCLAW_SANDBOX=workspace-write, not ${sandboxMode}`,
+      { variable: 'THEOCLAW_SANDBOX_BACKEND' },
+    )
+  }
   const search = readSearch(env)
   const browser = readBrowser(env, deps.browser)
   const computer = readComputer(env, { hostTools, sandboxMode }, deps.computer)
@@ -234,12 +272,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
   const mode: SandboxMode = hostTools ? sandboxMode : 'read-only'
-  const sandbox = createSandboxBackend({
-    mode,
-    workDir: toolRoot,
-    ...(deps.detect === undefined ? {} : { detect: deps.detect }),
-    ...(deps.warn === undefined ? {} : { warn: deps.warn }),
-  })
+  const sandbox = buildBackend(env, sandboxBackend, mode, toolRoot, deps)
   const sandboxEnforced = sandbox instanceof LinuxSandbox
   const gitRepository = isRepository(toolRoot)
   const offLines = [...lines]
@@ -256,6 +289,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     hostTools,
     gitRepository,
     sandboxEnforced,
+    sandboxBackend,
     sandbox,
     mode,
     sandboxMode,
@@ -282,12 +316,8 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
 export function toolSettingsForSession(settings: ToolSettings, env: Env, sessionKey: string, deps: ToolDeps = {}): ToolSettings {
   const sandboxMode = sandboxModeForSession(settings.sandboxMode, readSandboxSessions(env), sessionKey)
   if (sandboxMode === settings.sandboxMode || !settings.hostTools) return settings
-  const sandbox = createSandboxBackend({
-    mode: sandboxMode,
-    workDir: settings.toolRoot,
-    ...(deps.detect === undefined ? {} : { detect: deps.detect }),
-    ...(deps.warn === undefined ? {} : { warn: deps.warn }),
-  })
+  if (settings.sandboxBackend === 'docker') return settings
+  const sandbox = buildBackend(env, settings.sandboxBackend, sandboxMode, settings.toolRoot, deps)
   // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
   const { interactive: _chosenMode, ...rest } = settings
   return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: sandbox instanceof LinuxSandbox }
@@ -344,7 +374,7 @@ export function checkHostToolsPosture(
     for (const target of protectedPaths) refuseWritableProtectedPath(target, [settings.toolRoot])
     return
   }
-  if (!settings.sandboxEnforced) {
+  if (!settings.sandboxEnforced && settings.sandboxBackend !== 'docker') {
     const { sandboxMode } = settings
     const { detail } = resolveSandboxPosture({ mode: sandboxMode, ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
     throw new TheoClawConfigError(

@@ -389,6 +389,8 @@ when `git_diff` is off because the sandbox is not enforced.
 `THEOCLAW_SANDBOX` chooses the shell's sandbox when host tools are on (B-392). Any other value
 stops the start before any runner, with host tools off too.
 
+`THEOCLAW_SANDBOX_BACKEND=docker` runs each shell command in a throwaway Docker container (the SDK's `DockerSandbox`: read-only root, no network, only the tool root writable) instead of bubblewrap; `THEOCLAW_SANDBOX_IMAGE` picks the image (default `alpine:3`). It needs `THEOCLAW_SANDBOX=workspace-write`; `git_diff` and the interactive shell stay off with it.
+
 | Mode | The shell can write | The file-writing tools |
 |---|---|---|
 | `read-only` | nothing | not registered: they take no sandbox, so only leaving them out keeps the mode true |
