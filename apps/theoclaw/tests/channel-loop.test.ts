@@ -262,7 +262,7 @@ describe('startChannelLoop retry', () => {
     await loop.ready
     expect(loop.failed).toEqual(['matrix'])
     up = true
-    await waitFor(() => loop.started.has('matrix'))
+    await waitFor(() => loop.started.has('matrix'), 2000, 'matrix to connect')
     expect(loop.failed).toEqual([])
     expect(lines.some((line) => line.startsWith('matrix: retry 1/50'))).toBe(true)
     expect(lines).toContain('matrix: connected')
