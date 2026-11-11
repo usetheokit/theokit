@@ -263,3 +263,38 @@ describe('the /webchat routes on the started listener', () => {
     expect(calls.built).toBe(0)
   })
 })
+
+/** OC-105 (#1563): `/model` and `/status` are answered by the served listener, with no model turn and no usage line. */
+describe('WebChat slash commands on the started listener', () => {
+  it('answers /model with the configured model id, builds no agent and writes no usage line', async () => {
+    const { base, calls, capture } = await start({ token: TOKEN })
+
+    const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`, { message: '/model', id: 'chat-1' })
+
+    expect(served.status).toBe(200)
+    expect(servedText(await served.text())).toBe('Model: test-model')
+    expect(calls.built).toBe(0)
+    expect(capture.text()).not.toContain('usage webchat')
+  })
+
+  it('answers /status and still sends other text to the agent', async () => {
+    const { base, calls } = await start({ token: TOKEN })
+
+    const status = await post(base, '/webchat/chat', `Bearer ${TOKEN}`, { message: '/status', id: 'chat-1' })
+    expect(servedText(await status.text())).toContain('Model: test-model')
+    expect(calls.built).toBe(0)
+    const ordinary = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
+    expect(servedText(await ordinary.text())).toContain('hello from the agent')
+    expect(calls.built).toBe(1)
+  })
+
+  it('answers /think, /stop and /steer on the served listener without building an agent for /stop', async () => {
+    const { base, calls } = await start({ token: TOKEN })
+    const ask = async (message: string) => servedText(await (await post(base, '/webchat/chat', `Bearer ${TOKEN}`, { message, id: 'chat-2' })).text())
+
+    expect(await ask('/think low')).toBe('Thinking level set to low.')
+    expect(await ask('/stop')).toBe('Nothing is running to stop.')
+    expect(calls.built).toBe(0)
+    expect(await ask('/steer left')).toContain('Nothing is running')
+  })
+})
