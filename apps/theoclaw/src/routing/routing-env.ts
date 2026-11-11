@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import { clawRouting } from './claws.js'
 import { createAgentRouter, type AgentProfile, type AgentRoute, type AgentRouter } from './agent-routes.js'
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -23,7 +24,8 @@ function bad(variable: string, detail: string): TheoClawConfigError {
  */
 export function readAgentRouter(env: Env, mainWorkspace: string): AgentRouter | undefined {
   const routeEntries = entries(env.THEOCLAW_ROUTES)
-  if (routeEntries.length === 0) return undefined
+  const claws = clawRouting(env)
+  if (routeEntries.length === 0 && claws.routes.length === 0) return undefined
   const agents: AgentProfile[] = [{ id: MAIN_AGENT, workspace: mainWorkspace }]
   for (const entry of entries(env.THEOCLAW_AGENTS)) {
     const at = entry.indexOf('=')
@@ -33,6 +35,10 @@ export function readAgentRouter(env: Env, mainWorkspace: string): AgentRouter | 
       throw bad('THEOCLAW_AGENTS', 'must be <id>=<absolute workspace> pairs separated by commas; the id is not "main"')
     }
     agents.push({ id, workspace })
+  }
+  for (const claw of claws.agents) {
+    if (agents.some((agent) => agent.id === claw.id)) throw bad('THEOCLAW_AGENTS', `names ${claw.id}, which an installed claw already uses`)
+    agents.push(claw)
   }
   const routes: AgentRoute[] = routeEntries.map((entry) => {
     const equals = entry.lastIndexOf('=')
@@ -46,7 +52,7 @@ export function readAgentRouter(env: Env, mainWorkspace: string): AgentRouter | 
     return { agent: entry.slice(equals + 1).trim(), platform, ...(peer === '' ? {} : { peer }) }
   })
   try {
-    return createAgentRouter({ defaultAgent: MAIN_AGENT, agents, routes })
+    return createAgentRouter({ defaultAgent: MAIN_AGENT, agents, routes: [...routes, ...claws.routes] })
   } catch (error) {
     throw bad('THEOCLAW_ROUTES', (error as Error).message)
   }

@@ -36,7 +36,6 @@ const UNREACHABLE_ALLOWLIST: Readonly<Record<string, string>> = {
   'plugins/install.ts': 'No caller yet (#1516): no CLI command installs a plugin.',
   'plugins/manifest.ts': 'Only plugins/install.ts imports it (#1516).',
   'plugins/sdk.ts': 'No caller yet (#1516): the plugin SDK surface is not loaded by the product.',
-  'routing/agent-routes.ts': 'No caller yet (#1516): per-agent routes are not composed.',
   'voice/talk-session.ts': 'No caller yet (#1516): no entry point starts a talk session.',
 }
 

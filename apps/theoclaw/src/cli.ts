@@ -18,6 +18,7 @@ import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
 import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
+import { clawsCommand } from './routing/claws.js'
 import { triageCommand } from './ops/triage.js'
 import { statusCommand } from './ops/status.js'
 import { loginWhatsApp } from './channels/whatsapp-qr.js'
@@ -76,6 +77,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw status           the instance, its model and channels, and whether the service runs; exit 3 when it does not
   theoclaw triage [--out <dir>]
                             write a sanitized diagnostics archive (.tar.gz) and a prompt for a coding agent; no secret value is written
+  theoclaw claws add|update <dir> | remove <id> | list
+                            install, replace, remove or list packaged agents (claw.json, persona files, skills)
   theoclaw logs [--lines <n>] [--file <path>]
                             the last log lines (file, launchd log or user journal), secrets masked
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
@@ -271,6 +274,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   sessions: (args, io) => Promise.resolve(sessionsCommand(args, io)),
   logs: (args, io) => logsCommand(args, io, io.runner),
   triage: (args, io) => triageCommand(args, io),
+  claws: (args, io) => clawsCommand(args, io),
   whatsapp: whatsappCommand,
   tui: tuiCommand,
   mcp: async (args, io) => {
