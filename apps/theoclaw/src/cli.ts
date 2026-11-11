@@ -18,6 +18,7 @@ import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
 import { statusCommand } from './ops/status.js'
 import { loginWhatsApp } from './channels/whatsapp-qr.js'
+import { readControlClientSettings } from './control-client/settings.js'
 import { loadConfiguration } from './config-file.js'
 import { whatsappSessionDir } from './channels/platforms.js'
 import { securityCommand } from './security-audit.js'
@@ -74,6 +75,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
+  theoclaw tui [--session <id>]
+                            the terminal UI on the running instance, with the token and port from the configuration file
   theoclaw mcp              serve TheoClaw's tools as an MCP server on stdin/stdout (claude mcp add theoclaw -- theoclaw mcp)
   theoclaw import <claude-code|hermes> [--dry-run] [--source <dir>] [--project <dir>] [--home <dir>]
                             copy a Claude Code or Hermes setup into the state directory; --dry-run lists the files and writes none
@@ -85,8 +88,8 @@ const USAGE = `usage: theoclaw <command>
  * The entry as a child in its own process group, so a terminal's SIGINT reaches only this process,
  * which forwards it once; the exit code is the child's, or 1 with the signal named.
  */
-function startChild(args: readonly string[], io: CliIo, entry: string = io.entry): Promise<number> {
-  const child = spawn(process.execPath, [entry, ...args], { stdio: 'inherit', detached: true, env: io.env })
+function startChild(args: readonly string[], io: CliIo, entry: string = io.entry, env: NodeJS.ProcessEnv = io.env): Promise<number> {
+  const child = spawn(process.execPath, [entry, ...args], { stdio: 'inherit', detached: true, env })
   const forward = (signal: NodeJS.Signals): void => {
     child.kill(signal)
   }
@@ -167,6 +170,19 @@ async function whatsappCommand(args: readonly string[], io: CliIo): Promise<numb
   return 0
 }
 
+/** `tui`: the terminal UI as a child; the token and port come from the configuration file unless the environment sets them. */
+function tuiCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [flag, id, ...extra] = args
+  if (args.length > 0 && (flag !== '--session' || id === undefined || id.startsWith('-') || extra.length > 0)) {
+    throw new UsageError('theoclaw tui: expected [--session <id>]')
+  }
+  const env: NodeJS.ProcessEnv = { ...io.env }
+  if (id !== undefined) env.THEOCLAW_SESSION = id
+  loadConfiguration(env, io.homeDir)
+  readControlClientSettings(env) // a bad token, port or session id ends here with exit 1, before the child starts
+  return startChild([], io, join(dirname(io.entry), 'tui', 'main.js'), env)
+}
+
 const COMMANDS: Readonly<Record<string, Command>> = {
   start: startChild,
   // The ACP server is its own leaf entry beside `main.js`: stdin and stdout are the protocol, so the child inherits them.
@@ -185,6 +201,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   status: (_args, io) => statusCommand(io, io.runner),
   logs: (args, io) => logsCommand(args, io, io.runner),
   whatsapp: whatsappCommand,
+  tui: tuiCommand,
   mcp: async (args, io) => {
     if (args.length > 0) throw new UsageError('theoclaw mcp: expected no arguments')
     await serveMcpStdio({ env: io.env, homeDir: io.homeDir, cwd: io.cwd, stdin: io.stdin as unknown as NodeJS.ReadableStream, stdout: io.stdout })
