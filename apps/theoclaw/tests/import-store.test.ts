@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -20,7 +20,7 @@ function setupWith(overrides: Partial<ForeignSetup>): ForeignSetup {
     source: '/nowhere',
     instructions: [{ path: 'CLAUDE.md', text: 'Follow the house style.' }],
     mcpServers: { good: { command: 'npx', args: ['good-server'] } },
-    skills: [{ name: 'greet', description: 'Greets', body: 'Say hello.\n', path: 'skills/greet/SKILL.md' }],
+    skills: [{ name: 'greet', description: 'Greets', body: 'Say hello.\n', requiresBins: [], path: 'skills/greet/SKILL.md' }],
     memories: [{ path: 'MEMORY.md', text: 'The owner likes tea.' }],
     dropped: [],
     ...overrides,
@@ -133,6 +133,23 @@ describe('the import store', () => {
     expect(readImport(stateDir)?.mcpServers).toHaveProperty('db')
   })
 
+  it('does not offer a skill whose required binary is missing until it is on PATH', () => {
+    const skill = { name: 'needs-ghost', description: 'Needs it', body: 'Go.\n', requiresBins: ['ghost-binary-xyz'], path: 'skills/needs-ghost/SKILL.md' }
+    writeImport(stateDir, setupWith({ skills: [skill] }), { now })
+    expect(readFileSync(join(stateDir, 'import', 'skills', 'needs-ghost', 'SKILL.md'), 'utf8')).toContain('ghost-binary-xyz')
+    const names = (): string[] | undefined => readImport(stateDir)?.skills.map((entry) => entry.name)
+    const originalPath = process.env.PATH
+    try {
+      expect(names()).toEqual([])
+      const bin = mkdtempSync(join(tmpdir(), 'ghostbin-'))
+      writeFileSync(join(bin, 'ghost-binary-xyz'), '#!/bin/sh\n', { mode: 0o755 })
+      process.env.PATH = `${bin}${delimiter}${originalPath ?? ''}`
+      expect(names()).toEqual(['needs-ghost'])
+    } finally {
+      process.env.PATH = originalPath
+    }
+  })
+
   it('reads an import back as instructions, memory, MCP servers and inline skills', () => {
     writeImport(
       stateDir,
@@ -142,7 +159,7 @@ describe('the import store', () => {
           { path: 'project/CLAUDE.md', text: 'Second instruction.' },
         ],
         mcpServers: { good: { command: 'npx', args: ['good-server'] }, web: { type: 'http', url: 'https://h/mcp', headers: { A: 'b' } } },
-        skills: [{ name: 'greet', description: 'Greets: politely', body: 'Say hello.\n', path: 'skills/greet/SKILL.md' }],
+        skills: [{ name: 'greet', description: 'Greets: politely', body: 'Say hello.\n', requiresBins: [], path: 'skills/greet/SKILL.md' }],
       }),
       { now },
     )
@@ -330,7 +347,7 @@ describe('the import store', () => {
   it('refuses a skill that would not read back once staged, leaving no import', () => {
     // A body under the cap whose staged file, frontmatter included, goes over it.
     const body = 'x'.repeat(262_144 - 40)
-    const big = setupWith({ skills: [{ name: 'big', description: 'A long skill description', body, path: 'skills/big/SKILL.md' }] })
+    const big = setupWith({ skills: [{ name: 'big', description: 'A long skill description', body, requiresBins: [], path: 'skills/big/SKILL.md' }] })
 
     expect(refusal(() => writeImport(stateDir, big, { now })).message).toContain('"big"')
     expect(existsSync(join(stateDir, 'import'))).toBe(false)
