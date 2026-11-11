@@ -475,7 +475,7 @@ function startWebchat(
       })
     return createTurnRunner(withAgent, secrets, settings.model)
   }
-  return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy })
+  return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy, model: settings.model })
 }
 
 /**

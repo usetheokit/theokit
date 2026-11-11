@@ -12,6 +12,7 @@ import { TRUSTED_IDENTITY_HEADER } from '../control-plane/trusted-proxy.js'
 import type { TurnRunner } from '../control-plane/turn.js'
 import { chatIdOf, WebchatChatIdError } from './chat-id.js'
 import { createWebchatRun } from './create-run.js'
+import { withLocalCommands } from './local-commands.js'
 import { renderPage, WEBCHAT_ASSETS } from './page.js'
 import {
   WEBCHAT_ASSETS_PREFIX,
@@ -31,6 +32,8 @@ export interface WebchatRoutesOptions {
   readonly assetsDir: string | URL
   /** Where a finished turn's usage line goes (B-400 FR-004). Default: nowhere. */
   readonly write?: (line: string) => void
+  /** The model id `/model` and `/status` answer with, without a model turn. */
+  readonly model?: string
 }
 
 const NO_STORE = { 'cache-control': 'no-store' }
@@ -212,10 +215,12 @@ async function chat(
   rawTurnFor: (chatId: string) => TurnRunner,
   write?: (line: string) => void,
   scope = '',
+  model?: string,
 ): Promise<Response> {
   // A signed-in user's chats are keyed under their identity: two users naming one chat id get two sessions.
-  const turnFor =
+  const scoped =
     scope === '' ? rawTurnFor : (chatId: string): TurnRunner => rawTurnFor(`${scope}${chatId}`)
+  const turnFor = (chatId: string): TurnRunner => withLocalCommands(scoped(chatId), model)
   const turn = new AbortController()
   const stopTurn = (): void => turn.abort()
   if (request.signal.aborted) stopTurn()
@@ -273,6 +278,7 @@ export function createWebchatRoutes(
       options.turnFor,
       options.write,
       identity === '' ? '' : userScope(identity),
+      options.model,
     )
   }
 }
@@ -314,6 +320,7 @@ async function boundedChat(
   turnFor: (chatId: string) => TurnRunner,
   write?: (line: string) => void,
   scope = '',
+  model?: string,
 ): Promise<Response> {
   const body = await boundedBody(request).catch((error: unknown) => {
     // A client that leaves mid-upload errors the body stream: answer, since the listener would
@@ -335,5 +342,6 @@ async function boundedChat(
     turnFor,
     write,
     scope,
+    model,
   )
 }
