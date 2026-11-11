@@ -19,7 +19,8 @@ function entryPoints(): string[] {
     (command) =>
       [...command.matchAll(/(?:^|[\s])(?:node )?\.?\/?dist\/([\w/-]+)\.js/g)].map((m) => m[1]),
   )
-  return [...new Set(dist)].flatMap((stem) =>
+  // `theoclaw acp` starts this one as a child process by name (src/cli.ts), so no script or bin names it.
+  return [...new Set([...dist, 'main-acp'])].flatMap((stem) =>
     [`${stem}.ts`, `${stem}.tsx`].map((f) => join(SRC, f)).filter((f) => existsSync(f)),
   )
 }
@@ -36,7 +37,6 @@ const UNREACHABLE_ALLOWLIST: Readonly<Record<string, string>> = {
   'plugins/manifest.ts': 'Only plugins/install.ts imports it (#1516).',
   'plugins/sdk.ts': 'No caller yet (#1516): the plugin SDK surface is not loaded by the product.',
   'routing/agent-routes.ts': 'No caller yet (#1516): per-agent routes are not composed.',
-  'routing/task-worktree.ts': 'No caller yet (#1516): tasks do not get a worktree.',
   'voice/talk-session.ts': 'No caller yet (#1516): no entry point starts a talk session.',
 }
 

@@ -30,7 +30,8 @@ import type { TurnAgent } from '../agent-port.js'
 import { scrubbedAgentTransport } from './acp-transport.js'
 import { acpPermissionHandler, type AcpPermissionOptions } from './acp-permission.js'
 import { browserServer } from './browser-server.js'
-import { codeModeTool, delegateAllTool, delegateTool, type CreateWorker } from './code-mode-tools.js'
+import { codeModeTool, delegateAllTool, delegateTool, runWorker, type CreateWorker } from './code-mode-tools.js'
+import { codingWorkerPort, codingWorkersAvailable } from './coding-worker.js'
 import { computerTool } from './computer-tool.js'
 import { execApprovalPlugin, type ExecApprovalOptions } from './exec-approval.js'
 import { questionTool, taskTools } from './control-tools.js'
@@ -171,6 +172,7 @@ export function agentToolOptions(
   createWorker?: CreateWorker,
   buildDescriber?: () => Promise<TurnAgent>,
   execApproval?: ExecApprovalOptions,
+  createCoder?: (tools: CustomTool[]) => Promise<TurnAgent>,
 ): AgentToolOptions {
   const tools = [...buildTools(settings, execApproval === undefined ? {} : { ask: execApproval.ask }), ...extra]
   if (createWorker !== undefined && buildDescriber !== undefined && settings.computer !== undefined) {
@@ -178,10 +180,15 @@ export function agentToolOptions(
     tools.push(computerTool(settings.computer, buildDescriber))
   }
   if (createWorker !== undefined) {
+    // A coding task gets its own git worktree and branch (OC-83): only where files may be written in a repository.
+    const coder =
+      createCoder !== undefined && codingWorkersAvailable(settings)
+        ? codingWorkerPort(settings, readOnlyTools, (workerTools, task, signal) => runWorker(() => createCoder(workerTools), task, signal))
+        : undefined
     tools.push(
       codeModeTool(readOnlyTools(settings), settings),
-      delegateAllTool(createWorker),
-      delegateTool(createWorker),
+      delegateAllTool(createWorker, coder),
+      delegateTool(createWorker, coder),
       questionTool(),
       ...taskTools(),
     )
@@ -231,5 +238,6 @@ export function controlAgentToolOptions(
     // The screenshot's describer holds no tool and no plugin: it can only answer (B-676 D1).
     async () => build({ tools: [], plugins: [] }),
     execApproval,
+    async (tools) => build({ ...workerToolOptions(settings), tools }),
   )
 }
