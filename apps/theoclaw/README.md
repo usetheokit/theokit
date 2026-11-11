@@ -70,10 +70,21 @@ cannot run `install.sh`, so rebuild by hand and run `theoclaw daemon install` ag
 
 ## Container
 
+A release that publishes a new `theoclaw` version to npm also publishes the image
+`ghcr.io/usetheokit/theoclaw:<version>` (and `:latest`). It is available from the first release
+after this change; a release that does not bump theoclaw publishes no image. To tell whether a
+version has an image, run `docker manifest inspect ghcr.io/usetheokit/theoclaw:<version>`: it
+exits 0 when the image exists and non-zero when it does not.
+
+```bash
+docker run -d --name theoclaw --user "$(id -u):$(id -g)" \
+  -v ~/.config/theoclaw:/data -p 127.0.0.1:8787:8787 ghcr.io/usetheokit/theoclaw:<version>
+```
+
+Until a release has published an image, or to run unreleased code, build it from a checkout:
+
 ```bash
 docker build -f apps/theoclaw/Dockerfile -t theoclaw .     # from the repository root
-docker run -d --name theoclaw --user "$(id -u):$(id -g)" \
-  -v ~/.config/theoclaw:/data -p 127.0.0.1:8787:8787 theoclaw
 ```
 
 The image runs `/app/apps/theoclaw/dist/main.js` as a non-root user, reads the configuration file
