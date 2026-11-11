@@ -42,7 +42,8 @@ import { loadConfiguration } from './config-file.js'
 import { whatsappSessionDir } from './channels/platforms.js'
 import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
-import { sessionsCommand } from './sessions/sessions-command.js'
+import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
+import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { PublishError, publishSkill } from './skills/publish.js'
 
@@ -109,6 +110,9 @@ const USAGE = `usage: theoclaw <command>
   theoclaw tui [--session <id>]
                             the terminal UI on the running instance, with the token and port from the configuration file
   theoclaw mcp              serve TheoClaw's tools as an MCP server on stdin/stdout (claude mcp add theoclaw -- theoclaw mcp)
+  theoclaw attach [--session <id>] [--print-config]
+                            launch Claude Code (claude) with a temporary MCP config for this session that expires in an hour; --print-config prints the config instead
+  theoclaw resume           print the messages of the most recently updated chat session
   theoclaw import <claude-code|hermes> [--dry-run] [--source <dir>] [--project <dir>] [--home <dir>]
                             copy a Claude Code or Hermes setup into the state directory; --dry-run lists the files and writes none
   theoclaw sessions list|show <id>|export <id> [--json]
@@ -373,6 +377,44 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       stdout: io.stdout,
     })
     return 0
+  },
+  resume: (args, io) => Promise.resolve(resumeCommand(args, io)),
+  attach: async (args, io) => {
+    const print = args.includes('--print-config')
+    const rest = args.filter((arg) => arg !== '--print-config')
+    const [flag, id, ...extra] = rest
+    if (
+      rest.length > 0 &&
+      (flag !== '--session' || id === undefined || id.startsWith('-') || extra.length > 0)
+    )
+      throw new UsageError('theoclaw attach: expected [--session <id>] [--print-config]')
+    const launch = isSea()
+      ? { command: process.execPath, args: [] }
+      : { command: io.nodePath, args: [join(dirname(io.entry), 'cli.js')] }
+    const grant = mintAttachGrant(launch, id ?? 'owner')
+    if (print) {
+      io.stdout.write(`${JSON.stringify(grant.config, null, 2)}\n`)
+      return 0
+    }
+    const file = writeAttachConfig(grant)
+    try {
+      io.stderr.write(
+        `theoclaw: attaching Claude Code to session ${grant.session} until ${grant.expiresAt}\n`,
+      )
+      return await new Promise<number>((settle) => {
+        const child = spawn('claude', ['--strict-mcp-config', '--mcp-config', file.path], {
+          stdio: 'inherit',
+          env: io.env,
+        })
+        child.once('error', (error) => {
+          io.stderr.write(`theoclaw: cannot start claude: ${describeError(error)}\n`)
+          settle(1)
+        })
+        child.once('exit', (code) => settle(code ?? 1))
+      })
+    } finally {
+      file.remove()
+    }
   },
   import: (args, io) => {
     const [kind, ...rest] = args
