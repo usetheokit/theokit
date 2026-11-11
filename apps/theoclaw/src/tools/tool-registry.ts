@@ -3,6 +3,7 @@ import { createACPTool } from 'theokit/server/agent'
 import { bindToolScope } from '@theokit/agents/tool-scope'
 import { createExtractDocumentTool } from '@theokit/sdk-tools/extract-document'
 import { createGithubLinkPreviewTool } from '@theokit/sdk-tools/github-link-preview'
+import { createSearxngWebSearchAdapter, createTavilyWebSearchAdapter } from '@theokit/sdk-tools/web-search-adapters'
 import { createReadPdfTool } from '@theokit/sdk-tools/read-pdf'
 import { createScreenshotLogbookTool } from '@theokit/sdk-tools/screenshot-logbook'
 import {
@@ -14,9 +15,7 @@ import {
   createInteractiveShellTool,
   createListDirTool,
   createReadFileTool,
-  createSearxngWebSearchAdapter,
   createShellTool,
-  createTavilyWebSearchAdapter,
   createTodolistTool,
   createViewImageTool,
   createWebFetchTool,
