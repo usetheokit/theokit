@@ -14,6 +14,7 @@ import { createMemory, type MemoryWiring, memoryEnabled, reviewerOptions } from 
 import { createContainer } from '../agent-container.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { createChannelAgentFactory, isIncognito, keepsTranscripts, sessionAgentOptions } from '../control-plane/agent-factory.js'
+import type { AgentToolOptions } from '../tools/tool-registry.js'
 import { SessionRouter } from '@theokit/gateway'
 import { MAIN_AGENT, readAgentRouter } from '../routing/routing-env.js'
 import { Generations } from './generations.js'
@@ -29,6 +30,8 @@ export interface ChatSessionsOptions {
   readonly sessionSettings?: SessionSettings
   /** Plugins every session agent is opened with (B-572: the exec approval gate), read when an agent opens. */
   readonly plugins?: () => readonly Plugin[]
+  /** The tools and plugins a session opened for `event` holds (a tool profile); absent or undefined: none. */
+  readonly toolsFor?: (event: MessageEvent) => AgentToolOptions | undefined
   readonly write: (line: string) => void
 }
 
@@ -109,8 +112,10 @@ export function chatSessions(options: ChatSessionsOptions): {
       // A bound peer or platform is answered by its own agent: that agent's workspace and persona.
       const workspace = agentRouter?.route({ platform: event.platform, peer: event.sender.id }).workspace ?? settings.workspace
       const base = sessionAgentOptions(options.env, workspace)
-      const plugins = options.plugins?.() ?? []
-      return plugins.length === 0 ? base : { ...base, plugins: [...(base.plugins ?? []), ...plugins] }
+      const profiled = options.toolsFor?.(event)
+      const plugins = [...(options.plugins?.() ?? []), ...(profiled?.plugins ?? [])]
+      const withPlugins = plugins.length === 0 ? base : { ...base, plugins: [...(base.plugins ?? []), ...plugins] }
+      return profiled === undefined ? withPlugins : { ...withPlugins, tools: [...profiled.tools] }
     },
     generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
     settings,

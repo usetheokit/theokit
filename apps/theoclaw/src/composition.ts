@@ -84,6 +84,7 @@ import { triggerRoutes } from './triggers/trigger-route.js'
 import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
 import { withInteractiveShell } from './tools/interactive-shell.js'
+import { profileToolOptions, readToolProfile } from './tools/tool-profiles.js'
 import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import type { GenerateObject } from './workflows/triage-workflow.js'
@@ -150,6 +151,8 @@ export interface TheoClawOptions {
   readonly events?: EventSettings
   /** Builds one trigger run's agent, fresh per run: no tool, like a chat agent. Default: the channel factory. */
   readonly triggerAgentFactory?: () => Promise<TurnAgent>
+  /** The tool settings `startTheoClaw` resolved; with `THEOCLAW_TOOL_PROFILE` they give an owner's direct chat its tools. */
+  readonly toolSettings?: ToolSettings
 }
 
 export interface ComposedTheoClaw {
@@ -227,6 +230,14 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   let chatGate: Plugin[] | undefined
   const chat = chatSessions({
     ...options,
+    toolsFor: (event) => {
+      const profile = readToolProfile(options.env)
+      if (profile === undefined || options.toolSettings === undefined) return undefined
+      // Only an owner's direct chat: a group session is shared with senders who may not steer a shell.
+      if (event.channel.type !== 'dm' || !isPolicyOwner(policy, event.platform, event.sender.id)) return undefined
+      const key = chat.keyOf(event)
+      return profileToolOptions(profile, options.toolSettings, () => execChat.elevated(key), policy.stateDir !== undefined)
+    },
     plugins: () => {
       if (chatGate === undefined) {
         const gate = execApprovalFor({ ...options.execApproval, ...execChat.options }, policy.stateDir)
@@ -480,6 +491,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
   let tools = startToolSettings(options, policy)
+  readToolProfile(options.env)
   const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
   requireGroupPlatformsConfigured(policy, platforms)
   const events = readEventSettings(options.env, platforms)
@@ -549,6 +561,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     ...options,
     acp,
     policy,
+    toolSettings: tools,
     sessionSettings,
     generations,
     events,
