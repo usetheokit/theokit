@@ -64,7 +64,7 @@
     "@theokit/sdk": "5.15.3",
     "@theokit/sdk-tools": "0.29.0",
     "@theokit/tui": "0.80.0",
-    "@theokit/ui": "1.12.2",
+    "@theokit/ui": "1.13.0",
     "@usetheo/ui": "0.28.2",
     "bonjour-service": "1.4.4",
     "discord.js": "14.27.0",
