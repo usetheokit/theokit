@@ -11,6 +11,7 @@ import { Agent } from '@theokit/sdk'
 import type { AgentOptions, CustomTool, Plugin, SDKAgent } from '@theokit/sdk'
 
 import { createContainer } from './agent-container.js'
+import { TheoClawConfigError } from './control-plane/errors.js'
 import { createPairingStore, type PairingStore } from './authorization/pairing-store.js'
 import {
   type AuthorizationPolicy,
@@ -177,6 +178,17 @@ function composedTriggers(
     write,
     secrets,
   })
+}
+
+/** Refuse a broadcast group that names a platform with no configuration: its messages could never arrive. */
+export function requireGroupPlatformsConfigured(policy: AuthorizationPolicy, configured: readonly string[]): void {
+  for (const group of policy.broadcastGroups) {
+    for (const { platform } of group.members) {
+      if (!configured.includes(platform)) {
+        throw new TheoClawConfigError(`THEOCLAW_BROADCAST_GROUPS group "${group.name}" names ${platform}, which is not configured`, { variable: 'THEOCLAW_BROADCAST_GROUPS' })
+      }
+    }
+  }
 }
 
 /** One line per platform left unconfigured, and per configured one no sender can reach under the DM policy. */
@@ -469,6 +481,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const policy = parseAuthorizationPolicy(options.env)
   let tools = startToolSettings(options, policy)
   const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
+  requireGroupPlatformsConfigured(policy, platforms)
   const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
