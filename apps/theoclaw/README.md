@@ -722,6 +722,10 @@ A peer's text is the worker's user message, and its answer reaches `/control` as
 peer you do not trust can steer what the worker reads from your tool root and what `/control` does
 next. Give the token only to instances you run.
 
+## Place a phone call
+
+`theoclaw call <number> --message "text"` places one outbound call through Twilio's REST API; Twilio reads the message aloud and the command prints the call SID. Set `THEOCLAW_VOICE_CALL_TWILIO_ACCOUNT_SID`, `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and `THEOCLAW_VOICE_CALL_FROM_NUMBER` (E.164) in the environment or the configuration file. The number must be E.164 and listed in `THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS` (comma-separated E.164); with the list unset the command refuses. The auth token is never printed.
+
 ## Remote access over SSH
 
 TheoClaw binds `127.0.0.1` by default, and TheoClaw needs no public bind for this: to reach the

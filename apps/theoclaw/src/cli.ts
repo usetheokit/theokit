@@ -27,8 +27,9 @@ import { InstanceLockedError } from './backup/instance-lock.js'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './daemon.js'
 import { runCommand, type Runner } from './run-command.js'
-import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
+import { parseCall, parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
+import { placeCall } from './voice/outbound-call.js'
 import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
 import { pathCommand } from './ops/oc-path.js'
@@ -78,6 +79,8 @@ export interface CliIo extends DaemonIo {
   readonly signals: SignalSource
   /** Runs `systemctl`, `loginctl` and `git` for `daemon` and `update`. */
   readonly runner: Runner
+  /** The HTTP client `call` uses; the global `fetch` when absent. */
+  readonly fetch?: typeof fetch
 }
 
 const USAGE = `usage: theoclaw <command>
@@ -146,6 +149,8 @@ const USAGE = `usage: theoclaw <command>
                             upload a skill folder (SKILL.md with name, description, version) to THEOCLAW_SKILLS_REGISTRY with THEOCLAW_SKILLS_TOKEN
   theoclaw worker pair <control url> <setup code> [--name <n>] [--inference worker|gateway] | run <message> | status
                             pair this device as a worker; with inference worker its model calls run here and log in worker.log
+  theoclaw call <number> --message <text>
+                            place an outbound phone call through Twilio that says the message; <number> must be E.164 and listed in THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS
   theoclaw --help           this text
   theoclaw --version        print the version
 `
@@ -482,6 +487,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       { ...io, env },
       join(dirname(io.entry), 'import-main.js'),
     )
+  },
+  call: async (args, io) => {
+    const { to, message } = parseCall(args)
+    const env: NodeJS.ProcessEnv = { ...io.env }
+    loadConfiguration(env, io.homeDir)
+    try {
+      const sid = await placeCall({ env, to, message, fetch: io.fetch })
+      io.stdout.write(`${sid}\n`)
+      return 0
+    } catch (error) {
+      if (error instanceof UsageError || error instanceof TheoClawConfigError) throw error
+      io.stderr.write(`theoclaw call: ${describeError(error)}\n`)
+      return 1
+    }
   },
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
