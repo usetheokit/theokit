@@ -190,12 +190,14 @@ export type FakeTimelineEvent =
 export class FakeAgent {
   readonly sent: string[] = []
   readonly signals: (AbortSignal | undefined)[] = []
+  readonly queueModes: (string | undefined)[] = []
   cancels = 0
 
   constructor(private readonly turn: FakeTurn) {}
 
-  async send(text: string, options?: { readonly signal?: AbortSignal }) {
+  async send(text: string, options?: { readonly signal?: AbortSignal; readonly queueMode?: string }) {
     this.sent.push(text)
+    this.queueModes.push(options?.queueMode)
     const signal = options?.signal
     this.signals.push(signal)
     const turn = this.turn

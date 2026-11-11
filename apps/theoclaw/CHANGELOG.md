@@ -18,6 +18,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `/steer <text>` (#1526, OC-52): in a chat channel, and as a `steer` frame on `/control` (answered `steer_ok`, or `no_turn` when nothing runs), the text is injected into the turn already running (SDK `queueMode: 'steer'`) instead of waiting behind it.
 - `theoclaw worker pair|run|status` (#1590): a paired worker device with `--inference worker` runs model calls locally and records the provider request in its own `worker.log`; with `gateway` the message is proxied to the gateway's `/control` socket.
 
 - `theoclaw meetings join <Meet link>` joins a Google Meet as a guest in headless Chrome and stores the captions as notes (OC-16); `meetings list` and `meetings show <id>` read them back. Speaking in the meeting is not built.
