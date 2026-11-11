@@ -50,6 +50,9 @@ import { update } from './update.js'
 import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
+import { createMcpRelayServer } from './mcp-relay/relay-server.js'
+import { parsePort, isLoopback } from './control-plane/bind.js'
+import { readBearerToken } from './control-plane/bearer.js'
 import { PublishError, publishSkill } from './skills/publish.js'
 
 /**
@@ -140,6 +143,8 @@ const USAGE = `usage: theoclaw <command>
                             upload a skill folder (SKILL.md with name, description, version) to THEOCLAW_SKILLS_REGISTRY with THEOCLAW_SKILLS_TOKEN
   theoclaw worker pair <control url> <setup code> [--name <n>] [--inference worker|gateway] | run <message> | status
                             pair this device as a worker; with inference worker its model calls run here and log in worker.log
+  theoclaw mcp-relay serve --port <n> [--host <h>]
+                            serve the hosted MCP relay remote clients connect to; needs THEOCLAW_MCP_RELAY_TOKEN, binds loopback by default
   theoclaw --help           this text
   theoclaw --version        print the version
 `
@@ -335,6 +340,60 @@ function tuiCommand(args: readonly string[], io: CliIo): Promise<number> {
   return startChild([], io, join(dirname(io.entry), 'tui', 'main.js'), env)
 }
 
+/** `mcp-relay serve`: the hosted MCP relay, in this process until a signal. */
+async function mcpRelayCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const usage = 'theoclaw mcp-relay: expected serve --port <n> [--host <h>]'
+  const [verb, ...flags] = args
+  if (verb !== 'serve') throw new UsageError(usage)
+  let port: string | undefined
+  let host = '127.0.0.1'
+  for (let i = 0; i < flags.length; i += 2) {
+    const value = flags[i + 1]
+    if (value === undefined) throw new UsageError(usage)
+    if (flags[i] === '--port') port = value
+    else if (flags[i] === '--host') host = value
+    else throw new UsageError(usage)
+  }
+  if (port === undefined) throw new UsageError(usage)
+  const env: NodeJS.ProcessEnv = { ...io.env }
+  loadConfiguration(env, io.homeDir)
+  Object.assign(env, resolveInstance(env, { homeDir: io.homeDir }).overrides)
+  const instanceToken = readBearerToken(env, 'THEOCLAW_MCP_RELAY_TOKEN')
+  if (instanceToken === undefined)
+    throw new TheoClawConfigError('THEOCLAW_MCP_RELAY_TOKEN must be set to serve the MCP relay', {
+      variable: 'THEOCLAW_MCP_RELAY_TOKEN',
+    })
+  const stateDir = env['THEOCLAW_STATE_DIR']
+  if (stateDir === undefined || stateDir === '')
+    throw new TheoClawConfigError('THEOCLAW_STATE_DIR must be set to find mcp-relay-grants.json', {
+      variable: 'THEOCLAW_STATE_DIR',
+    })
+  if (!isLoopback(host) && env['THEOCLAW_PUBLIC_BIND'] !== 'yes')
+    throw new TheoClawConfigError(
+      `refusing to bind ${host}: it is not a loopback address; set THEOCLAW_PUBLIC_BIND=yes to bind a non-loopback address`,
+    )
+  const portNumber = parsePort(port)
+  const server = createMcpRelayServer({
+    instanceToken,
+    grantsPath: join(stateDir, 'mcp-relay-grants.json'),
+  })
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(portNumber, host, resolve)
+  })
+  const address = server.address()
+  const bound = typeof address === 'object' && address !== null ? address.port : portNumber
+  io.stdout.write(`theoclaw: MCP relay listening on ${host}:${bound}\n`)
+  return new Promise<number>((resolve) => {
+    const stop = (): void => {
+      for (const signal of FORWARDED) io.signals.removeListener(signal, stop)
+      server.closeAllConnections()
+      server.close(() => resolve(0))
+    }
+    for (const signal of FORWARDED) io.signals.on(signal, stop)
+  })
+}
+
 const COMMANDS: Readonly<Record<string, Command>> = {
   start: startChild,
   // The ACP server is its own leaf entry beside `main.js`: stdin and stdout are the protocol, so the child inherits them.
@@ -401,6 +460,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     })
     return 0
   },
+  'mcp-relay': mcpRelayCommand,
   resume: (args, io) => Promise.resolve(resumeCommand(args, io)),
   attach: async (args, io) => {
     const print = args.includes('--print-config')
