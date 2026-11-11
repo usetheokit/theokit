@@ -38,7 +38,9 @@ export function missingVariables(platform, env) {
     .map((name) => P + name)
 }
 
-/** `{ config, secrets, botEnv, owner }`: the transport settings, the values to mask, the bot's own env and the human's owner entry. */
+/**
+ * Owner ids checked against the adapters: Matrix's sender id is the MXID (`getSender()`), Mattermost's is the post's `user_id`.
+ * `{ config, secrets, botEnv, owner }`: the transport settings, the values to mask, the bot's own env and the human's owner entry. */
 export function platformConfig(platform, env) {
   const spec = SPECS[platform]
   const config = Object.fromEntries(
