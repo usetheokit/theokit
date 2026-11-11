@@ -89,6 +89,7 @@ import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import type { GenerateObject } from './workflows/triage-workflow.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { webchatEvent } from './webchat/chat-id.js'
+import { withInfoCommands } from './channels/info-commands.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
 import { createWebchatRoutes } from './webchat/routes.js'
 import { configuredVoiceReplies, withVoiceReplies } from './voice/voice-replies.js'
@@ -296,7 +297,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       compact: readCompactSettings(options.env, maskedWrite, options.compact),
       typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
     }), configuredVoiceReplies(options.env)),
-    hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
+    hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook, model }) }),
     secrets,
     write: options.write,
     retry: options.retry ?? { initialDelayMs: 1000, maxDelayMs: 30_000, maxAttempts: 40 },
@@ -453,7 +454,7 @@ function startWebchat(
           lease.release()
         }
       })
-    return createTurnRunner(withAgent, secrets, settings.model)
+    return withInfoCommands(createTurnRunner(withAgent, secrets, settings.model), { model: settings.model })
   }
   return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy })
 }

@@ -4,6 +4,7 @@ import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
 import type { PairingStore } from './authorization/pairing-store.js'
 import { type AuthorizationPolicy, isPolicyOwner } from './authorization/policy.js'
 import { createAcpCommandHook, type AcpSessions } from './channels/acp-command.js'
+import { createInfoCommandHook } from './channels/info-commands.js'
 import { createHelpHook } from './channels/help-hook.js'
 import { createGroupActivationHook } from './channels/group-activation-hook.js'
 
@@ -17,6 +18,8 @@ export interface ChannelHookOptions {
   readonly emailTrigger?: GatewayHook
   /** The `/usage` hook (B-400 FR-005), run third. */
   readonly usage?: GatewayHook
+  /** The model `/model` and `/status` answer with; absent: neither command. */
+  readonly model?: string
   /** The ACP sessions `/acp` starts, lists and stops (B-685), owners only; absent: no `/acp`. */
   readonly acp?: AcpSessions
   /** The chat exec approval: `/approve`, `/deny`, `/elevated` (B-572), run after the owner policy. */
@@ -38,5 +41,5 @@ export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[
   const help = createHelpHook()
   const exec = options.execApproval === undefined ? [] : [options.execApproval.hook]
   const acp = options.acp === undefined ? [] : [createAcpCommandHook({ sessions: options.acp, isOwner: (event) => isPolicyOwner(policy, event.platform, event.sender.id) })]
-  return [...(options.emailTrigger === undefined ? [] : [options.emailTrigger]), ownerPolicy, ...exec, ...acp, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), help]
+  return [...(options.emailTrigger === undefined ? [] : [options.emailTrigger]), ownerPolicy, ...exec, ...acp, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), ...(options.model === undefined ? [] : [createInfoCommandHook({ model: options.model })]), help]
 }
