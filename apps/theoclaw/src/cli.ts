@@ -17,6 +17,7 @@ import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
 import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
+import { proxyCommand } from './ops/proxy.js'
 import { statusCommand } from './ops/status.js'
 import { loginWhatsApp } from './channels/whatsapp-qr.js'
 import { readControlClientSettings } from './control-client/settings.js'
@@ -74,6 +75,10 @@ const USAGE = `usage: theoclaw <command>
   theoclaw status           the instance, its model and channels, and whether the service runs; exit 3 when it does not
   theoclaw logs [--lines <n>] [--file <path>]
                             the last log lines (file, launchd log or user journal), secrets masked
+  theoclaw proxy validate [--proxy-url <url>] [--target <host:port>]
+                            check the operator proxy (THEOCLAW_PROXY_URL) tunnels HTTPS; exit 1 when it does not
+  theoclaw proxy start [--port <n>]
+                            run a local capture proxy; theoclaw proxy captures lists what went through it
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
@@ -187,8 +192,18 @@ function tuiCommand(args: readonly string[], io: CliIo): Promise<number> {
   return startChild([], io, join(dirname(io.entry), 'tui', 'main.js'), env)
 }
 
+/** `start`: with THEOCLAW_PROXY_URL set, the child's outbound fetches go through that proxy. */
+function startCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const env: NodeJS.ProcessEnv = { ...io.env }
+  loadConfiguration(env, io.homeDir)
+  const proxy = env.THEOCLAW_PROXY_URL?.trim()
+  if (proxy) Object.assign(env, { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, NODE_USE_ENV_PROXY: '1', NO_PROXY: env.NO_PROXY ?? '127.0.0.1,localhost' })
+  return startChild(args, io, io.entry, proxy ? env : io.env)
+}
+
 const COMMANDS: Readonly<Record<string, Command>> = {
-  start: startChild,
+  start: startCommand,
+  proxy: (args, io) => proxyCommand(args, io),
   // The ACP server is its own leaf entry beside `main.js`: stdin and stdout are the protocol, so the child inherits them.
   acp: (args, io) => startChild(args, io, join(dirname(io.entry), 'main-acp.js')),
   onboard: async (args, io) => {
