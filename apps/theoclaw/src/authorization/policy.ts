@@ -29,6 +29,8 @@ export interface AuthorizationPolicy {
   /** Always set under `pairing`; optional under the other three policies. */
   readonly stateDir: string | undefined
   readonly broadcastGroups: readonly BroadcastGroup[]
+  /** `platform:senderId` keys named by THEOCLAW_ALLOWLIST, directly or through an access group. Treated like paired senders. */
+  readonly allowed: ReadonlySet<string>
 }
 
 /**
@@ -176,6 +178,50 @@ function parseBroadcastGroups(env: Env): readonly BroadcastGroup[] {
   return groups
 }
 
+const ACCESS_GROUP_PREFIX = 'accessGroup:'
+
+/** `THEOCLAW_ACCESS_GROUPS`: `name=platform:id,platform:id;name2=...` into name -> sender keys. */
+function parseAccessGroups(env: Env): ReadonlyMap<string, readonly string[]> {
+  const variable = 'THEOCLAW_ACCESS_GROUPS'
+  const groups = new Map<string, readonly string[]>()
+  for (const spec of list(read(env, variable), ';')) {
+    const equals = spec.indexOf('=')
+    const name = equals < 0 ? '' : spec.slice(0, equals).trim()
+    if (name === '') throw new TheoClawConfigError(`${variable} has a group with no name=`, { variable })
+    if (groups.has(name)) throw new TheoClawConfigError(`${variable} names group "${name}" twice`, { variable })
+    const members = list(spec.slice(equals + 1), ',').map((entry) => {
+      const { platform, id } = splitAddress(entry, variable)
+      requireAuthenticated(platform, variable, `cannot list an ${platform} sender`, 'anyone could write as a member')
+      return senderKey(platform, id)
+    })
+    groups.set(name, members)
+  }
+  return groups
+}
+
+/**
+ * `THEOCLAW_ALLOWLIST`: `platform:id` or `platform:accessGroup:<name>` entries. A group entry admits
+ * the group's members on that platform only.
+ */
+function parseAllowlist(env: Env): ReadonlySet<string> {
+  const variable = 'THEOCLAW_ALLOWLIST'
+  const groups = parseAccessGroups(env)
+  const allowed = new Set<string>()
+  for (const entry of list(read(env, variable), ',')) {
+    const { platform, id } = splitAddress(entry, variable)
+    requireAuthenticated(platform, variable, `cannot allow an ${platform} sender`, 'anyone could write as an allowed sender')
+    if (!id.startsWith(ACCESS_GROUP_PREFIX)) {
+      allowed.add(senderKey(platform, id))
+      continue
+    }
+    const name = id.slice(ACCESS_GROUP_PREFIX.length).trim()
+    const members = groups.get(name)
+    if (members === undefined) throw new TheoClawConfigError(`${variable} names access group "${name}", which THEOCLAW_ACCESS_GROUPS does not define`, { variable })
+    for (const key of members) if (key.startsWith(`${platform}:`)) allowed.add(key)
+  }
+  return allowed
+}
+
 /**
  * Read the authorization policy from the environment. The first bad value throws
  * `TheoClawConfigError` naming its variable, before anything is built.
@@ -197,5 +243,6 @@ export function parseAuthorizationPolicy(env: Env): AuthorizationPolicy {
     refusalText: read(env, 'THEOCLAW_REFUSAL_TEXT') ?? DEFAULT_REFUSAL_TEXT,
     stateDir,
     broadcastGroups: parseBroadcastGroups(env),
+    allowed: parseAllowlist(env),
   })
 }

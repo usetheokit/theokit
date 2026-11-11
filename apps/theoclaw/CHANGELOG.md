@@ -18,6 +18,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Named sender lists (#1567): `THEOCLAW_ACCESS_GROUPS` defines them and `THEOCLAW_ALLOWLIST` admits `platform:accessGroup:<name>` or single senders.
 - `THEOCLAW_TOOL_PROFILE=minimal|messaging|coding|full` (#1562) gives an owner's direct chat tools (minimal: read files; messaging: plus the web; coding: plus the sandboxed shell and file writers; full: plus the interactive shell). The shell needs `THEOCLAW_HOST_TOOLS=on` and a state directory, and stays behind exec approval. `/elevated on` now also runs that session's `shell_exec` outside the sandbox, for that session only. Unset, chat agents hold no tool, as before.
 
 - A changed start-only setting (`THEOCLAW_PORT`, a token, a channel or a policy) in the configuration file of a running instance now restarts TheoClaw onto the new file instead of only being reported (B-716, OC-94). Under systemd or launchd the process exits 75 and the manager restarts it; otherwise it starts its own successor, which waits for the old process to exit. A new file that would be refused at the start (a bad port or token) is refused whole and the instance keeps running. Offline-tested; the live check `tests/live/config-restart.live.test.ts` has not been run.

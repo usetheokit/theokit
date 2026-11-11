@@ -82,6 +82,16 @@ describe('parseAuthorizationPolicy', () => {
     expect(policy.broadcastGroups[0]?.members[0]).toEqual({ platform: 'matrix', channelId: '!room:matrix.org' })
   })
 
+  it('resolves accessGroup allowlist entries and refuses an undefined group', () => {
+    const policy = parseAuthorizationPolicy({
+      ...OWNER,
+      THEOCLAW_ACCESS_GROUPS: 'family=matrix:@a:hs,telegram:7',
+      THEOCLAW_ALLOWLIST: 'matrix:accessGroup:family,discord:9',
+    })
+    expect([...policy.allowed]).toEqual(['matrix:@a:hs', 'discord:9'])
+    expect(() => parseAuthorizationPolicy({ ...OWNER, THEOCLAW_ALLOWLIST: 'matrix:accessGroup:nope' })).toThrow(/does not define/)
+  })
+
   it('parses two broadcast groups and refuses a one-member group', () => {
     const policy = parseAuthorizationPolicy({
       ...OWNER,
