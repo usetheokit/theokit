@@ -70,6 +70,16 @@ cannot run `install.sh`, so rebuild by hand and run `theoclaw daemon install` ag
 
 ## Container
 
+Release images are published to `ghcr.io/usetheokit/theoclaw`, tagged with the release version.
+No checkout is needed:
+
+```bash
+docker run -d --name theoclaw --user "$(id -u):$(id -g)" \
+  -v ~/.config/theoclaw:/data -p 127.0.0.1:8787:8787 ghcr.io/usetheokit/theoclaw:0.1.0
+```
+
+To build the image from a checkout instead:
+
 ```bash
 docker build -f apps/theoclaw/Dockerfile -t theoclaw .     # from the repository root
 docker run -d --name theoclaw --user "$(id -u):$(id -g)" \
