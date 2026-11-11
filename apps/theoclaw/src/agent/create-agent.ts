@@ -1,6 +1,7 @@
 import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 
+import { SkillRegistry } from '../skills/registry.js'
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
@@ -72,6 +73,8 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   readonly thinking?: ThinkingLevel
   /** A workspace whose `.theokit/plugins/` holds installed, trusted plugins (OC-75); absent loads none. */
   readonly pluginWorkspace?: string
+  /** A directory holding `<skill>/SKILL.md` folders (`<workspace>/skills`), offered to the agent; absent offers none. */
+  readonly skillsDir?: string
 }
 
 /**
@@ -95,7 +98,9 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
-  const imported = input.imported === undefined ? withTools : withImport(withTools, input.imported)
+  const workspaceSkills = input.skillsDir === undefined ? [] : new SkillRegistry({ workspaceDir: input.skillsDir, bundled: [] }).inlineSkills()
+  const withSkills: TheoClawAgentOptions<Model> = workspaceSkills.length === 0 ? withTools : { ...withTools, skills: { inline: workspaceSkills } }
+  const imported = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
   const suffix = input.toolOptions?.systemPromptSuffix
   return suffix === undefined || suffix === '' ? imported : { ...imported, systemPrompt: `${imported.systemPrompt}\n\n${suffix}` }
 }
@@ -137,11 +142,18 @@ function withImport<Model extends string | ModelSelection>(
   return {
     ...options,
     systemPrompt: importedPrompt(setup),
-    ...(hasSkills ? { skills: { inline: [...setup.skills] }, tools: [...(options.tools ?? []), SkillReadTool.create(setup.skills)] } : {}),
+    ...(hasSkills ? { skills: { inline: mergeSkills(setup.skills, options.skills?.inline ?? []) }, tools: [...(options.tools ?? []), SkillReadTool.create(setup.skills)] } : {}),
     // The browser server and the external tools file's servers keep their names: an imported
     // server with one of them does not replace it.
     ...(hasServers ? { mcpServers: { ...setup.mcpServers, ...options.mcpServers } } : {}),
   }
+}
+
+/** Imported skills, then workspace skills: a workspace skill replaces an imported one of the same name. */
+function mergeSkills(imported: readonly InlineSkill[], workspace: readonly InlineSkill[]): InlineSkill[] {
+  const byName = new Map<string, InlineSkill>()
+  for (const skill of [...imported, ...workspace]) byName.set(skill.name, skill)
+  return [...byName.values()]
 }
 
 /** Create the agent those options describe, through the SDK. */

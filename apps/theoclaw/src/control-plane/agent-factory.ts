@@ -44,6 +44,12 @@ export function keepsTranscripts(env: BindEnvironment): boolean {
   throw new TheoClawConfigError('THEOCLAW_TRANSCRIPTS must be on or off', { variable: 'THEOCLAW_TRANSCRIPTS' })
 }
 
+/** `<workspace>/skills` for every agent (OC-70); none without a workspace. */
+function skillsDirOf(env: BindEnvironment): { skillsDir?: string } {
+  const workspace = env.THEOCLAW_WORKSPACE?.trim()
+  return workspace === undefined || workspace === '' ? {} : { skillsDir: join(workspace, 'skills') }
+}
+
 /**
  * The options every TheoClaw agent is built with, the model key passed explicitly (plan D4): the
  * SDK refuses `OPENROUTER_API_KEY` from the environment, so the key is resolved here by the same
@@ -59,7 +65,7 @@ export function keepsTranscripts(env: BindEnvironment): boolean {
  */
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
-  return theoClawAgentOptions({ model, apiKey: modelKey, approvedHooks: parseApprovedHooks(env), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
+  return theoClawAgentOptions({ model, apiKey: modelKey, ...skillsDirOf(env), approvedHooks: parseApprovedHooks(env), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
 }
 
 /**
@@ -135,6 +141,7 @@ export function createAgentFactory(
         model,
         apiKey: modelKey,
         approvedHooks: parseApprovedHooks(env),
+        ...skillsDirOf(env),
         ...thinkingOf(env),
         ...agentTelemetry(readTelemetrySettings(env)),
         ...(toolOptions === undefined ? {} : { toolOptions }),
