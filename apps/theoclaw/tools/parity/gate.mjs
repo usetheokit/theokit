@@ -14,7 +14,10 @@ export const LEDGER_REPO_PATH = 'apps/theoclaw/parity/ledger.json'
 
 /** The files an item names: `files` when set, else its check's path. */
 export function namedFiles(entry) {
-  return [...(Array.isArray(entry.files) ? entry.files : []), ...(entry.check?.path ? [entry.check.path] : [])]
+  return [
+    ...(Array.isArray(entry.files) ? entry.files : []),
+    ...(entry.check?.path ? [entry.check.path] : []),
+  ]
 }
 
 /**
@@ -23,20 +26,29 @@ export function namedFiles(entry) {
  * ISO date of the last change to them; `readResult(id)` the parsed result or undefined.
  */
 export function gate({ ledger, baseLedger, changed, lastChange, readResult }) {
-  const baseShipped = new Set((baseLedger ?? []).filter((e) => e.status === 'shipped').map((e) => e.id))
+  const baseShipped = new Set(
+    (baseLedger ?? []).filter((e) => e.status === 'shipped').map((e) => e.id),
+  )
   const problems = []
   for (const entry of ledger.filter((e) => e.status === 'shipped')) {
     const files = namedFiles(entry)
-    const touched = baseLedger === undefined || !baseShipped.has(entry.id) || files.some((f) => changed.has(f))
+    const touched =
+      baseLedger === undefined || !baseShipped.has(entry.id) || files.some((f) => changed.has(f))
     if (!touched) continue
     const result = readResult(entry.id)
-    if (result === undefined) problems.push({ id: entry.id, why: 'no results/' + entry.id + '.json' })
-    else if (result.verdict !== 'works') problems.push({ id: entry.id, why: `verdict is ${result.verdict}, not works` })
+    if (result === undefined)
+      problems.push({ id: entry.id, why: 'no results/' + entry.id + '.json' })
+    else if (result.verdict !== 'works')
+      problems.push({ id: entry.id, why: `verdict is ${result.verdict}, not works` })
     else {
       const since = lastChange(files)
       const dated = Date.parse(result.date)
       const sinceMs = Date.parse(since)
-      if (Number.isNaN(dated) || Number.isNaN(sinceMs) || dated <= sinceMs) problems.push({ id: entry.id, why: `result dated ${result.date} is not after the last change (${since})` })
+      if (Number.isNaN(dated) || Number.isNaN(sinceMs) || dated <= sinceMs)
+        problems.push({
+          id: entry.id,
+          why: `result dated ${result.date} is not after the last change (${since})`,
+        })
     }
   }
   return problems
@@ -75,7 +87,10 @@ export function runGate(argv, { out = console, env = process.env } = {}) {
     changed = new Set([diff, dirty, untracked].flatMap((text) => text.split('\n')).filter(Boolean))
   }
   const lastChange = (files) => {
-    const dirty = [git(['diff', '--name-only', 'HEAD', '--', ...files]), git(['ls-files', '--others', '--exclude-standard', '--', ...files])]
+    const dirty = [
+      git(['diff', '--name-only', 'HEAD', '--', ...files]),
+      git(['ls-files', '--others', '--exclude-standard', '--', ...files]),
+    ]
     if (dirty.some((text) => text)) return new Date().toISOString()
     return git(['log', '-1', '--format=%cI', 'HEAD', '--', ...files]) ?? '1970-01-01T00:00:00Z'
   }
@@ -93,6 +108,8 @@ export function runGate(argv, { out = console, env = process.env } = {}) {
     out.log(`parity:gate --all: ${problems.length} shipped items unmeasured`)
     return 0
   }
-  out.error(`parity:gate: ${problems.length} shipped item(s) lack a fresh passing result; run pnpm --filter theoclaw parity -- --id <id>`)
+  out.error(
+    `parity:gate: ${problems.length} shipped item(s) lack a fresh passing result; run pnpm --filter theoclaw parity -- --id <id>`,
+  )
   return 1
 }
