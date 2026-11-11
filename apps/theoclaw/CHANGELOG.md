@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- WebChat has a language switch in its settings (English or Svenska), using the `@theokit/ui` 1.13.0 i18n layer, so switching to Svenska shows "Inställningar". (#1547)
+- `theoclaw mcp-relay serve --port N [--host H]` runs the hosted MCP relay that remote MCP clients connect to: `POST /mcp` with a client grant token, and `/instance/poll` and `/instance/respond` for the instance, guarded by `THEOCLAW_MCP_RELAY_TOKEN`. (#1635)
 - `theoclaw call <number> --message <text>` places an outbound phone call through Twilio and prints the call SID (OC-15, #1628). It needs `THEOCLAW_VOICE_CALL_TWILIO_ACCOUNT_SID`, `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and `THEOCLAW_VOICE_CALL_FROM_NUMBER`, and refuses any number not in `THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS`.
 
 ### Changed
