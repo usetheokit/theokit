@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- CodeQL alerts (#1726): the capture proxy forwards only `http:` URLs, `skills publish` and the control client accept only http(s) and ws(s) addresses, and `sessions share` creates its file without following a planted link.
+
 ### Added
 
 - WebChat has a language switch in its settings (English or Svenska), using the `@theokit/ui` 1.13.0 i18n layer, so switching to Svenska shows "Inställningar". (#1547)

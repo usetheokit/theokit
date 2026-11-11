@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { closeSync, constants, existsSync, fchmodSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
@@ -156,13 +156,16 @@ function shareCommand(verb: 'share' | 'open', args: readonly string[], io: Sessi
   }
   mkdirSync(shared, { recursive: true })
   const file = join(shared, `${session.id}.json`)
-  if (existsSync(file)) chmodSync(file, 0o600)
-  writeFileSync(
-    file,
-    `${JSON.stringify({ id: session.id, messages: readMessages(session.transcript) })}\n`,
-    { mode: 0o600 },
-  )
-  chmodSync(file, 0o444)
+  // No check-then-use: drop any earlier copy (a read-only file, or a link planted in its place),
+  // then create the file exclusively without following a link, and set its mode on the open handle.
+  rmSync(file, { force: true })
+  const fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+  try {
+    writeFileSync(fd, `${JSON.stringify({ id: session.id, messages: readMessages(session.transcript) })}\n`)
+    fchmodSync(fd, 0o444)
+  } finally {
+    closeSync(fd)
+  }
   io.stdout.write(`shared ${session.id} read-only to ${shared}\n`)
   return 0
 }

@@ -90,11 +90,14 @@ export async function publishSkill(dir: string, options: PublishOptions): Promis
   const token = (options.env.THEOCLAW_SKILLS_TOKEN ?? '').trim()
   if (registry === '') throw new PublishError('THEOCLAW_SKILLS_REGISTRY is not set')
   if (token === '') throw new PublishError('THEOCLAW_SKILLS_TOKEN is not set')
+  if (!/^https?:\/\//i.test(registry)) throw new PublishError('THEOCLAW_SKILLS_REGISTRY must start with http:// or https://')
   const pkg = buildSkillPackage(dir)
   const url = `${registry.replace(/\/+$/, '')}/v1/skills/${encodeURIComponent(pkg.name)}/${encodeURIComponent(pkg.version)}`
   const id = `${pkg.name}@${pkg.version}`
   let response: Response
   try {
+    // The archive the publisher chose (at most MAX_PACKAGE_BYTES) goes to the registry the publisher
+    // configured; uploading it is the feature.
     response = await (options.fetch ?? fetch)(url, {
       method: 'PUT',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },

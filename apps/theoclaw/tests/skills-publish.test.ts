@@ -69,6 +69,11 @@ describe('theoclaw skills publish', () => {
     for (const dir of [empty, noVersion, linked]) expect((await run(dir, base)).code).toBe(1)
     expect(seen).toHaveLength(0)
   })
+  it('refuses a registry that is not http or https', async () => {
+    const r = await run(skill(), 'file:///etc/passwd', TOKEN)
+    expect(r.code).toBe(1)
+    expect(r.err).toContain('http:// or https://')
+  })
   it('names a missing variable', async () => {
     expect((await run(skill(), 'http://127.0.0.1:1', null)).err).toContain('THEOCLAW_SKILLS_TOKEN')
     expect((await run(skill(), undefined, TOKEN)).err).toContain('THEOCLAW_SKILLS_REGISTRY')
