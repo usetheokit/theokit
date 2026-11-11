@@ -194,7 +194,7 @@ export class FakeAgent {
 
   constructor(private readonly turn: FakeTurn) {}
 
-  async send(text: string, options?: { readonly signal?: AbortSignal }) {
+  async send(text: string, options?: { readonly signal?: AbortSignal; readonly queueMode?: string }) {
     this.sent.push(text)
     const signal = options?.signal
     this.signals.push(signal)

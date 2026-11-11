@@ -34,6 +34,8 @@ export interface TurnAgent {
     options?: {
       readonly signal?: AbortSignal
       readonly toolResultGuard?: { readonly delimit?: boolean }
+      /** `steer` injects the text into the turn already running; with none running it starts one (OC-52). */
+      readonly queueMode?: 'followup' | 'steer' | 'collect'
       /** Called with each `InteractionUpdate` as the model writes; `text-delta` carries the reply's text. */
       readonly onDelta?: (args: { readonly update: { readonly type: string } }) => void
     },

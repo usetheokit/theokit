@@ -46,6 +46,7 @@ function pathOf(request: IncomingMessage): string {
 type Frame =
   | { readonly kind: 'chat'; readonly message: string; readonly session?: string }
   | { readonly kind: 'interrupt'; readonly session: string }
+  | { readonly kind: 'steer'; readonly session: string; readonly message: string }
 
 /**
  * The frame's `session`, when it is a string. `null` reads as absent, as the field was ignored
@@ -86,6 +87,10 @@ function parseFrame(raw: { toString(): string }, isBinary: boolean): Frame | und
   const frame = readObject(raw, isBinary)
   if (frame === undefined) return undefined
   const session = sessionOf(frame)
+  if (frame.type === 'steer') {
+    const text = typeof frame.message === 'string' && frame.message !== '' ? frame.message : undefined
+    return session === undefined || text === undefined ? undefined : { kind: 'steer', session, message: text }
+  }
   if (frame.type === 'interrupt') return session === undefined ? undefined : { kind: 'interrupt', session }
   const message = chatMessage(frame)
   if (message === undefined) return undefined
@@ -153,6 +158,13 @@ function serve(
     if (frame === undefined) return send({ type: 'error', code: 'bad_frame' })
     const session = frame.session
     if (session !== undefined && sessions === undefined) return send({ type: 'error', code: 'bad_frame' })
+    if (frame.kind === 'steer') {
+      void sessions!.steer(frame.session, frame.message).then((answer) => {
+        if (answer === 'no_turn') return send({ type: 'no_turn', session })
+        send(answer === 'steered' ? { type: 'steer_ok', session } : { type: 'error', code: 'steer_failed', session })
+      })
+      return
+    }
     if (frame.kind === 'interrupt') {
       const answer = sessions!.interrupt(frame.session)
       if (answer === 'no_turn') return send({ type: 'no_turn', session })

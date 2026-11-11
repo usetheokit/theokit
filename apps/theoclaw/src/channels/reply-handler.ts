@@ -34,6 +34,18 @@ export const RESET_FAILED_REPLY = 'I could not start a new conversation; this on
  */
 const RESET_COMMANDS: ReadonlySet<string> = new Set(['/new', '/reset'])
 
+/** The one line a bare `/steer` answers with. */
+export const STEER_USAGE_REPLY = 'Usage: /steer <text> - redirect the turn that is running.'
+
+/** The line a `/steer` answers with once the running turn has the text. */
+export const STEER_SENT_REPLY = 'Steering the running turn.'
+
+/** `/steer <text>`, matched on the first word; undefined when the text is not a steer. */
+function steerOf(text: string): string | undefined {
+  const match = /^\/steer(?:\s+([\s\S]*))?$/.exec(text)
+  return match === null ? undefined : (match[1] ?? '').trim()
+}
+
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
 /** Broadcast groups and how their other members are reached (OC-21). */
@@ -230,7 +242,13 @@ async function streamTurn(
  * The agent is the session's, owned by `SessionAgents`; the lease is released once the turn has
  * replied, failed or not.
  */
-async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
+async function answerTurn(
+  options: ReplyHandlerOptions,
+  event: MessageEvent,
+  ctx: GatewayContext,
+  prompt: string,
+  running: WeakSet<object>,
+): Promise<string> {
   const presenter = presenterFor(event)
   const secrets = options.secrets ?? []
   const gate = createProgressGate(resolveDisplay(event.platform, options.display), options.incognito === true)
@@ -248,7 +266,14 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
       started = true
       const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
       try {
-        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress)
+        // Marked while the turn streams, so a `/steer` of this session knows a turn is there to steer.
+        running.add(lease.agent)
+        let outcome: TurnOutcome
+        try {
+          outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress)
+        } finally {
+          running.delete(lease.agent)
+        }
         // Masked before rendering (in the stream) and again after it, so a value is caught in the
         // model's text and in the platform's own format; the answer a broadcast group records and
         // fans out is masked before any member renders it.
@@ -342,9 +367,35 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
  * disposed here: it is the session's, owned by `SessionAgents`.
  */
 export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler {
+  /** The session agents with a chat turn streaming now. */
+  const running = new WeakSet<object>()
   return async (event, ctx) => {
     const text = event.text.trim()
     if (text === '') return
+    const steer = steerOf(text)
+    if (steer === '') {
+      await send(ctx, { text: STEER_USAGE_REPLY, format: 'plain' }, { failed: false, answer: STEER_USAGE_REPLY })
+      return
+    }
+    if (steer !== undefined) {
+      // Handlers of one session run concurrently, so this one reaches the agent while its turn streams.
+      const steered = await options.withAgent(event, async (lease) => {
+        try {
+          if (!running.has(lease.agent)) return false
+          await lease.agent.send(steer, { ...untrustedContentSendOptions(), queueMode: 'steer' })
+          return true
+        } finally {
+          lease.release()
+        }
+      })
+      if (steered) {
+        await send(ctx, { text: STEER_SENT_REPLY, format: 'plain' }, { failed: false, answer: STEER_SENT_REPLY })
+        return
+      }
+      // No turn is running: the text is an ordinary message.
+      await answerTurn(options, event, ctx, steer, running)
+      return
+    }
     if (RESET_COMMANDS.has(text)) {
       // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
       // A reset that could not be saved moved nothing; the person is told, and the runner too.
@@ -365,12 +416,12 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
     const broadcast = options.broadcast
     const group = broadcast?.groups.groupOf(event.platform, event.channel.id)
     if (broadcast === undefined || group === undefined) {
-      await answerTurn(options, event, ctx, event.text)
+      await answerTurn(options, event, ctx, event.text, running)
       return
     }
     // Entered before any await, so the group's turns run in delivery order.
     await group.run(async () => {
-      const answer = await answerTurn(options, event, ctx, group.prompt(event.text))
+      const answer = await answerTurn(options, event, ctx, group.prompt(event.text), running)
       // A member's own message joins the thread too, so it is masked as the answer is.
       group.record(event.platform, maskSecrets(event.text, options.secrets ?? []), answer)
       await fanOut(broadcast, group, event, answer)

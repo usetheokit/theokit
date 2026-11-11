@@ -298,3 +298,33 @@ describe("the control socket speaks sessions and interrupt (T2.3)", () => {
     expect(plane.builds()).toBe(0);
   });
 });
+
+describe("a steer frame (OC-52)", () => {
+  it("is sent to the running session turn with queue mode steer", async () => {
+    const hold = deferred<void>();
+    const plane = await startSessionPlane(() => ({ frames: [assistant("x"), finished()], before: hold.promise }));
+    const client = await peer(plane);
+    client.send({ type: "chat", message: "list", session: "s" });
+    await waitFor(() => plane.agents[0]?.sent.length === 1, 2000, "the send");
+    const modes: unknown[] = [];
+    const agent = plane.agents[0]!;
+    const original = agent.send.bind(agent);
+    agent.send = (async (text: string, options?: { queueMode?: string }) => {
+      modes.push(options?.queueMode);
+      return original(text, options as never);
+    }) as never;
+    client.send({ type: "steer", session: "s", message: "only three" });
+    await client.until(hasType("steer_ok"), "steer_ok");
+    expect(modes).toEqual(["steer"]);
+    expect(agent.sent).toEqual(["list", "only three"]);
+    hold.resolve();
+    await client.until(hasType("done"), "done");
+  });
+
+  it("answers no_turn when the session runs nothing", async () => {
+    const plane = await startSessionPlane(() => quick);
+    const client = await peer(plane);
+    client.send({ type: "steer", session: "s", message: "x" });
+    await client.until(hasType("no_turn"), "no_turn");
+  });
+});

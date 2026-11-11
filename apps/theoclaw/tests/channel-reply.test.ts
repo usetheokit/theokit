@@ -12,6 +12,8 @@ import {
   RESET_FAILED_REPLY,
   NO_ANSWER_REPLY,
   ReplyDeliveryError,
+  STEER_SENT_REPLY,
+  STEER_USAGE_REPLY,
   createReplyHandler,
 } from '../src/channels/reply-handler.js'
 import type { TurnAgent } from '../src/channels/reply-handler.js'
@@ -487,5 +489,52 @@ describe("the /control request boundary tears its agent down", () => {
     await expect(handlerOver(agent)(event, ctx)).rejects.toHaveProperty('errors', [teardown])
 
     expect(replies.map((reply) => reply.text)).toEqual(['Hi!'])
+  })
+})
+
+describe('/steer (OC-52)', () => {
+  /** An agent whose first turn is held; a `steer` send is recorded and resolves to that turn. */
+  function steerable() {
+    const hold = deferred<void>()
+    const sends: { text: string; queueMode: string | undefined }[] = []
+    const inner = new FakeAgent({ frames: [assistant('1. a 2. b 3. c'), finished()], before: hold.promise })
+    const agent: TurnAgent = {
+      send: async (text, options) => {
+        sends.push({ text: text as string, queueMode: options?.queueMode })
+        return options?.queueMode === 'steer' ? inner.send('steered') : inner.send(text as string, options)
+      },
+    }
+    return { agent, sends, hold }
+  }
+
+  it('sends the text to the running turn with queue mode steer, and that turn gives the one answer', async () => {
+    const { agent, sends, hold } = steerable()
+    const handler = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })
+    const first = fakeContext(messageEvent('telegram', 'list them'))
+    const turn = handler(first.ctx.event, first.ctx)
+    await waitFor(() => sends.length === 1, 2000, 'the first send')
+    const second = fakeContext(messageEvent('telegram', '/steer only the first three'))
+    await handler(second.ctx.event, second.ctx)
+    expect(sends[1]).toEqual({ text: 'only the first three', queueMode: 'steer' })
+    expect(second.replies.map((r) => r.text)).toEqual([STEER_SENT_REPLY])
+    hold.resolve()
+    await turn
+    expect(first.replies.map((r) => r.text)).toEqual(['1. a 2. b 3. c'])
+  })
+
+  it('answers a bare /steer with its usage and sends nothing', async () => {
+    const { agent, sends } = steerable()
+    const { ctx, replies } = fakeContext(messageEvent('telegram', '/steer'))
+    await createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(ctx.event, ctx)
+    expect(replies.map((r) => r.text)).toEqual([STEER_USAGE_REPLY])
+    expect(sends).toEqual([])
+  })
+
+  it('runs the text as an ordinary turn when none is running', async () => {
+    const agent = new FakeAgent({ frames: [assistant('ok'), finished()] })
+    const { ctx, replies } = fakeContext(messageEvent('telegram', '/steer hello'))
+    await createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(ctx.event, ctx)
+    expect(agent.sent).toEqual(['hello'])
+    expect(replies.map((r) => r.text)).toEqual(['ok'])
   })
 })
