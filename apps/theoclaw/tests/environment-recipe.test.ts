@@ -46,6 +46,18 @@ describe('environment recipes', () => {
     expect(await detectRecipe(repo({ 'a.txt': '' }))).toBeUndefined()
   })
 
+  it('detects each lockfile and skips the install when node_modules exists', async () => {
+    const cases: [string, string[]][] = [
+      ['package-lock.json', ['npm', 'ci']],
+      ['yarn.lock', ['yarn', 'install', '--frozen-lockfile']],
+      ['bun.lock', ['bun', 'install', '--frozen-lockfile']],
+    ]
+    for (const [file, command] of cases) {
+      expect((await detectRecipe(repo({ [file]: '' })))?.steps[0]?.commands[0]).toEqual(command)
+    }
+    expect(await detectRecipe(repo({ 'pnpm-lock.yaml': '', 'node_modules/.keep': '' }))).toBeUndefined()
+  })
+
   it('runs lifecycle stages in order, flattening objects and arrays', async () => {
     const root = repo({
       '.devcontainer/devcontainer.json': JSON.stringify({

@@ -52,39 +52,49 @@ export interface CloudRunResult {
   readonly recipe?: string
 }
 
-export function createCloudRunner(options: {
-  repo: string
-  provider: CloudMachineProvider
-  exec?: RecipeExec
-}) {
+export function createCloudRunner(options: { repo: string; provider: CloudMachineProvider; exec?: RecipeExec }) {
   const git = (cwd: string, ...args: string[]) =>
-    run('git', [
-      '-C',
-      cwd,
-      '-c',
-      'user.name=theoclaw',
-      '-c',
-      'user.email=theoclaw@localhost',
-      ...args,
-    ])
+    run('git', ['-C', cwd, '-c', 'user.name=theoclaw', '-c', 'user.email=theoclaw@localhost', ...args])
+  const apply = (cwd: string, patch: string) =>
+    new Promise<void>((resolve, reject) => {
+      const child = execFile('git', ['-C', cwd, 'apply', '--index', '--whitespace=nowarn', '-'], (error) =>
+        error ? reject(error) : resolve(),
+      )
+      child.stdin?.end(patch)
+    })
   return {
     /**
      * Provision a machine, let `work` edit its checkout, commit there, fetch the commit onto
      * `task/<id>` in the repository (only when something changed), and always tear the machine down.
      */
     async run(id: string, work: (machine: CloudMachine) => Promise<void>): Promise<CloudRunResult> {
-      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) || id.includes('..'))
-        throw new Error(`unsafe task id: ${id}`)
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) || id.includes('..')) throw new Error(`unsafe task id: ${id}`)
       const machine = await options.provider.provision({ id, repo: options.repo })
       try {
-        const recipe = await detectRecipe(machine.path)
-        if (recipe) await runRecipe(recipe, machine.path, options.exec)
+        const original = (await git(machine.path, 'rev-parse', 'HEAD')).stdout.trim()
+        // THEOCLAW_CLOUD_ENV_RECIPE=off skips recipes (devcontainer, setup script, lockfile install).
+        const recipe = process.env.THEOCLAW_CLOUD_ENV_RECIPE === 'off' ? undefined : await detectRecipe(machine.path)
+        // What the recipe leaves behind is the baseline; only the agent's changes go on the branch.
+        let baseline = original
+        if (recipe) {
+          await runRecipe(recipe, machine.path, options.exec)
+          await git(machine.path, 'add', '-A')
+          await git(machine.path, 'commit', '-q', '--allow-empty', '-m', `theoclaw environment ${id}`)
+          baseline = (await git(machine.path, 'rev-parse', 'HEAD')).stdout.trim()
+        }
         await work(machine)
         await git(machine.path, 'add', '-A')
         const dirty = (await git(machine.path, 'status', '--porcelain')).stdout.trim() !== ''
         const branch = `task/${id}`
         if (!dirty) return { branch, committed: false, recipe: recipe?.source }
         await git(machine.path, 'commit', '-q', '-m', `theoclaw cloud worker ${id}`)
+        if (baseline !== original) {
+          const patch = (await git(machine.path, 'diff', '--binary', baseline, 'HEAD')).stdout
+          await git(machine.path, 'reset', '-q', '--hard', original)
+          await git(machine.path, 'clean', '-fdq')
+          await apply(machine.path, patch)
+          await git(machine.path, 'commit', '-q', '--allow-empty', '-m', `theoclaw cloud worker ${id}`)
+        }
         await git(options.repo, 'fetch', '-q', machine.remote, `HEAD:refs/heads/${branch}`)
         return { branch, committed: true, recipe: recipe?.source }
       } finally {

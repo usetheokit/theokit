@@ -139,9 +139,7 @@ describe('cloud worker delegation', () => {
     try {
       const repo = join(workspace, 'files')
       const g = (...a: string[]) =>
-        execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], {
-          encoding: 'utf8',
-        })
+        execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' })
       execFileSync('git', ['init', '-q', repo])
       writeFileSync(join(repo, 'a.txt'), 'a')
       g('add', '.')
@@ -220,6 +218,23 @@ describe('cloud worker delegation', () => {
       const result = await port.run('task', {})
       expect(marker.trim()).toBe('ready')
       expect(result.response).toContain('environment .devcontainer/devcontainer.json')
+    })
+
+    it('keeps recipe side effects off the task branch', async () => {
+      const { settings } = repoWith({
+        '.devcontainer.json': '{"postCreateCommand":"echo x > artifact.txt && echo y >> a.txt"}',
+      })
+      const git = (...a: string[]) => execFileSync('git', ['-C', settings.toolRoot, ...a], { encoding: 'utf8' })
+      const quiet = cloudWorkerPort(settings, () => [], async () => ({ response: 'ok', toolCalls: [], cost: 0, tokens: 0 }))
+      expect((await quiet.run('t', {})).response).toContain('no changes to commit')
+      expect(git('branch', '--list', 'task/cloud-*').trim()).toBe('')
+      const busy = cloudWorkerPort(settings, () => [], async () => {
+        const dir = readdirSync(join(settings.workspace, '.theoclaw', 'cloud-workers'))[0] ?? ''
+        writeFileSync(join(settings.workspace, '.theoclaw', 'cloud-workers', dir, 'checkout', 'b.txt'), 'b')
+        return { response: 'ok', toolCalls: [], cost: 0, tokens: 0 }
+      })
+      const branch = /task\/cloud-[0-9a-f]+/.exec((await busy.run('t', {})).response)?.[0] ?? ''
+      expect(git('diff', '--name-only', 'HEAD', branch).trim()).toBe('b.txt')
     })
 
     it('does not start the agent when postCreateCommand fails, and tears down', async () => {
