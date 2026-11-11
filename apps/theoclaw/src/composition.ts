@@ -58,7 +58,7 @@ import { formatAddress, reportSurfacesOff } from './control-plane/start-output.j
 import { createTurnRunner, type TurnRunner, type WithAgent } from './control-plane/turn.js'
 import { teamReportJob } from './scheduler/team-report.js'
 import { heartbeatJob, readHeartbeatSettings } from './scheduler/heartbeat.js'
-import { loadScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
+import { openScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
@@ -506,7 +506,8 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
-  const scheduleStore = loadScheduleStore(sessionSettings.workspace)
+  const opened = await openScheduleStore(sessionSettings.workspace, options.env)
+  const scheduleStore = opened.store
   const heartbeat = readHeartbeatSettings(options.env, platforms)
   const a2a = readA2ASettings(options.env)
   const relay = readRelaySettings(options.env)
@@ -545,6 +546,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     // The scheduler, then the loop, so no run or turn starts once the agents are being disposed.
     stopAll: async () => {
       await scheduled?.stop()
+      await opened.close()
       await acpSessions?.stopAll()
       await composedApp?.loop.stopAll()
       await composedApp?.sessions.disposeAll()
@@ -647,6 +649,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     removeShutdown()
     options.signals.off('exit', flushOnExit)
     await scheduled.stop()
+    await opened.close()
     await acp.stopAll()
     await composed.loop.stopAll()
     await composed.sessions.disposeAll()
@@ -667,6 +670,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // running instance directly must not leave the service advertised.
   const close = async (): Promise<void> => {
     await scheduled?.stop()
+    await opened.close()
     await acp.stopAll()
     await stopThenClose(announcement, handle)
   }
