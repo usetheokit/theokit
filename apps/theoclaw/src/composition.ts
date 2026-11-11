@@ -55,6 +55,7 @@ import { peerTools } from './a2a/peer-tools.js'
 import { RelayClient, RelayTurnGate, relayTools } from './relay/relay-client.js'
 import { RelayMailbox, relayRoute } from './relay/relay-server.js'
 import { readRelaySettings, relaySecrets } from './relay/relay-settings.js'
+import { mcpRelaySecrets, readMcpRelaySettings, startMcpRelayConnector, type McpRelayConnector } from './mcp-relay/connector.js'
 import { RelayState } from './relay/relay-state.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
@@ -538,6 +539,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // Read here as well so a half-set pair refuses the start before anything is installed.
   readVoiceCallSettings(options.env)
   const relay = readRelaySettings(options.env)
+  const mcpRelay = readMcpRelaySettings(options.env)
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
@@ -547,7 +549,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // as the operator set it. Under a profile the workspace is the profile's own (`instance.ts`).
   mkdirSync(join(sessionSettings.workspace, '.theoclaw'), { recursive: true, mode: 0o700 })
   const streams = options.streams ?? [process.stdout, process.stderr]
-  const secretValues = [...processSecrets(options, settings, tools, events, a2a), ...relaySecrets(relay), ...databaseSecrets(database)]
+  const secretValues = [...processSecrets(options, settings, tools, events, a2a), ...relaySecrets(relay), ...mcpRelaySecrets(mcpRelay), ...databaseSecrets(database)]
   const logged = (write: (line: string) => void) => (line: string): void => {
     write(line)
     if (options.telemetryLog !== undefined) options.telemetryLog(redactSecrets(maskSecrets(line, secretValues)))
@@ -566,6 +568,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   let scheduled: RunningScheduler | undefined
   let closeScheduleStore = (): Promise<void> => Promise.resolve()
   let acpSessions: AcpSessions | undefined
+  let mcpConnector: McpRelayConnector | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
   let announcement: LanAnnouncement | undefined
@@ -573,6 +576,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     signals: options.signals,
     // The scheduler, then the loop, so no run or turn starts once the agents are being disposed.
     stopAll: async () => {
+      await mcpConnector?.stop()
       await scheduled?.stop()
       await closeScheduleStore()
       await acpSessions?.stopAll()
@@ -664,6 +668,9 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     controlTools: () => controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools,
     stderr,
   })
+  if (mcpRelay !== undefined) {
+    mcpConnector = startMcpRelayConnector({ settings: mcpRelay, controlTools: () => controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools, toolSettings: tools, log: stderr })
+  }
   const listen = options.listen ?? listenControlPlane
   const geoDb = options.env?.THEOCLAW_GEOIP_DB?.trim() || undefined
   serving = listen({
@@ -692,6 +699,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     // the entry exit 1.
     removeShutdown()
     options.signals.off('exit', flushOnExit)
+    await mcpConnector?.stop()
     await scheduled.stop()
     await closeScheduleStore()
     await acp.stopAll()
@@ -713,6 +721,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
   // running instance directly must not leave the service advertised.
   const close = async (): Promise<void> => {
+    await mcpConnector?.stop()
     await scheduled?.stop()
     await closeScheduleStore()
     await acp.stopAll()
