@@ -18,6 +18,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `THEOCLAW_DATABASE=postgres://...` keeps the scheduled jobs in PostgreSQL (table `theoclaw_scheduled_jobs`, through the TheoKit storage manager) instead of `.theoclaw/schedules.json` (OC-121). A job created by a turn is a row and survives a restart; an unreachable database refuses the start, with no fallback to files. Other stores stay on files and SQLite; moving existing state across is not done here.
 - A changed start-only setting (`THEOCLAW_PORT`, a token, a channel or a policy) in the configuration file of a running instance now restarts TheoClaw onto the new file instead of only being reported (B-716, OC-94). Under systemd or launchd the process exits 75 and the manager restarts it; otherwise it starts its own successor, which waits for the old process to exit. A new file that would be refused at the start (a bad port or token) is refused whole and the instance keeps running. Offline-tested; the live check `tests/live/config-restart.live.test.ts` has not been run.
 - Memory across surfaces (OC-56, Hermes row 3): every chat, WebChat, `/control`, TUI and desktop turn is stored in `<workspace>/.theoclaw/memory`, the `/control` agent has a `session_search` tool over all of it, and after each turn a forked reviewer with `save_memory` keeps durable facts (`THEOCLAW_MEMORY=off` and incognito disable it). Offline-tested; the live check `tests/live/memory.live.test.ts` has not been run yet.
 

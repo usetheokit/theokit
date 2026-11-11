@@ -21,6 +21,7 @@ import { createContainer } from '../agent-container.js'
 import type { TurnAgent } from '../agent-port.js'
 import { type ChannelLoop, maskSecrets } from '../channels/channel-loop.js'
 import { type AgentToolOptions, workerToolOptions } from '../tools/tool-registry.js'
+import { openPostgresScheduleStore, readDatabaseDsn } from './postgres-job-store.js'
 import type { ToolSettings } from '../tools/tool-settings.js'
 
 /** Where the durable jobs are kept: beside `sessions.json`, in the directory the start makes with 0700. */
@@ -34,6 +35,17 @@ export function scheduleFile(workspace: string): string {
  */
 export function loadScheduleStore(workspace: string): JobStore {
   return createJobStore(scheduleFile(workspace))
+}
+
+/** The job store `THEOCLAW_DATABASE` selects: PostgreSQL for a DSN, else the file under the workspace. */
+export async function openScheduleStore(
+  workspace: string,
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<{ store: JobStore; close?: () => Promise<void> }> {
+  const dsn = readDatabaseDsn(env)
+  if (dsn === undefined) return { store: loadScheduleStore(workspace) }
+  const opened = await openPostgresScheduleStore(dsn)
+  return { store: opened.store, close: opened.close }
 }
 
 /** Builds one agent from tool options: the start's worker factory. */
@@ -104,6 +116,8 @@ export interface WireSchedulerOptions {
   readonly platforms: readonly string[]
   readonly heartbeat?: TransientSchedule
   readonly write: (line: string) => void
+  /** Releases what the store holds (the PostgreSQL pool); called once the scheduler has stopped. */
+  readonly closeStore?: () => Promise<void>
   /** The configured values masked out of every delivered answer (OC-90). */
   readonly secrets?: readonly string[]
 }
@@ -148,9 +162,10 @@ export function wireScheduler(options: WireSchedulerOptions): RunningScheduler {
         `scheduler: ${String(options.store.list().length)} jobs, heartbeat ${heartbeat === undefined ? 'off' : 'on'}`,
       )
     },
-    stop: () => {
+    stop: async () => {
       stopped = true
-      return scheduler.stop()
+      await scheduler.stop()
+      await options.closeStore?.()
     },
   }
 }

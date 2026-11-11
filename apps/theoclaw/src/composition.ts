@@ -55,7 +55,7 @@ import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
 import { createTurnRunner, type TurnRunner, type WithAgent } from './control-plane/turn.js'
 import { heartbeatJob, readHeartbeatSettings } from './scheduler/heartbeat.js'
-import { loadScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
+import { openScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
@@ -489,7 +489,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
-  const scheduleStore = loadScheduleStore(sessionSettings.workspace)
+  const { store: scheduleStore, close: closeScheduleStore } = await openScheduleStore(sessionSettings.workspace, options.env)
   const heartbeat = readHeartbeatSettings(options.env, platforms)
   const a2a = readA2ASettings(options.env)
   const relay = readRelaySettings(options.env)
@@ -565,7 +565,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
-  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
+  scheduled = wireScheduler({ store: scheduleStore, closeStore: closeScheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
   const relayDir = join(sessionSettings.workspace, '.theoclaw')
   const relayState = relay.client === undefined ? undefined : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
   if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
