@@ -13,6 +13,8 @@ export interface ChannelHookOptions {
   readonly pairing?: PairingStore
   /** The masked write the hooks report through. */
   readonly write: (line: string) => void
+  /** The e-mail trigger (OC-17): run first, so an e-mail never reaches the owner policy or a chat session. */
+  readonly emailTrigger?: GatewayHook
   /** The `/usage` hook (B-400 FR-005), run third. */
   readonly usage?: GatewayHook
   /** The ACP sessions `/acp` starts, lists and stops (B-685), owners only; absent: no `/acp`. */
@@ -36,5 +38,5 @@ export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[
   const help = createHelpHook()
   const exec = options.execApproval === undefined ? [] : [options.execApproval.hook]
   const acp = options.acp === undefined ? [] : [createAcpCommandHook({ sessions: options.acp, isOwner: (event) => isPolicyOwner(policy, event.platform, event.sender.id) })]
-  return [ownerPolicy, ...exec, ...acp, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), help]
+  return [...(options.emailTrigger === undefined ? [] : [options.emailTrigger]), ownerPolicy, ...exec, ...acp, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), help]
 }
