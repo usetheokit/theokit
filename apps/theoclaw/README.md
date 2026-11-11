@@ -977,3 +977,6 @@ model configuration. Audio is transcribed by `gpt-4o-mini-transcribe`; replies u
 apply. Audio failures fall back to text. See [voice verification](parity/voice-verification.md)
 for limits and the outstanding real-account recording check. Continuous talk and
 wake word are tracked separately in B-722.
+
+Aged tool results are pruned: every send passes the SDK's `pruneToolResults`, so a tool result older
+than 4 tool rounds is trimmed from the next request. `THEOCLAW_PRUNE_TOOL_RESULT_ROUNDS` sets the count.
