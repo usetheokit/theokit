@@ -70,6 +70,13 @@ describe('the composed voice call route', () => {
     expect(body).toContain('<Gather')
   })
 
+  it('a caller who asks what time it is gets a spoken answer for OC-15', async () => {
+    const { router, sent } = app('It is twelve noon.')
+    const body = await (await router(post({ ...CALL, SpeechResult: 'what time is it' }))).text()
+    expect(sent).toEqual(['what time is it'])
+    expect(body).toContain('<Say>It is twelve noon.</Say>')
+  })
+
   it('answers 401 without a valid signature and runs no turn', async () => {
     const { router, sent } = app()
     expect((await router(post({ ...CALL, SpeechResult: 'hi' }, false))).status).toBe(401)

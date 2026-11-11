@@ -73,11 +73,13 @@
   },
   {
     "id": "OC-15",
-    "status": "out",
-    "reason": "Real-time voice over phone and meeting infrastructure is a different product from a messaging assistant.",
-    "declared_by": "human/paulo",
-    "declared_on": "2026-10-04",
-    "declared_at": ".squad/wiki/product/objectives.md:223"
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/voice-call-route.test.ts",
+      "test": "a caller who asks what time it is gets a spoken answer for OC-15"
+    },
+    "verified_on": "2026-11-11",
+    "note": "Twilio only: inbound calls answered through TwiML Gather/Say on POST /webhooks/voice (#1627) and outbound calls through theoclaw call (#1628). Offline route test through composeTheoClaw; no real phone call was placed. Telnyx, Plivo and media streaming are not built."
   },
   {
     "id": "OC-16",
