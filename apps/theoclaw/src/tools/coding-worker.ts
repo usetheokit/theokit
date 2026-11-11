@@ -4,7 +4,11 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { bindToolScope } from '@theokit/agents/tool-scope'
-import { createApplyPatchTool, createEditFileTool, createWriteFileTool } from '@theokit/agents/tools'
+import {
+  createApplyPatchTool,
+  createEditFileTool,
+  createWriteFileTool,
+} from '@theokit/agents/tools'
 import type { DelegationPort, DelegationResult } from '@theokit/agents'
 import type { CustomTool } from '@theokit/sdk'
 
@@ -26,7 +30,12 @@ export function coderTools(
   readOnlyTools: (settings: ToolSettings) => CustomTool[],
 ): CustomTool[] {
   const inTree: ToolSettings = { ...settings, toolRoot: worktreePath }
-  const scope = bindToolScope({ projectRoot: worktreePath, writeRoot: worktreePath, sandbox: settings.sandbox, mode: settings.mode })
+  const scope = bindToolScope({
+    projectRoot: worktreePath,
+    writeRoot: worktreePath,
+    sandbox: settings.sandbox,
+    mode: settings.mode,
+  })
   return [
     ...readOnlyTools(inTree),
     scope.bind(createWriteFileTool)(),
@@ -38,14 +47,21 @@ export function coderTools(
 /**
  * The `coder` roster entry (OC-83, B-395): each task gets its own git worktree and branch under
  * `<workspace>/.theoclaw/worktrees`, a worker whose file tools write only there, and a commit of
- * what it changed. The worktree and branch stay until `git worktree remove` (a failed task's are removed at once).
+ * what it changed. The worktree and branch stay until removed (the result gives the commands; a failed task's are removed at once).
  */
 export function codingWorkerPort(
   settings: ToolSettings,
   readOnlyTools: (settings: ToolSettings) => CustomTool[],
-  runWorker: (tools: CustomTool[], task: TurnMessage, signal: AbortSignal | undefined) => Promise<DelegationResult>,
+  runWorker: (
+    tools: CustomTool[],
+    task: TurnMessage,
+    signal: AbortSignal | undefined,
+  ) => Promise<DelegationResult>,
 ): DelegationPort {
-  const runner = createWorktreeRunner({ repo: settings.toolRoot, root: join(settings.workspace, '.theoclaw', 'worktrees') })
+  const runner = createWorktreeRunner({
+    repo: settings.toolRoot,
+    root: join(settings.workspace, '.theoclaw', 'worktrees'),
+  })
   return {
     run: (task, options) => {
       const id = `coder-${randomBytes(4).toString('hex')}`
@@ -53,12 +69,25 @@ export function codingWorkerPort(
         id,
         keep: true,
         work: async (worktree) => {
-          const result = await runWorker(coderTools(settings, worktree.path, readOnlyTools), task as TurnMessage, options?.signal)
-          const git = (...args: string[]) => exec('git', ['-C', worktree.path, '-c', 'user.name=theoclaw', '-c', 'user.email=theoclaw@localhost', ...args])
+          const result = await runWorker(
+            coderTools(settings, worktree.path, readOnlyTools),
+            task as TurnMessage,
+            options?.signal,
+          )
+          const git = (...args: string[]) =>
+            exec('git', [
+              '-C',
+              worktree.path,
+              '-c',
+              'user.name=theoclaw',
+              '-c',
+              'user.email=theoclaw@localhost',
+              ...args,
+            ])
           await git('add', '-A')
           const dirty = (await git('status', '--porcelain')).stdout.trim() !== ''
           if (dirty) await git('commit', '-q', '-m', `theoclaw coder ${id}`)
-          const note = `\n\n[worktree ${worktree.path} on branch ${worktree.branch}${dirty ? '' : '; no changes to commit'}]`
+          const note = `\n\n[worktree ${worktree.path} on branch ${worktree.branch}${dirty ? '' : '; no changes to commit'}; clean up with: git worktree remove --force ${worktree.path} && git branch -D ${worktree.branch}]`
           return { ...result, response: result.response + note }
         },
       })
