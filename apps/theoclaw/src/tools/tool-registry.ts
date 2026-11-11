@@ -174,8 +174,8 @@ export function agentToolOptions(
       ...taskTools(),
     )
   }
-  // The exec gate is installed only with host tools on and an asker wired: without one there is
-  // nobody to approve, and refusing every shell call would turn the shell off, which is not its job.
+  // The exec gate is installed only with host tools on and exec options given (the composition gives them with a state
+  // directory). Without an asker it refuses what no saved approval or reviewer allowed.
   const plugins = [pathVetoPlugin(settings), provenanceGuardPlugin(), loopDetectionPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
   const base = { tools, plugins }
   const servers = mcpServersOf(settings)
