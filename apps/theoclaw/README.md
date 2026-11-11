@@ -81,7 +81,7 @@ docker run -d --name theoclaw --user "$(id -u):$(id -g)" \
   -v ~/.config/theoclaw:/data -p 127.0.0.1:8787:8787 ghcr.io/usetheokit/theoclaw:<version>
 ```
 
-To build it from a checkout instead:
+Until a release has published an image, or to run unreleased code, build it from a checkout:
 
 ```bash
 docker build -f apps/theoclaw/Dockerfile -t theoclaw .     # from the repository root

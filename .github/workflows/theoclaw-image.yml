@@ -1,0 +1,76 @@
+# Publishes apps/theoclaw/Dockerfile as ghcr.io/usetheokit/theoclaw (#1555, OC-33).
+#
+# Runs after the Release workflow succeeds on main, and on dispatch. It reads the version from
+# apps/theoclaw/package.json and does nothing when that tag already exists, so a release that
+# does not bump theoclaw publishes nothing. A dispatch from any branch other than main builds the
+# image and does not push it, so the build can be checked before a release.
+name: TheoClaw image
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: theoclaw-image-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/usetheokit/theoclaw
+
+jobs:
+  image:
+    name: Build and publish the image
+    # A workflow_run fires for failed releases too; only a successful one on main publishes.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PUSH: ${{ github.event_name == 'workflow_run' || github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Read the version
+        id: version
+        run: echo "version=$(node -p "require('./apps/theoclaw/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check whether the version already has an image
+        id: exists
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if docker manifest inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "$IMAGE:$VERSION exists; nothing to publish."
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A dispatch from a branch builds even when the tag exists: it checks the build, pushes nothing.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.exists.outputs.found != 'true' || env.PUSH != 'true'
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        if: steps.exists.outputs.found != 'true' || env.PUSH != 'true'
+        with:
+          context: .
+          file: apps/theoclaw/Dockerfile
+          push: ${{ env.PUSH == 'true' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:latest
