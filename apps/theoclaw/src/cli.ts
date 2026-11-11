@@ -22,6 +22,7 @@ import { loadConfiguration } from './config-file.js'
 import { whatsappSessionDir } from './channels/platforms.js'
 import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
+import { serveMcpStdio } from './mcp/serve-tools.js'
 
 /**
  * The `theoclaw` command (B-374, plan D2). A second leaf entry beside `src/main.ts`: it never
@@ -71,6 +72,7 @@ const USAGE = `usage: theoclaw <command>
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
+  theoclaw mcp              serve TheoClaw's tools as an MCP server on stdin/stdout (claude mcp add theoclaw -- theoclaw mcp)
   theoclaw --help           this text
 `
 
@@ -176,6 +178,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   status: (_args, io) => statusCommand(io, io.runner),
   logs: (args, io) => logsCommand(args, io, io.runner),
   whatsapp: whatsappCommand,
+  mcp: async (args, io) => {
+    if (args.length > 0) throw new UsageError('theoclaw mcp: expected no arguments')
+    await serveMcpStdio({ env: io.env, homeDir: io.homeDir, cwd: io.cwd, stdin: io.stdin as unknown as NodeJS.ReadableStream, stdout: io.stdout })
+    return 0
+  },
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
   '--help': (_args, io) => {
