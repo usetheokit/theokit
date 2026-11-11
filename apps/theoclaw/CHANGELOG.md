@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `theoclaw call <number> --message <text>` places an outbound phone call through Twilio and prints the call SID (OC-15, #1628). It needs `THEOCLAW_VOICE_CALL_TWILIO_ACCOUNT_SID`, `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and `THEOCLAW_VOICE_CALL_FROM_NUMBER`, and refuses any number not in `THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS`.
+
 ### Changed
 
 - A `/control` chat turn no longer writes its transcript under `HOME/.theokit/projects` (#1434): it goes to a temp directory removed when the agent is disposed, unless `THEOCLAW_TRANSCRIPTS=on`. The SDK still records the agent in `<cwd>/.theokit/agents/registry.json`, without message text.
