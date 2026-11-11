@@ -49,6 +49,7 @@ import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { PublishError, publishSkill } from './skills/publish.js'
+import { RegistryError, searchSkills } from './skills/registry-client.js'
 
 /**
  * The `theoclaw` command (B-374, plan D2). A second leaf entry beside `src/main.ts`: it never
@@ -132,6 +133,8 @@ const USAGE = `usage: theoclaw <command>
                             list the stored chat transcripts or print one's messages (an id prefix is enough)
   theoclaw meetings join <meet link> [--minutes <n>] | list | show <id>
                             join a Google Meet as a guest in headless Chrome and keep the captions as notes; list or print the notes
+  theoclaw skills search <term>
+                            list registry skills matching <term> (name, latest version, description) from THEOCLAW_SKILLS_REGISTRY
   theoclaw skills publish <dir>
                             upload a skill folder (SKILL.md with name, description, version) to THEOCLAW_SKILLS_REGISTRY with THEOCLAW_SKILLS_TOKEN
   theoclaw worker pair <control url> <setup code> [--name <n>] [--inference worker|gateway] | run <message> | status
@@ -363,9 +366,34 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   claws: (args, io) => clawsCommand(args, io),
   meetings: (args, io) => meetingsCommand(args, io),
   skills: async (args, io) => {
+    if (args[0] === 'search') {
+      const [, term, ...more] = args
+      if (term === undefined || term.startsWith('-') || more.length > 0)
+        throw new UsageError('theoclaw skills: expected search <term>')
+      const env: NodeJS.ProcessEnv = { ...io.env }
+      loadConfiguration(env, io.homeDir)
+      const base = (env.THEOCLAW_SKILLS_REGISTRY ?? '').trim()
+      if (base === '')
+        throw new TheoClawConfigError(
+          'THEOCLAW_SKILLS_REGISTRY is not set (the skills registry URL)',
+        )
+      try {
+        const found = await searchSkills(base, term)
+        io.stdout.write(
+          found.length === 0
+            ? 'no skills found\n'
+            : found.map((s) => `${s.name}  ${s.latest}  ${s.description}\n`).join(''),
+        )
+        return 0
+      } catch (error) {
+        if (!(error instanceof RegistryError)) throw error
+        io.stderr.write(`theoclaw: ${error.message}\n`)
+        return 1
+      }
+    }
     const [verb, dir, ...extra] = args
     if (verb !== 'publish' || dir === undefined || dir.startsWith('-') || extra.length > 0)
-      throw new UsageError('theoclaw skills: expected publish <dir>')
+      throw new UsageError('theoclaw skills: expected search <term> or publish <dir>')
     try {
       io.stdout.write(`${await publishSkill(resolve(io.cwd, dir), { env: io.env })}\n`)
       return 0
