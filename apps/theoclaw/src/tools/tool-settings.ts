@@ -2,11 +2,13 @@ import { chmodSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import type { Stats } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
+import { createSandboxBackend, DockerSandbox, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import { createDockerBackend, readSandboxBackend } from '../sandbox/sandbox-backend.js'
+import type { DockerBackendDeps, SandboxBackendName } from '../sandbox/sandbox-backend.js'
 import { readSandboxMode, readSandboxSessions, sandboxModeForSession } from '../sandbox/sandbox-mode.js'
 import { browserLine, readBrowser } from './browser-server.js'
 import type { BrowserDeps, BrowserSettings } from './browser-server.js'
@@ -33,6 +35,8 @@ export interface ToolSettings {
   readonly gitRepository: boolean
   /** True when the one backend built at start is a kernel-confined `LinuxSandbox`. */
   readonly sandboxEnforced: boolean
+  /** Which backend `THEOCLAW_SANDBOX_BACKEND` chose; absent means `bwrap`. */
+  readonly backend?: SandboxBackendName
   /** Built once at start; every agent's tools share it (plan D3, revision 1.2). */
   readonly sandbox: SandboxBackend
   /** The backend's mode, which the tools are bound with: `sandboxMode` with host tools on, else `read-only`. */
@@ -63,7 +67,7 @@ export interface ToolSettings {
 type WebFetchLookup = (host: string, options: { readonly all: true }) => Promise<{ readonly address: string; readonly family: number }[]>
 
 /** What the tests inject; the process passes nothing. */
-export interface ToolDeps {
+export interface ToolDeps extends DockerBackendDeps {
   readonly detect?: () => BwrapDetection
   readonly fetchImpl?: typeof fetch
   /** Lets a test serve a page to `web_fetch` offline: its SSRF screen resolves the host through it. */
@@ -219,6 +223,7 @@ function refuseBrowserUnderReadOnly(hostTools: boolean, sandboxMode: SandboxMode
 export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}): ToolSettings {
   const hostTools = readHostTools(env)
   const sandboxMode = readSandboxMode(env)
+  const backend = readSandboxBackend(env)
   const search = readSearch(env)
   const browser = readBrowser(env, deps.browser)
   const computer = readComputer(env, { hostTools, sandboxMode }, deps.computer)
@@ -236,13 +241,8 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
   const mode: SandboxMode = hostTools ? sandboxMode : 'read-only'
-  const sandbox = createSandboxBackend({
-    mode,
-    workDir: toolRoot,
-    ...(deps.detect === undefined ? {} : { detect: deps.detect }),
-    ...(deps.warn === undefined ? {} : { warn: deps.warn }),
-  })
-  const sandboxEnforced = sandbox instanceof LinuxSandbox
+  const sandbox = buildBackend(backend, mode, toolRoot, deps)
+  const sandboxEnforced = isEnforced(sandbox)
   const gitRepository = isRepository(toolRoot)
   const offLines = [...lines]
   if (gitRepository && !sandboxEnforced) {
@@ -261,6 +261,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     hostTools,
     gitRepository,
     sandboxEnforced,
+    backend,
     sandbox,
     mode,
     sandboxMode,
@@ -288,15 +289,25 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
 export function toolSettingsForSession(settings: ToolSettings, env: Env, sessionKey: string, deps: ToolDeps = {}): ToolSettings {
   const sandboxMode = sandboxModeForSession(settings.sandboxMode, readSandboxSessions(env), sessionKey)
   if (sandboxMode === settings.sandboxMode || !settings.hostTools) return settings
-  const sandbox = createSandboxBackend({
-    mode: sandboxMode,
-    workDir: settings.toolRoot,
+  const sandbox = buildBackend(settings.backend ?? 'bwrap', sandboxMode, settings.toolRoot, deps)
+  // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
+  const { interactive: _chosenMode, ...rest } = settings
+  return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: isEnforced(sandbox) }
+}
+
+/** The one backend of a mode: the chosen `THEOCLAW_SANDBOX_BACKEND` over the tool root. */
+function buildBackend(backend: SandboxBackendName, mode: SandboxMode, toolRoot: string, deps: ToolDeps): SandboxBackend {
+  if (backend === 'docker') return createDockerBackend(mode, toolRoot, deps)
+  return createSandboxBackend({
+    mode,
+    workDir: toolRoot,
     ...(deps.detect === undefined ? {} : { detect: deps.detect }),
     ...(deps.warn === undefined ? {} : { warn: deps.warn }),
   })
-  // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
-  const { interactive: _chosenMode, ...rest } = settings
-  return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: sandbox instanceof LinuxSandbox }
+}
+
+function isEnforced(sandbox: SandboxBackend): boolean {
+  return sandbox instanceof LinuxSandbox || sandbox instanceof DockerSandbox
 }
 
 function realPathOrSelf(path: string): string {
@@ -360,7 +371,7 @@ export function checkHostToolsPosture(
   }
   // The `workspace-write` roots under `read-only` too: `read-only`'s are none, which would make the
   // refusals below vacuous; `danger-full-access` returned above, its roots being every path.
-  const roots = writableRootsFor('workspace-write', settings.toolRoot) ?? []
+  const roots = settings.backend === 'docker' ? [settings.toolRoot] : (writableRootsFor('workspace-write', settings.toolRoot) ?? [])
   refuseWorkspaceUnderWritableRoot(settings, roots)
   for (const target of protectedPaths) refuseWritableProtectedPath(target, roots)
 }
