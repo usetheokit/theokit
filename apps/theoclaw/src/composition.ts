@@ -95,6 +95,7 @@ import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { webchatEvent } from './webchat/chat-id.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
 import { createWebchatRoutes } from './webchat/routes.js'
+import { visitorGate } from './webchat/visitors.js'
 import { configuredVoiceReplies, withVoiceReplies } from './voice/voice-replies.js'
 
 export { createContainer, type AgentComposition, type AgentCompositionOptions } from './agent-container.js'
@@ -474,7 +475,7 @@ function startWebchat(
       })
     return createTurnRunner(withAgent, secrets, settings.model)
   }
-  return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy })
+  return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy, visitorGate: visitorGate(options.env) })
 }
 
 /**

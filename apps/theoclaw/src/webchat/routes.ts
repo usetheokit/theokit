@@ -19,6 +19,8 @@ export interface WebchatRoutesOptions {
   readonly token: string
   /** Trusted-proxy mode is on: a chat post marked by the listener needs no bearer token. */
   readonly trustedProxy?: boolean
+  /** Visitor grants (OC-143): when it returns a check, a proxy identity is admitted only while it holds a live grant. */
+  readonly visitorGate?: () => ((identity: string) => boolean) | undefined
   /** The turn runner of one chat: its turns share the chat's session agent, and no other chat's. */
   readonly turnFor: (chatId: string) => TurnRunner
   /** Where the built page assets are (`build:web` writes them). */
@@ -220,7 +222,9 @@ export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Re
       return asset(options.assetsDir, pathname.slice(WEBCHAT_ASSETS_PREFIX.length))
     }
     if (pathname !== WEBCHAT_CHAT_PATH || request.method !== 'POST') return notFound()
-    const viaProxy = options.trustedProxy === true && (request.headers.get(TRUSTED_IDENTITY_HEADER) ?? '') !== ''
+    const identity = request.headers.get(TRUSTED_IDENTITY_HEADER) ?? ''
+    const granted = options.visitorGate?.()
+    const viaProxy = options.trustedProxy === true && identity !== '' && (granted === undefined || granted(identity))
     if (!viaProxy && !accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
     return boundedChat(request, options.turnFor, options.write)
   }
