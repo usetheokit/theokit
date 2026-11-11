@@ -41,23 +41,64 @@ export interface AdapterBuildOptions {
  * The QR-linked WhatsApp Web backend (`THEOCLAW_WHATSAPP_BACKEND=baileys`): no Meta app, no webhook.
  * The QR goes to `options.onQr`, else stderr (the package default).
  */
-export function whatsappBaileysAdapter(sessionDir: string, options: AdapterBuildOptions): WhatsAppAdapter {
+export function whatsappBaileysAdapter(
+  sessionDir: string,
+  options: AdapterBuildOptions,
+): WhatsAppAdapter {
   return WhatsAppAdapter.from(
-    { backend: 'baileys', baileys: {
+    {
+      backend: 'baileys',
+      baileys: {
         sessionDir,
         ...(options.onQr === undefined ? {} : { onQr: options.onQr }),
-        ...(options.connectTimeoutMs === undefined ? {} : { connectTimeoutMs: options.connectTimeoutMs }),
-      } },
+        ...(options.connectTimeoutMs === undefined
+          ? {}
+          : { connectTimeoutMs: options.connectTimeoutMs }),
+      },
+    },
     mention(options),
   )
 }
 
 type AdapterConstructors = {
-  readonly [P in SupportedPlatform]: (settings: PlatformSettings<P>, options: AdapterBuildOptions) => BasePlatformAdapter
+  readonly [P in SupportedPlatform]: (
+    settings: PlatformSettings<P>,
+    options: AdapterBuildOptions,
+  ) => BasePlatformAdapter
 }
 
 function mention(options: AdapterBuildOptions): { readonly requireMention?: boolean } {
   return options.requireMention === undefined ? {} : { requireMention: options.requireMention }
+}
+
+/** True for the rejection @slack/web-api raises when Slack refuses a credential (`invalid_auth` and kin). */
+export function isSlackPlatformError(reason: unknown): boolean {
+  return (
+    typeof reason === 'object' &&
+    reason !== null &&
+    (reason as { code?: unknown }).code === 'slack_webapi_platform_error'
+  )
+}
+
+/**
+ * Bolt's Socket Mode client rejects a background promise when Slack refuses the credential, and
+ * nothing awaits it, so Node would exit the whole instance. While this adapter lives, that one
+ * rejection is reported on stderr and dropped; any other rejection is rethrown as Node would.
+ */
+export class GuardedSlackAdapter extends SlackAdapter {
+  private static guarded = false
+
+  override async connect(): Promise<boolean> {
+    if (!GuardedSlackAdapter.guarded) {
+      GuardedSlackAdapter.guarded = true
+      process.on('unhandledRejection', (reason) => {
+        if (!isSlackPlatformError(reason)) throw reason
+        const message = reason instanceof Error ? reason.message : String(reason)
+        process.stderr.write(`slack: connect failed: ${message}\n`)
+      })
+    }
+    return super.connect()
+  }
 }
 
 /**
@@ -68,7 +109,7 @@ function mention(options: AdapterBuildOptions): { readonly requireMention?: bool
 const ADAPTERS: AdapterConstructors = {
   telegram: (settings) => new TelegramAdapter(settings),
   discord: (settings) => new DiscordAdapter(settings),
-  slack: (settings, options) => new SlackAdapter({ ...settings, ...mention(options) }),
+  slack: (settings, options) => new GuardedSlackAdapter({ ...settings, ...mention(options) }),
   matrix: (settings) => new MatrixAdapter(settings),
   mattermost: (settings, options) => new MattermostAdapter({ ...settings, ...mention(options) }),
   email: (settings) => new EmailAdapter(settings),
@@ -81,7 +122,11 @@ const ADAPTERS: AdapterConstructors = {
       : WhatsAppAdapter.from(
           {
             backend: 'cloud',
-            cloud: { accessToken: settings.accessToken, phoneNumberId: settings.phoneNumberId, appSecret: settings.appSecret },
+            cloud: {
+              accessToken: settings.accessToken,
+              phoneNumberId: settings.phoneNumberId,
+              appSecret: settings.appSecret,
+            },
           },
           mention(options),
         ),
@@ -99,11 +144,20 @@ type SettingsFor<P extends SupportedPlatform = SupportedPlatform> = {
   [K in P]: { readonly platform: K; readonly settings: PlatformSettings<K> }
 }[P]
 
-function buildAdapter<P extends SupportedPlatform>(entry: SettingsFor<P>, options: AdapterBuildOptions): BasePlatformAdapter {
+function buildAdapter<P extends SupportedPlatform>(
+  entry: SettingsFor<P>,
+  options: AdapterBuildOptions,
+): BasePlatformAdapter {
   return ADAPTERS[entry.platform](entry.settings, options)
 }
 
 /** One builder per configured platform; the adapter is constructed only when the loop calls it. */
-export function adapterBuilders(configured: readonly ConfiguredPlatform[], options: AdapterBuildOptions = {}): PlatformBuild[] {
-  return configured.map((entry) => ({ platform: entry.platform, build: () => buildAdapter(entry, options) }))
+export function adapterBuilders(
+  configured: readonly ConfiguredPlatform[],
+  options: AdapterBuildOptions = {},
+): PlatformBuild[] {
+  return configured.map((entry) => ({
+    platform: entry.platform,
+    build: () => buildAdapter(entry, options),
+  }))
 }
