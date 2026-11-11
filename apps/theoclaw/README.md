@@ -767,6 +767,53 @@ set -a; . ~/.config/theoclaw/dev.env; set +a
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/remote-access.live.test.ts
 ```
 
+## Reach the instance from ChatGPT, Claude or Codex (MCP relay)
+
+The MCP relay lets a hosted assistant call this instance's tools over MCP without reaching the
+instance's own port. It is a small server you run somewhere both can reach; the instance dials out
+to it. The commands are `theoclaw mcp-relay serve|grant|list|revoke`.
+
+1. **Run the relay** on a host with a public HTTPS address (put a TLS proxy in front of it):
+
+   ```sh
+   THEOCLAW_MCP_RELAY_TOKEN=<instance-token> theoclaw mcp-relay serve --port 8787 [--host 0.0.0.0]
+   ```
+
+   `THEOCLAW_MCP_RELAY_TOKEN` is the secret the instance presents to the relay; the relay refuses to
+   start without it.
+
+2. **Point the instance at it** by setting both variables where the instance runs. Setting one
+   without the other is refused at start; setting neither leaves the connector off.
+
+   ```sh
+   THEOCLAW_MCP_RELAY_URL=https://<relay>
+   THEOCLAW_MCP_RELAY_TOKEN=<instance-token>
+   ```
+
+   The URL must be `https:` (or `http:` on the loopback).
+
+3. **Create a grant** for each client on the relay host:
+
+   ```sh
+   theoclaw mcp-relay grant <name> [--tools list_dir,read_file]
+   theoclaw mcp-relay list
+   theoclaw mcp-relay revoke <name|id>
+   ```
+
+   `grant` prints the client token once; only its hash is kept. `revoke` ends a grant at once.
+
+4. **Add the connector** in ChatGPT, Claude or Codex: use `https://<relay>/mcp` as the server URL and
+   the grant's token as the bearer token.
+
+What to know before you use it:
+
+- The relay sees tool names, arguments and results in clear text. It is a bridge, not the
+  end-to-end encrypted instance mailbox; run it yourself and trust its host.
+- A grant defaults to read-only tools (`list_dir`, `read_file`). A tool that changes the host needs
+  an explicit `--tools` naming it, and `THEOCLAW_HOST_TOOLS=on` on the instance.
+- Not built: a hosted Control UI "connected apps" view, and no run against a real ChatGPT, Claude or
+  Codex client is recorded (parity row OC-116 stays open).
+
 ## OpenAI-compatible API and tool invocation
 
 With `THEOCLAW_CONTROL_TOKEN` set, the listener also serves an OpenAI-compatible API and a tool

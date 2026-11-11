@@ -17,6 +17,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The README documents the hosted MCP relay (`theoclaw mcp-relay serve|grant|list|revoke`, `THEOCLAW_MCP_RELAY_URL`, `THEOCLAW_MCP_RELAY_TOKEN`, adding it as a ChatGPT, Claude or Codex connector), and the parity ledger records OC-116 as open: no hosted Control UI 'connected apps' view and no live check with a real client. (#1638)
 - `THEOCLAW_ACK_REACTION=👀` reacts to each inbound message when its turn starts, through the adapter's `react` method; the gateway packages are raised to the releases that ship typing and reactions on Discord, Slack and Matrix (Teams still has no typing indicator). (#1542)
 - WebChat has a language switch in its settings (English or Svenska), using the `@theokit/ui` 1.13.0 i18n layer, so switching to Svenska shows "Inställningar". (#1547)
 - `theoclaw mcp-relay serve --port N [--host H]` runs the hosted MCP relay that remote MCP clients connect to: `POST /mcp` with a client grant token, and `/instance/poll` and `/instance/respond` for the instance, guarded by `THEOCLAW_MCP_RELAY_TOKEN`. (#1635)
