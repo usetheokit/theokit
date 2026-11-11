@@ -186,6 +186,7 @@ describe('cloud worker delegation', () => {
       const result = await port.run('x', {})
       expect(seen).toBe('ready')
       expect(result.response).toContain('devcontainer.json ran')
+      expect(result.response).toContain('no changes to commit')
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }

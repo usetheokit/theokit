@@ -67,7 +67,37 @@ export function parseJsonc(text: string): unknown {
       i++
     }
   }
-  return JSON.parse(out.replace(/,(\s*[}\]])/g, '$1'))
+  return JSON.parse(stripTrailingCommas(out))
+}
+
+/** Drop commas that directly precede `}` or `]`, leaving string contents alone. */
+function stripTrailingCommas(text: string): string {
+  let out = ''
+  let i = 0
+  while (i < text.length) {
+    const c = text[i] as string
+    if (c === '"') {
+      let j = i + 1
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1
+      out += text.slice(i, j + 1)
+      i = j + 1
+    } else if (c === ',' && /^\s*[}\]]/.test(text.slice(i + 1))) {
+      i++
+    } else {
+      out += c
+      i++
+    }
+  }
+  return out
+}
+
+/** The environment a recipe command sees: no API keys or tokens from the host process. */
+export function recipeEnv(host: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const key of ['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'SHELL']) {
+    if (host[key] !== undefined) env[key] = host[key]
+  }
+  return env
 }
 
 function commandSteps(stage: string, value: unknown): RecipeStep[] {
@@ -111,7 +141,7 @@ export async function applyRecipe(
   for (const step of recipe.steps) {
     const [cmd, ...args] = step.argv
     try {
-      await run(cmd as string, args, { cwd: checkout, timeout: options.timeoutMs ?? 600_000, maxBuffer: 8 * 1024 * 1024 })
+      await run(cmd as string, args, { cwd: checkout, env: recipeEnv(), timeout: options.timeoutMs ?? 600_000, maxBuffer: 8 * 1024 * 1024 })
     } catch (error) {
       const e = error as { message: string; stderr?: string }
       throw new Error(`environment recipe ${recipe.source}: ${step.stage} failed: ${(e.stderr || e.message).trim().slice(0, 500)}`)

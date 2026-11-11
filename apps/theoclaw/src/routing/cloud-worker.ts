@@ -5,7 +5,7 @@
  * throwaway clone, so the protocol (provision, dispatch, result return, teardown) runs everywhere.
  */
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -44,6 +44,17 @@ export function cloneMachineProvider(root: string): CloudMachineProvider {
   }
 }
 
+/** Keep what the recipe created (node_modules, build output) out of the task commit. */
+async function excludeUntracked(checkout: string): Promise<void> {
+  const { stdout } = await run('git', ['-C', checkout, 'ls-files', '--others', '--exclude-standard', '--directory', '-z'])
+  const paths = stdout.split('\0').filter(Boolean)
+  if (paths.length === 0) return
+  const { stdout: gitDir } = await run('git', ['-C', checkout, 'rev-parse', '--absolute-git-dir'])
+  const lines = paths.map((p) => '/' + p.replace(/[\\[*?#!\s]/g, '\\$&'))
+  await mkdir(join(gitDir.trim(), 'info'), { recursive: true })
+  await appendFile(join(gitDir.trim(), 'info', 'exclude'), lines.join('\n') + '\n')
+}
+
 export interface CloudRunResult {
   readonly branch: string
   readonly committed: boolean
@@ -64,6 +75,7 @@ export function createCloudRunner(options: { repo: string; provider: CloudMachin
       const machine = await options.provider.provision({ id, repo: options.repo })
       try {
         const recipe = options.recipe === false ? undefined : await applyRecipe(machine.path)
+        if (recipe) await excludeUntracked(machine.path)
         await work(machine)
         await git(machine.path, 'add', '-A')
         const dirty = (await git(machine.path, 'status', '--porcelain')).stdout.trim() !== ''

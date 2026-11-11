@@ -1,10 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { detectRecipe, parseJsonc } from '../src/routing/environment-recipe.js'
+import { applyRecipe, detectRecipe, parseJsonc } from '../src/routing/environment-recipe.js'
 
 function dir(files: Record<string, string>) {
   const d = mkdtempSync(join(tmpdir(), 'rcp-'))
@@ -18,6 +18,22 @@ function dir(files: Record<string, string>) {
 describe('environment recipe', () => {
   it('parses JSONC', () => {
     expect(parseJsonc('{ /* a */ "u": "http://x", // c\n "a": [1,], }')).toEqual({ u: 'http://x', a: [1] })
+  })
+
+  it('keeps string contents with ,} intact', () => {
+    expect(parseJsonc('{ "a": "x,}", "b": [1,\n], }')).toEqual({ a: 'x,}', b: [1] })
+  })
+
+  it('hides host secrets from recipe commands', async () => {
+    process.env.THEOCLAW_TEST_SECRET = 'hunter2'
+    const d = dir({ '.devcontainer.json': JSON.stringify({ postCreateCommand: 'echo "[$THEOCLAW_TEST_SECRET]" > out.txt' }) })
+    try {
+      await applyRecipe(d)
+      expect(readFileSync(join(d, 'out.txt'), 'utf8').trim()).toBe('[]')
+    } finally {
+      delete process.env.THEOCLAW_TEST_SECRET
+      rmSync(d, { recursive: true, force: true })
+    }
   })
 
   it('orders lifecycle steps and accepts string, array and object commands', async () => {
