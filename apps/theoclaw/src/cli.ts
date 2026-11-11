@@ -53,6 +53,8 @@ const USAGE = `usage: theoclaw <command>
 
   theoclaw start [--config <path>] [--profile <name>]
                             run TheoClaw in the foreground with the configuration file
+  theoclaw acp [--config <path>] [--profile <name>]
+                            serve the /control agent over the Agent Client Protocol on stdio, for an editor such as Zed
   theoclaw onboard          write the configuration file, asking for each setting
       --yes --model <id> --api-key-env <NAME> --port <n> --owners <platform:id,...>
       [--workspace <absolute dir>] [--force]
@@ -78,8 +80,8 @@ const USAGE = `usage: theoclaw <command>
  * The entry as a child in its own process group, so a terminal's SIGINT reaches only this process,
  * which forwards it once; the exit code is the child's, or 1 with the signal named.
  */
-function startChild(args: readonly string[], io: CliIo): Promise<number> {
-  const child = spawn(process.execPath, [io.entry, ...args], { stdio: 'inherit', detached: true, env: io.env })
+function startChild(args: readonly string[], io: CliIo, entry: string = io.entry): Promise<number> {
+  const child = spawn(process.execPath, [entry, ...args], { stdio: 'inherit', detached: true, env: io.env })
   const forward = (signal: NodeJS.Signals): void => {
     child.kill(signal)
   }
@@ -90,7 +92,7 @@ function startChild(args: readonly string[], io: CliIo): Promise<number> {
       resolve(code)
     }
     child.once('error', (error) => {
-      io.stderr.write(`theoclaw: cannot start ${io.entry}: ${describeError(error)}\n`)
+      io.stderr.write(`theoclaw: cannot start ${entry}: ${describeError(error)}\n`)
       settle(1)
     })
     child.once('exit', (code, signal) => {
@@ -162,6 +164,8 @@ async function whatsappCommand(args: readonly string[], io: CliIo): Promise<numb
 
 const COMMANDS: Readonly<Record<string, Command>> = {
   start: startChild,
+  // The ACP server is its own leaf entry beside `main.js`: stdin and stdout are the protocol, so the child inherits them.
+  acp: (args, io) => startChild(args, io, join(dirname(io.entry), 'main-acp.js')),
   onboard: async (args, io) => {
     await onboard(parseOnboard(args), io)
     return 0
