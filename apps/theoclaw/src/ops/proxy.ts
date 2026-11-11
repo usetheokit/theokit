@@ -109,7 +109,12 @@ export function startCaptureProxy(file: string, port: number): Promise<http.Serv
       res.writeHead(400).end('absolute URL expected')
       return
     }
+    if (url.protocol !== 'http:') {
+      res.writeHead(400).end('http URL expected')
+      return
+    }
     record(req.method ?? 'GET', `${url.host}${url.pathname}`)
+    // A forward proxy reaches the host the client names; that is the feature. Only http is forwarded.
     const upstream = http.request(url, { method: req.method, headers: req.headers }, (answer) => {
       res.writeHead(answer.statusCode ?? 502, answer.headers)
       answer.pipe(res)

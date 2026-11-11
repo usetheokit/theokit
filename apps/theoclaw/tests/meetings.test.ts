@@ -26,8 +26,11 @@ describe('theoclaw meetings', () => {
       },
     }
     await expect(meetingsCommand(['join', 'https://example.com/x'], io)).rejects.toThrow(
-      /meet\.google\.com/,
+      /^theoclaw meetings join: expected a https:\/\/meet\.google\.com\/abc-defg-hij link$/,
     )
+    await expect(
+      meetingsCommand(['join', 'https://meet.google.com.evil.example/abc-defg-hij'], io),
+    ).rejects.toThrow(/expected a https/)
     expect(await meetingsCommand(['join', 'https://meet.google.com/abc-defg-hij'], io)).toBe(0)
     const id = chunks.join('').trim()
     chunks.length = 0

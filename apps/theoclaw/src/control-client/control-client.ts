@@ -45,6 +45,12 @@ function closedError(code: number): TheoClawControlError {
 /** Open the socket, or reject naming the address or the HTTP status; the token never appears. */
 function open(url: string, token: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
+    if (!/^wss?:\/\//i.test(url)) {
+      reject(new TheoClawControlError('the instance address must start with ws:// or wss://'))
+      return
+    }
+    // The owner token read from the state directory goes to the instance address the operator
+    // configured; that is the feature. Only ws and wss are accepted.
     const socket = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } })
     socket.once('open', () => resolve(socket))
     socket.once('unexpected-response', (_request, response) => {

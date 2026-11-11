@@ -59,6 +59,23 @@ describe('theoclaw proxy', () => {
     }
   })
 
+  it('refuses to forward a non-http URL', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'proxy-')), 'captures.jsonl')
+    const proxy = await startCaptureProxy(file, 0)
+    try {
+      const status = await new Promise<number>((resolve) =>
+        http.get({ host: '127.0.0.1', port: port(proxy), path: 'ftp://127.0.0.1/x' }, (res) => {
+          res.resume()
+          resolve(res.statusCode ?? 0)
+        }),
+      )
+      expect(status).toBe(400)
+      expect(readCaptures(file)).toHaveLength(0)
+    } finally {
+      proxy.close()
+    }
+  })
+
   it('validate reports an unreachable proxy', async () => {
     expect((await validateProxy('http://127.0.0.1:1', 'a:443')).ok).toBe(false)
     expect((await validateProxy('nonsense', 'a:443')).ok).toBe(false)
