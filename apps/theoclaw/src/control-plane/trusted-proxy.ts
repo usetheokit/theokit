@@ -16,6 +16,9 @@ export interface TrustedProxy {
 /** Set on a request the listener found to come from a trusted proxy with an identity; stripped from every other. */
 export const TRUSTED_IDENTITY_HEADER = 'x-theoclaw-trusted-identity'
 
+/** Set on every request to the TCP peer's address; any client-supplied value is dropped. */
+export const PEER_ADDRESS_HEADER = 'x-theoclaw-peer'
+
 type Env = Readonly<Record<string, string | undefined>>
 
 function normalize(address: string): string {
@@ -44,8 +47,10 @@ export function readTrustedProxy(env: Env): TrustedProxy | undefined {
  */
 export function stampTrustedIdentity(incoming: IncomingMessage, proxy: TrustedProxy | undefined): void {
   delete incoming.headers[TRUSTED_IDENTITY_HEADER]
-  if (proxy === undefined) return
+  delete incoming.headers[PEER_ADDRESS_HEADER]
   const peer = incoming.socket.remoteAddress
+  if (peer !== undefined) incoming.headers[PEER_ADDRESS_HEADER] = normalize(peer)
+  if (proxy === undefined) return
   const identity = incoming.headers[proxy.header]
   delete incoming.headers[proxy.header]
   if (peer === undefined || !proxy.addresses.has(normalize(peer))) return
