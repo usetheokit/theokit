@@ -49,6 +49,8 @@ const UNAUTHENTICATED_BECAUSE = {
   line: null,
   whatsapp: null,
   teams: null,
+  // Chat signs every request and names the sender's user resource.
+  google_chat: null,
   // The ship name is proven by the Eyre session the adapter holds; messages carry the author's @p.
   tlon_urbit: null,
   // The Twilio signature proves the request came from Twilio, not who sent the text.

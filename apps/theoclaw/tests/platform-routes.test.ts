@@ -172,3 +172,22 @@ describe('startedRoute', () => {
     expect((await handle(request())).status).toBe(503)
   })
 })
+
+describe('google_chat webhook', () => {
+  it('routes POSTs to an adapter that answers Chat requests', async () => {
+    const webhook = webhookPlatform(
+      { platform: 'google_chat', settings: { serviceAccountFile: '/x', audience: 'https://x' } },
+      { write: () => undefined, verifierFactory: () => refuseAll },
+    )
+    expect(webhook?.methods).toEqual(['POST'])
+    expect(() => webhook?.buildRoute(new FakeAdapter('google_chat'))).toThrow('cannot answer')
+    const adapter = Object.assign(new FakeAdapter('google_chat'), {
+      handleRequest: async () => ({ status: 200, body: {} }),
+    })
+    const handle = webhook?.buildRoute(adapter)
+    const response = await handle?.(
+      new Request('http://localhost/webhooks/google_chat', { method: 'POST', headers: { authorization: 'Bearer t' }, body: '{}' }),
+    )
+    expect(response?.status).toBe(200)
+  })
+})

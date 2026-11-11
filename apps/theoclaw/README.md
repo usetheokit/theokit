@@ -1,7 +1,7 @@
 # TheoClaw
 
 A personal AI assistant that lives where its user already writes: one agent answering on Telegram,
-Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams and SMS.
+Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams, Google Chat and SMS.
 
 ## Install
 
@@ -200,13 +200,14 @@ otherwise startup skips it and prints `<platform>: not configured (missing ...)`
 | WhatsApp Cloud | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | webhook `/webhooks/whatsapp` |
 | WhatsApp Web (Baileys, unofficial) | `THEOCLAW_WHATSAPP_BACKEND=baileys`, optional `THEOCLAW_WHATSAPP_SESSION_DIR` (default: `whatsapp-session` under `THEOCLAW_STATE_DIR`); install the `baileys` package. Run `theoclaw whatsapp login` and scan the QR (Linked devices); `theoclaw start` prints the QR too while unlinked. Use a number made for this: Meta's terms do not sanction it. | none (a socket, no public URL) |
 | Microsoft Teams | `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_TENANT_ID` | Bot Framework webhook; needs a work tenant |
+| Google Chat | `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` (path of the service account's JSON key), `GOOGLE_CHAT_AUDIENCE` (the exact HTTP endpoint URL set in the Chat app) | webhook `/webhooks/google_chat`; spaces and DMs |
 | SMS (Twilio) | `SMS_TWILIO_ACCOUNT_SID`, `SMS_TWILIO_AUTH_TOKEN`, `SMS_TWILIO_FROM_NUMBER`, `SMS_PUBLIC_URL` | webhook `/webhooks/sms` |
 
 Names in the table omit the `THEOCLAW_` prefix.
 
 ### Webhooks need a public URL
 
-LINE, WhatsApp, Teams and SMS deliver messages by calling an HTTPS URL, so `THEOCLAW_PORT` has to
+LINE, WhatsApp, Teams, Google Chat and SMS deliver messages by calling an HTTPS URL, so `THEOCLAW_PORT` has to
 be reachable from the internet. The listener binds `127.0.0.1` by default, so a tunnel is the
 simplest way, for example a Cloudflare named tunnel pointing a stable hostname at
 `http://localhost:$THEOCLAW_PORT`. Binding a public address instead takes `THEOCLAW_HOST` and

@@ -40,6 +40,10 @@ const PLATFORM_VARIABLES = {
     clientSecret: 'THEOCLAW_TEAMS_CLIENT_SECRET',
     tenantId: 'THEOCLAW_TEAMS_TENANT_ID',
   },
+  google_chat: {
+    serviceAccountFile: 'THEOCLAW_GOOGLE_CHAT_SERVICE_ACCOUNT_FILE',
+    audience: 'THEOCLAW_GOOGLE_CHAT_AUDIENCE',
+  },
   tlon_urbit: {
     shipUrl: 'THEOCLAW_TLON_URBIT_SHIP_URL',
     ship: 'THEOCLAW_TLON_URBIT_SHIP',

@@ -1,9 +1,20 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 
 import { adapterBuilders } from '../src/channels/adapter-factory.js'
 import type { ConfiguredPlatform } from '../src/channels/platforms.js'
+
+/** A service-account key file with a placeholder key: the adapter only reads it at construction. */
+function keyFile(): string {
+  const path = join(mkdtempSync(join(tmpdir(), 'gchat-')), 'sa.json')
+  writeFileSync(path, JSON.stringify({ client_email: 'bot@p.iam.gserviceaccount.com', private_key: 'x' }))
+  return path
+}
 
 /** Placeholder settings each adapter accepts at construction; no test here ever connects. */
 const PLACEHOLDERS: readonly ConfiguredPlatform[] = [
@@ -37,6 +48,7 @@ const PLACEHOLDERS: readonly ConfiguredPlatform[] = [
     settings: { accessToken: 'x', phoneNumberId: '1234', appSecret: 'x', verifyToken: 'x' },
   },
   { platform: 'teams', settings: { clientId: 'x', clientSecret: 'x', tenantId: 'x' } },
+  { platform: 'google_chat', settings: { serviceAccountFile: keyFile(), audience: 'https://example.org/webhooks/google_chat' } },
   {
     platform: 'sms',
     settings: {

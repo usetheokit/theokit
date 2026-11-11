@@ -271,6 +271,9 @@ importers:
       '@theokit/gateway-email':
         specifier: 0.3.1
         version: 0.3.1(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(imapflow@1.7.8)(mailparser@3.12.4)(nodemailer@10.2.1)
+      '@theokit/gateway-google-chat':
+        specifier: 0.1.0
+        version: 0.1.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)
       '@theokit/gateway-line':
         specifier: 0.4.0
         version: 0.4.0(@line/bot-sdk@11.3.0)(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)
@@ -325,6 +328,9 @@ importers:
       discord.js:
         specifier: 14.27.0
         version: 14.27.0
+      express:
+        specifier: 5.3.0
+        version: 5.3.0
       grammy:
         specifier: 1.46.0
         version: 1.46.0
@@ -3315,6 +3321,16 @@ packages:
       imapflow: ^1.0.0
       mailparser: ^3.0.0
       nodemailer: ^9.0.1
+
+  '@theokit/gateway-google-chat@0.1.0':
+    resolution: {integrity: sha512-cCNKYS6a0z19nFKqGknUgcdUYT4I8LWfClySqhTc1CG3qGOFPCNBCTFK2MTkRop8WMebq/lAYdWa3dqJ4CDgDg==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/gateway': '>=0.12.0 <1.0.0'
+      express: ^4.18.0 || ^5.0.0
+    peerDependenciesMeta:
+      express:
+        optional: true
 
   '@theokit/gateway-line@0.4.0':
     resolution: {integrity: sha512-U1F6yahQx5AgnrPtbP2meEI5qqMt3B9XwUYxCBWl3icGpy656AWLgRtuml/SuP3qlVl0Q+o9UYiV8jvG8h8yeQ==}
@@ -10950,6 +10966,12 @@ snapshots:
       imapflow: 1.7.8
       mailparser: 3.12.4
       nodemailer: 10.2.1
+
+  '@theokit/gateway-google-chat@0.1.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)':
+    dependencies:
+      '@theokit/gateway': 0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
+    optionalDependencies:
+      express: 5.3.0
 
   '@theokit/gateway-line@0.4.0(@line/bot-sdk@11.3.0)(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)':
     dependencies:
