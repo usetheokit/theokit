@@ -5,6 +5,7 @@ import {
   createOpenAICompatibleRoutes,
   createToolInvokeRoute,
   type OpenAIChatRequest,
+  type OpenAICompletion,
   renderTranscript,
 } from '@theokit/agents/bridge'
 import { z } from 'zod'
@@ -61,19 +62,29 @@ export function validateToolArgs(tool: CustomTool, args: Record<string, unknown>
  * The `complete` port over one TheoClaw turn: the transcript as the message, the text of every
  * `text_delta` joined. A failed turn's reason goes to stderr only; the client gets 502.
  */
-function completeWith(options: TheoClawApiOptions): (request: OpenAIChatRequest) => Promise<string> {
-  return async (request) => {
+function completeWith(options: TheoClawApiOptions): (
+  request: OpenAIChatRequest,
+  onDelta?: (text: string) => void,
+) => Promise<OpenAICompletion> {
+  return async (request, onDelta) => {
     const text: string[] = []
     const emit = (event: TurnEvent): void => {
-      if (event.type === 'text_delta' && typeof event.content === 'string') text.push(event.content)
+      if (event.type === 'text_delta' && typeof event.content === 'string') {
+        text.push(event.content)
+        onDelta?.(event.content)
+      }
     }
     const message = renderTranscript(request.messages)
-    const outcome = await runTheoClawTurn({ withAgent: options.withAgent, message, runId: randomUUID(), emit })
+    const outcome = await runTheoClawTurn({ withAgent: options.withAgent, message, runId: randomUUID(), emit, model: options.model })
     if (!outcome.ok) {
       options.stderr(`theoclaw: http api turn failed: ${outcome.reason}`)
       throw new Error(outcome.reason)
     }
-    return text.join('')
+    const usage = outcome.usage
+    return {
+      text: text.join(''),
+      ...(usage === undefined ? {} : { usage: { promptTokens: usage.inputTokens, completionTokens: usage.outputTokens } }),
+    }
   }
 }
 
