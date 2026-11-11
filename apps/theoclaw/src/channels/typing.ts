@@ -13,24 +13,29 @@ export interface TypingOptions {
   readonly ackReaction?: string
 }
 
-/** The reaction method a gateway adapter may offer; an adapter without it cannot acknowledge. */
-interface ReactingAdapter {
-  addReaction(channelId: string, messageId: string, emoji: string): Promise<unknown>
-}
-
 /** The emoji `THEOCLAW_ACK_REACTION` names, or undefined while it is unset or `off`. */
-export function readAckReaction(env: Readonly<Record<string, string | undefined>>): string | undefined {
+export function readAckReaction(
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
   const value = env.THEOCLAW_ACK_REACTION?.trim()
   return value === undefined || value === '' || value.toLowerCase() === 'off' ? undefined : value
 }
 
-/** React to the inbound message with the ack emoji. Best effort: it never fails the turn. */
-export function ackInbound(options: TypingOptions | undefined, platform: string, channelId: string, messageId: string): void {
+/**
+ * React to the inbound message with the ack emoji. Best effort: `react` reports failure (or
+ * `react_unsupported`, the base default) as `{ ok: false }`, and neither it nor a throw fails the turn.
+ */
+export function ackInbound(
+  options: TypingOptions | undefined,
+  platform: string,
+  channelId: string,
+  messageId: string,
+): void {
   const emoji = options?.ackReaction
-  const adapter = options?.adapterFor(platform) as Partial<ReactingAdapter> | undefined
-  if (emoji === undefined || typeof adapter?.addReaction !== 'function') return
+  const adapter = options?.adapterFor(platform)
+  if (emoji === undefined || adapter === undefined) return
   void Promise.resolve()
-    .then(() => adapter.addReaction?.(channelId, messageId, emoji))
+    .then(() => adapter.react(channelId, messageId, emoji))
     .catch(() => undefined)
 }
 
@@ -38,7 +43,11 @@ export function ackInbound(options: TypingOptions | undefined, platform: string,
  * Show a typing indicator in `channelId` until the returned function is called. Best effort: an
  * adapter that cannot show one, or that throws, never fails the turn. The stop is idempotent.
  */
-export function showTyping(options: TypingOptions | undefined, platform: string, channelId: string): () => Promise<void> {
+export function showTyping(
+  options: TypingOptions | undefined,
+  platform: string,
+  channelId: string,
+): () => Promise<void> {
   const adapter = options?.adapterFor(platform)
   if (options === undefined || adapter === undefined) return async () => undefined
   const start = (): void => {

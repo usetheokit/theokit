@@ -273,6 +273,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
   const usage = createUsageHook({ keyOf: chat.keyOf })
   const model = options.env.THEOCLAW_MODEL
+  const ackReaction = readAckReaction(options.env)
   const advisor = readAdvisorSettings(options.env, maskedWrite)
   const execChat = createChatExecApproval({
     env: options.env,
@@ -327,7 +328,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       ...(advisor === undefined ? {} : { advisor }),
       typing: {
         adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
-        ...(readAckReaction(options.env) === undefined ? {} : { ackReaction: readAckReaction(options.env) }),
+        ...(ackReaction === undefined ? {} : { ackReaction }),
       },
     }), configuredVoiceReplies(options.env)),
     hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.workflowResume === undefined ? {} : { workflowResume: options.workflowResume }), ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook, model }) }),
