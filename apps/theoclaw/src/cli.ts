@@ -128,8 +128,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw tui [--session <id>]
                             the terminal UI on the running instance, with the token and port from the configuration file
   theoclaw mcp              serve TheoClaw's tools as an MCP server on stdin/stdout (claude mcp add theoclaw -- theoclaw mcp)
-  theoclaw mcp-relay grant <name> [--tools a,b] | list | revoke <name|id>
-                            per-client grants for remote MCP clients; grant prints the token once; default tools list_dir and read_file
+  theoclaw mcp-relay grant <name> [--tools a,b] | list | revoke <name|id> | serve --port <n> [--host <h>]
+                            serve runs the hosted relay (instance token in THEOCLAW_MCP_RELAY_TOKEN); per-client grants for remote MCP clients; grant prints the token once; default tools list_dir and read_file
   theoclaw attach [--session <id>] [--print-config]
                             launch Claude Code (claude) with a temporary MCP config for this session that expires in an hour; --print-config prints the config instead
   theoclaw resume           print the messages of the most recently updated chat session
@@ -426,7 +426,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   path: (args, io) => pathCommand(args, io),
   whatsapp: whatsappCommand,
   tui: tuiCommand,
-  'mcp-relay': (args, io) => Promise.resolve(mcpRelayCommand(args, io)),
+  'mcp-relay': (args, io) => mcpRelayCommand(args, io),
   mcp: async (args, io) => {
     if (args.length > 0) throw new UsageError('theoclaw mcp: expected no arguments')
     await serveMcpStdio({
