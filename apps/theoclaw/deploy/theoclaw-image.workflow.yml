@@ -1,3 +1,5 @@
+# Copy to .github/workflows/theoclaw-image.yml (owner-approved on #1555). Kept here because the
+# factory may not write under .github/. SHAs checked against upstream tags with git ls-remote.
 # Publishes apps/theoclaw/Dockerfile as ghcr.io/usetheokit/theoclaw (#1555, OC-33).
 #
 # Runs after the Release workflow succeeds on main, and on dispatch. It reads the version from
