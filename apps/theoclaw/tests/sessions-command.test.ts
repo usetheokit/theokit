@@ -47,4 +47,11 @@ describe('theoclaw sessions', () => {
     expect((await run(['sessions', 'export', 'nope'], workspace)).code).toBe(1)
     expect((await run(['sessions', 'frob'], workspace)).code).toBe(2)
   })
+
+  it('transcripts list and show print the stored chat', async () => {
+    const workspace = workspaceWithSession()
+    expect((await run(['transcripts', 'list'], workspace)).out).toContain('matrix-dm-_owner_localhost-g0\t2 messages')
+    expect((await run(['transcripts', 'show', 'matrix-dm'], workspace)).out).toBe('user: hello there\nassistant: hi owner\n')
+    expect((await run(['transcripts', 'frob'], workspace)).code).toBe(2)
+  })
 })

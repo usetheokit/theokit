@@ -89,6 +89,8 @@ const USAGE = `usage: theoclaw <command>
                             copy a Claude Code or Hermes setup into the state directory; --dry-run lists the files and writes none
   theoclaw sessions list|show <id>|export <id> [--json]
                             list the chat sessions, show one's summary, or print its messages (an id prefix is enough)
+  theoclaw transcripts list|show <id>|export <id> [--json]
+                            list the stored chat transcripts or print one's messages (an id prefix is enough)
   theoclaw --help           this text
   theoclaw --version        print the version
 `
@@ -266,6 +268,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   status: (_args, io) => statusCommand(io, io.runner),
   sessions: (args, io) => Promise.resolve(sessionsCommand(args, io)),
+  transcripts: (args, io) => {
+    const [verb, ...rest] = args
+    if (verb !== 'list' && verb !== 'show' && verb !== 'export') throw new UsageError('theoclaw transcripts: expected list | show <id> | export <id> [--json]')
+    return Promise.resolve(sessionsCommand([verb === 'list' ? 'list' : 'export', ...rest], io))
+  },
   logs: (args, io) => logsCommand(args, io, io.runner),
   whatsapp: whatsappCommand,
   tui: tuiCommand,
