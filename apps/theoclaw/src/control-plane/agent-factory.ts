@@ -133,6 +133,8 @@ export function createAgentFactory(
   env: BindEnvironment,
   create: CreateAgent = createTheoClawAgent,
   imported?: AgentImport,
+  /** `custodian`: the owner's `/control` agent also gets the custodian skills; workers and other agents never do. */
+  { custodian = false }: { readonly custodian?: boolean } = {},
 ): (toolOptions?: AgentToolOptions) => Promise<TurnAgent> {
   return async (toolOptions) => {
     const { model, modelKey } = requireModel(env)
@@ -145,7 +147,7 @@ export function createAgentFactory(
         approvedHooks: parseApprovedHooks(env),
         providers: customProviderPlugins(parseCustomProviders(env)),
         ...skillsDirOf(env),
-        custodian: true,
+        ...(custodian ? { custodian: true } : {}),
         ...thinkingOf(env),
         ...agentTelemetry(readTelemetrySettings(env)),
         ...(toolOptions === undefined ? {} : { toolOptions }),

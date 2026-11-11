@@ -113,7 +113,7 @@ startTheoClaw({
   telemetryLog: (line) => telemetry.log(line),
   instance,
   // The import reaches the `/control` agents only; WebChat's, the workers' and the chat path's factories take none (FR-009).
-  agentFactory: createAgentFactory(process.env, create, imported),
+  agentFactory: createAgentFactory(process.env, create, imported, { custodian: true }),
   importFreeAgentFactory: createAgentFactory(process.env, create),
   importedPaths: importedMcpPaths(imported),
   ...(imported === undefined ? {} : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),
