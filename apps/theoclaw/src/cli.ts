@@ -27,7 +27,7 @@ import { InstanceLockedError } from './backup/instance-lock.js'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './daemon.js'
 import { runCommand, type Runner } from './run-command.js'
-import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
+import { parseCall, parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
 import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
@@ -48,6 +48,7 @@ import { update } from './update.js'
 import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
+import { CallError, placeCall } from './voice/outbound-call.js'
 import { PublishError, publishSkill } from './skills/publish.js'
 
 /**
@@ -74,6 +75,8 @@ export interface CliIo extends DaemonIo {
   readonly signals: SignalSource
   /** Runs `systemctl`, `loginctl` and `git` for `daemon` and `update`. */
   readonly runner: Runner
+  /** The HTTP client of `call`; the real `fetch` when absent. */
+  readonly fetch?: typeof fetch
 }
 
 const USAGE = `usage: theoclaw <command>
@@ -115,6 +118,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw restore --from <name>     restore the newest backup of a storage location
   theoclaw storage init <name> [--path <absolute dir>] [--no-encrypt]
   theoclaw storage list|test [<name>]  named storage locations (encrypted by default); test writes and reads back a probe
+  theoclaw call <number> --message "text"
+                            place a phone call through Twilio that speaks the message; the number must be in THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
   theoclaw tui [--session <id>]
                             the terminal UI on the running instance, with the token and port from the configuration file
@@ -331,6 +336,22 @@ function tuiCommand(args: readonly string[], io: CliIo): Promise<number> {
   return startChild([], io, join(dirname(io.entry), 'tui', 'main.js'), env)
 }
 
+/** `call`: one outbound Twilio call; the credentials and the allowed numbers come from the environment and the configuration file. */
+async function callCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const { to, message } = parseCall(args)
+  const env: NodeJS.ProcessEnv = { ...io.env }
+  loadConfiguration(env, io.homeDir)
+  try {
+    const sid = await placeCall({ env, to, message, fetch: io.fetch })
+    io.stdout.write(`${sid}\n`)
+    return 0
+  } catch (error) {
+    if (!(error instanceof CallError)) throw error
+    io.stderr.write(`theoclaw: ${error.message}\n`)
+    return 1
+  }
+}
+
 const COMMANDS: Readonly<Record<string, Command>> = {
   start: startChild,
   // The ACP server is its own leaf entry beside `main.js`: stdin and stdout are the protocol, so the child inherits them.
@@ -340,6 +361,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     return 0
   },
   daemon,
+  call: callCommand,
   update: (args, io) => update(parseUpdate(args), io, io.runner),
   security: securityCommand,
   audit: (args, io) => Promise.resolve(auditCommand(args, io)),

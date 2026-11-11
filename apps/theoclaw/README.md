@@ -1031,6 +1031,15 @@ apply. Audio failures fall back to text. See [voice verification](parity/voice-v
 for limits and the outstanding real-account recording check. Continuous talk and
 wake word are tracked separately in B-722.
 
+## Outbound phone calls
+
+`theoclaw call <number> --message "text"` places one phone call through Twilio's REST API; the
+call speaks the message and the command prints the call SID. Set
+`THEOCLAW_VOICE_CALL_TWILIO_ACCOUNT_SID`, `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and
+`THEOCLAW_VOICE_CALL_FROM_NUMBER` in the environment or the configuration file. The number must be
+E.164 (`+15550100`) and listed in `THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS` (comma-separated); with the
+list unset the command refuses. The auth token is never printed.
+
 Aged tool results are pruned: every send passes the SDK's `pruneToolResults`, so a tool result older
 than 4 tool rounds is trimmed from the next request. `THEOCLAW_PRUNE_TOOL_RESULT_ROUNDS` sets the count.
 

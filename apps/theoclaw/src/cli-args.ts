@@ -41,9 +41,34 @@ export function parseOnboard(args: readonly string[]): OnboardOptions {
 
 export function parseUpdate(args: readonly string[]): { channel?: string } {
   try {
-    const { values } = parseArgs({ args: [...args], strict: true, allowPositionals: false, options: { channel: { type: 'string' } } })
+    const { values } = parseArgs({
+      args: [...args],
+      strict: true,
+      allowPositionals: false,
+      options: { channel: { type: 'string' } },
+    })
     return { channel: values.channel }
   } catch (error) {
     throw new UsageError(`theoclaw update: ${describeError(error)}`)
+  }
+}
+
+export function parseCall(args: readonly string[]): { to: string; message: string } {
+  const usage = 'theoclaw call: expected <number> --message "text"'
+  try {
+    const { values, positionals } = parseArgs({
+      args: [...args],
+      strict: true,
+      allowPositionals: true,
+      options: { message: { type: 'string' } },
+    })
+    if (positionals.length !== 1 || values.message === undefined) throw new Error(usage)
+    return { to: positionals[0]!, message: values.message }
+  } catch (error) {
+    throw new UsageError(
+      describeError(error).startsWith('theoclaw call')
+        ? describeError(error)
+        : `theoclaw call: ${describeError(error)}`,
+    )
   }
 }

@@ -18,6 +18,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `theoclaw call <number> --message "text"` (#1628, OC-15) places an outbound phone call through Twilio's REST API and prints the call SID. It needs `THEOCLAW_VOICE_CALL_TWILIO_ACCOUNT_SID`, `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN`, `THEOCLAW_VOICE_CALL_FROM_NUMBER` and refuses any number not in `THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS`.
 - `/steer <text>` (#1526, OC-52): in a chat channel, and as a `steer` frame on `/control` (answered `steer_ok`, or `no_turn` when nothing runs), the text is injected into the turn already running (SDK `queueMode: 'steer'`) instead of waiting behind it.
 - `theoclaw worker pair|run|status` (#1590): a paired worker device with `--inference worker` runs model calls locally and records the provider request in its own `worker.log`; with `gateway` the message is proxied to the gateway's `/control` socket.
 
