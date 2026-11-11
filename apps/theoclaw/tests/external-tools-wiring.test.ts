@@ -133,7 +133,7 @@ describe('the external tools reach the /control agent only', () => {
     }
     const without = agentToolOptions(settingsWith({}))
     const control = recordingCreate()
-    await createAgentFactory(MODEL_ENV, control.create)(agentToolOptions(settings))
+    await createAgentFactory(MODEL_ENV, control.create, undefined, true)(agentToolOptions(settings))
     expect(Object.keys(control.options[0]?.mcpServers ?? {})).toHaveLength(2)
     expect(control.options[0]?.tools).toHaveLength(without.tools.length + 3) // + skill_read for the custodian skills
   })
