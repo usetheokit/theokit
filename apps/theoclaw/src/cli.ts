@@ -49,6 +49,7 @@ import { auditCommand } from './ops/audit.js'
 import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
 import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
+import { sandboxCommand } from './sandbox/sandbox-command.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { mcpRelayCommand } from './mcp-relay/command.js'
@@ -136,6 +137,9 @@ const USAGE = `usage: theoclaw <command>
   theoclaw resume           print the messages of the most recently updated chat session
   theoclaw import <claude-code|hermes> [--dry-run] [--source <dir>] [--project <dir>] [--home <dir>]
                             copy a Claude Code or Hermes setup into the state directory; --dry-run lists the files and writes none
+  theoclaw sandbox list     list the sandbox containers theoclaw made (docker backend): name, status, image, session, total
+  theoclaw sandbox recreate [--all | --session <id>] [--force]
+                            remove them so the next command of that session starts a fresh one; asks before removing a running one
   theoclaw sessions list|show <id>|export <id> [--json]
                             list the chat sessions, show one's summary, or print its messages (an id prefix is enough)
   theoclaw sessions share <id> --to <dir> | open <id> --from <dir>
@@ -367,6 +371,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     return Promise.resolve(doctor(io, { fix: args.includes('--fix') }))
   },
   status: (_args, io) => statusCommand(io, io.runner),
+  sandbox: (args, io) => sandboxCommand(args, io),
   sessions: (args, io) => Promise.resolve(sessionsCommand(args, io)),
   transcripts: (args, io) => {
     const [verb, ...rest] = args

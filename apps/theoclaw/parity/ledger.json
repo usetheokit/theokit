@@ -570,7 +570,7 @@
     "gaps": [
       "B-565"
     ],
-    "note": "moved to B-565 (dod reduced 2026-10-22, delegated): none of the six sandbox backends exists in the ecosystem, so nothing here can be built or checked yet"
+    "note": "moved to B-565 (dod reduced 2026-10-22, delegated): none of the six sandbox backends exists in the ecosystem, so nothing here can be built or checked yet; `theoclaw sandbox list|recreate` (src/sandbox/sandbox-command.ts, tests/sandbox-containers.test.ts) manage the docker backend's containers; the real-daemon check tests/live/sandbox-docker.live.test.ts has not run (no Docker in the factory)"
   },
   {
     "id": "OC-78",

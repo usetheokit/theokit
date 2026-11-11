@@ -9,7 +9,7 @@ import type { InteractiveBackend } from '@theokit/agents/interactive'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { createDockerBackend, readSandboxBackend } from '../sandbox/sandbox-backend.js'
 import type { DockerBackendDeps, SandboxBackendName } from '../sandbox/sandbox-backend.js'
-import { readSandboxMode, readSandboxSessions, sandboxModeForSession } from '../sandbox/sandbox-mode.js'
+import { MAIN_SESSION_KEY, readSandboxMode, readSandboxSessions, sandboxModeForSession } from '../sandbox/sandbox-mode.js'
 import { browserLine, readBrowser } from './browser-server.js'
 import type { BrowserDeps, BrowserSettings } from './browser-server.js'
 import { computerLine, readComputer } from './computer-settings.js'
@@ -241,7 +241,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
   const mode: SandboxMode = hostTools ? sandboxMode : 'read-only'
-  const sandbox = buildBackend(backend, mode, toolRoot, deps)
+  const sandbox = buildBackend(backend, mode, toolRoot, deps, MAIN_SESSION_KEY)
   const sandboxEnforced = isEnforced(sandbox)
   const gitRepository = isRepository(toolRoot)
   const offLines = [...lines]
@@ -289,15 +289,15 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
 export function toolSettingsForSession(settings: ToolSettings, env: Env, sessionKey: string, deps: ToolDeps = {}): ToolSettings {
   const sandboxMode = sandboxModeForSession(settings.sandboxMode, readSandboxSessions(env), sessionKey)
   if (sandboxMode === settings.sandboxMode || !settings.hostTools) return settings
-  const sandbox = buildBackend(settings.backend ?? 'bwrap', sandboxMode, settings.toolRoot, deps)
+  const sandbox = buildBackend(settings.backend ?? 'bwrap', sandboxMode, settings.toolRoot, deps, sessionKey)
   // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
   const { interactive: _chosenMode, ...rest } = settings
   return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: isEnforced(sandbox) }
 }
 
 /** The one backend of a mode: the chosen `THEOCLAW_SANDBOX_BACKEND` over the tool root. */
-function buildBackend(backend: SandboxBackendName, mode: SandboxMode, toolRoot: string, deps: ToolDeps): SandboxBackend {
-  if (backend === 'docker') return createDockerBackend(mode, toolRoot, deps)
+function buildBackend(backend: SandboxBackendName, mode: SandboxMode, toolRoot: string, deps: ToolDeps, session: string): SandboxBackend {
+  if (backend === 'docker') return createDockerBackend(mode, toolRoot, deps, session)
   return createSandboxBackend({
     mode,
     workDir: toolRoot,

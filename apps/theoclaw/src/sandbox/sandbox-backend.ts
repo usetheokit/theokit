@@ -20,7 +20,7 @@ export function readSandboxBackend(env: Readonly<Record<string, string | undefin
 }
 
 /** The `docker` process, run the way the SDK's own runner runs it. */
-const dockerProcess: DockerRunner = (args, opts) =>
+export const dockerProcess: DockerRunner = (args, opts) =>
   new Promise<DockerRunResult>((resolve, reject) => {
     const child = spawn('docker', [...args], { stdio: ['pipe', 'pipe', 'pipe'] })
     let stdout = ''
@@ -45,9 +45,41 @@ const dockerProcess: DockerRunner = (args, opts) =>
     child.stdin.end(opts.input)
   })
 
+/** The label every container theoclaw makes carries, and the one holding its session key. */
+export const SANDBOX_LABEL = 'theoclaw.sandbox'
+export const SESSION_LABEL = 'theoclaw.session'
+
 /** What a test injects: the `docker` process. */
 export interface DockerBackendDeps {
   readonly dockerRunner?: DockerRunner
+}
+
+const QUICK = { timeoutMs: 10_000, maxOutputBytes: 64 * 1024 } as const
+
+/**
+ * Makes the SDK's throwaway container something `sandbox list` can find. The SDK runs each command
+ * with `docker run --rm`, so nothing is left to list; this runner labels the container, keeps it
+ * after it exits, and removes the session's earlier finished ones, so one container per session stays
+ * until `sandbox recreate` removes it.
+ */
+function keepLabelled(base: DockerRunner, session: string): DockerRunner {
+  return async (args, opts) => {
+    if (args[0] !== 'run') return base(args, opts)
+    const name = args[args.indexOf('--name') + 1]
+    const rest = args.slice(1).filter((arg) => arg !== '--rm')
+    const result = await base(['run', '--label', `${SANDBOX_LABEL}=true`, '--label', `${SESSION_LABEL}=${session}`, ...rest], opts)
+    await pruneFinished(base, session, name).catch(() => undefined)
+    return result
+  }
+}
+
+async function pruneFinished(base: DockerRunner, session: string, keep: string | undefined): Promise<void> {
+  const listed = await base(
+    ['ps', '-a', '--filter', `label=${SANDBOX_LABEL}=true`, '--filter', `label=${SESSION_LABEL}=${session}`, '--filter', 'status=exited', '--format', '{{.Names}}'],
+    QUICK,
+  )
+  const old = listed.stdout.split('\n').map((line) => line.trim()).filter((line) => line !== '' && line !== keep)
+  if (old.length > 0) await base(['rm', '-f', ...old], QUICK)
 }
 
 /**
@@ -55,7 +87,7 @@ export interface DockerBackendDeps {
  * mounts it read-only (the SDK always writes `:rw`, so the runner turns that into `:ro`). The container
  * has no way to be unconfined, so `danger-full-access` is refused, never downgraded.
  */
-export function createDockerBackend(mode: SandboxMode, workDir: string, deps: DockerBackendDeps = {}): SandboxBackend {
+export function createDockerBackend(mode: SandboxMode, workDir: string, deps: DockerBackendDeps = {}, session = 'main'): SandboxBackend {
   if (mode === 'danger-full-access') {
     throw new TheoClawConfigError(
       'THEOCLAW_SANDBOX_BACKEND=docker cannot honor THEOCLAW_SANDBOX=danger-full-access: a container is always confined; choose workspace-write or read-only, or THEOCLAW_SANDBOX_BACKEND=bwrap',
@@ -63,9 +95,10 @@ export function createDockerBackend(mode: SandboxMode, workDir: string, deps: Do
     )
   }
   const base = deps.dockerRunner ?? dockerProcess
-  const runner: DockerRunner =
+  const mounted: DockerRunner =
     mode === 'read-only'
       ? (args, opts) => base(args.map((arg) => (arg.endsWith(':/workspace:rw') ? `${arg.slice(0, -3)}:ro` : arg)), opts)
       : base
+  const runner = keepLabelled(mounted, session)
   return new DockerSandbox({ workDir, runner })
 }

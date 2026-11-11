@@ -69,6 +69,28 @@ describe('THEOCLAW_SANDBOX_BACKEND=docker', () => {
     expect(mountOf(calls[0] ?? [])).toBe(`${readOnly.toolRoot}:/workspace:ro`)
   })
 
+  it('labels the container with theoclaw and its session, and keeps it after it exits', async () => {
+    const { runner, calls } = recorder()
+    const { settings } = settingsFor(undefined, runner)
+    await settings.sandbox.execute('true')
+    const run = calls[0] ?? []
+    expect(run).not.toContain('--rm')
+    expect(run.slice(0, 5)).toEqual(['run', '--label', 'theoclaw.sandbox=true', '--label', 'theoclaw.session=main'])
+    expect(calls[1]?.slice(0, 2)).toEqual(['ps', '-a'])
+  })
+
+  it('removes the session\'s earlier finished containers but not the one just run', async () => {
+    const calls: string[][] = []
+    const runner: DockerRunner = (args) => {
+      calls.push([...args])
+      const stdout = args[0] === 'ps' ? 'old-1\nold-2\n' : ''
+      return Promise.resolve({ stdout, stderr: '', code: 0, timedOut: false })
+    }
+    const { settings } = settingsFor(undefined, runner)
+    await settings.sandbox.execute('true')
+    expect(calls[2]).toEqual(['rm', '-f', 'old-1', 'old-2'])
+  })
+
   it('refuses danger-full-access, naming it, rather than downgrading', () => {
     const { runner } = recorder()
     expect(() => settingsFor('danger-full-access', runner)).toThrow(/cannot honor THEOCLAW_SANDBOX=danger-full-access/)
