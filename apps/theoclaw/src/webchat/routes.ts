@@ -1,4 +1,5 @@
 import { access, readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -12,7 +13,12 @@ import type { TurnRunner } from '../control-plane/turn.js'
 import { chatIdOf, WebchatChatIdError } from './chat-id.js'
 import { createWebchatRun } from './create-run.js'
 import { renderPage, WEBCHAT_ASSETS } from './page.js'
-import { WEBCHAT_ASSETS_PREFIX, WEBCHAT_CHAT_PATH, WEBCHAT_ROUTE, WEBCHAT_SANDBOX_PATH } from './paths.js'
+import {
+  WEBCHAT_ASSETS_PREFIX,
+  WEBCHAT_CHAT_PATH,
+  WEBCHAT_ROUTE,
+  WEBCHAT_SANDBOX_PATH,
+} from './paths.js'
 
 export interface WebchatRoutesOptions {
   /** The WebChat token every chat post must carry; at least 32 characters. */
@@ -32,7 +38,11 @@ const NO_STORE = { 'cache-control': 'no-store' }
 const PAGE_CSP =
   "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"
 /** The page holds the token in the tab: no framing (clickjacking), no sniffing, no referrer leak. */
-const PAGE_HARDENING = { 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
+const PAGE_HARDENING = {
+  'x-frame-options': 'DENY',
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer',
+}
 /**
  * The html-widget frame: its own policy lets inline script run (the page's does not, and a frame can
  * only tighten what it inherits, so the frame is a URL, not srcdoc), with an opaque origin, no network
@@ -49,7 +59,11 @@ const MISSING_BUNDLE = 'run the build:web script of the theoclaw package\n'
  * `webchat-stream.test.ts` pins that the stream does not change with these; B-510 (a per-request hook
  * on the generator) is the follow-up that removes this placeholder and the per-request rebuild.
  */
-const COMPILED_OPTIONS: AgentRouteContext['compiledOptions'] = { tools: [], agents: {}, stream: true }
+const COMPILED_OPTIONS: AgentRouteContext['compiledOptions'] = {
+  tools: [],
+  agents: {},
+  stream: true,
+}
 
 function ignore(): void {}
 
@@ -75,7 +89,10 @@ function assetPath(assetsDir: string | URL, name: keyof typeof WEBCHAT_ASSETS): 
 }
 
 /** The asset's bytes, or `undefined` when the file is not there (the bundle was never built). */
-async function readAsset(assetsDir: string | URL, name: keyof typeof WEBCHAT_ASSETS): Promise<Buffer | undefined> {
+async function readAsset(
+  assetsDir: string | URL,
+  name: keyof typeof WEBCHAT_ASSETS,
+): Promise<Buffer | undefined> {
   try {
     return await readFile(assetPath(assetsDir, name))
   } catch (error) {
@@ -95,10 +112,18 @@ async function page(assetsDir: string | URL): Promise<Response> {
     () => false,
   )
   if (!built) {
-    return new Response(MISSING_BUNDLE, { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8', ...NO_STORE } })
+    return new Response(MISSING_BUNDLE, {
+      status: 503,
+      headers: { 'content-type': 'text/plain; charset=utf-8', ...NO_STORE },
+    })
   }
   return new Response(renderPage(), {
-    headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PAGE_CSP, ...PAGE_HARDENING, ...NO_STORE },
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'content-security-policy': PAGE_CSP,
+      ...PAGE_HARDENING,
+      ...NO_STORE,
+    },
   })
 }
 
@@ -121,7 +146,11 @@ async function asset(assetsDir: string | URL, name: string): Promise<Response> {
   const bytes = await readAsset(assetsDir, name)
   if (bytes === undefined) return notFound()
   return new Response(new Uint8Array(bytes), {
-    headers: { 'content-type': WEBCHAT_ASSETS[name], 'x-content-type-options': 'nosniff', ...NO_STORE },
+    headers: {
+      'content-type': WEBCHAT_ASSETS[name],
+      'x-content-type-options': 'nosniff',
+      ...NO_STORE,
+    },
   })
 }
 
@@ -178,7 +207,15 @@ async function boundedBody(request: Request): Promise<Uint8Array<ArrayBuffer> | 
  * own turn. A client that leaves (the listener aborts `request.signal`) or a cancelled body stops
  * the turn.
  */
-async function chat(request: Request, turnFor: (chatId: string) => TurnRunner, write?: (line: string) => void): Promise<Response> {
+async function chat(
+  request: Request,
+  rawTurnFor: (chatId: string) => TurnRunner,
+  write?: (line: string) => void,
+  scope = '',
+): Promise<Response> {
+  // A signed-in user's chats are keyed under their identity: two users naming one chat id get two sessions.
+  const turnFor =
+    scope === '' ? rawTurnFor : (chatId: string): TurnRunner => rawTurnFor(`${scope}${chatId}`)
   const turn = new AbortController()
   const stopTurn = (): void => turn.abort()
   if (request.signal.aborted) stopTurn()
@@ -189,7 +226,8 @@ async function chat(request: Request, turnFor: (chatId: string) => TurnRunner, w
     createRun: createWebchatRun(turnFor, turn.signal, write),
   })
   const post = routes.find((route) => route.method === 'POST' && route.path === WEBCHAT_CHAT_PATH)
-  if (post === undefined) throw new Error(`generateAgentRoutes returned no POST ${WEBCHAT_CHAT_PATH}`)
+  if (post === undefined)
+    throw new Error(`generateAgentRoutes returned no POST ${WEBCHAT_CHAT_PATH}`)
   const response = await post.handler(request)
   const headers = new Headers(response.headers)
   headers.set('cache-control', 'no-store')
@@ -205,11 +243,16 @@ async function chat(request: Request, turnFor: (chatId: string) => TurnRunner, w
  * every answer carries `cache-control: no-store`. A token below the bearer minimum is refused here,
  * at the gate's owner, and not only by whoever read it from the environment.
  */
-export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Request) => Promise<Response> {
+export function createWebchatRoutes(
+  options: WebchatRoutesOptions,
+): (request: Request) => Promise<Response> {
   if (options.token.length < MIN_BEARER_TOKEN_LENGTH) {
-    throw new TheoClawConfigError(`THEOCLAW_WEBCHAT_TOKEN must be at least ${MIN_BEARER_TOKEN_LENGTH} characters`, {
-      variable: 'THEOCLAW_WEBCHAT_TOKEN',
-    })
+    throw new TheoClawConfigError(
+      `THEOCLAW_WEBCHAT_TOKEN must be at least ${MIN_BEARER_TOKEN_LENGTH} characters`,
+      {
+        variable: 'THEOCLAW_WEBCHAT_TOKEN',
+      },
+    )
   }
   const accepts = bearerCheck(options.token)
   return async (request) => {
@@ -220,10 +263,23 @@ export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Re
       return asset(options.assetsDir, pathname.slice(WEBCHAT_ASSETS_PREFIX.length))
     }
     if (pathname !== WEBCHAT_CHAT_PATH || request.method !== 'POST') return notFound()
-    const viaProxy = options.trustedProxy === true && (request.headers.get(TRUSTED_IDENTITY_HEADER) ?? '') !== ''
-    if (!viaProxy && !accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
-    return boundedChat(request, options.turnFor, options.write)
+    const viaProxy =
+      options.trustedProxy === true && (request.headers.get(TRUSTED_IDENTITY_HEADER) ?? '') !== ''
+    if (!viaProxy && !accepts(request.headers.get('authorization') ?? undefined))
+      return unauthorized()
+    const identity = viaProxy ? (request.headers.get(TRUSTED_IDENTITY_HEADER) ?? '') : ''
+    return boundedChat(
+      request,
+      options.turnFor,
+      options.write,
+      identity === '' ? '' : userScope(identity),
+    )
   }
+}
+
+/** The session-key prefix of one proxy-authenticated user: a hash, so the identity never reaches a key or a file name. */
+function userScope(identity: string): string {
+  return `u${createHash('sha256').update(identity).digest('hex').slice(0, 16)}.`
 }
 
 /**
@@ -253,7 +309,12 @@ function chatIdRefusal(body: Uint8Array): Response | undefined {
 }
 
 /** An authorized chat post: its body read within the bound, then handed to `chat`. */
-async function boundedChat(request: Request, turnFor: (chatId: string) => TurnRunner, write?: (line: string) => void): Promise<Response> {
+async function boundedChat(
+  request: Request,
+  turnFor: (chatId: string) => TurnRunner,
+  write?: (line: string) => void,
+  scope = '',
+): Promise<Response> {
   const body = await boundedBody(request).catch((error: unknown) => {
     // A client that leaves mid-upload errors the body stream: answer, since the listener would
     // otherwise log "request failed" and write a 500 to a socket that is already gone.
@@ -264,5 +325,15 @@ async function boundedChat(request: Request, turnFor: (chatId: string) => TurnRu
   if (body === undefined) return tooLarge()
   const refused = chatIdRefusal(body)
   if (refused !== undefined) return refused
-  return chat(new Request(request.url, { method: 'POST', headers: request.headers, body, signal: request.signal }), turnFor, write)
+  return chat(
+    new Request(request.url, {
+      method: 'POST',
+      headers: request.headers,
+      body,
+      signal: request.signal,
+    }),
+    turnFor,
+    write,
+    scope,
+  )
 }
