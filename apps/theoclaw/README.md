@@ -1023,3 +1023,10 @@ than 4 tool rounds is trimmed from the next request. `THEOCLAW_PRUNE_TOOL_RESULT
 `pnpm build && pnpm build:sea` writes `dist/sea/theoclaw`, a single executable (Node SEA) that runs
 `./theoclaw --help` on a machine without Node. Commands that start the service (`start`, `acp`) still
 spawn `main.js` from a checkout or npm install.
+
+## Network proxy
+
+`THEOCLAW_PROXY_URL=http://host:port` sends TheoClaw's outbound requests through that proxy
+(loopback stays direct). `theoclaw proxy validate` checks that it tunnels HTTPS (http:// proxy URLs
+only). `theoclaw proxy start` runs a local capture proxy that records each request's host, and
+`theoclaw proxy captures` lists them; HTTPS is tunnelled, not decrypted.

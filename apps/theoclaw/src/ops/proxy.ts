@@ -117,7 +117,7 @@ export async function proxyCommand(args: readonly string[], io: ProxyIo): Promis
     const name = rest[i]
     const value = rest[i + 1]
     if (name === undefined || !['--proxy-url', '--target', '--port'].includes(name) || value === undefined) {
-      throw new UsageError('theoclaw proxy: expected validate [--proxy-url <url>] [--target <host:port>] | start [--port <n>] | captures')
+      throw new UsageError(`theoclaw proxy: ${name === undefined ? 'missing flag' : `bad or valueless flag ${name}`}; expected validate [--proxy-url <url>] [--target <host:port>] | start [--port <n>] | captures`)
     }
     flags.set(name, value)
   }

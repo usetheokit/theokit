@@ -18,7 +18,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- `theoclaw proxy validate|start|captures` (#1571): `validate` checks that the proxy in `THEOCLAW_PROXY_URL` (or `--proxy-url`) tunnels HTTPS; `start` runs a local capture proxy that lists the host of each request; `theoclaw start` sends its outbound requests through `THEOCLAW_PROXY_URL` when set. HTTPS is tunnelled, not decrypted.
+- `theoclaw proxy validate|start|captures` (#1571): `validate` checks that the proxy in `THEOCLAW_PROXY_URL` (or `--proxy-url`) tunnels HTTPS; `start` runs a local capture proxy that lists the host of each request; `theoclaw start` sends its outbound requests through `THEOCLAW_PROXY_URL` when set (an explicit undici proxy dispatcher, so it works on every supported Node). HTTPS is tunnelled, not decrypted.
 - Named sender lists (#1567): `THEOCLAW_ACCESS_GROUPS` defines them and `THEOCLAW_ALLOWLIST` admits `platform:accessGroup:<name>` or single senders.
 - `THEOCLAW_TOOL_PROFILE=minimal|messaging|coding|full` (#1562) gives an owner's direct chat tools (minimal: read files; messaging: plus the web; coding: plus the sandboxed shell and file writers; full: plus the interactive shell). The shell needs `THEOCLAW_HOST_TOOLS=on` and a state directory, and stays behind exec approval. `/elevated on` now also runs that session's `shell_exec` outside the sandbox, for that session only. Unset, chat agents hold no tool, as before.
 

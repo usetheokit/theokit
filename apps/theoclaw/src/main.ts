@@ -12,6 +12,7 @@ import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
+import { installProxyFromEnv } from './ops/proxy-dispatcher.js'
 import { teeToLogFile } from './ops/log-tee.js'
 import { watchConfiguration } from './ops/hot-reload.js'
 import { RESTART_EXIT_CODE, spawnSuccessor, supervised, waitForPredecessor } from './ops/self-restart.js'
@@ -63,6 +64,7 @@ try {
   }
   // The configuration file next (B-374): it fills only what the environment leaves unset.
   const configFile = loadConfiguration(process.env, homedir())
+  installProxyFromEnv(process.env)
   // B-718: mirror the output to THEOCLAW_LOG_FILE, which `theoclaw logs` reads where there is no user unit.
   teeToLogFile(process.env, [process.stdout, process.stderr])
   // Hot reload (B-399): a change to the model settings applies to the next agent, without a restart.

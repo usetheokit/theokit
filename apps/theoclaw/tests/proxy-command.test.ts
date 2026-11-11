@@ -2,6 +2,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { installProxyFromEnv } from '../src/ops/proxy-dispatcher.js'
 import { runCli } from '../src/cli.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
 
@@ -30,10 +31,14 @@ describe('theoclaw proxy', () => {
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
     expect(await runCli(['proxy', 'validate', '--proxy-url', url, '--target', `127.0.0.1:${originPort}`], h.io)).toBe(0)
     expect(h.stdout()).toContain('reachable')
+    // A turn's provider request: the global fetch, once THEOCLAW_PROXY_URL is installed, goes through the proxy.
+    expect(installProxyFromEnv({ THEOCLAW_PROXY_URL: url })).toBe(true)
+    await fetch('http://provider.invalid/v1/messages').catch(() => undefined)
     stop.forEach((l) => l())
     expect(await running).toBe(0)
     const h2 = { ...h.io, env: h.io.env }
     expect(await runCli(['proxy', 'captures'], h2)).toBe(0)
+    expect(h.stdout()).toContain('provider.invalid')
     expect(h.stdout()).toContain(`CONNECT 127.0.0.1:${originPort}`)
     origin.close()
   })

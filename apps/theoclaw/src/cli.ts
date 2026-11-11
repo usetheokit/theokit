@@ -192,17 +192,8 @@ function tuiCommand(args: readonly string[], io: CliIo): Promise<number> {
   return startChild([], io, join(dirname(io.entry), 'tui', 'main.js'), env)
 }
 
-/** `start`: with THEOCLAW_PROXY_URL set, the child's outbound fetches go through that proxy. */
-function startCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const env: NodeJS.ProcessEnv = { ...io.env }
-  loadConfiguration(env, io.homeDir)
-  const proxy = env.THEOCLAW_PROXY_URL?.trim()
-  if (proxy) Object.assign(env, { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, NODE_USE_ENV_PROXY: '1', NO_PROXY: env.NO_PROXY ?? '127.0.0.1,localhost' })
-  return startChild(args, io, io.entry, proxy ? env : io.env)
-}
-
 const COMMANDS: Readonly<Record<string, Command>> = {
-  start: startCommand,
+  start: startChild,
   proxy: (args, io) => proxyCommand(args, io),
   // The ACP server is its own leaf entry beside `main.js`: stdin and stdout are the protocol, so the child inherits them.
   acp: (args, io) => startChild(args, io, join(dirname(io.entry), 'main-acp.js')),
