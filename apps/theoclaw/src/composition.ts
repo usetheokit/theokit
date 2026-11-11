@@ -84,7 +84,7 @@ import {
 import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import { theoClawApiFor } from './http-api/api-routes.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
-import { createExecApprovalStore, execApprovalPlugin, type ExecApprovalOptions } from './tools/exec-approval.js'
+import { createActivityLedger, createExecApprovalStore, execApprovalPlugin, type ExecApprovalOptions } from './tools/exec-approval.js'
 import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { createEmailTrigger } from './triggers/email-trigger.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
@@ -426,7 +426,7 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
  */
 function execApprovalFor(given: TheoClawOptions['execApproval'], stateDir: string | undefined): ExecApprovalOptions | undefined {
   if (stateDir === undefined) return undefined
-  return { ...given, store: createExecApprovalStore(stateDir) }
+  return { ...given, store: createExecApprovalStore(stateDir), ledger: createActivityLedger(stateDir) }
 }
 
 /** The store of `policy.stateDir`, or none without one. Throws on a state file it cannot read. */

@@ -42,6 +42,7 @@ import { loginWhatsApp } from './channels/whatsapp-qr.js'
 import { readControlClientSettings } from './control-client/settings.js'
 import { loadConfiguration } from './config-file.js'
 import { whatsappSessionDir } from './channels/platforms.js'
+import { auditCommand } from './ops/audit.js'
 import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
 import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
@@ -92,6 +93,8 @@ const USAGE = `usage: theoclaw <command>
                             fetch and fast-forward the checkout on its channel, rebuild, restart
   theoclaw security audit [--fix]
                             report risky configuration; --fix narrows file permissions; exit 3 while findings remain
+  theoclaw audit [--run <id>]
+                            the exec decision ledger: each command, whether it ran, who approved it and when; exit 1 when empty
   theoclaw doctor [--fix]   check the configuration offline (--fix: file modes, missing state directory); exit 3 on a failed check, never printing a value
   theoclaw status           the instance, its model and channels, and whether the service runs; exit 3 when it does not
   theoclaw triage [--out <dir>]
@@ -339,6 +342,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   daemon,
   update: (args, io) => update(parseUpdate(args), io, io.runner),
   security: securityCommand,
+  audit: (args, io) => Promise.resolve(auditCommand(args, io)),
   doctor: (args, io) => {
     if (args.some((arg) => arg !== '--fix'))
       throw new UsageError('theoclaw doctor: expected [--fix]')
