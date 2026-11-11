@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -158,5 +166,91 @@ describe('cloud worker delegation', () => {
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }
+  })
+  describe('cloud environment recipe', () => {
+    const dirs: string[] = []
+    afterEach(() => dirs.splice(0).forEach((d) => rmSync(d, { recursive: true, force: true })))
+    const repoWith = (files: Record<string, string>) => {
+      const workspace = mkdtempSync(join(tmpdir(), 'cwr-'))
+      dirs.push(workspace)
+      const repo = join(workspace, 'files')
+      execFileSync('git', ['init', '-q', repo])
+      writeFileSync(join(repo, 'a.txt'), 'a')
+      for (const [name, text] of Object.entries(files)) {
+        mkdirSync(join(repo, name, '..'), { recursive: true })
+        writeFileSync(join(repo, name), text)
+      }
+      execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '.'])
+      execFileSync('git', [
+        '-C',
+        repo,
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@t',
+        'commit',
+        '-q',
+        '-m',
+        'i',
+      ])
+      return { workspace, settings: { workspace, toolRoot: repo } as unknown as ToolSettings }
+    }
+
+    it('runs postCreateCommand before the agent starts', async () => {
+      const { settings } = repoWith({
+        '.devcontainer/devcontainer.json':
+          '{ // setup\n "postCreateCommand": "echo ready > marker.txt" }',
+      })
+      let marker = ''
+      const port = cloudWorkerPort(
+        settings,
+        () => [],
+        async (tools) => {
+          void tools
+          const dir = readdirSync(join(settings.workspace, '.theoclaw', 'cloud-workers'))[0] ?? ''
+          marker = readFileSync(
+            join(settings.workspace, '.theoclaw', 'cloud-workers', dir, 'checkout', 'marker.txt'),
+            'utf8',
+          )
+          return { response: 'done', toolCalls: [], cost: 0, tokens: 0 }
+        },
+      )
+      const result = await port.run('task', {})
+      expect(marker.trim()).toBe('ready')
+      expect(result.response).toContain('environment .devcontainer/devcontainer.json')
+    })
+
+    it('keeps recipe side effects off the task branch', async () => {
+      const { settings } = repoWith({
+        '.devcontainer.json': '{"postCreateCommand":"echo x > artifact.txt && echo y >> a.txt"}',
+      })
+      const git = (...a: string[]) => execFileSync('git', ['-C', settings.toolRoot, ...a], { encoding: 'utf8' })
+      const quiet = cloudWorkerPort(settings, () => [], async () => ({ response: 'ok', toolCalls: [], cost: 0, tokens: 0 }))
+      expect((await quiet.run('t', {})).response).toContain('no changes to commit')
+      expect(git('branch', '--list', 'task/cloud-*').trim()).toBe('')
+      const busy = cloudWorkerPort(settings, () => [], async () => {
+        const dir = readdirSync(join(settings.workspace, '.theoclaw', 'cloud-workers'))[0] ?? ''
+        writeFileSync(join(settings.workspace, '.theoclaw', 'cloud-workers', dir, 'checkout', 'b.txt'), 'b')
+        return { response: 'ok', toolCalls: [], cost: 0, tokens: 0 }
+      })
+      const branch = /task\/cloud-[0-9a-f]+/.exec((await busy.run('t', {})).response)?.[0] ?? ''
+      expect(git('diff', '--name-only', 'HEAD', branch).trim()).toBe('b.txt')
+    })
+
+    it('does not start the agent when postCreateCommand fails, and tears down', async () => {
+      const { settings } = repoWith({ '.devcontainer.json': '{"postCreateCommand":"exit 3"}' })
+      let started = false
+      const port = cloudWorkerPort(
+        settings,
+        () => [],
+        async () => {
+          started = true
+          return { response: 'done', toolCalls: [], cost: 0, tokens: 0 }
+        },
+      )
+      await expect(port.run('task', {})).rejects.toThrow(/postCreateCommand failed/)
+      expect(started).toBe(false)
+      expect(readdirSync(join(settings.workspace, '.theoclaw', 'cloud-workers'))).toEqual([])
+    })
   })
 })
