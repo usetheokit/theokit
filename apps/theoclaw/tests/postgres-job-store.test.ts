@@ -54,7 +54,7 @@ describe('postgres job store', () => {
     table.clear()
     vi.resetModules()
   })
-  const dsn = 'postgres://u:p%40ss@db.example:5433/claw'
+  const dsn = 'postgres://u:p%40ss@db.example:5433/claw' // trufflehog:ignore -- fake DSN, db.example never resolves
 
   it('keeps a job as a row that survives a restart', async () => {
     const first = await (
