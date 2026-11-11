@@ -98,6 +98,8 @@ const USAGE = `usage: theoclaw <command>
                             copy a Claude Code or Hermes setup into the state directory; --dry-run lists the files and writes none
   theoclaw sessions list|show <id>|export <id> [--json]
                             list the chat sessions, show one's summary, or print its messages (an id prefix is enough)
+  theoclaw sessions share <id> --to <dir> | open <id> --from <dir>
+                            share a session read-only with another instance through <dir>, or open one shared with you
   theoclaw transcripts list|show <id>|export <id> [--json]
                             list the stored chat transcripts or print one's messages (an id prefix is enough)
   theoclaw --help           this text

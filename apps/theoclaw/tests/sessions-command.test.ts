@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -53,5 +53,18 @@ describe('theoclaw sessions', () => {
     expect((await run(['transcripts', 'list'], workspace)).out).toContain('matrix-dm-_owner_localhost-g0\t2 messages')
     expect((await run(['transcripts', 'show', 'matrix-dm'], workspace)).out).toBe('user: hello there\nassistant: hi owner\n')
     expect((await run(['transcripts', 'frob'], workspace)).code).toBe(2)
+  })
+
+  it('shares a session read-only to another profile, which opens but cannot write it', async () => {
+    const workspace = workspaceWithSession()
+    const shared = scratchDir()
+    const shareRun = await run(['sessions', 'share', 'matrix-dm', '--to', shared], workspace)
+    expect(shareRun.code).toBe(0)
+    const other = await run(['sessions', 'open', 'matrix-dm', '--from', shared], scratchDir())
+    expect(other.out).toBe('shared session matrix-dm-_owner_localhost-g0 (read-only)\nuser: hello there\nassistant: hi owner\n')
+    const file = join(shared, 'shared-sessions', 'matrix-dm-_owner_localhost-g0.json')
+    expect(statSync(file).mode & 0o222).toBe(0)
+    expect((await run(['sessions', 'open', 'nope', '--from', shared], workspace)).code).toBe(1)
+    expect((await run(['sessions', 'share', 'matrix-dm'], workspace)).code).toBe(2)
   })
 })

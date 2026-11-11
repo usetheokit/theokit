@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
@@ -58,21 +58,94 @@ export function readMessages(file: string): Message[] {
   return messages
 }
 
-export function sessionsCommand(args: readonly string[], io: SessionsIo): number {
-  const [verb, ...rest] = args
-  const json = rest.includes('--json')
-  const operands = rest.filter((arg) => arg !== '--json')
-  const wantsId = verb === 'show' || verb === 'export'
-  if (!(verb === 'list' && operands.length === 0 && !json) && !(wantsId && operands.length === 1 && !operands[0]!.startsWith('-') && (verb === 'export' || !json))) {
-    throw new UsageError(USAGE_TEXT)
-  }
+type ChatSession = ReturnType<typeof listSessions>[number] & { id: string }
+
+function listChatSessions(io: SessionsIo): ChatSession[] {
   const env: NodeJS.ProcessEnv = { ...io.env }
   loadConfiguration(env, io.homeDir)
   const workspace = env.THEOCLAW_WORKSPACE?.trim() || resolveInstance(env, { homeDir: io.homeDir }).workspace
   if (workspace === undefined || workspace === '') {
     throw new TheoClawConfigError('THEOCLAW_WORKSPACE must be set to the directory TheoClaw keeps its chat sessions in', { variable: 'THEOCLAW_WORKSPACE' })
   }
-  const sessions = listSessions(workspace, join(workspace, '.theoclaw')).filter((entry) => entry.id !== undefined)
+  return listSessions(workspace, join(workspace, '.theoclaw')).filter((entry): entry is ChatSession => entry.id !== undefined)
+}
+
+function matchSession(sessions: readonly ChatSession[], wanted: string): ChatSession[] {
+  const exact = sessions.filter((entry) => entry.id === wanted)
+  return exact.length > 0 ? exact : sessions.filter((entry) => entry.id.startsWith(wanted))
+}
+
+function pickSession(sessions: readonly ChatSession[], wanted: string, io: SessionsIo): ChatSession | undefined {
+  const found = matchSession(sessions, wanted)
+  if (found.length !== 1) {
+    io.stderr.write(`theoclaw: ${found.length === 0 ? 'no session' : 'more than one session'} matches ${wanted}\n`)
+    return undefined
+  }
+  return found[0]
+}
+
+function findSession(wanted: string, io: SessionsIo): ChatSession | string {
+  const found = matchSession(listChatSessions(io), wanted)
+  return found.length === 1 ? found[0]! : `theoclaw: ${found.length === 0 ? 'no session' : 'more than one session'} matches ${wanted}\n`
+}
+
+const SHARE_USAGE = 'theoclaw sessions: expected share <id> --to <dir> | open <id> --from <dir>'
+const SHARED_SUBDIR = 'shared-sessions'
+
+function flagValue(args: readonly string[], flag: string): { value: string; operands: string[] } {
+  const at = args.indexOf(flag)
+  const value = at >= 0 ? args[at + 1] : undefined
+  const operands = args.filter((_, index) => index !== at && index !== at + 1)
+  if (value === undefined || value.startsWith('-') || operands.length !== 1 || operands[0]!.startsWith('-')) throw new UsageError(SHARE_USAGE)
+  return { value, operands }
+}
+
+/**
+ * `sessions share` writes a read-only snapshot of a session into a directory another instance can
+ * read; `sessions open` prints one. A snapshot has no verb that appends to it, so the receiving
+ * instance can read it but never send into it.
+ */
+function shareCommand(verb: 'share' | 'open', args: readonly string[], io: SessionsIo): number {
+  const { value: dir, operands } = flagValue(args, verb === 'share' ? '--to' : '--from')
+  const wanted = operands[0]!
+  const shared = join(dir, SHARED_SUBDIR)
+  if (verb === 'open') {
+    const names = existsSync(shared) ? readdirSync(shared).filter((name) => name.endsWith('.json')) : []
+    const found = names.filter((name) => name === `${wanted}.json`)
+    const matches = found.length > 0 ? found : names.filter((name) => name.startsWith(wanted))
+    if (matches.length !== 1) {
+      io.stderr.write(`theoclaw: ${matches.length === 0 ? 'no shared session' : 'more than one shared session'} matches ${wanted}\n`)
+      return 1
+    }
+    const snapshot = JSON.parse(readFileSync(join(shared, matches[0]!), 'utf8')) as { id: string; messages: Message[] }
+    io.stdout.write(`shared session ${snapshot.id} (read-only)\n`)
+    for (const message of snapshot.messages) io.stdout.write(`${message.role}: ${message.text}\n`)
+    return 0
+  }
+  const session = findSession(wanted, io)
+  if (typeof session === 'string') {
+    io.stderr.write(session)
+    return 1
+  }
+  mkdirSync(shared, { recursive: true })
+  const file = join(shared, `${session.id}.json`)
+  if (existsSync(file)) chmodSync(file, 0o600)
+  writeFileSync(file, `${JSON.stringify({ id: session.id, messages: readMessages(session.transcript) })}\n`, { mode: 0o600 })
+  chmodSync(file, 0o444)
+  io.stdout.write(`shared ${session.id} read-only to ${shared}\n`)
+  return 0
+}
+
+export function sessionsCommand(args: readonly string[], io: SessionsIo): number {
+  const [verb, ...rest] = args
+  if (verb === 'share' || verb === 'open') return shareCommand(verb, rest, io)
+  const json = rest.includes('--json')
+  const operands = rest.filter((arg) => arg !== '--json')
+  const wantsId = verb === 'show' || verb === 'export'
+  if (!(verb === 'list' && operands.length === 0 && !json) && !(wantsId && operands.length === 1 && !operands[0]!.startsWith('-') && (verb === 'export' || !json))) {
+    throw new UsageError(USAGE_TEXT)
+  }
+  const sessions = listChatSessions(io)
   if (verb === 'list') {
     for (const entry of sessions) {
       io.stdout.write(`${entry.id}\t${readMessages(entry.transcript).length} messages\t${entry.modifiedAt.toISOString()}\n`)
@@ -80,13 +153,8 @@ export function sessionsCommand(args: readonly string[], io: SessionsIo): number
     return 0
   }
   const wanted = operands[0]!
-  const exact = sessions.filter((entry) => entry.id === wanted)
-  const found = exact.length > 0 ? exact : sessions.filter((entry) => entry.id!.startsWith(wanted))
-  if (found.length !== 1) {
-    io.stderr.write(`theoclaw: ${found.length === 0 ? 'no session' : 'more than one session'} matches ${wanted}\n`)
-    return 1
-  }
-  const session = found[0]!
+  const session = pickSession(sessions, wanted, io)
+  if (session === undefined) return 1
   const messages = readMessages(session.transcript)
   if (verb === 'show') {
     io.stdout.write(`id: ${session.id}\nmessages: ${messages.length}\nupdated: ${session.modifiedAt.toISOString()}\n`)
