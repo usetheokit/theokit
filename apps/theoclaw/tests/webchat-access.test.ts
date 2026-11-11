@@ -203,8 +203,8 @@ describe('the /webchat routes on the started listener', () => {
     const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
     expect(servedText(await served.text())).toContain('hello from the agent')
 
-    expect(calls.chatOptions.map((built) => [built.tools, built.plugins, built.mcpServers])).toEqual([
-      [undefined, undefined, undefined],
+    expect(calls.chatOptions.map((built) => [built.tools?.map((tool) => tool.name), built.plugins, built.mcpServers])).toEqual([
+      [['skill_read'], undefined, undefined],
     ])
   })
 

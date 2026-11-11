@@ -2,7 +2,7 @@ import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 
 import { custodianSkills } from '../skills/custodian.js'
-import { loadSkillDirectory, SkillRegistry } from '../skills/registry.js'
+import { BUNDLED_SKILLS, loadSkillDirectory, SkillRegistry } from '../skills/registry.js'
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
@@ -162,10 +162,10 @@ function withImport<Model extends string | ModelSelection>(
   }
 }
 
-/** User skills, then workspace skills (which win by name); a skill whose required binary is missing is left out. */
+/** Built-in skills, user skills, then workspace skills (which win by name); a skill whose required binary is missing is left out. */
 function discoverSkills(workspaceDir: string | undefined, userDir: string | undefined): InlineSkill[] {
-  if (workspaceDir === undefined && userDir === undefined) return []
-  const bundled = userDir === undefined ? [] : loadSkillDirectory(userDir, 'bundled')
+  const user = userDir === undefined ? [] : loadSkillDirectory(userDir, 'bundled')
+  const bundled = [...BUNDLED_SKILLS, ...user]
   return new SkillRegistry({ ...(workspaceDir === undefined ? {} : { workspaceDir }), bundled }).inlineSkills()
 }
 

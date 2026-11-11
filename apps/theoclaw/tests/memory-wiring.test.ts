@@ -64,7 +64,7 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
     expect(reviewers).toHaveLength(2)
     expect(reviewers[0]?.options.tools?.map((tool) => tool.name)).toEqual(['save_memory'])
     // The chat agents themselves hold no tool.
-    expect(opened.find((o) => !o.id.includes('-review-'))?.options.tools ?? []).toEqual([])
+    expect((opened.find((o) => !o.id.includes('-review-'))?.options.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
 
     const store = new MemoryStore(join(workspace, '.theoclaw', 'memory'))
     expect(store.search('Porto').map((hit) => hit.surface).sort()).toEqual(['line', 'telegram'])

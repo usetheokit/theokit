@@ -301,7 +301,7 @@ describe('the API in the started process', () => {
     await client.chat.completions.create({ model: 'test-model', messages: [{ role: 'user', content: 'x' }] })
 
     expect(built).toHaveLength(1)
-    expect(built[0]?.tools ?? []).toHaveLength(0)
+    expect((built[0]?.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
     expect(built[0]?.plugins ?? []).toHaveLength(0)
     expect(start.toolOptions).toHaveLength(controlBuiltBefore)
   })

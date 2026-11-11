@@ -491,7 +491,7 @@ describe('the digest workflow tool at start', () => {
     const telegram = adapters.get('telegram') as FakeAdapter
     for (let sender = 0; sender < 20; sender += 1) await telegram.deliver(messageEvent('telegram', 'hello', `sender-${sender}`))
     await waitFor(() => chatOptions.length === 20, 5000, 'twenty chat agents to be opened')
-    expect(chatOptions.every((options) => options.tools === undefined)).toBe(true)
+    expect(chatOptions.every((options) => (options.tools ?? []).every((tool) => tool.name === 'skill_read'))).toBe(true)
   })
 
   it('the process entry builds the draft agents through the tool-less chat factory', () => {

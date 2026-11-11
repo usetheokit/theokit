@@ -146,7 +146,7 @@ describe("createChannelAgentFactory", () => {
 
     expect(options).toHaveLength(1);
     const catalog = effectiveToolNames({ ...options[0] });
-    expect(catalog.names).toEqual([]);
+    expect(catalog.names).toEqual(['skill_read']);
     expect(catalog.unresolved).toEqual([]);
     expect(options[0]).toMatchObject({ model: "openrouter/m", apiKey: "router-key" });
   });
@@ -167,8 +167,9 @@ describe("webchatAgentFactory", () => {
 
     await webchatAgentFactory(env, create)();
 
-    expect(options).toEqual([agentOptionsFor(env)]);
-    expect(effectiveToolNames({ ...options[0] }).names).toEqual([]);
+    expect(options).toHaveLength(1);
+    expect({ ...options[0], tools: undefined }).toEqual({ ...agentOptionsFor(env), tools: undefined });
+    expect(effectiveToolNames({ ...options[0] }).names).toEqual(['skill_read']);
   });
 });
 
@@ -220,7 +221,7 @@ describe("the chat path's agent options", () => {
 
     expect(options).toHaveLength(1);
     const catalog = effectiveToolNames({ ...options[0] });
-    expect(catalog.names).toEqual([]);
+    expect(catalog.names).toEqual(['skill_read']);
     expect(catalog.unresolved).toEqual([]);
     expect(options[0]).toMatchObject({ model: "openrouter/m", apiKey: "router-key" });
   });
