@@ -281,6 +281,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     handler: withVoiceReplies(createReplyHandler({
       withAgent: chat.withAgent,
       reset: (event) => chat.sessions.reset(event),
+      think: chat.think,
       secrets,
       display: readDisplayConfig(options.env),
       incognito: isIncognito(options.env),

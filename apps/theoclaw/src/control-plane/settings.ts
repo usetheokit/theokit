@@ -1,3 +1,4 @@
+import { parseThinkingLevel } from '../agent/failover.js'
 import { customProviderOf } from '../agent/custom-providers.js'
 import { readBearerToken } from './bearer.js'
 import { type BindEnvironment, parsePort, resolveBindAddress } from './bind.js'
@@ -32,7 +33,10 @@ export function resolveModelKey(env: BindEnvironment): string | undefined {
  * The model and its key, or the refusal naming what is missing. Shared by the start and the agent
  * factory, so both refuse with the same words.
  */
-export function requireModel(env: BindEnvironment): { readonly model: string; readonly modelKey: string } {
+export function requireModel(env: BindEnvironment): {
+  readonly model: string
+  readonly modelKey: string
+} {
   const model = nonBlank(env.THEOCLAW_MODEL)
   if (model === undefined) {
     throw new TheoClawConfigError('THEOCLAW_MODEL must name the model TheoClaw runs', {
@@ -44,7 +48,9 @@ export function requireModel(env: BindEnvironment): { readonly model: string; re
   if (custom !== undefined) {
     const customKey = nonBlank(env[custom.keyEnv])
     if (customKey === undefined) {
-      throw new TheoClawConfigError(`set ${custom.keyEnv} to the ${custom.name} provider key`, { variable: custom.keyEnv })
+      throw new TheoClawConfigError(`set ${custom.keyEnv} to the ${custom.name} provider key`, {
+        variable: custom.keyEnv,
+      })
     }
     return { model, modelKey: customKey }
   }
@@ -66,6 +72,14 @@ export function requireModel(env: BindEnvironment): { readonly model: string; re
  */
 export function readControlPlaneSettings(env: BindEnvironment): ControlPlaneSettings {
   const { model, modelKey } = requireModel(env)
+  try {
+    parseThinkingLevel(env.THEOCLAW_THINKING)
+  } catch (error) {
+    throw new TheoClawConfigError(
+      error instanceof Error ? error.message : 'THEOCLAW_THINKING is invalid',
+      { variable: 'THEOCLAW_THINKING' },
+    )
+  }
   const port = parsePort(env.THEOCLAW_PORT)
   const controlToken = readBearerToken(env, 'THEOCLAW_CONTROL_TOKEN')
   const webchatToken = readBearerToken(env, 'THEOCLAW_WEBCHAT_TOKEN')
