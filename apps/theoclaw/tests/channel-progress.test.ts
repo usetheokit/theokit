@@ -25,7 +25,7 @@ async function turn(platform: PlatformName, display?: DisplayConfig): Promise<st
     },
   }
   const withAgent = async <R>(_e: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) =>
-    work({ agent, release: () => undefined })
+    work({ agent, agentId: 'a-1', release: () => undefined })
   await createReplyHandler({ reset: async () => undefined, withAgent, ...(display ? { display } : {}) })(event, ctx)
   return sent
 }

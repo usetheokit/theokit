@@ -44,7 +44,7 @@ function harness(agent: TurnAgent, env: Record<string, string> = ENV, secrets?: 
     reset: async () => undefined,
     withAgent: async <R>(_event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> => {
       leases += 1
-      return work({ agent, release: () => undefined })
+      return work({ agent, agentId: 'a-1', release: () => undefined })
     },
     goal: readGoalSettings(env),
     ...(secrets === undefined ? {} : { secrets }),

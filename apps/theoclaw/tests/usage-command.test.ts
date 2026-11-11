@@ -30,7 +30,7 @@ function pricedTurn(answer: string): FakeTurn {
 
 function withOne(agent: TurnAgent) {
   return async <R>(_event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> =>
-    work({ agent, release: () => undefined })
+    work({ agent, agentId: 'a-1', release: () => undefined })
 }
 
 function inflight(runner: GatewayRunner): number {

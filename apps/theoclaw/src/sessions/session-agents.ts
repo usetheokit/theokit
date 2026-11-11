@@ -17,6 +17,8 @@ export interface SessionAgent extends TurnAgent {
  */
 export interface SessionLease {
   readonly agent: TurnAgent
+  /** The agent id of the session at its generation; what `Agent.compact` takes. */
+  readonly agentId?: string
   /** Ends this turn's hold on the agent; a second call does nothing. */
   release(): void
 }
@@ -114,6 +116,7 @@ export class SessionAgents {
     let released = false
     return {
       agent,
+      agentId: id,
       release: () => {
         if (released) return
         released = true

@@ -11,11 +11,13 @@ import type { StreamMask } from './stream-mask.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import { type DisplayConfig, resolveDisplay } from './display-config.js'
 import { createProgressGate, type ProgressGate } from './progress.js'
+import { compactIfNeeded } from './compact-command.js'
 import { deliverText } from './deliver.js'
 import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-command.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import type { UsageMode } from './usage-hook.js'
+import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
 import { showTyping, type TypingOptions } from './typing.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
@@ -68,6 +70,8 @@ export interface ReplyHandlerOptions {
   readonly incognito?: boolean
   /** A finished turn's usage: its line, and the footer its conversation's `/usage` asks for (FR-005). */
   readonly usage?: ReplyUsageOptions
+  /** `/compact` and the `THEOCLAW_COMPACT_AT` threshold (OC-53); without it, `/compact` is an ordinary message. */
+  readonly compact?: CompactSettings
   /** A typing indicator shown while a turn or goal runs (OC-106); without it, none. */
   readonly typing?: TypingOptions
 }
@@ -255,6 +259,7 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
         const reply = withFooter(finishTurn(presenter), options.usage, event, outcome)
         await send(ctx, { ...reply, text: maskSecrets(reply.text, secrets) }, outcome)
         if (outcome.failed) throw outcome.error
+        if (options.compact !== undefined && lease.agentId !== undefined) await compactIfNeeded(options.compact, lease.agentId, outcome.result)
         return maskSecrets(outcome.answer, secrets)
       } finally {
         await stopTyping()
@@ -355,6 +360,11 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
         throw error
       }
       await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
+      return
+    }
+    if (options.compact !== undefined && compactOf(text) !== undefined) {
+      const reply = await options.withAgent(event, (lease) => runCompact(options.compact as CompactSettings, lease.agentId).finally(() => lease.release()))
+      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
       return
     }
     const goal = options.goal === undefined ? undefined : goalOf(text)
