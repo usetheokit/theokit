@@ -75,10 +75,11 @@ export async function handleMcpRequest(
     if (done.result !== undefined) done.result.isError ??= false
     return Response.json(done)
   }
-  if (message?.method !== 'initialize') return reply
+  // The handshake reply is the one that names a protocol version: negotiate it against the client's.
+  const asked = (message?.params as { protocolVersion?: unknown } | undefined)?.protocolVersion
+  if (message === undefined || asked === undefined) return reply
   const envelope = (await reply.json()) as { result?: { protocolVersion?: string } }
-  if (envelope.result !== undefined) {
-    const asked = (message.params as { protocolVersion?: unknown } | undefined)?.protocolVersion
+  if (envelope.result?.protocolVersion !== undefined) {
     envelope.result.protocolVersion =
       typeof asked === 'string' && MCP_PROTOCOL_VERSIONS.includes(asked)
         ? asked
