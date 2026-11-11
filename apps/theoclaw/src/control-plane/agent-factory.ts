@@ -3,6 +3,7 @@ import { rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { customProviderPlugins, parseCustomProviders } from '../agent/custom-providers.js'
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
 import type { ThinkingLevel } from '../agent/failover.js'
 import type { AgentImport, TheoClawAgentOptions, TheoClawLocalOptions } from '../agent/create-agent.js'
@@ -66,7 +67,7 @@ function skillsDirOf(env: BindEnvironment): { skillsDir?: string; userSkillsDir:
  */
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
-  return theoClawAgentOptions({ model, apiKey: modelKey, ...skillsDirOf(env), approvedHooks: parseApprovedHooks(env), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
+  return theoClawAgentOptions({ model, apiKey: modelKey, ...skillsDirOf(env), approvedHooks: parseApprovedHooks(env), providers: customProviderPlugins(parseCustomProviders(env)), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
 }
 
 /**
@@ -142,6 +143,7 @@ export function createAgentFactory(
         model,
         apiKey: modelKey,
         approvedHooks: parseApprovedHooks(env),
+        providers: customProviderPlugins(parseCustomProviders(env)),
         ...skillsDirOf(env),
         ...thinkingOf(env),
         ...agentTelemetry(readTelemetrySettings(env)),

@@ -1,3 +1,4 @@
+import { customProviderOf } from '../agent/custom-providers.js'
 import { readBearerToken } from './bearer.js'
 import { type BindEnvironment, parsePort, resolveBindAddress } from './bind.js'
 import { TheoClawConfigError } from './errors.js'
@@ -37,6 +38,15 @@ export function requireModel(env: BindEnvironment): { readonly model: string; re
     throw new TheoClawConfigError('THEOCLAW_MODEL must name the model TheoClaw runs', {
       variable: 'THEOCLAW_MODEL',
     })
+  }
+  // A model on a registered custom provider (THEOCLAW_PROVIDERS) runs on that provider's own key.
+  const custom = customProviderOf(env, model)
+  if (custom !== undefined) {
+    const customKey = nonBlank(env[custom.keyEnv])
+    if (customKey === undefined) {
+      throw new TheoClawConfigError(`set ${custom.keyEnv} to the ${custom.name} provider key`, { variable: custom.keyEnv })
+    }
+    return { model, modelKey: customKey }
   }
   const modelKey = resolveModelKey(env)
   if (modelKey === undefined) {
