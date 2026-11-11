@@ -87,7 +87,7 @@ describe('startChannelLoop', () => {
 
     expect(loop.started.size).toBe(9)
     expect(loop.failed).toEqual(['sms'])
-    expect(lines).toEqual(['sms: start failed: SMSAdapter: signing secret missing'])
+    expect(lines.filter((l) => !l.endsWith(": connected"))).toEqual(['sms: start failed: SMSAdapter: signing secret missing'])
   })
 
   it('stop all stops every started runner', async () => {
@@ -147,7 +147,7 @@ describe('startChannelLoop', () => {
     await harness.loop.ready
 
     expect(harness.loop.failed).toEqual(['matrix'])
-    expect(harness.lines).toEqual(['matrix: start timed out after 50 ms'])
+    expect(harness.lines.filter((l) => !l.endsWith(": connected"))).toEqual(['matrix: start timed out after 50 ms'])
   })
 
   it('an abandoned start that later connects is stopped', async () => {
@@ -283,5 +283,13 @@ describe('startChannelLoop retry', () => {
     const seen = adapter.connects
     await new Promise((resolve) => setTimeout(resolve, 40))
     expect(adapter.connects).toBe(seen)
+  })
+})
+
+describe('startChannelLoop connect log', () => {
+  it('writes "<platform>: connected" on the first successful start', async () => {
+    const harness = startTen()
+    await harness.loop.ready
+    expect(harness.lines).toContain('telegram: connected')
   })
 })

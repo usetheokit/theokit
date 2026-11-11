@@ -144,7 +144,7 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
     started.set(platform, { adapter, runner })
     const index = failed.indexOf(platform)
     if (index >= 0) failed.splice(index, 1)
-    if (retrying) options.write(`${platform}: connected`)
+    options.write(`${platform}: connected`)
     return true
   }
 
