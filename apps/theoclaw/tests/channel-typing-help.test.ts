@@ -9,7 +9,7 @@ import { createUsageHook } from '../src/channels/usage-hook.js'
 import { createAcpCommandHook, createAcpSessions } from '../src/channels/acp-command.js'
 import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
-import { showTyping } from '../src/channels/typing.js'
+import { ackInbound, readAckReaction, showTyping } from '../src/channels/typing.js'
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent } from './fakes.js'
 
 class TypingAdapter extends FakeAdapter {
@@ -120,5 +120,28 @@ describe('/think', () => {
     expect(set).toEqual(['high'])
     expect(log.join('\n')).toContain('Thinking level set to high.')
     expect(log.filter((l) => l.includes('Usage: /think off|low|medium|high'))).toHaveLength(2)
+  })
+})
+
+describe('ack reaction (OC-106)', () => {
+  it('reacts to the inbound message with the configured emoji, and ignores adapters without a reaction method', async () => {
+    const calls: string[] = []
+    const adapter = Object.assign(new TypingAdapter('discord'), {
+      addReaction: async (c: string, m: string, e: string) => void calls.push(`${c}|${m}|${e}`),
+    })
+    const event = messageEvent('discord', 'hello')
+    const agent = new FakeAgent({ frames: [assistant('Hi!'), finished()] })
+    const log: string[] = []
+    const handler = createReplyHandler({
+      withAgent: async (_e, work) => work({ agent, release: () => undefined }),
+      reset: async () => undefined,
+      typing: { adapterFor: () => adapter, ackReaction: '👀' },
+    })
+    await handler(event, ctxFor(event, log))
+    await new Promise((r) => setTimeout(r, 5))
+    expect(calls).toEqual([`${event.channel.id}|${event.id}|👀`])
+    ackInbound({ adapterFor: () => new TypingAdapter('slack'), ackReaction: '👀' }, 'slack', 'c', 'm')
+    expect(readAckReaction({ THEOCLAW_ACK_REACTION: ' 👀 ' })).toBe('👀')
+    expect(readAckReaction({ THEOCLAW_ACK_REACTION: 'off' })).toBeUndefined()
   })
 })

@@ -38,6 +38,7 @@ import { qrWriter } from './channels/whatsapp-qr.js'
 
 import { readDisplayConfig } from './channels/display-config.js'
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
+import { readAckReaction } from './channels/typing.js'
 import { createSdkChannelAgentFactory, isIncognito, webchatAgentFactory } from './control-plane/agent-factory.js'
 import type { CreateAgent } from './control-plane/agent-factory.js'
 import { controlOptions, devicePairingFor } from './control-plane/control-wiring.js'
@@ -324,7 +325,10 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       goal: events.goal,
       compact: readCompactSettings(options.env, maskedWrite, options.compact),
       ...(advisor === undefined ? {} : { advisor }),
-      typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
+      typing: {
+        adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
+        ...(readAckReaction(options.env) === undefined ? {} : { ackReaction: readAckReaction(options.env) }),
+      },
     }), configuredVoiceReplies(options.env)),
     hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.workflowResume === undefined ? {} : { workflowResume: options.workflowResume }), ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook, model }) }),
     secrets,

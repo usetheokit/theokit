@@ -9,6 +9,29 @@ export interface TypingOptions {
   readonly adapterFor: (platform: string) => BasePlatformAdapter | undefined
   /** Renewal period; default `TYPING_RENEW_MS`. */
   readonly renewMs?: number
+  /** `THEOCLAW_ACK_REACTION`: the emoji that reacts to an inbound message when its turn starts. */
+  readonly ackReaction?: string
+}
+
+/** The reaction method a gateway adapter may offer; an adapter without it cannot acknowledge. */
+interface ReactingAdapter {
+  addReaction(channelId: string, messageId: string, emoji: string): Promise<unknown>
+}
+
+/** The emoji `THEOCLAW_ACK_REACTION` names, or undefined while it is unset or `off`. */
+export function readAckReaction(env: Readonly<Record<string, string | undefined>>): string | undefined {
+  const value = env.THEOCLAW_ACK_REACTION?.trim()
+  return value === undefined || value === '' || value.toLowerCase() === 'off' ? undefined : value
+}
+
+/** React to the inbound message with the ack emoji. Best effort: it never fails the turn. */
+export function ackInbound(options: TypingOptions | undefined, platform: string, channelId: string, messageId: string): void {
+  const emoji = options?.ackReaction
+  const adapter = options?.adapterFor(platform) as Partial<ReactingAdapter> | undefined
+  if (emoji === undefined || typeof adapter?.addReaction !== 'function') return
+  void Promise.resolve()
+    .then(() => adapter.addReaction?.(channelId, messageId, emoji))
+    .catch(() => undefined)
 }
 
 /**

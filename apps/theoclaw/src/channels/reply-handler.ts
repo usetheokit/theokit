@@ -20,7 +20,7 @@ import type { UsageMode } from './usage-hook.js'
 import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
 import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
 import { AdvisorHistory, reviewQuietly, steerNote, type AdvisorSettings } from './advisor.js'
-import { showTyping, type TypingOptions } from './typing.js'
+import { ackInbound, showTyping, type TypingOptions } from './typing.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
@@ -333,6 +333,7 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
       started = true
       turnStarted(lease.agent)
       const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
+      ackInbound(options.typing, event.platform, event.channel.id, event.id)
       try {
         const advisor = options.advisor === undefined ? undefined : watchTurn(options.advisor, advisorHistoryOf(options.advisor), lease.agentId ?? event.channel.id)
         const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress, advisor)
