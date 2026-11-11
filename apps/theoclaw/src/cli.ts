@@ -18,6 +18,7 @@ import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
 import { statusCommand } from './ops/status.js'
 import { loginWhatsApp } from './channels/whatsapp-qr.js'
+import { readControlClientSettings } from './control-client/settings.js'
 import { loadConfiguration } from './config-file.js'
 import { whatsappSessionDir } from './channels/platforms.js'
 import { securityCommand } from './security-audit.js'
@@ -176,6 +177,7 @@ function tuiCommand(args: readonly string[], io: CliIo): Promise<number> {
   const env: NodeJS.ProcessEnv = { ...io.env }
   if (id !== undefined) env.THEOCLAW_SESSION = id
   loadConfiguration(env, io.homeDir)
+  readControlClientSettings(env) // a bad token, port or session id ends here with exit 1, before the child starts
   return startChild([], io, join(dirname(io.entry), 'tui', 'main.js'), env)
 }
 

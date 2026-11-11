@@ -615,6 +615,14 @@ pnpm --filter theoclaw run build
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/control-plane.live.test.ts
 ```
 
+### Terminal UI
+
+```sh
+theoclaw tui [--session <id>]
+```
+
+Opens the terminal UI on the running instance. The control token and port come from the configuration file (variables already in the environment win); `--session` picks the conversation (default `owner`; 1 to 64 letters, digits, `-` or `_`). It exits 1 with one line when the token, port or session id is invalid or the instance is not reachable. It does not replay earlier turns: the view starts empty.
+
 ### WebChat
 
 WebChat is a browser chat with the agent, served on the same port. Build the page once, then start
