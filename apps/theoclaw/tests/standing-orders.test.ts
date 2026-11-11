@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -8,7 +8,9 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createTheoClawAgent } from '../src/agent/create-agent.js'
+import { runCli } from '../src/cli.js'
 import { ordersCommand } from '../src/agent/standing-orders.js'
+import { cleanScratch, harness } from './support/cli-harness.js'
 import type { TurnAgent } from '../src/agent-port.js'
 import { createControlSessions } from '../src/control-plane/control-sessions.js'
 import { sessionAgentOptions } from '../src/control-plane/agent-factory.js'
@@ -16,6 +18,7 @@ import { UsageError } from '../src/cli-args.js'
 
 const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
+  cleanScratch()
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
@@ -61,10 +64,19 @@ describe('standing orders (#1614)', () => {
       })
     })
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    cleanups.push(() => new Promise<void>((resolve) => { server.closeAllConnections(); server.close(() => resolve()) }))
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve) => {
+          server.closeAllConnections()
+          server.close(() => resolve())
+        }),
+    )
     const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`
     const turn = async (id: string): Promise<string> => {
-      const options = { ...sessionAgentOptions({ THEOCLAW_MODEL: 'm', THEOKIT_API_KEY: 'stub-key' }, ws), model: { id: 'lmstudio/stub', url } }
+      const options = {
+        ...sessionAgentOptions({ THEOCLAW_MODEL: 'm', THEOKIT_API_KEY: 'stub-key' }, ws),
+        model: { id: 'lmstudio/stub', url },
+      }
       const sessions = createControlSessions({
         build: async () => (await createTheoClawAgent(options as never)) as TurnAgent,
         report: () => undefined,
@@ -73,9 +85,42 @@ describe('standing orders (#1614)', () => {
       expect(await sessions.run(id, 'hello', () => undefined, {})).toEqual({ ok: true })
       return bodies.at(-1) ?? ''
     }
-    orders(ws, 'add', 'end every reply with the word OVER')
+    const h = harness()
+    const config = join(h.io.homeDir, 'theoclaw.env')
+    writeFileSync(config, `THEOCLAW_WORKSPACE="${ws}"\n`)
+    const owner = async (...args: string[]): Promise<void> => {
+      expect(
+        await runCli(['orders', ...args], {
+          ...h.io,
+          env: { ...h.io.env, THEOCLAW_CONFIG: config },
+        }),
+      ).toBe(0)
+    }
+    await owner('add', 'end every reply with the word OVER')
     expect(await turn('s1')).toContain('end every reply with the word OVER')
-    orders(ws, 'remove', '1')
+    await owner('remove', '1')
     expect(await turn('s2')).not.toContain('end every reply with the word OVER')
+  })
+
+  it('writes into the profile workspace under THEOCLAW_PROFILE', async () => {
+    const h = harness()
+    expect(
+      await runCli(['orders', 'add', 'be brief'], {
+        ...h.io,
+        env: { ...h.io.env, THEOCLAW_PROFILE: 'work' },
+      }),
+    ).toBe(0)
+    const profile = join(h.io.homeDir, '.theokit', 'profiles', 'work', 'workspace')
+    mkdirSync(profile, { recursive: true })
+    const out = harness()
+    expect(
+      await runCli(['orders', 'list'], {
+        ...out.io,
+        homeDir: h.io.homeDir,
+        env: { ...h.io.env, THEOCLAW_PROFILE: 'work' },
+      }),
+    ).toBe(0)
+    expect(out.stdout()).toBe('1. be brief\n')
+    expect(await runCli(['orders', 'list'], h.io)).toBe(0)
   })
 })

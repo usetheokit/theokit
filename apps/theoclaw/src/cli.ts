@@ -35,6 +35,7 @@ import { pathCommand } from './ops/oc-path.js'
 import { meetingsCommand } from './meetings/meetings.js'
 import { clawsCommand } from './routing/claws.js'
 import { proxyCommand } from './ops/proxy.js'
+import { resolveInstance } from './instance.js'
 import { ordersCommand } from './agent/standing-orders.js'
 import { visitorsCommand } from './webchat/visitors.js'
 import { triageCommand } from './ops/triage.js'
@@ -356,7 +357,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     return Promise.resolve(sessionsCommand([verb === 'list' ? 'list' : 'export', ...rest], io))
   },
   proxy: (args, io) => proxyCommand(args, io),
-  orders: (args, io) => Promise.resolve(ordersCommand(args, io)),
+  orders: (args, io) => {
+    // The workspace the daemon works in: the configuration file's, or the profile's own.
+    const env: NodeJS.ProcessEnv = { ...io.env }
+    loadConfiguration(env, io.homeDir)
+    Object.assign(env, resolveInstance(env, { homeDir: io.homeDir }).overrides)
+    return Promise.resolve(ordersCommand(args, { ...io, env }))
+  },
   visitors: (args, io) => Promise.resolve(visitorsCommand(args, io)),
   logs: (args, io) => logsCommand(args, io, io.runner),
   triage: (args, io) => triageCommand(args, io),
