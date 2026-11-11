@@ -134,15 +134,14 @@ afterEach(async () => {
 
 /**
  * One turn of a real SDK agent built from TheoClaw's own options, in `workspace`. The project
- * setting source is turned on here, because TheoClaw's agents load none (plan D3), and without it
- * the SDK would read no hook at all and the refusal could not fail. `gated: false` drops the gate,
+ * setting source comes from TheoClaw's own options (on once a fingerprint is approved); the ungated control sets it itself. `gated: false` drops the gate,
  * which is the control that proves the hooks do run when nothing refuses them.
  */
 async function runOneTurn(workspace: HookWorkspace, approvedHooks: ReadonlySet<string>, gated = true): Promise<void> {
   const stub = await startModelStub([{ text: 'done' }])
   realCleanups.push(() => stub.close())
   const options = theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', approvedHooks })
-  const local = { ...(gated ? options.local : {}), cwd: workspace.cwd, settingSources: ['project' as const] }
+  const local = gated ? { ...options.local, cwd: workspace.cwd } : { cwd: workspace.cwd, settingSources: ['project' as const] }
   const agent = await Agent.create({ ...options, local })
   realCleanups.push(() => agent[Symbol.asyncDispose]())
   const run = await agent.send('say done')
