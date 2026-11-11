@@ -19,6 +19,7 @@ import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../
 import type { UsageMode } from './usage-hook.js'
 import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
 import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
+import { AdvisorHistory, reviewQuietly, steerNote, type AdvisorSettings } from './advisor.js'
 import { showTyping, type TypingOptions } from './typing.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
@@ -86,6 +87,8 @@ export interface ReplyHandlerOptions {
   readonly compact?: CompactSettings
   /** A typing indicator shown while a turn or goal runs (OC-106); without it, none. */
   readonly typing?: TypingOptions
+  /** `THEOCLAW_ADVISOR=on` (OC-118): a reviewer that steers the running turn; without it, none. */
+  readonly advisor?: AdvisorSettings
 }
 
 export interface ReplyUsageOptions {
@@ -161,6 +164,42 @@ async function send(
   if (!result.ok) throw new ReplyDeliveryError(ctx.event.platform, result.error?.code ?? 'unknown', cause)
 }
 
+/** The advisor's review of one running turn: its advice steers the turn while it runs, never after. */
+interface AdvisorWatch {
+  start(agent: TurnAgent, prompt: string): void
+  stop(): void
+  record(answer: string): void
+}
+
+function watchTurn(settings: AdvisorSettings, history: AdvisorHistory, key: string): AdvisorWatch {
+  let running = true
+  let prompt = ''
+  return {
+    start(agent, text) {
+      prompt = text
+      void reviewQuietly(settings, history.of(key), text).then(async (advice) => {
+        if (advice === undefined) {
+          settings.write(`advisor: no correction for session ${key}`)
+          return
+        }
+        if (!running) return
+        try {
+          await agent.send(steerNote(advice), { ...untrustedContentSendOptions(), queueMode: 'steer' })
+          settings.write(`advisor: steered session ${key}: ${advice}`)
+        } catch {
+          settings.write(`advisor: could not steer session ${key}`)
+        }
+      })
+    },
+    stop() {
+      running = false
+    },
+    record(answer) {
+      history.record(key, { user: prompt, answer })
+    },
+  }
+}
+
 type TurnOutcome =
   | { readonly failed: false; readonly answer: string; readonly result?: Awaited<ReturnType<TurnRun['wait']>> }
   | { readonly failed: true; readonly error: unknown }
@@ -214,11 +253,13 @@ async function streamTurn(
   secrets: readonly string[],
   gate: ProgressGate,
   sendProgress: (line: string) => Promise<void>,
+  advisor?: AdvisorWatch,
 ): Promise<TurnOutcome> {
   // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
   const streamed: StreamedTurn = { answer: '', error: undefined, mask: createStreamMask(secrets), progress: [], gate }
   try {
     const run = await agent.send(prompt, untrustedContentSendOptions())
+    advisor?.start(agent, prompt)
     try {
       for await (const frame of run.stream()) {
         presentFrame(frame, presenter, streamed)
@@ -226,10 +267,12 @@ async function streamTurn(
       }
       for (const line of streamed.gate.flush()) await sendProgress(line)
     } finally {
+      advisor?.stop()
       flushMask(presenter, streamed)
     }
     const result = await run.wait()
     if (result.status !== 'error' && streamed.error === undefined) {
+      advisor?.record(streamed.answer)
       return { failed: false, answer: streamed.answer === '' ? NO_ANSWER_REPLY : streamed.answer, result }
     }
     presenter.present(AGENT_ERROR)
@@ -246,6 +289,14 @@ async function streamTurn(
  * The agent is the session's, owned by `SessionAgents`; the lease is released once the turn has
  * replied, failed or not.
  */
+const advisorHistories = new WeakMap<AdvisorSettings, AdvisorHistory>()
+
+function advisorHistoryOf(settings: AdvisorSettings): AdvisorHistory {
+  const found = advisorHistories.get(settings) ?? new AdvisorHistory()
+  advisorHistories.set(settings, found)
+  return found
+}
+
 async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
   const presenter = presenterFor(event)
   const secrets = options.secrets ?? []
@@ -264,7 +315,8 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
       started = true
       const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
       try {
-        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress)
+        const advisor = options.advisor === undefined ? undefined : watchTurn(options.advisor, advisorHistoryOf(options.advisor), lease.agentId ?? event.channel.id)
+        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress, advisor)
         // Masked before rendering (in the stream) and again after it, so a value is caught in the
         // model's text and in the platform's own format; the answer a broadcast group records and
         // fans out is masked before any member renders it.

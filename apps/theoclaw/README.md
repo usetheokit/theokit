@@ -289,6 +289,14 @@ after `/compact` is accepted but the SDK's summarizer takes no instructions. `TH
 whose input reached that many tokens. A session without a saved transcript answers that it could
 not compact.
 
+### Advisor
+
+Experimental, off by default. With `THEOCLAW_ADVISOR=on`, each chat turn is reviewed on the
+session's model against a fork of the recent conversation; a second fork verifies any draft
+correction, and only approved advice (at most 120 words) steers the running turn through the SDK's
+`steer` queue mode. The log gets `advisor: steered session <id>: <advice>` or
+`advisor: no correction for session <id>`. A review that fails is logged and never fails the turn.
+
 ### LAN discovery
 
 A TheoClaw bound to a LAN address (`THEOCLAW_HOST` with `THEOCLAW_PUBLIC_BIND=yes`) announces itself
