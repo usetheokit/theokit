@@ -51,6 +51,7 @@ import { update } from './update.js'
 import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
+import { sandboxCommand } from './sandbox/sandbox-containers.js'
 import { mcpRelayCommand } from './mcp-relay/command.js'
 import { installSkill } from './skills/install.js'
 import { PublishError, publishSkill } from './skills/publish.js'
@@ -131,6 +132,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw mcp              serve TheoClaw's tools as an MCP server on stdin/stdout (claude mcp add theoclaw -- theoclaw mcp)
   theoclaw mcp-relay grant <name> [--tools a,b] | list | revoke <name|id> | serve --port <n> [--host <h>]
                             serve runs the hosted relay (instance token in THEOCLAW_MCP_RELAY_TOKEN); per-client grants for remote MCP clients; grant prints the token once; default tools list_dir and read_file
+  theoclaw sandbox list | recreate [--all | --session <id>] [--force]
+                            list the docker sandbox containers theoclaw made, or remove them so the next command starts a fresh one; asks before removing a running one without --force
   theoclaw attach [--session <id>] [--print-config]
                             launch Claude Code (claude) with a temporary MCP config for this session that expires in an hour; --print-config prints the config instead
   theoclaw resume           print the messages of the most recently updated chat session
@@ -458,6 +461,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   whatsapp: whatsappCommand,
   tui: tuiCommand,
   'mcp-relay': (args, io) => mcpRelayCommand(args, io),
+  sandbox: (args, io) => sandboxCommand(args, io),
   mcp: async (args, io) => {
     if (args.length > 0) throw new UsageError('theoclaw mcp: expected no arguments')
     await serveMcpStdio({

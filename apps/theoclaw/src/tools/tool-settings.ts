@@ -289,15 +289,15 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
 export function toolSettingsForSession(settings: ToolSettings, env: Env, sessionKey: string, deps: ToolDeps = {}): ToolSettings {
   const sandboxMode = sandboxModeForSession(settings.sandboxMode, readSandboxSessions(env), sessionKey)
   if (sandboxMode === settings.sandboxMode || !settings.hostTools) return settings
-  const sandbox = buildBackend(settings.backend ?? 'bwrap', sandboxMode, settings.toolRoot, deps)
+  const sandbox = buildBackend(settings.backend ?? 'bwrap', sandboxMode, settings.toolRoot, deps, sessionKey)
   // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
   const { interactive: _chosenMode, ...rest } = settings
   return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: isEnforced(sandbox) }
 }
 
 /** The one backend of a mode: the chosen `THEOCLAW_SANDBOX_BACKEND` over the tool root. */
-function buildBackend(backend: SandboxBackendName, mode: SandboxMode, toolRoot: string, deps: ToolDeps): SandboxBackend {
-  if (backend === 'docker') return createDockerBackend(mode, toolRoot, deps)
+function buildBackend(backend: SandboxBackendName, mode: SandboxMode, toolRoot: string, deps: ToolDeps, sessionKey?: string): SandboxBackend {
+  if (backend === 'docker') return createDockerBackend(mode, toolRoot, deps, sessionKey)
   return createSandboxBackend({
     mode,
     workDir: toolRoot,
