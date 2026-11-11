@@ -20,6 +20,8 @@ export interface ChannelHookOptions {
   readonly usage?: GatewayHook
   /** The model `/model` and `/status` answer with; absent: neither command. */
   readonly model?: string
+  /** `THEOCLAW_THINKING`, which `/think` reports. */
+  readonly thinking?: string
   /** The ACP sessions `/acp` starts, lists and stops (B-685), owners only; absent: no `/acp`. */
   readonly acp?: AcpSessions
   /** The chat exec approval: `/approve`, `/deny`, `/elevated` (B-572), run after the owner policy. */
@@ -41,5 +43,5 @@ export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[
   const help = createHelpHook()
   const exec = options.execApproval === undefined ? [] : [options.execApproval.hook]
   const acp = options.acp === undefined ? [] : [createAcpCommandHook({ sessions: options.acp, isOwner: (event) => isPolicyOwner(policy, event.platform, event.sender.id) })]
-  return [...(options.emailTrigger === undefined ? [] : [options.emailTrigger]), ownerPolicy, ...exec, ...acp, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), ...(options.model === undefined ? [] : [createInfoCommandHook({ model: options.model })]), help]
+  return [...(options.emailTrigger === undefined ? [] : [options.emailTrigger]), ownerPolicy, ...exec, ...acp, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), ...(options.model === undefined ? [] : [createInfoCommandHook({ model: options.model, ...(options.thinking === undefined ? {} : { thinking: options.thinking }) })]), help]
 }

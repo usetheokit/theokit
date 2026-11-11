@@ -25,7 +25,7 @@ import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import type { RetryPolicy } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
-import { readCompactSettings, type CompactSettings } from './channels/compact-command.js'
+import { readCompactSettings, runCompact, type CompactSettings } from './channels/compact-command.js'
 import { createAcpSessions, type AcpSessions } from './channels/acp-command.js'
 import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
@@ -89,7 +89,8 @@ import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import type { GenerateObject } from './workflows/triage-workflow.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { webchatEvent } from './webchat/chat-id.js'
-import { withInfoCommands } from './channels/info-commands.js'
+import { parseThinkingLevel } from './agent/failover.js'
+import { withWebchatCommands, type ActiveTurns } from './channels/info-commands.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
 import { createWebchatRoutes } from './webchat/routes.js'
 import { configuredVoiceReplies, withVoiceReplies } from './voice/voice-replies.js'
@@ -246,6 +247,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
   const usage = createUsageHook({ keyOf: chat.keyOf })
   const model = options.env.THEOCLAW_MODEL
+  const thinkingLevel = parseThinkingLevel(options.env.THEOCLAW_THINKING)
   const execChat = createChatExecApproval({
     env: options.env,
     keyOf: chat.keyOf,
@@ -297,7 +299,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       compact: readCompactSettings(options.env, maskedWrite, options.compact),
       typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
     }), configuredVoiceReplies(options.env)),
-    hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook, model }) }),
+    hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook, model, ...(thinkingLevel === undefined ? {} : { thinking: thinkingLevel }) }) }),
     secrets,
     write: options.write,
     retry: options.retry ?? { initialDelayMs: 1000, maxDelayMs: 30_000, maxAttempts: 40 },
@@ -443,6 +445,9 @@ function startWebchat(
   const token = settings.webchatToken
   if (token === undefined) return undefined
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
+  const compact = readCompactSettings(options.env, write, options.compact)
+  const thinking = parseThinkingLevel(options.env.THEOCLAW_THINKING)
+  const active: ActiveTurns = new Map()
   // One session agent per chat id: the chat's turns lease the same agent, so a follow-up sees the earlier messages.
   const turnFor = (chatId: string): TurnRunner => {
     const event = webchatEvent(chatId)
@@ -454,7 +459,13 @@ function startWebchat(
           lease.release()
         }
       })
-    return withInfoCommands(createTurnRunner(withAgent, secrets, settings.model), { model: settings.model })
+    return withWebchatCommands(createTurnRunner(withAgent, secrets, settings.model), {
+      model: settings.model,
+      ...(thinking === undefined ? {} : { thinking }),
+      chatId,
+      active,
+      compact: () => withChatAgent(event, (lease) => runCompact(compact, lease.agentId).finally(() => lease.release())),
+    })
   }
   return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy })
 }
