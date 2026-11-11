@@ -48,6 +48,7 @@ describe('theoclaw onboard', () => {
       expect(() => parseAuthorizationPolicy(env)).not.toThrow()
       expect(readSessionSettings(env, statSync).workspace).toBe(env.THEOCLAW_WORKSPACE)
       expect(mode(env.THEOCLAW_WORKSPACE!)).toBe(0o700)
+      expect(mode(env.THEOCLAW_STATE_DIR!)).toBe(0o700)
     }
   })
 
