@@ -18,6 +18,7 @@ import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
 import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
+import { triageCommand } from './ops/triage.js'
 import { statusCommand } from './ops/status.js'
 import { loginWhatsApp } from './channels/whatsapp-qr.js'
 import { readControlClientSettings } from './control-client/settings.js'
@@ -73,6 +74,8 @@ const USAGE = `usage: theoclaw <command>
                             report risky configuration; --fix narrows file permissions; exit 3 while findings remain
   theoclaw doctor [--fix]   check the configuration offline (--fix: file modes, missing state directory); exit 3 on a failed check, never printing a value
   theoclaw status           the instance, its model and channels, and whether the service runs; exit 3 when it does not
+  theoclaw triage [--out <dir>]
+                            write a sanitized diagnostics archive (.tar.gz) and a prompt for a coding agent; no secret value is written
   theoclaw logs [--lines <n>] [--file <path>]
                             the last log lines (file, launchd log or user journal), secrets masked
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
@@ -267,6 +270,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   status: (_args, io) => statusCommand(io, io.runner),
   sessions: (args, io) => Promise.resolve(sessionsCommand(args, io)),
   logs: (args, io) => logsCommand(args, io, io.runner),
+  triage: (args, io) => triageCommand(args, io),
   whatsapp: whatsappCommand,
   tui: tuiCommand,
   mcp: async (args, io) => {
