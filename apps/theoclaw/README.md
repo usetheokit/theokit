@@ -1065,3 +1065,13 @@ than 4 tool rounds is trimmed from the next request. `THEOCLAW_PRUNE_TOOL_RESULT
 `pnpm build && pnpm build:sea` writes `dist/sea/theoclaw`, a single executable (Node SEA) that runs
 `./theoclaw --help` on a machine without Node. Commands that start the service (`start`, `acp`) still
 spawn `main.js` from a checkout or npm install.
+
+## Parity harness against OpenClaw
+
+`pnpm --filter theoclaw parity -- --id <OC id> --side theoclaw|openclaw|both` runs a scripted turn
+(`--side theoclaw` by default). `openclaw` and `both` install a pinned OpenClaw release into a scratch
+directory, run the same model on both products through the ChatGPT subscription route, and write both
+verdicts (reply, version, model) into `parity/results/<id>.json`. Set `THEOCLAW_PARITY_MODEL` to an
+`openai-chatgpt/...` model and log in to both products first (`~/.theokit/auth.json`, and OpenClaw's
+`~/.openclaw/agents/main/agent/auth-profiles.json`; override with `THEOCLAW_PARITY_THEOKIT_AUTH` and
+`THEOCLAW_PARITY_OPENCLAW_AUTH`). A missing login or model exits non-zero before either product starts.
