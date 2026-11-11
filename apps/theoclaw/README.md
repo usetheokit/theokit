@@ -702,8 +702,19 @@ address instead.
 Every request a forward delivers arrives from `127.0.0.1`, so the bearer token is the whole gate,
 and no TheoClaw route grants anything to a loopback peer (`tests/remote-access-source.test.ts`
 fails if TheoClaw's source starts reading `remoteAddress` or a forwarding header). Closing the forward and opening a new one needs no
-restart. SSH is the one supported remote path: Tailscale serve or funnel and a trusted proxy that
-passes the user's identity in a header are not supported.
+restart. SSH needs no extra setting; the trusted-proxy mode below is the other remote path.
+
+### Trusted proxy (and Tailscale serve)
+
+For WebChat behind a reverse proxy that authenticates the user, set
+`THEOCLAW_TRUSTED_PROXY_ADDRESSES` (comma-separated peer addresses of the proxy, e.g. `127.0.0.1`)
+and `THEOCLAW_TRUSTED_PROXY_HEADER` (the identity header the proxy sets, e.g. `X-Remote-User`; Tailscale
+serve sets `Tailscale-User-Login`). A `POST /webchat/chat` from an allowlisted peer that carries a
+non-empty identity header needs no bearer token; the same request from any other peer, or without the
+header, is 401. The header is removed from every request from a non-allowlisted peer. `THEOCLAW_WEBCHAT_TOKEN`
+must still be set (it turns WebChat on and stays the direct path). With Tailscale: bind loopback, run
+`tailscale serve --bg <THEOCLAW_PORT>`, and allowlist `127.0.0.1`. The proxy must strip any client-sent copy
+of the header. Only WebChat chat posts honor the header; `/control` still needs its bearer token.
 
 The live check runs a real `sshd` of its own from a temp directory, never the host's and never
 `~/.ssh`, and needs `ssh`, `sshd` and `ssh-keygen` on `PATH`:

@@ -37,6 +37,7 @@ import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createSdkChannelAgentFactory, isIncognito, webchatAgentFactory } from './control-plane/agent-factory.js'
 import type { CreateAgent } from './control-plane/agent-factory.js'
 import { controlOptions, devicePairingFor } from './control-plane/control-wiring.js'
+import { readTrustedProxy } from './control-plane/trusted-proxy.js'
 import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
 import { readControlPlaneSettings, type ControlPlaneSettings } from './control-plane/settings.js'
@@ -424,6 +425,7 @@ function startWebchat(
   secrets: readonly string[],
   write: (line: string) => void,
   withChatAgent: ChatBoundary,
+  trustedProxy = false,
 ): HttpHandler | undefined {
   const token = settings.webchatToken
   if (token === undefined) return undefined
@@ -441,7 +443,7 @@ function startWebchat(
       })
     return createTurnRunner(withAgent, secrets, settings.model)
   }
-  return createWebchatRoutes({ token, turnFor, assetsDir, write })
+  return createWebchatRoutes({ token, turnFor, assetsDir, write, trustedProxy })
 }
 
 /**
@@ -461,6 +463,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const resolved = hasRefs ? await resolveSecretRefs(given.env, given.secretStores) : { env: given.env, values: [] as string[] }
   const options: StartOptions = resolved.values.length === 0 ? given : { ...given, env: resolved.env, importedSecrets: [...(given.importedSecrets ?? []), ...resolved.values] }
   const settings = readControlPlaneSettings(options.env)
+  const trustedProxy = readTrustedProxy(options.env)
   const discovery = parseDiscoveryMode(options.env)
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
@@ -580,7 +583,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   serving = listen({
     handler: serveHandler(
       composed.router,
-      startWebchat(options, settings, secretValues, stderr, composed.withChatAgent),
+      startWebchat(options, settings, secretValues, stderr, composed.withChatAgent, trustedProxy !== undefined),
       devices,
       api,
       a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),
@@ -589,6 +592,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     port: settings.port,
     host: settings.host,
     stderr,
+    ...(trustedProxy === undefined ? {} : { trustedProxy }),
     ...(settings.controlToken === undefined
       ? {}
       : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues, devices, settings.model) }),

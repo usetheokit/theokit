@@ -7,6 +7,7 @@ import { type AgentRouteContext, generateAgentRoutes } from '@theokit/agents/bri
 import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from '../control-plane/bearer.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { MAX_MESSAGE_BYTES } from '../control-plane/limits.js'
+import { TRUSTED_IDENTITY_HEADER } from '../control-plane/trusted-proxy.js'
 import type { TurnRunner } from '../control-plane/turn.js'
 import { chatIdOf, WebchatChatIdError } from './chat-id.js'
 import { createWebchatRun } from './create-run.js'
@@ -16,6 +17,8 @@ import { WEBCHAT_ASSETS_PREFIX, WEBCHAT_CHAT_PATH, WEBCHAT_ROUTE, WEBCHAT_SANDBO
 export interface WebchatRoutesOptions {
   /** The WebChat token every chat post must carry; at least 32 characters. */
   readonly token: string
+  /** Trusted-proxy mode is on: a chat post marked by the listener needs no bearer token. */
+  readonly trustedProxy?: boolean
   /** The turn runner of one chat: its turns share the chat's session agent, and no other chat's. */
   readonly turnFor: (chatId: string) => TurnRunner
   /** Where the built page assets are (`build:web` writes them). */
@@ -217,7 +220,8 @@ export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Re
       return asset(options.assetsDir, pathname.slice(WEBCHAT_ASSETS_PREFIX.length))
     }
     if (pathname !== WEBCHAT_CHAT_PATH || request.method !== 'POST') return notFound()
-    if (!accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
+    const viaProxy = options.trustedProxy === true && (request.headers.get(TRUSTED_IDENTITY_HEADER) ?? '') !== ''
+    if (!viaProxy && !accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
     return boundedChat(request, options.turnFor, options.write)
   }
 }
