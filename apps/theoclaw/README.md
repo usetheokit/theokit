@@ -29,6 +29,8 @@ theoclaw onboard     # asks for the model, the key (not shown), the port, the ow
 theoclaw start
 ```
 
+`theoclaw acp` serves the `/control` agent over the Agent Client Protocol on stdio, so an editor such as Zed can use it as an agent server (command `theoclaw`, args `acp`). Tool calls ask the editor for permission.
+
 `theoclaw onboard --yes --model <id> --api-key-env <NAME> --port <n> --owners <platform:id,...>`
 does the same without prompts, and reads the key from the variable `--api-key-env` names. The key
 never goes on the command line. The file is `~/.config/theoclaw/theoclaw.env` (mode 0600, in a

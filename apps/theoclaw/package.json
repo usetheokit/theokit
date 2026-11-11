@@ -22,6 +22,7 @@
     "theoclaw": "./dist/cli.js"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "0.22.1",
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@line/bot-sdk": "11.3.0",
     "@mattermost/client": "11.9.0",
@@ -37,6 +38,7 @@
     "@opentelemetry/sdk-trace": "3.0.0",
     "@playwright/mcp": "0.0.83",
     "@slack/bolt": "5.1.0",
+    "@theokit/acp": "4.0.2",
     "@theokit/agents": "workspace:*",
     "@theokit/agents-pty": "workspace:*",
     "@theokit/di": "0.2.1",

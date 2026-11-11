@@ -199,6 +199,9 @@ importers:
 
   apps/theoclaw:
     dependencies:
+      '@agentclientprotocol/sdk':
+        specifier: 0.22.1
+        version: 0.22.1(zod@4.6.7)
       '@jitl/quickjs-wasmfile-release-sync':
         specifier: 0.32.0
         version: 0.32.0
@@ -244,6 +247,9 @@ importers:
       '@slack/bolt':
         specifier: 5.1.0
         version: 5.1.0(@types/express@5.0.6)(undici@7.30.1)
+      '@theokit/acp':
+        specifier: 4.0.2
+        version: 4.0.2(@agentclientprotocol/sdk@0.22.1(zod@4.6.7))(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
       '@theokit/agents':
         specifier: workspace:*
         version: link:../../packages/agents
@@ -3257,6 +3263,14 @@ packages:
 
   '@theokit/acp@4.0.1':
     resolution: {integrity: sha512-O3oFM89QRCTsaS60BxjOI6wd1ZSeFly2MTyrRUvCC6AkqEVOA5fiJaUJd5ewt51Kt1UwuW/bMcrpLBTFabWpog==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+    peerDependencies:
+      '@agentclientprotocol/sdk': ^0.22.1
+      '@theokit/sdk': 5.15.3
+
+  '@theokit/acp@4.0.2':
+    resolution: {integrity: sha512-Mw7Ne7vbymEVDB4ns5TIUNKZW3RiRDFEZw3zGbfBWNhuESTGyDjyOHQuMwwaQpT2OPEVhMWz6EwYC/0VsG27AQ==}
     engines: {node: '>=22.12.0'}
     hasBin: true
     peerDependencies:
@@ -10827,6 +10841,11 @@ snapshots:
   '@tauri-apps/api@2.11.1': {}
 
   '@theokit/acp@4.0.1(@agentclientprotocol/sdk@0.22.1(zod@4.6.7))(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))':
+    dependencies:
+      '@agentclientprotocol/sdk': 0.22.1(zod@4.6.7)
+      '@theokit/sdk': 5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
+
+  '@theokit/acp@4.0.2(@agentclientprotocol/sdk@0.22.1(zod@4.6.7))(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))':
     dependencies:
       '@agentclientprotocol/sdk': 0.22.1(zod@4.6.7)
       '@theokit/sdk': 5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
