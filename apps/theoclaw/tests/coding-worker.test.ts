@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -9,7 +9,7 @@ import { controlAgentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 
-import { codingWorkerPort } from '../src/tools/coding-worker.js'
+import { cloudWorkerPort, codingWorkerPort } from '../src/tools/coding-worker.js'
 import type { ToolSettings } from '../src/tools/tool-settings.js'
 
 describe('coder delegation', () => {
@@ -124,3 +124,39 @@ function readdirTree(workspace: string): string {
   const paths = [...out.matchAll(/^worktree (.+)$/gm)].map((m) => m[1] ?? '')
   return paths.find((p) => p.includes('worktrees')) ?? ''
 }
+
+describe('cloud worker delegation', () => {
+  it('runs on a provisioned machine, lands the commit on a task branch, and tears down', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'cl-'))
+    try {
+      const repo = join(workspace, 'files')
+      const g = (...a: string[]) =>
+        execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' })
+      execFileSync('git', ['init', '-q', repo])
+      writeFileSync(join(repo, 'a.txt'), 'a')
+      g('add', '.')
+      g('commit', '-q', '-m', 'init')
+      const settings = { workspace, toolRoot: repo } as unknown as ToolSettings
+      let machineDir = ''
+      const port = cloudWorkerPort(
+        settings,
+        () => [],
+        async (tools) => {
+          expect(tools).toBeDefined()
+          machineDir = join(workspace, '.theoclaw', 'cloud-workers')
+          const checkout = readdirSync(machineDir).map((d) => join(machineDir, d, 'checkout'))[0]
+          writeFileSync(join(checkout, 'b.txt'), 'b')
+          return { response: 'done', toolCalls: [], cost: 0, tokens: 0 }
+        },
+      )
+      const result = await port.run('add b', {})
+      const branch = /task\/cloud-[0-9a-f]+/.exec(result.response)?.[0] ?? ''
+      expect(branch).not.toBe('')
+      expect(g('show', '--stat', branch)).toContain('b.txt')
+      expect(existsSync(join(repo, 'b.txt'))).toBe(false)
+      expect(readdirSync(machineDir)).toEqual([])
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+})
