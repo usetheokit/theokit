@@ -1,4 +1,4 @@
-import type { BasePlatformAdapter } from '@theokit/gateway'
+import type { BasePlatformAdapter, MessageEvent } from '@theokit/gateway'
 import { DiscordAdapter } from '@theokit/gateway-discord'
 import { EmailAdapter } from '@theokit/gateway-email'
 import type { GoogleChatAdapterOptions } from '@theokit/gateway-google-chat'
@@ -51,6 +51,22 @@ export function googleChatOptions(settings: PlatformSettings<'google_chat'>): Go
     audience: settings.audience,
     app: { post: () => undefined } as unknown as NonNullable<GoogleChatAdapterOptions['app']>,
   }
+}
+
+/**
+ * The Signal adapter names a sender by `sourceUuid` when signal-cli sends one, so an owner written
+ * as `signal:+5511...` would never match. Inbound events are rewritten to carry the phone number
+ * as the sender id whenever the envelope has one; the UUID stays in `signal.sourceUuid`.
+ */
+export class NumberKeyedSignalAdapter extends SignalAdapter {
+  override onInbound(handler: Parameters<SignalAdapter['onInbound']>[0]): () => void {
+    return super.onInbound((event) => handler(withNumberSender(event)))
+  }
+}
+
+function withNumberSender<E extends MessageEvent>(event: E): E {
+  const number = (event as { signal?: { sourceNumber?: string } }).signal?.sourceNumber
+  return number === undefined ? event : { ...event, sender: { ...event.sender, id: number } }
 }
 
 /** Options that apply to every build, from the authorization policy. */
@@ -161,7 +177,7 @@ const ADAPTERS: AdapterConstructors = {
         ),
   teams: (settings) => new TeamsAdapter(settings),
   google_chat: (settings) => new GoogleChatAdapter(googleChatOptions(settings)),
-  signal: (settings) => new SignalAdapter(settings),
+  signal: (settings) => new NumberKeyedSignalAdapter(settings),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }

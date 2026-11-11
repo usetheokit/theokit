@@ -171,3 +171,15 @@ describe('the channel loop output', () => {
     }
   })
 })
+
+describe('signal settings', () => {
+  it('needs only the account; the signal-cli path is optional', () => {
+    const only = resolvePlatforms({ THEOCLAW_SIGNAL_ACCOUNT: '+5511999990000' }).configured.find((p) => p.platform === 'signal')
+    expect(only?.settings).toEqual({ account: '+5511999990000' })
+    const both = resolvePlatforms({ THEOCLAW_SIGNAL_ACCOUNT: '+5511999990000', THEOCLAW_SIGNAL_CLI_PATH: '/opt/signal-cli' })
+    expect(both.configured.find((p) => p.platform === 'signal')?.settings).toEqual({
+      account: '+5511999990000',
+      signalCliPath: '/opt/signal-cli',
+    })
+  })
+})

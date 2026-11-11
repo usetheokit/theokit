@@ -49,7 +49,7 @@ const PLACEHOLDERS: readonly ConfiguredPlatform[] = [
   },
   { platform: 'teams', settings: { clientId: 'x', clientSecret: 'x', tenantId: 'x' } },
   { platform: 'google_chat', settings: { serviceAccountFile: keyFile(), audience: 'https://example.org/webhooks/google_chat' } },
-  { platform: 'signal', settings: { signalCliPath: 'signal-cli', account: '+5511999990000' } },
+  { platform: 'signal', settings: { account: '+5511999990000' } },
   {
     platform: 'sms',
     settings: {
@@ -112,5 +112,26 @@ describe('GuardedSlackAdapter', () => {
     expect(() => listener(new Error('other'))).toThrow('other')
     expect(isSlackPlatformError(err)).toBe(true)
     vi.restoreAllMocks()
+  })
+})
+
+describe('signal sender id', () => {
+  it('hands the handler the phone number, not the UUID, so signal:+number owners match', async () => {
+    const { NumberKeyedSignalAdapter } = await import('../src/channels/adapter-factory.js')
+    const adapter = new NumberKeyedSignalAdapter({ account: '+5511999990000' })
+    const seen: string[] = []
+    adapter.onInbound(async (event) => {
+      seen.push(event.sender.id)
+    })
+    await adapter.deliver({
+      id: 'u:1',
+      platform: 'signal',
+      sender: { id: 'uuid-1' },
+      channel: { id: '+5511888880000' },
+      text: 'Responda só: pong',
+      receivedAt: 1,
+      signal: { timestamp: 1, sourceNumber: '+5511888880000', sourceUuid: 'uuid-1', raw: {} },
+    } as never)
+    expect(seen).toEqual(['+5511888880000'])
   })
 })
