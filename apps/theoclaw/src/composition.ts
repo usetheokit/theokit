@@ -39,6 +39,7 @@ import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createSdkChannelAgentFactory, isIncognito, webchatAgentFactory } from './control-plane/agent-factory.js'
 import type { CreateAgent } from './control-plane/agent-factory.js'
 import { controlOptions, devicePairingFor } from './control-plane/control-wiring.js'
+import { loadCityLookup } from './control-plane/geo-city.js'
 import { readTrustedProxy } from './control-plane/trusted-proxy.js'
 import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
@@ -615,6 +616,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     stderr,
   })
   const listen = options.listen ?? listenControlPlane
+  const geoDb = options.env?.THEOCLAW_GEOIP_DB?.trim() || undefined
   serving = listen({
     handler: serveHandler(
       composed.router,
@@ -623,6 +625,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
       api,
       a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),
       relayHandler,
+      geoDb === undefined ? undefined : loadCityLookup(geoDb),
     ),
     port: settings.port,
     host: settings.host,
