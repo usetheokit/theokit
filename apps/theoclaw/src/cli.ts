@@ -52,6 +52,7 @@ import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { mcpRelayCommand } from './mcp-relay/command.js'
+import { listProjectHooks } from './agent/hooks-list.js'
 import { installSkill } from './skills/install.js'
 import { PublishError, publishSkill } from './skills/publish.js'
 import { RegistryError, searchSkills } from './skills/registry-client.js'
@@ -117,6 +118,7 @@ const USAGE = `usage: theoclaw <command>
                             standing orders every new chat session of the agent keeps until removed
   theoclaw visitors grant <email> --for <30m|12h|7d> | revoke <email> | list
                             expiring WebChat visitor grants; enforced for trusted-proxy identities when THEOCLAW_VISITOR_ACCESS=on
+  theoclaw hooks list       the project hooks in .theokit/settings.json: event, fingerprint, and whether THEOCLAW_APPROVED_HOOKS approves it
   theoclaw logs [--lines <n>] [--file <path>]
                             the last log lines (file, launchd log or user journal), secrets masked
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
@@ -452,6 +454,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       io.stderr.write(`theoclaw: ${error.message}\n`)
       return 1
     }
+  },
+  hooks: (args, io) => {
+    if (args.length !== 1 || args[0] !== 'list') throw new UsageError('theoclaw hooks: expected list')
+    const lines = listProjectHooks(io.cwd, io.env)
+    io.stdout.write(lines.length === 0 ? 'no hooks\n' : `${lines.join('\n')}\n`)
+    return Promise.resolve(0)
   },
   worker: async (args, io) => (await import('./worker/worker.js')).workerCommand(args, io),
   path: (args, io) => pathCommand(args, io),
