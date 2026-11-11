@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
@@ -44,10 +44,11 @@ export function keepsTranscripts(env: BindEnvironment): boolean {
   throw new TheoClawConfigError('THEOCLAW_TRANSCRIPTS must be on or off', { variable: 'THEOCLAW_TRANSCRIPTS' })
 }
 
-/** `<workspace>/skills` for every agent (OC-70); none without a workspace. */
-function skillsDirOf(env: BindEnvironment): { skillsDir?: string } {
+/** `<workspace>/skills` and the user's `~/.theoclaw/skills` for every agent (OC-70). */
+function skillsDirOf(env: BindEnvironment): { skillsDir?: string; userSkillsDir: string } {
   const workspace = env.THEOCLAW_WORKSPACE?.trim()
-  return workspace === undefined || workspace === '' ? {} : { skillsDir: join(workspace, 'skills') }
+  const userSkillsDir = join(env.HOME?.trim() || homedir(), '.theoclaw', 'skills')
+  return workspace === undefined || workspace === '' ? { userSkillsDir } : { skillsDir: join(workspace, 'skills'), userSkillsDir }
 }
 
 /**

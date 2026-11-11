@@ -37,7 +37,6 @@ const UNREACHABLE_ALLOWLIST: Readonly<Record<string, string>> = {
   'plugins/sdk.ts': 'No caller yet (#1516): the plugin SDK surface is not loaded by the product.',
   'routing/agent-routes.ts': 'No caller yet (#1516): per-agent routes are not composed.',
   'routing/task-worktree.ts': 'No caller yet (#1516): tasks do not get a worktree.',
-  'skills/registry.ts': 'No caller yet (#1516): skill gating and bundled skills are not loaded.',
   'voice/talk-session.ts': 'No caller yet (#1516): no entry point starts a talk session.',
 }
 
