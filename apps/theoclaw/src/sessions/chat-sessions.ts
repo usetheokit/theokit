@@ -9,6 +9,7 @@ import type { AgentOptions, Plugin } from '@theokit/sdk'
 
 import { isAuthenticatedSender, senderKey } from '../authorization/policy.js'
 import { OWNER_SCOPE } from '../memory/memory-store.js'
+import { memoryBackend } from '../memory/backend.js'
 import { createMemory, type MemoryWiring, memoryEnabled, reviewerOptions } from '../memory/wiring.js'
 import { createContainer } from '../agent-container.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -44,7 +45,12 @@ export type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) 
  * once two sessions are dispatched at once. The lease the boundary resolves carries no dispose, so
  * the end of the request leaves the agent open (D2).
  */
-export function chatSessions(options: ChatSessionsOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary; readonly keyOf: (event: MessageEvent) => string; readonly memory: MemoryWiring | undefined } {
+export function chatSessions(options: ChatSessionsOptions): {
+  readonly sessions: SessionAgents
+  readonly withAgent: ChatBoundary
+  readonly keyOf: (event: MessageEvent) => string
+  readonly memory: MemoryWiring | undefined
+} {
   const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
   const router = createSessionRouter(settings)
   const incognito = isIncognito(options.env)
@@ -55,7 +61,7 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
       variable: 'THEOCLAW_MEMORY',
     })
   }
-  const memory = memoryEnabled(options.env, transient) ? createMemory(join(settings.workspace, '.theoclaw', 'memory'), options.write) : undefined
+  const memory = memoryEnabled(options.env, transient) ? createMemory(join(settings.workspace, '.theoclaw', 'memory'), options.write, memoryBackend(options.env, settings.workspace)) : undefined
   let reviews = 0
   const owners = ownerKeys(options.env)
   const currentEvent = new AsyncLocalStorage<MessageEvent>()
@@ -68,9 +74,18 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
     getOrCreate: async (id, sessionOptions) => {
       const dir = sessionOptions.local?.sessionDir
       const scope = scopeOf(currentEvent.getStore(), owners)
+      const facts = await recalled(scope)
+      const backendOptions = (await memory?.agentOptions()) ?? {}
       const build = (agentId: string, extra: AgentOptions): Promise<SessionAgent> =>
         createChannelAgentFactory(options.env, (channel) =>
-          open(agentId, { ...sessionOptions, ...channel, ...extra, ...recalled(channel.systemPrompt, extra, scope), local: { ...sessionOptions.local, ...channel.local } }),
+          open(agentId, {
+            ...sessionOptions,
+            ...backendOptions,
+            ...channel,
+            ...extra,
+            ...withFacts(channel.systemPrompt, extra, facts),
+            local: { ...sessionOptions.local, ...channel.local },
+          }),
         )()
       try {
         const opened = await build(id, {})
@@ -98,7 +113,12 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
       return sessions.lease(event)
     },
   })
-  return { sessions, memory, keyOf: (event) => router.resolveAgentId(event), withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
+  return {
+    sessions,
+    memory,
+    keyOf: (event) => router.resolveAgentId(event),
+    withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)),
+  }
 }
 
 /** The session key inside an agent id (`agentIdFor`), and the surface (platform) its first segment names. */
@@ -110,10 +130,11 @@ const surfaceOf = (id: string): string => keyOf(id).split('-')[0] ?? 'chat'
  * (which passes `tools`) does not. Read when the agent opens, so a new session sees the latest.
  */
 function recalledPrompt(memory: MemoryWiring | undefined) {
-  return (prompt: string, extra: AgentOptions, scope: string): { systemPrompt?: string } => {
-    const facts = memory?.store.recallSection(scope) ?? ''
-    return facts === '' || extra.tools !== undefined ? {} : { systemPrompt: `${prompt}\n\n${facts}` }
-  }
+  return async (scope: string): Promise<string> => (await memory?.recall(scope)) ?? ''
+}
+
+function withFacts(prompt: string, extra: AgentOptions, facts: string): { systemPrompt?: string } {
+  return facts === '' || extra.tools !== undefined ? {} : { systemPrompt: `${prompt}\n\n${facts}` }
 }
 
 /** The `platform:senderId` keys `THEOCLAW_OWNERS` names, compared the way the owner policy does. */
