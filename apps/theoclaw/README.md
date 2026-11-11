@@ -1040,6 +1040,15 @@ Telegram voice notes can receive spoken replies when
 model configuration. Audio is transcribed by `gpt-4o-mini-transcribe`; replies use
 `gpt-4o-mini-tts` with an AI-generated voice caption. Owner and group rules still
 apply. Audio failures fall back to text. See [voice verification](parity/voice-verification.md)
+
+### Parity harness: Matrix and Mattermost
+
+`pnpm --filter theoclaw parity -- --id matrix-dm` (or `mattermost-dm`) sends as a human account into a DM with the bot and writes `parity/results/<id>.json`. Credentials come from the environment only; every token is masked in the result file. Without a platform's variables, `--all` skips its scenario, names the missing variables and exits zero.
+
+- Matrix: `THEOCLAW_PARITY_MATRIX_HOMESERVER_URL`, `_USER_ID`, `_USER_TOKEN` (a human user, e.g. made with the Synapse shared-secret admin API), `_BOT_USER_ID`, `_BOT_TOKEN`. The harness joins the bot to the room by API.
+- Mattermost: `THEOCLAW_PARITY_MATTERMOST_BASE_URL`, `_USER_ID`, `_USER_TOKEN` (a personal access token), `_BOT_USER_ID`, `_BOT_TOKEN`.
+
+Also set `THEOCLAW_PARITY_MODEL` and a model key, as for the other scenarios.
 for limits and the outstanding real-account recording check. Continuous talk and
 wake word are tracked separately in B-722.
 
