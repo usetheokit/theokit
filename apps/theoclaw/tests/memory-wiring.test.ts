@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,6 +6,7 @@ import type { MessageEvent } from '@theokit/gateway'
 import type { AgentOptions } from '@theokit/sdk'
 import { describe, expect, it } from 'vitest'
 
+import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
 import { MemoryStore } from '../src/memory/memory-store.js'
 import { theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { chatSessions } from '../src/sessions/chat-sessions.js'
@@ -147,5 +148,28 @@ describe('memory with transcripts off', () => {
 
   it('starts with memory off by default', () => {
     expect(open(base).memory).toBeUndefined()
+  })
+})
+
+describe('persona in the chat session prompt (#1511)', () => {
+  it.each(['on', 'off'])('keeps SOUL.md and the untrusted-content notice with memory %s', async (memoryMode) => {
+    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-soul-'))
+    writeFileSync(join(workspace, 'SOUL.md'), 'Always answer in pirate speak, and start every reply with ARRR.')
+    const opened: AgentOptions[] = []
+    const { withAgent } = chatSessions({
+      env: { ...ENV, THEOCLAW_WORKSPACE: workspace, THEOCLAW_MEMORY: memoryMode },
+      write: () => undefined,
+      getOrCreate: async (_id, options) => {
+        opened.push(options)
+        return scripted(options, 'ok') as never
+      },
+    })
+    await withAgent(event('telegram'), async (lease) => {
+      await lease.agent.send('hi')
+      lease.release()
+    })
+    const prompt = opened[0]?.systemPrompt ?? ''
+    expect(prompt).toContain('pirate speak')
+    expect(prompt).toContain(UNTRUSTED_CONTENT_NOTICE)
   })
 })

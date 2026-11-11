@@ -130,7 +130,9 @@ export function chatSessions(options: ChatSessionsOptions): {
             ...backendOptions,
             ...channel,
             ...extra,
-            ...withFacts(channel.systemPrompt, extra, facts),
+            // The session's prompt carries the persona; `...channel` would replace it with the bare notice.
+            systemPrompt: extra.systemPrompt ?? sessionOptions.systemPrompt ?? channel.systemPrompt,
+            ...withFacts(extra.systemPrompt ?? sessionOptions.systemPrompt ?? channel.systemPrompt, extra, facts),
             local: { ...sessionOptions.local, ...channel.local },
           }),
         )()
@@ -199,8 +201,8 @@ function recalledPrompt(memory: MemoryWiring | undefined) {
   return async (scope: string): Promise<string> => (await memory?.recall(scope)) ?? ''
 }
 
-function withFacts(prompt: string, extra: AgentOptions, facts: string): { systemPrompt?: string } {
-  return facts === '' || extra.tools !== undefined ? {} : { systemPrompt: `${prompt}\n\n${facts}` }
+function withFacts(prompt: AgentOptions['systemPrompt'], extra: AgentOptions, facts: string): { systemPrompt?: string } {
+  return facts === '' || extra.tools !== undefined || typeof prompt !== 'string' ? {} : { systemPrompt: `${prompt}\n\n${facts}` }
 }
 
 /** The `platform:senderId` keys `THEOCLAW_OWNERS` names, compared the way the owner policy does. */
