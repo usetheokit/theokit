@@ -4,6 +4,7 @@ import type { Readable, Writable } from 'node:stream'
 import type { CustomTool } from '@theokit/sdk'
 import { handleMcpToolsJsonRpc, serveMcpToolsStdio } from 'theokit/server/agent'
 
+import { TheoClawConfigError } from '../control-plane/errors.js'
 import { loadConfiguration } from '../config-file.js'
 import { vetoToolCall } from '../tools/path-veto.js'
 import { buildTools } from '../tools/tool-registry.js'
@@ -22,19 +23,32 @@ export function vetoedTools(tools: readonly CustomTool[], settings: ToolSettings
     handler: (input: Record<string, unknown>, ctx?: unknown) => {
       const refusal = vetoToolCall(tool.name, input, settings)
       if (refusal !== undefined) throw new Error(refusal)
-      return (tool.handler as (input: Record<string, unknown>, ctx?: unknown) => ReturnType<CustomTool['handler']>)(input, ctx)
+      return (
+        tool.handler as (
+          input: Record<string, unknown>,
+          ctx?: unknown,
+        ) => ReturnType<CustomTool['handler']>
+      )(input, ctx)
     },
   })) as CustomTool[]
 }
 
 /** One MCP JSON-RPC request answered over the `/control` tools, for the authenticated `/mcp` route. */
-export async function handleMcpRequest(tools: readonly CustomTool[], settings: ToolSettings, request: Request): Promise<Response> {
-  if (request.method !== 'POST') return new Response('method not allowed', { status: 405, headers: { allow: 'POST' } })
+export async function handleMcpRequest(
+  tools: readonly CustomTool[],
+  settings: ToolSettings,
+  request: Request,
+): Promise<Response> {
+  if (request.method !== 'POST')
+    return new Response('method not allowed', { status: 405, headers: { allow: 'POST' } })
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400 })
+    return Response.json(
+      { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } },
+      { status: 400 },
+    )
   }
   return handleMcpToolsJsonRpc(vetoedTools(tools, settings), MCP_SERVER_NAME, body)
 }
@@ -55,8 +69,26 @@ export interface McpCommandIo {
 export async function serveMcpStdio(io: McpCommandIo): Promise<void> {
   const env: NodeJS.ProcessEnv = { ...io.env }
   loadConfiguration(env, io.homeDir)
+  // A grant from `theoclaw attach` expires: a server started after it, or still running at it, stops.
+  const expires =
+    env.THEOCLAW_MCP_EXPIRES_AT === undefined ? undefined : Date.parse(env.THEOCLAW_MCP_EXPIRES_AT)
+  if (expires !== undefined && !(expires > Date.now()))
+    throw new TheoClawConfigError('the MCP grant has expired; run theoclaw attach again', {
+      variable: 'THEOCLAW_MCP_EXPIRES_AT',
+    })
   const settings = resolveToolSettings(env, io.cwd)
   const tools = vetoedTools(buildTools(settings), settings)
   const lines = createInterface({ input: io.stdin as Readable })
-  await serveMcpToolsStdio(tools, MCP_SERVER_NAME, { lines, write: (line) => void io.stdout.write(line) })
+  const timer =
+    expires === undefined
+      ? undefined
+      : setTimeout(() => lines.close(), Math.min(expires - Date.now(), 2 ** 31 - 1))
+  try {
+    await serveMcpToolsStdio(tools, MCP_SERVER_NAME, {
+      lines,
+      write: (line) => void io.stdout.write(line),
+    })
+  } finally {
+    clearTimeout(timer)
+  }
 }
