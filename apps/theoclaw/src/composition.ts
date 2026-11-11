@@ -61,6 +61,7 @@ import { formatAddress, reportSurfacesOff } from './control-plane/start-output.j
 import { createTurnRunner, type TurnRunner, type WithAgent } from './control-plane/turn.js'
 import { teamReportJob } from './scheduler/team-report.js'
 import { heartbeatJob, readHeartbeatSettings } from './scheduler/heartbeat.js'
+import { databaseSecrets, openPostgresJobStore, readDatabaseSetting, type DatabaseDeps } from './scheduler/postgres-job-store.js'
 import { loadScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
@@ -347,6 +348,8 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
 
 export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly signals: SignalSource
+  /** `THEOCLAW_DATABASE=postgres://...`: the pool and storage manager the job store uses (tests inject fakes). */
+  readonly database?: DatabaseDeps
   readonly exit: (code: number) => void
   /** The streams the output mask wraps; `process.stdout` and `process.stderr` by default. */
   readonly streams?: readonly MaskableStream[]
@@ -515,7 +518,9 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
-  const scheduleStore = loadScheduleStore(sessionSettings.workspace)
+  const database = readDatabaseSetting(options.env)
+  // The file store opens (and may refuse a malformed file) before anything is installed; PostgreSQL opens once the shutdown hook exists.
+  const fileStore = database.engine === 'files' ? loadScheduleStore(sessionSettings.workspace) : undefined
   const heartbeat = readHeartbeatSettings(options.env, platforms)
   const a2a = readA2ASettings(options.env)
   const relay = readRelaySettings(options.env)
@@ -528,7 +533,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // as the operator set it. Under a profile the workspace is the profile's own (`instance.ts`).
   mkdirSync(join(sessionSettings.workspace, '.theoclaw'), { recursive: true, mode: 0o700 })
   const streams = options.streams ?? [process.stdout, process.stderr]
-  const secretValues = [...processSecrets(options, settings, tools, events, a2a), ...relaySecrets(relay)]
+  const secretValues = [...processSecrets(options, settings, tools, events, a2a), ...relaySecrets(relay), ...databaseSecrets(database)]
   const logged = (write: (line: string) => void) => (line: string): void => {
     write(line)
     if (options.telemetryLog !== undefined) options.telemetryLog(redactSecrets(maskSecrets(line, secretValues)))
@@ -545,6 +550,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   options.signals.on('exit', flushOnExit)
   let composedApp: ComposedTheoClaw | undefined
   let scheduled: RunningScheduler | undefined
+  let closeScheduleStore = (): Promise<void> => Promise.resolve()
   let acpSessions: AcpSessions | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
@@ -554,6 +560,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     // The scheduler, then the loop, so no run or turn starts once the agents are being disposed.
     stopAll: async () => {
       await scheduled?.stop()
+      await closeScheduleStore()
       await acpSessions?.stopAll()
       await composedApp?.loop.stopAll()
       await composedApp?.sessions.disposeAll()
@@ -594,7 +601,23 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
   const reportJob = teamReportJob(options.env, platforms)
   const teamReport = reportJob === undefined ? {} : { teamReport: reportJob }
-  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, ...teamReport, write: stderr, secrets: secretValues })
+  let scheduleStore = fileStore
+  if (database.engine === 'postgres') {
+    try {
+      const opened = await openPostgresJobStore(database.dsn, options.database)
+      scheduleStore = opened.store
+      closeScheduleStore = opened.close
+    } catch (error) {
+      // A database that is down refuses the start; there is no fallback to the file store.
+      removeShutdown()
+      options.signals.off('exit', flushOnExit)
+      await acp.stopAll()
+      await composed.sessions.disposeAll()
+      mask.flush()
+      throw error
+    }
+  }
+  scheduled = wireScheduler({ store: scheduleStore!, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, ...teamReport, write: stderr, secrets: secretValues })
   const relayDir = join(sessionSettings.workspace, '.theoclaw')
   const relayState = relay.client === undefined ? undefined : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
   if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
@@ -656,6 +679,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     removeShutdown()
     options.signals.off('exit', flushOnExit)
     await scheduled.stop()
+    await closeScheduleStore()
     await acp.stopAll()
     await composed.loop.stopAll()
     await composed.sessions.disposeAll()
@@ -676,6 +700,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // running instance directly must not leave the service advertised.
   const close = async (): Promise<void> => {
     await scheduled?.stop()
+    await closeScheduleStore()
     await acp.stopAll()
     await stopThenClose(announcement, handle)
   }
