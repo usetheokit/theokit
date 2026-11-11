@@ -18,6 +18,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `theoclaw worker pair|run|status` (#1590): a paired worker device with `--inference worker` runs model calls locally and records the provider request in its own `worker.log`; with `gateway` the message is proxied to the gateway's `/control` socket.
+
 - `theoclaw meetings join <Meet link>` joins a Google Meet as a guest in headless Chrome and stores the captions as notes (OC-16); `meetings list` and `meetings show <id>` read them back. Speaking in the meeting is not built.
 - Named sender lists (#1567): `THEOCLAW_ACCESS_GROUPS` defines them and `THEOCLAW_ALLOWLIST` admits `platform:accessGroup:<name>` or single senders.
 - `THEOCLAW_TOOL_PROFILE=minimal|messaging|coding|full` (#1562) gives an owner's direct chat tools (minimal: read files; messaging: plus the web; coding: plus the sandboxed shell and file writers; full: plus the interactive shell). The shell needs `THEOCLAW_HOST_TOOLS=on` and a state directory, and stays behind exec approval. `/elevated on` now also runs that session's `shell_exec` outside the sandbox, for that session only. Unset, chat agents hold no tool, as before.
