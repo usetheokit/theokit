@@ -6,11 +6,13 @@ type Answer = Promise<Record<string, unknown>>
 
 function approve(devices: DevicePairing, id: unknown): Answer {
   if (typeof id !== 'string') return Promise.resolve({ type: 'error', code: 'bad_frame' })
-  return devices.approve(id).then((result) =>
-    result.ok
-      ? { type: 'device_approved', id, name: result.name }
-      : { type: 'error', code: 'approve_failed', reason: result.reason },
-  )
+  return devices
+    .approve(id)
+    .then((result) =>
+      result.ok
+        ? { type: 'device_approved', id, name: result.name }
+        : { type: 'error', code: 'approve_failed', reason: result.reason },
+    )
 }
 
 function revoke(devices: DevicePairing, id: unknown, onRevoked: (id: string) => void): Answer {
@@ -37,10 +39,13 @@ export function handleDeviceFrame(
   frame: { type?: unknown; id?: unknown } | undefined,
   onRevoked: (id: string) => void,
 ): Answer | undefined {
-  if (devices === undefined || typeof frame?.type !== 'string' || !DEVICE_FRAMES.has(frame.type)) return undefined
+  if (devices === undefined || typeof frame?.type !== 'string' || !DEVICE_FRAMES.has(frame.type))
+    return undefined
   if (!owner) return Promise.resolve({ type: 'error', code: 'forbidden' })
-  if (frame.type === 'pair_code') return Promise.resolve({ type: 'pair_code', code: devices.issueSetupCode() })
-  if (frame.type === 'pending_devices') return Promise.resolve({ type: 'pending_devices', devices: devices.pending() })
+  if (frame.type === 'pair_code')
+    return Promise.resolve({ type: 'pair_code', code: devices.issueSetupCode() })
+  if (frame.type === 'pending_devices')
+    return Promise.resolve({ type: 'pending_devices', devices: devices.pending() })
   if (frame.type === 'revoke_device') return revoke(devices, frame.id, onRevoked)
   return approve(devices, frame.id)
 }

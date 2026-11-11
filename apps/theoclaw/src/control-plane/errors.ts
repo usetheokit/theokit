@@ -27,7 +27,10 @@ export class TheoClawBindError extends Error {
   readonly address: string | undefined
   readonly port: number | undefined
 
-  constructor(message: string, options: { readonly address?: string; readonly port?: number } = {}) {
+  constructor(
+    message: string,
+    options: { readonly address?: string; readonly port?: number } = {},
+  ) {
     super(message)
     this.name = 'TheoClawBindError'
     this.address = options.address

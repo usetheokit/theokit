@@ -86,16 +86,22 @@ function parseFrame(raw: { toString(): string }, isBinary: boolean): Frame | und
   const frame = readObject(raw, isBinary)
   if (frame === undefined) return undefined
   const session = sessionOf(frame)
-  if (frame.type === 'interrupt') return session === undefined ? undefined : { kind: 'interrupt', session }
+  if (frame.type === 'interrupt')
+    return session === undefined ? undefined : { kind: 'interrupt', session }
   const message = chatMessage(frame)
   if (message === undefined) return undefined
   // A session that is present but not a string is refused; an absent or null one runs sessionless.
-  if (frame.session !== undefined && frame.session !== null && session === undefined) return undefined
+  if (frame.session !== undefined && frame.session !== null && session === undefined)
+    return undefined
   return session === undefined ? { kind: 'chat', message } : { kind: 'chat', message, session }
 }
 
 /** A finished turn's `done` frame: its usage record when the runner priced it, and one usage line (FR-003, FR-004). */
-function done(usage: TurnUsage | undefined, stderr: (line: string) => void, session?: string): Record<string, unknown> {
+function done(
+  usage: TurnUsage | undefined,
+  stderr: (line: string) => void,
+  session?: string,
+): Record<string, unknown> {
   const frame = session === undefined ? { type: 'done' } : { type: 'done', session }
   if (usage === undefined) return frame
   stderr(formatUsageLine('control', usage))
@@ -103,7 +109,11 @@ function done(usage: TurnUsage | undefined, stderr: (line: string) => void, sess
 }
 
 /** The final frame of a session turn, and the stderr line an interrupted or failed one writes. */
-function sessionEnd(session: string, outcome: SessionOutcome, stderr: (line: string) => void): Record<string, unknown> {
+function sessionEnd(
+  session: string,
+  outcome: SessionOutcome,
+  stderr: (line: string) => void,
+): Record<string, unknown> {
   if (outcome.ok) return done(outcome.usage, stderr, session)
   if (outcome.code === 'interrupted') {
     stderr(`theoclaw: control session ${session} turn interrupted`)
@@ -142,7 +152,10 @@ function serve(
   const sessionlessTurn = (message: string): Promise<void> =>
     Promise.resolve()
       .then(() => options.runTurn(message, (event) => send({ type: 'event', event })))
-      .catch((error: unknown) => ({ ok: false, code: 'turn_failed', reason: describeError(error) }) as const)
+      .catch(
+        (error: unknown) =>
+          ({ ok: false, code: 'turn_failed', reason: describeError(error) }) as const,
+      )
       .then((outcome) => {
         if (outcome.ok) return send(done(outcome.usage, stderr))
         stderr(`theoclaw: turn failed: ${outcome.reason}`)
@@ -152,7 +165,8 @@ function serve(
     const frame = parseFrame(raw, isBinary)
     if (frame === undefined) return send({ type: 'error', code: 'bad_frame' })
     const session = frame.session
-    if (session !== undefined && sessions === undefined) return send({ type: 'error', code: 'bad_frame' })
+    if (session !== undefined && sessions === undefined)
+      return send({ type: 'error', code: 'bad_frame' })
     if (frame.kind === 'interrupt') {
       const answer = sessions!.interrupt(frame.session)
       if (answer === 'no_turn') return send({ type: 'no_turn', session })
@@ -160,10 +174,18 @@ function serve(
       if (current !== session) send({ type: 'interrupt_ok', session })
       return
     }
-    if (busy) return send(session === undefined ? { type: 'error', code: 'busy' } : { type: 'error', code: 'busy', session })
+    if (busy)
+      return send(
+        session === undefined
+          ? { type: 'error', code: 'busy' }
+          : { type: 'error', code: 'busy', session },
+      )
     busy = true
     current = session
-    const turn = session === undefined ? sessionlessTurn(frame.message) : sessionTurn(sessions!, frame.message, session)
+    const turn =
+      session === undefined
+        ? sessionlessTurn(frame.message)
+        : sessionTurn(sessions!, frame.message, session)
     void turn.finally(() => {
       busy = false
       current = undefined
@@ -191,9 +213,12 @@ export function attachControlSocket(
   stderr: (line: string) => void,
 ): ControlSocket {
   if (options.token.length < MIN_BEARER_TOKEN_LENGTH) {
-    throw new TheoClawConfigError(`THEOCLAW_CONTROL_TOKEN must be at least ${MIN_BEARER_TOKEN_LENGTH} characters`, {
-      variable: 'THEOCLAW_CONTROL_TOKEN',
-    })
+    throw new TheoClawConfigError(
+      `THEOCLAW_CONTROL_TOKEN must be at least ${MIN_BEARER_TOKEN_LENGTH} characters`,
+      {
+        variable: 'THEOCLAW_CONTROL_TOKEN',
+      },
+    )
   }
   const tokenMatches = bearerCheck(options.token)
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES })
@@ -206,7 +231,8 @@ export function attachControlSocket(
   server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (pathOf(request) !== CONTROL_PATH) return refuse(socket, '404 Not Found')
     const owner = tokenMatches(request.headers.authorization)
-    if (!owner && options.devices?.accepts(request.headers.authorization) !== true) return refuse(socket, '401 Unauthorized')
+    if (!owner && options.devices?.accepts(request.headers.authorization) !== true)
+      return refuse(socket, '401 Unauthorized')
     const deviceId = owner ? undefined : options.devices?.deviceIdFor(request.headers.authorization)
     wss.handleUpgrade(request, socket, head, (ws) => {
       if (deviceId !== undefined) {

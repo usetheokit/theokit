@@ -2,6 +2,7 @@ import type { TurnAgent } from '../agent-port.js'
 import { createControlSessions } from './control-sessions.js'
 import { createDevicePairing, type DevicePairing } from './device-pairing.js'
 import type { ControlSocketOptions } from './control-socket.js'
+import { rpcRoute } from './rpc-route.js'
 import { createTurnRunner, type WithAgent } from './turn.js'
 
 /**
@@ -22,7 +23,12 @@ export function controlOptions(
   return {
     token,
     runTurn: createTurnRunner(withAgent, secrets, model),
-    sessions: createControlSessions({ build, report, secrets, ...(model === undefined ? {} : { model }) }),
+    sessions: createControlSessions({
+      build,
+      report,
+      secrets,
+      ...(model === undefined ? {} : { model }),
+    }),
     ...(devices === undefined ? {} : { devices }),
   }
 }
@@ -36,5 +42,21 @@ export function devicePairingFor(
   controlToken: string | undefined,
   write: (line: string) => void,
 ): DevicePairing | undefined {
-  return stateDir === undefined || controlToken === undefined ? undefined : createDevicePairing({ dir: stateDir, write })
+  return stateDir === undefined || controlToken === undefined
+    ? undefined
+    : createDevicePairing({ dir: stateDir, write })
+}
+
+/**
+ * The admin HTTP RPC (OC-128) is opt-in: `THEOCLAW_ADMIN_HTTP_RPC=1`, and it needs the control token
+ * (its bearer) and device pairing (the methods it exposes).
+ */
+export function adminRpcFor(
+  env: Readonly<Record<string, string | undefined>>,
+  controlToken: string | undefined,
+  devices: DevicePairing | undefined,
+): ((request: Request) => Promise<Response>) | undefined {
+  if (env.THEOCLAW_ADMIN_HTTP_RPC !== '1' || controlToken === undefined || devices === undefined)
+    return undefined
+  return rpcRoute(controlToken, devices)
 }

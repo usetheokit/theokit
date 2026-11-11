@@ -30,10 +30,23 @@ export function readTrustedProxy(env: Env): TrustedProxy | undefined {
     .map((a) => normalize(a.trim()))
     .filter((a) => a !== '')
   if (header === '' && list.length === 0) return undefined
-  if (header === '') throw new TheoClawConfigError('THEOCLAW_TRUSTED_PROXY_HEADER must name the identity header', { variable: 'THEOCLAW_TRUSTED_PROXY_HEADER' })
-  if (list.length === 0) throw new TheoClawConfigError('THEOCLAW_TRUSTED_PROXY_ADDRESSES must list the proxy addresses', { variable: 'THEOCLAW_TRUSTED_PROXY_ADDRESSES' })
-  if (!/^[a-z0-9-]+$/.test(header) || header === TRUSTED_IDENTITY_HEADER || header === 'authorization') {
-    throw new TheoClawConfigError('THEOCLAW_TRUSTED_PROXY_HEADER is not a usable header name', { variable: 'THEOCLAW_TRUSTED_PROXY_HEADER' })
+  if (header === '')
+    throw new TheoClawConfigError('THEOCLAW_TRUSTED_PROXY_HEADER must name the identity header', {
+      variable: 'THEOCLAW_TRUSTED_PROXY_HEADER',
+    })
+  if (list.length === 0)
+    throw new TheoClawConfigError(
+      'THEOCLAW_TRUSTED_PROXY_ADDRESSES must list the proxy addresses',
+      { variable: 'THEOCLAW_TRUSTED_PROXY_ADDRESSES' },
+    )
+  if (
+    !/^[a-z0-9-]+$/.test(header) ||
+    header === TRUSTED_IDENTITY_HEADER ||
+    header === 'authorization'
+  ) {
+    throw new TheoClawConfigError('THEOCLAW_TRUSTED_PROXY_HEADER is not a usable header name', {
+      variable: 'THEOCLAW_TRUSTED_PROXY_HEADER',
+    })
   }
   return { header, addresses: new Set(list) }
 }
@@ -42,7 +55,10 @@ export function readTrustedProxy(env: Env): TrustedProxy | undefined {
  * Decide the identity marker on the incoming headers: any client-supplied marker is dropped, and
  * the marker is set only for an allowlisted peer that sent a non-empty identity.
  */
-export function stampTrustedIdentity(incoming: IncomingMessage, proxy: TrustedProxy | undefined): void {
+export function stampTrustedIdentity(
+  incoming: IncomingMessage,
+  proxy: TrustedProxy | undefined,
+): void {
   delete incoming.headers[TRUSTED_IDENTITY_HEADER]
   if (proxy === undefined) return
   const peer = incoming.socket.remoteAddress
@@ -50,5 +66,6 @@ export function stampTrustedIdentity(incoming: IncomingMessage, proxy: TrustedPr
   delete incoming.headers[proxy.header]
   if (peer === undefined || !proxy.addresses.has(normalize(peer))) return
   const value = Array.isArray(identity) ? identity[0] : identity
-  if (value !== undefined && value.trim() !== '') incoming.headers[TRUSTED_IDENTITY_HEADER] = value.trim()
+  if (value !== undefined && value.trim() !== '')
+    incoming.headers[TRUSTED_IDENTITY_HEADER] = value.trim()
 }

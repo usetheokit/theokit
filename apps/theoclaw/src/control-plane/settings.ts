@@ -82,7 +82,10 @@ export function readControlPlaneSettings(env: BindEnvironment): ControlPlaneSett
   try {
     parseThinkingLevel(env.THEOCLAW_THINKING)
   } catch (error) {
-    throw new TheoClawConfigError(error instanceof Error ? error.message : 'THEOCLAW_THINKING is invalid', { variable: 'THEOCLAW_THINKING' })
+    throw new TheoClawConfigError(
+      error instanceof Error ? error.message : 'THEOCLAW_THINKING is invalid',
+      { variable: 'THEOCLAW_THINKING' },
+    )
   }
   const port = parsePort(env.THEOCLAW_PORT)
   const controlToken = readBearerToken(env, 'THEOCLAW_CONTROL_TOKEN')

@@ -23,7 +23,10 @@ const MIN_DISTINCT_TOKEN_CHARS = 10
 
 export type PairingRequest =
   | { readonly ok: true; readonly id: string }
-  | { readonly ok: false; readonly reason: 'unknown_or_expired' | 'bad_token' | 'bad_name' | 'too_many_pending' }
+  | {
+      readonly ok: false
+      readonly reason: 'unknown_or_expired' | 'bad_token' | 'bad_name' | 'too_many_pending'
+    }
 
 export type DeviceApproval =
   | { readonly ok: true; readonly name: string }
@@ -91,20 +94,28 @@ function load(path: string): Device[] {
     text = readFileSync(path, 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw new TheoClawConfigError(`${path} cannot be read: ${describeError(error)}`, { variable: 'THEOCLAW_STATE_DIR' })
+    throw new TheoClawConfigError(`${path} cannot be read: ${describeError(error)}`, {
+      variable: 'THEOCLAW_STATE_DIR',
+    })
   }
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch (error) {
-    throw new TheoClawConfigError(`${path} is not valid JSON (${describeError(error)}); fix or remove it`, {
-      variable: 'THEOCLAW_STATE_DIR',
-    })
+    throw new TheoClawConfigError(
+      `${path} is not valid JSON (${describeError(error)}); fix or remove it`,
+      {
+        variable: 'THEOCLAW_STATE_DIR',
+      },
+    )
   }
   if (!isDevices(parsed)) {
-    throw new TheoClawConfigError(`${path} is not a devices file ({ "devices": [...] }); fix or remove it`, {
-      variable: 'THEOCLAW_STATE_DIR',
-    })
+    throw new TheoClawConfigError(
+      `${path} is not a devices file ({ "devices": [...] }); fix or remove it`,
+      {
+        variable: 'THEOCLAW_STATE_DIR',
+      },
+    )
   }
   return parsed.devices
 }
@@ -168,7 +179,8 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
 
   return {
     issueSetupCode() {
-      for (const [code, issuedAt] of codes) if (clock() - issuedAt >= CODE_TTL_MS) codes.delete(code)
+      for (const [code, issuedAt] of codes)
+        if (clock() - issuedAt >= CODE_TTL_MS) codes.delete(code)
       const code = randomBytes(6).toString('hex')
       codes.set(code, clock())
       return code
@@ -180,8 +192,13 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
         return { ok: false, reason: 'unknown_or_expired' }
       }
       const trimmed = name.trim()
-      if (trimmed === '' || trimmed.length > MAX_NAME_LENGTH) return { ok: false, reason: 'bad_name' }
-      if (token.length < MIN_BEARER_TOKEN_LENGTH || token.trim() !== token || new Set(token).size < MIN_DISTINCT_TOKEN_CHARS) {
+      if (trimmed === '' || trimmed.length > MAX_NAME_LENGTH)
+        return { ok: false, reason: 'bad_name' }
+      if (
+        token.length < MIN_BEARER_TOKEN_LENGTH ||
+        token.trim() !== token ||
+        new Set(token).size < MIN_DISTINCT_TOKEN_CHARS
+      ) {
         return { ok: false, reason: 'bad_token' }
       }
       dropExpiredRequests()

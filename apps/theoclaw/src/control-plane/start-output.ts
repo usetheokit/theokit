@@ -19,5 +19,7 @@ export function reportSurfacesOff(
 
 /** A bound address as the listening line writes it, an IPv6 host in brackets. */
 export function formatAddress(address: { readonly host: string; readonly port: number }): string {
-  return isIPv6(address.host) ? `[${address.host}]:${address.port}` : `${address.host}:${address.port}`
+  return isIPv6(address.host)
+    ? `[${address.host}]:${address.port}`
+    : `${address.host}:${address.port}`
 }
