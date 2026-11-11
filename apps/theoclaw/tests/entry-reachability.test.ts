@@ -19,7 +19,8 @@ function entryPoints(): string[] {
     (command) =>
       [...command.matchAll(/(?:^|[\s])(?:node )?\.?\/?dist\/([\w/-]+)\.js/g)].map((m) => m[1]),
   )
-  return [...new Set(dist)].flatMap((stem) =>
+  // `theoclaw acp` starts this one as a child process by name (src/cli.ts), so no script or bin names it.
+  return [...new Set([...dist, 'main-acp'])].flatMap((stem) =>
     [`${stem}.ts`, `${stem}.tsx`].map((f) => join(SRC, f)).filter((f) => existsSync(f)),
   )
 }

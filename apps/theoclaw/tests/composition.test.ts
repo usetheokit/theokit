@@ -1,10 +1,10 @@
-import "reflect-metadata";
-import { afterEach, describe, expect, it } from "vitest";
+import 'reflect-metadata'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import { Container, ScopeViolationError } from "@theokit/di";
-import { createAgentProvider } from "@theokit/di-agent";
+import { Container, ScopeViolationError } from '@theokit/di'
+import { createAgentProvider } from '@theokit/di-agent'
 
-import { createContainer } from "../src/composition.js";
+import { createContainer } from '../src/composition.js'
 
 import { createHmac } from 'node:crypto'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -17,8 +17,23 @@ import type { AgentOptions, SDKAgent } from '@theokit/sdk'
 import { composeTheoClaw } from '../src/composition.js'
 import { MAX_BODY_BYTES } from '../src/webhooks/router.js'
 import type { TeamsVerifier } from '../src/webhooks/teams.js'
-import { chunkedPost, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE, WORKSPACE } from './composition-fixtures.js'
-import { FakeAdapter, FakeAgent, assistant, deferred, finished, messageEvent, waitFor } from './fakes.js'
+import {
+  chunkedPost,
+  fakeBuilders,
+  noAgent,
+  signedLinePost,
+  TELEGRAM_AND_LINE,
+  WORKSPACE,
+} from './composition-fixtures.js'
+import {
+  FakeAdapter,
+  FakeAgent,
+  assistant,
+  deferred,
+  finished,
+  messageEvent,
+  waitFor,
+} from './fakes.js'
 import { notEnforced, runControlTurn, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
 import type { ToolStart } from './tool-start-fixtures.js'
 
@@ -30,26 +45,26 @@ import type { ToolStart } from './tool-start-fixtures.js'
  * Asserting that the provider was configured with `Scope.REQUEST` would test the configuration
  * rather than the behaviour, and a default that stopped being honoured would still pass.
  */
-describe("the composition root", () => {
-  it("gives two concurrent requests two different agents", async () => {
-    const container = createContainer({ factory: () => ({ id: Symbol("agent") }) });
+describe('the composition root', () => {
+  it('gives two concurrent requests two different agents', async () => {
+    const container = createContainer({ factory: () => ({ id: Symbol('agent') }) })
 
     const [first, second] = await Promise.all([
       container.withAgent((agent) => agent),
       container.withAgent((agent) => agent),
-    ]);
+    ])
 
-    expect(first).not.toBe(second);
-  });
+    expect(first).not.toBe(second)
+  })
 
-  it("does not share mutated state between two requests", async () => {
-    const container = createContainer({ factory: () => ({ seen: [] as string[] }) });
+  it('does not share mutated state between two requests', async () => {
+    const container = createContainer({ factory: () => ({ seen: [] as string[] }) })
 
-    await container.withAgent((agent) => agent.seen.push("from the first request"));
-    const secondRequestSaw = await container.withAgent((agent) => agent.seen);
+    await container.withAgent((agent) => agent.seen.push('from the first request'))
+    const secondRequestSaw = await container.withAgent((agent) => agent.seen)
 
-    expect(secondRequestSaw).toEqual([]);
-  });
+    expect(secondRequestSaw).toEqual([])
+  })
   /**
    * B-004 T1.1 — FR-004 says a caller asking for an agent outside a request is refused. Writing
    * that test revealed something better than a passing assertion: **through this module's public
@@ -71,12 +86,12 @@ describe("the composition root", () => {
    * construction: the day a second key appears on that object, this fails and someone has to
    * argue for it.
    */
-  it("exposes no way to resolve outside a request boundary", () => {
-    const container = createContainer({ factory: () => ({ id: Symbol("agent") }) });
+  it('exposes no way to resolve outside a request boundary', () => {
+    const container = createContainer({ factory: () => ({ id: Symbol('agent') }) })
 
-    expect(Object.keys(container)).toEqual(["withAgent"]);
-  });
-});
+    expect(Object.keys(container)).toEqual(['withAgent'])
+  })
+})
 
 /**
  * The three tests below were added after a review round in which eight independent reviewers read
@@ -84,20 +99,20 @@ describe("the composition root", () => {
  * production change that accompanies it — the order matters, and it is recorded here because a test
  * written after the fix proves only that the fix is self-consistent.
  */
-describe("what the first round of tests could not see", () => {
+describe('what the first round of tests could not see', () => {
   /**
    * RED before `resolveAsync`. `AgentCompositionOptions.factory` is typed `() => TAgent |
    * Promise<TAgent>` and the canonical factory — `Agent.create` from `@theokit/sdk` — is async, so
    * this is not an edge case: it is the only shape a real consumer writes. Three reviewers reached
    * it independently by execution, and all three got `AsyncProviderInSyncResolveError`.
    */
-  it("resolves an agent built by an async factory", async () => {
-    const container = createContainer({ factory: async () => ({ id: "async-built" }) });
+  it('resolves an agent built by an async factory', async () => {
+    const container = createContainer({ factory: async () => ({ id: 'async-built' }) })
 
-    const seen = await container.withAgent((agent) => agent.id);
+    const seen = await container.withAgent((agent) => agent.id)
 
-    expect(seen).toBe("async-built");
-  });
+    expect(seen).toBe('async-built')
+  })
 
   /**
    * The refusal this module's docblock rests on, asserted rather than quoted.
@@ -111,14 +126,14 @@ describe("what the first round of tests could not see", () => {
    * in the test column. This is the second: a documented ADR rests on this exact guarantee, so the
    * guarantee is ours to pin even though the code enforcing it is not.
    */
-  it("refuses a request-scoped resolve outside a boundary, with the documented error", () => {
-    const container = new Container();
-    const provider = createAgentProvider<{ id: string }>({ factory: () => ({ id: "unreachable" }) });
-    container.register(provider);
+  it('refuses a request-scoped resolve outside a boundary, with the documented error', () => {
+    const container = new Container()
+    const provider = createAgentProvider<{ id: string }>({ factory: () => ({ id: 'unreachable' }) })
+    container.register(provider)
 
-    expect(() => container.resolve(provider.provide)).toThrow(ScopeViolationError);
-    expect(() => container.resolve(provider.provide)).toThrow(/runInRequest/);
-  });
+    expect(() => container.resolve(provider.provide)).toThrow(ScopeViolationError)
+    expect(() => container.resolve(provider.provide)).toThrow(/runInRequest/)
+  })
 
   /**
    * RED under `Scope.TRANSIENT`, green under `Scope.REQUEST`.
@@ -132,33 +147,41 @@ describe("what the first round of tests could not see", () => {
    * registers it with. That is narrower than testing `withAgent`, and it is the widest claim the
    * shipped surface actually supports.
    */
-  it("gives one boundary one agent, however many times it is resolved", async () => {
-    const container = new Container();
+  it('gives one boundary one agent, however many times it is resolved', async () => {
+    const container = new Container()
     const provider = createAgentProvider<{ id: symbol }>({
-      factory: () => ({ id: Symbol("per-boundary") }),
-    });
-    container.register(provider);
+      factory: () => ({ id: Symbol('per-boundary') }),
+    })
+    container.register(provider)
 
     const [first, second] = await container.runInRequest(async () => [
       await container.resolveAsync(provider.provide),
       await container.resolveAsync(provider.provide),
-    ]);
+    ])
 
-    expect(first).toBe(second);
-  });
-});
+    expect(first).toBe(second)
+  })
+})
 
 describe('composeTheoClaw', () => {
   it('composes one runner per configured platform and serves its route', async () => {
     const { builders } = fakeBuilders()
     const lines: string[] = []
-    const { loop, router } = composeTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, write: (line) => lines.push(line) })
+    const { loop, router } = composeTheoClaw({
+      env: TELEGRAM_AND_LINE,
+      agentFactory: noAgent,
+      builders,
+      write: (line) => lines.push(line),
+    })
 
     await loop.ready
 
     expect(loop.started.size).toBe(2)
     expect((await router(signedLinePost())).status).toBe(200)
-    expect((await router(new Request('http://localhost/webhooks/sms', { method: 'POST', body: 'x' }))).status).toBe(404)
+    expect(
+      (await router(new Request('http://localhost/webhooks/sms', { method: 'POST', body: 'x' })))
+        .status,
+    ).toBe(404)
     expect(lines).toContain(
       'slack: not configured (missing THEOCLAW_SLACK_BOT_TOKEN, THEOCLAW_SLACK_APP_TOKEN)',
     )
@@ -169,9 +192,12 @@ describe('composeTheoClaw', () => {
   // through `getOrCreate` and never through the `/control` factory, and its answer leaves through
   // the same platform's adapter.
   it('answers a LINE message with the reply of an agent from the channel factory', async () => {
-    const channelAgent = Object.assign(new FakeAgent({ frames: [assistant('hi from theo'), finished()] }), {
-      dispose: async () => undefined,
-    })
+    const channelAgent = Object.assign(
+      new FakeAgent({ frames: [assistant('hi from theo'), finished()] }),
+      {
+        dispose: async () => undefined,
+      },
+    )
     const { adapters, builders } = fakeBuilders()
     const { loop, router } = composeTheoClaw({
       env: TELEGRAM_AND_LINE,
@@ -185,7 +211,11 @@ describe('composeTheoClaw', () => {
     await loop.ready
 
     expect((await router(signedLinePost())).status).toBe(200)
-    await waitFor(() => (adapters.get('line')?.sent.length ?? 0) > 0, 1000, 'the LINE reply to be sent')
+    await waitFor(
+      () => (adapters.get('line')?.sent.length ?? 0) > 0,
+      1000,
+      'the LINE reply to be sent',
+    )
 
     expect(channelAgent.sent).toEqual(['hi'])
     expect(adapters.get('line')?.sent.map((message) => message.text)).toEqual(['hi from theo'])
@@ -194,8 +224,15 @@ describe('composeTheoClaw', () => {
 
   it('serves a route before a slow platform has connected', async () => {
     const held = deferred<boolean>()
-    const { builders } = fakeBuilders({ telegram: new FakeAdapter('telegram', { connect: () => held.promise }) })
-    const { loop, router } = composeTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, write: () => undefined })
+    const { builders } = fakeBuilders({
+      telegram: new FakeAdapter('telegram', { connect: () => held.promise }),
+    })
+    const { loop, router } = composeTheoClaw({
+      env: TELEGRAM_AND_LINE,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+    })
     await waitFor(() => loop.started.has('line'), 1000, 'the LINE runner to start')
 
     const response = await router(signedLinePost())
@@ -226,7 +263,12 @@ describe('composeTheoClaw', () => {
       THEOCLAW_SMS_PUBLIC_URL: 'https://example.org/webhooks/sms',
       THEOCLAW_WORKSPACE: WORKSPACE,
     }
-    const { loop, router } = composeTheoClaw({ env, agentFactory: noAgent, builders, write: () => undefined })
+    const { loop, router } = composeTheoClaw({
+      env,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+    })
     await loop.ready
 
     const response = await router(chunkedPost('/webhooks/sms', MAX_BODY_BYTES + 1))
@@ -266,7 +308,12 @@ describe('composeTheoClaw with WhatsApp', () => {
   it('serves the WhatsApp route through the started adapter', async () => {
     const whatsapp = new ConvertingWhatsApp()
     const { builders } = fakeBuilders({ whatsapp })
-    const { loop, router } = composeTheoClaw({ env: WHATSAPP_ENV, agentFactory: noAgent, builders, write: () => undefined })
+    const { loop, router } = composeTheoClaw({
+      env: WHATSAPP_ENV,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+    })
     await loop.ready
     const body = JSON.stringify({ object: 'whatsapp_business_account', entry: [] })
     const signature = `sha256=${createHmac('sha256', 'wa-app-secret').update(body).digest('hex')}`
@@ -287,7 +334,12 @@ describe('composeTheoClaw with WhatsApp', () => {
   it('a chunked oversized whatsapp post never reaches the route', async () => {
     const whatsapp = new ConvertingWhatsApp()
     const { builders } = fakeBuilders({ whatsapp })
-    const { loop, router } = composeTheoClaw({ env: WHATSAPP_ENV, agentFactory: noAgent, builders, write: () => undefined })
+    const { loop, router } = composeTheoClaw({
+      env: WHATSAPP_ENV,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+    })
     await loop.ready
 
     const response = await router(chunkedPost('/webhooks/whatsapp', MAX_BODY_BYTES + 1))
@@ -339,7 +391,9 @@ describe('composeTheoClaw with Teams', () => {
     await loop.ready
 
     for (const _ of [1, 2]) {
-      const response = await router(new Request('http://localhost/webhooks/teams', { method: 'POST', body: '{}' }))
+      const response = await router(
+        new Request('http://localhost/webhooks/teams', { method: 'POST', body: '{}' }),
+      )
       expect(response.status).toBe(200)
     }
 
@@ -401,10 +455,14 @@ describe('composeTheoClaw with Teams', () => {
     })
     await loop.ready
 
-    const response = await router(new Request('http://localhost/webhooks/teams', { method: 'POST', body: '{}' }))
+    const response = await router(
+      new Request('http://localhost/webhooks/teams', { method: 'POST', body: '{}' }),
+    )
 
     expect(response.status).toBe(503)
-    expect(lines).toContain('teams: the activity verifier could not be built: teamsActivityVerifier: tenantId must be a tenant GUID')
+    expect(lines).toContain(
+      'teams: the activity verifier could not be built: teamsActivityVerifier: tenantId must be a tenant GUID',
+    )
     expect((await router(signedLinePost())).status).toBe(200)
     await loop.stopAll()
   })
@@ -418,12 +476,16 @@ describe('composeTheoClaw with Teams', () => {
       builders,
       write: (line) => lines.push(line),
       teamsVerifierFactory: () => {
-        throw new TypeError('teamsActivityVerifier: refused the settings of tenant not-a-guid-tenant')
+        throw new TypeError(
+          'teamsActivityVerifier: refused the settings of tenant not-a-guid-tenant',
+        )
       },
     })
     await loop.ready
 
-    expect(lines.some((line) => line.startsWith('teams: the activity verifier could not be built'))).toBe(true)
+    expect(
+      lines.some((line) => line.startsWith('teams: the activity verifier could not be built')),
+    ).toBe(true)
     expect(lines.join('\n')).not.toContain('not-a-guid-tenant')
     await loop.stopAll()
   })
@@ -437,20 +499,37 @@ describe('the chat path names no per-message factory', () => {
   const SRC = fileURLToPath(new URL('../src/', import.meta.url))
   const sources = (directory: string): string[] =>
     readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
-      entry.isDirectory() ? sources(join(directory, entry.name)) : entry.name.endsWith('.ts') ? [join(directory, entry.name)] : [],
+      entry.isDirectory()
+        ? sources(join(directory, entry.name))
+        : entry.name.endsWith('.ts')
+          ? [join(directory, entry.name)]
+          : [],
     )
 
   it('names channelAgentFactory nowhere and calls Agent.create only in the /control factory', () => {
-    const files = sources(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
-    expect(files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
+    const files = sources(SRC).map((path) => ({
+      path: relative(SRC, path),
+      text: readFileSync(path, 'utf8'),
+    }))
+    expect(
+      files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path),
+    ).toEqual([])
     // `main.ts` builds the `create` it hands `createAgentFactory` alone; only the `/control` one takes the import (FR-009).
-    expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path).sort()).toEqual(
-      [join('agent', 'create-agent.ts'), 'main.ts'].sort(),
+    expect(
+      files
+        .filter(({ text }) => /Agent\.create\(/.test(text))
+        .map(({ path }) => path)
+        .sort(),
+    ).toEqual([join('agent', 'create-agent.ts'), 'main-acp.ts', 'main.ts'].sort())
+    expect(
+      files
+        .filter(({ text }) => /createTheoClawAgent\b/.test(text))
+        .map(({ path }) => path)
+        .sort(),
+    ).toEqual([join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort())
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toMatch(
+      /agentFactory: createAgentFactory\(process\.env, create, imported\),\n\s+importFreeAgentFactory: createAgentFactory\(process\.env, create\),\n\s+importedPaths: importedMcpPaths\(imported\),/,
     )
-    expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
-      [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
-    )
-    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toMatch(/agentFactory: createAgentFactory\(process\.env, create, imported\),\n\s+importFreeAgentFactory: createAgentFactory\(process\.env, create\),\n\s+importedPaths: importedMcpPaths\(imported\),/)
   })
 })
 
@@ -466,10 +545,16 @@ describe('the digest workflow tool at start', () => {
     for (const cleanup of cleanups.splice(0)) cleanup()
   })
   const draftAgentFactory = async (): Promise<SDKAgent> => ({}) as SDKAgent
-  const names = (tools: readonly { readonly name: string }[]): string[] => tools.map((tool) => tool.name)
+  const names = (tools: readonly { readonly name: string }[]): string[] =>
+    tools.map((tool) => tool.name)
 
   it('the control agent gets the digest tool', async () => {
-    const start = await startForTools({}, tempCwd(cleanups), { detect: notEnforced }, { draftAgentFactory })
+    const start = await startForTools(
+      {},
+      tempCwd(cleanups),
+      { detect: notEnforced },
+      { draftAgentFactory },
+    )
     starts.push(start)
     const controlOptions = await runControlTurn(start)
     expect(names(controlOptions.tools)).toContain('digest')
@@ -478,24 +563,32 @@ describe('the digest workflow tool at start', () => {
   it('twenty chat reply agents hold no tool, digest included', async () => {
     const chatOptions: AgentOptions[] = []
     const { adapters, builders } = fakeBuilders()
-    const start = await startForTools({ THEOCLAW_DM_POLICY: 'open' }, tempCwd(cleanups), { detect: notEnforced }, {
-      draftAgentFactory,
-      builders,
-      getOrCreate: async (_id, options) => {
-        chatOptions.push(options)
-        return Object.assign(new FakeAgent({ frames: [] }), { dispose: async () => undefined })
+    const start = await startForTools(
+      { THEOCLAW_DM_POLICY: 'open' },
+      tempCwd(cleanups),
+      { detect: notEnforced },
+      {
+        draftAgentFactory,
+        builders,
+        getOrCreate: async (_id, options) => {
+          chatOptions.push(options)
+          return Object.assign(new FakeAgent({ frames: [] }), { dispose: async () => undefined })
+        },
       },
-    })
+    )
     starts.push(start)
     await start.app?.loop.ready
     const telegram = adapters.get('telegram') as FakeAdapter
-    for (let sender = 0; sender < 20; sender += 1) await telegram.deliver(messageEvent('telegram', 'hello', `sender-${sender}`))
+    for (let sender = 0; sender < 20; sender += 1)
+      await telegram.deliver(messageEvent('telegram', 'hello', `sender-${sender}`))
     await waitFor(() => chatOptions.length === 20, 5000, 'twenty chat agents to be opened')
     expect(chatOptions.every((options) => options.tools === undefined)).toBe(true)
   })
 
   it('the process entry builds the draft agents through the tool-less chat factory', () => {
     const main = readFileSync(fileURLToPath(new URL('../src/main.ts', import.meta.url)), 'utf8')
-    expect(main).toContain('draftAgentFactory: createChannelAgentFactory(process.env, createSdkAgent)')
+    expect(main).toContain(
+      'draftAgentFactory: createChannelAgentFactory(process.env, createSdkAgent)',
+    )
   })
 })
