@@ -45,8 +45,8 @@ vi.mock('@theokit/agents/tool-scope', async (importOriginal) => {
   }
 })
 
-const READ_ONLY = ['list_dir', 'read_file', 'show_widget', 'todolist', 'view_image', 'web_fetch']
-const HOST = ['apply_patch', 'edit_file', 'shell_exec', 'write_file']
+const READ_ONLY = ['extract_document', 'github_link_preview', 'list_dir', 'read_file', 'read_pdf', 'show_widget', 'todolist', 'view_image', 'web_fetch']
+const HOST = ['apply_patch', 'edit_file', 'screenshot_logbook', 'shell_exec', 'write_file']
 
 describe('BUILT_TOOL_NAMES', () => {
   it('names every tool buildTools can register, and only those', () => {

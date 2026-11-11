@@ -56,6 +56,7 @@
     "@theokit/http": "workspace:*",
     "@theokit/presenter": "workspace:*",
     "@theokit/sdk": "5.15.3",
+    "@theokit/sdk-tools": "0.29.0",
     "@theokit/tui": "0.80.0",
     "@theokit/ui": "1.12.2",
     "@usetheo/ui": "0.28.2",

@@ -1,6 +1,10 @@
 import type { CustomTool, McpServerConfig, Plugin } from '@theokit/sdk'
 import { createACPTool } from 'theokit/server/agent'
 import { bindToolScope } from '@theokit/agents/tool-scope'
+import { createExtractDocumentTool } from '@theokit/sdk-tools/extract-document'
+import { createGithubLinkPreviewTool } from '@theokit/sdk-tools/github-link-preview'
+import { createReadPdfTool } from '@theokit/sdk-tools/read-pdf'
+import { createScreenshotLogbookTool } from '@theokit/sdk-tools/screenshot-logbook'
 import {
   createApplyPatchTool,
   createBraveWebSearchAdapter,
@@ -119,6 +123,10 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
     scope.bind(createReadFileTool)(),
     scope.bind(createListDirTool)(),
     scope.bind(createViewImageTool)(),
+    // Documents and PDFs are read from the tool root, GitHub links over the settings' fetch (OC-69).
+    createReadPdfTool({ projectRoot: settings.toolRoot }),
+    createExtractDocumentTool({ projectRoot: settings.toolRoot }),
+    createGithubLinkPreviewTool({ fetchImpl: settings.fetchImpl }),
     webFetchTool(settings),
     // `TodolistTool` types its handler with the todo input union; the SDK validates the model's
     // arguments against the tool's own `inputSchema` before calling it, so the wider type is safe.
@@ -132,7 +140,7 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
     // The file writers take a project root and no sandbox, so `read-only` can only leave them out
     // (plan D3); the shell stays, confined by the read-only backend.
     if (settings.sandboxMode !== 'read-only') {
-      tools.push(scope.bind(createWriteFileTool)(), scope.bind(createEditFileTool)(), scope.bind(createApplyPatchTool)())
+      tools.push(scope.bind(createWriteFileTool)(), scope.bind(createEditFileTool)(), scope.bind(createApplyPatchTool)(), createScreenshotLogbookTool({ projectRoot: settings.toolRoot }))
     }
     tools.push(scope.bind(createShellTool)())
     if (settings.interactive !== undefined) {
