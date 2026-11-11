@@ -35,6 +35,7 @@ import { pathCommand } from './ops/oc-path.js'
 import { meetingsCommand } from './meetings/meetings.js'
 import { clawsCommand } from './routing/claws.js'
 import { proxyCommand } from './ops/proxy.js'
+import { visitorsCommand } from './webchat/visitors.js'
 import { triageCommand } from './ops/triage.js'
 import { statusCommand } from './ops/status.js'
 import { loginWhatsApp } from './channels/whatsapp-qr.js'
@@ -100,6 +101,8 @@ const USAGE = `usage: theoclaw <command>
                             read or edit a workspace Markdown section (#Rules) or JSON leaf (#a.b.0)
   theoclaw proxy validate [--proxy-url <url>] [--target <host:port>] | start [--port <n>] | sessions
                             check the operator's HTTPS proxy is reachable; run a local capture proxy (THEOCLAW_DEBUG_PROXY_URL routes a turn through it) and list what it saw
+  theoclaw visitors grant <email> --for <30m|12h|7d> | revoke <email> | list
+                            expiring WebChat visitor grants; enforced for trusted-proxy identities when THEOCLAW_VISITOR_ACCESS=on
   theoclaw logs [--lines <n>] [--file <path>]
                             the last log lines (file, launchd log or user journal), secrets masked
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
@@ -346,6 +349,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     return Promise.resolve(sessionsCommand([verb === 'list' ? 'list' : 'export', ...rest], io))
   },
   proxy: (args, io) => proxyCommand(args, io),
+  visitors: (args, io) => Promise.resolve(visitorsCommand(args, io)),
   logs: (args, io) => logsCommand(args, io, io.runner),
   triage: (args, io) => triageCommand(args, io),
   claws: (args, io) => clawsCommand(args, io),
