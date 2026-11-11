@@ -5,7 +5,7 @@ import { join } from 'node:path'
  * OC-55 (B-379): the persona files of a workspace, injected into a chat agent's system prompt.
  * HEARTBEAT.md is left out: it steers the heartbeat run, not a conversation.
  */
-export const PERSONA_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'AGENTS.md'] as const
+export const PERSONA_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'AGENTS.md', 'STANDING-ORDERS.md'] as const
 
 /** One file is cut at this many characters, so a runaway file cannot fill the context. */
 export const PERSONA_FILE_LIMIT = 20_000

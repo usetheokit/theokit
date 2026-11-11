@@ -35,6 +35,8 @@ import { pathCommand } from './ops/oc-path.js'
 import { meetingsCommand } from './meetings/meetings.js'
 import { clawsCommand } from './routing/claws.js'
 import { proxyCommand } from './ops/proxy.js'
+import { resolveInstance } from './instance.js'
+import { ordersCommand } from './agent/standing-orders.js'
 import { visitorsCommand } from './webchat/visitors.js'
 import { triageCommand } from './ops/triage.js'
 import { statusCommand } from './ops/status.js'
@@ -105,6 +107,8 @@ const USAGE = `usage: theoclaw <command>
                             read or edit a workspace Markdown section (#Rules) or JSON leaf (#a.b.0)
   theoclaw proxy validate [--proxy-url <url>] [--target <host:port>] | start [--port <n>] | sessions
                             check the operator's HTTPS proxy is reachable; run a local capture proxy (THEOCLAW_DEBUG_PROXY_URL routes a turn through it) and list what it saw
+  theoclaw orders add <text> | list | remove <number>
+                            standing orders every new chat session of the agent keeps until removed
   theoclaw visitors grant <email> --for <30m|12h|7d> | revoke <email> | list
                             expiring WebChat visitor grants; enforced for trusted-proxy identities when THEOCLAW_VISITOR_ACCESS=on
   theoclaw logs [--lines <n>] [--file <path>]
@@ -357,6 +361,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     return Promise.resolve(sessionsCommand([verb === 'list' ? 'list' : 'export', ...rest], io))
   },
   proxy: (args, io) => proxyCommand(args, io),
+  orders: (args, io) => {
+    // The workspace the daemon works in: the configuration file's, or the profile's own.
+    const env: NodeJS.ProcessEnv = { ...io.env }
+    loadConfiguration(env, io.homeDir)
+    Object.assign(env, resolveInstance(env, { homeDir: io.homeDir }).overrides)
+    return Promise.resolve(ordersCommand(args, { ...io, env }))
+  },
   visitors: (args, io) => Promise.resolve(visitorsCommand(args, io)),
   logs: (args, io) => logsCommand(args, io, io.runner),
   triage: (args, io) => triageCommand(args, io),
