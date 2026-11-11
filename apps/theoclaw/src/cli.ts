@@ -75,6 +75,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
   theoclaw mcp              serve TheoClaw's tools as an MCP server on stdin/stdout (claude mcp add theoclaw -- theoclaw mcp)
+  theoclaw import <claude-code|hermes> [--dry-run] [--source <dir>] [--project <dir>] [--home <dir>]
+                            copy a Claude Code or Hermes setup into the state directory; --dry-run lists the files and writes none
   theoclaw --help           this text
 `
 
@@ -186,6 +188,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     if (args.length > 0) throw new UsageError('theoclaw mcp: expected no arguments')
     await serveMcpStdio({ env: io.env, homeDir: io.homeDir, cwd: io.cwd, stdin: io.stdin as unknown as NodeJS.ReadableStream, stdout: io.stdout })
     return 0
+  },
+  import: (args, io) => {
+    const [kind, ...rest] = args
+    if (kind !== 'claude-code' && kind !== 'hermes') throw new UsageError('theoclaw import: expected claude-code or hermes')
+    const env: NodeJS.ProcessEnv = { ...io.env }
+    loadConfiguration(env, io.homeDir)
+    return startChild(['--from', kind, ...rest], { ...io, env }, join(dirname(io.entry), 'import-main.js'))
   },
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),

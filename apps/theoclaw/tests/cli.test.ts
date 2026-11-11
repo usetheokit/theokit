@@ -92,6 +92,21 @@ describe('the theoclaw command line', () => {
     expect(help.stdout()).toContain('theoclaw acp')
   })
 
+  it('import runs the import entry beside the main entry as --from <kind>, and refuses another kind', async () => {
+    const dir = scratchDir()
+    const out = join(dir, 'import.out')
+    writeFileSync(join(dir, 'import-main.js'), `import { writeFileSync } from 'node:fs'\nwriteFileSync(${JSON.stringify(out)}, process.argv.slice(2).join(' '))\n`)
+    writeFileSync(join(dir, 'package.json'), '{"type":"module"}')
+    const h = harness(join(dir, 'main.js'))
+
+    expect(await runCli(['import', 'claude-code', '--dry-run'], h.io)).toBe(0)
+    expect(readFileSync(out, 'utf8')).toBe('--from claude-code --dry-run')
+    expect(await runCli(['import', 'openclaw'], harness().io)).toBe(2)
+    const help = harness()
+    await runCli(['--help'], help.io)
+    expect(help.stdout()).toContain('theoclaw import')
+  })
+
   // Audit finding (post-GREEN): the entry runs in its own session, so a closed terminal reaches only
   // this command; it must pass the hangup on rather than orphan an entry that holds the port.
   it('a terminal hangup is forwarded to the entry', { timeout: 20_000 }, async () => {
