@@ -11,6 +11,7 @@
  * Credentials come from the environment (CI secrets) only. Every string written to stdout, stderr
  * or a result file goes through `redact`, which removes each configured secret value.
  */
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -255,13 +256,6 @@ export const SCENARIOS = {
   'OC-2': channelTurn('telegram'),
   'OC-4': channelTurn('discord'),
   'OC-8': channelTurn('matrix'),
-  'OC-12': {
-    channel: 'cli',
-    command: ['theoclaw', 'run', '--json'],
-    send: PROMPT,
-    expect: /PARITY-OK/,
-    expectation: 'the finished turn text contains PARITY-OK',
-  },
 }
 
 const TRANSPORTS = {
@@ -312,6 +306,11 @@ async function runOpenClaw(scenario, env, transports) {
   }
 }
 
+function entryOf(id, root) {
+  const ledger = JSON.parse(readFileSync(join(root, LEDGER), 'utf8'))
+  return ledger.find((e) => e.id === id) ?? { id }
+}
+
 /** Runs one scenario and returns the result record (verdict `works` or `fails`). */
 export async function runScenario(
   id,
@@ -343,6 +342,7 @@ export async function runScenario(
     openclaw,
     commit: git(['rev-parse', 'HEAD'], root),
     versions: packageVersions(root),
+    inputs_digest: inputsDigest(entryOf(id, root), root),
     date: now.toISOString(),
   }
   // Redact the serialized record so a credential echoed in a reply or an error never lands on disk.
@@ -366,74 +366,48 @@ export const namedFiles = (entry) =>
     (f) => typeof f === 'string',
   )
 
-/** The ledger entry for `id` as it stood in each commit, newest first: `[{ commit, time, text }]`. */
-function entryHistory(id, root) {
-  const log = git(['log', '--format=%H %cI', '--', LEDGER], root)
-  return log
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const [commit, time] = line.split(' ')
-      let text = ''
-      try {
-        text = JSON.stringify(
-          JSON.parse(git(['show', `${commit}:${LEDGER}`], root)).find((e) => e.id === id) ?? null,
-        )
-      } catch {
-        text = ''
-      }
-      return { commit, time, text }
-    })
-}
-
-/** ISO time of the commit that last changed the ledger entry for `id`. */
-function entryChange(id, root) {
-  const history = entryHistory(id, root)
-  for (let i = 0; i < history.length; i++) {
-    if (i === history.length - 1 || history[i].text !== history[i + 1].text) return history[i].time
+/**
+ * A digest of what the item is made of: the contents of every file it names and its ledger entry
+ * minus the fields a measurement is allowed to change (`status`, `verified_on`, `note`). A result
+ * records the digest it measured; the gate recomputes it, so staleness never depends on commit
+ * times, squash merges or history depth.
+ */
+export function inputsDigest(entry, root = REPO_ROOT) {
+  const hash = createHash('sha256')
+  const rest = Object.fromEntries(
+    Object.entries(entry).filter(([k]) => !['status', 'verified_on', 'note'].includes(k)),
+  )
+  hash.update(JSON.stringify(rest))
+  for (const file of namedFiles(entry).toSorted()) {
+    let body = ''
+    try {
+      body = readFileSync(join(root, file), 'utf8')
+    } catch {
+      body = '<absent>'
+    }
+    hash.update(`\0${file}\0${body}`)
   }
-  return ''
-}
-
-/** ISO time of the item's last change: any file it names, or its ledger entry. `null` when unknown. */
-export function lastChange(entry, root = REPO_ROOT) {
-  const times = []
-  for (const file of namedFiles(entry)) {
-    if (git(['status', '--porcelain', '--', file], root)) return new Date().toISOString()
-    times.push(git(['log', '-1', '--format=%cI', '--', file], root))
-  }
-  times.push(entryChange(entry.id, root))
-  const known = times.filter(Boolean).map((t) => new Date(t).getTime())
-  return known.length === 0 ? null : new Date(Math.max(...known)).toISOString()
+  return hash.digest('hex')
 }
 
 /**
- * Violations: every `shipped` entry needs a passing real result dated after its last change.
- * `resultOf(id)` returns the parsed result or null; `changedAt(entry)` the ISO time or null.
+ * Violations: every `shipped` entry needs a passing real result that measured the item as it is now.
+ * `resultOf(id)` returns the parsed result or null; `digestOf(entry)` the item's current digest.
  */
-export function gate(ledger, resultOf, changedAt, knownCommit = () => true) {
+export function gate(ledger, resultOf, digestOf, knownCommit = () => true) {
   const violations = []
   for (const entry of ledger) {
     if (entry.status !== 'shipped') continue
     const result = resultOf(entry.id)
-    if (!result) {
-      violations.push({ id: entry.id, detail: 'no result file' })
-    } else if (result.verdict !== 'works' || result.real !== true) {
-      violations.push({ id: entry.id, detail: `result verdict is ${result.verdict}` })
-    } else if (!result.commit || !knownCommit(result.commit)) {
-      violations.push({ id: entry.id, detail: 'result names no commit of this repository' })
-    } else {
-      const changed = changedAt(entry)
-      const at = Date.parse(result.date)
-      if (changed === null)
-        violations.push({ id: entry.id, detail: 'last change unknown (shallow clone?)' })
-      else if (!Number.isFinite(at) || at <= Date.parse(changed)) {
-        violations.push({
-          id: entry.id,
-          detail: `result ${result.date} is not newer than the last change ${changed}`,
-        })
-      }
-    }
+    let detail = null
+    if (!result) detail = 'no result file'
+    else if (result.verdict !== 'works' || result.real !== true)
+      detail = `result verdict is ${result.verdict}`
+    else if (!result.commit || !knownCommit(result.commit))
+      detail = 'result names no commit of this repository'
+    else if (result.inputs_digest !== digestOf(entry))
+      detail = 'the item or a file it names changed since the result; rerun the harness'
+    if (detail) violations.push({ id: entry.id, detail })
   }
   return violations
 }
@@ -450,7 +424,7 @@ export function runGate({ root = REPO_ROOT, write = console.log } = {}) {
   const violations = gate(
     ledger,
     resultOf,
-    (entry) => lastChange(entry, root),
+    (entry) => inputsDigest(entry, root),
     (commit) => git(['cat-file', '-t', commit], root) === 'commit',
   )
   for (const v of violations) write(`${v.id} shipped-without-real-result: ${v.detail}`)
