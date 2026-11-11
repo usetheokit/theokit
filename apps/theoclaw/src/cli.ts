@@ -118,6 +118,8 @@ const USAGE = `usage: theoclaw <command>
                             list the stored chat transcripts or print one's messages (an id prefix is enough)
   theoclaw meetings join <meet link> [--minutes <n>] | list | show <id>
                             join a Google Meet as a guest in headless Chrome and keep the captions as notes; list or print the notes
+  theoclaw worker pair <control url> <setup code> [--name <n>] [--inference worker|gateway] | run <message> | status
+                            pair this device as a worker; with inference worker its model calls run here and log in worker.log
   theoclaw --help           this text
   theoclaw --version        print the version
 `
@@ -341,6 +343,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   triage: (args, io) => triageCommand(args, io),
   claws: (args, io) => clawsCommand(args, io),
   meetings: (args, io) => meetingsCommand(args, io),
+  worker: async (args, io) => (await import('./worker/worker.js')).workerCommand(args, io),
   path: (args, io) => pathCommand(args, io),
   whatsapp: whatsappCommand,
   tui: tuiCommand,
