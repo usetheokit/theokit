@@ -56,6 +56,7 @@ import { RelayState } from './relay/relay-state.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
 import { createTurnRunner, type TurnRunner, type WithAgent } from './control-plane/turn.js'
+import { teamReportJob } from './scheduler/team-report.js'
 import { heartbeatJob, readHeartbeatSettings } from './scheduler/heartbeat.js'
 import { loadScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
@@ -582,7 +583,9 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
-  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
+  const reportJob = teamReportJob(options.env, platforms)
+  const teamReport = reportJob === undefined ? {} : { teamReport: reportJob }
+  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, ...teamReport, write: stderr, secrets: secretValues })
   const relayDir = join(sessionSettings.workspace, '.theoclaw')
   const relayState = relay.client === undefined ? undefined : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
   if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
