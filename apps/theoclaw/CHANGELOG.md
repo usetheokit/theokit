@@ -470,6 +470,7 @@ run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspa
   step run ESLint over `tools/`, which the root config's `apps/**` ignore left unread.
 - An activity ledger records each exec decision (command, run id, who approved, when) in `activity.jsonl` in the state directory; `theoclaw audit [--run <id>]` prints it. (#1573)
 - `THEOCLAW_DATABASE=postgres://...` keeps the scheduled jobs in PostgreSQL, through the TheoKit storage manager, instead of `schedules.json`. (#1565)
+- `theoclaw state port --to postgres://...` copies the scheduled jobs from the files to PostgreSQL, refuses a target that already holds rows unless `--force`, prints the rows copied per store and never deletes the source. (#1640)
 - With `THEOCLAW_MCP_RELAY_URL` and `THEOCLAW_MCP_RELAY_TOKEN` set, the instance dials out to an MCP relay, pulls JSON-RPC jobs and answers them with the `/control` tools limited to each job's granted tools. (#1636)
 - `theoclaw proxy validate` checks that the operator's HTTPS proxy is reachable, and `theoclaw proxy start` runs a local capture proxy; a process started with `THEOCLAW_DEBUG_PROXY_URL` (or `THEOCLAW_PROXY_URL`) routes its requests through it, and `theoclaw proxy sessions` lists them. (#1571)
 - Add a reference skill registry server (publish, search, versions, download).
