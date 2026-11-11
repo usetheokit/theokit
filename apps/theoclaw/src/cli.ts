@@ -8,8 +8,21 @@ import type { Writable } from 'node:stream'
 import { isSea } from 'node:sea'
 import { fileURLToPath } from 'node:url'
 
-import { backupInstance, BackupRefusal, restoreInstance, uploadBackup, downloadBackup } from './backup/backup.js'
-import { fetchBackup, initStorage, listStorage, scratchDir, storeBackup, testStorage } from './backup/storage.js'
+import {
+  backupInstance,
+  BackupRefusal,
+  restoreInstance,
+  uploadBackup,
+  downloadBackup,
+} from './backup/backup.js'
+import {
+  fetchBackup,
+  initStorage,
+  listStorage,
+  scratchDir,
+  storeBackup,
+  testStorage,
+} from './backup/storage.js'
 import { InstanceLockedError } from './backup/instance-lock.js'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './daemon.js'
@@ -19,6 +32,7 @@ import { type OnboardInput, onboard } from './onboard.js'
 import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
 import { pathCommand } from './ops/oc-path.js'
+import { meetingsCommand } from './meetings/meetings.js'
 import { clawsCommand } from './routing/claws.js'
 import { triageCommand } from './ops/triage.js'
 import { statusCommand } from './ops/status.js'
@@ -102,6 +116,8 @@ const USAGE = `usage: theoclaw <command>
                             share a session read-only with another instance through <dir>, or open one shared with you
   theoclaw transcripts list|show <id>|export <id> [--json]
                             list the stored chat transcripts or print one's messages (an id prefix is enough)
+  theoclaw meetings join <meet link> [--minutes <n>] | list | show <id>
+                            join a Google Meet as a guest in headless Chrome and keep the captions as notes; list or print the notes
   theoclaw --help           this text
   theoclaw --version        print the version
 `
@@ -110,7 +126,12 @@ const USAGE = `usage: theoclaw <command>
  * The entry as a child in its own process group, so a terminal's SIGINT reaches only this process,
  * which forwards it once; the exit code is the child's, or 1 with the signal named.
  */
-function startChild(args: readonly string[], io: CliIo, entry: string = io.entry, env: NodeJS.ProcessEnv = io.env): Promise<number> {
+function startChild(
+  args: readonly string[],
+  io: CliIo,
+  entry: string = io.entry,
+  env: NodeJS.ProcessEnv = io.env,
+): Promise<number> {
   const child = spawn(process.execPath, [entry, ...args], { stdio: 'inherit', detached: true, env })
   const forward = (signal: NodeJS.Signals): void => {
     child.kill(signal)
@@ -144,14 +165,16 @@ const DAEMON_VERBS: Readonly<Record<string, (io: CliIo, runner: Runner) => Promi
 function daemon(args: readonly string[], io: CliIo): Promise<number> {
   const [verb, ...extra] = args
   const run = verb === undefined ? undefined : DAEMON_VERBS[verb]
-  if (run === undefined || extra.length > 0) throw new UsageError('theoclaw daemon: expected install, uninstall or status')
+  if (run === undefined || extra.length > 0)
+    throw new UsageError('theoclaw daemon: expected install, uninstall or status')
   return run(io, io.runner)
 }
 
 /** The one directory argument of `backup` and `restore`. */
 function directoryArgument(name: string, args: readonly string[]): string {
   const [dir, ...extra] = args
-  if (dir === undefined || dir.startsWith('-') || extra.length > 0) throw new UsageError(`theoclaw ${name}: expected one directory`)
+  if (dir === undefined || dir.startsWith('-') || extra.length > 0)
+    throw new UsageError(`theoclaw ${name}: expected one directory`)
   return dir
 }
 
@@ -160,7 +183,8 @@ function takeOption(flag: string, args: readonly string[]): { value?: string; re
   const at = args.indexOf(flag)
   if (at < 0) return { rest: [...args] }
   const value = args[at + 1]
-  if (value === undefined || value.startsWith('-')) throw new UsageError(`theoclaw: ${flag} expects a storage location name`)
+  if (value === undefined || value.startsWith('-'))
+    throw new UsageError(`theoclaw: ${flag} expects a storage location name`)
   return { value, rest: args.filter((_, i) => i !== at && i !== at + 1) }
 }
 
@@ -168,10 +192,14 @@ function takeOption(flag: string, args: readonly string[]): { value?: string; re
 function backupCommand(name: 'backup' | 'restore'): Command {
   return async (args, io) => {
     const live = name === 'backup' && args.includes('--live')
-    const named = takeOption(name === 'backup' ? '--to' : '--from', live ? args.filter((arg) => arg !== '--live') : args)
+    const named = takeOption(
+      name === 'backup' ? '--to' : '--from',
+      live ? args.filter((arg) => arg !== '--live') : args,
+    )
     const location = named.value
     const scratch = location === undefined ? undefined : scratchDir()
-    if (location !== undefined && named.rest.length > 0) throw new UsageError(`theoclaw ${name}: expected no directory with a storage location`)
+    if (location !== undefined && named.rest.length > 0)
+      throw new UsageError(`theoclaw ${name}: expected no directory with a storage location`)
     const dir = scratch ?? directoryArgument(name, named.rest)
     try {
       if (location !== undefined) {
@@ -187,11 +215,14 @@ function backupCommand(name: 'backup' | 'restore'): Command {
         return 0
       }
       const target = io.env.THEOCLAW_BACKUP_TARGET
-      if (name === 'restore' && target) await downloadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
+      if (name === 'restore' && target)
+        await downloadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
       const run = name === 'backup' ? backupInstance : restoreInstance
       const { files } = run(io.env, dir, { homeDir: io.homeDir, live })
       if (name === 'backup' && target) await uploadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
-      io.stdout.write(`theoclaw: ${name === 'backup' ? 'backed up' : 'restored'} ${files.length} files ${name === 'backup' ? 'to' : 'from'} ${dir}\n`)
+      io.stdout.write(
+        `theoclaw: ${name === 'backup' ? 'backed up' : 'restored'} ${files.length} files ${name === 'backup' ? 'to' : 'from'} ${dir}\n`,
+      )
       return 0
     } catch (error) {
       if (!(error instanceof BackupRefusal) && !(error instanceof InstanceLockedError)) throw error
@@ -209,11 +240,20 @@ function storageCommand(args: readonly string[], io: CliIo): Promise<number> {
   try {
     if (verb === 'init') {
       const encrypted = !rest.includes('--no-encrypt')
-      const pathOption = takeOption('--path', rest.filter((arg) => arg !== '--no-encrypt'))
+      const pathOption = takeOption(
+        '--path',
+        rest.filter((arg) => arg !== '--no-encrypt'),
+      )
       const [name, ...extra] = pathOption.rest
-      if (name === undefined || extra.length > 0) throw new UsageError('theoclaw storage init: expected <name> [--path <dir>] [--no-encrypt]')
-      const location = initStorage(io.env, io.homeDir, name, { ...(pathOption.value === undefined ? {} : { path: pathOption.value }), encrypted })
-      io.stdout.write(`theoclaw: storage location ${name} initialized at ${location.root}${location.encrypted ? ' (encrypted)' : ''}\n`)
+      if (name === undefined || extra.length > 0)
+        throw new UsageError('theoclaw storage init: expected <name> [--path <dir>] [--no-encrypt]')
+      const location = initStorage(io.env, io.homeDir, name, {
+        ...(pathOption.value === undefined ? {} : { path: pathOption.value }),
+        encrypted,
+      })
+      io.stdout.write(
+        `theoclaw: storage location ${name} initialized at ${location.root}${location.encrypted ? ' (encrypted)' : ''}\n`,
+      )
       return Promise.resolve(0)
     }
     if (verb === 'list' && rest.length === 0) {
@@ -235,24 +275,35 @@ function storageCommand(args: readonly string[], io: CliIo): Promise<number> {
 
 /** `whatsapp login`: print the pairing QR and wait for the scan; the pairing is kept in the session directory. */
 async function whatsappCommand(args: readonly string[], io: CliIo): Promise<number> {
-  if (args.length !== 1 || args[0] !== 'login') throw new UsageError('theoclaw whatsapp: expected login')
+  if (args.length !== 1 || args[0] !== 'login')
+    throw new UsageError('theoclaw whatsapp: expected login')
   const env: NodeJS.ProcessEnv = { ...io.env }
   loadConfiguration(env, io.homeDir)
   const sessionDir = whatsappSessionDir(env)
-  if (sessionDir === undefined) throw new TheoClawConfigError('whatsapp login needs THEOCLAW_WHATSAPP_SESSION_DIR or THEOCLAW_STATE_DIR')
+  if (sessionDir === undefined)
+    throw new TheoClawConfigError(
+      'whatsapp login needs THEOCLAW_WHATSAPP_SESSION_DIR or THEOCLAW_STATE_DIR',
+    )
   const linked = await loginWhatsApp(sessionDir, (text) => io.stdout.write(`${text}\n`))
   if (!linked) {
-    io.stderr.write('theoclaw: WhatsApp was not linked (the QR was not scanned in time, or the connection failed)\n')
+    io.stderr.write(
+      'theoclaw: WhatsApp was not linked (the QR was not scanned in time, or the connection failed)\n',
+    )
     return 1
   }
-  io.stdout.write(`theoclaw: WhatsApp linked; set THEOCLAW_WHATSAPP_BACKEND=baileys and run theoclaw start\n`)
+  io.stdout.write(
+    `theoclaw: WhatsApp linked; set THEOCLAW_WHATSAPP_BACKEND=baileys and run theoclaw start\n`,
+  )
   return 0
 }
 
 /** `tui`: the terminal UI as a child; the token and port come from the configuration file unless the environment sets them. */
 function tuiCommand(args: readonly string[], io: CliIo): Promise<number> {
   const [flag, id, ...extra] = args
-  if (args.length > 0 && (flag !== '--session' || id === undefined || id.startsWith('-') || extra.length > 0)) {
+  if (
+    args.length > 0 &&
+    (flag !== '--session' || id === undefined || id.startsWith('-') || extra.length > 0)
+  ) {
     throw new UsageError('theoclaw tui: expected [--session <id>]')
   }
   const env: NodeJS.ProcessEnv = { ...io.env }
@@ -274,33 +325,47 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   update: (args, io) => update(parseUpdate(args), io, io.runner),
   security: securityCommand,
   doctor: (args, io) => {
-    if (args.some((arg) => arg !== '--fix')) throw new UsageError('theoclaw doctor: expected [--fix]')
+    if (args.some((arg) => arg !== '--fix'))
+      throw new UsageError('theoclaw doctor: expected [--fix]')
     return Promise.resolve(doctor(io, { fix: args.includes('--fix') }))
   },
   status: (_args, io) => statusCommand(io, io.runner),
   sessions: (args, io) => Promise.resolve(sessionsCommand(args, io)),
   transcripts: (args, io) => {
     const [verb, ...rest] = args
-    if (verb !== 'list' && verb !== 'show' && verb !== 'export') throw new UsageError('theoclaw transcripts: expected list | show <id> | export <id> [--json]')
+    if (verb !== 'list' && verb !== 'show' && verb !== 'export')
+      throw new UsageError('theoclaw transcripts: expected list | show <id> | export <id> [--json]')
     return Promise.resolve(sessionsCommand([verb === 'list' ? 'list' : 'export', ...rest], io))
   },
   logs: (args, io) => logsCommand(args, io, io.runner),
   triage: (args, io) => triageCommand(args, io),
   claws: (args, io) => clawsCommand(args, io),
+  meetings: (args, io) => meetingsCommand(args, io),
   path: (args, io) => pathCommand(args, io),
   whatsapp: whatsappCommand,
   tui: tuiCommand,
   mcp: async (args, io) => {
     if (args.length > 0) throw new UsageError('theoclaw mcp: expected no arguments')
-    await serveMcpStdio({ env: io.env, homeDir: io.homeDir, cwd: io.cwd, stdin: io.stdin as unknown as NodeJS.ReadableStream, stdout: io.stdout })
+    await serveMcpStdio({
+      env: io.env,
+      homeDir: io.homeDir,
+      cwd: io.cwd,
+      stdin: io.stdin as unknown as NodeJS.ReadableStream,
+      stdout: io.stdout,
+    })
     return 0
   },
   import: (args, io) => {
     const [kind, ...rest] = args
-    if (kind !== 'claude-code' && kind !== 'hermes') throw new UsageError('theoclaw import: expected claude-code or hermes')
+    if (kind !== 'claude-code' && kind !== 'hermes')
+      throw new UsageError('theoclaw import: expected claude-code or hermes')
     const env: NodeJS.ProcessEnv = { ...io.env }
     loadConfiguration(env, io.homeDir)
-    return startChild(['--from', kind, ...rest], { ...io, env }, join(dirname(io.entry), 'import-main.js'))
+    return startChild(
+      ['--from', kind, ...rest],
+      { ...io, env },
+      join(dirname(io.entry), 'import-main.js'),
+    )
   },
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
@@ -341,7 +406,9 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
 declare const __THEOCLAW_VERSION__: string | undefined
 function readVersion(): string {
   if (typeof __THEOCLAW_VERSION__ === 'string') return __THEOCLAW_VERSION__
-  const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as { version: string }
+  const pkg = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
+  ) as { version: string }
   return pkg.version
 }
 

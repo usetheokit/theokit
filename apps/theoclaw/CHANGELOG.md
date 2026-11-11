@@ -18,6 +18,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `theoclaw meetings join <Meet link>` joins a Google Meet as a guest in headless Chrome and stores the captions as notes (OC-16); `meetings list` and `meetings show <id>` read them back. Speaking in the meeting is not built.
 - Named sender lists (#1567): `THEOCLAW_ACCESS_GROUPS` defines them and `THEOCLAW_ALLOWLIST` admits `platform:accessGroup:<name>` or single senders.
 - `THEOCLAW_TOOL_PROFILE=minimal|messaging|coding|full` (#1562) gives an owner's direct chat tools (minimal: read files; messaging: plus the web; coding: plus the sandboxed shell and file writers; full: plus the interactive shell). The shell needs `THEOCLAW_HOST_TOOLS=on` and a state directory, and stays behind exec approval. `/elevated on` now also runs that session's `shell_exec` outside the sandbox, for that session only. Unset, chat agents hold no tool, as before.
 
@@ -64,7 +65,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   Windows (B-692, OC-32). On macOS it writes a launchd agent to `~/Library/LaunchAgents` and loads it
   into `gui/<uid>`; on Windows it registers a Task Scheduler task started at logon, with no execution
   time limit. A load or registration the platform refuses leaves no definition behind. `theoclaw
-  update` restarts the macOS agent with `launchctl kickstart -k`. The process entry now accepts
+update` restarts the macOS agent with `launchctl kickstart -k`. The process entry now accepts
   `--config <path>` and `--profile <name>` (a scheduled task carries no environment), so
   `theoclaw start <other argument>` exits 2 where it used to ignore the argument. The real-model
   daemon test runs on `macos-latest` and `windows-latest` through `theoclaw-daemon.yml`.
@@ -191,13 +192,13 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   - Installing from the npm registry (B-691): `npm i -g theoclaw` installs the published package, whose
     `workspace:*` ranges `pnpm publish` resolves to real versions. `theoclaw update` still needs a checkout.
 - Importing a Claude Code or Hermes setup (B-375, OC-35): `node dist/import-main.js --from
-  claude-code|hermes` (`pnpm --filter theoclaw run import`, with `--source`, `--project` and `--home`)
+claude-code|hermes` (`pnpm --filter theoclaw run import`, with `--source`, `--project` and `--home`)
   copies the instructions, MCP servers, skills and memories of the setup into
   `THEOCLAW_STATE_DIR/import` at 0700/0600, after the framework's `loadMcpJson` reads the staged MCP
   file back; a server it would ignore refuses the whole import and a previous import is left as it
   was. It prints a count per kind and a `dropped <path>: <reason>` line for every entry it did not
   carry, and no MCP `env` or `headers` value. The next start writes `theoclaw: imported <kind> setup:
-  ...` after its instance line and hands the import to the `/control` agent only: instructions and
+...` after its instance line and hands the import to the `/control` agent only: instructions and
   read-only memory in its system prompt, the skills inline with a `skill_read` tool, and the MCP
   servers only with `THEOCLAW_IMPORTED_MCP=on` (any other value stops the start). Channel, session
   and WebChat agents, and the `run_code` and `delegate_all` workers, receive nothing from it. With
@@ -299,7 +300,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   first line, `theoclaw: instance started, no profile`.
 - Exact dependency versions and an audit of what TheoClaw installs (B-406). Every entry of
   `apps/theoclaw/package.json` is now an exact version or `workspace:*`, and `pnpm --filter theoclaw
-  run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,
+run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,
   `link:`, `npm:`, git), printing one `<section> <name> <specifier>` line per non-exact entry and
   exiting 1. `pnpm --filter theoclaw run audit` runs one workspace `pnpm audit --json` and exits 1
   on any advisory whose path starts at TheoClaw, dev tree included, or at a production dependency
@@ -366,7 +367,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   `THEOCLAW_HOST` names another address; a non-loopback address also needs
   `THEOCLAW_PUBLIC_BIND=yes`, and the generic `HOST` is never read. A busy port or an address the
   host does not have is refused by name, and the listening line is read from the socket. `GET
-  /health` answers `{"status":"ok"}`. With `THEOCLAW_CONTROL_TOKEN` set (32 characters or more),
+/health` answers `{"status":"ok"}`. With `THEOCLAW_CONTROL_TOKEN` set (32 characters or more),
   `/control` accepts a WebSocket carrying `Authorization: Bearer <token>` and runs one agent turn
   per `{"type":"chat","message":"..."}` frame, streaming each event as `{"type":"event"}` and
   ending with exactly one `{"type":"done"}` or `{"type":"error","code":"turn_failed"}`. The start
