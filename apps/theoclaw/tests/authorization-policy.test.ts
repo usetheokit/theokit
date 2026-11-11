@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { isAuthenticatedSender, isPolicyOwner, parseAuthorizationPolicy } from '../src/authorization/policy.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
+import { requireGroupPlatformsConfigured } from '../src/composition.js'
 
 /** The parse error of `env`, so a test asserts its type, its message and the variable it names. */
 function refusal(env: Record<string, string | undefined>): TheoClawConfigError {
@@ -169,5 +170,17 @@ describe('isPolicyOwner', () => {
     const policy = { ...parsed, owners: new Set(['email:owner@example.com', 'sms:+15550001111']) }
     expect(isPolicyOwner(policy, 'email', 'OWNER@example.com')).toBe(false)
     expect(isPolicyOwner(policy, 'sms', '+15550001111')).toBe(false)
+  })
+})
+
+describe('requireGroupPlatformsConfigured', () => {
+  const policy = parseAuthorizationPolicy({ ...OWNER, THEOCLAW_BROADCAST_GROUPS: 'team=telegram:-100,discord:200' })
+
+  it('refuses a group naming a platform that is not configured, and names it', () => {
+    expect(() => requireGroupPlatformsConfigured(policy, ['telegram'])).toThrow(/names discord, which is not configured/)
+  })
+
+  it('accepts a group whose platforms are all configured', () => {
+    expect(() => requireGroupPlatformsConfigured(policy, ['telegram', 'discord'])).not.toThrow()
   })
 })
