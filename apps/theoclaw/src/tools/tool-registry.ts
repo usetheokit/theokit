@@ -10,7 +10,9 @@ import {
   createInteractiveShellTool,
   createListDirTool,
   createReadFileTool,
+  createSearxngWebSearchAdapter,
   createShellTool,
+  createTavilyWebSearchAdapter,
   createTodolistTool,
   createViewImageTool,
   createWebFetchTool,
@@ -66,6 +68,8 @@ function acpTools(settings: ToolSettings, permission: AcpPermissionOptions): Cus
 function webSearchTool(settings: ToolSettings): CustomTool | undefined {
   const { kind, url, key } = settings.search
   if (kind === 'brave') return createWebSearchTool({ search: createBraveWebSearchAdapter({ apiKey: key, fetchImpl: settings.fetchImpl }) })
+  if (kind === 'searxng') return createWebSearchTool({ search: createSearxngWebSearchAdapter({ baseUrl: url, fetchImpl: settings.fetchImpl }) })
+  if (kind === 'tavily') return createWebSearchTool({ search: createTavilyWebSearchAdapter({ apiKey: key, fetchImpl: settings.fetchImpl }) })
   if (kind === 'generic') {
     return createWebSearchTool({ search: createGenericHttpSearchAdapter({ apiKey: key, endpoint: url, fetchImpl: settings.fetchImpl }) })
   }

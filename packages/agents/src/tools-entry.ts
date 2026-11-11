@@ -82,6 +82,17 @@ export {
   withToolResultGuidance,
 } from '@theokit/sdk-tools'
 
+// Keyless-with-a-self-hosted-instance (SearXNG) and keyed (Tavily) search adapters, on their own
+// `@theokit/sdk-tools` subpath.
+export {
+  createSearxngWebSearchAdapter,
+  createTavilyWebSearchAdapter,
+} from '@theokit/sdk-tools/web-search-adapters'
+export type {
+  CreateSearxngWebSearchAdapterOptions,
+  CreateTavilyWebSearchAdapterOptions,
+} from '@theokit/sdk-tools/web-search-adapters'
+
 export type {
   CommandPolicy,
   ContextMatchReason,
