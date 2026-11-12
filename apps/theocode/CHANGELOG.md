@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Security
+- **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
+
 ### Fixed
 - **Headless `exec` keeps parallel and failed tool calls apart.** The processors keyed tool calls by an `id` the wire never carries, so parallel calls shared one JSONL item id, and a `tool-output-error` produced no `item.completed` and no line on stderr. Chunks now go through `fromWireChunk`: each call has its own id, a failed call completes with `status: "failed"` and prints `failed: <error>`, and the completed item keeps the tool name. (#1891)
 - **Esc stops a long streaming reply.** The TUI stopped reading the keyboard while a reply streamed, so Esc was ignored until the reply ended and the spinner's timer froze. Two causes, both fixed: the stream loop in `@theokit/agents` never yielded to the event loop, and the bundle carried React's development build, which nothing switched off because a user never sets `NODE_ENV`. The bundle now pins only React's own packages to production. (#964)
