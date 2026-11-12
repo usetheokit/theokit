@@ -572,7 +572,7 @@
     "gaps": [
       "B-565"
     ],
-    "note": "moved to B-565 (dod reduced 2026-10-22, delegated): none of the six sandbox backends exists in the ecosystem, so nothing here can be built or checked yet"
+    "note": "moved to B-565 (dod reduced 2026-10-22, delegated): none of the six sandbox backends exists in the ecosystem, so nothing here can be built or checked yet; built for the docker backend (#1609): theoclaw sandbox list and recreate [--all | --session <id>] [--force], unit-tested with a stubbed docker runner; the live check tests/live/sandbox-docker.live.test.ts needs a Docker daemon and is not yet run"
   },
   {
     "id": "OC-78",
@@ -829,5 +829,10 @@
     "declared_by": "human/paulo",
     "declared_on": "2026-10-06",
     "declared_at": "apps/theoclaw/parity/decisions-2026-10-06.md"
+  },
+  {
+    "id": "OC-116",
+    "status": "open",
+    "reason": "Partly implemented: theoclaw mcp-relay serve, grant, list and revoke, and the instance connector set by THEOCLAW_MCP_RELAY_URL and THEOCLAW_MCP_RELAY_TOKEN, are on main, with grants limited to list_dir and read_file unless --tools names more. Not implemented: a hosted Control UI connected-apps view, and no run against a real ChatGPT, Claude or Codex client is recorded, so this stays open."
   }
 ]

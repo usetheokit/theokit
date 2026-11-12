@@ -9,14 +9,22 @@ import { MattermostAdapter } from '@theokit/gateway-mattermost'
 import { IMessageAdapter } from '@theokit/gateway-imessage'
 import { SlackAdapter } from '@theokit/gateway-slack'
 import { SignalAdapter } from '@theokit/gateway-signal'
+import { QQAdapter } from '@theokit/gateway-qq'
+import { RaftAdapter } from '@theokit/gateway-raft'
 import { SMSAdapter } from '@theokit/gateway-sms'
 import type { TwilioOptions } from '@theokit/gateway-sms'
 import { TeamsAdapter } from '@theokit/gateway-teams'
 import { TelegramAdapter } from '@theokit/gateway-telegram'
 import { TlonUrbitAdapter } from '@theokit/gateway-tlon-urbit'
+import { WeChatAdapter } from '@theokit/gateway-wechat'
+import { WeComAdapter } from '@theokit/gateway-wecom'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
+import { XAdapter } from '@theokit/gateway-x'
+import { YuanbaoAdapter } from '@theokit/gateway-yuanbao'
+import { ZaloAdapter } from '@theokit/gateway-zalo'
 
-import { readFileSync } from 'node:fs'
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import type { PlatformBuild } from './channel-loop.js'
 import { isBaileys } from './platforms.js'
@@ -51,6 +59,37 @@ export function googleChatOptions(settings: PlatformSettings<'google_chat'>): Go
     privateKey,
     audience: settings.audience,
     app: { post: () => undefined } as unknown as NonNullable<GoogleChatAdapterOptions['app']>,
+  }
+}
+
+/**
+ * The X adapter's options. X rotates the refresh token on every refresh, so the new one is kept in
+ * `x-refresh-token` under `THEOCLAW_STATE_DIR` (mode 0600) and wins over the environment's on the
+ * next start. Without a state directory the rotated token is lost on restart.
+ */
+export function xOptions(settings: PlatformSettings<'x'>, stateDir = process.env.THEOCLAW_STATE_DIR): ConstructorParameters<typeof XAdapter>[0] {
+  const dir = (stateDir ?? '').trim()
+  const file = dir === '' ? undefined : join(dir, 'x-refresh-token')
+  let refreshToken = settings.refreshToken
+  if (file !== undefined) {
+    try {
+      const saved = readFileSync(file, 'utf8').trim()
+      if (saved !== '') refreshToken = saved
+    } catch {
+      // none saved yet: the environment's token is the first
+    }
+  }
+  return {
+    ...settings,
+    refreshToken,
+    ...(file === undefined
+      ? {}
+      : {
+          onRefreshToken: (token: string) => {
+            writeFileSync(file, token, { mode: 0o600 })
+            chmodSync(file, 0o600)
+          },
+        }),
   }
 }
 
@@ -148,7 +187,7 @@ export class GuardedSlackAdapter extends SlackAdapter {
 }
 
 /**
- * The one module that imports the eleven gateway packages: a missing peer or a renamed class fails
+ * The one module that imports the gateway packages: a missing peer or a renamed class fails
  * here and nowhere else. No constructor connects; some validate their options and throw, which
  * fails only that platform's builder.
  */
@@ -180,6 +219,13 @@ const ADAPTERS: AdapterConstructors = {
   google_chat: (settings) => new GoogleChatAdapter(googleChatOptions(settings)),
   signal: (settings) => new NumberKeyedSignalAdapter(settings),
   imessage: (settings) => new IMessageAdapter(settings),
+  raft: (settings) => new RaftAdapter(settings),
+  x: (settings) => new XAdapter(xOptions(settings)),
+  wechat: (settings) => new WeChatAdapter(settings),
+  wecom: (settings) => new WeComAdapter(settings),
+  yuanbao: (settings) => new YuanbaoAdapter(settings),
+  qq: (settings) => new QQAdapter(settings),
+  zalo: (settings) => new ZaloAdapter(settings),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }

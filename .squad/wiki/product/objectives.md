@@ -202,8 +202,8 @@ the first task of PIECE-8, not an afterthought.
 
 ## OBJ-6 — It does what an assistant is for, not just what a chat is for
 
-metric: all 113 rows are answered (the 106 of OpenClaw's inventory of 2026-10-04 and the 7 of
-Hermes' headline list), each one shipped and verified on a real run, or declared out of scope with
+metric: all 114 rows are answered (the 106 of OpenClaw's inventory of 2026-10-04, OC-116 added on
+2026-11-12, and the 7 of Hermes' headline list), each one shipped and verified on a real run, or declared out of scope with
 the reason written. 0 silently dropped.
 horizon: 2026-10-09.
 serves: the capability bar, and the problem it turned out to be hiding.
