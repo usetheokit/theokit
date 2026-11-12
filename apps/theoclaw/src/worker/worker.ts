@@ -10,6 +10,8 @@ import {
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
+import type { RunResult } from '@theokit/sdk'
+
 import { UsageError } from '../cli-args.js'
 import type { ControlClient } from '../control-client/control-client.js'
 import type { TurnAgent } from '../agent-port.js'
@@ -120,6 +122,13 @@ async function pair(args: readonly string[], io: WorkerIo): Promise<number> {
   return 0
 }
 
+const SDK_STATUSES: readonly RunResult['status'][] = ['finished', 'error', 'cancelled']
+
+/** The port widens `status` to `string`; a value the SDK cannot return is an `error`. */
+function sdkStatus(status: string): RunResult['status'] {
+  return SDK_STATUSES.find((s) => s === status) ?? 'error'
+}
+
 function logLine(env: NodeJS.ProcessEnv, line: string): void {
   appendFileSync(workerLogPath(env), `${new Date().toISOString()} ${line}\n`, { mode: 0o600 })
 }
@@ -140,12 +149,15 @@ async function runLocal(message: string, profile: WorkerProfile, io: WorkerIo): 
       const text = (event as { type: string; text?: unknown }).text
       if (event.type === 'text-delta' && typeof text === 'string') io.stdout.write(text)
     }
-    const end = await run.wait()
+    const status = sdkStatus((await run.wait()).status)
     io.stdout.write('\n')
-    logLine(io.env, `provider response: status=${end.status}`)
-    return end.status === 'finished' || end.status === 'completed' ? 0 : 1
+    logLine(io.env, `provider response: status=${status}`)
+    return status === 'finished' ? 0 : 1
   } finally {
-    await (agent as unknown as { dispose?: () => Promise<void> }).dispose?.()
+    const closable = agent as TurnAgent &
+      Partial<AsyncDisposable> & { dispose?: () => Promise<void> }
+    await closable.dispose?.()
+    await closable[Symbol.asyncDispose]?.()
   }
 }
 
