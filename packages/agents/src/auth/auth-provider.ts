@@ -12,6 +12,7 @@ import type {
   OpenAIDeviceConfig,
   ResolvedCredential,
 } from '@theokit/sdk/auth'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 import { withFileLock } from '@theokit/sdk/persistence'
 
 /**
@@ -46,14 +47,16 @@ type DeviceLoginHooks = Parameters<typeof openaiDeviceLogin>[2]
  *
  * SECRET-SAFETY: the message never carries token material — only the class and the reason.
  */
-export class RefreshFailure extends Error {
+export class RefreshFailure extends TheokitAgentError {
+  override readonly name = 'RefreshFailure'
   constructor(
     message: string,
     /** `true` ⇒ worth retrying with backoff. `false` ⇒ terminal, fails on the first attempt. */
     readonly transient: boolean,
+    options?: { cause?: unknown },
   ) {
-    super(message)
-    this.name = 'RefreshFailure'
+    // `isRetryable` mirrors `transient`, so the SDK's `isTransientError` sees a refresh failure.
+    super(message, { isRetryable: transient, code: 'oauth_refresh_failed', cause: options?.cause })
   }
 }
 
@@ -77,6 +80,7 @@ export function classifyRefreshFailure(err: unknown): RefreshFailure {
     return new RefreshFailure(
       'the refresh token is no longer valid — log in again. Retrying does not change the outcome.',
       false,
+      { cause: err },
     )
   }
   const transient =
@@ -84,6 +88,7 @@ export function classifyRefreshFailure(err: unknown): RefreshFailure {
   return new RefreshFailure(
     transient ? 'transient failure refreshing the credential' : 'failure refreshing the credential',
     transient,
+    { cause: err },
   )
 }
 
