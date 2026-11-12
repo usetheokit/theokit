@@ -12,7 +12,14 @@ const TOKEN = 'mcp-relay-token-0123456789abcdef'
 
 async function relayServer() {
   let polls = 0
+  let inflight = 0
+  const idle: (() => void)[] = []
   const server = createServer((req, res) => {
+    inflight += 1
+    res.on('close', () => {
+      inflight -= 1
+      if (inflight === 0) for (const wake of idle.splice(0)) wake()
+    })
     req.resume()
     req.on('end', () => {
       if (req.url === '/instance/poll') polls += 1
@@ -28,10 +35,11 @@ async function relayServer() {
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
     polls: () => polls,
-    /** Drops every connection and resolves once all are closed, so no request can still land. */
+    /** Resolves once no request is in flight and every connection has closed; the server keeps listening. */
     settled: async () => {
+      if (inflight > 0) await new Promise<void>((r) => idle.push(r))
       const open = [...sockets].map((socket) => new Promise<void>((r) => socket.once('close', () => r())))
-      server.closeAllConnections()
+      server.closeIdleConnections()
       await Promise.all(open)
     },
     close: () => new Promise<void>((r) => (server.closeAllConnections(), server.close(() => r()))),
@@ -59,6 +67,9 @@ describe('the MCP relay in the composition', () => {
     await stop(on)
     await relay.settled()
     const seen = relay.polls()
+    // The server still listens: a poll after stop would be counted here.
+    await new Promise<void>((r) => setImmediate(r))
+    expect(relay.polls()).toBe(seen)
     await relay.close()
     expect(relay.polls()).toBe(seen)
   })
