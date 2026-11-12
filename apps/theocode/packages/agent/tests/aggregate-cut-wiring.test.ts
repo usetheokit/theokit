@@ -13,7 +13,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { buildChatAgent } from '../src/chat/chat.js'
 import type { TrustPosture } from '../src/config/index.js'
@@ -142,6 +142,28 @@ describe('B-173 — the aggregate cut travels from the composer to the record', 
     const wired = await wiredFor(projectWithRules(2, 200))
 
     expect(wired?.rules).toBeDefined()
+    expect(wired?.rules?.aggregateCut).toBeUndefined()
+  })
+
+  test('cutting only AGENTS.md (with a --- in it) shows no rules truncation (#1903)', async () => {
+    // No rules files, so the whole overflow lands on AGENTS.md. The chain loader caps it at
+    // 64,000 chars; the surface document pushes the persona past the aggregate ceiling.
+    const cwd = tempRoot('b1903-project-')
+    writeFileSync(
+      join(cwd, 'AGENTS.md'),
+      `HEAD ${'a'.repeat(40_000)}\n\n---\n\nTAIL ${'b'.repeat(40_000)}\n`,
+    )
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    let wired: WiredCapabilities | undefined
+    try {
+      wired = await wiredFor(cwd, 'S'.repeat(40_000))
+      const warned = stderr.mock.calls.map((c) => String(c[0])).join('')
+      expect(warned).toContain("source 'agentsMd' truncated")
+      expect(warned).not.toContain("source 'rules' truncated")
+    } finally {
+      stderr.mockRestore()
+    }
+
     expect(wired?.rules?.aggregateCut).toBeUndefined()
   })
 })

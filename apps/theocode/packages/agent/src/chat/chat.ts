@@ -24,7 +24,14 @@ import type { InteractiveBackend } from '@theokit/agents/interactive'
 import { PtyInteractiveBackend } from '@theokit/agents-pty'
 import { z } from 'zod'
 
-import { MAX_AGGREGATE, agentsMdChain, composeInstructions, loadAgentsMd, loadUserAgentsMd } from '../context/index.js'
+import {
+  MAX_AGGREGATE,
+  agentsMdChain,
+  composeInstructions,
+  loadAgentsMd,
+  loadUserAgentsMd,
+  type ProjectParts,
+} from '../context/index.js'
 import type { RulesLoad } from '../context/rules.js'
 import type { InlineSkill } from '@theokit/sdk'
 import {
@@ -291,10 +298,10 @@ function projectDocument(
    * have shown four.
    */
   home: string,
-): string {
-  const user = [loadUserAgentsMd(home), rules.user.text].filter(Boolean).join('\n\n')
-  if (!posture.allows.agentsMd) return user
-  return [user, loadAgentsMd(cwd), rules.project.text].filter(Boolean).join('\n\n')
+): ProjectParts {
+  const user = { userAgentsMd: loadUserAgentsMd(home), userRules: rules.user.text }
+  if (!posture.allows.agentsMd) return { ...user, projectAgentsMd: '', projectRules: '' }
+  return { ...user, projectAgentsMd: loadAgentsMd(cwd), projectRules: rules.project.text }
 }
 
 function resolveProviderPlugins(

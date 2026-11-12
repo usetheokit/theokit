@@ -31,25 +31,48 @@ describe('composeInstructions reports what the aggregate ceiling cut', () => {
   })
 
   test('cutting the rules names the rules, with the chars on both sides', () => {
-    // The rules segment is recognised by the `\n\n---\n\n` separator the loader joins blocks
-    // with; without it the whole document reads as AGENTS.md and the cut lands there instead.
     const rules = ['R'.repeat(2_000), 'S'.repeat(2_000)].join('\n\n---\n\n')
-    const agentsMd = 'A'.repeat(100)
-    const composed = composeInstructions('base', `${agentsMd}\n\n${rules}`, '', budget(2_000))
+    const composed = composeInstructions(
+      'base',
+      { userAgentsMd: '', userRules: '', projectAgentsMd: 'A'.repeat(100), projectRules: rules },
+      '',
+      budget(2_000),
+    )
 
     const cut = composed.cuts.find((c) => c.source === 'rules')
-    expect(cut).toBeDefined()
-    // Deliberately NOT asserting `from === rules.length`. `splitProjectDoc` recognises the rules
-    // segment from the first `---` onward, so the two differ by the leading block — and a test
-    // that pinned the splitter's arithmetic would break on a refactor that changed nothing
-    // observable. What must hold is the direction: something was there, less of it survived.
-    expect(cut?.from).toBeGreaterThan(0)
-    expect(cut?.to).toBeLessThan(cut?.from ?? 0)
-    // An upper bound too, because `from` is PRINTED verbatim in the status row: review showed
-    // that direction alone let `rules.length + agentsMd.length` through, putting a number on
-    // screen that describes a block bigger than the document it came from.
-    expect(cut?.from).toBeLessThanOrEqual(`${agentsMd}\n\n${rules}`.length - agentsMd.length)
+    expect(cut?.from).toBe(rules.length)
+    expect(cut?.to).toBeLessThan(rules.length)
+    expect(composed.cuts.some((c) => c.source === 'agentsMd')).toBe(false)
     expect(composed.text.length).toBeLessThanOrEqual(2_000)
+  })
+
+  test('a --- rule inside AGENTS.md is not read as the start of rules (#1903)', () => {
+    const agentsMd = 'HEAD-SECTION ' + 'a'.repeat(500) + '\n\n---\n\n' + 'TAIL-SECTION ' + 'b'.repeat(500)
+    const composed = composeInstructions('BASE', agentsMd, '', budget(900))
+
+    expect(composed.cuts.length).toBeGreaterThan(0)
+    expect(composed.cuts.every((c) => c.source === 'agentsMd')).toBe(true)
+    expect(composed.text).toContain('TAIL-SECTION')
+    expect(composed.text).not.toContain('HEAD-SECTION')
+  })
+
+  test('with real rules and a --- in AGENTS.md, each cut goes to its own source', () => {
+    const agentsMd = 'HEAD ' + 'a'.repeat(800) + '\n\n---\n\n' + 'TAIL ' + 'b'.repeat(800)
+    const rules = ['R1 ' + 'r'.repeat(600), 'R2 ' + 'r'.repeat(600)].join('\n\n---\n\n')
+    const parts = { userAgentsMd: '', userRules: '', projectAgentsMd: agentsMd, projectRules: rules }
+
+    // Rules alone absorb the overflow: no AGENTS.md cut.
+    const rulesOnly = composeInstructions('base', parts, '', budget(2_700))
+    expect(rulesOnly.cuts.map((c) => c.source)).toEqual(['rules'])
+    expect(rulesOnly.cuts[0]?.from).toBe(rules.length)
+    expect(rulesOnly.text).toContain('HEAD')
+
+    // Rules are exhausted, so AGENTS.md is cut too, keeping its tail.
+    const both = composeInstructions('base', parts, '', budget(1_000))
+    expect(both.cuts.map((c) => c.source)).toEqual(['rules', 'agentsMd'])
+    expect(both.cuts[1]?.from).toBe(agentsMd.length)
+    expect(both.text).toContain('b'.repeat(50))
+    expect(both.text).not.toContain('HEAD')
   })
 
   test('cutting the surface document does NOT report a rules cut', () => {
