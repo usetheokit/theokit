@@ -15,8 +15,11 @@ import { TeamsAdapter } from '@theokit/gateway-teams'
 import { TelegramAdapter } from '@theokit/gateway-telegram'
 import { TlonUrbitAdapter } from '@theokit/gateway-tlon-urbit'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
+import { XAdapter } from '@theokit/gateway-x'
+import type { XAdapterOptions } from '@theokit/gateway-x'
 
-import { readFileSync } from 'node:fs'
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import type { PlatformBuild } from './channel-loop.js'
 import { isBaileys } from './platforms.js'
@@ -81,6 +84,49 @@ export interface AdapterBuildOptions {
   readonly onQr?: (qr: string) => void
   /** How long the Baileys backend waits for the session to open (the QR scan); the package default is 60 s. */
   readonly connectTimeoutMs?: number
+  /** Where X keeps the refresh token it rotates; without it the rotated token lives in memory only. */
+  readonly stateDir?: string
+}
+
+/** The file under the state directory holding X's current refresh token. */
+export const X_REFRESH_TOKEN_FILE = 'x-refresh-token'
+
+/**
+ * The X adapter's options. X rotates the refresh token on every refresh and the old one stops
+ * working, so the newest one is kept in `<stateDir>/x-refresh-token` and preferred on the next start.
+ */
+export function xOptions(settings: PlatformSettings<'x'>, options: AdapterBuildOptions = {}): XAdapterOptions {
+  const file = options.stateDir === undefined ? undefined : join(options.stateDir, X_REFRESH_TOKEN_FILE)
+  let refreshToken = settings.refreshToken
+  if (file !== undefined) {
+    try {
+      const saved = readFileSync(file, 'utf8').trim()
+      if (saved !== '') refreshToken = saved
+    } catch {
+      // none saved yet: the configured token is the first one
+    }
+  }
+  return {
+    userId: settings.userId,
+    username: settings.username,
+    clientId: settings.clientId,
+    clientSecret: settings.clientSecret,
+    refreshToken,
+    allowFrom: settings.allowFrom
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry !== ''),
+    ...(settings.bearerToken === undefined ? {} : { bearerToken: settings.bearerToken }),
+    ...(settings.guestDailyLimit === undefined ? {} : { guest: { dailyLimit: settings.guestDailyLimit } }),
+    onRefreshToken: (token) => {
+      if (file === undefined) {
+        process.stderr.write('x: a rotated refresh token is kept in memory only; set THEOCLAW_STATE_DIR to keep it across restarts\n')
+        return
+      }
+      writeFileSync(file, token, { mode: 0o600 })
+      chmodSync(file, 0o600)
+    },
+  }
 }
 
 /**
@@ -181,6 +227,7 @@ const ADAPTERS: AdapterConstructors = {
   signal: (settings) => new NumberKeyedSignalAdapter(settings),
   imessage: (settings) => new IMessageAdapter(settings),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
+  x: (settings, options) => new XAdapter(xOptions(settings, options)),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }
 

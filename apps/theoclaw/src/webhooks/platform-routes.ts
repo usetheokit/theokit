@@ -85,6 +85,7 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
   signal: null,
   imessage: null,
   tlon_urbit: null,
+  x: null,
   email: null,
   line: ({ channelSecret }) => ({
     methods: ['POST'],

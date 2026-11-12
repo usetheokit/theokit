@@ -51,6 +51,14 @@ const PLATFORM_VARIABLES = {
     ship: 'THEOCLAW_TLON_URBIT_SHIP',
     code: 'THEOCLAW_TLON_URBIT_CODE',
   },
+  x: {
+    userId: 'THEOCLAW_X_USER_ID',
+    username: 'THEOCLAW_X_USERNAME',
+    clientId: 'THEOCLAW_X_CLIENT_ID',
+    clientSecret: 'THEOCLAW_X_CLIENT_SECRET',
+    refreshToken: 'THEOCLAW_X_REFRESH_TOKEN',
+    allowFrom: 'THEOCLAW_X_ALLOW_FROM',
+  },
   sms: {
     accountSid: 'THEOCLAW_SMS_TWILIO_ACCOUNT_SID',
     authToken: 'THEOCLAW_SMS_TWILIO_AUTH_TOKEN',
@@ -76,6 +84,11 @@ export const IMESSAGE_CLI_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_CLI_PATH'
 /** Optional: the Messages database `imsg` reads. */
 export const IMESSAGE_DB_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_DB_PATH'
 
+/** Optional: an app-only bearer token X reads mentions with. */
+export const X_BEARER_TOKEN_VARIABLE = 'THEOCLAW_X_BEARER_TOKEN'
+/** Optional: how many mentions one author outside the allowlist gets answered per UTC day (guest mode; off when unset). */
+export const X_GUEST_DAILY_LIMIT_VARIABLE = 'THEOCLAW_X_GUEST_DAILY_LIMIT'
+
 /** The environment variable that picks WhatsApp's backend: `cloud` (the default) or `baileys` (QR-linked WhatsApp Web). */
 export const WHATSAPP_BACKEND_VARIABLE = 'THEOCLAW_WHATSAPP_BACKEND'
 /** Where the Baileys pairing is kept; defaults to `whatsapp-session` under `THEOCLAW_STATE_DIR`. */
@@ -95,7 +108,9 @@ export type PlatformSettings<P extends SupportedPlatform> = P extends 'whatsapp'
     ? CloudSettings<'signal'> & { readonly signalCliPath?: string }
     : P extends 'imessage'
       ? { readonly cliPath?: string; readonly dbPath?: string }
-      : CloudSettings<P>
+      : P extends 'x'
+        ? CloudSettings<'x'> & { readonly bearerToken?: string; readonly guestDailyLimit?: number }
+        : CloudSettings<P>
 
 /** The Baileys settings when WhatsApp is set up that way, narrowing the union. */
 export function isBaileys(settings: PlatformSettings<'whatsapp'>): settings is WhatsAppBaileysSettings {
@@ -193,11 +208,32 @@ export function resolvePlatforms(
     }
     // Safe: `settings` has exactly the keys of this platform's row, which `PlatformSettings<P>`
     // is derived from; TypeScript cannot pair a loop variable of a union with its own row.
-    const settings = Object.fromEntries(read.map(([setting, , value]) => [setting, value]))
+    const settings: Record<string, unknown> = Object.fromEntries(read.map(([setting, , value]) => [setting, value]))
     const signalCliPath = (env[SIGNAL_CLI_PATH_VARIABLE] ?? '').trim()
     if (platform === 'signal' && signalCliPath !== '') settings.signalCliPath = signalCliPath
+    if (platform === 'x') {
+      const bearerToken = (env[X_BEARER_TOKEN_VARIABLE] ?? '').trim()
+      if (bearerToken !== '') {
+        settings.bearerToken = bearerToken
+        secrets.push(bearerToken)
+      }
+      const limit = (env[X_GUEST_DAILY_LIMIT_VARIABLE] ?? '').trim()
+      if (limit !== '') {
+        if (!/^[1-9]\d*$/.test(limit)) {
+          throw new TheoClawConfigError(`${X_GUEST_DAILY_LIMIT_VARIABLE} must be a positive whole number`, {
+            variable: X_GUEST_DAILY_LIMIT_VARIABLE,
+          })
+        }
+        settings.guestDailyLimit = Number(limit)
+      }
+    }
     configured.push({ platform, settings } as ConfiguredPlatform)
-    secrets.push(...read.map(([, , value]) => value))
+    // Only the credentials are secrets; the allowlist and the handle are no secrets.
+    secrets.push(
+      ...read
+        .filter(([setting]) => platform !== 'x' || ['clientSecret', 'refreshToken'].includes(setting))
+        .map(([, , value]) => value),
+    )
   }
   return { configured, skipped, secrets }
 }

@@ -57,6 +57,8 @@ const UNAUTHENTICATED_BECAUSE = {
   imessage: null,
   // The ship name is proven by the Eyre session the adapter holds; messages carry the author's @p.
   tlon_urbit: null,
+  // X's OAuth 2.0 token reads the mentions; the author id in each one is X's own.
+  x: null,
   // The Twilio signature proves the request came from Twilio, not who sent the text.
   sms: 'the caller id of a text message',
 } as const satisfies Record<SupportedPlatform, string | null>

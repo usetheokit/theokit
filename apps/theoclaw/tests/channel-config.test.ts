@@ -85,7 +85,29 @@ describe('resolvePlatforms', () => {
     expect(JSON.stringify(resolved.skipped)).not.toContain('bot-token-value')
   })
 
-  it('lists all fourteen platforms', () => {
+  it('reads X settings: the allowlist stays plain, credentials are masked, a bad guest limit is refused', () => {
+    const env = {
+      THEOCLAW_X_USER_ID: '42',
+      THEOCLAW_X_USERNAME: 'bot',
+      THEOCLAW_X_CLIENT_ID: 'cid',
+      THEOCLAW_X_CLIENT_SECRET: 'csecret',
+      THEOCLAW_X_REFRESH_TOKEN: 'rtoken',
+      THEOCLAW_X_ALLOW_FROM: 'alice, 77',
+      THEOCLAW_X_GUEST_DAILY_LIMIT: '3',
+    }
+    const resolved = resolvePlatforms(env)
+    expect(resolved.configured).toEqual([
+      {
+        platform: 'x',
+        settings: { userId: '42', username: 'bot', clientId: 'cid', clientSecret: 'csecret', refreshToken: 'rtoken', allowFrom: 'alice, 77', guestDailyLimit: 3 },
+      },
+    ])
+    expect(resolved.secrets).toEqual(['csecret', 'rtoken'])
+    expect(() => resolvePlatforms({ ...env, THEOCLAW_X_GUEST_DAILY_LIMIT: 'many' })).toThrow(/THEOCLAW_X_GUEST_DAILY_LIMIT/)
+    expect(resolvePlatforms({ THEOCLAW_X_USER_ID: '42' }).skipped.find((entry) => entry.platform === 'x')?.missing).toContain('THEOCLAW_X_ALLOW_FROM')
+  })
+
+  it('lists all fifteen platforms', () => {
     expect(PLATFORMS.map((spec) => spec.platform)).toEqual([
       'telegram',
       'discord',
@@ -100,6 +122,7 @@ describe('resolvePlatforms', () => {
       'signal',
       'imessage',
       'tlon_urbit',
+      'x',
       'sms',
     ])
   })

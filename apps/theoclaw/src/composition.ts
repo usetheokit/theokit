@@ -305,7 +305,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   })
   const handles = new WeakMap<BasePlatformAdapter, Handle>()
   const loop = startChannelLoop({
-    platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention', onQr: qrWriter(options.write), connectTimeoutMs: PAIRING_WAIT_MS }).map((build) =>
+    platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention', onQr: qrWriter(options.write), connectTimeoutMs: PAIRING_WAIT_MS, ...(policy.stateDir === undefined ? {} : { stateDir: policy.stateDir }) }).map((build) =>
       withRoute(build, webhooks.get(build.platform), handles),
     ),
     handler: withVoiceReplies(createReplyHandler({
