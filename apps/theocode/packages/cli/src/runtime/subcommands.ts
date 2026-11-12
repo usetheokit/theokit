@@ -79,11 +79,12 @@ function parseSessionAction(
  * B-081 — reports the RESOLVED install, so config overrides are honoured rather than refused:
  * diagnosing "why does `-c sandbox_mode=read-only` not take effect" is the point of the command.
  */
-function parseDoctor(values: OptionValues): ExecArgs {
+function parseDoctor(values: OptionValues, overrides: string[]): ExecArgs {
   return {
     mode: 'doctor',
     json: values.json === true,
     ...(values.cd !== undefined ? { cd: values.cd } : {}),
+    overrides,
   }
 }
 
@@ -98,7 +99,7 @@ interface SubcommandInput {
 export const SUBCOMMANDS: Record<string, (i: SubcommandInput) => ExecArgs> = {
   review: (i) => parseReview(i.values, i.positionals, i.overrides),
   sessions: (i) => parseSessions(i.values, i.positionals, i.overrides, i.overridesPresent),
-  doctor: (i) => parseDoctor(i.values),
+  doctor: (i) => parseDoctor(i.values, i.overrides),
   'migrate-config': (i) => parseMigrateConfig(i.values),
   goal: (i) => parseGoal(i.values, i.positionals, i.overrides),
 }

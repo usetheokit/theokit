@@ -90,17 +90,38 @@ export function runtimeCredentialState(
   return credentialState(path, now)
 }
 
-export async function doctorCommand(opts: { json: boolean; cd?: string }): Promise<void> {
+/**
+ * #1895 — the directory inspected and the configuration resolved for it. `main.ts` has already
+ * changed into `-C` before this command runs, so the directory is the process's own: re-applying a
+ * relative `-C sub` would inspect `sub/sub`. `-c`, `--sandbox` and `-a` arrive as `overrides`.
+ */
+export async function resolveDoctorTarget(opts: {
+  cd?: string
+  overrides?: string[]
+  userDir?: string
+  env?: Record<string, string | undefined>
+}) {
+  const { resolveEffectiveConfig, resolveTrustPosture } = await import('@theocode/agent/config')
+  const cwd = process.cwd()
+  const cfg = resolveEffectiveConfig({
+    cwd,
+    cli: opts.overrides ?? [],
+    ...(opts.userDir !== undefined ? { userDir: opts.userDir } : {}),
+    ...(opts.env !== undefined ? { env: opts.env } : {}),
+  })
+  return { cwd, cfg, posture: resolveTrustPosture(cwd) }
+}
+
+export async function doctorCommand(opts: {
+  json: boolean
+  cd?: string
+  overrides?: string[]
+}): Promise<void> {
   const agent = await import('@theocode/agent')
   const { authFilePath, strayCredentialFiles } = await import('@theocode/agent/auth')
   const { skillsOnDisk, loadOutputStyle, foreignHookRefusals } = await import('@theocode/agent')
-  const { resolveEffectiveConfig, resolveTrustPosture, settingsReport } = await import(
-    '@theocode/agent/config'
-  )
-  const cwd = opts.cd ?? process.cwd()
-
-  const posture = resolveTrustPosture(cwd)
-  const cfg = resolveEffectiveConfig({ cwd })
+  const { settingsReport } = await import('@theocode/agent/config')
+  const { cwd, cfg, posture } = await resolveDoctorTarget(opts)
 
   // Built for real, so the wiring reported is the wiring an actual turn would get. A cheaper
   // "read the files again" would reproduce the defect B-071 was reopened for.
