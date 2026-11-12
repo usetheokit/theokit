@@ -4,12 +4,38 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Wraps the real `skillReadTool` so `buildChatAgent` still gets the real tool, and the test can read
+// what `chat.ts` handed it.
+const spy = vi.hoisted(() => ({ calls: [] as unknown[][], results: [] as Promise<unknown>[] }))
+vi.mock('../../src/context/readable-skills.js', async (orig) => {
+  const actual = await orig<typeof import('../../src/context/readable-skills.js')>()
+  return {
+    ...actual,
+    skillReadTool: (...args: Parameters<typeof actual.skillReadTool>) => {
+      spy.calls.push(args)
+      const r = actual.skillReadTool(...args)
+      spy.results.push(r)
+      return r
+    },
+  }
+})
 
 import { skillReadTool } from '../../src/context/readable-skills.js'
 
 const made: string[] = []
+const realHome = process.env.HOME
+const realState = process.env.THEOKIT_HOME
+beforeEach(() => {
+  delete process.env.THEOKIT_HOME
+  spy.calls.length = 0
+  spy.results.length = 0
+})
 afterEach(() => {
+  if (realHome === undefined) delete process.env.HOME
+  else process.env.HOME = realHome
+  if (realState !== undefined) process.env.THEOKIT_HOME = realState
   for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 
@@ -69,5 +95,38 @@ describe('skill_read trust gate', () => {
     const other = temp()
     skillAt(other, '.theokit/skills', 'elsewhere')
     expect(await read(tools, 'elsewhere')).toContain('not found')
+  })
+
+  it('buildChatAgent wires the posture and the configured home into skill_read', async () => {
+    const { buildChatAgent } = await import('../../src/chat/chat.js')
+    const home = temp()
+    const realHomeDir = temp()
+    process.env.HOME = realHomeDir
+    skillAt(home, '.theokit/skills', 'mine')
+    skillAt(realHomeDir, '.theokit/skills', 'ambient')
+    const build = async (skills: boolean, cwd: string) => {
+      spy.results.length = 0
+      await buildChatAgent({
+        cwd,
+        home,
+        posture: { level: skills ? 'trusted' : 'untrusted', allows: { skills } },
+      } as never)
+      return read((await spy.results[0]) as never, 'x')
+    }
+
+    const untrustedCwd = temp()
+    skillAt(untrustedCwd, '.claude/skills', 'x')
+    const refused = await build(false, untrustedCwd)
+    expect(refused).toMatch(/Available skills: mine\./)
+    expect(refused).not.toContain('BODY OF x')
+
+    const trustedCwd = temp()
+    skillAt(trustedCwd, '.claude/skills', 'x')
+    expect(await build(true, trustedCwd)).toContain('BODY OF x')
+
+    // The configured home is read; the process's own home is not.
+    expect(spy.calls.at(-1)?.[1]).toBe(home)
+    const [tool] = (await spy.results[0]) as Awaited<ReturnType<typeof skillReadTool>>
+    expect(String(await tool?.handler({ name: 'ambient' }, undefined as never))).toContain('not found')
   })
 })
