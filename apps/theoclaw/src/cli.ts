@@ -23,6 +23,8 @@ import {
   storeBackup,
   testStorage,
 } from './backup/storage.js'
+import { portState, StatePortRefusal } from './state-port.js'
+import type { DatabaseDeps } from './scheduler/postgres-job-store.js'
 import { InstanceLockedError } from './backup/instance-lock.js'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './daemon.js'
@@ -82,6 +84,8 @@ export interface CliIo extends DaemonIo {
   readonly runner: Runner
   /** The HTTP client `call` uses; the global `fetch` when absent. */
   readonly fetch?: typeof fetch
+  /** Test seam: the PostgreSQL pool `state port` talks to. */
+  readonly database?: DatabaseDeps
 }
 
 const USAGE = `usage: theoclaw <command>
@@ -125,6 +129,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw restore --from <name>     restore the newest backup of a storage location
   theoclaw storage init <name> [--path <absolute dir>] [--no-encrypt]
   theoclaw storage list|test [<name>]  named storage locations (encrypted by default); test writes and reads back a probe
+  theoclaw state port --to <postgres url> [--force]
+                            copy the stores that have a schema (scheduled jobs) to PostgreSQL; refuses a target holding rows unless --force; keeps the source
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
   theoclaw tui [--session <id>]
                             the terminal UI on the running instance, with the token and port from the configuration file
@@ -267,6 +273,29 @@ function backupCommand(name: 'backup' | 'restore'): Command {
     } finally {
       if (scratch !== undefined) rmSync(dirname(scratch), { recursive: true, force: true })
     }
+  }
+}
+
+/** `state port --to <url> [--force]`: exit 0, or 1 with the refusal on stderr. */
+async function stateCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [verb, ...tail] = args
+  if (verb !== 'port') throw new UsageError('theoclaw state: expected port')
+  const force = tail.includes('--force')
+  const named = takeOption('--to', tail.filter((arg) => arg !== '--force'))
+  if (named.value === undefined || named.rest.length > 0)
+    throw new UsageError('theoclaw state port: expected --to <postgres url> [--force]')
+  try {
+    const done = await portState(io.env, io.homeDir, named.value, force, io.database)
+    for (const { store, rows } of done) io.stdout.write(`theoclaw: copied ${rows} rows of ${store}\n`)
+    return 0
+  } catch (error) {
+    if (!(error instanceof StatePortRefusal) && !(error instanceof TheoClawConfigError)) {
+      const text = describeError(error)
+      io.stderr.write(`theoclaw: ${text.split(named.value).join('<target>')}\n`)
+      return 1
+    }
+    io.stderr.write(`theoclaw: ${error.message}\n`)
+    return 1
   }
 }
 
@@ -536,6 +565,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
   storage: storageCommand,
+  state: stateCommand,
   '--version': (_args, io) => {
     io.stdout.write(`${readVersion()}\n`)
     return Promise.resolve(0)
