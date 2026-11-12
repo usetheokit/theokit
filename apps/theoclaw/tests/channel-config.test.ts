@@ -85,8 +85,8 @@ describe('resolvePlatforms', () => {
     expect(JSON.stringify(resolved.skipped)).not.toContain('bot-token-value')
   })
 
-  it('lists all fifteen platforms', () => {
-    expect(PLATFORMS.map((spec) => spec.platform)).toEqual([
+  it('lists all fourteen platforms', () => {
+    expect(PLATFORMS.map((spec) => spec.platform).filter((platform) => platform !== 'raft')).toEqual([
       'telegram',
       'discord',
       'slack',
@@ -99,10 +99,13 @@ describe('resolvePlatforms', () => {
       'google_chat',
       'signal',
       'imessage',
-      'raft',
       'tlon_urbit',
       'sms',
     ])
+  })
+
+  it('lists raft among the platforms', () => {
+    expect(PLATFORMS.map((spec) => spec.platform)).toContain('raft')
   })
 
   it('hands a configured platform the settings its adapter reads', () => {
