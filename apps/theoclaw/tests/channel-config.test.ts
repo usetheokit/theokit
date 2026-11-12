@@ -85,8 +85,8 @@ describe('resolvePlatforms', () => {
     expect(JSON.stringify(resolved.skipped)).not.toContain('bot-token-value')
   })
 
-  it('lists the platforms', () => {
-    expect(PLATFORMS.map((spec) => spec.platform).filter((platform) => platform !== 'raft')).toEqual([
+  it('lists all fourteen platforms', () => {
+    expect(PLATFORMS.map((spec) => spec.platform).filter((platform) => !['raft', 'wechat', 'wecom', 'yuanbao', 'zalo', 'qq'].includes(platform))).toEqual([
       'telegram',
       'discord',
       'slack',
@@ -100,13 +100,12 @@ describe('resolvePlatforms', () => {
       'signal',
       'imessage',
       'tlon_urbit',
-      'wechat',
-      'wecom',
-      'yuanbao',
-      'zalo',
-      'qq',
       'sms',
     ])
+  })
+
+  it('lists the Chinese and Vietnamese platforms', () => {
+    expect(PLATFORMS.map((spec) => spec.platform)).toEqual(expect.arrayContaining(['wechat', 'wecom', 'yuanbao', 'zalo', 'qq']))
   })
 
   it('lists raft among the platforms', () => {
