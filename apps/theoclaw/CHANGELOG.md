@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `/approve <token>` no longer treats every resume error as an unknown token: only a missing snapshot moves on to the next workflow, and any other error reaches the person and the log with the workflow name and token.
+
 - CodeQL alerts (#1726): the capture proxy forwards only `http:` URLs, `skills publish` and the control client accept only http(s) and ws(s) addresses, and `sessions share` creates its file without following a planted link.
 
 ### Added

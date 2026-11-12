@@ -39,6 +39,33 @@ describe('workspace workflows', () => {
     expect(await load().resume(suspended.runId, true)).toBeUndefined()
   })
 
+  it('surfaces a step error on resume instead of an unknown token', async () => {
+    const { workspace, lines } = setup(DEF)
+    const stateDir = join(workspace, '.s')
+    const make = (generate: never) => loadUserWorkflows({ workspace, stateDir, generate, write: (l) => lines.push(l) })
+    const first = make((async (prompt: string) => ({ result: `out(${prompt.split('\n')[0]})` })) as never)
+    const suspended = JSON.parse(String(await first.tools[0]!.handler({ text: 'notes' })))
+    const failing = make((async () => {
+      throw new Error('model exploded')
+    }) as never)
+    const hook = createWorkflowApproveHook({ isOwner: () => true, resume: failing.resume })
+    const event = { text: `/approve ${suspended.runId}`, platform: 'telegram', sender: { id: '1' } } as never
+    const decision = (await hook.pre_inbound!({ event } as never)) as { block: boolean; message: string }
+    expect(decision.message).toContain('model exploded')
+    expect(decision.message).not.toContain('No suspended workflow run')
+    expect(lines.some((l) => l.includes('release') && l.includes(suspended.runId) && l.includes('model exploded'))).toBe(true)
+  })
+
+  it('still answers an unknown token', async () => {
+    const { load } = setup(DEF)
+    const loaded = load()
+    expect(await loaded.resume('wfr-nope', true)).toBeUndefined()
+    const hook = createWorkflowApproveHook({ isOwner: () => true, resume: loaded.resume })
+    const event = { text: '/approve wfr-nope', platform: 'telegram', sender: { id: '1' } } as never
+    const decision = (await hook.pre_inbound!({ event } as never)) as { message: string }
+    expect(decision.message).toBe('No suspended workflow run has that token.')
+  })
+
   it('skips a file that is invalid or takes a reserved name', () => {
     const { load, lines } = setup({ ...DEF, name: 'triage' })
     expect(load().tools).toEqual([])

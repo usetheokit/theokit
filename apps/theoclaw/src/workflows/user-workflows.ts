@@ -2,7 +2,15 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { CustomTool } from '@theokit/sdk'
-import { fn, Workflow, workflowAsTool, workflowResumeTool, type WorkflowRun } from '@theokit/sdk/workflow'
+import {
+  fn,
+  Workflow,
+  workflowAsTool,
+  WorkflowResumeWorkflowMismatchError,
+  workflowResumeTool,
+  WorkflowSnapshotNotFoundError,
+  type WorkflowRun,
+} from '@theokit/sdk/workflow'
 import { z } from 'zod'
 
 import type { GenerateObject } from './triage-workflow.js'
@@ -144,10 +152,15 @@ export function loadUserWorkflows(options: {
     for (const { name, workflow } of committed) {
       try {
         const run = await Workflow.resume({ workflow, runId: token, payload: { approved } } as never)
-        options.write(`theoclaw-workflow: ${name} ${token} ${run.status}`)
+        options.write(`theoclaw-workflow: ${name} ${token} ${run.status}${run.error ? ` ${run.error.message}` : ''}`)
+        if (run.status === 'failed') return `${name} ${token}: failed${run.error ? ` (${run.error.message})` : ''}`
         return `${name} ${token}: ${run.status}${run.status === 'completed' ? ` ${JSON.stringify(run.output)}` : ''}`
-      } catch {
-        // Not this workflow's run (or no such snapshot): try the next.
+      } catch (error) {
+        // No snapshot, or a snapshot another workflow owns (the store is shared): try the next.
+        if (error instanceof WorkflowSnapshotNotFoundError || error instanceof WorkflowResumeWorkflowMismatchError) continue
+        const message = error instanceof Error ? error.message : String(error)
+        options.write(`theoclaw-workflow: ${name} ${token} failed: ${message}`)
+        throw new Error(`${name} ${token} failed: ${message}`, { cause: error })
       }
     }
     return undefined
