@@ -1,6 +1,6 @@
 import { UIMessageStreamPresenter } from '@theokit/presenter'
 import type { AgentOutputEvent } from '@theokit/presenter'
-import { WIRE_APPROVAL_DETAIL_PART } from '@theokit/presenter/wire'
+import { WIRE_APPROVAL_DETAIL_PART, WIRE_ERROR_CODE_PART } from '@theokit/presenter/wire'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import type { AgentStreamEvent, AgentTurnMetadata, DoneEvent } from './agent-stream-events.js'
@@ -63,7 +63,7 @@ function doneToMetadata(event: DoneEvent): AgentTurnMetadata {
 }
 
 /** The data-part name carrying the failure `code`. Public in effect: the consumer matches on it. */
-export const ERROR_CODE_DATA_PART = 'data-error-code'
+export const ERROR_CODE_DATA_PART = WIRE_ERROR_CODE_PART
 
 /**
  * Data-part names for the three signals theokit#141 restored. Public in effect — a consumer matches
