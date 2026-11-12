@@ -65,9 +65,9 @@ describe('check-parity-ledger: the id set', () => {
     expect(rulesOf(result, 'OC-999')).toEqual(['extra'])
   })
 
-  it('fails when an id appears twice even though the count is 114', () => {
+  it('fails when an id appears twice even though the count is 113', () => {
     const ids = [...ALL_IDS.filter((id) => id !== 'H-2'), 'H-1']
-    expect(ids).toHaveLength(114)
+    expect(ids).toHaveLength(113)
     const result = run(ids.map(validOut))
     expect(rulesOf(result, 'H-1')).toContain('duplicate')
   })
@@ -85,7 +85,7 @@ describe('check-parity-ledger: the id set', () => {
     expect(result.violations.filter((v) => v.rule !== 'source-parse')).toEqual([])
   })
 
-  it('accepts a ledger whose ids equal the 114 source rows', () => {
+  it('accepts a ledger whose ids equal the 113 source rows', () => {
     const result = run(ALL_IDS.map(validOut))
     expect(result.violations).toEqual([])
   })
@@ -114,7 +114,7 @@ describe('check-parity-ledger: the id set', () => {
     }
     const badElement = run([...ALL_IDS.map(validOut), { status: 'open' }])
     expect(badElement.violations.map((v) => v.rule)).toEqual(['ledger-parse'])
-    expect(badElement.violations[0].detail).toMatch(/114/)
+    expect(badElement.violations[0].detail).toMatch(/113/)
   })
 
   it('fails when the Hermes table header is renamed', () => {
