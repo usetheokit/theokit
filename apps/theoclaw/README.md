@@ -279,12 +279,15 @@ TheoClaw's agents load the project setting source only when `THEOCLAW_APPROVED_H
 one fingerprint, so with none set no project hook runs; with some set, a hook runs only if its own
 fingerprint is listed. `THEOCLAW_APPROVED_HOOKS` lists the
 approved commands by fingerprint, comma-separated: the hex sha256 of the hook's event as the file
-spells it, its command and its timeout in milliseconds (30000 unless the file sets `timeout`), one
+spells it, its command and its timeout in milliseconds (30000 unless the file sets `timeout`, which it gives in seconds: `5` is 5000), one
 per line. For a `Stop` hook running `touch x`:
 
 ```bash
 node -e "console.log(require('node:crypto').createHash('sha256').update(process.argv[1]).digest('hex'))" "$(printf 'Stop\ntouch x\n30000')"
 ```
+
+`theoclaw hooks list` prints one line per hook in the workspace's `.theokit/settings.json`: its event, its
+fingerprint and `approved` or `not approved`. The fingerprints it prints are the ones to list.
 
 An item that is not 64 hex characters refuses the start. Approved fingerprints are hidden from the
 output.
