@@ -5,6 +5,8 @@ import { readFileSync, realpathSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
+
+import type { DockerRunner } from '@theokit/agents/sandbox'
 import { isSea } from 'node:sea'
 import { fileURLToPath } from 'node:url'
 
@@ -23,6 +25,8 @@ import {
   storeBackup,
   testStorage,
 } from './backup/storage.js'
+import { portState, StatePortRefusal } from './state-port.js'
+import type { DatabaseDeps } from './scheduler/postgres-job-store.js'
 import { InstanceLockedError } from './backup/instance-lock.js'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './daemon.js'
@@ -47,8 +51,10 @@ import { loadConfiguration } from './config-file.js'
 import { whatsappSessionDir } from './channels/platforms.js'
 import { auditCommand } from './ops/audit.js'
 import { securityCommand } from './security-audit.js'
+import { sandboxCommand } from './sandbox/sandbox-command.js'
 import { update } from './update.js'
 import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
+import { hooksCommand } from './agent/hooks-list.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { mcpRelayCommand } from './mcp-relay/command.js'
@@ -82,6 +88,10 @@ export interface CliIo extends DaemonIo {
   readonly runner: Runner
   /** The HTTP client `call` uses; the global `fetch` when absent. */
   readonly fetch?: typeof fetch
+  /** Test seam: the PostgreSQL pool `state port` talks to. */
+  readonly database?: DatabaseDeps
+  /** Test seam: the `docker` process `sandbox` talks to. */
+  readonly docker?: DockerRunner
 }
 
 const USAGE = `usage: theoclaw <command>
@@ -125,17 +135,22 @@ const USAGE = `usage: theoclaw <command>
   theoclaw restore --from <name>     restore the newest backup of a storage location
   theoclaw storage init <name> [--path <absolute dir>] [--no-encrypt]
   theoclaw storage list|test [<name>]  named storage locations (encrypted by default); test writes and reads back a probe
+  theoclaw sandbox list | recreate (--all | --session <id>) [--force]
+                            with THEOCLAW_SANDBOX_BACKEND=docker: list the sandbox containers theoclaw made; remove them so the next command starts fresh (asks before a running one without --force)
+  theoclaw state port --to <postgres url> [--force]
+                            copy the stores that have a schema (scheduled jobs) to PostgreSQL; refuses a target holding rows unless --force; keeps the source
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
   theoclaw tui [--session <id>]
                             the terminal UI on the running instance, with the token and port from the configuration file
   theoclaw mcp              serve TheoClaw's tools as an MCP server on stdin/stdout (claude mcp add theoclaw -- theoclaw mcp)
-  theoclaw mcp-relay grant <name> [--tools a,b] | list | revoke <name|id> | serve --port <n> [--host <h>]
+  theoclaw mcp-relay grant <name> [--tools a,b] | list | revoke <name|id> | serve --port <n> [--host <h>] | smoke
                             serve runs the hosted relay (instance token in THEOCLAW_MCP_RELAY_TOKEN); per-client grants for remote MCP clients; grant prints the token once; default tools list_dir and read_file
   theoclaw attach [--session <id>] [--print-config]
                             launch Claude Code (claude) with a temporary MCP config for this session that expires in an hour; --print-config prints the config instead
   theoclaw resume           print the messages of the most recently updated chat session
   theoclaw import <claude-code|hermes> [--dry-run] [--source <dir>] [--project <dir>] [--home <dir>]
                             copy a Claude Code or Hermes setup into the state directory; --dry-run lists the files and writes none
+  theoclaw hooks list       the project hooks in .theokit/settings.json: event, fingerprint, approved or not approved; exit 1 when none
   theoclaw sessions list|show <id>|export <id> [--json]
                             list the chat sessions, show one's summary, or print its messages (an id prefix is enough)
   theoclaw sessions share <id> --to <dir> | open <id> --from <dir>
@@ -270,6 +285,29 @@ function backupCommand(name: 'backup' | 'restore'): Command {
   }
 }
 
+/** `state port --to <url> [--force]`: exit 0, or 1 with the refusal on stderr. */
+async function stateCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [verb, ...tail] = args
+  if (verb !== 'port') throw new UsageError('theoclaw state: expected port')
+  const force = tail.includes('--force')
+  const named = takeOption('--to', tail.filter((arg) => arg !== '--force'))
+  if (named.value === undefined || named.rest.length > 0)
+    throw new UsageError('theoclaw state port: expected --to <postgres url> [--force]')
+  try {
+    const done = await portState(io.env, io.homeDir, named.value, force, io.database)
+    for (const { store, rows } of done) io.stdout.write(`theoclaw: copied ${rows} rows of ${store}\n`)
+    return 0
+  } catch (error) {
+    if (!(error instanceof StatePortRefusal) && !(error instanceof TheoClawConfigError)) {
+      const text = describeError(error)
+      io.stderr.write(`theoclaw: ${text.split(named.value).join('<target>')}\n`)
+      return 1
+    }
+    io.stderr.write(`theoclaw: ${error.message}\n`)
+    return 1
+  }
+}
+
 /** `storage init|list|test`: exit 0, 1 on a refusal or a failed test. */
 function storageCommand(args: readonly string[], io: CliIo): Promise<number> {
   const [verb, ...rest] = args
@@ -367,6 +405,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     return Promise.resolve(doctor(io, { fix: args.includes('--fix') }))
   },
   status: (_args, io) => statusCommand(io, io.runner),
+  hooks: (args, io) => Promise.resolve(hooksCommand(args, io)),
   sessions: (args, io) => Promise.resolve(sessionsCommand(args, io)),
   transcripts: (args, io) => {
     const [verb, ...rest] = args
@@ -536,6 +575,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
   storage: storageCommand,
+  state: stateCommand,
+  sandbox: (args, io) => sandboxCommand(args, io),
   '--version': (_args, io) => {
     io.stdout.write(`${readVersion()}\n`)
     return Promise.resolve(0)

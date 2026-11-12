@@ -122,7 +122,7 @@ export function cloudWorkerPort(
           options?.signal,
         )
       })
-      const note = `\n\n[cloud worker ${id}: ${outcome.committed ? `commit on branch ${outcome.branch}` : 'no changes to commit'}; machine torn down]`
+      const note = `\n\n[cloud worker ${id}: ${outcome.committed ? `commit on branch ${outcome.branch}` : 'no changes to commit'}; ${outcome.recipe ? `environment ${outcome.recipe}; ` : ''}machine torn down]`
       return { ...(result as DelegationResult), response: (result as DelegationResult).response + note }
     },
   }

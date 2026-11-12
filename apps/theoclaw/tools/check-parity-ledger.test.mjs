@@ -17,7 +17,7 @@ import {
 } from './check-parity-ledger.mjs'
 
 const TODAY = '2026-10-06'
-const OC_IDS = Array.from({ length: 106 }, (_, i) => `OC-${i + 1}`)
+const OC_IDS = Array.from({ length: 107 }, (_, i) => `OC-${i + 1}`)
 const H_IDS = Array.from({ length: 7 }, (_, i) => `H-${i + 1}`)
 const ALL_IDS = [...OC_IDS, ...H_IDS]
 
@@ -43,7 +43,7 @@ function validOut(id) {
 
 function run(ledger, overrides = {}) {
   return checkLedger({
-    inventoryText: inventoryText(106),
+    inventoryText: inventoryText(107),
     hermesText: hermesText(7),
     ledgerText: typeof ledger === 'string' ? ledger : JSON.stringify(ledger),
     repoRoot: '/nonexistent-repo-root',
@@ -65,9 +65,9 @@ describe('check-parity-ledger: the id set', () => {
     expect(rulesOf(result, 'OC-999')).toEqual(['extra'])
   })
 
-  it('fails when an id appears twice even though the count is 113', () => {
+  it('fails when an id appears twice even though the count is 114', () => {
     const ids = [...ALL_IDS.filter((id) => id !== 'H-2'), 'H-1']
-    expect(ids).toHaveLength(113)
+    expect(ids).toHaveLength(114)
     const result = run(ids.map(validOut))
     expect(rulesOf(result, 'H-1')).toContain('duplicate')
   })
@@ -75,7 +75,7 @@ describe('check-parity-ledger: the id set', () => {
   it('counts each row once when the ledger answers it twice', () => {
     const ids = [...ALL_IDS.filter((id) => id !== 'H-2'), 'H-1']
     const result = run(ids.map(validOut))
-    expect(result.counts).toEqual({ shipped: 0, out: 112, open: 0 })
+    expect(result.counts).toEqual({ shipped: 0, out: 113, open: 0 })
   })
 
   it('fails instead of passing when a source parses to fewer rows than its floor', () => {
@@ -85,7 +85,7 @@ describe('check-parity-ledger: the id set', () => {
     expect(result.violations.filter((v) => v.rule !== 'source-parse')).toEqual([])
   })
 
-  it('accepts a ledger whose ids equal the 113 source rows', () => {
+  it('accepts a ledger whose ids equal the 114 source rows', () => {
     const result = run(ALL_IDS.map(validOut))
     expect(result.violations).toEqual([])
   })
@@ -102,7 +102,7 @@ describe('check-parity-ledger: the id set', () => {
   })
 
   it('fails when a source lists the same row twice', () => {
-    const text = inventoryText(106, ['| OC-5 | capability 5 again | yes |'])
+    const text = inventoryText(107, ['| OC-5 | capability 5 again | yes |'])
     const result = run(ALL_IDS.map(validOut), { inventoryText: text })
     expect(result.violations).toContainEqual(expect.objectContaining({ id: 'OC-5', rule: 'source-parse' }))
   })
@@ -114,7 +114,7 @@ describe('check-parity-ledger: the id set', () => {
     }
     const badElement = run([...ALL_IDS.map(validOut), { status: 'open' }])
     expect(badElement.violations.map((v) => v.rule)).toEqual(['ledger-parse'])
-    expect(badElement.violations[0].detail).toMatch(/113/)
+    expect(badElement.violations[0].detail).toMatch(/114/)
   })
 
   it('fails when the Hermes table header is renamed', () => {
@@ -411,11 +411,11 @@ function readRealInputs() {
 }
 
 describe('check-parity-ledger: the real ledger', () => {
-  it('the real ledger holds exactly the 113 source ids', () => {
+  it('the real ledger holds exactly the 114 source ids', () => {
     const realLedger = JSON.parse(readReal(LEDGER_PATH))
     const sourceIds = [...parseInventoryIds(readReal(INVENTORY_PATH)), ...parseHermesIds(readReal(HERMES_PATH))]
-    expect(sourceIds).toHaveLength(113)
-    expect(realLedger).toHaveLength(113)
+    expect(sourceIds).toHaveLength(114)
+    expect(realLedger).toHaveLength(114)
     expect(realLedger.map((e) => e.id).sort()).toEqual([...sourceIds].sort())
   })
 
@@ -443,7 +443,7 @@ function cliRepo({ withInventory = true } = {}) {
     'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
     [LEDGER_PATH]: JSON.stringify(ledger),
   }
-  if (withInventory) files[INVENTORY_PATH] = inventoryText(106)
+  if (withInventory) files[INVENTORY_PATH] = inventoryText(107)
   return tempRepo(files)
 }
 
@@ -465,7 +465,7 @@ describe('check-parity-ledger: the parity command', () => {
   it('runCli returns 0 and prints only the counts for a fully answered ledger', () => {
     const { code, lines } = runCliCapturing(cliRepo())
     expect(code).toBe(0)
-    expect(lines).toEqual(['shipped 1 · out 112 · open 0'])
+    expect(lines).toEqual(['shipped 1 · out 113 · open 0'])
   })
 
   it('runCli reports an absent inventory as source-parse and returns 1', () => {
@@ -521,7 +521,7 @@ describe('check-parity-ledger: the command run by node', () => {
       { id: 'OC-2', status: 'open' },
     ]
     const root = tempRepo({
-      [INVENTORY_PATH]: inventoryText(106),
+      [INVENTORY_PATH]: inventoryText(107),
       [HERMES_PATH]: hermesText(7),
       [LEDGER_PATH]: JSON.stringify(ledger),
       'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
@@ -532,7 +532,7 @@ describe('check-parity-ledger: the command run by node', () => {
     const result = runNode(copy, root)
     expect(result.stderr).toBe('')
     expect(result.status).toBe(1)
-    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 111 · open 1', 'OC-2 open: no check and no reason'])
+    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 112 · open 1', 'OC-2 open: no check and no reason'])
   })
 
   it('node on the module exits 0 and prints only the counts for a fully answered ledger', () => {
@@ -541,7 +541,7 @@ describe('check-parity-ledger: the command run by node', () => {
       shipped('OC-1', 'apps/theoclaw/tests/e2e/proof.test.ts', 'proves OC-1', localDate()),
     ]
     const root = tempRepo({
-      [INVENTORY_PATH]: inventoryText(106),
+      [INVENTORY_PATH]: inventoryText(107),
       [HERMES_PATH]: hermesText(7),
       [LEDGER_PATH]: JSON.stringify(ledger),
       'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
@@ -552,7 +552,7 @@ describe('check-parity-ledger: the command run by node', () => {
     const result = runNode(copy, root)
     expect(result.stderr).toBe('')
     expect(result.status).toBe(0)
-    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 112 · open 0'])
+    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 113 · open 0'])
   })
 
   it('node on the real tree prints what runCli computes and exits with its code', () => {

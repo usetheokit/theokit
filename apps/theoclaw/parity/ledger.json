@@ -73,11 +73,13 @@
   },
   {
     "id": "OC-15",
-    "status": "out",
-    "reason": "Real-time voice over phone and meeting infrastructure is a different product from a messaging assistant.",
-    "declared_by": "human/paulo",
-    "declared_on": "2026-10-04",
-    "declared_at": ".squad/wiki/product/objectives.md:223"
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/voice-call-route.test.ts",
+      "test": "a caller who asks what time it is gets a spoken answer for OC-15"
+    },
+    "verified_on": "2026-11-11",
+    "note": "Twilio only: inbound calls answered through TwiML Gather/Say on POST /webhooks/voice (#1627) and outbound calls through theoclaw call (#1628). Offline route test through composeTheoClaw; no real phone call was placed. Telnyx, Plivo and media streaming are not built."
   },
   {
     "id": "OC-16",
@@ -529,12 +531,12 @@
   {
     "id": "OC-71",
     "status": "open",
-    "note": "precedence built: a workspace skill overrides a bundled one of the same name (tests/skill-registry.test.ts) ; open because no end-to-end check against a real model exists yet, and none was run"
+    "note": "precedence built: a workspace skill overrides a bundled one of the same name (tests/skill-registry.test.ts); tests/skills-registry-e2e.test.ts runs publish, search and install through the CLI against the reference registry and checks the skill is offered on the next turn of an open session; open because no end-to-end check against a real model exists yet, and none was run"
   },
   {
     "id": "OC-72",
     "status": "open",
-    "note": "`theoclaw skills install <name>[@<version>]` downloads, sha256-verifies and installs a registry skill (src/skills/install.ts); gating built: a skill whose required binary is not on PATH is not offered (tests/skill-registry.test.ts) ; open because no end-to-end check against a real model exists yet, and none was run"
+    "note": "`theoclaw skills install <name>[@<version>]` downloads, sha256-verifies and installs a registry skill (src/skills/install.ts); gating built: a skill whose required binary is not on PATH is not offered (tests/skill-registry.test.ts); tests/skills-registry-e2e.test.ts runs publish, search and install through the CLI against the reference registry and checks the skill is offered on the next turn of an open session; open because no end-to-end check against a real model exists yet, and none was run"
   },
   {
     "id": "OC-73",
@@ -570,7 +572,7 @@
     "gaps": [
       "B-565"
     ],
-    "note": "moved to B-565 (dod reduced 2026-10-22, delegated): none of the six sandbox backends exists in the ecosystem, so nothing here can be built or checked yet"
+    "note": "moved to B-565 (dod reduced 2026-10-22, delegated): none of the six sandbox backends exists in the ecosystem, so nothing here can be built or checked yet; built for the docker backend (#1609): theoclaw sandbox list and recreate [--all | --session <id>] [--force], unit-tested with a stubbed docker runner; the live check tests/live/sandbox-docker.live.test.ts needs a Docker daemon and is not yet run"
   },
   {
     "id": "OC-78",
@@ -827,5 +829,10 @@
     "declared_by": "human/paulo",
     "declared_on": "2026-10-06",
     "declared_at": "apps/theoclaw/parity/decisions-2026-10-06.md"
+  },
+  {
+    "id": "OC-116",
+    "status": "open",
+    "reason": "Partly implemented: theoclaw mcp-relay serve, grant, list and revoke, and the instance connector set by THEOCLAW_MCP_RELAY_URL and THEOCLAW_MCP_RELAY_TOKEN, are on main, with grants limited to list_dir and read_file unless --tools names more. Not implemented: a hosted Control UI connected-apps view, and no run against a real ChatGPT, Claude or Codex client is recorded, so this stays open."
   }
 ]

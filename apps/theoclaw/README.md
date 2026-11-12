@@ -1,7 +1,7 @@
 # TheoClaw
 
 A personal AI assistant that lives where its user already writes: one agent answering on Telegram,
-Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams, Google Chat, Signal, iMessage and SMS.
+Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams, Google Chat, Signal, iMessage, Raft, X (Twitter), WeChat, WeCom, Yuanbao, QQ Bot, Zalo and SMS.
 
 ## Install
 
@@ -136,7 +136,7 @@ so a file kept outside the repository and sourced from your shell profile is als
 | `THEOCLAW_STATE_DIR`                      | Where pairings are kept. Required under the default `THEOCLAW_DM_POLICY=pairing`; see below.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `THEOCLAW_OWNERS`                         | Who the instance serves: comma-separated `platform:senderId`, e.g. `telegram:42,matrix:@me:matrix.org`. Required even with no platform configured; see [Who may talk to the instance](#who-may-talk-to-the-instance).                                                                                                                                                                                                                                                                                                                  |
 | `THEOCLAW_TRANSCRIPTS`                    | `on` or `off` (default `off`). Off, a chat turn's transcript is kept in a temp directory removed when the session's agent is disposed and the memory store is off, so a message is stored in no file; the cost is that a conversation does not survive a restart, `session_search` finds nothing, and memory is off (`THEOCLAW_MEMORY=on` with transcripts off refuses to start). On, each chat's transcript is kept under `<THEOCLAW_WORKSPACE>/.theoclaw/`, a conversation survives a restart, and memory follows `THEOCLAW_MEMORY`. |
-| `THEOCLAW_DATABASE`                       | `sqlite` (default, same as `files`) or a `postgres://user:password@host:port/db` URL (a secret ref works). With a URL the scheduled jobs (the store with a schema) are rows in the `theoclaw_schedules` table instead of `.theoclaw/schedules.json`, and survive a restart; sessions, memory and the rest stay in files and SQLite. The start fails if the database cannot be reached, with no fallback to the files. Needs the `pg` package installed beside theoclaw. Existing jobs are not moved across.                            |
+| `THEOCLAW_DATABASE`                       | `sqlite` (default, same as `files`) or a `postgres://user:password@host:port/db` URL (a secret ref works). With a URL the scheduled jobs (the store with a schema) are rows in the `theoclaw_schedules` table instead of `.theoclaw/schedules.json`, and survive a restart; sessions, memory and the rest stay in files and SQLite. The start fails if the database cannot be reached, with no fallback to the files. Needs the `pg` package installed beside theoclaw. `theoclaw state port --to <postgres url> [--force]` copies the existing jobs across (it refuses a target that already holds rows unless `--force`, prints the rows copied per store, and never deletes the source). Stop the instance first: a job written while the port runs can be missed).                            |
 | `THEOCLAW_MEMORY_BACKEND`                 | `builtin` (default), `mem0`, `honcho`, `supermemory` or `sdk-memory`. The hosted three mirror each saved fact to the service and recall from it when a session opens (key in `MEM0_API_KEY`, `HONCHO_API_KEY` or `SUPERMEMORY_API_KEY`; install `@theokit/memory-<name>` and its peer SDK). `sdk-memory` gives agents `@theokit/sdk-memory`'s provider. The built-in store stays the fallback.                                                                                                                                         |
 | `THEOCLAW_WORKSPACE`                      | Absolute path of an existing directory. Each chat's transcript and the session generations are kept under `<THEOCLAW_WORKSPACE>/.theoclaw/` (created with mode 0700). Startup fails and names the variable when it is unset, relative or not a directory. Under `THEOCLAW_PROFILE` the profile sets it to its own `workspace` and an explicit value is refused (see [Several instances on one host](#several-instances-on-one-host)).                                                                                                  |
 
@@ -215,6 +215,13 @@ otherwise startup skips it and prints `<platform>: not configured (missing ...)`
 | Google Chat                        | `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` (path of the service account's JSON key), `GOOGLE_CHAT_AUDIENCE` (the exact HTTP endpoint URL set in the Chat app)                                                                                                                                                                                                  | webhook `/webhooks/google_chat`; spaces and DMs      |
 | Signal                             | `SIGNAL_ACCOUNT` (the linked number, E.164); optional `SIGNAL_CLI_PATH` (default: `signal-cli` on `PATH`). Owners are written `signal:+<number>`                                                                                                                                                                                                       | none (a `signal-cli jsonRpc` child)                  |
 | iMessage                           | `IMESSAGE_ENABLED=1`; optional `IMESSAGE_CLI_PATH` (default: `imsg` on `PATH`, or a script running `imsg rpc` over ssh), `IMESSAGE_DB_PATH`. macOS only with Messages signed in; refused on other systems. Owners are written `imessage:<handle>`                                                                                                      | none (an `imsg rpc` child)                           |
+| Raft                               | `RAFT_ENABLED=1`; optional `RAFT_CLI_PATH` (default: `raft` on `PATH`). The Raft CLI holds its own login                                                                                                                                                                                                                                               | none (a `raft wake --json` child)                    |
+| WeChat Official Account | `WECHAT_APP_ID`, `WECHAT_APP_SECRET`, `WECHAT_TOKEN` | webhook `/webhooks/wechat` |
+| WeCom | `WECOM_CORP_ID`, `WECOM_CORP_SECRET`, `WECOM_AGENT_ID`, `WECOM_TOKEN`, `WECOM_ENCODING_AES_KEY` | webhook `/webhooks/wecom` |
+| Yuanbao | `YUANBAO_APP_ID`, `YUANBAO_APP_SECRET`, `YUANBAO_CALLBACK_SECRET` | webhook `/webhooks/yuanbao` |
+| QQ Bot | `QQ_APP_ID`, `QQ_APP_SECRET` | webhook `/webhooks/qq` |
+| Zalo Official Account | `ZALO_APP_ID`, `ZALO_OA_SECRET_KEY`, `ZALO_ACCESS_TOKEN` (expires; supply a fresh one) | webhook `/webhooks/zalo` |
+| X (Twitter)                        | `X_USER_ID`, `X_USERNAME`, `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_REFRESH_TOKEN`, `X_ALLOW_FROM` (comma list of handles or user ids); optional `X_BEARER_TOKEN`, `X_GUEST_DAILY_LIMIT`. Public replies only; no DMs, likes or media | none (polls the X API; the rotated refresh token is kept in `x-refresh-token` under `STATE_DIR`) |
 | SMS (Twilio)                       | `SMS_TWILIO_ACCOUNT_SID`, `SMS_TWILIO_AUTH_TOKEN`, `SMS_TWILIO_FROM_NUMBER`, `SMS_PUBLIC_URL`                                                                                                                                                                                                                                                          | webhook `/webhooks/sms`                              |
 
 Names in the table omit the `THEOCLAW_` prefix.
@@ -279,12 +286,15 @@ TheoClaw's agents load the project setting source only when `THEOCLAW_APPROVED_H
 one fingerprint, so with none set no project hook runs; with some set, a hook runs only if its own
 fingerprint is listed. `THEOCLAW_APPROVED_HOOKS` lists the
 approved commands by fingerprint, comma-separated: the hex sha256 of the hook's event as the file
-spells it, its command and its timeout in milliseconds (30000 unless the file sets `timeout`), one
+spells it, its command and its timeout in milliseconds (30000 unless the file sets `timeout`, which it gives in seconds: `5` is 5000), one
 per line. For a `Stop` hook running `touch x`:
 
 ```bash
 node -e "console.log(require('node:crypto').createHash('sha256').update(process.argv[1]).digest('hex'))" "$(printf 'Stop\ntouch x\n30000')"
 ```
+
+`theoclaw hooks list` prints one line per hook in the workspace's `.theokit/settings.json`: its event, its
+fingerprint and `approved` or `not approved`. The fingerprints it prints are the ones to list.
 
 An item that is not 64 hex characters refuses the start. Approved fingerprints are hidden from the
 output.
@@ -414,6 +424,14 @@ when `git_diff` is off because the sandbox is not enforced.
 
 `THEOCLAW_SANDBOX` chooses the shell's sandbox when host tools are on (B-392). Any other value
 stops the start before any runner, with host tools off too.
+
+With `THEOCLAW_SANDBOX_BACKEND=docker`, `theoclaw sandbox list` prints one line per sandbox container
+theoclaw made (name, status, image, session) and a total; containers it did not make are not listed.
+`theoclaw sandbox recreate (--all | --session <id>) [--force]` removes the matching containers so the
+next command of that session starts a fresh one; without `--force` it asks before removing a running
+container (and refuses when there is no terminal). theoclaw keeps the last container of each session
+(labelled `theoclaw.sandbox=1`) so it can be listed. With the bwrap backend both say there is nothing
+to manage and exit 0.
 
 | Mode                        | The shell can write                               | The file-writing tools                                                             |
 | --------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -645,6 +663,49 @@ set -a; . ~/.config/theoclaw/dev.env; set +a
 pnpm --filter theoclaw run build
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/control-plane.live.test.ts
 ```
+
+### MCP relay (ChatGPT, Claude, Codex)
+
+The MCP relay lets a hosted MCP client (ChatGPT, Claude or Codex) call an instance's tools through a
+relay you run. The commands are `theoclaw mcp-relay serve|grant|list|revoke`. There is no hosted
+Control UI "connected apps" view; grants are managed on the command line only.
+
+The relay sees tool names and results in clear text. It is a bridge, not the end-to-end encrypted
+instance mailbox, so run it on a host you trust and put it behind HTTPS.
+
+1. Run the relay. `THEOCLAW_MCP_RELAY_TOKEN` is the instance token and must be set; `--host` is
+   optional.
+
+   ```bash
+   THEOCLAW_MCP_RELAY_TOKEN=<instance-token> theoclaw mcp-relay serve --port 8787 [--host <host>]
+   ```
+
+2. Point the instance at it by setting both variables in its environment. The URL must be `https:`
+   (or `http:` on the loopback), and the token must match the relay's.
+
+   ```bash
+   THEOCLAW_MCP_RELAY_URL=https://<relay>
+   THEOCLAW_MCP_RELAY_TOKEN=<instance-token>
+   ```
+
+3. Create a grant for each client. The client token is shown once.
+
+   ```bash
+   theoclaw mcp-relay grant <name> [--tools a,b]
+   theoclaw mcp-relay list
+   theoclaw mcp-relay revoke <name|id>
+   ```
+
+4. In ChatGPT, Claude or Codex, add a connector with the URL `https://<relay>/mcp` and the client
+   token from step 3 as its bearer token.
+
+`theoclaw mcp-relay smoke` checks the whole path on the loopback in one command (a throwaway grant,
+the relay, the connector and `list_dir`) and exits 1 if it fails. It does not use a real ChatGPT,
+Claude or Codex client; no run against one is recorded.
+
+A grant without `--tools` gets only the read-only tools `list_dir` and `read_file`. A tool that
+changes the host needs both an explicit `--tools` naming it and `THEOCLAW_HOST_TOOLS=on` on the
+instance. `revoke` ends a grant at once.
 
 ### Terminal UI
 
@@ -1042,6 +1103,20 @@ model configuration. Audio is transcribed by `gpt-4o-mini-transcribe`; replies u
 apply. Audio failures fall back to text. See [voice verification](parity/voice-verification.md)
 for limits and the outstanding real-account recording check. Continuous talk and
 wake word are tracked separately in B-722.
+
+### Parity harness: Matrix and Mattermost
+
+`pnpm --filter theoclaw parity -- --id matrix-dm-pong` (or `mattermost-dm-pong`) sends a DM as a
+scripted human account and reads the bot's reply. Credentials come only from the environment, and
+the harness masks them in its output and result files. Without a platform's variables, `--all`
+skips its scenarios, names them and exits zero.
+
+- Matrix (a local Synapse; make both users with the shared-secret admin API,
+  `/_synapse/admin/v1/register`): `THEOCLAW_PARITY_MATRIX_HOMESERVER_URL`,
+  `THEOCLAW_PARITY_MATRIX_HUMAN_USER_ID`, `THEOCLAW_PARITY_MATRIX_HUMAN_TOKEN`,
+  `THEOCLAW_PARITY_MATRIX_BOT_USER_ID`, `THEOCLAW_PARITY_MATRIX_BOT_TOKEN`. The harness joins the bot to the DM room by API.
+- Mattermost: `THEOCLAW_PARITY_MATTERMOST_BASE_URL`, `THEOCLAW_PARITY_MATTERMOST_HUMAN_TOKEN`
+  (a personal access token) and `THEOCLAW_PARITY_MATTERMOST_BOT_TOKEN`.
 
 ### Answering phone calls (Twilio Voice)
 

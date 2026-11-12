@@ -74,10 +74,7 @@ export interface OpenedScheduleStore {
   close(): Promise<void>
 }
 
-export async function openPostgresJobStore(
-  dsn: string,
-  deps: DatabaseDeps = {},
-): Promise<OpenedScheduleStore> {
+function openPool(dsn: string, deps: DatabaseDeps): PoolLike {
   const makePool = deps.makePool ?? lazyPgPool
   const manager = deps.manager ?? getStorageManager()
   const url = new URL(dsn)
@@ -94,7 +91,7 @@ export async function openPostgresJobStore(
     },
     databases: { theoclaw: { server: 'theoclaw', database } },
   })
-  const pool = manager.usePostgres('theoclaw', (server, db) =>
+  return manager.usePostgres('theoclaw', (server, db) =>
     makePool({
       host: server.host,
       port: server.port,
@@ -104,6 +101,13 @@ export async function openPostgresJobStore(
       ...(sslmode !== null && sslmode !== 'disable' ? { ssl: true } : {}),
     }),
   )
+}
+
+export async function openPostgresJobStore(
+  dsn: string,
+  deps: DatabaseDeps = {},
+): Promise<OpenedScheduleStore> {
+  const pool = openPool(dsn, deps)
   try {
     await pool.query(
       `CREATE TABLE IF NOT EXISTS ${TABLE} (id text PRIMARY KEY, job jsonb NOT NULL)`,
@@ -156,5 +160,36 @@ function storeOver(pool: PoolLike, jobs: Map<string, ScheduledJob>): JobStore {
         jobs.set(id, next)
         return true
       }),
+  }
+}
+
+/** A target that already holds theoclaw rows and was not forced. */
+export class StatePortRefusal extends Error {}
+
+/** #1640 — copy jobs into the table; refuses a table that has rows unless `force`. Never touches the source. */
+export async function portJobs(
+  dsn: string,
+  jobs: readonly ScheduledJob[],
+  options: { readonly force: boolean },
+  deps: DatabaseDeps = {},
+): Promise<number> {
+  const pool = openPool(dsn, deps)
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS ${TABLE} (id text PRIMARY KEY, job jsonb NOT NULL)`)
+    const { rows } = await pool.query<{ id: string }>(`SELECT id FROM ${TABLE}`)
+    if (rows.length > 0 && !options.force) {
+      throw new StatePortRefusal(
+        `the target already holds ${rows.length} theoclaw schedule rows; pass --force to copy over them`,
+      )
+    }
+    for (const job of jobs) {
+      await pool.query(
+        `INSERT INTO ${TABLE} (id, job) VALUES ($1, $2::jsonb) ON CONFLICT (id) DO UPDATE SET job = EXCLUDED.job`,
+        [job.id, JSON.stringify(job)],
+      )
+    }
+    return jobs.length
+  } finally {
+    await pool.end?.().catch(() => undefined)
   }
 }

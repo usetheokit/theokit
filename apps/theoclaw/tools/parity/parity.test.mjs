@@ -1,11 +1,15 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { gate } from './gate.mjs'
 import { redact, runCli, runScenario, secretValues, verdictFor } from './harness.mjs'
+import { chatSetup, missingChatVariables } from './chat-platforms.mjs'
 import { SCENARIOS } from './scenarios.mjs'
+import { configureOpenclaw, missingSubscription, nodeSupportsOpenclaw, replyFromAgentJson } from './openclaw.mjs'
+import { matrixTransport } from './transport.mjs'
 
 const dirs = []
 afterEach(() => dirs.splice(0).forEach((d) => rmSync(d, { recursive: true, force: true })))
@@ -39,7 +43,7 @@ describe('gate', () => {
 
 describe('harness', () => {
   it('ships one scenario per surface', () => {
-    expect(new Set(SCENARIOS.map((s) => s.surface))).toEqual(new Set(['control', 'webchat', 'cli']))
+    expect(new Set(SCENARIOS.map((s) => s.surface))).toEqual(new Set(['control', 'webchat', 'cli', 'matrix', 'mattermost']))
   })
   it('judges a reply', () => {
     expect(verdictFor({}, { text: 'pong', matched: true, failed: false })).toBe('works')
@@ -69,5 +73,222 @@ describe('harness', () => {
     const code = await runCli(['--all'], { env: {}, out: { log: (l) => lines.push(l), error: (l) => lines.push(l) } })
     expect(code).toBe(0)
     expect(lines.filter((l) => l.startsWith('skip OC-22'))).toHaveLength(1)
+  })
+})
+
+async function fakeServer(handler) {
+  const seen = []
+  const server = createServer((req, res) => {
+    let body = ''
+    req.on('data', (c) => (body += c))
+    req.on('end', () => {
+      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, body })
+      const out = handler(req, body)
+      res
+        .writeHead(out === undefined ? 404 : 200, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify(out ?? {}))
+    })
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  return { url: `http://127.0.0.1:${server.address().port}`, seen, close: () => server.close() }
+}
+
+describe('chat platforms', () => {
+  it('skips both scenarios by name without their variables, and exits zero', async () => {
+    const lines = []
+    const env = { THEOCLAW_PARITY_MODEL: 'm', OPENROUTER_API_KEY: 'sk-secret-value-1' }
+    const code = await runCli(['--all'], {
+      env,
+      scenarios: SCENARIOS.filter((s) => s.id.endsWith('-dm-pong')),
+      out: { log: (l) => lines.push(l), error: (l) => lines.push(l) },
+    })
+    expect(code).toBe(0)
+    expect(lines.filter((l) => l.startsWith('skip matrix-dm-pong'))).toHaveLength(1)
+    expect(lines.filter((l) => l.startsWith('skip mattermost-dm-pong'))).toHaveLength(1)
+    expect(missingChatVariables('matrix', {})).toHaveLength(5)
+  })
+
+  it('reads the bot reply from a Matrix timeline, not the human message', async () => {
+    const server = await fakeServer((req) => {
+      if (req.method === 'PUT') return { event_id: '$mine' }
+      return {
+        chunk: [
+          { event_id: '$bot', type: 'm.room.message', sender: '@bot:x', content: { body: 'pong' } },
+          {
+            event_id: '$mine',
+            type: 'm.room.message',
+            sender: '@me:x',
+            content: { body: 'ping pong' },
+          },
+        ],
+      }
+    })
+    const transport = matrixTransport({
+      homeserver: server.url,
+      token: 'human-token-123',
+      botUserId: '@bot:x',
+      roomId: '!r:x',
+    })
+    await transport.send({ message: 'ping' })
+    const reply = await transport.awaitReply(/pong/, 2_000)
+    server.close()
+    expect(reply).toMatchObject({ text: 'pong', matched: true })
+    expect(server.seen.every((r) => r.auth === 'Bearer human-token-123')).toBe(true)
+  })
+
+  it('reads the bot reply from a Mattermost channel and sets the DM up', async () => {
+    const server = await fakeServer((req) => {
+      if (req.url.endsWith('/users/me'))
+        return { id: req.headers.authorization.includes('bot') ? 'botid' : 'meid' }
+      if (req.url.endsWith('/channels/direct')) return { id: 'chan' }
+      if (req.method === 'POST') return { create_at: 10 }
+      return {
+        order: ['p2', 'p1'],
+        posts: {
+          p1: { user_id: 'meid', create_at: 10, message: 'ping' },
+          p2: { user_id: 'botid', create_at: 20, message: 'pong' },
+        },
+      }
+    })
+    const env = {
+      THEOCLAW_PARITY_MATTERMOST_BASE_URL: server.url,
+      THEOCLAW_PARITY_MATTERMOST_HUMAN_TOKEN: 'human-token-123',
+      THEOCLAW_PARITY_MATTERMOST_BOT_TOKEN: 'bot-token-1234',
+    }
+    const { owner, transport } = await chatSetup('mattermost', env)
+    await transport.send({ message: 'ping' })
+    const reply = await transport.awaitReply(/pong/, 2_000)
+    server.close()
+    expect(owner).toContain('mattermost:meid')
+    expect(reply).toMatchObject({ text: 'pong', matched: true })
+  })
+
+  it('masks the chat tokens in a result file', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'parity-test-'))
+    dirs.push(dir)
+    const env = {
+      PATH: process.env.PATH,
+      THEOCLAW_PARITY_MODEL: 'm',
+      OPENROUTER_API_KEY: 'sk-secret-value-1',
+      THEOCLAW_PARITY_MATRIX_HUMAN_TOKEN: 'human-token-123',
+      THEOCLAW_PARITY_MATRIX_BOT_TOKEN: 'bot-token-12345',
+    }
+    const makeTransport = () => ({
+      async send() {},
+      awaitReply: async () => ({ text: 'pong human-token-123 bot-token-12345', matched: true, failed: false, raw: [] }),
+    })
+    const scenario = SCENARIOS.find((s) => s.id === 'matrix-dm-pong')
+    await runScenario(scenario, { env, makeTransport, resultsDir: dir })
+    const text = readFileSync(join(dir, 'matrix-dm-pong.json'), 'utf8')
+    expect(text).not.toMatch(/human-token-123|bot-token-12345/)
+  })
+
+  it('does not match when the bot stays silent', async () => {
+    const server = await fakeServer((req) =>
+      req.method === 'PUT' ? { event_id: '$mine' } : { chunk: [{ event_id: '$mine' }] },
+    )
+    const transport = matrixTransport({
+      homeserver: server.url,
+      token: 'human-token-123',
+      botUserId: '@bot:x',
+      roomId: '!r:x',
+    })
+    await transport.send({ message: 'ping' })
+    const reply = await transport.awaitReply(/pong/, 50)
+    server.close()
+    expect(reply).toMatchObject({ text: '', matched: false })
+  })
+})
+
+describe('openclaw side', () => {
+  const MODEL = 'openai-chatgpt/gpt-5'
+  const AUTH = join('agents', 'main', 'agent', 'openclaw-agent.sqlite')
+  /** Both logins in a temp dir: theoclaw's `.theokit/auth.json` and OpenClaw's own auth store. */
+  const logins = (openclaw = true) => {
+    const dir = mkdtempSync(join(tmpdir(), 'parity-auth-'))
+    dirs.push(dir)
+    mkdirSync(join(dir, '.theokit'))
+    writeFileSync(join(dir, '.theokit', 'auth.json'), '{}')
+    if (openclaw) {
+      mkdirSync(join(dir, 'oc', 'agents', 'main', 'agent'), { recursive: true })
+      writeFileSync(join(dir, 'oc', AUTH), 'db')
+    }
+    return { THEOKIT_AUTH_HOME: dir, OPENCLAW_STATE_DIR: join(dir, 'oc') }
+  }
+  const out = (lines) => ({ log: (l) => lines.push(l), error: (l) => lines.push(l) })
+
+  it('names the missing logins and starts nothing for --side both', async () => {
+    const lines = []
+    const empty = mkdtempSync(join(tmpdir(), 'parity-auth-'))
+    dirs.push(empty)
+    let started = false
+    const run = async () => (started = true)
+    const env = { THEOCLAW_PARITY_MODEL: MODEL, THEOKIT_AUTH_HOME: empty, OPENCLAW_STATE_DIR: join(empty, 'oc') }
+    const code = await runCli(['--id', 'OC-22', '--side', 'both'], { env, run, out: out(lines) })
+    expect(code).not.toBe(0)
+    expect(started).toBe(false)
+    expect(lines.join('\n')).toContain('theoclaw ChatGPT subscription login')
+    expect(lines.join('\n')).toContain('OpenClaw ChatGPT subscription login')
+  })
+  it('refuses a model that is not on the subscription route', () => {
+    expect(missingSubscription({ THEOCLAW_PARITY_MODEL: 'm', ...logins() }).join()).toContain('openai-chatgpt/')
+  })
+  it('checks the Node version OpenClaw needs', () => {
+    expect(nodeSupportsOpenclaw('v22.23.4')).toBe(false)
+    expect(nodeSupportsOpenclaw('v24.22.0')).toBe(false)
+    expect(nodeSupportsOpenclaw('v24.22.1')).toBe(true)
+    expect(nodeSupportsOpenclaw('v26.13.1')).toBe(true)
+    expect(nodeSupportsOpenclaw('v26.2.0')).toBe(false)
+  })
+  it('takes only the agent reply text from the JSON, not the logs around it', () => {
+    const stdout = 'banner pong\n' + JSON.stringify({ ok: true, result: { payloads: [{ text: 'hello' }] } })
+    expect(replyFromAgentJson(stdout)).toMatchObject({ text: 'hello', failed: false })
+    expect(replyFromAgentJson(JSON.stringify({ ok: false, error: { message: 'pong' } }))).toMatchObject({ text: '', failed: true })
+    expect(replyFromAgentJson('pong, no json').failed).toBe(true)
+  })
+  it('rejects an unknown side and defaults to theoclaw', async () => {
+    const lines = []
+    expect(await runCli(['--id', 'OC-22', '--side', 'x'], { env: {}, out: out(lines) })).toBe(2)
+    const sides = []
+    const run = async (_s, o) => (sides.push(o.side), { verdict: 'works', theoclaw: { verdict: 'works' } })
+    await runCli(['--id', 'OC-22'], { env: { THEOCLAW_PARITY_MODEL: MODEL, ...logins() }, run, out: out(lines) })
+    expect(sides).toEqual(['theoclaw'])
+  })
+  it('writes both verdicts with the same model into one result', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'parity-test-'))
+    dirs.push(dir)
+    const env = { PATH: process.env.PATH, THEOCLAW_PARITY_MODEL: MODEL, ...logins() }
+    const makeTransport = () => ({ async send() {}, awaitReply: async () => ({ text: 'pong', matched: true, failed: false, raw: [] }) })
+    const openclawTurn = async () => ({ reply: { text: 'pong', matched: true, failed: false }, version: '1.2.3' })
+    await runScenario(SCENARIOS[0], { env, side: 'both', makeTransport, openclawTurn, resultsDir: dir })
+    const result = JSON.parse(readFileSync(join(dir, 'OC-22.json'), 'utf8'))
+    expect(result.theoclaw).toMatchObject({ verdict: 'works', reply: 'pong', model: MODEL })
+    expect(result.openclaw).toMatchObject({ verdict: 'works', reply: 'pong', version: '1.2.3', model: MODEL })
+    expect(result.theoclaw.version).toBeTruthy()
+  })
+  it('keeps the other side when one side is re-run, and marks a fresh OpenClaw-only file unmeasured', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'parity-test-'))
+    dirs.push(dir)
+    const env = { PATH: process.env.PATH, THEOCLAW_PARITY_MODEL: MODEL, ...logins() }
+    const openclawTurn = async () => ({ reply: undefined, version: '1.2.3', error: 'boom' })
+    await runScenario(SCENARIOS[0], { env, side: 'openclaw', openclawTurn, resultsDir: dir })
+    const fresh = JSON.parse(readFileSync(join(dir, 'OC-22.json'), 'utf8'))
+    expect(fresh).toMatchObject({ verdict: 'unmeasured', date: expect.any(String) })
+    const makeTransport = () => ({ async send() {}, awaitReply: async () => ({ text: 'pong', matched: true, failed: false, raw: [] }) })
+    await runScenario(SCENARIOS[0], { env, makeTransport, resultsDir: dir })
+    await runScenario(SCENARIOS[0], { env, side: 'openclaw', openclawTurn, resultsDir: dir })
+    const result = JSON.parse(readFileSync(join(dir, 'OC-22.json'), 'utf8'))
+    expect(result.theoclaw.verdict).toBe('works')
+    expect(result.verdict).toBe('works')
+    expect(result.openclaw).toMatchObject({ verdict: 'broken', error: 'boom' })
+  })
+  it('writes the OpenClaw config in the scratch state and copies the OpenClaw login only', () => {
+    const root = mkdtempSync(join(tmpdir(), 'parity-home-'))
+    dirs.push(root)
+    configureOpenclaw(root, logins(), MODEL, 'tok', 1234)
+    const config = JSON.parse(readFileSync(join(root, 'state', 'openclaw.json'), 'utf8'))
+    expect(config.agents.defaults.model.primary).toBe(MODEL)
+    expect(config.gateway).toMatchObject({ mode: 'local', port: 1234 })
+    expect(readFileSync(join(root, 'state', AUTH), 'utf8')).toBe('db')
   })
 })

@@ -17,8 +17,17 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `theoclaw mcp-relay smoke` runs relay, connector and `list_dir` on the loopback as a one-command check, and an end-to-end test covers a granted client, a refused tool and a revoke. OC-116 stays open: no real-client run. (#1588)
+- Documented the MCP relay (`theoclaw mcp-relay serve|grant|list|revoke`, `THEOCLAW_MCP_RELAY_URL`, `THEOCLAW_MCP_RELAY_TOKEN`) in the README, with the clear-text and read-only-default notes, and recorded OC-116 in the parity ledger (and the inventory) as open: no hosted Control UI connected-apps view and no real-client run yet. (OC-116, #1638)
+- An X (Twitter) platform: mentions of the bot account become group-thread conversations and are answered with public replies, only to authors in `THEOCLAW_X_ALLOW_FROM` (optional guest mode with `THEOCLAW_X_GUEST_DAILY_LIMIT`), using `@theokit/gateway-x` 0.1.0; `@theokit/gateway` is raised to 0.16.0. The rotated refresh token is kept in `x-refresh-token` under `THEOCLAW_STATE_DIR`. Not yet run against a real X account. (OC-114, #1543)
+- WeChat, WeCom, Yuanbao, QQ Bot and Zalo platforms: each runs when its `THEOCLAW_WECHAT_*`, `THEOCLAW_WECOM_*`, `THEOCLAW_YUANBAO_*`, `THEOCLAW_QQ_*` or `THEOCLAW_ZALO_*` variables are set and receives at `/webhooks/<name>`, using `@theokit/gateway-{wechat,wecom,yuanbao,qq,zalo}` 0.1.0 from `theokit-gateways`. Not yet run against a real account. (OC-11, #1525)
+- A Raft platform: `THEOCLAW_RAFT_ENABLED=1` wakes the agent from the Raft CLI (`raft wake --json`) and replies through `raft reply`, using `@theokit/gateway-raft` 0.1.0 from `theokit-gateways`; optional `THEOCLAW_RAFT_CLI_PATH`. Not yet run against a real Raft account. (OC-126, #1544)
+- `theoclaw hooks list` prints each project hook in `.theokit/settings.json` with its event, its fingerprint and whether `THEOCLAW_APPROVED_HOOKS` approves it. (OC-87, #1615)
+- A test runs `theoclaw skills publish`, `search` and `install` against the reference registry and shows the installed skill is offered on the next turn of an open session. (OC-72, #1586)
+- `THEOCLAW_ACK_REACTION=👀` reacts to each inbound message when its turn starts, through the adapter's `react` method; the gateway packages are raised to the releases that ship typing and reactions on Discord, Slack and Matrix (Teams still has no typing indicator). (#1542)
 - WebChat has a language switch in its settings (English or Svenska), using the `@theokit/ui` 1.13.0 i18n layer, so switching to Svenska shows "Inställningar". (#1547)
 - `theoclaw mcp-relay serve --port N [--host H]` runs the hosted MCP relay that remote MCP clients connect to: `POST /mcp` with a client grant token, and `/instance/poll` and `/instance/respond` for the instance, guarded by `THEOCLAW_MCP_RELAY_TOKEN`. (#1635)
+- OC-15 (phone calls) is shipped on Twilio: a caller who asks what time it is hears a spoken answer, and `theoclaw call` places calls. Telnyx, Plivo and media streaming are not built. (#1583)
 - `theoclaw call <number> --message <text>` places an outbound phone call through Twilio and prints the call SID (OC-15, #1628). It needs `THEOCLAW_VOICE_CALL_TWILIO_ACCOUNT_SID`, `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and `THEOCLAW_VOICE_CALL_FROM_NUMBER`, and refuses any number not in `THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS`.
 
 ### Changed
@@ -469,6 +478,7 @@ run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspa
   step run ESLint over `tools/`, which the root config's `apps/**` ignore left unread.
 - An activity ledger records each exec decision (command, run id, who approved, when) in `activity.jsonl` in the state directory; `theoclaw audit [--run <id>]` prints it. (#1573)
 - `THEOCLAW_DATABASE=postgres://...` keeps the scheduled jobs in PostgreSQL, through the TheoKit storage manager, instead of `schedules.json`. (#1565)
+- `theoclaw state port --to postgres://...` copies the scheduled jobs from the files to PostgreSQL, refuses a target that already holds rows unless `--force`, prints the rows copied per store and never deletes the source. (#1640)
 - With `THEOCLAW_MCP_RELAY_URL` and `THEOCLAW_MCP_RELAY_TOKEN` set, the instance dials out to an MCP relay, pulls JSON-RPC jobs and answers them with the `/control` tools limited to each job's granted tools. (#1636)
 - `theoclaw proxy validate` checks that the operator's HTTPS proxy is reachable, and `theoclaw proxy start` runs a local capture proxy; a process started with `THEOCLAW_DEBUG_PROXY_URL` (or `THEOCLAW_PROXY_URL`) routes its requests through it, and `theoclaw proxy sessions` lists them. (#1571)
 - Add a reference skill registry server (publish, search, versions, download).

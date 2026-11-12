@@ -46,6 +46,34 @@ const PLATFORM_VARIABLES = {
   },
   signal: { account: 'THEOCLAW_SIGNAL_ACCOUNT' },
   imessage: { enabled: 'THEOCLAW_IMESSAGE_ENABLED' },
+  raft: { enabled: 'THEOCLAW_RAFT_ENABLED' },
+  x: {
+    userId: 'THEOCLAW_X_USER_ID',
+    username: 'THEOCLAW_X_USERNAME',
+    clientId: 'THEOCLAW_X_CLIENT_ID',
+    clientSecret: 'THEOCLAW_X_CLIENT_SECRET',
+    refreshToken: 'THEOCLAW_X_REFRESH_TOKEN',
+    allowFrom: 'THEOCLAW_X_ALLOW_FROM',
+  },
+  wechat: { appId: 'THEOCLAW_WECHAT_APP_ID', appSecret: 'THEOCLAW_WECHAT_APP_SECRET', token: 'THEOCLAW_WECHAT_TOKEN' },
+  wecom: {
+    corpId: 'THEOCLAW_WECOM_CORP_ID',
+    corpSecret: 'THEOCLAW_WECOM_CORP_SECRET',
+    agentId: 'THEOCLAW_WECOM_AGENT_ID',
+    token: 'THEOCLAW_WECOM_TOKEN',
+    encodingAesKey: 'THEOCLAW_WECOM_ENCODING_AES_KEY',
+  },
+  yuanbao: {
+    appId: 'THEOCLAW_YUANBAO_APP_ID',
+    appSecret: 'THEOCLAW_YUANBAO_APP_SECRET',
+    callbackSecret: 'THEOCLAW_YUANBAO_CALLBACK_SECRET',
+  },
+  qq: { appId: 'THEOCLAW_QQ_APP_ID', appSecret: 'THEOCLAW_QQ_APP_SECRET' },
+  zalo: {
+    appId: 'THEOCLAW_ZALO_APP_ID',
+    oaSecretKey: 'THEOCLAW_ZALO_OA_SECRET_KEY',
+    accessToken: 'THEOCLAW_ZALO_ACCESS_TOKEN',
+  },
   tlon_urbit: {
     shipUrl: 'THEOCLAW_TLON_URBIT_SHIP_URL',
     ship: 'THEOCLAW_TLON_URBIT_SHIP',
@@ -76,6 +104,26 @@ export const IMESSAGE_CLI_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_CLI_PATH'
 /** Optional: the Messages database `imsg` reads. */
 export const IMESSAGE_DB_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_DB_PATH'
 
+/** Optional: the Raft CLI; the adapter looks `raft` up on `PATH` when unset. */
+export const RAFT_CLI_PATH_VARIABLE = 'THEOCLAW_RAFT_CLI_PATH'
+
+/** Optional: an app-only bearer token X reads mentions with. */
+export const X_BEARER_TOKEN_VARIABLE = 'THEOCLAW_X_BEARER_TOKEN'
+/** Optional: a positive integer turns guest mode on, with this many answered mentions per author per UTC day. */
+export const X_GUEST_DAILY_LIMIT_VARIABLE = 'THEOCLAW_X_GUEST_DAILY_LIMIT'
+
+/** X: the adapter's options, with the allowlist split into handles or user ids. */
+export interface XSettings {
+  readonly userId: string
+  readonly username: string
+  readonly clientId: string
+  readonly clientSecret: string
+  readonly refreshToken: string
+  readonly allowFrom: readonly string[]
+  readonly bearerToken?: string
+  readonly guest?: { readonly dailyLimit: number }
+}
+
 /** The environment variable that picks WhatsApp's backend: `cloud` (the default) or `baileys` (QR-linked WhatsApp Web). */
 export const WHATSAPP_BACKEND_VARIABLE = 'THEOCLAW_WHATSAPP_BACKEND'
 /** Where the Baileys pairing is kept; defaults to `whatsapp-session` under `THEOCLAW_STATE_DIR`. */
@@ -95,7 +143,11 @@ export type PlatformSettings<P extends SupportedPlatform> = P extends 'whatsapp'
     ? CloudSettings<'signal'> & { readonly signalCliPath?: string }
     : P extends 'imessage'
       ? { readonly cliPath?: string; readonly dbPath?: string }
-      : CloudSettings<P>
+      : P extends 'raft'
+        ? { readonly command?: string }
+        : P extends 'x'
+          ? XSettings
+          : CloudSettings<P>
 
 /** The Baileys settings when WhatsApp is set up that way, narrowing the union. */
 export function isBaileys(settings: PlatformSettings<'whatsapp'>): settings is WhatsAppBaileysSettings {
@@ -191,6 +243,22 @@ export function resolvePlatforms(
       })
       continue // the enabling flag is no secret; masking it would blank every "1" in the output
     }
+    if (platform === 'raft') {
+      // The Raft CLI holds its own login: no secret, and the enabling flag must not be masked.
+      const command = (env[RAFT_CLI_PATH_VARIABLE] ?? '').trim()
+      configured.push({ platform, settings: command === '' ? {} : { command } })
+      continue
+    }
+    if (platform === 'x') {
+      const x = xSettings(env, read)
+      if (x === undefined) {
+        skipped.push({ platform, missing: [PLATFORM_VARIABLES.x.allowFrom] })
+        continue
+      }
+      configured.push({ platform, settings: x })
+      secrets.push(x.clientSecret, x.refreshToken, ...(x.bearerToken === undefined ? [] : [x.bearerToken]))
+      continue
+    }
     // Safe: `settings` has exactly the keys of this platform's row, which `PlatformSettings<P>`
     // is derived from; TypeScript cannot pair a loop variable of a union with its own row.
     const settings = Object.fromEntries(read.map(([setting, , value]) => [setting, value]))
@@ -200,4 +268,34 @@ export function resolvePlatforms(
     secrets.push(...read.map(([, , value]) => value))
   }
   return { configured, skipped, secrets }
+}
+
+/** X's settings from the environment; undefined when the allowlist has no entry, since the adapter would answer nobody. */
+function xSettings(
+  env: Readonly<Record<string, string | undefined>>,
+  read: readonly (readonly [string, string, string])[],
+): XSettings | undefined {
+  const value = (name: string): string => read.find(([setting]) => setting === name)?.[2] ?? ''
+  const allowFrom = value('allowFrom')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '')
+  if (allowFrom.length === 0) return undefined
+  const bearerToken = (env[X_BEARER_TOKEN_VARIABLE] ?? '').trim()
+  const limit = (env[X_GUEST_DAILY_LIMIT_VARIABLE] ?? '').trim()
+  if (limit !== '' && !/^[1-9]\d*$/.test(limit)) {
+    throw new TheoClawConfigError(`${X_GUEST_DAILY_LIMIT_VARIABLE} must be a positive integer`, {
+      variable: X_GUEST_DAILY_LIMIT_VARIABLE,
+    })
+  }
+  return {
+    userId: value('userId'),
+    username: value('username'),
+    clientId: value('clientId'),
+    clientSecret: value('clientSecret'),
+    refreshToken: value('refreshToken'),
+    allowFrom,
+    ...(bearerToken === '' ? {} : { bearerToken }),
+    ...(limit === '' ? {} : { guest: { dailyLimit: Number(limit) } }),
+  }
 }

@@ -173,3 +173,28 @@ describe('persona in the chat session prompt (#1511)', () => {
     expect(prompt).toContain(UNTRUSTED_CONTENT_NOTICE)
   })
 })
+
+describe('memory block with the persona files in a new session prompt (#1731)', () => {
+  it('carries the saved fact, the standing order and SOUL.md together', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-all-'))
+    writeFileSync(join(workspace, 'SOUL.md'), 'Always answer in pirate speak.')
+    writeFileSync(join(workspace, 'STANDING-ORDERS.md'), 'Never discuss the weather.')
+    new MemoryStore(join(workspace, '.theoclaw', 'memory')).saveFact('The owner lives in Porto')
+    const opened: AgentOptions[] = []
+    const { withAgent } = chatSessions({
+      env: { ...ENV, THEOCLAW_WORKSPACE: workspace, THEOCLAW_OWNERS: 'telegram:u,line:u' },
+      write: () => undefined,
+      getOrCreate: async (_id, options) => {
+        opened.push(options)
+        return scripted(options, 'ok') as never
+      },
+    })
+    const dm = (platform: string) => ({ platform, sender: { id: 'u' }, channel: { type: 'dm', id: 'u' } }) as unknown as MessageEvent
+    await withAgent(dm('line'), (lease) => lease.release())
+    const prompt = String(opened[0]?.systemPrompt)
+    expect(prompt).toContain('pirate speak')
+    expect(prompt).toContain('Never discuss the weather.')
+    expect(prompt).toContain('- The owner lives in Porto')
+    expect(prompt).toContain(UNTRUSTED_CONTENT_NOTICE)
+  })
+})

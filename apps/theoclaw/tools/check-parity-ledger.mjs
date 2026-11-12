@@ -2,7 +2,7 @@
 /**
  * Counts OBJ-6's 113 parity rows by machine and names every row nobody has answered.
  *
- * B-404. The rows live in two tracked documents: the 106 `| OC-N |` rows of the OpenClaw
+ * B-404. The rows live in two tracked documents: the 107 `| OC-N |` rows of the OpenClaw
  * capability inventory and the 7 rows of the Hermes table in the objectives. The answers live in
  * `apps/theoclaw/parity/ledger.json`. This module reads the documents in place (never a copy of
  * their ids) and requires EXACT counts, so a renamed header or a deleted row is a loud
@@ -21,7 +21,7 @@ export const INVENTORY_PATH = '.squad/wiki/references/openclaw-capability-invent
 export const HERMES_PATH = '.squad/wiki/product/objectives.md'
 export const LEDGER_PATH = 'apps/theoclaw/parity/ledger.json'
 
-const INVENTORY_FLOOR = 106
+const INVENTORY_FLOOR = 107
 const HERMES_FLOOR = 7
 
 /** Ids of the `| OC-N |` rows, in file order. */
