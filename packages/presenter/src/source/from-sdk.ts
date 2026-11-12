@@ -7,7 +7,9 @@ import type { AgentOutputEvent } from '../agent-output-event.js'
  * {@link AgentOutputEvent}. Every presenter (web / terminal / json) consumes the result, so the SDK is
  * parsed ONCE instead of each surface re-translating it (the duplication this layer removes).
  *
- * Ported faithfully from `@theokit/agents/bridge/event-translator.ts` (the proven web-path logic), but
+ * Ported faithfully from `@theokit/agents/bridge/event-translator.ts` (the proven web-path logic), including
+ * its exit-code rule (theokit#388): the SDK ships every finished tool call as `status: "completed"` and
+ * reports failure through `result.exitCode`, so a non-zero code is an error result. But
  * emitting the NARROW pure-output event: framework concerns (run-lifecycle, HITL approval, checkpoints,
  * devtools artifacts) are NOT SDK output and are layered by `@theokit/agents` on top (ADR-4), so they are
  * intentionally NOT produced here.
@@ -37,6 +39,18 @@ function serializeToolResult(value: unknown, fallback: string): string {
   } catch {
     return typeof value === 'bigint' ? value.toString() : fallback
   }
+}
+
+/** Numeric `exitCode` of an object result, else undefined. Mirrors the agents translator. */
+function toolResultExitCode(value: unknown): number | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const code = (value as { exitCode?: unknown }).exitCode
+  return typeof code === 'number' ? code : undefined
+}
+
+/** Whether a tool result reports a failure. Absent or zero exit code means no failure reported. */
+function reportsToolFailure(result: unknown): boolean {
+  return (toolResultExitCode(result) ?? 0) !== 0
 }
 
 function fromAssistant(msg: SdkMessage): AgentOutputEvent[] {
@@ -69,7 +83,7 @@ function fromToolUse(msg: SdkMessage): AgentOutputEvent[] {
         callId,
         name,
         result: serializeToolResult(msg.result, ''),
-        isError: false,
+        isError: reportsToolFailure(msg.result),
       },
     ]
   }
@@ -158,7 +172,7 @@ export function fromInteractionUpdate(update: InteractionUpdate): AgentOutputEve
           callId: update.callId,
           name: update.toolCall.name,
           result: serializeToolResult(update.toolCall.result, ''),
-          isError: false,
+          isError: reportsToolFailure(update.toolCall.result),
         },
       ]
     default:

@@ -60,4 +60,14 @@ describe('a scoped instruction block can be applied to a path', () => {
     expect(blockAppliesTo(block(['a.ts']), 'axts')).toBe(false)
     expect(blockAppliesTo(block(['a.ts']), 'a.ts')).toBe(true)
   })
+
+  it('test_a_double_star_slash_does_not_match_inside_a_segment', () => {
+    const scoped = block(['src/**/test.ts'])
+    expect(blockAppliesTo(scoped, 'src/mytest.ts')).toBe(false)
+    expect(blockAppliesTo(scoped, 'src/a/notatest.ts')).toBe(false)
+    expect(blockAppliesTo(scoped, 'src/test.ts')).toBe(true)
+    expect(blockAppliesTo(scoped, 'src/a/test.ts')).toBe(true)
+    expect(blockAppliesTo(scoped, 'src/a/b/test.ts')).toBe(true)
+    expect(blockAppliesTo(block(['**/*.md']), 'README.md')).toBe(true)
+  })
 })
