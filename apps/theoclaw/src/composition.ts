@@ -581,18 +581,20 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
   let announcement: LanAnnouncement | undefined
+  // The one teardown: the scheduler, then the loop, so no run or turn starts once the agents are being disposed.
+  // Steps not yet started are undefined and skipped, so every failure path and `close` run the same list.
+  const teardown = async (): Promise<void> => {
+    await mcpConnector?.stop()
+    await mcpEvents?.stop()
+    await scheduled?.stop()
+    await closeScheduleStore()
+    await acpSessions?.stopAll()
+    await composedApp?.loop.stopAll()
+    await composedApp?.sessions.disposeAll()
+  }
   const removeShutdown = installShutdown({
     signals: options.signals,
-    // The scheduler, then the loop, so no run or turn starts once the agents are being disposed.
-    stopAll: async () => {
-      await mcpConnector?.stop()
-      await mcpEvents?.stop()
-      await scheduled?.stop()
-      await closeScheduleStore()
-      await acpSessions?.stopAll()
-      await composedApp?.loop.stopAll()
-      await composedApp?.sessions.disposeAll()
-    },
+    stopAll: teardown,
     closeServer: async () => {
       const handle = await serving
       if (handle !== undefined) await stopThenClose(announcement ?? NOTHING_TO_WITHDRAW, handle)
@@ -624,6 +626,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     write: stderr,
     secrets: secretValues,
   })
+  composedApp = composed
   // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
@@ -639,8 +642,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
       // A database that is down refuses the start; there is no fallback to the file store.
       removeShutdown()
       options.signals.off('exit', flushOnExit)
-      await acp.stopAll()
-      await composed.sessions.disposeAll()
+      await teardown()
       mask.flush()
       throw error
     }
@@ -666,7 +668,6 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     return memory === undefined ? agent : memory.wrap(agent, 'control', 'control', async () => options.agentFactory({ tools: [saveMemoryTool(memory.store)], plugins: [] }))
   }
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
-  composedApp = composed
   if (mcpEventsSettings !== undefined) {
     mcpEvents = await startMcpEvents({
       settings: mcpEventsSettings,
@@ -718,12 +719,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     // the entry exit 1.
     removeShutdown()
     options.signals.off('exit', flushOnExit)
-    await mcpConnector?.stop()
-    await scheduled.stop()
-    await closeScheduleStore()
-    await acp.stopAll()
-    await composed.loop.stopAll()
-    await composed.sessions.disposeAll()
+    await teardown()
     // The mask stays: the entry writes this error and exits, and that line is masked too.
     mask.flush()
     throw error
@@ -740,10 +736,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
   // running instance directly must not leave the service advertised.
   const close = async (): Promise<void> => {
-    await mcpConnector?.stop()
-    await scheduled?.stop()
-    await closeScheduleStore()
-    await acp.stopAll()
+    await teardown()
     await stopThenClose(announcement, handle)
   }
   return { ...handle, ...composed, announcement, instance, close }

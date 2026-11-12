@@ -499,3 +499,35 @@ describe('the digest workflow tool at start', () => {
     expect(main).toContain('draftAgentFactory: createChannelAgentFactory(process.env, createSdkAgent)')
   })
 })
+
+// #1784: close() releases what the signal shutdown releases.
+describe('close() on a running instance', () => {
+  const cleanups: (() => void)[] = []
+  afterEach(() => {
+    for (const cleanup of cleanups.splice(0)) cleanup()
+  })
+
+  it('disconnects the channel adapters and disposes the session agents', async () => {
+    let disposed = 0
+    const { adapters, builders } = fakeBuilders()
+    const start = await startForTools({ THEOCLAW_DM_POLICY: 'open' }, tempCwd(cleanups), { detect: notEnforced }, {
+      draftAgentFactory: async (): Promise<SDKAgent> => ({}) as SDKAgent,
+      builders,
+      getOrCreate: async () =>
+        Object.assign(new FakeAgent({ frames: [] }), {
+          dispose: async () => {
+            disposed += 1
+          },
+        }),
+    })
+    const app = start.app
+    if (app === undefined) throw new Error(`the start refused: ${start.error?.message ?? 'unknown'}`)
+    await app.loop.ready
+    const telegram = adapters.get('telegram') as FakeAdapter
+    await telegram.deliver(messageEvent('telegram', 'hello', 'sender-1'))
+    await waitFor(() => telegram.sent.length > 0 || disposed >= 0, 2000, 'the turn to start')
+    await app.close()
+    expect(telegram.disconnects).toBeGreaterThan(0)
+    expect(disposed).toBeGreaterThan(0)
+  })
+})
