@@ -1,5 +1,12 @@
 # @theokit/agents
 
+## 16.5.2
+
+### Patch Changes
+
+- 58aa919: `forkBeforeUserTurn` now throws `LiveTranscriptError` when the destination is a protected session, instead of a raw `EEXIST`.
+- dff80d9: `forkBeforeUserTurn` no longer throws `JsonlParseError` when the last line of the transcript is partly written; it still throws on a corrupt line in the middle.
+
 ## 16.5.1
 
 ### Patch Changes
