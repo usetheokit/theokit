@@ -54,6 +54,10 @@ for (const message of sdkMessages) {
 }
 ```
 
+`fromSdkMessage` reads a failed, vetoed or timed-out tool call from the result's `exitCode` (non-zero),
+not from `status`, because the SDK reports every finished call as `completed`. An absent or non-numeric
+exit code is not a failure.
+
 `fromWireChunk` is the other door — from the transport wire into the canonical event, which is what
 a client-side surface receives. `fromInteractionUpdate` covers interactive runs.
 
