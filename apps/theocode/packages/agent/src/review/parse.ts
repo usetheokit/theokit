@@ -1,13 +1,20 @@
-interface ReviewFinding {
-  title: string
-  body: string
-  confidence_score?: number
-  priority?: number | null
-  code_location?: {
-    absolute_file_path: string
-    line_range?: { start: number; end: number }
-  }
-}
+import { z } from 'zod'
+
+const findingSchema = z.object({
+  title: z.string(),
+  body: z.string().catch(''),
+  confidence_score: z.number().optional().catch(undefined),
+  priority: z.number().nullable().optional().catch(undefined),
+  code_location: z
+    .object({
+      absolute_file_path: z.string(),
+      line_range: z.object({ start: z.number(), end: z.number() }).optional().catch(undefined),
+    })
+    .optional()
+    .catch(undefined),
+})
+
+type ReviewFinding = z.infer<typeof findingSchema>
 
 export interface ReviewOutput {
   findings: ReviewFinding[]
@@ -21,10 +28,10 @@ function coerce(parsed: unknown): ReviewOutput | undefined {
   const p = parsed as Record<string, unknown>
   if (!Array.isArray(p.findings)) return undefined
   return {
-    findings: p.findings.filter(
-      (f): f is ReviewFinding =>
-        f !== null && typeof f === 'object' && typeof (f as { title?: unknown }).title === 'string',
-    ),
+    findings: p.findings.flatMap((f) => {
+      const r = findingSchema.safeParse(f)
+      return r.success ? [r.data] : []
+    }),
     overall_correctness: typeof p.overall_correctness === 'string' ? p.overall_correctness : '',
     overall_explanation: typeof p.overall_explanation === 'string' ? p.overall_explanation : '',
     ...(typeof p.overall_confidence_score === 'number'
