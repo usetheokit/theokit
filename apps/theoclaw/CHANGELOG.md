@@ -17,6 +17,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- WeChat, WeCom, Yuanbao, Zalo and QQ Bot platforms, each a webhook at `/webhooks/<platform>` with its `THEOCLAW_<PLATFORM>_*` settings, using `@theokit/gateway-{wechat,wecom,yuanbao,zalo,qq}` 0.1.0 (and `@theokit/gateway` raised to 0.16.0, which names `qq`). Not yet run against real accounts. (OC-11, #1525)
 - A Raft platform: `THEOCLAW_RAFT_ENABLED=1` wakes the agent from the Raft CLI (`raft wake --json`) and replies through `raft reply`, using `@theokit/gateway-raft` 0.1.0 from `theokit-gateways`; optional `THEOCLAW_RAFT_CLI_PATH`. Not yet run against a real Raft account. (OC-126, #1544)
 - `theoclaw hooks list` prints each project hook in `.theokit/settings.json` with its event, its fingerprint and whether `THEOCLAW_APPROVED_HOOKS` approves it. (OC-87, #1615)
 - A test runs `theoclaw skills publish`, `search` and `install` against the reference registry and shows the installed skill is offered on the next turn of an open session. (OC-72, #1586)

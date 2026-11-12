@@ -16,6 +16,7 @@ import { createTeamsRoute } from './teams.js'
 import type { TeamsVerifier } from './teams.js'
 import { createWhatsAppRoute } from './whatsapp.js'
 import type { DeliverableWhatsAppAdapter } from './whatsapp.js'
+import { createQueryRoute, createSignedBodyRoute } from './weixin-style.js'
 
 /*
  * Which platforms deliver over a webhook, and how each one's route is built over the adapter its
@@ -85,6 +86,17 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
   signal: null,
   imessage: null,
   raft: null,
+  wechat: () => ({ methods: ['GET', 'POST'], buildRoute: createQueryRoute }),
+  wecom: () => ({ methods: ['GET', 'POST'], buildRoute: createQueryRoute }),
+  yuanbao: () => ({
+    methods: ['POST'],
+    buildRoute: (adapter) => createSignedBodyRoute(adapter, ['x-signature', 'x-timestamp']),
+  }),
+  zalo: () => ({ methods: ['POST'], buildRoute: (adapter) => createSignedBodyRoute(adapter, ['x-zevent-signature']) }),
+  qq: () => ({
+    methods: ['POST'],
+    buildRoute: (adapter) => createSignedBodyRoute(adapter, ['x-signature-ed25519', 'x-signature-timestamp']),
+  }),
   tlon_urbit: null,
   email: null,
   line: ({ channelSecret }) => ({

@@ -57,6 +57,12 @@ const UNAUTHENTICATED_BECAUSE = {
   imessage: null,
   // The Raft CLI holds its own login; wakes carry the sender Raft names.
   raft: null,
+  // Each signs its callbacks with the app's secret and names the sender's account id.
+  wechat: null,
+  wecom: null,
+  yuanbao: null,
+  zalo: null,
+  qq: null,
   // The ship name is proven by the Eyre session the adapter holds; messages carry the author's @p.
   tlon_urbit: null,
   // The Twilio signature proves the request came from Twilio, not who sent the text.

@@ -52,6 +52,11 @@ const PLACEHOLDERS: readonly ConfiguredPlatform[] = [
   { platform: 'signal', settings: { account: '+5511999990000' } },
   { platform: 'imessage', settings: {} },
   { platform: 'raft', settings: {} },
+  { platform: 'wechat', settings: { appId: 'wx1', appSecret: 's', token: 't' } },
+  { platform: 'wecom', settings: { corpId: 'c', corpSecret: 's', agentId: '1', token: 't', encodingAesKey: 'a'.repeat(43) } },
+  { platform: 'yuanbao', settings: { appId: 'a', appSecret: 's', callbackSecret: 'c' } },
+  { platform: 'zalo', settings: { appId: 'a', oaSecretKey: 'k', accessToken: 't' } },
+  { platform: 'qq', settings: { appId: 'a', appSecret: 's' } },
   {
     platform: 'sms',
     settings: {
