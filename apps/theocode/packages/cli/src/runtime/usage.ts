@@ -22,4 +22,5 @@ export const USAGE = `Usage: theocode [OPTIONS] [PROMPT]
 Options: --version/-v  --json  -m/--model <id>  -C/--cd <dir>  -o/--output-last-message <file>  --skip-git-repo-check
          -c/--config <key=value> (repeatable)  --sandbox <mode>  -a/--approval <policy>  --effort <level>
 Stdout carries ONLY the final message (or JSONL with --json); progress goes to stderr.
-Exit code is 1 when the turn fails or is interrupted (review findings do NOT affect it).`
+Exit code is 1 when the turn fails or is interrupted (review findings do NOT affect it).
+Exit code is 3 when the loop cut the turn short (step limit or no progress); stderr says status=cut stop=<reason>.`

@@ -13,6 +13,7 @@ export {
   createHumanProcessor,
   createJsonlProcessor,
   silentEmptyTurnDiagnostic,
+  exitCodeFor,
   type ExecProcessor,
 } from './events.js'
 export { createGoalCancellation } from './goal-cancellation.js'

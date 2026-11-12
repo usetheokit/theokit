@@ -5,6 +5,7 @@ import {
   type TurnLifecycle,
 } from '@theokit/presenter'
 import type { WireChunk } from '@theokit/presenter/wire'
+import type { AgentTurnMetadata } from '@theokit/agents/bridge'
 
 type TurnFold = TurnLifecycle<unknown>
 
@@ -17,6 +18,22 @@ export interface ProcessorResult {
   finalText: string
   errorSeen: boolean
   usage: Record<string, number>
+  /** Set when the loop cut the turn short (`step_limit` | `no_progress`); absent on a finished turn. */
+  stopReason?: AgentTurnMetadata['stopReason']
+}
+
+/** Exit code of a turn the loop cut short: distinct from 1 (failed) and 130 (interrupted). */
+export const CUT_TURN_EXIT_CODE = 3
+
+/** The finish chunk's metadata. A local cast until `readTurnMetadata` (#1854) ships. */
+function readFinishMetadata(chunk: WireChunk): AgentTurnMetadata | undefined {
+  return (chunk as { messageMetadata?: AgentTurnMetadata }).messageMetadata
+}
+
+/** 1 for an error or empty turn, 3 for a cut turn, else 0. */
+export function exitCodeFor(result: ProcessorResult, emptyTurn: boolean): number {
+  if (result.errorSeen || emptyTurn) return 1
+  return result.stopReason !== undefined ? CUT_TURN_EXIT_CODE : 0
 }
 
 /**
@@ -141,6 +158,7 @@ export function createHumanProcessor(
   const message = finalMessage()
   let errorSeen = false
   let usage: Record<string, number> | undefined
+  let stopReason: AgentTurnMetadata['stopReason']
   // #105 — collected as they go past, so the diff at the end is scoped to what THIS turn wrote
   // rather than to whatever the working tree happens to hold.
   const writes: ToolChunk[] = []
@@ -175,7 +193,9 @@ export function createHumanProcessor(
   return {
     process(chunk) {
       if (chunk.type === 'finish') {
-        usage = (chunk.messageMetadata as { usage?: Record<string, number> } | undefined)?.usage
+        const meta = readFinishMetadata(chunk)
+        usage = meta?.usage as Record<string, number> | undefined
+        stopReason = meta?.stopReason
         return
       }
       for (const event of translate(chunk)) onEvent[event.type]?.(event)
@@ -193,11 +213,14 @@ export function createHumanProcessor(
         const diff = turnDiff(git, changedPaths(writes))
         if (diff !== undefined) io.err(diff)
       }
+      const cut = !errorSeen && stopReason !== undefined
       const u = toCodexUsage(extra?.usage ?? usage)
       io.err(
-        `[exec] session=${sessionId} status=${errorSeen ? 'error' : status} tokens=${blendedTotal(u)}`,
+        `[exec] session=${sessionId} status=${errorSeen ? 'error' : cut ? 'cut' : status}${
+          cut ? ` stop=${stopReason}` : ''
+        } tokens=${blendedTotal(u)}`,
       )
-      return { finalText, errorSeen, usage: u }
+      return { finalText, errorSeen, usage: u, ...(cut ? { stopReason } : {}) }
     },
   }
 }
@@ -282,6 +305,7 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
   }
 
   let usage: Record<string, number> | undefined
+  let stopReason: AgentTurnMetadata['stopReason']
   // The same rule as the human processor. The JSONL events themselves already arrive separated by
   // `turn.observe`; it is `finalText` — what `-o/--output-last-message` writes — that ran them
   // together, so a script reading that file got the preambles glued to the answer.
@@ -304,7 +328,9 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
   return {
     process(chunk) {
       if (chunk.type === 'finish') {
-        usage = (chunk.messageMetadata as { usage?: Record<string, number> } | undefined)?.usage
+        const meta = readFinishMetadata(chunk)
+        usage = meta?.usage as Record<string, number> | undefined
+        stopReason = meta?.stopReason
         return
       }
       for (const event of translate(chunk)) {
@@ -317,12 +343,20 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
     finish(status, extra) {
       const raw = extra?.usage ?? usage
       const failed = status === 'error' || errorSeen
+      const cut = !failed && stopReason !== undefined
       const outcome = failed
         ? { status: 'error' as const, error: extra?.error ?? 'turn failed', usage: raw }
-        : { status: 'ok' as const, usage: raw }
+        : cut
+          ? { status: 'error' as const, error: `turn cut: stop=${stopReason}`, usage: raw }
+          : { status: 'ok' as const, usage: raw }
 
       for (const event of turn.finish(outcome)) emit(event)
-      return { finalText: message.done(), errorSeen: failed, usage: toCodexUsage(raw) }
+      return {
+        finalText: message.done(),
+        errorSeen: failed,
+        usage: toCodexUsage(raw),
+        ...(cut ? { stopReason } : {}),
+      }
     },
   }
 }

@@ -11,7 +11,12 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { createHumanProcessor, createJsonlProcessor, type ExecIo } from '../../src/runtime/events.js'
+import {
+  createHumanProcessor,
+  createJsonlProcessor,
+  exitCodeFor,
+  type ExecIo,
+} from '../../src/runtime/events.js'
 
 function capture() {
   const lines: string[] = []
@@ -181,5 +186,48 @@ describe('createJsonlProcessor — tool calls open and close items', () => {
     p.process({ type: 'reasoning-delta', id: 'r1', delta: 'thinking' })
 
     expect(types(c.events())).toEqual(['thread.started', 'turn.started'])
+  })
+})
+
+describe('a turn cut by the loop (#1897)', () => {
+  const cut = { type: 'finish', messageMetadata: { stopReason: 'step_limit' } } as never
+  const done = { type: 'finish', messageMetadata: {} } as never
+
+  it('test_jsonl_closes_a_cut_turn_as_failed_and_carries_the_reason', () => {
+    const c = capture()
+    const p = createJsonlProcessor(c.io, 't')
+    p.process(cut)
+    const result = p.finish('finished')
+    expect(types(c.events())).toEqual(['thread.started', 'turn.started', 'turn.failed'])
+    expect(c.events()[2]?.['error']).toEqual({ message: 'turn cut: stop=step_limit' })
+    expect(result.stopReason).toBe('step_limit')
+    expect(exitCodeFor(result, false)).toBe(3)
+  })
+
+  it('test_human_line_says_why_and_exit_is_non_zero', () => {
+    const errs: string[] = []
+    const p = createHumanProcessor({ out: () => {}, err: (l) => errs.push(l) }, 's')
+    p.process(cut)
+    const result = p.finish('finished')
+    expect(errs.join('\n')).toContain('status=cut stop=step_limit')
+    expect(exitCodeFor(result, false)).toBe(3)
+  })
+
+  it('test_a_finish_chunk_without_stop_reason_still_exits_0', () => {
+    const c = capture()
+    for (const p of [createJsonlProcessor(c.io, 't'), createHumanProcessor(c.io, 's')]) {
+      p.process(done)
+      const result = p.finish('finished')
+      expect(result.stopReason).toBeUndefined()
+      expect(exitCodeFor(result, false)).toBe(0)
+    }
+    expect(types(c.events())).toContain('turn.completed')
+  })
+
+  it('test_an_error_outranks_a_cut', () => {
+    const c = capture()
+    const p = createJsonlProcessor(c.io, 't')
+    p.process(cut)
+    expect(exitCodeFor(p.finish('error', { error: 'x' }), false)).toBe(1)
   })
 })
