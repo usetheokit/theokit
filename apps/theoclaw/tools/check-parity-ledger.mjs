@@ -17,8 +17,8 @@ import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync }
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const INVENTORY_PATH = '.squad/wiki/references/openclaw-capability-inventory.md'
-export const HERMES_PATH = '.squad/wiki/product/objectives.md'
+export const INVENTORY_PATH = 'docs/wiki/references/openclaw-capability-inventory.md'
+export const HERMES_PATH = 'docs/wiki/product/objectives.md'
 export const LEDGER_PATH = 'apps/theoclaw/parity/ledger.json'
 
 const INVENTORY_FLOOR = 107

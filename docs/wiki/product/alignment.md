@@ -44,7 +44,7 @@ The cascade moved from `apps/theoclaw/.squad/wiki/product/` to `.squad/wiki/prod
 | `trd.md` | **12 requirements**, each with a statement and an acceptance line; REQ-10 (parity ledger), REQ-11 (channel packages) and REQ-12 (skill oracle) new |
 | `technical-pieces.md` | **15 pieces**, each with a responsibility line; PIECE-11 to PIECE-15 new, skill authoring moved in |
 
-The OpenClaw rows come from `.squad/wiki/references/openclaw-capability-inventory.md`.
+The OpenClaw rows come from `docs/wiki/references/openclaw-capability-inventory.md`.
 
 ## What was signed on 2026-09-18
 
@@ -76,7 +76,7 @@ Three things changed late, after the first three documents were written:
 
 ## What no signature here asserts
 
-That any of it was verified. The reference notes under `.squad/wiki/references/` record
+That any of it was verified. The reference notes under `docs/wiki/references/` record
 what was measured against Hermes and what was not; the boxes above record only that a
 person read this cascade and is willing to say it holds.
 

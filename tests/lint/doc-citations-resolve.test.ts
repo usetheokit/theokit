@@ -26,6 +26,7 @@ import {
   classifyCitation,
   isBareName,
   isHistoricalRecord,
+  citesOutsideThisTree,
   collectDocs,
   extractAdrCitations,
   classifyAdrCitation,
@@ -65,6 +66,21 @@ describe('doc citation extraction (theokit#193)', () => {
     expect(isHistoricalRecord('CHANGELOG.md')).toBe(true)
     expect(isHistoricalRecord('packages/theo/CHANGELOG.md')).toBe(true)
     expect(isHistoricalRecord('README.md')).toBe(false)
+  })
+
+  it('leaves out the acceptance records and the product wiki, whose citations point outside this tree', () => {
+    expect(citesOutsideThisTree('docs/acceptance/M2-2026-09-24.md')).toBe(true)
+    expect(citesOutsideThisTree('docs/wiki/references/openclaw-capability-inventory.md')).toBe(true)
+    expect(citesOutsideThisTree('docs/wiki/product/trd.md')).toBe(true)
+    expect(
+      citesOutsideThisTree('docs/wiki/decisions/knip-cannot-run-here-so-d1-asserts-nothing.md'),
+    ).toBe(true)
+    expect(citesOutsideThisTree('docs/wiki/sops/cloudflare-deploy.md')).toBe(false)
+    expect(
+      citesOutsideThisTree(
+        'docs/adr/0018-a-durable-rate-limit-gets-its-own-path-beside-the-sync-facade.md',
+      ),
+    ).toBe(false)
   })
 })
 
