@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { workerCommand, workerLogPath } from '../src/worker/worker.js'
 
-function setup() {
+function setup(status = 'finished') {
   const dir = mkdtempSync(join(tmpdir(), 'worker-'))
   const chunks: string[] = []
   const stdout = new PassThrough()
@@ -21,7 +21,7 @@ function setup() {
           stream: async function* () {
             yield { type: 'text-delta', text: 'hi' }
           },
-          wait: () => Promise.resolve({ status: 'finished' }),
+          wait: () => Promise.resolve({ status }),
           cancel: () => Promise.resolve(),
         }),
     })
@@ -48,5 +48,15 @@ describe('theoclaw worker', () => {
     await workerCommand(['pair', 'http://127.0.0.1:1', 'code', '--inference', 'gateway'], io)
     await workerCommand(['run', 'hello'], io) // gateway unreachable: exits 1
     expect(existsSync(workerLogPath(env))).toBe(false)
+  })
+
+  it.each([
+    ['finished', 0],
+    ['error', 1],
+    ['cancelled', 1],
+  ])('exits for a run that ends %s with %i', async (status, code) => {
+    const { io } = setup(status)
+    await workerCommand(['pair', 'http://127.0.0.1:1', 'code', '--name', 'w1'], io)
+    expect(await workerCommand(['run', 'hello'], io)).toBe(code)
   })
 })
