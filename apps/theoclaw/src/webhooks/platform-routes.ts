@@ -10,10 +10,14 @@ import { createGoogleChatRoute } from './google-chat.js'
 import type { GoogleChatInbound } from './google-chat.js'
 import { createLineRoute } from './line.js'
 import type { WebhookRoute } from './router.js'
+import { createQqRoute, createYuanbaoRoute, createZaloRoute } from './signed-json.js'
+import type { SignedJsonAdapter } from './signed-json.js'
 import { createSmsRoute } from './sms.js'
 import type { SmsRouteAdapter } from './sms.js'
 import { createTeamsRoute } from './teams.js'
 import type { TeamsVerifier } from './teams.js'
+import { createWeixinRoute } from './weixin.js'
+import type { WeixinAdapter } from './weixin.js'
 import { createWhatsAppRoute } from './whatsapp.js'
 import type { DeliverableWhatsAppAdapter } from './whatsapp.js'
 
@@ -62,6 +66,28 @@ function teamsVerifier(
   }
 }
 
+function weixinPlatform(): WebhookPlatform {
+  return {
+    methods: ['GET', 'POST'],
+    buildRoute: (adapter) => {
+      if (typeof (adapter as { handleWebhook?: unknown }).handleWebhook !== 'function')
+        throw new Error('the built adapter cannot answer a webhook')
+      return createWeixinRoute(adapter as BasePlatformAdapter & WeixinAdapter)
+    },
+  }
+}
+
+function signedPlatform(create: (adapter: BasePlatformAdapter & SignedJsonAdapter) => Handle): WebhookPlatform {
+  return {
+    methods: ['POST'],
+    buildRoute: (adapter) => {
+      if (typeof (adapter as { handleWebhook?: unknown }).handleWebhook !== 'function')
+        throw new Error('the built adapter cannot answer a webhook')
+      return create(adapter as BasePlatformAdapter & SignedJsonAdapter)
+    },
+  }
+}
+
 export interface WebhookDeps {
   readonly write: (line: string) => void
   readonly verifierFactory: (options: TeamsActivityVerifierOptions) => TeamsVerifier
@@ -88,6 +114,11 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
   x: null,
   tlon_urbit: null,
   email: null,
+  wechat: () => weixinPlatform(),
+  wecom: () => weixinPlatform(),
+  yuanbao: () => signedPlatform(createYuanbaoRoute),
+  qq: () => signedPlatform(createQqRoute),
+  zalo: () => signedPlatform(createZaloRoute),
   line: ({ channelSecret }) => ({
     methods: ['POST'],
     buildRoute: (adapter) => createLineRoute({ channelSecret, adapter }),

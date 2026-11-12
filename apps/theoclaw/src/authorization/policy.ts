@@ -59,6 +59,13 @@ const UNAUTHENTICATED_BECAUSE = {
   raft: null,
   // The adapter answers only allowlisted authors (or guests under a daily cap); messages carry the author's X id.
   x: null,
+  // Each signs its webhook and names the sender by a platform id. Unverified against real accounts
+  // (the packages say so); Yuanbao's header names are the package's own assumption.
+  wechat: null,
+  wecom: null,
+  yuanbao: null,
+  qq: null,
+  zalo: null,
   // The ship name is proven by the Eyre session the adapter holds; messages carry the author's @p.
   tlon_urbit: null,
   // The Twilio signature proves the request came from Twilio, not who sent the text.

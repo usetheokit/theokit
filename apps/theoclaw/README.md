@@ -1,7 +1,7 @@
 # TheoClaw
 
 A personal AI assistant that lives where its user already writes: one agent answering on Telegram,
-Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams, Google Chat, Signal, iMessage, Raft, X (Twitter) and SMS.
+Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams, Google Chat, Signal, iMessage, Raft, X (Twitter), WeChat, WeCom, Yuanbao, QQ Bot, Zalo and SMS.
 
 ## Install
 
@@ -216,6 +216,11 @@ otherwise startup skips it and prints `<platform>: not configured (missing ...)`
 | Signal                             | `SIGNAL_ACCOUNT` (the linked number, E.164); optional `SIGNAL_CLI_PATH` (default: `signal-cli` on `PATH`). Owners are written `signal:+<number>`                                                                                                                                                                                                       | none (a `signal-cli jsonRpc` child)                  |
 | iMessage                           | `IMESSAGE_ENABLED=1`; optional `IMESSAGE_CLI_PATH` (default: `imsg` on `PATH`, or a script running `imsg rpc` over ssh), `IMESSAGE_DB_PATH`. macOS only with Messages signed in; refused on other systems. Owners are written `imessage:<handle>`                                                                                                      | none (an `imsg rpc` child)                           |
 | Raft                               | `RAFT_ENABLED=1`; optional `RAFT_CLI_PATH` (default: `raft` on `PATH`). The Raft CLI holds its own login                                                                                                                                                                                                                                               | none (a `raft wake --json` child)                    |
+| WeChat Official Account | `WECHAT_APP_ID`, `WECHAT_APP_SECRET`, `WECHAT_TOKEN` | webhook `/webhooks/wechat` |
+| WeCom | `WECOM_CORP_ID`, `WECOM_CORP_SECRET`, `WECOM_AGENT_ID`, `WECOM_TOKEN`, `WECOM_ENCODING_AES_KEY` | webhook `/webhooks/wecom` |
+| Yuanbao | `YUANBAO_APP_ID`, `YUANBAO_APP_SECRET`, `YUANBAO_CALLBACK_SECRET` | webhook `/webhooks/yuanbao` |
+| QQ Bot | `QQ_APP_ID`, `QQ_APP_SECRET` | webhook `/webhooks/qq` |
+| Zalo Official Account | `ZALO_APP_ID`, `ZALO_OA_SECRET_KEY`, `ZALO_ACCESS_TOKEN` (expires; supply a fresh one) | webhook `/webhooks/zalo` |
 | X (Twitter)                        | `X_USER_ID`, `X_USERNAME`, `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_REFRESH_TOKEN`, `X_ALLOW_FROM` (comma list of handles or user ids); optional `X_BEARER_TOKEN`, `X_GUEST_DAILY_LIMIT`. Public replies only; no DMs, likes or media | none (polls the X API; the rotated refresh token is kept in `x-refresh-token` under `STATE_DIR`) |
 | SMS (Twilio)                       | `SMS_TWILIO_ACCOUNT_SID`, `SMS_TWILIO_AUTH_TOKEN`, `SMS_TWILIO_FROM_NUMBER`, `SMS_PUBLIC_URL`                                                                                                                                                                                                                                                          | webhook `/webhooks/sms`                              |
 

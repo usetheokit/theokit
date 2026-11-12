@@ -55,6 +55,25 @@ const PLATFORM_VARIABLES = {
     refreshToken: 'THEOCLAW_X_REFRESH_TOKEN',
     allowFrom: 'THEOCLAW_X_ALLOW_FROM',
   },
+  wechat: { appId: 'THEOCLAW_WECHAT_APP_ID', appSecret: 'THEOCLAW_WECHAT_APP_SECRET', token: 'THEOCLAW_WECHAT_TOKEN' },
+  wecom: {
+    corpId: 'THEOCLAW_WECOM_CORP_ID',
+    corpSecret: 'THEOCLAW_WECOM_CORP_SECRET',
+    agentId: 'THEOCLAW_WECOM_AGENT_ID',
+    token: 'THEOCLAW_WECOM_TOKEN',
+    encodingAesKey: 'THEOCLAW_WECOM_ENCODING_AES_KEY',
+  },
+  yuanbao: {
+    appId: 'THEOCLAW_YUANBAO_APP_ID',
+    appSecret: 'THEOCLAW_YUANBAO_APP_SECRET',
+    callbackSecret: 'THEOCLAW_YUANBAO_CALLBACK_SECRET',
+  },
+  qq: { appId: 'THEOCLAW_QQ_APP_ID', appSecret: 'THEOCLAW_QQ_APP_SECRET' },
+  zalo: {
+    appId: 'THEOCLAW_ZALO_APP_ID',
+    oaSecretKey: 'THEOCLAW_ZALO_OA_SECRET_KEY',
+    accessToken: 'THEOCLAW_ZALO_ACCESS_TOKEN',
+  },
   tlon_urbit: {
     shipUrl: 'THEOCLAW_TLON_URBIT_SHIP_URL',
     ship: 'THEOCLAW_TLON_URBIT_SHIP',

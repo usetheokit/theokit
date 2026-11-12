@@ -85,7 +85,7 @@ describe('resolvePlatforms', () => {
     expect(JSON.stringify(resolved.skipped)).not.toContain('bot-token-value')
   })
 
-  it('lists all fourteen platforms', () => {
+  it('lists every platform except raft and x, in start order', () => {
     expect(PLATFORMS.map((spec) => spec.platform).filter((platform) => platform !== 'raft' && platform !== 'x')).toEqual([
       'telegram',
       'discord',
@@ -99,9 +99,28 @@ describe('resolvePlatforms', () => {
       'google_chat',
       'signal',
       'imessage',
+      'wechat',
+      'wecom',
+      'yuanbao',
+      'qq',
+      'zalo',
       'tlon_urbit',
       'sms',
     ])
+  })
+
+  it('runs WeChat from its variables, masking every value, and skips QQ missing its secret', () => {
+    const resolved = resolvePlatforms({
+      THEOCLAW_WECHAT_APP_ID: 'wx1',
+      THEOCLAW_WECHAT_APP_SECRET: ' s1 ',
+      THEOCLAW_WECHAT_TOKEN: 't1',
+      THEOCLAW_QQ_APP_ID: 'q1',
+    })
+    expect(resolved.configured).toEqual([
+      { platform: 'wechat', settings: { appId: 'wx1', appSecret: 's1', token: 't1' } },
+    ])
+    expect(resolved.secrets).toEqual(['wx1', 's1', 't1'])
+    expect(resolved.skipped).toContainEqual({ platform: 'qq', missing: ['THEOCLAW_QQ_APP_SECRET'] })
   })
 
   it('lists raft among the platforms', () => {
