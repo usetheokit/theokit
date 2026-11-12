@@ -2,7 +2,7 @@
 
 Paulo decided these rows on 2026-10-06, in the S-001 session, answering questions Q1 and Q2 of
 the parity ledger plan. They extend the table "Declared out by Paulo on 2026-10-04" in
-`.squad/wiki/product/objectives.md`, which names "OC-37 to OC-43" as native mobile apps and device
+`docs/wiki/product/objectives.md`, which names "OC-37 to OC-43" as native mobile apps and device
 nodes although three of those rows are not mobile.
 
 | Row | What | Decision | Why |

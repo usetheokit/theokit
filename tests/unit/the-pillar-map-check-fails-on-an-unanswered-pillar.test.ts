@@ -213,7 +213,7 @@ describe('an input the check cannot read exits 2, never 1', () => {
 describe('the canonical names are the objective’s own', () => {
   it('holds 33 unique canonical names, each present in the objective', () => {
     const names = PILLARS
-    const objective = readFileSync(join(ROOT, '.squad/wiki/product/objectives.md'), 'utf8')
+    const objective = readFileSync(join(ROOT, 'docs/wiki/product/objectives.md'), 'utf8')
     // The objective lists the pillars once, in parentheses after "pillar by pillar". Comparing
     // against that list, not a substring search, catches a truncated name ("agent" is inside
     // "agents") as well as a renamed one.

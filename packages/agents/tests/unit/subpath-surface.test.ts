@@ -123,8 +123,11 @@ describe('M90 — the infra subpath surface is locked', () => {
     // 200 since the floor moved to `@theokit/sdk` ^5.15.1: +6, nothing removed. In `persistence`,
     // `SqliteSessionStore` and the type `SqliteSessionStoreOptions`; in `sandbox`, `DockerSandbox`
     // and the types `DockerRunner`, `DockerRunResult`, `DockerSandboxConfig`.
+    //
+    // 204 since the floor moved to `@theokit/sdk` ^5.17.0: +4, nothing removed. In `sandbox`,
+    // `E2BSandbox`, `E2B_CA_BUNDLE` and the types `E2BSandboxConfig`, `E2BSandboxHandle`.
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(200)
+    expect(total).toBe(204)
   })
 
   /**

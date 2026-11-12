@@ -89,6 +89,8 @@ import type { TeamsVerifier } from './webhooks/teams.js'
 import { createActivityLedger, createExecApprovalStore, execApprovalPlugin, type ExecApprovalOptions } from './tools/exec-approval.js'
 import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { createEmailTrigger } from './triggers/email-trigger.js'
+import { type McpEvents, startMcpEvents } from './triggers/mcp-events.js'
+import { readMcpEventsSettings } from './triggers/mcp-events-settings.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
 import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
@@ -534,6 +536,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
   requireGroupPlatformsConfigured(policy, platforms)
   const events = readEventSettings(options.env, platforms)
+  const mcpEventsSettings = readMcpEventsSettings(options.env, platforms, tools.external.mcpServers)
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
   const database = readDatabaseSetting(options.env)
@@ -574,6 +577,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   let closeScheduleStore = (): Promise<void> => Promise.resolve()
   let acpSessions: AcpSessions | undefined
   let mcpConnector: McpRelayConnector | undefined
+  let mcpEvents: McpEvents | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
   let announcement: LanAnnouncement | undefined
@@ -582,6 +586,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     // The scheduler, then the loop, so no run or turn starts once the agents are being disposed.
     stopAll: async () => {
       await mcpConnector?.stop()
+      await mcpEvents?.stop()
       await scheduled?.stop()
       await closeScheduleStore()
       await acpSessions?.stopAll()
@@ -662,6 +667,15 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   }
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
+  if (mcpEventsSettings !== undefined) {
+    mcpEvents = await startMcpEvents({
+      settings: mcpEventsSettings,
+      adapterFor: (platform) => composed.loop.started.get(platform)?.adapter,
+      withAgent: createContainer<TurnAgent>({ factory: options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env) }).withAgent,
+      write: stderr,
+      secrets: secretValues,
+    })
+  }
   const devices = devicePairingFor(policy.stateDir, settings.controlToken, stderr)
   // A chat completion is a chat surface: its agent is a chat agent, holding no tool (B-382), so
   // `/tools/invoke` is the only way to the `/control` set, built by the same call as that agent's.
