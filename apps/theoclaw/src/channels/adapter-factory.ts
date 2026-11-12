@@ -9,14 +9,19 @@ import { MattermostAdapter } from '@theokit/gateway-mattermost'
 import { IMessageAdapter } from '@theokit/gateway-imessage'
 import { SlackAdapter } from '@theokit/gateway-slack'
 import { SignalAdapter } from '@theokit/gateway-signal'
+import { QQAdapter } from '@theokit/gateway-qq'
 import { RaftAdapter } from '@theokit/gateway-raft'
 import { SMSAdapter } from '@theokit/gateway-sms'
 import type { TwilioOptions } from '@theokit/gateway-sms'
 import { TeamsAdapter } from '@theokit/gateway-teams'
 import { TelegramAdapter } from '@theokit/gateway-telegram'
 import { TlonUrbitAdapter } from '@theokit/gateway-tlon-urbit'
+import { WeChatAdapter } from '@theokit/gateway-wechat'
+import { WeComAdapter } from '@theokit/gateway-wecom'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 import { XAdapter } from '@theokit/gateway-x'
+import { YuanbaoAdapter } from '@theokit/gateway-yuanbao'
+import { ZaloAdapter } from '@theokit/gateway-zalo'
 
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -216,6 +221,11 @@ const ADAPTERS: AdapterConstructors = {
   imessage: (settings) => new IMessageAdapter(settings),
   raft: (settings) => new RaftAdapter(settings),
   x: (settings) => new XAdapter(xOptions(settings)),
+  wechat: (settings) => new WeChatAdapter(settings),
+  wecom: (settings) => new WeComAdapter(settings),
+  yuanbao: (settings) => new YuanbaoAdapter(settings),
+  qq: (settings) => new QQAdapter(settings),
+  zalo: (settings) => new ZaloAdapter(settings),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }
