@@ -28,6 +28,13 @@ function readSettings(cwd: string): Record<string, unknown> | undefined {
   }
 }
 
+/** The SDK reads a hook's `timeout` in seconds and applies it in ms; zero, negative or absent means the default. */
+function hookTimeoutMs(timeout: unknown): number {
+  return typeof timeout === 'number' && timeout > 0
+    ? Math.round(timeout * 1000)
+    : DEFAULT_TIMEOUT_MS
+}
+
 function commandsOf(groups: unknown): { command: string; timeoutMs: number }[] {
   if (!Array.isArray(groups)) return []
   const found: { command: string; timeoutMs: number }[] = []
@@ -36,7 +43,7 @@ function commandsOf(groups: unknown): { command: string; timeoutMs: number }[] {
     if (!Array.isArray(hooks)) continue
     for (const hook of hooks) {
       if (!isRecord(hook) || hook.type !== 'command' || typeof hook.command !== 'string') continue
-      const timeoutMs = typeof hook.timeout === 'number' ? hook.timeout : DEFAULT_TIMEOUT_MS
+      const timeoutMs = hookTimeoutMs(hook.timeout)
       found.push({ command: hook.command, timeoutMs })
     }
   }
@@ -56,7 +63,9 @@ export function listProjectHooks(cwd: string, env: Env): string[] {
   for (const [sourceEvent, groups] of Object.entries(hooks)) {
     for (const { command, timeoutMs } of commandsOf(groups)) {
       const fingerprint = hookFingerprint({ sourceEvent, command, timeoutMs })
-      lines.push(`${sourceEvent}  ${fingerprint}  ${approved.has(fingerprint) ? 'approved' : 'not approved'}`)
+      lines.push(
+        `${sourceEvent}  ${fingerprint}  ${approved.has(fingerprint) ? 'approved' : 'not approved'}`,
+      )
     }
   }
   return lines
