@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Security
+- **A custom command's shell output can no longer pull a local file into the prompt.** Template expansion ran each ``!`cmd` `` first and then scanned its output for `@file`, so text a command printed (a commit message, say) could inline a file; `@../` also reached outside the project. Expansion now uses `expandCommandTemplate` from `@theokit/agents/config`: shell output is never scanned, shell and `@file` segments match only at a word boundary (`KEY=!`echo x`` no longer runs), `\$1` stays literal, and a ```` ```! ```` block or a failed command shows an error and sends nothing. `@file` is limited to the working directory; `~/` is no longer read. (#1899)
+
 ### Fixed
 - **Headless `exec` keeps parallel and failed tool calls apart.** The processors keyed tool calls by an `id` the wire never carries, so parallel calls shared one JSONL item id, and a `tool-output-error` produced no `item.completed` and no line on stderr. Chunks now go through `fromWireChunk`: each call has its own id, a failed call completes with `status: "failed"` and prints `failed: <error>`, and the completed item keeps the tool name. (#1891)
 - **Esc stops a long streaming reply.** The TUI stopped reading the keyboard while a reply streamed, so Esc was ignored until the reply ended and the spinner's timer froze. Two causes, both fixed: the stream loop in `@theokit/agents` never yielded to the event loop, and the bundle carried React's development build, which nothing switched off because a user never sets `NODE_ENV`. The bundle now pins only React's own packages to production. (#964)
