@@ -121,13 +121,6 @@ describe("the process entry", () => {
     expect(run.output()).not.toContain(TOKEN);
   });
 
-  it("the process entry refuses THEOCLAW_THINKING=ultra with exit 1 and the allowed values", { timeout: 20_000 }, async () => {
-    const run = spawnEntry({ THEOCLAW_THINKING: "ultra" });
-
-    expect(await run.exited).toEqual({ code: 1, signal: null });
-    expect(run.output()).toContain("THEOCLAW_THINKING must be one of off, low, medium, high");
-  });
-
   it("the entry process ignores a configuration file outside its XDG_CONFIG_HOME", { timeout: 20_000 }, async () => {
     // A file at the HOME default path would supply THEOCLAW_MODEL if the entry read it; the scratch
     // XDG_CONFIG_HOME points the entry elsewhere, so the refusal still happens.

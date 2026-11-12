@@ -2,7 +2,6 @@ import { isA2APath } from '../a2a/a2a-route.js'
 import { isRelayPath } from '../relay/relay-server.js'
 import { isWebchatPath } from '../webchat/paths.js'
 import type { DevicePairing } from './device-pairing.js'
-import type { CityLookup } from './geo-city.js'
 import { healthHandler } from './listener.js'
 import { PAIR_PATH, pairRoute } from './pair-route.js'
 
@@ -28,12 +27,11 @@ export function serveHandler(
   api?: PartialHandler,
   a2a?: HttpHandler,
   relay?: HttpHandler,
-  cityOf?: CityLookup,
 ): HttpHandler {
   return async (request) => {
     const { pathname } = new URL(request.url)
     if (pathname === '/health') return healthHandler(request)
-    if (pathname === PAIR_PATH && devices !== undefined) return pairRoute(devices, request, cityOf)
+    if (pathname === PAIR_PATH && devices !== undefined) return pairRoute(devices, request)
     if (isA2APath(pathname)) return a2a === undefined ? new Response(null, { status: 404 }) : a2a(request)
     if (isRelayPath(pathname)) return relay === undefined ? new Response(null, { status: 404 }) : relay(request)
     if (isWebchatPath(pathname)) return webchat === undefined ? new Response(null, { status: 404 }) : webchat(request)

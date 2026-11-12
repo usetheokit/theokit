@@ -59,7 +59,7 @@ function promptOf(trigger: TriggerSettings, body: string): string {
 }
 
 /** The run's text and the error code a stream frame reported, if any. */
-export async function runText(agent: TurnAgent, prompt: string): Promise<{ readonly text: string; readonly failure?: string }> {
+async function runText(agent: TurnAgent, prompt: string): Promise<{ readonly text: string; readonly failure?: string }> {
   const run = await agent.send(prompt, untrustedContentSendOptions())
   let text = ''
   let streamError: string | undefined

@@ -28,36 +28,20 @@ export function readHeartbeatSettings(
   env: Readonly<Record<string, string | undefined>>,
   configured: readonly string[],
 ): HeartbeatSettings | undefined {
-  return readScheduleVariable(VARIABLE, env, configured)
-}
-
-/** `<cron> <platform>:<channelId>` read from the variable `variable`; shared with the team report. */
-export function readScheduleVariable(
-  variable: string,
-  env: Readonly<Record<string, string | undefined>>,
-  configured: readonly string[],
-): HeartbeatSettings | undefined {
-  const refuse = (detail: string): TheoClawConfigError => refuseFor(variable, detail)
-  const value = env[variable]?.trim()
+  const value = env[VARIABLE]?.trim()
   if (value === undefined || value === '') return undefined
   const tokens = value.split(/\s+/)
   const targetToken = tokens.pop() ?? ''
   const separator = targetToken.indexOf(':')
   if (tokens.length === 0 || separator <= 0 || separator === targetToken.length - 1) {
-    throw refuse(
-      'must be "<cron> <platform>:<channelId>", for example "0 9 * * * telegram:-100123"',
-    )
+    throw refuse('must be "<cron> <platform>:<channelId>", for example "0 9 * * * telegram:-100123"')
   }
   const platform = targetToken.slice(0, separator)
   if (!PLATFORMS.some((spec) => spec.platform === platform)) {
-    throw refuse(
-      `names platform ${JSON.stringify(platform)}, which is none of ${PLATFORMS.map((spec) => spec.platform).join(', ')}`,
-    )
+    throw refuse(`names platform ${JSON.stringify(platform)}, which is none of ${PLATFORMS.map((spec) => spec.platform).join(', ')}`)
   }
   if (!configured.includes(platform)) {
-    throw refuse(
-      `names platform ${JSON.stringify(platform)}, which is not configured (configured: ${configured.join(', ') || 'none'})`,
-    )
+    throw refuse(`names platform ${JSON.stringify(platform)}, which is not configured (configured: ${configured.join(', ') || 'none'})`)
   }
   const cron = tokens.join(' ')
   const problem = cronProblem(cron)
@@ -84,8 +68,8 @@ export function heartbeatJob(workspace: string, settings: HeartbeatSettings): Tr
   }
 }
 
-function refuseFor(variable: string, detail: string): TheoClawConfigError {
-  return new TheoClawConfigError(`${variable} ${detail}`, { variable })
+function refuse(detail: string): TheoClawConfigError {
+  return new TheoClawConfigError(`${VARIABLE} ${detail}`, { variable: VARIABLE })
 }
 
 // The SDK validates a cron only inside its asynchronous `Cron.create`, and the start may not await
@@ -133,9 +117,7 @@ function stepAccepted(text: string, range: FieldRange): boolean {
 
 function spanAccepted(field: string, range: FieldRange): boolean {
   const [start, end, ...rest] = field.split('-').map(numberOf)
-  return (
-    rest.length === 0 && inRange(start, range) && inRange(end, range) && (start ?? 0) <= (end ?? 0)
-  )
+  return rest.length === 0 && inRange(start, range) && inRange(end, range) && (start ?? 0) <= (end ?? 0)
 }
 
 function inRange(value: number | undefined, range: FieldRange): boolean {

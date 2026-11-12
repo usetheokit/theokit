@@ -146,7 +146,7 @@ describe("createChannelAgentFactory", () => {
 
     expect(options).toHaveLength(1);
     const catalog = effectiveToolNames({ ...options[0] });
-    expect(catalog.names).toEqual(['skill_read']);
+    expect(catalog.names).toEqual([]);
     expect(catalog.unresolved).toEqual([]);
     expect(options[0]).toMatchObject({ model: "openrouter/m", apiKey: "router-key" });
   });
@@ -167,9 +167,8 @@ describe("webchatAgentFactory", () => {
 
     await webchatAgentFactory(env, create)();
 
-    expect(options).toHaveLength(1);
-    expect({ ...options[0], tools: undefined, skillsRefresh: undefined }).toEqual({ ...agentOptionsFor(env), tools: undefined, skillsRefresh: undefined });
-    expect(effectiveToolNames({ ...options[0] }).names).toEqual(['skill_read']);
+    expect(options).toEqual([agentOptionsFor(env)]);
+    expect(effectiveToolNames({ ...options[0] }).names).toEqual([]);
   });
 });
 
@@ -221,7 +220,7 @@ describe("the chat path's agent options", () => {
 
     expect(options).toHaveLength(1);
     const catalog = effectiveToolNames({ ...options[0] });
-    expect(catalog.names).toEqual(['skill_read']);
+    expect(catalog.names).toEqual([]);
     expect(catalog.unresolved).toEqual([]);
     expect(options[0]).toMatchObject({ model: "openrouter/m", apiKey: "router-key" });
   });
@@ -286,13 +285,12 @@ describe("sessionAgentOptions", () => {
     });
   });
 
-  it("keeps the env's hook gate beside cwd and sessionDir, and loads the project setting only for approved hooks (OC-87)", () => {
+  it("keeps the env's hook gate beside cwd and sessionDir, and loads no project setting (B-397 D3)", () => {
     const local = sessionAgentOptions({ ...MODEL_ENV, THEOCLAW_APPROVED_HOOKS: APPROVED }, "/ws").local;
     expect(local.cwd).toBe("/ws");
     expect(local.hooks.approve?.(LISTED_HOOK)).toBe(true);
     expect(local.hooks.approve?.(UNLISTED_HOOK)).toBe(false);
-    expect(local.settingSources).toEqual(["project"]);
-    expect(sessionAgentOptions(MODEL_ENV, "/ws").local).not.toHaveProperty("settingSources");
+    expect(local).not.toHaveProperty("settingSources");
   });
 
   it("refuses a missing model with the start's own words", () => {

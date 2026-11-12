@@ -127,7 +127,7 @@ describe('the external tools reach the /control agent only', () => {
     for (let i = 0; i < 20; i += 1) await chat()
     expect(options).toHaveLength(20)
     for (const option of options) {
-      expect((option.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
+      expect(option.tools).toBeUndefined()
       expect(option.plugins).toBeUndefined()
       expect(option.mcpServers).toBeUndefined()
     }
@@ -135,7 +135,7 @@ describe('the external tools reach the /control agent only', () => {
     const control = recordingCreate()
     await createAgentFactory(MODEL_ENV, control.create)(agentToolOptions(settings))
     expect(Object.keys(control.options[0]?.mcpServers ?? {})).toHaveLength(2)
-    expect(control.options[0]?.tools).toHaveLength(without.tools.length + 3) // + skill_read for the custodian skills
+    expect(control.options[0]?.tools).toHaveLength(without.tools.length + 2)
   })
 
   it('every ACP tool comes from theokit/server/agent', () => {

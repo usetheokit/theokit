@@ -116,7 +116,6 @@ export {
   renderTranscript,
   type OpenAIChatMessage,
   type OpenAIChatRequest,
-  type OpenAICompletion,
   type OpenAICompatibleRoutesOptions,
   type OpenAITextPart,
 } from './openai-compatible-routes.js'

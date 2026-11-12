@@ -199,9 +199,6 @@ importers:
 
   apps/theoclaw:
     dependencies:
-      '@agentclientprotocol/sdk':
-        specifier: 0.22.1
-        version: 0.22.1(zod@4.6.7)
       '@jitl/quickjs-wasmfile-release-sync':
         specifier: 0.32.0
         version: 0.32.0
@@ -247,9 +244,6 @@ importers:
       '@slack/bolt':
         specifier: 5.1.0
         version: 5.1.0(@types/express@5.0.6)(undici@7.30.1)
-      '@theokit/acp':
-        specifier: 4.0.2
-        version: 4.0.2(@agentclientprotocol/sdk@0.22.1(zod@4.6.7))(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
       '@theokit/agents':
         specifier: workspace:*
         version: link:../../packages/agents
@@ -271,12 +265,6 @@ importers:
       '@theokit/gateway-email':
         specifier: 0.3.1
         version: 0.3.1(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(imapflow@1.7.8)(mailparser@3.12.4)(nodemailer@10.2.1)
-      '@theokit/gateway-google-chat':
-        specifier: 0.1.0
-        version: 0.1.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)
-      '@theokit/gateway-imessage':
-        specifier: 0.1.0
-        version: 0.1.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
       '@theokit/gateway-line':
         specifier: 0.4.0
         version: 0.4.0(@line/bot-sdk@11.3.0)(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)
@@ -284,11 +272,8 @@ importers:
         specifier: 0.3.0
         version: 0.3.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(matrix-js-sdk@42.4.0)
       '@theokit/gateway-mattermost':
-        specifier: 0.3.1
-        version: 0.3.1(@mattermost/client@11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(ws@8.22.0)
-      '@theokit/gateway-signal':
-        specifier: 0.1.0
-        version: 0.1.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
+        specifier: 0.2.1
+        version: 0.2.1(@mattermost/client@11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(ws@8.22.0)
       '@theokit/gateway-slack':
         specifier: 0.3.1
         version: 0.3.1(@slack/bolt@5.1.0(@types/express@5.0.6)(undici@7.30.1))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
@@ -316,15 +301,12 @@ importers:
       '@theokit/sdk':
         specifier: 5.15.3
         version: 5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
-      '@theokit/sdk-tools':
-        specifier: 0.29.0
-        version: 0.29.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)
       '@theokit/tui':
         specifier: 0.80.0
         version: 0.80.0(@types/react@19.2.17)(lowlight@3.3.0)(react@19.2.7)
       '@theokit/ui':
-        specifier: 1.13.0
-        version: 1.13.0(@tailwindcss/vite@4.3.1(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(@usetheo/ui@0.28.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1))(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.18.10)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.1)(typescript@5.9.3)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))(yaml@2.9.0)
+        specifier: 1.12.2
+        version: 1.12.2(@tailwindcss/vite@4.3.1(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(@usetheo/ui@0.28.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1))(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.18.10)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.1)(typescript@5.9.3)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))(yaml@2.9.0)
       '@usetheo/ui':
         specifier: 0.28.2
         version: 0.28.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
@@ -334,9 +316,6 @@ importers:
       discord.js:
         specifier: 14.27.0
         version: 14.27.0
-      express:
-        specifier: 5.3.0
-        version: 5.3.0
       grammy:
         specifier: 1.46.0
         version: 1.46.0
@@ -352,21 +331,12 @@ importers:
       mailparser:
         specifier: 3.12.4
         version: 3.12.4
-      mammoth:
-        specifier: 1.13.0
-        version: 1.13.0
       matrix-js-sdk:
         specifier: 42.4.0
         version: 42.4.0
       nodemailer:
         specifier: 10.2.1
         version: 10.2.1
-      pg:
-        specifier: 8.23.0
-        version: 8.23.0
-      qrcode-terminal:
-        specifier: 0.12.0
-        version: 0.12.0
       quickjs-emscripten-core:
         specifier: 0.32.0
         version: 0.32.0
@@ -388,9 +358,6 @@ importers:
       undici:
         specifier: 7.30.1
         version: 7.30.1
-      unpdf:
-        specifier: 2.1.0
-        version: 2.1.0
       ws:
         specifier: 8.22.0
         version: 8.22.0
@@ -604,7 +571,7 @@ importers:
         version: 5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
       '@theokit/sdk-tools':
         specifier: ^0.29.0
-        version: 0.29.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)
+        version: 0.29.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(vitest@4.1.12)(zod@4.6.7)
       react:
         specifier: '>=18'
         version: 19.2.7
@@ -3293,14 +3260,6 @@ packages:
       '@agentclientprotocol/sdk': ^0.22.1
       '@theokit/sdk': 5.15.3
 
-  '@theokit/acp@4.0.2':
-    resolution: {integrity: sha512-Mw7Ne7vbymEVDB4ns5TIUNKZW3RiRDFEZw3zGbfBWNhuESTGyDjyOHQuMwwaQpT2OPEVhMWz6EwYC/0VsG27AQ==}
-    engines: {node: '>=22.12.0'}
-    hasBin: true
-    peerDependencies:
-      '@agentclientprotocol/sdk': ^0.22.1
-      '@theokit/sdk': 5.15.3
-
   '@theokit/di-agent@0.5.0':
     resolution: {integrity: sha512-DqsggX3nO5KUatys1hlmy7baZPa/huLbegnaB7adQJxaUID3GpbEOrK6z6Ft8nm1SUK9tKUuskzxT5oMHpNahg==}
     engines: {node: '>=22.12.0'}
@@ -3331,22 +3290,6 @@ packages:
       mailparser: ^3.0.0
       nodemailer: ^9.0.1
 
-  '@theokit/gateway-google-chat@0.1.0':
-    resolution: {integrity: sha512-cCNKYS6a0z19nFKqGknUgcdUYT4I8LWfClySqhTc1CG3qGOFPCNBCTFK2MTkRop8WMebq/lAYdWa3dqJ4CDgDg==}
-    engines: {node: '>=22.12.0'}
-    peerDependencies:
-      '@theokit/gateway': '>=0.12.0 <1.0.0'
-      express: ^4.18.0 || ^5.0.0
-    peerDependenciesMeta:
-      express:
-        optional: true
-
-  '@theokit/gateway-imessage@0.1.0':
-    resolution: {integrity: sha512-v1XnMD6Dm6nZRKh6DAuxZKP4PV30SkevPq8DDN5kDMjsDpirDIuVFkkwKjtOjA9tXy+aiUKaaEKBABhHq2G+Xw==}
-    engines: {node: '>=22.12.0'}
-    peerDependencies:
-      '@theokit/gateway': '>=0.12.0 <1.0.0'
-
   '@theokit/gateway-line@0.4.0':
     resolution: {integrity: sha512-U1F6yahQx5AgnrPtbP2meEI5qqMt3B9XwUYxCBWl3icGpy656AWLgRtuml/SuP3qlVl0Q+o9UYiV8jvG8h8yeQ==}
     engines: {node: '>=22.12.0'}
@@ -3370,8 +3313,8 @@ packages:
       matrix-js-sdk:
         optional: true
 
-  '@theokit/gateway-mattermost@0.3.1':
-    resolution: {integrity: sha512-Zz4bXQUqTrOATO/DJ8cAb87nAjk4wCqLl+toOmHwyCqjnEZypF0Q6e7Nr+ql81prBUQMNGDRiL6YT9ofwFWS0Q==}
+  '@theokit/gateway-mattermost@0.2.1':
+    resolution: {integrity: sha512-cZwUW5FEmWrmK+FDkRgi5HTUXUYKuFht/99SVczykVF3YGj6xAsKsIOV8E74Sw1pheeJen1Efxsh0FjxSBatKA==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@mattermost/client': ^9.0.0 || ^11.0.0
@@ -3382,12 +3325,6 @@ packages:
         optional: true
       ws:
         optional: true
-
-  '@theokit/gateway-signal@0.1.0':
-    resolution: {integrity: sha512-2AdAcn6Ao+RAfhSUTq8UhCZbmwvMVh0QYjsJG0IytnBnpOY20lVa+pV+om9zQ3Mu46PPdQd3ceFDgPEywfeHQA==}
-    engines: {node: '>=22.12.0'}
-    peerDependencies:
-      '@theokit/gateway': '>=0.12.0 <1.0.0'
 
   '@theokit/gateway-slack@0.3.1':
     resolution: {integrity: sha512-AKgeEQWC1ptPa4yGnzxv+/hzNvnoYyl1TsisBN6JUuc+hFJQnaHfDNZSY70tInAiVu2BlyYuH+iHJeMbG9KlCw==}
@@ -3523,75 +3460,6 @@ packages:
 
   '@theokit/ui@1.12.2':
     resolution: {integrity: sha512-HAzgCjyMEh3HA3lJy6nIOETBhOzNinq/Y3hd3vDP/xa20zU8FhzqMli0pIsfO+9Ml91wiAUwoOylk3sB6E2vXw==}
-    engines: {node: '>=22.12.0', pnpm: '>=10.34.1'}
-    peerDependencies:
-      '@tailwindcss/vite': ^4.0.0
-      '@usetheo/ui': '>=0.22.0 <1'
-      hast-util-from-html: ^2.0.0
-      hast-util-sanitize: ^5.0.0
-      hast-util-to-jsx-runtime: ^2.0.0
-      katex: ^0.18.2
-      mdast-util-from-markdown: ^2.0.0
-      mdast-util-gfm: ^3.0.0
-      mdast-util-math: ^3.0.0
-      mdast-util-to-hast: ^13.0.0
-      mermaid: ^11.16.1
-      micromark-extension-gfm: ^3.0.0
-      micromark-extension-math: ^3.0.0
-      perfect-freehand: ^1.2.0
-      react: '>=18.2.0 <20'
-      react-dom: '>=18.2.0 <20'
-      roughjs: ^4.6.0
-      shiki: ^1.0.0
-      tailwindcss: ^4.0.0
-      unist-util-visit: ^5.0.0
-      unist-util-visit-parents: ^6.0.0
-      vite: ^6.0.0 || ^7.0.0
-      yaml: ^2.0.0
-    peerDependenciesMeta:
-      '@tailwindcss/vite':
-        optional: true
-      hast-util-from-html:
-        optional: true
-      hast-util-sanitize:
-        optional: true
-      hast-util-to-jsx-runtime:
-        optional: true
-      katex:
-        optional: true
-      mdast-util-from-markdown:
-        optional: true
-      mdast-util-gfm:
-        optional: true
-      mdast-util-math:
-        optional: true
-      mdast-util-to-hast:
-        optional: true
-      mermaid:
-        optional: true
-      micromark-extension-gfm:
-        optional: true
-      micromark-extension-math:
-        optional: true
-      perfect-freehand:
-        optional: true
-      roughjs:
-        optional: true
-      shiki:
-        optional: true
-      tailwindcss:
-        optional: true
-      unist-util-visit:
-        optional: true
-      unist-util-visit-parents:
-        optional: true
-      vite:
-        optional: true
-      yaml:
-        optional: true
-
-  '@theokit/ui@1.13.0':
-    resolution: {integrity: sha512-wcq7718uNb/x20aRTy3V2wElaWs2nWSJwBeD1ec6PsHuE69aSavsDo1JhEdIhDfOBG2UWnZkEW5NemhALfP+4A==}
     engines: {node: '>=22.12.0', pnpm: '>=10.34.1'}
     peerDependencies:
       '@tailwindcss/vite': ^4.0.0
@@ -4126,10 +3994,6 @@ packages:
 
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
-
-  '@xmldom/xmldom@0.8.15':
-    resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
-    engines: {node: '>=10.0.0'}
 
   '@zone-eu/mailsplit@5.4.16':
     resolution: {integrity: sha512-zQ9iXvlT3Wi/hazeC1MdI4rQc1UJwJ6IQ6QzSZ5KDxLZZWQSazWLOzImLFluXadKShJ9WJvI1xH+AyVS8b9azg==}
@@ -4672,9 +4536,6 @@ packages:
   core-js-compat@3.49.0:
     resolution: {integrity: sha512-VQXt1jr9cBz03b331DFDCCP90b3fanciLkgiOoy8SBHy06gNf+vQ1A3WFLqG7I8TipYIKeYK9wxd0tUrvHcOZA==}
 
-  core-util-is@1.0.3:
-    resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
-
   cors@2.8.6:
     resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
     engines: {node: '>= 0.10'}
@@ -4838,9 +4699,6 @@ packages:
     resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
     engines: {node: '>=0.3.1'}
 
-  dingbat-to-unicode@1.0.2:
-    resolution: {integrity: sha512-R0bRerYzy/EZP6QzD3Hkl6JjUDA1Mnn+pd928w0nWjPzihnbAR6dcjGJGiRyznj5E4S1duEKzWrTqw02DPcdzg==}
-
   dir-glob@3.0.1:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
@@ -4975,9 +4833,6 @@ packages:
         optional: true
       sqlite3:
         optional: true
-
-  duck@0.1.12:
-    resolution: {integrity: sha512-wkctla1O6VfP89gQ+J/yDesM0S7B7XLXjKGzXxMDVFg7uEn706niAtyYovKbyq1oT9YwDcly721/iUWoc8MVRg==}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -5797,9 +5652,6 @@ packages:
   imapflow@1.7.8:
     resolution: {integrity: sha512-dJoCIdZOJh26Rn2PdwEzwj0bRDgGBxxX38pio534FagIHVuR2l0SAfLr6sJo32YfuJHiSs/U2ntNDHnMg3/Hlg==}
 
-  immediate@3.0.6:
-    resolution: {integrity: sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ==}
-
   immutable@4.3.9:
     resolution: {integrity: sha512-ObHy4YN7ycwZOUCLI1/6svfyAFu7vL8RhAvVu/bh/RZW9EPlOyDaQ9jDQWCtdqzaXUjgXZCW1migtHE7YI7UGQ==}
 
@@ -6060,9 +5912,6 @@ packages:
     resolution: {integrity: sha512-eXK1UInq2bPmjyX6e3VHIzMLobc4J94i4AWn+Hpq3OU5KkrRC96OAcR3PRJ/pGu6m8TRnBHP9dkXQVsT/COVIA==}
     engines: {node: '>=0.10.0'}
 
-  isarray@1.0.0:
-    resolution: {integrity: sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ==}
-
   isarray@2.0.5:
     resolution: {integrity: sha512-xHjhDr3cNBK0BzdUJSPXZntQUx/mwMS5Rw4A7lPJ90XGAO6ISP/ePDNuo0vhqOZU+UD5JoodwCAAoZQd3FeAKw==}
 
@@ -6197,9 +6046,6 @@ packages:
     resolution: {integrity: sha512-ZZow9HBI5O6EPgSJLUb8n2NKgmVWTwCvHGwFuJlMjvLFqlGG6pjirPhtdsseaLZjSibD8eegzmYpUZwoIlj2cQ==}
     engines: {node: '>=4.0'}
 
-  jszip@3.10.2:
-    resolution: {integrity: sha512-3l+rb15IOWtUhU0H5MFqES/T6Kh7abYwjosBey/vD6hDt8zoEffkSC5Ws5SGtgVw3gBx2NEbhTeSW1+kWkpyTQ==}
-
   jwa@2.0.1:
     resolution: {integrity: sha512-hRF04fqJIP8Abbkq5NKGN0Bbr3JxlQ+qhZufXVr0DvujKy93ZCbXZMHDL4EOtodSbCWxOqR8MS1tXA5hwqCXDg==}
 
@@ -6271,9 +6117,6 @@ packages:
   libqp@3.0.1:
     resolution: {integrity: sha512-7QZxpPX25pga1WiMueduWxmrHMVBFrZPH6ZUaozGYa/H98JH6NVBSET3qVw+4NxzoraIW7rJ81YxSU9IalvCpg==}
     engines: {node: '>=20.0.0'}
-
-  lie@3.3.0:
-    resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
 
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
@@ -6437,9 +6280,6 @@ packages:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     hasBin: true
 
-  lop@0.4.2:
-    resolution: {integrity: sha512-RefILVDQ4DKoRZsJ4Pj22TxE3omDO47yFpkIBoDKzkqPRISs5U1cnAdg/5583YPkWPaLIYHOKRMQSvjFsO26cw==}
-
   lowlight@3.3.0:
     resolution: {integrity: sha512-0JNhgFoPvP6U6lE/UdVsSq99tn6DhjjpAj5MxG49ewd2mOBVtwWYIT8ClyABhq198aXXODMU6Ox8DrGy/CpTZQ==}
 
@@ -6485,11 +6325,6 @@ packages:
   make-dir@4.0.0:
     resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
     engines: {node: '>=10'}
-
-  mammoth@1.13.0:
-    resolution: {integrity: sha512-2cawcYFcP7ISfXbBcL9lmVgTNWo88v/52ND1gnywHtVT/pX0//puPnf0iMPV9ZgmuvNOE+zkIhDgZ9M2c2dDDg==}
-    engines: {node: '>=12.0.0'}
-    hasBin: true
 
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
@@ -6947,9 +6782,6 @@ packages:
   openapi-types@12.1.3:
     resolution: {integrity: sha512-N4YtSYJqghVu4iek2ZUvcN/0aqH1kRDuNqzcycDxhOUpg7GdvLa2F3DgS6yBNhInhv2r/6I0Flkn7CqL8+nIcw==}
 
-  option@0.2.4:
-    resolution: {integrity: sha512-pkEqbDyl8ou5cpq+VsnQbe/WlEy5qS7xPzMS1U55OCG9KPvwFD46zDbxQIj3egJSFc3D+XhYOPUzz49zQAVy7A==}
-
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -7027,9 +6859,6 @@ packages:
 
   package-manager-detector@1.8.0:
     resolution: {integrity: sha512-yQA4H19AmPEoMUeavPMDIe1higySl/gH/yaQrkT/s07Qp+7pp2hYz30N3z2l5BkjVkF9Ow6o0wjJamm2y7Sn0A==}
-
-  pako@1.0.11:
-    resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
 
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
@@ -7313,9 +7142,6 @@ packages:
     engines: {node: '>=14'}
     hasBin: true
 
-  process-nextick-args@2.0.1:
-    resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
-
   process-warning@5.1.1:
     resolution: {integrity: sha512-oCkNVj4OKnKEcocVBcDfiIugN1/cE6rgfT3nCtzeqZPA8+rIxMaQ0xXzIkGP8Gj2qUaP1UR7uhJ1VD8lUCpzCg==}
 
@@ -7359,10 +7185,6 @@ packages:
   qified@0.10.1:
     resolution: {integrity: sha512-+Owyggi9IxT1ePKGafcI87ubSmxol6smwJ+RAHDQlx9+9cPwFWDiKFFCPuWhr9ignlGpZ9vDQLw67N4dcTVFEA==}
     engines: {node: '>=20'}
-
-  qrcode-terminal@0.12.0:
-    resolution: {integrity: sha512-EXtzRZmC+YGmGlDFbXKxQiMZNwCLEO6BANKXG4iCtSIM0yqc/pappSx3RIKr4r0uh5JsBckOXeKrB3Iz7mdQpQ==}
-    hasBin: true
 
   qs@6.16.1:
     resolution: {integrity: sha512-5Px6J7rfHBAGUhNQ3es4YzcOdBBw0SDcVtThJml4RdnKw4tKs2epA0kPZ+K8X+WiHktT93RHVcQ/3ym5aTCgtg==}
@@ -7489,9 +7311,6 @@ packages:
   read-yaml-file@1.1.0:
     resolution: {integrity: sha512-VIMnQi/Z4HT2Fxuwg5KrY174U1VdUIASQVWXXyqtNRtxSr9IYkn1rsI6Tb6HsrHCmB7gVpNwX6JxPTHcH6IoTA==}
     engines: {node: '>=6'}
-
-  readable-stream@2.3.8:
-    resolution: {integrity: sha512-8p0AUk4XODgIewSi0l8Epjs+EVnWiK7NoDIEGU0HhE7+ZyY8D1IMY7odu5lRrFXGg71L15KG8QrPmum45RTtdA==}
 
   readable-stream@3.6.2:
     resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
@@ -7640,9 +7459,6 @@ packages:
     resolution: {integrity: sha512-wtZlHyOje6OZTGqAoaDKxFkgRtkF9CnHAVnCHKfuj200wAgL+bSJhdsCD2l0Qx/2ekEXjPWcyKkfGb5CPboslg==}
     engines: {node: '>=0.4'}
 
-  safe-buffer@5.1.2:
-    resolution: {integrity: sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==}
-
   safe-buffer@5.2.1:
     resolution: {integrity: sha512-rp3So07KcdmmKbGvgaNxQSJr7bGVSVk5S9Eq1F+ppbRo70+YeaDxkw5Dd8NPN+GD6bjnYm2VuPuCXmpuYvmCXQ==}
 
@@ -7735,9 +7551,6 @@ packages:
   set-proto@1.0.0:
     resolution: {integrity: sha512-RJRdvCo6IAnPdsvP/7m6bsQqNnn1FCBX5ZNtFL98MmFF/4xAIJTIg1YbHW5DC2W5SKZanrC6i4HsJqlajw/dZw==}
     engines: {node: '>= 0.4'}
-
-  setimmediate@1.0.5:
-    resolution: {integrity: sha512-MATJdZp8sLqDl/68LfQmbP8zKPLQNV6BIZoIgrscFDQ+RsvK/BxeDQOgyxKKoh0y/8h3BqVFnCqQ/gd+reiIXA==}
 
   setprototypeof@1.2.0:
     resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
@@ -7954,9 +7767,6 @@ packages:
   string.prototype.trimstart@1.0.8:
     resolution: {integrity: sha512-UXSH262CSZY1tfu3G3Secr6uGLCFVPMhIqHjlgCUtCCcgihYc/xKs9djMTMUOb2j1mVSeU8EU6NWc/iQKU6Gfg==}
     engines: {node: '>= 0.4'}
-
-  string_decoder@1.1.1:
-    resolution: {integrity: sha512-n/ShnvDi6FHbbVfviro+WojiFzv+s8MPMHBczVePfUpDJLwoLT0ht1l4YwBCbi8pJAveEEdnkHyPyTP/mzRfwg==}
 
   string_decoder@1.3.0:
     resolution: {integrity: sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA==}
@@ -8304,9 +8114,6 @@ packages:
   uncrypto@0.1.3:
     resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
 
-  underscore@1.13.8:
-    resolution: {integrity: sha512-DXtD3ZtEQzc7M8m4cXotyHR+FAS18C64asBYY5vqZexfYryNNnDc02W4hKg3rdQuqOYas1jkseX0+nZXjTXnvQ==}
-
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
@@ -8349,15 +8156,6 @@ packages:
   universalify@0.1.2:
     resolution: {integrity: sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg==}
     engines: {node: '>= 4.0.0'}
-
-  unpdf@2.1.0:
-    resolution: {integrity: sha512-G/Hsrm++g0EoubUhV8TDFItq6oQ+FUu9EMvIRtHUwseKXB0iJoCvaLvBGOpYUBqyvggv/XfxhYYtohL2QpE3xQ==}
-    engines: {node: '>=24'}
-    peerDependencies:
-      '@napi-rs/canvas': ^0.1.69 || ^1.0.0
-    peerDependenciesMeta:
-      '@napi-rs/canvas':
-        optional: true
 
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
@@ -8714,10 +8512,6 @@ packages:
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
-
-  xmlbuilder@10.1.1:
-    resolution: {integrity: sha512-OyzrcFLL/nb6fMGHbiRDuPup9ljBycsdCypwuyg5AAHvyWzGfChJpCXMG88AGTIMFhGZ9RccFN1e6lhg3hkwKg==}
-    engines: {node: '>=4.0'}
 
   xmlbuilder@13.0.2:
     resolution: {integrity: sha512-Eux0i2QdDYKbdbA6AM6xE4m6ZTZr4G4xF9kahI2ukSEMCzwce2eX9WlTI5J3s+NU7hpasFsr8hWIONae7LluAQ==}
@@ -11030,11 +10824,6 @@ snapshots:
       '@agentclientprotocol/sdk': 0.22.1(zod@4.6.7)
       '@theokit/sdk': 5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
 
-  '@theokit/acp@4.0.2(@agentclientprotocol/sdk@0.22.1(zod@4.6.7))(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))':
-    dependencies:
-      '@agentclientprotocol/sdk': 0.22.1(zod@4.6.7)
-      '@theokit/sdk': 5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
-
   '@theokit/di-agent@0.5.0(@theokit/di@0.2.1(reflect-metadata@0.2.2))(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(reflect-metadata@0.2.2)':
     dependencies:
       '@theokit/di': 0.2.1(reflect-metadata@0.2.2)
@@ -11057,16 +10846,6 @@ snapshots:
       mailparser: 3.12.4
       nodemailer: 10.2.1
 
-  '@theokit/gateway-google-chat@0.1.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)':
-    dependencies:
-      '@theokit/gateway': 0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
-    optionalDependencies:
-      express: 5.3.0
-
-  '@theokit/gateway-imessage@0.1.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
-    dependencies:
-      '@theokit/gateway': 0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
-
   '@theokit/gateway-line@0.4.0(@line/bot-sdk@11.3.0)(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)':
     dependencies:
       '@theokit/gateway': 0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
@@ -11080,16 +10859,12 @@ snapshots:
     optionalDependencies:
       matrix-js-sdk: 42.4.0
 
-  '@theokit/gateway-mattermost@0.3.1(@mattermost/client@11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(ws@8.22.0)':
+  '@theokit/gateway-mattermost@0.2.1(@mattermost/client@11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(ws@8.22.0)':
     dependencies:
       '@theokit/gateway': 0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
     optionalDependencies:
       '@mattermost/client': 11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3)
       ws: 8.22.0
-
-  '@theokit/gateway-signal@0.1.0(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
-    dependencies:
-      '@theokit/gateway': 0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
 
   '@theokit/gateway-slack@0.3.1(@slack/bolt@5.1.0(@types/express@5.0.6)(undici@7.30.1))(@theokit/gateway@0.14.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
     dependencies:
@@ -11133,14 +10908,12 @@ snapshots:
     optionalDependencies:
       node-pty: 1.1.0
 
-  '@theokit/sdk-tools@0.29.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)':
+  '@theokit/sdk-tools@0.29.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(vitest@4.1.12)(zod@4.6.7)':
     dependencies:
       '@theokit/sdk': 5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
       zod: 4.6.7
     optionalDependencies:
-      mammoth: 1.13.0
-      unpdf: 2.1.0
-      vitest: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.3)(@vitest/coverage-v8@4.1.12)(happy-dom@21.0.4)(jsdom@25.0.1)(msw@2.14.6(@types/node@22.20.3)(typescript@5.9.3))(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+      vitest: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@25.9.5)(@vitest/coverage-v8@4.1.12)(happy-dom@21.0.4)(jsdom@25.0.1)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(vite@7.3.7(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
 
   '@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)':
     dependencies:
@@ -11195,6 +10968,44 @@ snapshots:
       - react-devtools-core
       - utf-8-validate
 
+  '@theokit/ui@1.12.2(@tailwindcss/vite@4.3.1(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(@usetheo/ui@0.28.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1))(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.18.10)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.1)(typescript@5.9.3)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))(yaml@2.9.0)':
+    dependencies:
+      '@radix-ui/react-dropdown-menu': 2.1.18(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@usetheo/ui': 0.28.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
+      class-variance-authority: 0.7.1
+      clsx: 2.1.1
+      lucide-react: 0.471.2(react@19.2.7)
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+      tailwind-merge: 2.6.1
+      tailwindcss-animate: 1.0.7(tailwindcss@4.3.1)
+      valibot: 1.4.2(typescript@5.9.3)
+      zod: 4.6.7
+    optionalDependencies:
+      '@tailwindcss/vite': 4.3.1(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+      hast-util-from-html: 2.0.3
+      hast-util-sanitize: 5.0.2
+      hast-util-to-jsx-runtime: 2.3.6
+      katex: 0.18.10
+      mdast-util-from-markdown: 2.0.3
+      mdast-util-gfm: 3.1.0
+      mdast-util-math: 3.0.0
+      mdast-util-to-hast: 13.2.1
+      micromark-extension-gfm: 3.0.0
+      micromark-extension-math: 3.1.0
+      perfect-freehand: 1.2.3
+      roughjs: 4.6.6
+      shiki: 1.29.2
+      tailwindcss: 4.3.1
+      unist-util-visit: 5.1.0
+      unist-util-visit-parents: 6.0.2
+      vite: 7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
+      yaml: 2.9.0
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - typescript
+
   '@theokit/ui@1.12.2(@tailwindcss/vite@4.3.1(vite@7.3.7(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(@usetheo/ui@0.28.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1))(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.18.10)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.1)(typescript@5.9.3)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@7.3.7(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))(yaml@2.9.0)':
     dependencies:
       '@radix-ui/react-dropdown-menu': 2.1.18(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -11227,44 +11038,6 @@ snapshots:
       unist-util-visit: 5.1.0
       unist-util-visit-parents: 6.0.2
       vite: 7.3.7(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
-      yaml: 2.9.0
-    transitivePeerDependencies:
-      - '@types/react'
-      - '@types/react-dom'
-      - typescript
-
-  '@theokit/ui@1.13.0(@tailwindcss/vite@4.3.1(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(@usetheo/ui@0.28.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1))(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.18.10)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.1)(typescript@5.9.3)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))(yaml@2.9.0)':
-    dependencies:
-      '@radix-ui/react-dropdown-menu': 2.1.18(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@usetheo/ui': 0.28.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
-      class-variance-authority: 0.7.1
-      clsx: 2.1.1
-      lucide-react: 0.471.2(react@19.2.7)
-      react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
-      tailwind-merge: 2.6.1
-      tailwindcss-animate: 1.0.7(tailwindcss@4.3.1)
-      valibot: 1.4.2(typescript@5.9.3)
-      zod: 4.6.7
-    optionalDependencies:
-      '@tailwindcss/vite': 4.3.1(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
-      hast-util-from-html: 2.0.3
-      hast-util-sanitize: 5.0.2
-      hast-util-to-jsx-runtime: 2.3.6
-      katex: 0.18.10
-      mdast-util-from-markdown: 2.0.3
-      mdast-util-gfm: 3.1.0
-      mdast-util-math: 3.0.0
-      mdast-util-to-hast: 13.2.1
-      micromark-extension-gfm: 3.0.0
-      micromark-extension-math: 3.1.0
-      perfect-freehand: 1.2.3
-      roughjs: 4.6.6
-      shiki: 1.29.2
-      tailwindcss: 4.3.1
-      unist-util-visit: 5.1.0
-      unist-util-visit-parents: 6.0.2
-      vite: 7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
       yaml: 2.9.0
     transitivePeerDependencies:
       - '@types/react'
@@ -11920,8 +11693,6 @@ snapshots:
 
   '@workflow/serde@4.1.0': {}
 
-  '@xmldom/xmldom@0.8.15': {}
-
   '@zone-eu/mailsplit@5.4.16':
     dependencies:
       libbase64: 1.3.0
@@ -12498,8 +12269,6 @@ snapshots:
     dependencies:
       browserslist: 4.28.8
 
-  core-util-is@1.0.3: {}
-
   cors@2.8.6:
     dependencies:
       object-assign: 4.1.1
@@ -12664,8 +12433,6 @@ snapshots:
 
   diff@8.0.4: {}
 
-  dingbat-to-unicode@1.0.2: {}
-
   dir-glob@3.0.1:
     dependencies:
       path-type: 4.0.0
@@ -12735,10 +12502,6 @@ snapshots:
       pg: 8.23.0
       postgres: 3.4.9
     optional: true
-
-  duck@0.1.12:
-    dependencies:
-      underscore: 1.13.8
 
   dunder-proto@1.0.1:
     dependencies:
@@ -13933,8 +13696,6 @@ snapshots:
       pino: 10.3.1
       socks: 2.8.9
 
-  immediate@3.0.6: {}
-
   immutable@4.3.9: {}
 
   import-fresh@3.3.1:
@@ -14189,8 +13950,6 @@ snapshots:
 
   is-windows@1.0.2: {}
 
-  isarray@1.0.0: {}
-
   isarray@2.0.5: {}
 
   isexe@2.0.0: {}
@@ -14335,13 +14094,6 @@ snapshots:
       object.assign: 4.1.7
       object.values: 1.2.1
 
-  jszip@3.10.2:
-    dependencies:
-      lie: 3.3.0
-      pako: 1.0.11
-      readable-stream: 2.3.8
-      setimmediate: 1.0.5
-
   jwa@2.0.1:
     dependencies:
       buffer-equal-constant-time: 1.0.1
@@ -14445,10 +14197,6 @@ snapshots:
   libqp@2.1.1: {}
 
   libqp@3.0.1: {}
-
-  lie@3.3.0:
-    dependencies:
-      immediate: 3.0.6
 
   lightningcss-android-arm64@1.32.0:
     optional: true
@@ -14588,12 +14336,6 @@ snapshots:
     dependencies:
       js-tokens: 4.0.0
 
-  lop@0.4.2:
-    dependencies:
-      duck: 0.1.12
-      option: 0.2.4
-      underscore: 1.13.8
-
   lowlight@3.3.0:
     dependencies:
       '@types/hast': 3.0.5
@@ -14650,17 +14392,6 @@ snapshots:
   make-dir@4.0.0:
     dependencies:
       semver: 7.8.5
-
-  mammoth@1.13.0:
-    dependencies:
-      '@xmldom/xmldom': 0.8.15
-      argparse: 1.0.10
-      base64-js: 1.5.1
-      dingbat-to-unicode: 1.0.2
-      jszip: 3.10.2
-      lop: 0.4.2
-      underscore: 1.13.8
-      xmlbuilder: 10.1.1
 
   markdown-table@3.0.4:
     optional: true
@@ -15443,8 +15174,6 @@ snapshots:
 
   openapi-types@12.1.3: {}
 
-  option@0.2.4: {}
-
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -15582,8 +15311,6 @@ snapshots:
       quansync: 0.2.11
 
   package-manager-detector@1.8.0: {}
-
-  pako@1.0.11: {}
 
   parent-module@1.0.1:
     dependencies:
@@ -15820,8 +15547,6 @@ snapshots:
 
   prettier@3.8.4: {}
 
-  process-nextick-args@2.0.1: {}
-
   process-warning@5.1.1: {}
 
   prompts@2.4.2:
@@ -15871,8 +15596,6 @@ snapshots:
   qified@0.10.1:
     dependencies:
       hookified: 2.2.0
-
-  qrcode-terminal@0.12.0: {}
 
   qs@6.16.1:
     dependencies:
@@ -15996,16 +15719,6 @@ snapshots:
       js-yaml: 3.15.2
       pify: 4.0.1
       strip-bom: 3.0.0
-
-  readable-stream@2.3.8:
-    dependencies:
-      core-util-is: 1.0.3
-      inherits: 2.0.4
-      isarray: 1.0.0
-      process-nextick-args: 2.0.1
-      safe-buffer: 5.1.2
-      string_decoder: 1.1.1
-      util-deprecate: 1.0.2
 
   readable-stream@3.6.2:
     dependencies:
@@ -16198,8 +15911,6 @@ snapshots:
       has-symbols: 1.1.0
       isarray: 2.0.5
 
-  safe-buffer@5.1.2: {}
-
   safe-buffer@5.2.1: {}
 
   safe-push-apply@1.0.0:
@@ -16303,8 +16014,6 @@ snapshots:
       dunder-proto: 1.0.1
       es-errors: 1.3.0
       es-object-atoms: 1.1.2
-
-  setimmediate@1.0.5: {}
 
   setprototypeof@1.2.0: {}
 
@@ -16550,10 +16259,6 @@ snapshots:
       call-bind: 1.0.9
       define-properties: 1.2.1
       es-object-atoms: 1.1.2
-
-  string_decoder@1.1.1:
-    dependencies:
-      safe-buffer: 5.1.2
 
   string_decoder@1.3.0:
     dependencies:
@@ -16929,8 +16634,6 @@ snapshots:
 
   uncrypto@0.1.3: {}
 
-  underscore@1.13.8: {}
-
   undici-types@6.21.0: {}
 
   undici-types@7.24.6: {}
@@ -16978,8 +16681,6 @@ snapshots:
     optional: true
 
   universalify@0.1.2: {}
-
-  unpdf@2.1.0: {}
 
   unpipe@1.0.0: {}
 
@@ -17348,8 +17049,6 @@ snapshots:
 
   xml-name-validator@5.0.0:
     optional: true
-
-  xmlbuilder@10.1.1: {}
 
   xmlbuilder@13.0.2: {}
 

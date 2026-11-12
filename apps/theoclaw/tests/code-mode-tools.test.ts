@@ -473,6 +473,6 @@ describe('run_code and delegate_all on a /control agent', () => {
     await factory()
 
     expect(seen).toHaveLength(1)
-    expect((seen[0]?.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
+    expect(seen[0]?.tools ?? []).toHaveLength(0)
   })
 })

@@ -1,8 +1,6 @@
 import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 
-import { custodianSkills } from '../skills/custodian.js'
-import { BUNDLED_SKILLS, loadSkillDirectory, SkillRegistry } from '../skills/registry.js'
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
@@ -12,19 +10,16 @@ import { UNTRUSTED_CONTENT_NOTICE } from './untrusted-content.js'
 
 /**
  * The SDK's local options TheoClaw sets. `hooks` is on every agent (B-397 FR-007): the SDK reads a
- * hook gate only here, and throws on a top-level `hooks`. `settingSources` has `project` once a
- * hook fingerprint is approved; the gate still vets every hook command. Whoever adds `cwd` or
+ * hook gate only here, and throws on a top-level `hooks`. No agent sets `settingSources`, so the SDK
+ * loads no project hook today and the gate is defense in depth (plan D3). Whoever adds `cwd` or
  * `sessionDir` merges them into this object, so the gate is never dropped.
  */
 export interface TheoClawLocalOptions {
   readonly hooks: HookApprovalGate
   readonly cwd?: string
   readonly sessionDir?: string
-  /**
-   * `'plugins'` for an agent given a plugin workspace (OC-75), `'project'` when the owner approved
-   * at least one hook fingerprint (OC-87); absent loads neither.
-   */
-  readonly settingSources?: Array<'plugins' | 'project'>
+  /** `['plugins']` only for an agent given a plugin workspace (OC-75); absent loads no plugin folder. */
+  readonly settingSources?: Array<'plugins'>
 }
 
 /** The options every TheoClaw agent is created with, every one of them. */
@@ -45,12 +40,6 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
    */
   readonly systemPrompt: string
   readonly skills?: { readonly inline: InlineSkill[] }
-  /**
-   * Rediscovers `skills.inline` from disk. The SDK evaluates it on every `send()` (a `skills`
-   * resolver, see `withSdkSkills`), so a skill installed into the workspace after a session opened is
-   * offered on that session's next turn, and `skill_read` reads the same fresh list (OC-72).
-   */
-  readonly skillsRefresh?: () => InlineSkill[]
   /**
    * Only on a `/control` agent: its browser server with `THEOCLAW_BROWSER=on`, the servers its
    * external tools file names, and an import's servers with `THEOCLAW_IMPORTED_MCP` on; never on
@@ -81,16 +70,8 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   /** SDK telemetry for every agent while `THEOCLAW_OTEL=on` (B-400 FR-006). */
   readonly telemetry?: AgentTelemetry
   readonly thinking?: ThinkingLevel
-  /** The `THEOCLAW_PROVIDERS` plugins (OC-119); added to every agent so `<provider>/<model>` resolves. */
-  readonly providers?: readonly Plugin[]
   /** A workspace whose `.theokit/plugins/` holds installed, trusted plugins (OC-75); absent loads none. */
   readonly pluginWorkspace?: string
-  /** A directory holding `<skill>/SKILL.md` folders (`<workspace>/skills`), offered to the agent; absent offers none. */
-  readonly skillsDir?: string
-  /** The user's skills directory; a workspace skill of the same name wins over it. */
-  readonly userSkillsDir?: string
-  /** The system agent (the owner's `/control` agent) also gets the custodian skills (OC-137). */
-  readonly custodian?: boolean
 }
 
 /**
@@ -108,36 +89,15 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     systemPrompt: UNTRUSTED_CONTENT_NOTICE,
     local: {
       hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
-      ...(input.pluginWorkspace === undefined ? {} : { cwd: input.pluginWorkspace }),
-      ...settingSourcesFor(input),
+      ...(input.pluginWorkspace === undefined ? {} : { cwd: input.pluginWorkspace, settingSources: ['plugins' as const] }),
     },
     ...(input.telemetry === undefined ? {} : { telemetry: input.telemetry }),
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
-  const gather = (): InlineSkill[] => mergeSkills(input.custodian === true ? custodianSkills() : [], discoverSkills(input.skillsDir, input.userSkillsDir))
-  const discovered = gather()
-  const withSkills: TheoClawAgentOptions<Model> = discovered.length === 0 ? withTools : { ...withTools, skills: { inline: discovered }, skillsRefresh: gather }
-  const imported = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
-  const skilled = withSkillRead(withProviders(imported, input.providers))
+  const imported = input.imported === undefined ? withTools : withImport(withTools, input.imported)
   const suffix = input.toolOptions?.systemPromptSuffix
-  return suffix === undefined || suffix === '' ? skilled : { ...skilled, systemPrompt: `${skilled.systemPrompt}\n\n${suffix}` }
-}
-
-/**
- * The setting sources an agent loads: `plugins` for a plugin workspace, and `project` only once an
- * approved hook fingerprint exists, so the SDK reads project hooks that the gate then vets one by one.
- */
-function settingSourcesFor(input: TheoClawAgentInput<string | ModelSelection>): { settingSources?: Array<'plugins' | 'project'> } {
-  const sources: Array<'plugins' | 'project'> = []
-  if (input.pluginWorkspace !== undefined) sources.push('plugins')
-  if (input.approvedHooks !== undefined && input.approvedHooks.size > 0) sources.push('project')
-  return sources.length === 0 ? {} : { settingSources: sources }
-}
-
-/** `options` with the custom provider plugins after its own. */
-function withProviders<Model extends string | ModelSelection>(options: TheoClawAgentOptions<Model>, providers: readonly Plugin[] | undefined): TheoClawAgentOptions<Model> {
-  return providers === undefined || providers.length === 0 ? options : { ...options, plugins: [...(options.plugins ?? []), ...providers] }
+  return suffix === undefined || suffix === '' ? imported : { ...imported, systemPrompt: `${imported.systemPrompt}\n\n${suffix}` }
 }
 
 /** `base` plus the tool options: the tools, the plugins, and the browser and external servers. */
@@ -177,49 +137,11 @@ function withImport<Model extends string | ModelSelection>(
   return {
     ...options,
     systemPrompt: importedPrompt(setup),
-    ...(hasSkills
-      ? {
-          skills: { inline: mergeSkills(setup.skills, options.skills?.inline ?? []) },
-          ...(options.skillsRefresh === undefined ? {} : { skillsRefresh: () => mergeSkills(setup.skills, options.skillsRefresh?.() ?? []) }),
-        }
-      : {}),
+    ...(hasSkills ? { skills: { inline: [...setup.skills] }, tools: [...(options.tools ?? []), SkillReadTool.create(setup.skills)] } : {}),
     // The browser server and the external tools file's servers keep their names: an imported
     // server with one of them does not replace it.
     ...(hasServers ? { mcpServers: { ...setup.mcpServers, ...options.mcpServers } } : {}),
   }
-}
-
-/** Built-in skills, user skills, then workspace skills (which win by name); a skill whose required binary is missing is left out. */
-function discoverSkills(workspaceDir: string | undefined, userDir: string | undefined): InlineSkill[] {
-  const user = userDir === undefined ? [] : loadSkillDirectory(userDir, 'bundled')
-  const bundled = [...BUNDLED_SKILLS, ...user]
-  return new SkillRegistry({ ...(workspaceDir === undefined ? {} : { workspaceDir }), bundled }).inlineSkills()
-}
-
-/** Every agent with skills gets `skill_read`, so the model can read a body the prompt block lists by name only. */
-function withSkillRead<Model extends string | ModelSelection>(options: TheoClawAgentOptions<Model>): TheoClawAgentOptions<Model> {
-  const inline = options.skills?.inline ?? []
-  // A function source is re-evaluated on every call, so skill_read stays in step with the refreshed list.
-  return inline.length === 0 ? options : { ...options, tools: [...(options.tools ?? []), SkillReadTool.create(options.skillsRefresh ?? inline)] }
-}
-
-/**
- * The `skills` the SDK is given to a session that outlives its turns. A `/control` agent and a
- * WebChat agent are created per turn, so `createTheoClawAgent` reads the folder afresh each time.
- * Freshness comes from here: with `skillsRefresh` it is a resolver the
- * SDK runs on every `send()` (also on a cached `getOrCreate` agent), so the skill list is rebuilt per
- * turn without recreating the session or losing its history.
- */
-export function withSdkSkills<T extends { skills?: unknown }>(options: T): Omit<T, 'skillsRefresh'> {
-  const { skillsRefresh, ...rest } = options as T & { skillsRefresh?: () => InlineSkill[] }
-  return skillsRefresh === undefined ? rest : { ...rest, skills: (): { inline: InlineSkill[] } => ({ inline: skillsRefresh() }) }
-}
-
-/** Imported skills, then workspace skills: a workspace skill replaces an imported one of the same name. */
-function mergeSkills(imported: readonly InlineSkill[], workspace: readonly InlineSkill[]): InlineSkill[] {
-  const byName = new Map<string, InlineSkill>()
-  for (const skill of [...imported, ...workspace]) byName.set(skill.name, skill)
-  return [...byName.values()]
 }
 
 /** Create the agent those options describe, through the SDK. */

@@ -83,10 +83,9 @@ describe('the commands /help lists', () => {
       throw new Error('the model was reached')
     }
     const handler = createReplyHandler({
-      withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => undefined }),
+      withAgent: async (_e, work) => work({ agent, release: () => undefined }),
       reset: async () => undefined,
       goal: { tokenBudget: 1, judge: () => never() },
-      compact: { run: async () => ({ preTokens: 2, postTokens: 1 }), write: () => undefined },
     })
     for (const command of HELP_COMMANDS) {
       expect(HELP_TEXT).toContain(command)
@@ -100,25 +99,5 @@ describe('the commands /help lists', () => {
       expect(log.length).toBeGreaterThan(0)
     }
     expect(sends).toBe(0)
-  })
-})
-
-describe('/think', () => {
-  it('sets the level, confirms, and never reaches the model', async () => {
-    const set: string[] = []
-    const log: string[] = []
-    const agent = new FakeAgent({ frames: [assistant('x'), finished()] })
-    const handler = createReplyHandler({
-      withAgent: async (_e, work) => work({ agent, release: () => undefined }),
-      reset: async () => undefined,
-      think: (_e, level) => void set.push(level),
-    })
-    for (const text of ['/think high', '/think ultra', '/think']) {
-      const event = messageEvent('telegram', text)
-      await handler(event, ctxFor(event, log))
-    }
-    expect(set).toEqual(['high'])
-    expect(log.join('\n')).toContain('Thinking level set to high.')
-    expect(log.filter((l) => l.includes('Usage: /think off|low|medium|high'))).toHaveLength(2)
   })
 })

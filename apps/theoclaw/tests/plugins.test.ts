@@ -87,8 +87,6 @@ describe('plugin sdk and agent wiring', () => {
     const local = theoClawAgentOptions({ ...base, pluginWorkspace: '/w' }).local
     expect(local.settingSources).toEqual(['plugins'])
     expect(local.cwd).toBe('/w')
-    const both = theoClawAgentOptions({ ...base, pluginWorkspace: '/w', approvedHooks: new Set(['a'.repeat(64)]) }).local
-    expect(both.settingSources).toEqual(['plugins', 'project'])
   })
   afterEach(() => vi.unstubAllEnvs())
   it('an installed plugin adds its tool to a real SDK agent (offline, no model call)', async () => {

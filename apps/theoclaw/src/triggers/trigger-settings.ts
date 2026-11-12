@@ -23,16 +23,8 @@ export interface TriggerSettings {
 /** What the event features read at start: the triggers, the hook fingerprints the owner approved, and `/goal`'s budget. */
 export interface EventSettings {
   readonly triggers: readonly TriggerSettings[]
-  /** Set by `THEOCLAW_EMAIL_TRIGGER_REPLY_TO`: inbound e-mail runs isolated and the summary goes there. */
-  readonly emailTrigger?: EmailTriggerSettings
   readonly approvedHooks: ReadonlySet<string>
   readonly goal: GoalSettings
-}
-
-/** Where the summary of each inbound e-mail goes, and what the run is told besides. */
-export interface EmailTriggerSettings {
-  readonly replyTo: TriggerSettings['replyTo']
-  readonly instructions?: string
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -68,8 +60,8 @@ function triggerNames(env: Env): readonly string[] {
 }
 
 /** `<platform>:<channel id>`, split at the first `:`; the platform must be a configured one. */
-function replyTarget(env: Env, name: string, configured: readonly PlatformName[], given?: string): TriggerSettings['replyTo'] {
-  const variable = given ?? variableOf(name, 'REPLY_TO')
+function replyTarget(env: Env, name: string, configured: readonly PlatformName[]): TriggerSettings['replyTo'] {
+  const variable = variableOf(name, 'REPLY_TO')
   const value = required(env, variable)
   const separator = value.indexOf(':')
   const platform = separator < 0 ? value : value.slice(0, separator)
@@ -106,29 +98,9 @@ export function readTriggerSettings(env: Env, configured: readonly PlatformName[
   return triggerNames(env).map((name) => triggerSettings(env, name, configured))
 }
 
-/**
- * `THEOCLAW_EMAIL_TRIGGER_REPLY_TO` (`<platform>:<channel id>`) turns each inbound e-mail into one
- * isolated, tool-less run whose summary goes there. The e-mail channel must be configured and the
- * reply must go to another platform, so a summary is never mailed back to the sender's address.
- */
-export function readEmailTriggerSettings(env: Env, configured: readonly PlatformName[]): EmailTriggerSettings | undefined {
-  const variable = 'THEOCLAW_EMAIL_TRIGGER_REPLY_TO'
-  if ((env[variable] ?? '').trim() === '') return undefined
-  if (!configured.includes('email' as PlatformName)) {
-    throw new TheoClawConfigError(`${variable} is set but the e-mail channel is not configured`, { variable })
-  }
-  const replyTo = replyTarget(env, '', configured, variable)
-  if (replyTo.platform === ('email' as PlatformName)) {
-    throw new TheoClawConfigError(`${variable} must name a platform other than email`, { variable })
-  }
-  const instructions = (env['THEOCLAW_EMAIL_TRIGGER_INSTRUCTIONS'] ?? '').trim()
-  return { replyTo, ...(instructions === '' ? {} : { instructions }) }
-}
-
 /** The triggers, the approved hook fingerprints and the goal settings, read once at start. */
 export function readEventSettings(env: Env, configured: readonly PlatformName[]): EventSettings {
-  const emailTrigger = readEmailTriggerSettings(env, configured)
-  return { triggers: readTriggerSettings(env, configured), ...(emailTrigger === undefined ? {} : { emailTrigger }), approvedHooks: parseApprovedHooks(env), goal: readGoalSettings(env) }
+  return { triggers: readTriggerSettings(env, configured), approvedHooks: parseApprovedHooks(env), goal: readGoalSettings(env) }
 }
 
 /** Every trigger secret and every approved fingerprint, which the process output mask hides (NFR-003). */

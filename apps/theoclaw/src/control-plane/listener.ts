@@ -5,7 +5,6 @@ import { nodeIncomingToRequest, writeResponseToNode } from '@theokit/http/runtim
 
 import { attachControlSocket, type ControlSocket, type ControlSocketOptions } from './control-socket.js'
 import { describeError, TheoClawBindError } from './errors.js'
-import { stampTrustedIdentity, type TrustedProxy } from './trusted-proxy.js'
 
 export type RequestHandler = (request: Request) => Promise<Response>
 
@@ -15,8 +14,6 @@ export interface ListenOptions {
   readonly host: string
   /** The `/control` socket. Without it every upgrade is refused 404. */
   readonly control?: ControlSocketOptions
-  /** Trusted-proxy mode: an identity header from an allowlisted peer marks the request (OC-24). */
-  readonly trustedProxy?: TrustedProxy
   /** Where a failed request is written, one line per call. */
   readonly stderr: (line: string) => void
 }
@@ -57,8 +54,7 @@ export function refuseUpgrade(
  * registered before the handler runs, so a client that leaves while the handler awaits is seen too;
  * a finished response emits `close` after `finish`, which `writableFinished` keeps from aborting.
  */
-function withDepartureSignal(incoming: IncomingMessage, outgoing: ServerResponse, proxy?: TrustedProxy): Request {
-  stampTrustedIdentity(incoming, proxy)
+function withDepartureSignal(incoming: IncomingMessage, outgoing: ServerResponse): Request {
   const controller = new AbortController()
   outgoing.once('close', () => {
     if (!outgoing.writableFinished) controller.abort()
@@ -75,7 +71,7 @@ function serve(options: ListenOptions) {
   return (incoming: IncomingMessage, outgoing: ServerResponse): void => {
     void (async () => {
       try {
-        await writeResponseToNode(await options.handler(withDepartureSignal(incoming, outgoing, options.trustedProxy)), outgoing)
+        await writeResponseToNode(await options.handler(withDepartureSignal(incoming, outgoing)), outgoing)
       } catch (error) {
         options.stderr(`theoclaw: request failed: ${describeError(error)}`)
         if (!outgoing.headersSent) outgoing.writeHead(500)

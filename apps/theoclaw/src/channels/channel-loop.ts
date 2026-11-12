@@ -17,15 +17,6 @@ export interface ChannelLoopOptions {
   readonly write: (line: string) => void
   /** How long one platform may take to connect before it is abandoned. Default 30 000 ms. */
   readonly startTimeoutMs?: number
-  /** Retry a platform whose start failed, in the background, with doubling delays. Absent: give up after one try. */
-  readonly retry?: RetryPolicy
-}
-
-export interface RetryPolicy {
-  readonly initialDelayMs: number
-  readonly maxDelayMs: number
-  /** Retries after the first failed start. */
-  readonly maxAttempts: number
 }
 
 /** A platform whose runner connected: the routes deliver to `adapter`, shutdown stops `runner`. */
@@ -89,80 +80,44 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
     redactSecrets(
       maskSecrets(error instanceof Error ? error.message : String(error), options.secrets),
     )
-  const failPlatform = (platform: PlatformName, line: string): void => {
+  const fail = (platform: PlatformName, line: string): void => {
     failed.push(platform)
     options.write(line)
   }
   const stopQuietly = (platform: PlatformName, runner: GatewayRunner): Promise<void> =>
     runner.stop().catch((error: unknown) => options.write(`${platform}: stop failed: ${describeError(error)}`))
 
-  const timers = new Set<NodeJS.Timeout>()
-  const sleep = (ms: number): Promise<void> =>
-    new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        timers.delete(timer)
-        resolve()
-      }, ms)
-      timers.add(timer)
-    })
-
-  /** One start attempt; true when the platform is now started. */
-  const attempt = async ({ platform, build }: PlatformBuild, retrying: boolean): Promise<boolean> => {
-    const fail = (line: string): false => {
-      if (retrying) options.write(line)
-      else failPlatform(platform, line)
-      return false
-    }
+  const startOne = async ({ platform, build }: PlatformBuild): Promise<void> => {
     let adapter: BasePlatformAdapter
     let runner: GatewayRunner
     try {
       adapter = build()
       runner = new GatewayRunner({ adapters: [adapter], handler: options.handler, hooks: options.hooks ?? [] })
     } catch (error) {
-      fail(`${platform}: start failed: ${describeError(error)}`)
-      return false
+      fail(platform, `${platform}: start failed: ${describeError(error)}`)
+      return
     }
     const start = runner.start()
     const outcome = await settleWithin(start, timeoutMs)
     if (outcome.kind === 'timed_out') {
-      fail(`${platform}: start timed out after ${timeoutMs} ms`)
+      fail(platform, `${platform}: start timed out after ${timeoutMs} ms`)
       // Abandoned: if it connects later, stop it, so nothing stays connected unseen.
       void start.then(
         () => stopQuietly(platform, runner),
         (error: unknown) =>
           options.write(`${platform}: abandoned start failed: ${describeError(error)}`),
       )
-      return false
+      return
     }
     if (outcome.kind === 'rejected') {
-      return fail(`${platform}: start failed: ${describeError(outcome.error)}`)
+      fail(platform, `${platform}: start failed: ${describeError(outcome.error)}`)
+      return
     }
     if (stopping) {
       await stopQuietly(platform, runner)
-      return true
+      return
     }
     started.set(platform, { adapter, runner })
-    const index = failed.indexOf(platform)
-    if (index >= 0) failed.splice(index, 1)
-    options.write(`${platform}: connected`)
-    return true
-  }
-
-  const startOne = async (entry: PlatformBuild): Promise<void> => {
-    if (await attempt(entry, false) || options.retry === undefined) return
-    const retry = options.retry
-    // Not awaited by `ready`: the other platforms are served while this one keeps trying.
-    void (async () => {
-      let delay = retry.initialDelayMs
-      for (let n = 1; n <= retry.maxAttempts && !stopping; n++) {
-        options.write(`${entry.platform}: retry ${n}/${retry.maxAttempts} in ${delay} ms`)
-        await sleep(delay)
-        if (stopping) return
-        if (await attempt(entry, true)) return
-        delay = Math.min(delay * 2, retry.maxDelayMs)
-      }
-      if (!stopping) options.write(`${entry.platform}: giving up after ${retry.maxAttempts} retries`)
-    })()
   }
 
   const ready = Promise.allSettled(options.platforms.map(startOne)).then(() => undefined)
@@ -173,8 +128,6 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
     ready,
     async stopAll() {
       stopping = true
-      for (const timer of timers) clearTimeout(timer)
-      timers.clear()
       const toStop = [...started]
       // A stopped platform is no longer started: a route that looks it up answers 503 (D7).
       started.clear()

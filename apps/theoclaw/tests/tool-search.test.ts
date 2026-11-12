@@ -9,7 +9,7 @@ import type { ToolStart } from './tool-start-fixtures.js'
 const BRAVE_KEY = 'brave-key-value-7f3a91c2'
 const SEARCH_KEY = 'generic-search-key-4b8e10'
 const SEARCH_URL = 'https://search.example.test/api'
-const OFF_LINE = 'tools: web search is off (no THEOCLAW_SEARCH, BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
+const OFF_LINE = 'tools: web search is off (no BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
 
 const cleanups: (() => void)[] = []
 const started: ToolStart[] = []
@@ -94,29 +94,6 @@ describe('web search', () => {
     expect(calls[0]?.url).toBe('https://api.search.brave.com/res/v1/web/search?q=theokit&count=3')
     expect(calls[0]?.headers['X-Subscription-Token']).toBe(BRAVE_KEY)
     expect(output).toMatchObject({ ok: true, results: [{ title: 'T', url: 'https://r.test', snippet: 'D' }] })
-  })
-
-  it('THEOCLAW_SEARCH=searxng:<url> queries the instance keyless and returns its results — injected fetch', async () => {
-    const { fetchImpl, calls } = recordingFetch({ results: [{ title: 'N', url: 'https://n.test', content: 'C' }] })
-    const settings = settingsFor({ THEOCLAW_SEARCH: 'searxng:http://localhost:8888', BRAVE_API_KEY: BRAVE_KEY }, fetchImpl)
-    expect(settings.search.kind).toBe('searxng')
-    const output = JSON.parse(String(await webSearchOf(settings).handler({ query: 'node 22', max_results: 2 })))
-    expect(calls).toHaveLength(1)
-    expect(calls[0]?.url).toContain('http://localhost:8888/search')
-    expect(output).toMatchObject({ ok: true, results: [{ title: 'N', url: 'https://n.test' }] })
-  })
-
-  it('THEOCLAW_SEARCH=tavily needs TAVILY_API_KEY and masks it', () => {
-    expect(() => settingsFor({ THEOCLAW_SEARCH: 'tavily' })).toThrow('TAVILY_API_KEY')
-    const settings = settingsFor({ THEOCLAW_SEARCH: 'tavily', TAVILY_API_KEY: 'tvly-secret' })
-    expect(settings.search.kind).toBe('tavily')
-    expect(settings.secrets).toContain('tvly-secret')
-    expect(buildTools(settings).map((tool) => tool.name)).toContain('web_search')
-  })
-
-  it('refuses a bad THEOCLAW_SEARCH', () => {
-    expect(() => settingsFor({ THEOCLAW_SEARCH: 'duck' })).toThrow('THEOCLAW_SEARCH')
-    expect(() => settingsFor({ THEOCLAW_SEARCH: 'searxng:nope' })).toThrow('http(s) URL')
   })
 
   it('web_search over the generic adapter sends GET THEOKIT_SEARCH_API_URL?q= with a Bearer key and returns its results — injected fetch', async () => {

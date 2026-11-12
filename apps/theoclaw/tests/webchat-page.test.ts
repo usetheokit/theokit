@@ -166,20 +166,3 @@ describe("the WebChat token store", () => {
     expect(recorded[0]!.headers.get("authorization")).toBe(`Bearer ${TOKEN}`);
   });
 });
-
-/** #1547: the settings carry a language switch; Svenska shows the Swedish strings. */
-describe("the WebChat language switch", () => {
-  it("shows Inställningar in the settings after switching to Svenska", async () => {
-    await sendThroughThePage("hello agent");
-    expect(container.textContent).toContain("Settings");
-
-    const select = container.querySelector<HTMLSelectElement>("select")!;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, "sv");
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain("Inställningar");
-    expect(sessionStorage.getItem("theoclaw.webchat.locale")).toBe("sv");
-  });
-});

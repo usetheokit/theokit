@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from './errors.js'
 import { runSessionTurn } from './session-turn.js'
 import type { TurnEvent, TurnOutcome } from './turn.js'
@@ -42,11 +41,6 @@ export interface ControlSessions {
   run(session: string, message: string, emit: (event: TurnEvent) => void, owner: object): Promise<SessionOutcome>
   /** Stop the session's running turn: `no_turn` when nothing runs there. */
   interrupt(session: string): 'cancelled' | 'no_turn'
-  /**
-   * Inject `message` into the session's running turn (`queueMode: 'steer'`): `no_turn` when nothing
-   * runs there or the turn's events already ended.
-   */
-  steer(session: string, message: string): Promise<'steered' | 'no_turn'>
   /** Stop every running turn `owner` sent (its socket closed, FR-005). */
   cancelOwnedBy(owner: object): void
   /** Stop every turn, wait for them and for every pending build, and dispose every agent. */
@@ -289,18 +283,6 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     interrupt: (session) => {
       const turn = stoppable(session)
       return turn === undefined ? 'no_turn' : stop(turn)
-    },
-    steer: async (session, message) => {
-      const entry = entries.get(session)
-      const turn = entry?.running
-      if (entry?.agent === undefined || turn === undefined || turn.eventsEnded || turn.cancelRequested) return 'no_turn'
-      try {
-        await entry.agent.send(message, { ...untrustedContentSendOptions(), queueMode: 'steer' })
-      } catch (error) {
-        options.report(`theoclaw: control session steer failed: ${describeError(error)}`)
-        return 'no_turn'
-      }
-      return 'steered'
     },
     cancelOwnedBy: (owner) => {
       for (const turn of waiting.keys()) {

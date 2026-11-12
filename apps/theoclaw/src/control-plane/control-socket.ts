@@ -46,7 +46,6 @@ function pathOf(request: IncomingMessage): string {
 type Frame =
   | { readonly kind: 'chat'; readonly message: string; readonly session?: string }
   | { readonly kind: 'interrupt'; readonly session: string }
-  | { readonly kind: 'steer'; readonly session: string; readonly message: string }
 
 /**
  * The frame's `session`, when it is a string. `null` reads as absent, as the field was ignored
@@ -88,10 +87,6 @@ function parseFrame(raw: { toString(): string }, isBinary: boolean): Frame | und
   if (frame === undefined) return undefined
   const session = sessionOf(frame)
   if (frame.type === 'interrupt') return session === undefined ? undefined : { kind: 'interrupt', session }
-  if (frame.type === 'steer') {
-    const text = typeof frame.message === 'string' && frame.message !== '' ? frame.message : undefined
-    return session === undefined || text === undefined ? undefined : { kind: 'steer', session, message: text }
-  }
   const message = chatMessage(frame)
   if (message === undefined) return undefined
   // A session that is present but not a string is refused; an absent or null one runs sessionless.
@@ -163,13 +158,6 @@ function serve(
       if (answer === 'no_turn') return send({ type: 'no_turn', session })
       // The socket that owns the turn learns from the turn's own final frame, `interrupted`.
       if (current !== session) send({ type: 'interrupt_ok', session })
-      return
-    }
-    if (frame.kind === 'steer') {
-      // Allowed while the socket is busy: that is when there is a turn to steer.
-      void sessions!
-        .steer(frame.session, frame.message)
-        .then((answer) => send(answer === 'steered' ? { type: 'steer_ok', session } : { type: 'no_turn', session }))
       return
     }
     if (busy) return send(session === undefined ? { type: 'error', code: 'busy' } : { type: 'error', code: 'busy', session })
