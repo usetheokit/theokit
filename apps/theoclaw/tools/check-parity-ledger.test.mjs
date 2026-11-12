@@ -411,11 +411,11 @@ function readRealInputs() {
 }
 
 describe('check-parity-ledger: the real ledger', () => {
-  it('the real ledger holds exactly the 113 source ids', () => {
+  it('the real ledger holds exactly the 114 source ids', () => {
     const realLedger = JSON.parse(readReal(LEDGER_PATH))
     const sourceIds = [...parseInventoryIds(readReal(INVENTORY_PATH)), ...parseHermesIds(readReal(HERMES_PATH))]
-    expect(sourceIds).toHaveLength(113)
-    expect(realLedger).toHaveLength(113)
+    expect(sourceIds).toHaveLength(114)
+    expect(realLedger).toHaveLength(114)
     expect(realLedger.map((e) => e.id).sort()).toEqual([...sourceIds].sort())
   })
 
