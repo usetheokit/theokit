@@ -25,6 +25,15 @@ describe('the theoclaw command line', () => {
     expect(process.env[unset]).toBeUndefined()
   })
 
+  it('sandbox is a command: bwrap has nothing to manage, a bad verb is a usage error', async () => {
+    const v = harness()
+    expect(await runCli(['sandbox', 'list'], v.io)).toBe(0)
+    expect(v.stdout()).toMatch(/no containers to manage/)
+    const bad = harness()
+    expect(await runCli(['sandbox', 'nope'], bad.io)).toBe(2)
+    expect(bad.stderr()).toMatch(/theoclaw sandbox list/)
+  })
+
   it('--version prints the package version and exits 0', async () => {
     const v = harness()
     const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')) as { version: string }

@@ -55,6 +55,8 @@ describe('THEOCLAW_SANDBOX_BACKEND=docker', () => {
     expect(settings.sandbox).toBeInstanceOf(DockerSandbox)
     await settings.sandbox.execute('true')
     expect(mountOf(calls[0] ?? [])).toBe(`${settings.toolRoot}:/workspace:rw`)
+    expect(calls[0]).toEqual(expect.arrayContaining(['--label', 'theoclaw.sandbox=1', '--label', 'theoclaw.session=main']))
+    expect(calls[0]).not.toContain('--rm')
   })
 
   it('mounts the tool root read-only for a read-only session', async () => {

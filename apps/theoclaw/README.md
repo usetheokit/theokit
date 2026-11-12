@@ -415,6 +415,14 @@ when `git_diff` is off because the sandbox is not enforced.
 `THEOCLAW_SANDBOX` chooses the shell's sandbox when host tools are on (B-392). Any other value
 stops the start before any runner, with host tools off too.
 
+With `THEOCLAW_SANDBOX_BACKEND=docker`, `theoclaw sandbox list` prints one line per sandbox container
+theoclaw made (name, status, image, session) and a total; containers it did not make are not listed.
+`theoclaw sandbox recreate (--all | --session <id>) [--force]` removes the matching containers so the
+next command of that session starts a fresh one; without `--force` it asks before removing a running
+container (and refuses when there is no terminal). theoclaw keeps the last container of each session
+(labelled `theoclaw.sandbox=1`) so it can be listed. With the bwrap backend both say there is nothing
+to manage and exit 0.
+
 | Mode                        | The shell can write                               | The file-writing tools                                                             |
 | --------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `read-only`                 | nothing                                           | not registered: they take no sandbox, so only leaving them out keeps the mode true |
