@@ -80,15 +80,41 @@ function longSystemPrompt(): string {
   return ['You are a catalogue assistant. Answer in one short sentence.', ...rules].join('\n')
 }
 
+/**
+ * Output cap for each request. The SDK sends no `max_tokens`, so OpenRouter reserves the model's
+ * maximum (64 000) and answers 402 when the key's balance cannot cover that reservation, though
+ * the answer is one sentence.
+ */
+const MAX_OUTPUT_TOKENS = 256
+
+/** Swap `target.fetch` for one that sets `max_tokens` on every chat-completions request. */
+function capOutputTokens(target: { fetch: typeof fetch }): () => void {
+  const original = target.fetch
+  target.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = new Request(input).url
+    if (url.endsWith('/chat/completions') && typeof init?.body === 'string') {
+      const body = JSON.parse(init.body) as Record<string, unknown>
+      body.max_tokens ??= MAX_OUTPUT_TOKENS
+      return original(input, { ...init, body: JSON.stringify(body) })
+    }
+    return original(input, init)
+  }
+  return () => {
+    target.fetch = original
+  }
+}
+
 const workDirs: string[] = []
 /**
  * Installed before the runner is built: the SDK binds the global `fetch` when each `run()` builds
  * its client (`src/loop/agent-runner.ts:358`), so both turns go through the recorder.
  */
+const restoreCap = capOutputTokens(globalThis)
 const record = recordRoutedProviders(globalThis)
 
 afterAll(() => {
   record.restore()
+  restoreCap()
   for (const dir of workDirs) rmSync(dir, { recursive: true, force: true })
 })
 
