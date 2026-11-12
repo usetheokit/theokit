@@ -37,7 +37,7 @@ describe('theoclaw hooks list', () => {
     expect(code).toBe(0)
     expect(out.split('\n').filter(Boolean)).toEqual([`PreToolUse\t${a}\tapproved`, `PreToolUse\t${b}\tnot approved`])
     const gate = createHookApprovalGate(new Set([a]))
-    expect(gate.approve({ sourceEvent: 'PreToolUse', event: 'preToolUse', command: 'echo a', timeoutMs: 30_000 } as never)).toBe(true)
+    expect(gate.approve?.({ sourceEvent: 'PreToolUse', event: 'preToolUse', command: 'echo a', timeoutMs: 30_000 } as never)).toBe(true)
   })
 
   it('uses the hook timeout in the fingerprint', async () => {
