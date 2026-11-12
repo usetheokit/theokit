@@ -5,6 +5,8 @@ import { readFileSync, realpathSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
+
+import type { DockerRunner } from '@theokit/agents/sandbox'
 import { isSea } from 'node:sea'
 import { fileURLToPath } from 'node:url'
 
@@ -49,6 +51,7 @@ import { loadConfiguration } from './config-file.js'
 import { whatsappSessionDir } from './channels/platforms.js'
 import { auditCommand } from './ops/audit.js'
 import { securityCommand } from './security-audit.js'
+import { sandboxCommand } from './sandbox/sandbox-command.js'
 import { update } from './update.js'
 import { mintAttachGrant, writeAttachConfig } from './mcp/attach.js'
 import { hooksCommand } from './agent/hooks-list.js'
@@ -87,6 +90,8 @@ export interface CliIo extends DaemonIo {
   readonly fetch?: typeof fetch
   /** Test seam: the PostgreSQL pool `state port` talks to. */
   readonly database?: DatabaseDeps
+  /** Test seam: the `docker` process `sandbox` talks to. */
+  readonly docker?: DockerRunner
 }
 
 const USAGE = `usage: theoclaw <command>
@@ -130,6 +135,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw restore --from <name>     restore the newest backup of a storage location
   theoclaw storage init <name> [--path <absolute dir>] [--no-encrypt]
   theoclaw storage list|test [<name>]  named storage locations (encrypted by default); test writes and reads back a probe
+  theoclaw sandbox list | recreate (--all | --session <id>) [--force]
+                            with THEOCLAW_SANDBOX_BACKEND=docker: list the sandbox containers theoclaw made; remove them so the next command starts fresh (asks before a running one without --force)
   theoclaw state port --to <postgres url> [--force]
                             copy the stores that have a schema (scheduled jobs) to PostgreSQL; refuses a target holding rows unless --force; keeps the source
   theoclaw whatsapp login   link WhatsApp Web by QR (THEOCLAW_WHATSAPP_BACKEND=baileys; needs the baileys package installed); exit 1 if not linked
@@ -569,6 +576,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   restore: backupCommand('restore'),
   storage: storageCommand,
   state: stateCommand,
+  sandbox: (args, io) => sandboxCommand(args, io),
   '--version': (_args, io) => {
     io.stdout.write(`${readVersion()}\n`)
     return Promise.resolve(0)
