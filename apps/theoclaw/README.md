@@ -699,6 +699,10 @@ instance mailbox, so run it on a host you trust and put it behind HTTPS.
 4. In ChatGPT, Claude or Codex, add a connector with the URL `https://<relay>/mcp` and the client
    token from step 3 as its bearer token.
 
+`theoclaw mcp-relay smoke` checks the whole path on the loopback in one command (a throwaway grant,
+the relay, the connector and `list_dir`) and exits 1 if it fails. It does not use a real ChatGPT,
+Claude or Codex client; no run against one is recorded.
+
 A grant without `--tools` gets only the read-only tools `list_dir` and `read_file`. A tool that
 changes the host needs both an explicit `--tools` naming it and `THEOCLAW_HOST_TOOLS=on` on the
 instance. `revoke` ends a grant at once.

@@ -143,7 +143,7 @@ const USAGE = `usage: theoclaw <command>
   theoclaw tui [--session <id>]
                             the terminal UI on the running instance, with the token and port from the configuration file
   theoclaw mcp              serve TheoClaw's tools as an MCP server on stdin/stdout (claude mcp add theoclaw -- theoclaw mcp)
-  theoclaw mcp-relay grant <name> [--tools a,b] | list | revoke <name|id> | serve --port <n> [--host <h>]
+  theoclaw mcp-relay grant <name> [--tools a,b] | list | revoke <name|id> | serve --port <n> [--host <h>] | smoke
                             serve runs the hosted relay (instance token in THEOCLAW_MCP_RELAY_TOKEN); per-client grants for remote MCP clients; grant prints the token once; default tools list_dir and read_file
   theoclaw attach [--session <id>] [--print-config]
                             launch Claude Code (claude) with a temporary MCP config for this session that expires in an hour; --print-config prints the config instead
