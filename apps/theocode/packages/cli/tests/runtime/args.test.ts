@@ -293,6 +293,17 @@ describe('B-074 — sessions actions', () => {
  * that routes without a test in this file is how `--uncommitted` shipped validated-and-unread.
  */
 describe('B-081 — doctor', () => {
+  it('test_doctor_carries_config_overrides', () => {
+    expect(parseExecArgs(['doctor', '-c', 'sandbox_mode=read-only'], false)).toMatchObject({
+      mode: 'doctor',
+      overrides: ['sandbox_mode=read-only'],
+    })
+    expect(parseExecArgs(['doctor', '--sandbox', 'read-only'], false)).toMatchObject({
+      mode: 'doctor',
+      overrides: ['sandbox_mode=read-only'],
+    })
+  })
+
   it('test_doctor_routes', () => {
     expect(parseExecArgs(['doctor'], false)).toMatchObject({ mode: 'doctor', json: false })
   })

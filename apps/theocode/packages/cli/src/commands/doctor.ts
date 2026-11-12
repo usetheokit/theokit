@@ -90,17 +90,29 @@ export function runtimeCredentialState(
   return credentialState(path, now)
 }
 
-export async function doctorCommand(opts: { json: boolean; cd?: string }): Promise<void> {
+/**
+ * #1895 — `main.ts` has already changed into `-C` before this command runs, so the directory to
+ * inspect is the process's own. Re-applying a relative `-C sub` would inspect `sub/sub`.
+ */
+export function doctorCwd(): string {
+  return process.cwd()
+}
+
+export async function doctorCommand(opts: {
+  json: boolean
+  cd?: string
+  overrides?: string[]
+}): Promise<void> {
   const agent = await import('@theocode/agent')
   const { authFilePath, strayCredentialFiles } = await import('@theocode/agent/auth')
   const { skillsOnDisk, loadOutputStyle, foreignHookRefusals } = await import('@theocode/agent')
   const { resolveEffectiveConfig, resolveTrustPosture, settingsReport } = await import(
     '@theocode/agent/config'
   )
-  const cwd = opts.cd ?? process.cwd()
+  const cwd = doctorCwd()
 
   const posture = resolveTrustPosture(cwd)
-  const cfg = resolveEffectiveConfig({ cwd })
+  const cfg = resolveEffectiveConfig({ cwd, cli: opts.overrides ?? [] })
 
   // Built for real, so the wiring reported is the wiring an actual turn would get. A cheaper
   // "read the files again" would reproduce the defect B-071 was reopened for.

@@ -84,6 +84,7 @@ interface ExecDoctor {
   mode: 'doctor'
   json: boolean
   cd?: string
+  overrides: string[]
 }
 
 export interface ExecVersion {
