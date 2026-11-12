@@ -86,7 +86,7 @@ describe('resolvePlatforms', () => {
   })
 
   it('lists all fourteen platforms', () => {
-    expect(PLATFORMS.map((spec) => spec.platform).filter((platform) => platform !== 'raft')).toEqual([
+    expect(PLATFORMS.map((spec) => spec.platform).filter((platform) => platform !== 'raft' && platform !== 'x')).toEqual([
       'telegram',
       'discord',
       'slack',

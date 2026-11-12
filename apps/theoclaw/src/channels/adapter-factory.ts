@@ -16,8 +16,10 @@ import { TeamsAdapter } from '@theokit/gateway-teams'
 import { TelegramAdapter } from '@theokit/gateway-telegram'
 import { TlonUrbitAdapter } from '@theokit/gateway-tlon-urbit'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
+import { XAdapter } from '@theokit/gateway-x'
 
-import { readFileSync } from 'node:fs'
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import type { PlatformBuild } from './channel-loop.js'
 import { isBaileys } from './platforms.js'
@@ -52,6 +54,37 @@ export function googleChatOptions(settings: PlatformSettings<'google_chat'>): Go
     privateKey,
     audience: settings.audience,
     app: { post: () => undefined } as unknown as NonNullable<GoogleChatAdapterOptions['app']>,
+  }
+}
+
+/**
+ * The X adapter's options. X rotates the refresh token on every refresh, so the new one is kept in
+ * `x-refresh-token` under `THEOCLAW_STATE_DIR` (mode 0600) and wins over the environment's on the
+ * next start. Without a state directory the rotated token is lost on restart.
+ */
+export function xOptions(settings: PlatformSettings<'x'>, stateDir = process.env.THEOCLAW_STATE_DIR): ConstructorParameters<typeof XAdapter>[0] {
+  const dir = (stateDir ?? '').trim()
+  const file = dir === '' ? undefined : join(dir, 'x-refresh-token')
+  let refreshToken = settings.refreshToken
+  if (file !== undefined) {
+    try {
+      const saved = readFileSync(file, 'utf8').trim()
+      if (saved !== '') refreshToken = saved
+    } catch {
+      // none saved yet: the environment's token is the first
+    }
+  }
+  return {
+    ...settings,
+    refreshToken,
+    ...(file === undefined
+      ? {}
+      : {
+          onRefreshToken: (token: string) => {
+            writeFileSync(file, token, { mode: 0o600 })
+            chmodSync(file, 0o600)
+          },
+        }),
   }
 }
 
@@ -182,6 +215,7 @@ const ADAPTERS: AdapterConstructors = {
   signal: (settings) => new NumberKeyedSignalAdapter(settings),
   imessage: (settings) => new IMessageAdapter(settings),
   raft: (settings) => new RaftAdapter(settings),
+  x: (settings) => new XAdapter(xOptions(settings)),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }
