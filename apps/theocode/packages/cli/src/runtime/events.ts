@@ -168,6 +168,13 @@ export function createHumanProcessor(
     },
   }
 
+  const track = (event: ReturnType<ReturnType<typeof wireTranslator>>[number]): boolean => {
+    if (event.type === 'text') message.delta(event.text)
+    if (event.type === 'tool-call') message.cut()
+    if (event.type === 'tool-result' && event.isError === true) failedCalls.add(event.callId)
+    return event.type === 'error'
+  }
+
   return {
     process(chunk) {
       if (chunk.type === 'finish') {
@@ -295,11 +302,7 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
         return
       }
       for (const event of translate(chunk)) {
-        if (event.type === 'text') message.delta(event.text)
-        if (event.type === 'tool-call') message.cut()
-        if (event.type === 'error') errorSeen = true
-        if (event.type === 'tool-result' && event.isError === true) failedCalls.add(event.callId)
-
+        if (track(event)) errorSeen = true
         const mapped = toContentChunk(event)
         if (mapped === null) continue
         for (const out of turn.observe(mapped)) emit(out)
