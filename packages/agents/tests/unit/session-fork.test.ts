@@ -14,12 +14,13 @@
  * would pass against a naive implementation and prove nothing — the trap the module's own docstring
  * describes at `session-lifecycle.ts:257-260`.
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, utimesSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { acquireSessionWriter, LiveTranscriptError } from '../../src/persistence-entry.js'
 import { forkBeforeUserTurn } from '../../src/session/session-lifecycle.js'
 import { transcriptPath } from '../../src/persistence-entry.js'
 
@@ -244,5 +245,36 @@ describe('forkBeforeUserTurn — on a transcript that looks like a real one', ()
 
   it('test_nth_beyond_reachable_turns_names_the_reachable_count', () => {
     expect(() => forkBeforeUserTurn('real', 'f6', 3, { cwd, root })).toThrow(/\b2\b/)
+  })
+})
+
+describe('forkBeforeUserTurn — onto a protected session', () => {
+  const touch = (id: string, seconds: number): string => {
+    writeTranscript(id)
+    const p = transcriptPath(root, cwd, id)
+    utimesSync(p, new Date(seconds * 1000), new Date(seconds * 1000))
+    return p
+  }
+
+  it('forkBeforeUserTurn onto the most recent session throws LiveTranscriptError', () => {
+    touch('src', 1000)
+    const live = touch('live', 2000)
+    const before = readFileSync(live, 'utf8')
+    expect(() => forkBeforeUserTurn('src', 'live', 2, { cwd, root })).toThrow(LiveTranscriptError)
+    expect(readFileSync(live, 'utf8')).toBe(before)
+  })
+
+  it('forkBeforeUserTurn onto a session with a writer lease throws LiveTranscriptError', async () => {
+    touch('src', 1000)
+    const live = touch('live', 500)
+    touch('newest', 3000)
+    const before = readFileSync(live, 'utf8')
+    const lease = await acquireSessionWriter(live)
+    try {
+      expect(() => forkBeforeUserTurn('src', 'live', 2, { cwd, root })).toThrow(LiveTranscriptError)
+      expect(readFileSync(live, 'utf8')).toBe(before)
+    } finally {
+      await (lease as { release?: () => Promise<void> }).release?.()
+    }
   })
 })
