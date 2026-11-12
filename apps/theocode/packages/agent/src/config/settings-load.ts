@@ -13,6 +13,7 @@ import process from 'node:process'
 
 import { CONFIG_SCHEMA_KEYS, ConfigError } from './config-contract.js'
 import { DEFAULT_HOME_DIR, LEGACY_HOME_DIR, homeStateDir } from './home-dir.js'
+import { readManagedSettingsFile } from './managed-settings.js'
 import { translateSettings } from './settings-json.js'
 import type { PermissionRule } from '@theokit/agents/config'
 
@@ -189,14 +190,19 @@ export interface SettingsFileReport {
  * "malformed ends the scope" and "only the first is read" with the same `break` keyword in one
  * body, which is where a future edit goes wrong.
  */
-function reportOne(candidate: SettingsCandidate): SettingsFileReport | 'skip' | 'stop' {
+function reportOne(
+  candidate: SettingsCandidate,
+  preParsed?: unknown,
+): SettingsFileReport | 'skip' | 'stop' {
   const path = candidate.path
-  if (!existsSync(path)) return 'skip'
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(readFileSync(path, 'utf8'))
-  } catch {
-    return 'stop'
+  let parsed: unknown = preParsed
+  if (preParsed === undefined) {
+    if (!existsSync(path)) return 'skip'
+    try {
+      parsed = JSON.parse(readFileSync(path, 'utf8'))
+    } catch {
+      return 'stop'
+    }
   }
   try {
     const read = translateSettings(parsed, {
@@ -231,6 +237,8 @@ export function settingsReport(opts: {
   projectDir?: string
   userDir?: string
   env?: Record<string, string | undefined>
+  /** Managed-settings paths to consult; defaults to the platform paths. */
+  managedPaths?: readonly string[]
 }): SettingsFileReport[] {
   const env = opts.env ?? process.env
   const candidates = settingsCandidates({
@@ -246,6 +254,16 @@ export function settingsReport(opts: {
       if (result !== 'stop') out.push(result)
       break // first existing candidate wins — the report describes what the loader used
     }
+  }
+  const managed = readManagedSettingsFile(
+    opts.managedPaths === undefined ? {} : { paths: opts.managedPaths },
+  )
+  if (managed !== null) {
+    const result = reportOne(
+      { path: managed.path, foreignRoot: true, hooksDelivery: 'inert' },
+      managed.raw,
+    )
+    if (result !== 'skip' && result !== 'stop') out.push(result)
   }
   return out
 }

@@ -29,6 +29,7 @@ import {
 import type { TrustPosture } from './trust-posture.js'
 import { applySecurityFloor } from './security-floor.js'
 import { readManagedSettings } from './managed-settings.js'
+import { translateSettings } from './settings-json.js'
 
 /**
  * How long an operator-supplied shell command may run before it is killed.
@@ -385,6 +386,8 @@ export interface ConfigLayers {
    * path an ordinary user cannot write. Highest precedence, `cli` included.
    */
   managed?: unknown
+  /** Receives the keys of the managed file that were ignored or unrecognised. */
+  onManagedNotice?: (message: string) => void
 }
 
 const ACCUMULATING_KEYS = ['hooks'] as const
@@ -448,7 +451,20 @@ export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
   const cli = fromFile(layers.cli, 'cli (-c)')
   // #737 — the enterprise policy. Parsed through the SAME schema as every other layer: a
   // managed file with a typo must fail by name, not be tolerated because of where it came from.
-  const managed = fromFile(layers.managed, 'managed-settings.json')
+  // The file is Claude Code's, so it is read as a foreign-root file: unknown keys are reported, not fatal.
+  const managedRead = translateSettings(layers.managed, {
+    ownKeys: CONFIG_SCHEMA_KEYS,
+    foreignRoot: true,
+    hooksDelivery: 'inert',
+  })
+  const notices = [
+    managedRead.ignored.length > 0 ? `not implemented here: ${managedRead.ignored.join(', ')}` : '',
+    managedRead.unrecognised.length > 0 ? `unrecognised: ${managedRead.unrecognised.join(', ')}` : '',
+    managedRead.droppedHooks.length > 0 ? `hooks not translated: ${managedRead.droppedHooks.join('; ')}` : '',
+  ].filter((n) => n !== '')
+  if (notices.length > 0)
+    layers.onManagedNotice?.(`managed-settings.json — ${notices.join('; ')}`)
+  const managed = fromFile(managedRead.values, 'managed-settings.json')
 
   const { name: selectedProfile, values: profile } = chosenProfile([
     user,
@@ -538,7 +554,10 @@ export function loadConfig(opts: {
   // #737 — read here rather than in `discoverSettings`, which is about the files a PROJECT and a
   // USER own. This one is neither: an administrator deployed it to a path they cannot write, and no
   // trust posture gates it — the policy binds the untrusted repository too.
-  const managedSettings = readManagedSettings()
+  const warn = (m: string): void => {
+    process.stderr.write(`theocode: ${m}\n`)
+  }
+  const managedSettings = readManagedSettings({ onWarn: warn })
   const { user, project, projectLocal, projectAllowed, ourHome } = discoverSettings({
     projectDir,
     userDir,
@@ -570,6 +589,6 @@ export function loadConfig(opts: {
     ...(projectLocal !== null ? { projectLocal: projectLocal } : {}),
     env,
     ...(opts.cli !== undefined ? { cli: opts.cli } : {}),
-    ...(managedSettings !== null ? { managed: managedSettings } : {}),
+    ...(managedSettings !== null ? { managed: managedSettings, onManagedNotice: warn } : {}),
   })
 }
