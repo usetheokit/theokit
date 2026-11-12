@@ -278,6 +278,21 @@ and a run in flight when the process stops sends no reply. A failed run writes
 `trigger <name>: run failed (<code>)`, and a reply the platform refused writes
 `trigger <name>: the reply was not delivered (<code>)`. Trigger secrets are hidden from the output.
 
+### MCP server events
+
+An MCP server that implements the events profile (`events/subscribe`, Streamable HTTP) can start a
+run. Set `THEOCLAW_MCP_EVENTS_REPLY_TO=<platform>:<channel id>` and TheoClaw subscribes to the HTTP
+servers named in `THEOCLAW_EXTERNAL_TOOLS` (`THEOCLAW_MCP_EVENTS_SERVERS` narrows them, comma-separated).
+Each event is delivered with a per-subscription HMAC signature to a receiver the SDK binds on
+`THEOCLAW_MCP_EVENTS_HOST` (default `127.0.0.1`) and `THEOCLAW_MCP_EVENTS_PORT` (default any port); a
+wrong signature answers 401 and runs nothing. For a server that is not on the same host, set
+`THEOCLAW_MCP_EVENTS_CALLBACK_ORIGIN` to the public HTTPS origin that reaches the receiver.
+
+An accepted event posts `event received from <server>` to `REPLY_TO`, then runs once on a fresh
+agent with no tool, the event given as untrusted data, and posts the outcome. `THEOCLAW_MCP_EVENTS_TYPES`
+(comma-separated) limits the event types and `THEOCLAW_MCP_EVENTS_INSTRUCTIONS` is put before the event.
+A server that refuses the subscription is written (`mcp events: <name>: subscription failed`) and skipped.
+
 ### Approved hooks
 
 Every TheoClaw agent refuses to spawn a hook command unless the owner approved it. The SDK reads

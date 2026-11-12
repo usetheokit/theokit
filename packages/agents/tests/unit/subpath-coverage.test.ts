@@ -107,6 +107,13 @@ const DECISIONS: Record<string, Decision> = {
       'catalogue reaches the SDK directly. Crossing it here would put a second, staler copy of the ' +
       'provider list in front of consumers for no capability they do not already have.',
   },
+  './mcp-events': {
+    sinceMajor: 5,
+    verdict: 'out',
+    reason:
+      'MCP `events/subscribe` signing and verification (`signMcpEvent`, callback verification). Consumed ' +
+      'directly by apps/theoclaw, which owns the callback route; the layer has no events surface to re-export.',
+  },
   './mcp-auth': {
     sinceMajor: 5,
     verdict: 'out',
