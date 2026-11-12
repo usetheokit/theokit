@@ -59,6 +59,7 @@
     "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs ."
   },
   "peerDependencies": {
+    "@theokit/di": ">=0.2.1 <0.3",
     "@swc/core": ">=1.3.0",
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0",
@@ -66,6 +67,9 @@
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "@theokit/di": {
+      "optional": true
+    },
     "@swc/core": {
       "optional": true
     },
@@ -77,6 +81,7 @@
     }
   },
   "devDependencies": {
+    "@theokit/di": "0.2.1",
     "@swc/core": "^1.15.41",
     "reflect-metadata": "^0.2.2",
     "tsup": "^8.5.1",
