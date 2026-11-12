@@ -52,4 +52,22 @@ describe('B-018 — a transient failure offers the retry, a fatal one does not',
   it('test_an_empty_message_still_produces_something_readable', () => {
     expect(formatTurnError(new Error('')).length).toBeGreaterThan(0)
   })
+
+  it('test_a_bare_status_like_number_is_fatal', () => {
+    expect(offersRetry(new Error('prompt has 500 lines'))).toBe(false)
+    expect(offersRetry(new Error('limit is 504 tokens'))).toBe(false)
+  })
+
+  it('test_a_status_in_a_status_position_is_transient', () => {
+    expect(offersRetry(new Error('HTTP 503 Service Unavailable'))).toBe(true)
+    expect(offersRetry(new Error('status: 429'))).toBe(true)
+    expect(offersRetry(new Error('failed', { cause: new Error('read ECONNRESET') }))).toBe(true)
+  })
+
+  it('test_a_numeric_status_property_on_the_error_or_a_cause_is_transient', () => {
+    expect(offersRetry(Object.assign(new Error('upstream failed'), { status: 502 }))).toBe(true)
+    const wrapped = new Error('outer', { cause: Object.assign(new Error('x'), { statusCode: 529 }) })
+    expect(offersRetry(wrapped)).toBe(true)
+    expect(offersRetry(Object.assign(new Error('bad'), { status: 400 }))).toBe(false)
+  })
 })

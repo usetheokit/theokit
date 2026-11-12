@@ -6,8 +6,23 @@ interface TurnErrorView {
   hint?: string
 }
 
-const TRANSIENT_SHAPE =
-  /\b(408|429|500|502|503|504|529|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up)\b/i
+const NETWORK_SHAPE = /\b(ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up)\b/i
+const STATUS_CODES = '408|429|500|502|503|504|529'
+// A status number only counts in a status position: `HTTP 503`, `status: 429`, `statusCode=500`.
+const STATUS_SHAPE = new RegExp(`\\b(?:HTTP|status(?:[ _-]?code)?)\\b[\\s:=/]*(?:${STATUS_CODES})\\b`, 'i')
+const TRANSIENT_STATUSES = new Set(STATUS_CODES.split('|').map(Number))
+
+function hasTransientStatus(err: Error): boolean {
+  let current: unknown = err
+  for (let i = 0; i < 8 && current instanceof Error; i += 1) {
+    const e = current as { status?: unknown; statusCode?: unknown; cause?: unknown }
+    for (const v of [e.status, e.statusCode]) {
+      if (typeof v === 'number' && TRANSIENT_STATUSES.has(v)) return true
+    }
+    current = e.cause
+  }
+  return false
+}
 
 function textWithCauses(err: Error): string {
   const parts: string[] = []
@@ -26,7 +41,8 @@ function classifyTurnError(err: Error): TurnErrorView {
   const message = err.message.trim() === '' ? 'the turn failed with no message' : err.message.trim()
   if (isTransientError(err)) return { kind: 'transient', message, hint: RETRY_HINT }
   if (err instanceof TheokitAgentError) return { kind: 'fatal', message }
-  if (TRANSIENT_SHAPE.test(textWithCauses(err)))
+  const text = textWithCauses(err)
+  if (NETWORK_SHAPE.test(text) || STATUS_SHAPE.test(text) || hasTransientStatus(err))
     return { kind: 'transient', message, hint: RETRY_HINT }
   return { kind: 'fatal', message }
 }
