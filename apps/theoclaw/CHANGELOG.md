@@ -17,6 +17,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- An X (Twitter) platform: mentions of the bot account become group-thread conversations and are answered with public replies, only to authors in `THEOCLAW_X_ALLOW_FROM` (optional guest mode with `THEOCLAW_X_GUEST_DAILY_LIMIT`), using `@theokit/gateway-x` 0.1.0; `@theokit/gateway` is raised to 0.16.0. The rotated refresh token is kept in `x-refresh-token` under `THEOCLAW_STATE_DIR`. Not yet run against a real X account. (OC-114, #1543)
 - A Raft platform: `THEOCLAW_RAFT_ENABLED=1` wakes the agent from the Raft CLI (`raft wake --json`) and replies through `raft reply`, using `@theokit/gateway-raft` 0.1.0 from `theokit-gateways`; optional `THEOCLAW_RAFT_CLI_PATH`. Not yet run against a real Raft account. (OC-126, #1544)
 - `theoclaw hooks list` prints each project hook in `.theokit/settings.json` with its event, its fingerprint and whether `THEOCLAW_APPROVED_HOOKS` approves it. (OC-87, #1615)
 - A test runs `theoclaw skills publish`, `search` and `install` against the reference registry and shows the installed skill is offered on the next turn of an open session. (OC-72, #1586)

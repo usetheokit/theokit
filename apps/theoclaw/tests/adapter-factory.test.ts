@@ -53,6 +53,10 @@ const PLACEHOLDERS: readonly ConfiguredPlatform[] = [
   { platform: 'imessage', settings: {} },
   { platform: 'raft', settings: {} },
   {
+    platform: 'x',
+    settings: { userId: '1', username: 'bot', clientId: 'x', clientSecret: 'x', refreshToken: 'x', allowFrom: ['alice'] },
+  },
+  {
     platform: 'sms',
     settings: {
       accountSid: 'AC-x',

@@ -85,6 +85,7 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
   signal: null,
   imessage: null,
   raft: null,
+  x: null,
   tlon_urbit: null,
   email: null,
   line: ({ channelSecret }) => ({
