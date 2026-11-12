@@ -570,7 +570,12 @@ function reachableUserTurns(src: string): { index: number; text: string }[] {
   // module and is NOT on the `/persistence` surface. Reaching past the published entry to get it
   // would be the boundary violation this whole layer exists to remove — the same one the M67
   // measurement found a consumer committing six times.
-  const records = loadJsonl<TranscriptRecord>(src) as readonly TranscriptRecord[]
+  //
+  // A live transcript can end in a half-written line (the writer is mid-append, or died mid-append).
+  // Tolerate that LAST line only; corruption in the middle of the file still throws.
+  const records = loadJsonl<TranscriptRecord>(src, {
+    tolerateTrailingPartialLine: true,
+  }) as readonly TranscriptRecord[]
 
   // The LAST boundary, not the first: an old transcript can carry several, and only the most recent
   // one describes what the model can still see.
