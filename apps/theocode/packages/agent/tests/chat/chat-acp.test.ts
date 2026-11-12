@@ -13,6 +13,10 @@
  * that the surface is left undeclared, and a test that inspected the tools would keep passing if
  * someone later changed the default instead of declaring the profile.
  */
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const buildChatAgent = vi.fn(() => ({ kind: 'fake-agent' }))
@@ -20,7 +24,8 @@ const toAgentFactory = vi.fn((factory: unknown, _options?: unknown) => factory)
 const resolveFreshCredential = vi.fn()
 
 vi.mock('../../src/chat/chat.js', () => ({ buildChatAgent }))
-vi.mock('@theokit/agents', () => ({
+vi.mock('@theokit/agents', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@theokit/agents')>()),
   toAgentFactory,
   setDiagnosticsSink: vi.fn(),
 }))
@@ -92,5 +97,35 @@ describe('B-007 — credential failure is not degraded to an empty key', () => {
     const options = toAgentFactory.mock.calls[0]?.[1] as { apiKey: () => Promise<string> }
 
     await expect(options.apiKey()).resolves.toBe('sk-real-key')
+  })
+})
+
+describe('#1893 — the ACP entry runs the startup bootstrap before exporting the factory', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.resetModules()
+  })
+
+  it('test_acp_installs_the_sdk_home_variables_from_THEOCODE_HOME_first', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'acp-home-'))
+    const saved = { ...process.env }
+    try {
+      delete process.env.THEOKIT_AUTH_HOME
+      delete process.env.THEOKIT_HOME
+      process.env.THEOCODE_HOME = root
+      let atFactoryExport: string | undefined
+      toAgentFactory.mockImplementationOnce((factory: unknown) => {
+        atFactoryExport = process.env.THEOKIT_AUTH_HOME
+        return factory
+      })
+      await import('../../src/chat/chat-acp.js')
+      expect(atFactoryExport, 'the SDK auth home was not installed before the factory').toContain(
+        root,
+      )
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
+      Object.assign(process.env, saved)
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

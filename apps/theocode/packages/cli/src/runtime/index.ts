@@ -15,11 +15,10 @@ export {
   silentEmptyTurnDiagnostic,
   type ExecProcessor,
 } from './events.js'
+export { loadProjectEnv } from '@theocode/agent/bootstrap'
 export { createGoalCancellation } from './goal-cancellation.js'
 export { resolveSession } from './preflight.js'
 export { createDrainedProcessOutput } from './drained-output.js'
 export { consumeWithForkIfBusy, availableIdOrFork } from './session-busy.js'
 
 export { gitGate } from './preflight.js'
-
-export { loadProjectEnv } from './project-env.js'
