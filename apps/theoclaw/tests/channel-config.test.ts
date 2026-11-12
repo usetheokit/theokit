@@ -107,7 +107,26 @@ describe('resolvePlatforms', () => {
     expect(resolvePlatforms({ THEOCLAW_X_USER_ID: '42' }).skipped.find((entry) => entry.platform === 'x')?.missing).toContain('THEOCLAW_X_ALLOW_FROM')
   })
 
-  it('lists all fifteen platforms', () => {
+  it('lists all fourteen platforms', () => {
+    expect(PLATFORMS.map((spec) => spec.platform).filter((platform) => platform !== 'x')).toEqual([
+      'telegram',
+      'discord',
+      'slack',
+      'matrix',
+      'mattermost',
+      'email',
+      'line',
+      'whatsapp',
+      'teams',
+      'google_chat',
+      'signal',
+      'imessage',
+      'tlon_urbit',
+      'sms',
+    ])
+  })
+
+  it('lists X among the platforms', () => {
     expect(PLATFORMS.map((spec) => spec.platform)).toEqual([
       'telegram',
       'discord',

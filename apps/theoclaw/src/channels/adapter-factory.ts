@@ -123,8 +123,13 @@ export function xOptions(settings: PlatformSettings<'x'>, options: AdapterBuildO
         process.stderr.write('x: a rotated refresh token is kept in memory only; set THEOCLAW_STATE_DIR to keep it across restarts\n')
         return
       }
-      writeFileSync(file, token, { mode: 0o600 })
-      chmodSync(file, 0o600)
+      try {
+        writeFileSync(file, token, { mode: 0o600 })
+        chmodSync(file, 0o600)
+      } catch (error) {
+        // A failed save must not fail the refresh that is answering a mention; the token still lives in memory.
+        process.stderr.write(`x: the rotated refresh token could not be saved: ${error instanceof Error ? error.message : String(error)}\n`)
+      }
     },
   }
 }
