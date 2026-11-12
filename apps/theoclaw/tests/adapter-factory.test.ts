@@ -51,6 +51,7 @@ const PLACEHOLDERS: readonly ConfiguredPlatform[] = [
   { platform: 'google_chat', settings: { serviceAccountFile: keyFile(), audience: 'https://example.org/webhooks/google_chat' } },
   { platform: 'signal', settings: { account: '+5511999990000' } },
   { platform: 'imessage', settings: {} },
+  { platform: 'raft', settings: {} },
   {
     platform: 'sms',
     settings: {

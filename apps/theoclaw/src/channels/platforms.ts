@@ -46,6 +46,7 @@ const PLATFORM_VARIABLES = {
   },
   signal: { account: 'THEOCLAW_SIGNAL_ACCOUNT' },
   imessage: { enabled: 'THEOCLAW_IMESSAGE_ENABLED' },
+  raft: { enabled: 'THEOCLAW_RAFT_ENABLED' },
   tlon_urbit: {
     shipUrl: 'THEOCLAW_TLON_URBIT_SHIP_URL',
     ship: 'THEOCLAW_TLON_URBIT_SHIP',
@@ -76,6 +77,9 @@ export const IMESSAGE_CLI_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_CLI_PATH'
 /** Optional: the Messages database `imsg` reads. */
 export const IMESSAGE_DB_PATH_VARIABLE = 'THEOCLAW_IMESSAGE_DB_PATH'
 
+/** Optional: the Raft CLI; the adapter looks `raft` up on `PATH` when unset. */
+export const RAFT_CLI_PATH_VARIABLE = 'THEOCLAW_RAFT_CLI_PATH'
+
 /** The environment variable that picks WhatsApp's backend: `cloud` (the default) or `baileys` (QR-linked WhatsApp Web). */
 export const WHATSAPP_BACKEND_VARIABLE = 'THEOCLAW_WHATSAPP_BACKEND'
 /** Where the Baileys pairing is kept; defaults to `whatsapp-session` under `THEOCLAW_STATE_DIR`. */
@@ -95,7 +99,9 @@ export type PlatformSettings<P extends SupportedPlatform> = P extends 'whatsapp'
     ? CloudSettings<'signal'> & { readonly signalCliPath?: string }
     : P extends 'imessage'
       ? { readonly cliPath?: string; readonly dbPath?: string }
-      : CloudSettings<P>
+      : P extends 'raft'
+        ? { readonly command?: string }
+        : CloudSettings<P>
 
 /** The Baileys settings when WhatsApp is set up that way, narrowing the union. */
 export function isBaileys(settings: PlatformSettings<'whatsapp'>): settings is WhatsAppBaileysSettings {
@@ -190,6 +196,12 @@ export function resolvePlatforms(
         settings: { ...(cliPath === '' ? {} : { cliPath }), ...(dbPath === '' ? {} : { dbPath }) },
       })
       continue // the enabling flag is no secret; masking it would blank every "1" in the output
+    }
+    if (platform === 'raft') {
+      // The Raft CLI holds its own login: no secret, and the enabling flag must not be masked.
+      const command = (env[RAFT_CLI_PATH_VARIABLE] ?? '').trim()
+      configured.push({ platform, settings: command === '' ? {} : { command } })
+      continue
     }
     // Safe: `settings` has exactly the keys of this platform's row, which `PlatformSettings<P>`
     // is derived from; TypeScript cannot pair a loop variable of a union with its own row.
