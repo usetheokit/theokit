@@ -98,3 +98,113 @@ export function cliTransport({ entry, env, home, model }) {
     },
   }
 }
+
+/** `url` without trailing slashes. */
+export function trimSlashes(url) {
+  let end = url.length
+  while (end > 0 && url[end - 1] === '/') end--
+  return url.slice(0, end)
+}
+
+async function getJson(url, init, what) {
+  const response = await fetch(url, { ...init, signal: AbortSignal.timeout(15_000) })
+  if (!response.ok) throw new Error(`${what}: HTTP ${response.status}`)
+  return response.json()
+}
+
+/** Polls `read()` for the bot's messages until one matches or the deadline passes; resolves with what was collected. */
+async function collectBotReply(read, match, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  let texts = []
+  let raw = []
+  for (;;) {
+    ;({ texts, raw } = await read())
+    if (texts.some((text) => match.test(text)) || Date.now() >= deadline) break
+    await sleep(1_000)
+  }
+  const text = texts.join('\n')
+  return { text, matched: match.test(text), failed: false, raw }
+}
+
+/** A human Matrix user sending into a DM room with the bot, reading the room timeline (#1672). */
+export function matrixTransport({ homeserver, token, botUserId, roomId }) {
+  const base = `${trimSlashes(homeserver)}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}`
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  let sentEventId
+  return {
+    async send(turn) {
+      const txn = `parity-${Date.now()}`
+      const body = JSON.stringify({ msgtype: 'm.text', body: turn.message })
+      const sent = await getJson(
+        `${base}/send/m.room.message/${txn}`,
+        { method: 'PUT', headers, body },
+        'matrix send',
+      )
+      sentEventId = sent.event_id
+    },
+    awaitReply(match, timeoutMs) {
+      return collectBotReply(
+        async () => {
+          const page = await getJson(
+            `${base}/messages?dir=b&limit=30`,
+            { headers },
+            'matrix messages',
+          )
+          const newer = []
+          for (const event of page.chunk ?? []) {
+            if (event.event_id === sentEventId) break
+            newer.push(event)
+          }
+          const mine = newer.filter(
+            (e) =>
+              e.type === 'm.room.message' &&
+              e.sender === botUserId &&
+              typeof e.content?.body === 'string',
+          )
+          return { texts: mine.reverse().map((e) => e.content.body), raw: mine }
+        },
+        match,
+        timeoutMs,
+      )
+    },
+  }
+}
+
+/** A human Mattermost user posting in a DM channel with the bot, reading it back (#1672). */
+export function mattermostTransport({ baseUrl, token, botUserId, channelId }) {
+  const api = `${trimSlashes(baseUrl)}/api/v4`
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  let sentAt = 0
+  return {
+    async send(turn) {
+      const post = await getJson(
+        `${api}/posts`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ channel_id: channelId, message: turn.message }),
+        },
+        'mattermost post',
+      )
+      sentAt = post.create_at ?? Date.now()
+    },
+    awaitReply(match, timeoutMs) {
+      return collectBotReply(
+        async () => {
+          const page = await getJson(
+            `${api}/channels/${encodeURIComponent(channelId)}/posts?per_page=30`,
+            { headers },
+            'mattermost posts',
+          )
+          const mine = (page.order ?? [])
+            .map((id) => page.posts?.[id])
+            .filter((p) => p && p.user_id === botUserId && p.create_at > sentAt)
+          mine.sort((a, b) => a.create_at - b.create_at)
+          return { texts: mine.map((p) => p.message), raw: mine }
+        },
+        match,
+        timeoutMs,
+      )
+    },
+  }
+}

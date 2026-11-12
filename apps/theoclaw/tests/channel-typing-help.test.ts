@@ -2,14 +2,14 @@ import 'reflect-metadata'
 
 import { describe, expect, it } from 'vitest'
 
-import type { GatewayContext, MessageEvent } from '@theokit/gateway'
+import type { GatewayContext, MessageEvent, PlatformName, SendResult } from '@theokit/gateway'
 
 import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
 import { createUsageHook } from '../src/channels/usage-hook.js'
 import { createAcpCommandHook, createAcpSessions } from '../src/channels/acp-command.js'
 import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
-import { showTyping } from '../src/channels/typing.js'
+import { readAckReaction, showTyping } from '../src/channels/typing.js'
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent } from './fakes.js'
 
 class TypingAdapter extends FakeAdapter {
@@ -63,7 +63,8 @@ describe('typing indicator (OC-106)', () => {
 describe('/help (OC-105)', () => {
   it('answers with the command list and blocks the message from the model', () => {
     const hook = createHelpHook()
-    const decide = (text: string) => hook.pre_inbound?.({ event: messageEvent('telegram', text) } as never)
+    const decide = (text: string) =>
+      hook.pre_inbound?.({ event: messageEvent('telegram', text) } as never)
     expect(decide('/help')).toEqual({ block: true, message: HELP_TEXT })
     expect(decide('/help@mybot')).toEqual({ block: true, message: HELP_TEXT })
     expect(decide('/commands')).toEqual({ block: true, message: HELP_TEXT })
@@ -75,10 +76,17 @@ describe('/help (OC-105)', () => {
 describe('the commands /help lists', () => {
   it('each is answered by its own handler without a model turn', async () => {
     const usage = createUsageHook().hook
-    const activation = createGroupActivationHook({ isOwner: () => true, mode: 'mention', write: () => undefined })
-    const acp = createAcpCommandHook({ sessions: createAcpSessions({ agents: [], cwd: '/tmp' }), isOwner: () => true })
+    const activation = createGroupActivationHook({
+      isOwner: () => true,
+      mode: 'mention',
+      write: () => undefined,
+    })
+    const acp = createAcpCommandHook({
+      sessions: createAcpSessions({ agents: [], cwd: '/tmp' }),
+      isOwner: () => true,
+    })
     let sends = 0
-    const agent = { send: async () => (sends += 1, never()) } as never
+    const agent = { send: async () => ((sends += 1), never()) } as never
     const never = (): never => {
       throw new Error('the model was reached')
     }
@@ -120,5 +128,85 @@ describe('/think', () => {
     expect(set).toEqual(['high'])
     expect(log.join('\n')).toContain('Thinking level set to high.')
     expect(log.filter((l) => l.includes('Usage: /think off|low|medium|high'))).toHaveLength(2)
+  })
+})
+
+class ReactingAdapter extends TypingAdapter {
+  readonly reactions: string[] = []
+  constructor(
+    platform: PlatformName,
+    private readonly result: SendResult,
+  ) {
+    super(platform)
+  }
+  override async react(channelId: string, messageId: string, emoji: string): Promise<SendResult> {
+    this.reactions.push(`${channelId}|${messageId}|${emoji}`)
+    return this.result
+  }
+}
+
+async function runTurn(adapter: FakeAdapter, ackReaction: string | undefined) {
+  const event = messageEvent('discord', 'hello')
+  const log: string[] = []
+  const handler = createReplyHandler({
+    withAgent: async (_e, work) =>
+      work({
+        agent: new FakeAgent({ frames: [assistant('Hi!'), finished()] }),
+        release: () => undefined,
+      }),
+    reset: async () => undefined,
+    typing: { adapterFor: () => adapter, ...(ackReaction === undefined ? {} : { ackReaction }) },
+  })
+  await handler(event, ctxFor(event, log))
+  await new Promise((r) => setTimeout(r, 5))
+  return { event, log }
+}
+
+describe('ack reaction (OC-106)', () => {
+  it('reaches the adapter react() with the inbound message id', async () => {
+    const adapter = new ReactingAdapter('discord', { ok: true })
+    const { event } = await runTurn(adapter, '👀')
+    expect(adapter.reactions).toEqual([`${event.channel.id}|${event.id}|👀`])
+  })
+
+  it('does not fail the turn when react() returns ok:false', async () => {
+    const adapter = new ReactingAdapter('discord', {
+      ok: false,
+      error: { code: 'rate_limited', message: 'slow' },
+    })
+    const { log } = await runTurn(adapter, '👀')
+    expect(adapter.reactions).toHaveLength(1)
+    expect(log.some((line) => line.startsWith('reply:'))).toBe(true)
+  })
+
+  it('does not fail the turn when react() throws', async () => {
+    const adapter = new ReactingAdapter('discord', { ok: true })
+    adapter.react = async () => {
+      throw new Error('boom')
+    }
+    const { log } = await runTurn(adapter, '👀')
+    expect(log.some((line) => line.startsWith('reply:'))).toBe(true)
+  })
+
+  it('does not react without a configured emoji', async () => {
+    const adapter = new ReactingAdapter('discord', { ok: true })
+    await runTurn(adapter, undefined)
+    expect(adapter.reactions).toEqual([])
+  })
+
+  it('an adapter with the base react() (unsupported) is harmless', async () => {
+    const { log } = await runTurn(new TypingAdapter('discord'), '👀')
+    expect(log.some((line) => line.startsWith('reply:'))).toBe(true)
+  })
+})
+
+describe('readAckReaction', () => {
+  it('trims the emoji', () => {
+    expect(readAckReaction({ THEOCLAW_ACK_REACTION: ' 👀 ' })).toBe('👀')
+  })
+  it('is off when unset, empty or "off"', () => {
+    expect(readAckReaction({})).toBeUndefined()
+    expect(readAckReaction({ THEOCLAW_ACK_REACTION: '' })).toBeUndefined()
+    expect(readAckReaction({ THEOCLAW_ACK_REACTION: 'OFF' })).toBeUndefined()
   })
 })

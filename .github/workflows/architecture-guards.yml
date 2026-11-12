@@ -29,7 +29,7 @@ on:
       - 'packages/agents/src/**'
       - 'packages/agents/tests/**'
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, workspace]
     paths:
       - 'packages/theo/src/**'
       - '.dependency-cruiser.cjs'

@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { chatBotEnv, chatSecrets, chatSetup, missingChatVariables } from './chat-platforms.mjs'
 import { SCENARIOS } from './scenarios.mjs'
 import { cliTransport, controlTransport, webchatTransport } from './transport.mjs'
 
@@ -76,6 +77,32 @@ async function stop(child) {
   clearTimeout(timer)
 }
 
+/** Starts what the scenario's surface needs and returns its transport (and the process, to stop later). */
+async function buildTransport(scenario, { env, home, childEnv, token, makeTransport }) {
+  if (makeTransport) return { transport: makeTransport(scenario, { home, childEnv, token }) }
+  if (scenario.surface === 'cli')
+    return {
+      transport: cliTransport({
+        entry: join(APP_DIR, 'dist', 'cli.js'),
+        env: childEnv,
+        home,
+        model: childEnv.THEOCLAW_MODEL,
+      }),
+    }
+  if (scenario.surface === 'matrix' || scenario.surface === 'mattermost') {
+    // The human's id is known after the DM exists, and the bot must list it as an owner before it starts.
+    const setup = await chatSetup(scenario.surface, env)
+    childEnv.THEOCLAW_OWNERS = setup.owner
+    return { running: await startProcess(home, childEnv), transport: setup.transport }
+  }
+  const running = await startProcess(home, childEnv)
+  const transport =
+    scenario.surface === 'control'
+      ? controlTransport({ port: running.port, token })
+      : webchatTransport({ base: `http://127.0.0.1:${running.port}`, token })
+  return { running, transport }
+}
+
 /** Runs a scenario against a built theoclaw; `makeTransport` overrides the real surface (tests). */
 export async function runScenario(scenario, { env = process.env, makeTransport, resultsDir = RESULTS_DIR, now = () => new Date() } = {}) {
   const model = env.THEOCLAW_PARITY_MODEL
@@ -97,19 +124,16 @@ export async function runScenario(scenario, { env = process.env, makeTransport, 
     THEOCLAW_DM_POLICY: 'allowlist',
     THEOCLAW_WORKSPACE: home,
   }
-  const secrets = secretValues({ ...env, ...childEnv }, [token])
+  const chat = scenario.surface === 'matrix' || scenario.surface === 'mattermost'
+  if (chat) Object.assign(childEnv, chatBotEnv(scenario.surface, env))
+  const secrets = secretValues({ ...env, ...childEnv }, [token, ...chatSecrets(env)])
   let running
   let reply
   let error
   try {
-    let transport
-    if (makeTransport) transport = makeTransport(scenario, { home, childEnv, token })
-    else if (scenario.surface === 'cli') transport = cliTransport({ entry: join(APP_DIR, 'dist', 'cli.js'), env: childEnv, home, model })
-    else {
-      running = await startProcess(home, childEnv)
-      transport =
-        scenario.surface === 'control' ? controlTransport({ port: running.port, token }) : webchatTransport({ base: `http://127.0.0.1:${running.port}`, token })
-    }
+    const built = await buildTransport(scenario, { env, home, childEnv, token, makeTransport })
+    running = built.running
+    const transport = built.transport
     await transport.send(scenario.send)
     reply = await transport.awaitReply(new RegExp(scenario.expect.match, scenario.expect.flags), TURN_TIMEOUT_MS)
   } catch (cause) {
@@ -144,7 +168,9 @@ export async function runScenario(scenario, { env = process.env, makeTransport, 
 export function skipReason(scenario, env = process.env) {
   if (!env.THEOCLAW_PARITY_MODEL) return 'THEOCLAW_PARITY_MODEL is not set'
   if (!(env.THEOKIT_API_KEY ?? env.OPENROUTER_API_KEY)) return 'no model credential (THEOKIT_API_KEY or OPENROUTER_API_KEY)'
-  if (!['control', 'webchat', 'cli'].includes(scenario.surface)) return `no transport for the ${scenario.surface} surface`
+  const missingChat = missingChatVariables(scenario.surface, env)
+  if (missingChat.length > 0) return `missing ${missingChat.join(', ')}`
+  if (!['control', 'webchat', 'cli', 'matrix', 'mattermost'].includes(scenario.surface)) return `no transport for the ${scenario.surface} surface`
   return undefined
 }
 
