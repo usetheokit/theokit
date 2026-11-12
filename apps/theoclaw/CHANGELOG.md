@@ -17,6 +17,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- An X (Twitter) platform: mentions of the bot account become conversations and allowlisted authors get public replies; configure it with the `THEOCLAW_X_*` variables. (OC-114, #1543)
 - `theoclaw hooks list` prints each project hook in `.theokit/settings.json` with its event, its fingerprint and whether `THEOCLAW_APPROVED_HOOKS` approves it. (OC-87, #1615)
 - A test runs `theoclaw skills publish`, `search` and `install` against the reference registry and shows the installed skill is offered on the next turn of an open session. (OC-72, #1586)
 - `THEOCLAW_ACK_REACTION=👀` reacts to each inbound message when its turn starts, through the adapter's `react` method; the gateway packages are raised to the releases that ship typing and reactions on Discord, Slack and Matrix (Teams still has no typing indicator). (#1542)
