@@ -17,6 +17,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `theoclaw mcp-relay smoke` runs relay, connector and `list_dir` on the loopback as a one-command check, and an end-to-end test covers a granted client, a refused tool and a revoke. OC-116 stays open: no real-client run. (#1588)
 - Documented the MCP relay (`theoclaw mcp-relay serve|grant|list|revoke`, `THEOCLAW_MCP_RELAY_URL`, `THEOCLAW_MCP_RELAY_TOKEN`) in the README, with the clear-text and read-only-default notes, and recorded OC-116 in the parity ledger (and the inventory) as open: no hosted Control UI connected-apps view and no real-client run yet. (OC-116, #1638)
 - An X (Twitter) platform: mentions of the bot account become group-thread conversations and are answered with public replies, only to authors in `THEOCLAW_X_ALLOW_FROM` (optional guest mode with `THEOCLAW_X_GUEST_DAILY_LIMIT`), using `@theokit/gateway-x` 0.1.0; `@theokit/gateway` is raised to 0.16.0. The rotated refresh token is kept in `x-refresh-token` under `THEOCLAW_STATE_DIR`. Not yet run against a real X account. (OC-114, #1543)
 - WeChat, WeCom, Yuanbao, QQ Bot and Zalo platforms: each runs when its `THEOCLAW_WECHAT_*`, `THEOCLAW_WECOM_*`, `THEOCLAW_YUANBAO_*`, `THEOCLAW_QQ_*` or `THEOCLAW_ZALO_*` variables are set and receives at `/webhooks/<name>`, using `@theokit/gateway-{wechat,wecom,yuanbao,qq,zalo}` 0.1.0 from `theokit-gateways`. Not yet run against a real account. (OC-11, #1525)

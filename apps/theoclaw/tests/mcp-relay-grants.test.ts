@@ -37,4 +37,10 @@ describe('mcp-relay', () => {
     expect(await runCli(['mcp-relay', 'grant', 'b', '--tools', 'nope'], v.io)).toBe(2)
     expect(await runCli(['mcp-relay', 'grant', 'c', '--tools', 'write_file'], v.io)).toBe(0)
   })
+
+  it('smoke runs list_dir through the relay and the connector', async () => {
+    const v = harness()
+    expect(await runCli(['mcp-relay', 'smoke'], v.io)).toBe(0)
+    expect(v.stdout()).toContain('mcp-relay smoke: ok')
+  })
 })

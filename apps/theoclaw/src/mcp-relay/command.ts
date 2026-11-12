@@ -1,13 +1,21 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { UsageError } from '../cli-args.js'
 import type { CliIo } from '../cli.js'
 import { readBearerToken } from '../control-plane/bearer.js'
 import { resolveBindAddress } from '../control-plane/bind.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import { buildTools } from '../tools/tool-registry.js'
+import { resolveToolSettings } from '../tools/tool-settings.js'
+import { startMcpRelayConnector } from './connector.js'
 import { createMcpRelay } from './relay-server.js'
 import { GrantError, GrantStore, grantsPath } from './grants.js'
 
 const USAGE =
-  'theoclaw mcp-relay: expected grant <name> [--tools a,b] | list | revoke <name|id> | serve --port <n> [--host <h>]'
+  'theoclaw mcp-relay: expected grant <name> [--tools a,b] | list | revoke <name|id> | serve --port <n> [--host <h>] | smoke'
 
 async function serve(rest: readonly string[], io: CliIo): Promise<number> {
   let port: number | undefined
@@ -47,9 +55,53 @@ async function serve(rest: readonly string[], io: CliIo): Promise<number> {
   return 0
 }
 
+/** One-command check: relay, connector and `list_dir` on loopback with a throwaway grant and directory. */
+async function smoke(io: CliIo): Promise<number> {
+  const dir = mkdtempSync(join(tmpdir(), 'mcp-relay-smoke-'))
+  const instanceToken = 'smoke-instance-token-0123456789abcdef'
+  const toolSettings = resolveToolSettings({}, dir)
+  writeFileSync(join(toolSettings.toolRoot, 'smoke.txt'), 'ok')
+  const grants = join(dir, 'grants.json')
+  const { token } = new GrantStore(grants).load().create('smoke')
+  const relay = createMcpRelay({ instanceToken, grantsPath: grants, pollMs: 50, timeoutMs: 5000 })
+  await new Promise<void>((resolve) => relay.listen(0, '127.0.0.1', resolve))
+  const url = `http://127.0.0.1:${(relay.address() as AddressInfo).port}`
+  const connector = startMcpRelayConnector({
+    settings: { url, token: instanceToken },
+    controlTools: () => buildTools(toolSettings),
+    toolSettings,
+    log: () => undefined,
+  })
+  try {
+    const res = await fetch(`${url}/mcp`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'list_dir', arguments: { path: '.' } },
+      }),
+    })
+    const text = await res.text()
+    if (res.status !== 200 || !text.includes('smoke.txt')) {
+      io.stderr.write(`mcp-relay smoke: failed (HTTP ${res.status})\n`)
+      return 1
+    }
+    io.stdout.write('mcp-relay smoke: ok (list_dir through relay and connector)\n')
+    return 0
+  } finally {
+    await connector.stop()
+    relay.closeAllConnections()
+    await new Promise<void>((resolve) => relay.close(() => resolve()))
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 export async function mcpRelayCommand(args: readonly string[], io: CliIo): Promise<number> {
   const [verb, ...rest] = args
   if (verb === 'serve') return serve(rest, io)
+  if (verb === 'smoke' && rest.length === 0) return smoke(io)
   const store = new GrantStore(grantsPath(io.env, io.homeDir))
   try {
     store.load()
