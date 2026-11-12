@@ -304,9 +304,21 @@ importers:
       '@theokit/gateway-tlon-urbit':
         specifier: 0.1.0
         version: 0.1.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
+      '@theokit/gateway-wechat':
+        specifier: 0.1.0
+        version: 0.1.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
+      '@theokit/gateway-wecom':
+        specifier: 0.1.0
+        version: 0.1.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
       '@theokit/gateway-whatsapp':
         specifier: 0.5.0
         version: 0.5.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
+      '@theokit/gateway-yuanbao':
+        specifier: 0.1.0
+        version: 0.1.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
+      '@theokit/gateway-zalo':
+        specifier: 0.1.0
+        version: 0.1.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
       '@theokit/http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -3436,6 +3448,18 @@ packages:
     peerDependencies:
       '@theokit/gateway': '>=0.13.0 <1.0.0'
 
+  '@theokit/gateway-wechat@0.1.0':
+    resolution: {integrity: sha512-b1n19hs/Jy1Izlyt9Av8u/ZTR0wBxyGWz2n1u9IkcP5pFXuGNmpuxIlTgFchX4R+vfN6bscGfKZTAFoqa7301Q==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/gateway': '>=0.15.0 <1.0.0'
+
+  '@theokit/gateway-wecom@0.1.0':
+    resolution: {integrity: sha512-RFwD2dbs66iyxy0jX7NDiYpXW1ODuV2ooAnWkOsedEbuOyYm2UVrgyUiQg6KfeD5UuyIIiFWIqCLA52E3hZv+g==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/gateway': '>=0.15.0 <1.0.0'
+
   '@theokit/gateway-whatsapp@0.5.0':
     resolution: {integrity: sha512-VF1koCD/nFYBP2RxJGMQvQxdyvmZIz+A9kCyGElTm9PcDgBdaHpuLCNZ3x/Mshaf5EfYeAS47K0seGX16OJj2g==}
     engines: {node: '>=22.12.0'}
@@ -3448,6 +3472,18 @@ packages:
         optional: true
       whatsapp-web.js:
         optional: true
+
+  '@theokit/gateway-yuanbao@0.1.0':
+    resolution: {integrity: sha512-B2Cxy8UqoLC3pFzC0RxnuhcCA52vK/jlI8sSxoT7ifzuVzMtGcy5IPzhO6rYw/XWbJWXH5BNL4KFKu1KphJWfA==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/gateway': '>=0.15.0 <1.0.0'
+
+  '@theokit/gateway-zalo@0.1.0':
+    resolution: {integrity: sha512-Dj48yl/HBFk5MN0D7y81tCXYV8ovRFJRkn4j8rB8TzCkAbPbHeEWNeVdG6jSaKEIEN57rlFByd3xPdS5GYXilg==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/gateway': '>=0.12.0 <1.0.0'
 
   '@theokit/gateway@0.15.0':
     resolution: {integrity: sha512-SANAlJr/8QUPjZ90qMxndTYnm4wfa4aBBXeTSSnVmKKRNTuEn3FF4/cqJ6pgfzesZVPuQAu411fL/UqcxeXoJw==}
@@ -11119,7 +11155,23 @@ snapshots:
       '@theokit/gateway': 0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
       '@urbit/aura': 3.0.0
 
+  '@theokit/gateway-wechat@0.1.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
+    dependencies:
+      '@theokit/gateway': 0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
+
+  '@theokit/gateway-wecom@0.1.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
+    dependencies:
+      '@theokit/gateway': 0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
+
   '@theokit/gateway-whatsapp@0.5.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
+    dependencies:
+      '@theokit/gateway': 0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
+
+  '@theokit/gateway-yuanbao@0.1.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
+    dependencies:
+      '@theokit/gateway': 0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
+
+  '@theokit/gateway-zalo@0.1.0(@theokit/gateway@0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
     dependencies:
       '@theokit/gateway': 0.15.0(@theokit/sdk@5.15.3(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
 

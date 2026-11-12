@@ -53,6 +53,10 @@ const PLATFORM_TIERS: Readonly<Record<string, DisplayTier>> = {
   line: 'low',
   email: 'minimal',
   sms: 'minimal',
+  wechat: 'low',
+  wecom: 'low',
+  yuanbao: 'low',
+  zalo: 'low',
 }
 
 /** Platform defaults that differ from the tier's. */

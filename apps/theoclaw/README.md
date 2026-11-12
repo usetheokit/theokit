@@ -216,12 +216,16 @@ otherwise startup skips it and prints `<platform>: not configured (missing ...)`
 | Signal                             | `SIGNAL_ACCOUNT` (the linked number, E.164); optional `SIGNAL_CLI_PATH` (default: `signal-cli` on `PATH`). Owners are written `signal:+<number>`                                                                                                                                                                                                       | none (a `signal-cli jsonRpc` child)                  |
 | iMessage                           | `IMESSAGE_ENABLED=1`; optional `IMESSAGE_CLI_PATH` (default: `imsg` on `PATH`, or a script running `imsg rpc` over ssh), `IMESSAGE_DB_PATH`. macOS only with Messages signed in; refused on other systems. Owners are written `imessage:<handle>`                                                                                                      | none (an `imsg rpc` child)                           |
 | SMS (Twilio)                       | `SMS_TWILIO_ACCOUNT_SID`, `SMS_TWILIO_AUTH_TOKEN`, `SMS_TWILIO_FROM_NUMBER`, `SMS_PUBLIC_URL`                                                                                                                                                                                                                                                          | webhook `/webhooks/sms`                              |
+| WeChat Official Account | `WECHAT_APP_ID`, `WECHAT_APP_SECRET`, `WECHAT_TOKEN` | webhook `/webhooks/wechat`; replies use the customer-service API |
+| WeCom (self-built app) | `WECOM_CORP_ID`, `WECOM_CORP_SECRET`, `WECOM_AGENT_ID`, `WECOM_TOKEN`, `WECOM_ENCODING_AES_KEY` | webhook `/webhooks/wecom` |
+| Yuanbao | `YUANBAO_APP_ID`, `YUANBAO_APP_SECRET`, `YUANBAO_CALLBACK_SECRET` | webhook `/webhooks/yuanbao` |
+| Zalo Official Account | `ZALO_APP_ID`, `ZALO_OA_SECRET_KEY`, `ZALO_ACCESS_TOKEN` | webhook `/webhooks/zalo` |
 
 Names in the table omit the `THEOCLAW_` prefix.
 
 ### Webhooks need a public URL
 
-LINE, WhatsApp, Teams, Google Chat and SMS deliver messages by calling an HTTPS URL, so `THEOCLAW_PORT` has to
+LINE, WhatsApp, Teams, Google Chat, SMS, WeChat, WeCom, Yuanbao and Zalo deliver messages by calling an HTTPS URL, so `THEOCLAW_PORT` has to
 be reachable from the internet. The listener binds `127.0.0.1` by default, so a tunnel is the
 simplest way, for example a Cloudflare named tunnel pointing a stable hostname at
 `http://localhost:$THEOCLAW_PORT`. Binding a public address instead takes `THEOCLAW_HOST` and

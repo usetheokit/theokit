@@ -60,6 +60,10 @@ const PLACEHOLDERS: readonly ConfiguredPlatform[] = [
       publicUrl: 'https://example.org/webhooks/sms',
     },
   },
+  { platform: 'wechat', settings: { appId: 'x', appSecret: 'x', token: 'x' } },
+  { platform: 'wecom', settings: { corpId: 'x', corpSecret: 'x', agentId: '1000002', token: 'x', encodingAesKey: 'a'.repeat(43) } },
+  { platform: 'yuanbao', settings: { appId: 'x', appSecret: 'x', callbackSecret: 'x' } },
+  { platform: 'zalo', settings: { appId: 'x', oaSecretKey: 'x', accessToken: 'x' } },
 ]
 
 describe('adapterBuilders', () => {

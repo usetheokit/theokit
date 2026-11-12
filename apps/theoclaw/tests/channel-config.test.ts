@@ -85,7 +85,7 @@ describe('resolvePlatforms', () => {
     expect(JSON.stringify(resolved.skipped)).not.toContain('bot-token-value')
   })
 
-  it('lists all fourteen platforms', () => {
+  it('lists all eighteen platforms', () => {
     expect(PLATFORMS.map((spec) => spec.platform)).toEqual([
       'telegram',
       'discord',
@@ -100,6 +100,10 @@ describe('resolvePlatforms', () => {
       'signal',
       'imessage',
       'tlon_urbit',
+      'wechat',
+      'wecom',
+      'yuanbao',
+      'zalo',
       'sms',
     ])
   })

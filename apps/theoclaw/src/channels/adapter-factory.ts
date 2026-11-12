@@ -14,7 +14,11 @@ import type { TwilioOptions } from '@theokit/gateway-sms'
 import { TeamsAdapter } from '@theokit/gateway-teams'
 import { TelegramAdapter } from '@theokit/gateway-telegram'
 import { TlonUrbitAdapter } from '@theokit/gateway-tlon-urbit'
+import { WeChatAdapter } from '@theokit/gateway-wechat'
+import { WeComAdapter } from '@theokit/gateway-wecom'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
+import { YuanbaoAdapter } from '@theokit/gateway-yuanbao'
+import { ZaloAdapter } from '@theokit/gateway-zalo'
 
 import { readFileSync } from 'node:fs'
 
@@ -148,7 +152,7 @@ export class GuardedSlackAdapter extends SlackAdapter {
 }
 
 /**
- * The one module that imports the eleven gateway packages: a missing peer or a renamed class fails
+ * The one module that imports the gateway packages: a missing peer or a renamed class fails
  * here and nowhere else. No constructor connects; some validate their options and throw, which
  * fails only that platform's builder.
  */
@@ -182,6 +186,10 @@ const ADAPTERS: AdapterConstructors = {
   imessage: (settings) => new IMessageAdapter(settings),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
+  wechat: (settings) => new WeChatAdapter(settings),
+  wecom: (settings) => new WeComAdapter(settings),
+  yuanbao: (settings) => new YuanbaoAdapter(settings),
+  zalo: (settings) => new ZaloAdapter(settings),
 }
 
 /**

@@ -14,6 +14,8 @@ import { createSmsRoute } from './sms.js'
 import type { SmsRouteAdapter } from './sms.js'
 import { createTeamsRoute } from './teams.js'
 import type { TeamsVerifier } from './teams.js'
+import { createWeixinRoute, createYuanbaoRoute, createZaloRoute } from './weixin-family.js'
+import type { WeixinInbound, YuanbaoInbound, ZaloInbound } from './weixin-family.js'
 import { createWhatsAppRoute } from './whatsapp.js'
 import type { DeliverableWhatsAppAdapter } from './whatsapp.js'
 
@@ -59,6 +61,20 @@ function teamsVerifier(
   } catch (error) {
     write(`teams: the activity verifier could not be built: ${describeError(error)}`)
     return undefined
+  }
+}
+
+function withHandleWebhook<T>(adapter: BasePlatformAdapter): T {
+  if (typeof (adapter as { handleWebhook?: unknown }).handleWebhook !== 'function')
+    throw new Error('the built adapter cannot handle a webhook request')
+  return adapter as unknown as T
+}
+
+/** WeChat and WeCom: a GET answers the server-URL check, a POST carries the message. */
+function weixinWebhook(): WebhookPlatform {
+  return {
+    methods: ['GET', 'POST'],
+    buildRoute: (adapter) => createWeixinRoute(withHandleWebhook<WeixinInbound>(adapter)),
   }
 }
 
@@ -121,6 +137,16 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
           : createTeamsRoute({ verify, adapter, write }),
     }
   },
+  wechat: () => weixinWebhook(),
+  wecom: () => weixinWebhook(),
+  yuanbao: () => ({
+    methods: ['POST'],
+    buildRoute: (adapter) => createYuanbaoRoute(withHandleWebhook<YuanbaoInbound>(adapter)),
+  }),
+  zalo: () => ({
+    methods: ['POST'],
+    buildRoute: (adapter) => createZaloRoute(withHandleWebhook<ZaloInbound>(adapter)),
+  }),
   sms: (settings) => {
     const options = smsOptions(settings)
     return {

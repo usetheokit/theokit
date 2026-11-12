@@ -59,6 +59,11 @@ const UNAUTHENTICATED_BECAUSE = {
   tlon_urbit: null,
   // The Twilio signature proves the request came from Twilio, not who sent the text.
   sms: 'the caller id of a text message',
+  // Each callback is signed (SHA-1 / HMAC / OA MAC) and the sender id comes from the signed body.
+  wechat: null,
+  wecom: null,
+  yuanbao: null,
+  zalo: null,
 } as const satisfies Record<SupportedPlatform, string | null>
 const PLATFORMS = Object.keys(UNAUTHENTICATED_BECAUSE) as SupportedPlatform[]
 const DM_POLICIES: readonly DmPolicy[] = ['pairing', 'allowlist', 'open', 'disabled']

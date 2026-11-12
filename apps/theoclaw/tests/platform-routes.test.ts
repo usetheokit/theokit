@@ -53,6 +53,15 @@ describe('webhookPlatform', () => {
     expect(webhookPlatform({ platform, settings: {} as never }, deps())).toBeUndefined()
   })
 
+  it.each([
+    ['wechat', { appId: 'a', appSecret: 's', token: 't' }, ['GET', 'POST']],
+    ['wecom', { corpId: 'c', corpSecret: 's', agentId: '1', token: 't', encodingAesKey: 'k' }, ['GET', 'POST']],
+    ['yuanbao', { appId: 'a', appSecret: 's', callbackSecret: 'c' }, ['POST']],
+    ['zalo', { appId: 'a', oaSecretKey: 's', accessToken: 't' }, ['POST']],
+  ] as const)('builds the %s route with its methods', (platform, settings, methods) => {
+    expect(webhookPlatform({ platform, settings } as never, deps())?.methods).toEqual(methods)
+  })
+
   it('builds the SMS route for POST only', () => {
     expect(webhookPlatform({ platform: 'sms', settings: SMS_SETTINGS }, deps())?.methods).toEqual(['POST'])
   })
