@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Scratch roots, removed when the file finishes.
@@ -139,5 +139,73 @@ describe('runtimeCredentialState', () => {
     const path = credentialFile('{"provider":"openai","expires":1}')
 
     expect(runtimeCredentialState(path, {}, NOW)).toBe('expired')
+  })
+})
+
+describe('doctorCommand wiring', () => {
+  async function run(
+    setup: () => void,
+  ): Promise<{ out: string; code: number | undefined; unhandled: unknown[] }> {
+    const unhandled: unknown[] = []
+    const onUnhandled = (e: unknown): void => void unhandled.push(e)
+    process.on('unhandledRejection', onUnhandled)
+    let out = ''
+    let code: number | undefined
+    const exit = vi.spyOn(process, 'exit').mockImplementation(((c?: number) => {
+      code = c
+      return undefined as never
+    }) as never)
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(((s: string) => {
+      out += s
+      return true
+    }) as never)
+    try {
+      setup()
+      const { doctorCommand } = await import('../../src/commands/doctor.js')
+      const dir = mkdtempSync(join(tmpdir(), 'theocode-doctor-wire-'))
+      roots.push(dir)
+      writeFileSync(
+        join(dir, '.mcp.json'),
+        JSON.stringify({ mcpServers: { wiredprobe: { command: 'node', args: ['-e', ''] } } }),
+      )
+      await doctorCommand({ json: false, cd: dir })
+      await new Promise((r) => setTimeout(r, 20))
+    } finally {
+      exit.mockRestore()
+      err.mockRestore()
+      process.off('unhandledRejection', onUnhandled)
+    }
+    return { out, code, unhandled }
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.doUnmock('@theocode/agent')
+    vi.resetModules()
+  })
+
+  it('test_the_mcp_row_names_a_server_from_the_projects_mcp_json', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'theocode-doctor-home-'))
+    roots.push(home)
+    const { out, unhandled } = await run(() => {
+      vi.stubEnv('HOME', home)
+      vi.stubEnv('THEOCODE_TRUST_ALL_DIRS', '1')
+      vi.stubEnv('THEOKIT_TRUST_ALL_DIRS', '1')
+    })
+    expect(out).toContain('wiredprobe')
+    expect(unhandled).toEqual([])
+  })
+
+  it('test_a_rejecting_build_is_a_failed_check_and_not_an_unhandled_rejection', async () => {
+    const { out, code, unhandled } = await run(() => {
+      vi.doMock('@theocode/agent', async () => ({
+        ...(await vi.importActual<object>('@theocode/agent')),
+        buildChatAgent: () => Promise.reject(new Error('boom-build')),
+      }))
+    })
+    expect(code).not.toBe(0)
+    expect(code).toBeDefined()
+    expect(out).toContain('boom-build')
+    expect(unhandled).toEqual([])
   })
 })

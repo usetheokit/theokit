@@ -113,7 +113,15 @@ export async function doctorCommand(opts: { json: boolean; cd?: string }): Promi
     agentsMdFiles: [],
     sandboxMode: cfg.sandbox_mode,
   })
-  agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
+  // Awaited: `onWired` fires only after the disk reads inside the build finish, so reading `wired`
+  // earlier reports the placeholder above. A build failure is a failed check, not an unhandled
+  // rejection.
+  let buildFailure: string | undefined
+  try {
+    await agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
+  } catch (err) {
+    buildFailure = err instanceof Error ? err.message : String(err)
+  }
 
   const { AGENT } = await import('@theocode/shared/agent')
   const checks = agent.collectChecks({
@@ -165,7 +173,14 @@ export async function doctorCommand(opts: { json: boolean; cd?: string }): Promi
       : {}),
     wired,
   })
-  const result = agent.diagnose(checks)
+  const result = agent.diagnose(
+    buildFailure === undefined
+      ? checks
+      : [
+          ...checks,
+          { name: 'agent build', status: 'fail', detail: `buildChatAgent failed: ${buildFailure}` },
+        ],
+  )
 
   if (opts.json) process.stdout.write(`${JSON.stringify({ type: 'doctor', ...result })}\n`)
   else process.stderr.write(`${agent.renderDiagnosis(result)}\n`)
