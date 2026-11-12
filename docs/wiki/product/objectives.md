@@ -211,7 +211,7 @@ serves: the capability bar, and the problem it turned out to be hiding.
 ### Amended 2026-10-04: OpenClaw joins the bar
 
 Paulo widened the bar from Hermes to OpenClaw and Hermes. The 106 OpenClaw rows are in
-`.squad/wiki/references/openclaw-capability-inventory.md`, each with the path in OpenClaw's source
+`docs/wiki/references/openclaw-capability-inventory.md`, each with the path in OpenClaw's source
 that shows it. The rule is the one this objective already had for Hermes: a row is shipped or
 declared out, and nothing disappears.
 

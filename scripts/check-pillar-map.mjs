@@ -6,7 +6,7 @@
  *
  * OBJ-8 asks for 33 of 33 framework pillars exercised end to end by TheoClaw or TheoCode on a real
  * model run, or declared out with the reason written. Until this check the 33 names lived in one
- * prose sentence of `.squad/wiki/product/objectives.md` and nothing mapped a pillar to a test, so
+ * prose sentence of `docs/wiki/product/objectives.md` and nothing mapped a pillar to a test, so
  * the count could only be made by eye. `docs/program/pillar-map.json` holds one row per pillar and
  * this script refuses each row that does not answer for its pillar.
  *
@@ -50,7 +50,7 @@ const ROOT = resolve(import.meta.dirname, '..')
 const DEFAULT_MAP = resolve(ROOT, 'docs/program/pillar-map.json')
 const MIN_REASON_WORDS = 8
 
-/** Copied verbatim from `.squad/wiki/product/objectives.md` (OBJ-8); a test holds them in step. */
+/** Copied verbatim from `docs/wiki/product/objectives.md` (OBJ-8); a test holds them in step. */
 const PILLARS = [
   'agents',
   'file-based config',

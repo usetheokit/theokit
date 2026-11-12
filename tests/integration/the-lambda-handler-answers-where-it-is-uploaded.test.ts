@@ -193,7 +193,7 @@ describe('the Lambda handler answers where it is uploaded', () => {
     //
     // Measured 2026-09-29 against the deployed Function URL, with a credential present and the same
     // valid shape: 200 in 2.16s, streaming `delta:"P"` then `delta:"ONG"`. Recorded under
-    // `.squad/records/acceptance/evidence/b347-aws-lambda-agent-after-fix.txt`.
+    // `docs/acceptance/evidence/b347-aws-lambda-agent-after-fix.txt`.
     const agentOut = join(root, 'out-agent')
     mkdirSync(agentOut, { recursive: true })
 

@@ -250,7 +250,7 @@ nothing is done.
 **Amended 2026-10-04: OpenClaw AND Hermes, equal or better.** Paulo, opening the backlog for this
 product: *"criando um sistmea IGUAL OU SUPERIOR AO OpenClaw"*. The bar was Hermes alone; it is now
 both. OpenClaw's surface is inventoried row by row in
-`.squad/wiki/references/openclaw-capability-inventory.md` (106 rows, version `2026.9.8`, measured
+`docs/wiki/references/openclaw-capability-inventory.md` (106 rows, version `2026.9.8`, measured
 2026-10-04), and `objectives.md` OBJ-6 holds the rule every row is judged by: shipped, or declared
 out with the reason written.
 
