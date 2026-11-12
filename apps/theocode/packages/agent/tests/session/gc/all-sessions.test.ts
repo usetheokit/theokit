@@ -65,3 +65,21 @@ describe('B-003 — the plan phase consults the writer lease', () => {
     ).toEqual([])
   })
 })
+
+describe('#1911 — only the SDK’s own temp files are collectable', () => {
+  it('test_a_foreign_old_tmp_file_is_not_a_candidate_but_an_sdk_temp_file_is', async () => {
+    const old = NOW - 60 * DAY
+    const sdkTmp = 'abc.jsonl.1234.0123456789abcdef.tmp'
+    const plan = await planSessionGCAllProjects(
+      options({
+        listProject: () => [
+          { name: 'notes.tmp', isDirectory: false, mtimeMs: old },
+          { name: sdkTmp, isDirectory: false, mtimeMs: old },
+        ],
+      }),
+    )
+
+    expect(plan.candidates.some((c) => c.target.endsWith(sdkTmp))).toBe(true)
+    expect(plan.candidates.some((c) => c.target.endsWith('notes.tmp'))).toBe(false)
+  })
+})
