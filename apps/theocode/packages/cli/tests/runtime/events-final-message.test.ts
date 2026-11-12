@@ -25,9 +25,11 @@ function capture(): { io: ExecIo; out: string[]; err: string[] } {
   return { io: { out: (l) => out.push(l), err: (l) => err.push(l) }, out, err }
 }
 
-const text = (delta: string) => ({ type: 'text-delta' as const, delta })
+const text = (delta: string) => ({ type: 'text-delta' as const, id: 't', delta })
+let callCount = 0
 const toolCall = (toolName: string) => ({
   type: 'tool-input-available' as const,
+  toolCallId: `call_${++callCount}`,
   toolName,
   input: {},
 })
@@ -39,7 +41,7 @@ describe('the preamble is not part of the final message', () => {
 
     p.process(text("I'll read duration.mjs and report briefly."))
     p.process(toolCall('Read'))
-    p.process({ type: 'tool-output-available' })
+    p.process({ type: 'tool-output-available', toolCallId: `call_${callCount}`, output: 'ok' })
     p.process(text('parseDuration converts seconds to milliseconds.'))
     const result = p.finish('finished')
 

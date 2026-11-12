@@ -1,4 +1,10 @@
-import { foldTurnLifecycle, type TurnLifecycle } from '@theokit/presenter'
+import {
+  foldTurnLifecycle,
+  fromWireChunk,
+  type AgentOutputEvent,
+  type TurnLifecycle,
+} from '@theokit/presenter'
+import type { WireChunk } from '@theokit/presenter/wire'
 
 type TurnFold = TurnLifecycle<unknown>
 
@@ -13,16 +19,18 @@ export interface ProcessorResult {
   usage: Record<string, number>
 }
 
-interface ChunkLike {
-  type: string
-  id?: string
-  delta?: string
-  text?: string
-  toolName?: string
-  input?: unknown
-  output?: unknown
-  errorText?: string
-  messageMetadata?: { usage?: Record<string, number> }
+/**
+ * One wire chunk to canonical events, remembering each call's tool name.
+ *
+ * `tool-output-*` carries only `toolCallId`; the name arrives on the earlier input chunk, so the
+ * map is threaded through `fromWireChunk` per processor.
+ */
+function wireTranslator(): (chunk: WireChunk) => AgentOutputEvent[] {
+  const toolNames = new Map<string, string>()
+  return (chunk) => {
+    if (chunk.type === 'tool-input-available') toolNames.set(chunk.toolCallId, chunk.toolName)
+    return fromWireChunk(chunk, toolNames)
+  }
 }
 
 const USAGE_ALIASES: readonly (readonly [output: string, camel: string, snake: string])[] = [
@@ -71,7 +79,7 @@ import { changedPaths } from './changed-paths.js'
 import { turnDiff } from './turn-diff.js'
 
 export interface ExecProcessor {
-  process(chunk: ChunkLike): void
+  process(chunk: WireChunk): void
   finish(
     status: 'finished' | 'error',
     extra?: { usage?: Record<string, number>; error?: string },
@@ -136,36 +144,41 @@ export function createHumanProcessor(
   // #105 — collected as they go past, so the diff at the end is scoped to what THIS turn wrote
   // rather than to whatever the working tree happens to hold.
   const writes: ToolChunk[] = []
-  // Per-chunk handling as a table, mirroring the JSONL twin's `toContentChunk` extraction — the
-  // same chunk vocabulary, dispatched instead of switched, which is what keeps `process` under the
-  // complexity gate here too. A chunk type without a row carries nothing for this surface.
-  const onChunk: Record<string, (chunk: ChunkLike) => void> = {
-    finish: (chunk) => {
-      usage = chunk.messageMetadata?.usage
-    },
-    'text-delta': (chunk) => {
-      message.delta(chunk.delta ?? '')
-    },
-    'tool-input-available': (chunk) => {
+  const translate = wireTranslator()
+  // Per-event handling as a table, mirroring the JSONL twin's `toContentChunk` extraction. An event
+  // type without a row carries nothing for this surface.
+  const onEvent: Record<string, (event: AgentOutputEvent) => void> = {
+    'tool-call': (event) => {
+      if (event.type !== 'tool-call') return
       // The preamble goes out BEFORE the call it announces, which is the order it was written
       // to be read in — and to stderr, where the rest of the progress already goes.
       const preamble = message.cut()
       if (preamble !== undefined) io.err(preamble)
-      io.err(toolLine(chunk))
-      writes.push(chunk)
+      const call = { toolName: event.name, input: event.input }
+      io.err(toolLine(call))
+      writes.push(call)
     },
-    'tool-output-available': () => {
-      io.err(`  done`)
+    'tool-result': (event) => {
+      if (event.type !== 'tool-result') return
+      io.err(event.isError === true ? `  failed: ${String(event.result)}` : `  done`)
     },
-    error: (chunk) => {
+    text: (event) => {
+      if (event.type === 'text') message.delta(event.text)
+    },
+    error: (event) => {
+      if (event.type !== 'error') return
       errorSeen = true
-      io.err(`ERROR: ${chunk.errorText ?? 'unknown'}`)
+      io.err(`ERROR: ${event.message}`)
     },
   }
 
   return {
     process(chunk) {
-      onChunk[chunk.type]?.(chunk)
+      if (chunk.type === 'finish') {
+        usage = (chunk.messageMetadata as { usage?: Record<string, number> } | undefined)?.usage
+        return
+      }
+      for (const event of translate(chunk)) onEvent[event.type]?.(event)
     },
     finish(status, extra) {
       if (status === 'error') {
@@ -193,7 +206,7 @@ function commandEvent(
   kind: 'item.started' | 'item.completed',
   id: string,
   toolName: string | undefined,
-  status: 'in_progress' | 'completed',
+  status: 'in_progress' | 'completed' | 'failed',
 ): unknown {
   return {
     type: kind,
@@ -202,37 +215,28 @@ function commandEvent(
 }
 
 /**
- * Translate one SDK chunk into the fold's vocabulary, or `null` when it carries no lifecycle.
+ * Translate one canonical event into the fold's vocabulary, or `null` when it carries no lifecycle.
  * Part of the Codex JSONL projection — the B-123 rationale lives on `createJsonlProcessor`.
- *
- * Its own function because it answers a different question from the processor: this is where the
- * SDK's words become the fold's, and the processor is where the fold's become Codex's. Keeping the
- * two apart is also what kept `process` under the complexity gate once the fold arrived.
  */
-function toContentChunk(chunk: ChunkLike): Parameters<TurnFold['observe']>[0] | null {
-  // `id` spread conditionally in one place rather than at each call: the optional-property spread
-  // counts as a branch, and repeating it three times is what put this over the complexity gate.
-  const withId = (name: string) => ({
-    ...(chunk.id !== undefined ? { id: chunk.id } : {}),
-    name,
-  })
-
-  switch (chunk.type) {
-    case 'text-delta':
-      return { kind: 'text', delta: chunk.delta ?? '' }
-    case 'tool-input-available':
-      return { kind: 'tool-call', ...withId(chunk.toolName ?? 'tool') }
-    case 'tool-output-available':
-      return { kind: 'tool-result', ...withId(chunk.toolName ?? 'tool') }
+function toContentChunk(event: AgentOutputEvent): Parameters<TurnFold['observe']>[0] | null {
+  switch (event.type) {
+    case 'text':
+      return { kind: 'text', delta: event.text }
+    case 'tool-call':
+      return { kind: 'tool-call', id: event.callId, name: event.name }
+    case 'tool-result':
+      return { kind: 'tool-result', id: event.callId, name: event.name }
     case 'error':
-      return { kind: 'error', message: chunk.errorText ?? 'unknown' }
+      return { kind: 'error', message: event.message }
     default:
       return null
   }
 }
 
 /** The Codex dialect, as constructors the fold calls. This product's words, and only its words. */
-function codexDialect(): Parameters<typeof foldTurnLifecycle<unknown>>[0] {
+function codexDialect(
+  failed: ReadonlySet<string>,
+): Parameters<typeof foldTurnLifecycle<unknown>>[0] {
   return {
     threadStarted: (id) => ({ type: 'thread.started', thread_id: id }),
     turnStarted: () => ({ type: 'turn.started' }),
@@ -243,7 +247,12 @@ function codexDialect(): Parameters<typeof foldTurnLifecycle<unknown>>[0] {
             type: 'item.completed',
             item: { id: 'item_msg', type: 'agent_message', text: item.kind },
           }
-        : commandEvent('item.completed', item.id, item.kind, 'completed'),
+        : commandEvent(
+            'item.completed',
+            item.id,
+            item.kind,
+            failed.has(item.id) ? 'failed' : 'completed',
+          ),
     turnCompleted: (u) => ({
       type: 'turn.completed',
       usage: toCodexUsage(u as Record<string, number> | undefined),
@@ -279,22 +288,31 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
   const message = finalMessage()
   let errorSeen = false
 
-  const turn = foldTurnLifecycle<unknown>(codexDialect(), threadId)
+  // The fold has no failed-result flag yet (#1852), so failed call ids are kept here.
+  const failedCalls = new Set<string>()
+  const translate = wireTranslator()
+  const turn = foldTurnLifecycle<unknown>(codexDialect(failedCalls), threadId)
   for (const event of turn.opened) emit(event)
+
+  const track = (event: AgentOutputEvent): boolean => {
+    if (event.type === 'text') message.delta(event.text)
+    if (event.type === 'tool-call') message.cut()
+    if (event.type === 'tool-result' && event.isError === true) failedCalls.add(event.callId)
+    return event.type === 'error'
+  }
 
   return {
     process(chunk) {
       if (chunk.type === 'finish') {
-        usage = chunk.messageMetadata?.usage
+        usage = (chunk.messageMetadata as { usage?: Record<string, number> } | undefined)?.usage
         return
       }
-      if (chunk.type === 'text-delta') message.delta(chunk.delta ?? '')
-      if (chunk.type === 'tool-input-available') message.cut()
-      if (chunk.type === 'error') errorSeen = true
-
-      const mapped = toContentChunk(chunk)
-      if (mapped === null) return
-      for (const event of turn.observe(mapped)) emit(event)
+      for (const event of translate(chunk)) {
+        if (track(event)) errorSeen = true
+        const mapped = toContentChunk(event)
+        if (mapped === null) continue
+        for (const out of turn.observe(mapped)) emit(out)
+      }
     },
     finish(status, extra) {
       const raw = extra?.usage ?? usage

@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { createJsonlProcessor, type ExecIo } from '../../src/runtime/events.js'
+import { createHumanProcessor, createJsonlProcessor, type ExecIo } from '../../src/runtime/events.js'
 
 function capture() {
   const lines: string[] = []
@@ -97,8 +97,8 @@ describe('createJsonlProcessor — text becomes one message item', () => {
     // like the agent had said nothing.
     const c = capture()
     const p = createJsonlProcessor(c.io, 't')
-    p.process({ type: 'text-delta', delta: 'hel' })
-    p.process({ type: 'text-delta', delta: 'lo' })
+    p.process({ type: 'text-delta', id: 't1', delta: 'hel' })
+    p.process({ type: 'text-delta', id: 't1', delta: 'lo' })
     const result = p.finish('finished')
 
     const message = c.events().find((e) => e['type'] === 'item.completed')
@@ -119,8 +119,8 @@ describe('createJsonlProcessor — tool calls open and close items', () => {
   it('test_a_tool_call_and_its_result_bracket_one_item', () => {
     const c = capture()
     const p = createJsonlProcessor(c.io, 't')
-    p.process({ type: 'tool-input-available', id: 'c1', toolName: 'read' })
-    p.process({ type: 'tool-output-available', id: 'c1', toolName: 'read' })
+    p.process({ type: 'tool-input-available', toolCallId: 'c1', toolName: 'read', input: {} })
+    p.process({ type: 'tool-output-available', toolCallId: 'c1', output: 'ok' })
     p.finish('finished')
 
     expect(types(c.events())).toEqual([
@@ -132,12 +132,53 @@ describe('createJsonlProcessor — tool calls open and close items', () => {
     ])
   })
 
+  it('test_parallel_calls_get_distinct_item_ids', () => {
+    const c = capture()
+    const p = createJsonlProcessor(c.io, 't')
+    p.process({ type: 'tool-input-available', toolCallId: 'a', toolName: 'Read', input: {} })
+    p.process({ type: 'tool-input-available', toolCallId: 'b', toolName: 'Read', input: {} })
+
+    const ids = c
+      .events()
+      .filter((e) => e['type'] === 'item.started')
+      .map((e) => (e['item'] as Record<string, unknown>)['id'])
+    expect(ids).toHaveLength(2)
+    expect(new Set(ids).size).toBe(2)
+  })
+
+  it('test_a_failed_call_completes_as_failed_and_keeps_its_tool_name', () => {
+    const c = capture()
+    const p = createJsonlProcessor(c.io, 't')
+    p.process({ type: 'tool-input-available', toolCallId: 'a', toolName: 'Read', input: {} })
+    p.process({ type: 'tool-input-available', toolCallId: 'b', toolName: 'Read', input: {} })
+    p.process({ type: 'tool-output-error', toolCallId: 'a', errorText: 'ENOENT' })
+    p.process({ type: 'tool-output-available', toolCallId: 'b', output: 'ok' })
+
+    const done = c
+      .events()
+      .filter((e) => e['type'] === 'item.completed')
+      .map((e) => e['item'] as Record<string, unknown>)
+    expect(done).toHaveLength(2)
+    expect(done[0]).toMatchObject({ command: 'Read', status: 'failed' })
+    expect(done[1]).toMatchObject({ command: 'Read', status: 'completed' })
+    expect(done[0]?.['id']).not.toBe(done[1]?.['id'])
+  })
+
+  it('test_the_human_surface_prints_a_failure_line', () => {
+    const err: string[] = []
+    const p = createHumanProcessor({ out: () => {}, err: (l) => err.push(l) }, 's')
+    p.process({ type: 'tool-input-available', toolCallId: 'a', toolName: 'Read', input: {} })
+    p.process({ type: 'tool-output-error', toolCallId: 'a', errorText: 'ENOENT' })
+
+    expect(err).toContain('  failed: ENOENT')
+  })
+
   it('test_an_unmapped_chunk_emits_nothing', () => {
     // The stream carries more than a lifecycle needs. A chunk this dialect does not model must not
     // produce a stray event, which no consumer of the wire could interpret.
     const c = capture()
     const p = createJsonlProcessor(c.io, 't')
-    p.process({ type: 'reasoning-delta', delta: 'thinking' })
+    p.process({ type: 'reasoning-delta', id: 'r1', delta: 'thinking' })
 
     expect(types(c.events())).toEqual(['thread.started', 'turn.started'])
   })
