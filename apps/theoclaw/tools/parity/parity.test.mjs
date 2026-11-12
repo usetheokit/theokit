@@ -8,7 +8,7 @@ import { gate } from './gate.mjs'
 import { redact, runCli, runScenario, secretValues, verdictFor } from './harness.mjs'
 import { chatSetup, missingChatVariables } from './chat-platforms.mjs'
 import { SCENARIOS } from './scenarios.mjs'
-import { configureOpenclaw, missingSubscription } from './openclaw.mjs'
+import { configureOpenclaw, missingSubscription, nodeSupportsOpenclaw, replyFromAgentJson } from './openclaw.mjs'
 import { matrixTransport } from './transport.mjs'
 
 const dirs = []
@@ -202,42 +202,62 @@ describe('chat platforms', () => {
 
 describe('openclaw side', () => {
   const MODEL = 'openai-chatgpt/gpt-5'
-  const loggedIn = () => {
+  const AUTH = join('agents', 'main', 'agent', 'openclaw-agent.sqlite')
+  /** Both logins in a temp dir: theoclaw's `.theokit/auth.json` and OpenClaw's own auth store. */
+  const logins = (openclaw = true) => {
     const dir = mkdtempSync(join(tmpdir(), 'parity-auth-'))
     dirs.push(dir)
     mkdirSync(join(dir, '.theokit'))
     writeFileSync(join(dir, '.theokit', 'auth.json'), '{}')
-    return dir
+    if (openclaw) {
+      mkdirSync(join(dir, 'oc', 'agents', 'main', 'agent'), { recursive: true })
+      writeFileSync(join(dir, 'oc', AUTH), 'db')
+    }
+    return { THEOKIT_AUTH_HOME: dir, OPENCLAW_STATE_DIR: join(dir, 'oc') }
   }
   const out = (lines) => ({ log: (l) => lines.push(l), error: (l) => lines.push(l) })
 
-  it('names the missing login and starts nothing for --side both', async () => {
+  it('names the missing logins and starts nothing for --side both', async () => {
     const lines = []
     const empty = mkdtempSync(join(tmpdir(), 'parity-auth-'))
     dirs.push(empty)
     let started = false
     const run = async () => (started = true)
-    const env = { THEOCLAW_PARITY_MODEL: MODEL, THEOKIT_AUTH_HOME: empty }
+    const env = { THEOCLAW_PARITY_MODEL: MODEL, THEOKIT_AUTH_HOME: empty, OPENCLAW_STATE_DIR: join(empty, 'oc') }
     const code = await runCli(['--id', 'OC-22', '--side', 'both'], { env, run, out: out(lines) })
     expect(code).not.toBe(0)
     expect(started).toBe(false)
-    expect(lines.join('\n')).toContain('subscription login')
+    expect(lines.join('\n')).toContain('theoclaw ChatGPT subscription login')
+    expect(lines.join('\n')).toContain('OpenClaw ChatGPT subscription login')
   })
   it('refuses a model that is not on the subscription route', () => {
-    expect(missingSubscription({ THEOCLAW_PARITY_MODEL: 'm', THEOKIT_AUTH_HOME: loggedIn() }).join()).toContain('openai-chatgpt/')
+    expect(missingSubscription({ THEOCLAW_PARITY_MODEL: 'm', ...logins() }).join()).toContain('openai-chatgpt/')
+  })
+  it('checks the Node version OpenClaw needs', () => {
+    expect(nodeSupportsOpenclaw('v22.23.4')).toBe(false)
+    expect(nodeSupportsOpenclaw('v24.22.0')).toBe(false)
+    expect(nodeSupportsOpenclaw('v24.22.1')).toBe(true)
+    expect(nodeSupportsOpenclaw('v26.13.1')).toBe(true)
+    expect(nodeSupportsOpenclaw('v26.2.0')).toBe(false)
+  })
+  it('takes only the agent reply text from the JSON, not the logs around it', () => {
+    const stdout = 'banner pong\n' + JSON.stringify({ ok: true, result: { payloads: [{ text: 'hello' }] } })
+    expect(replyFromAgentJson(stdout)).toMatchObject({ text: 'hello', failed: false })
+    expect(replyFromAgentJson(JSON.stringify({ ok: false, error: { message: 'pong' } }))).toMatchObject({ text: '', failed: true })
+    expect(replyFromAgentJson('pong, no json').failed).toBe(true)
   })
   it('rejects an unknown side and defaults to theoclaw', async () => {
     const lines = []
     expect(await runCli(['--id', 'OC-22', '--side', 'x'], { env: {}, out: out(lines) })).toBe(2)
     const sides = []
     const run = async (_s, o) => (sides.push(o.side), { verdict: 'works', theoclaw: { verdict: 'works' } })
-    await runCli(['--id', 'OC-22'], { env: { THEOCLAW_PARITY_MODEL: MODEL, THEOKIT_AUTH_HOME: loggedIn() }, run, out: out(lines) })
+    await runCli(['--id', 'OC-22'], { env: { THEOCLAW_PARITY_MODEL: MODEL, ...logins() }, run, out: out(lines) })
     expect(sides).toEqual(['theoclaw'])
   })
   it('writes both verdicts with the same model into one result', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'parity-test-'))
     dirs.push(dir)
-    const env = { PATH: process.env.PATH, THEOCLAW_PARITY_MODEL: MODEL, THEOKIT_AUTH_HOME: loggedIn() }
+    const env = { PATH: process.env.PATH, THEOCLAW_PARITY_MODEL: MODEL, ...logins() }
     const makeTransport = () => ({ async send() {}, awaitReply: async () => ({ text: 'pong', matched: true, failed: false, raw: [] }) })
     const openclawTurn = async () => ({ reply: { text: 'pong', matched: true, failed: false }, version: '1.2.3' })
     await runScenario(SCENARIOS[0], { env, side: 'both', makeTransport, openclawTurn, resultsDir: dir })
@@ -246,24 +266,29 @@ describe('openclaw side', () => {
     expect(result.openclaw).toMatchObject({ verdict: 'works', reply: 'pong', version: '1.2.3', model: MODEL })
     expect(result.theoclaw.version).toBeTruthy()
   })
-  it('keeps the other side when one side is re-run', async () => {
+  it('keeps the other side when one side is re-run, and marks a fresh OpenClaw-only file unmeasured', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'parity-test-'))
     dirs.push(dir)
-    const env = { PATH: process.env.PATH, THEOCLAW_PARITY_MODEL: MODEL, THEOKIT_AUTH_HOME: loggedIn() }
+    const env = { PATH: process.env.PATH, THEOCLAW_PARITY_MODEL: MODEL, ...logins() }
+    const openclawTurn = async () => ({ reply: undefined, version: '1.2.3', error: 'boom' })
+    await runScenario(SCENARIOS[0], { env, side: 'openclaw', openclawTurn, resultsDir: dir })
+    const fresh = JSON.parse(readFileSync(join(dir, 'OC-22.json'), 'utf8'))
+    expect(fresh).toMatchObject({ verdict: 'unmeasured', date: expect.any(String) })
     const makeTransport = () => ({ async send() {}, awaitReply: async () => ({ text: 'pong', matched: true, failed: false, raw: [] }) })
     await runScenario(SCENARIOS[0], { env, makeTransport, resultsDir: dir })
-    const openclawTurn = async () => ({ reply: undefined, version: '1.2.3', error: 'boom' })
     await runScenario(SCENARIOS[0], { env, side: 'openclaw', openclawTurn, resultsDir: dir })
     const result = JSON.parse(readFileSync(join(dir, 'OC-22.json'), 'utf8'))
     expect(result.theoclaw.verdict).toBe('works')
+    expect(result.verdict).toBe('works')
     expect(result.openclaw).toMatchObject({ verdict: 'broken', error: 'boom' })
   })
-  it('configures OpenClaw with the model and seeds the login', () => {
-    const home = mkdtempSync(join(tmpdir(), 'parity-home-'))
-    dirs.push(home)
-    configureOpenclaw(home, { THEOKIT_AUTH_HOME: loggedIn() }, MODEL, 'tok', 1234)
-    const config = JSON.parse(readFileSync(join(home, '.openclaw', 'openclaw.json'), 'utf8'))
+  it('writes the OpenClaw config in the scratch state and copies the OpenClaw login only', () => {
+    const root = mkdtempSync(join(tmpdir(), 'parity-home-'))
+    dirs.push(root)
+    configureOpenclaw(root, logins(), MODEL, 'tok', 1234)
+    const config = JSON.parse(readFileSync(join(root, 'state', 'openclaw.json'), 'utf8'))
     expect(config.agents.defaults.model.primary).toBe(MODEL)
-    expect(readFileSync(join(home, '.theokit', 'auth.json'), 'utf8')).toBe('{}')
+    expect(config.gateway).toMatchObject({ mode: 'local', port: 1234 })
+    expect(readFileSync(join(root, 'state', AUTH), 'utf8')).toBe('db')
   })
 })

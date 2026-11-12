@@ -188,7 +188,8 @@ export async function runScenario(scenario, { env = process.env, side = 'theocla
     blocks.theoclaw = block
   }
   if (side !== 'theoclaw') blocks.openclaw = sideBlock(scenario, await openclawTurn(scenario, { env }), model)
-  const merged = side === 'both' ? { ...base, ...blocks } : { ...previous, ...base, ...blocks }
+  // An OpenClaw-only run on a fresh file has no theoclaw verdict; the gate then reads `unmeasured`, not works.
+  const merged = side === 'both' ? { ...base, ...blocks } : { verdict: 'unmeasured', ...previous, ...base, ...blocks }
   const result = redact(merged, secrets)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`)
@@ -235,7 +236,7 @@ export async function runCli(argv, { out = console, env = process.env, scenarios
     return 2
   }
   // Before either product starts: OpenClaw runs only on the subscription route.
-  const missing = side === 'theoclaw' ? [] : missingSubscription(env)
+  const missing = side === 'theoclaw' ? [] : missingSubscription(env, side)
   if (missing.length > 0) {
     out.error(`parity --side ${side} cannot run, missing: ${missing.join('; ')}`)
     return 2
