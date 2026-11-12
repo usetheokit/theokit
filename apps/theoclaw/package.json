@@ -68,7 +68,7 @@
     "@theokit/http": "workspace:*",
     "@theokit/presenter": "workspace:*",
     "pg": "8.23.0",
-    "@theokit/sdk": "5.15.3",
+    "@theokit/sdk": "5.17.0",
     "@theokit/sdk-tools": "0.29.0",
     "@theokit/tui": "0.80.0",
     "@theokit/ui": "1.13.0",
