@@ -1,5 +1,11 @@
 # create-theo
 
+## 3.0.35
+
+### Patch Changes
+
+- 5831762: The default template pins `@theokit/sdk` at `^5.17.0`, the floor `theokit` now asks for.
+
 ## 3.0.34
 
 ### Patch Changes

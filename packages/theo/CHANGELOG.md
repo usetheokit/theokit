@@ -1,5 +1,13 @@
 # theo
 
+## 0.80.1
+
+### Patch Changes
+
+- 90e7844: The `@theokit/sdk` peer floor is now `^5.17.0`, matching `@theokit/agents`, which needs the SDK's E2B exports.
+- Updated dependencies [24f9a0e]
+  - @theokit/agents@16.5.1
+
 ## 0.80.0
 
 ### Minor Changes
@@ -454,8 +462,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                              [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                              were found and every /api/agents/* route will 404.
+                                                [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
