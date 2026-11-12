@@ -516,9 +516,9 @@ export function forkBeforeUserTurn(
   // exactly that set, so passing it is not extra safety — it is the guard finally being fed.
   forkTranscript(src, dst, {
     beforeRecordIndex: selected.index,
-    liveSessionPaths: [...protectedTranscriptPaths(options.cwd, root).keys()].map((id) =>
-      transcriptPath(root, options.cwd, id),
-    ),
+    // The keys are already transcript paths; mapping them through `transcriptPath` again would
+    // build paths that match nothing and the SDK guard would never fire.
+    liveSessionPaths: [...protectedTranscriptPaths(options.cwd, root).keys()],
   })
   // `selectedText` so a surface can re-seed its composer with what the user typed. Returning only
   // an index forces every consumer to re-read the transcript to learn what it just selected — which
@@ -570,7 +570,12 @@ function reachableUserTurns(src: string): { index: number; text: string }[] {
   // module and is NOT on the `/persistence` surface. Reaching past the published entry to get it
   // would be the boundary violation this whole layer exists to remove — the same one the M67
   // measurement found a consumer committing six times.
-  const records = loadJsonl<TranscriptRecord>(src) as readonly TranscriptRecord[]
+  //
+  // A live transcript can end in a half-written line (the writer is mid-append, or died mid-append).
+  // Tolerate that LAST line only; corruption in the middle of the file still throws.
+  const records = loadJsonl<TranscriptRecord>(src, {
+    tolerateTrailingPartialLine: true,
+  }) as readonly TranscriptRecord[]
 
   // The LAST boundary, not the first: an old transcript can carry several, and only the most recent
   // one describes what the model can still see.
