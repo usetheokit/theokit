@@ -120,6 +120,27 @@ describe('forkBeforeUserTurn', () => {
     )
   })
 
+  it('forkBeforeUserTurn forks a transcript whose last line is torn', () => {
+    const path = transcriptPath(root, cwd, 'torn')
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, `${[record('user', 'a'), record('user', 'b')].join('\n')}\n{"type":"assis`)
+    const { recordIndex, selectedText } = forkBeforeUserTurn('torn', 'torn-fork', 1, { cwd, root })
+    expect(recordIndex).toBe(0)
+    expect(selectedText).toBe('a')
+  })
+
+  it('forkBeforeUserTurn still throws JsonlParseError on a corrupt middle line', () => {
+    const path = transcriptPath(root, cwd, 'corrupt')
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(
+      path,
+      `${[record('user', 'a'), '{"type":"assis', record('user', 'b')].join('\n')}\n`,
+    )
+    expect(() => forkBeforeUserTurn('corrupt', 'corrupt-fork', 1, { cwd, root })).toThrow(
+      /invalid JSON/,
+    )
+  })
+
   it('rejects_src_equal_to_new_id', () => {
     // EC-1 (MUST FIX) — both ids resolve to the SAME path, so a self-fork truncates the source in
     // place. Unreachable while the function always threw; fixing the count is what opens it.
