@@ -4,6 +4,8 @@ Sixteen milestones, one per framework surface, plus delivery milestones (M17 onw
 `.claude/skills/`; a milestone closes when the published packages meet that surface's contract and
 `/acceptance` says so against the released artifact.
 
+**Note, 2026-11-12:** the squad kit that ran this process was removed from the repository. The `.claude/skills/`, `.claude/rules/` and `/acceptance` references below name parts of that kit and are kept as the record of how each milestone was defined. The acceptance evidence now lives under `docs/acceptance/`.
+
 **Revised 2026-08-21: the surfaces are not held to one standard.** Five must reach parity, ten must
 meet a declared minimum contract, one is delisted. The criterion that sorts them is in § Two bands,
 and the measured state each assignment was made from is in the table below it.
@@ -558,11 +560,11 @@ opt-in compatibility surface — TheoCloud is the only end-to-end-validated depl
 **Measured 2026-10-02, which makes the 2026-08-21 sentence above stale:** an agent endpoint now
 answers on the deployed targets. On 2026-09-30 a person deployed one `create-theokit` scaffold to
 `cloudflare`, `vercel`, `netlify`, `aws-lambda` and `deno-deploy` and watched the agent stream on each
-(`.squad/records/acceptance/evidence/every-target-exercised-from-a-scaffold.txt`). On 2026-10-02 the
+(`docs/acceptance/evidence/every-target-exercised-from-a-scaffold.txt`). On 2026-10-02 the
 published `theokit@0.74.2` was run again on `node`, `bun`, `theo-cloud` and `theokit dev` (8/8 checks
 each, the agent streaming), on a real AWS Lambda Function URL (routing, CSRF and agent loading; no
 model key was given to that function), and in Chrome on `node`
-(`.squad/records/acceptance/evidence/published-scaffold-end-to-end-2026-10-02.txt`). No box below is
+(`docs/acceptance/evidence/published-scaffold-end-to-end-2026-10-02.txt`). No box below is
 flipped by this note: that is `/acceptance`'s job against a released tag.
 
 **Definition of done (all must hold):**

@@ -84,6 +84,19 @@ export function isHistoricalRecord(relPath) {
 }
 
 /**
+ * Documents whose citations point at a past run or at another repository.
+ *
+ * `docs/acceptance/` is the evidence of one run on one day and cites the scaffold that run built.
+ * The product wiki under `docs/wiki/` (references, product, decisions) describes OpenClaw, Hermes
+ * and sibling packages by their own paths. These files lived under `.squad/` until 2026-11-12, and
+ * the walk below skips dot-directories, so leaving them out keeps this check's scope where it was.
+ * `docs/wiki/sops/` was always in scope and stays in.
+ */
+export function citesOutsideThisTree(relPath) {
+  return /^docs\/(acceptance|wiki\/(references|product|decisions))\//.test(relPath)
+}
+
+/**
  * The maintenance registry, out of scope for a different reason than the changelog.
  *
  * `BACKLOG.md` is not versioned by this repository — it is a maintainer's working file — and it
@@ -247,6 +260,7 @@ export function collectDocs(root, dir = root, acc = [], tracked = trackedDocs(ro
     } else if (
       entry.name.endsWith('.md') &&
       !isHistoricalRecord(relative(root, full)) &&
+      !citesOutsideThisTree(relative(root, full)) &&
       !isUnversionedRegistry(relative(root, full))
     ) {
       if (tracked === null || tracked.has(full)) acc.push(full)

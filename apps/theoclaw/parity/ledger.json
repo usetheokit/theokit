@@ -45,7 +45,7 @@
     "reason": "OpenClaw does not ship these channels itself, so there is nothing to reach parity with.",
     "declared_by": "human/paulo",
     "declared_on": "2026-10-04",
-    "declared_at": ".squad/wiki/product/objectives.md:225"
+    "declared_at": "docs/wiki/product/objectives.md:225"
   },
   {
     "id": "OC-12",
@@ -87,7 +87,7 @@
     "reason": "Real-time voice over phone and meeting infrastructure is a different product from a messaging assistant.",
     "declared_by": "human/paulo",
     "declared_on": "2026-10-04",
-    "declared_at": ".squad/wiki/product/objectives.md:223"
+    "declared_at": "docs/wiki/product/objectives.md:223"
   },
   {
     "id": "OC-17",
@@ -193,7 +193,7 @@
     "reason": "One instance serves one person, the first non-goal of the product vision, so a team server is out.",
     "declared_by": "human/paulo",
     "declared_on": "2026-10-04",
-    "declared_at": ".squad/wiki/product/objectives.md:224"
+    "declared_at": "docs/wiki/product/objectives.md:224"
   },
   {
     "id": "OC-30",
@@ -277,7 +277,7 @@
     "reason": "Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.",
     "declared_by": "human/paulo",
     "declared_on": "2026-10-04",
-    "declared_at": ".squad/wiki/product/objectives.md:222"
+    "declared_at": "docs/wiki/product/objectives.md:222"
   },
   {
     "id": "OC-39",
@@ -285,7 +285,7 @@
     "reason": "Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.",
     "declared_by": "human/paulo",
     "declared_on": "2026-10-04",
-    "declared_at": ".squad/wiki/product/objectives.md:222"
+    "declared_at": "docs/wiki/product/objectives.md:222"
   },
   {
     "id": "OC-40",
@@ -305,7 +305,7 @@
     "reason": "Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.",
     "declared_by": "human/paulo",
     "declared_on": "2026-10-04",
-    "declared_at": ".squad/wiki/product/objectives.md:222"
+    "declared_at": "docs/wiki/product/objectives.md:222"
   },
   {
     "id": "OC-43",
@@ -313,7 +313,7 @@
     "reason": "Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.",
     "declared_by": "human/paulo",
     "declared_on": "2026-10-04",
-    "declared_at": ".squad/wiki/product/objectives.md:222"
+    "declared_at": "docs/wiki/product/objectives.md:222"
   },
   {
     "id": "OC-44",
@@ -820,7 +820,7 @@
     "reason": "Hibernating when idle solves a cloud cost nobody pays with one self-hosted instance per person.",
     "declared_by": "human/paulo",
     "declared_on": "2026-09-17",
-    "declared_at": ".squad/wiki/product/product-vision.md:243"
+    "declared_at": "docs/wiki/product/product-vision.md:243"
   },
   {
     "id": "H-7",
