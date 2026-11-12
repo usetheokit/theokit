@@ -27,7 +27,10 @@ export async function fakeMcpEventsServer(): Promise<FakeMcpEventsServer> {
       let result: unknown = {}
       if (message.method === 'initialize') result = { protocolVersion: '2025-03-26', capabilities: {}, serverInfo: { name: 'fake', version: '1' } }
       if (message.method === 'events/subscribe') {
-        callbackUrl = message.params?.callbackUrl ?? ''
+        const given = new URL(message.params?.callbackUrl ?? '')
+        // A test double only ever delivers to this machine; refuse any other host rather than fetch it.
+        if (given.hostname !== '127.0.0.1' && given.hostname !== 'localhost') return void res.writeHead(400).end()
+        callbackUrl = given.href
         secret = message.params?.secret ?? ''
         result = { subscriptionId: 'sub-1' }
       }
