@@ -682,7 +682,8 @@ A grant gets read-only tools by default. To give a client tools that change the 
 with `theoclaw mcp-relay grant <name> --tools <tool>,<tool>` and start the instance with
 `THEOCLAW_HOST_TOOLS=on`; without both, those tools stay unavailable.
 
-Not built: a hosted Control UI "connected apps" view, and no run against a real ChatGPT, Claude or Codex connector has been made. The parity ledger has no OC-116 entry because its checker requires ledger ids to match the capability inventory exactly, and the inventory has no OC-116 row.
+Not built: a hosted Control UI "connected apps" view. No run against a real ChatGPT, Claude or
+Codex connector has been made.
 
 ### Terminal UI
 

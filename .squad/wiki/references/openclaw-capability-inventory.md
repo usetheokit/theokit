@@ -124,6 +124,7 @@ run: behaviour is read from code, not exercised.
 | OC-104 | Media | Media understanding | image, audio, video, PDF and link understanding injected into context | src/link-understanding/apply.ts:1 | Observed |
 | OC-105 | Chat UX | Slash commands | /help /status /model /think /reasoning /fast /elevated /compact /new /reset /stop /usage /tts /config /mcp /plugins /skill /learn /loop /goal /steer /export /approve /allowlist /acp and more | src/auto-reply/commands-registry.shared.ts:103-613 | Observed |
 | OC-106 | Chat UX | Typing and reactions | `typingMode`, per-channel `ackReaction` | src/config/zod-schema.core.ts:434 | Observed |
+| OC-116 | Tools | MCP relay | a hosted relay that lets ChatGPT, Claude or Codex reach an instance as an MCP connector, with per-client grants | not read from the openclaw source | Inferred |
 
 ## Not verified
 

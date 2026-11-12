@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Counts OBJ-6's 113 parity rows by machine and names every row nobody has answered.
+ * Counts OBJ-6's 114 parity rows by machine and names every row nobody has answered.
  *
  * B-404. The rows live in two tracked documents: the 106 `| OC-N |` rows of the OpenClaw
  * capability inventory and the 7 rows of the Hermes table in the objectives. The answers live in
