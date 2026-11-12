@@ -657,6 +657,33 @@ pnpm --filter theoclaw run build
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/control-plane.live.test.ts
 ```
 
+### MCP relay (use TheoClaw's tools from ChatGPT, Claude or Codex)
+
+The MCP relay lets a remote MCP client call tools of a running instance without reaching the
+instance's own address. The relay is a small server you run somewhere both sides can reach; the
+instance polls it and answers.
+
+The relay sees tool names and results in clear text. It is a bridge, unlike the end-to-end
+encrypted instance mailbox, so run it on a host you trust and serve it over HTTPS.
+
+1. Run the relay: `theoclaw mcp-relay serve --port 8787 [--host <address>]`. It needs
+   `THEOCLAW_MCP_RELAY_TOKEN` set to the instance token and prints `mcp-relay listening on ...`.
+2. On the instance, set `THEOCLAW_MCP_RELAY_URL` to the relay's address (`https:`, or `http:` on the
+   loopback) and `THEOCLAW_MCP_RELAY_TOKEN` to the same token, for example
+   `THEOCLAW_MCP_RELAY_URL=https://relay.example.com` and `THEOCLAW_MCP_RELAY_TOKEN=<instance-token>`.
+   Setting one without the other stops the start.
+3. Create a grant for each client: `theoclaw mcp-relay grant <name>`. It prints the client token
+   once; store it then. `theoclaw mcp-relay list` shows the grants and
+   `theoclaw mcp-relay revoke <name|id>` ends one.
+4. In ChatGPT, Claude or Codex, add a connector (a custom MCP server) with the URL
+   `https://<relay>/mcp` and the client token from step 3 as the bearer token.
+
+A grant gets read-only tools by default. To give a client tools that change the host, name them
+with `theoclaw mcp-relay grant <name> --tools <tool>,<tool>` and start the instance with
+`THEOCLAW_HOST_TOOLS=on`; without both, those tools stay unavailable.
+
+Not built: a hosted Control UI "connected apps" view. See OC-116 in `parity/ledger.json`.
+
 ### Terminal UI
 
 ```sh
