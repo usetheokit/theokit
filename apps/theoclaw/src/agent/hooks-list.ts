@@ -11,7 +11,7 @@ import { hookFingerprint, parseApprovedHooks } from './hook-approval.js'
 /**
  * `theoclaw hooks list` (OC-87): one line per command hook in `<workspace>/.theokit/settings.json`,
  * `<event>\t<fingerprint>\tapproved|not approved`, the fingerprint being the one
- * `THEOCLAW_APPROVED_HOOKS` accepts. A hook with no `timeout` takes 30000 ms.
+ * `THEOCLAW_APPROVED_HOOKS` accepts. A hook's `timeout` is in seconds (the SDK multiplies it by 1000); with none it takes 30000 ms.
  */
 export interface HooksIo {
   readonly env: NodeJS.ProcessEnv
@@ -54,7 +54,7 @@ export function hooksCommand(args: readonly string[], io: HooksIo): number {
         if (!Array.isArray(entries)) continue
         for (const entry of entries as unknown[]) {
           if (!isRecord(entry) || entry.type !== 'command' || typeof entry.command !== 'string') continue
-          const timeoutMs = typeof entry.timeout === 'number' && entry.timeout > 0 ? entry.timeout : DEFAULT_TIMEOUT_MS
+          const timeoutMs = typeof entry.timeout === 'number' && entry.timeout > 0 ? Math.round(entry.timeout * 1000) : DEFAULT_TIMEOUT_MS
           const fingerprint = hookFingerprint({ sourceEvent: event, command: entry.command, timeoutMs })
           lines.push(`${event}\t${fingerprint}\t${approved.has(fingerprint) ? 'approved' : 'not approved'}\n`)
         }

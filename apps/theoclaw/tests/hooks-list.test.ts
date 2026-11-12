@@ -41,7 +41,7 @@ describe('theoclaw hooks list', () => {
   })
 
   it('uses the hook timeout in the fingerprint', async () => {
-    const workspace = workspaceWith({ hooks: { Stop: [hook('touch x', 5000)] } })
+    const workspace = workspaceWith({ hooks: { Stop: [hook('touch x', 5)] } })
     const { out } = await run(['hooks', 'list'], workspace)
     expect(out).toContain(hookFingerprint({ sourceEvent: 'Stop', command: 'touch x', timeoutMs: 5000 }))
   })
