@@ -51,6 +51,12 @@ const PLATFORM_VARIABLES = {
     ship: 'THEOCLAW_TLON_URBIT_SHIP',
     code: 'THEOCLAW_TLON_URBIT_CODE',
   },
+  sms: {
+    accountSid: 'THEOCLAW_SMS_TWILIO_ACCOUNT_SID',
+    authToken: 'THEOCLAW_SMS_TWILIO_AUTH_TOKEN',
+    fromNumber: 'THEOCLAW_SMS_TWILIO_FROM_NUMBER',
+    publicUrl: 'THEOCLAW_SMS_PUBLIC_URL',
+  },
   wechat: { appId: 'THEOCLAW_WECHAT_APP_ID', appSecret: 'THEOCLAW_WECHAT_APP_SECRET', token: 'THEOCLAW_WECHAT_TOKEN' },
   wecom: {
     corpId: 'THEOCLAW_WECOM_CORP_ID',
@@ -68,12 +74,6 @@ const PLATFORM_VARIABLES = {
     appId: 'THEOCLAW_ZALO_APP_ID',
     oaSecretKey: 'THEOCLAW_ZALO_OA_SECRET_KEY',
     accessToken: 'THEOCLAW_ZALO_ACCESS_TOKEN',
-  },
-  sms: {
-    accountSid: 'THEOCLAW_SMS_TWILIO_ACCOUNT_SID',
-    authToken: 'THEOCLAW_SMS_TWILIO_AUTH_TOKEN',
-    fromNumber: 'THEOCLAW_SMS_TWILIO_FROM_NUMBER',
-    publicUrl: 'THEOCLAW_SMS_PUBLIC_URL',
   },
 } as const satisfies Partial<Record<PlatformName, Readonly<Record<string, string>>>>
 

@@ -161,6 +161,10 @@ describe('isAuthenticatedSender', () => {
     expect(isAuthenticatedSender('sms')).toBe(false)
   })
 
+  it('trusts the signed-webhook platforms wechat, wecom, yuanbao and zalo', () => {
+    for (const platform of ['wechat', 'wecom', 'yuanbao', 'zalo']) expect(isAuthenticatedSender(platform), platform).toBe(true)
+  })
+
   it('refuses a platform it does not know, rather than trusting it', () => {
     expect(isAuthenticatedSender('carrier-pigeon')).toBe(false)
     expect(isAuthenticatedSender('')).toBe(false)

@@ -85,8 +85,8 @@ describe('resolvePlatforms', () => {
     expect(JSON.stringify(resolved.skipped)).not.toContain('bot-token-value')
   })
 
-  it('lists all eighteen platforms', () => {
-    expect(PLATFORMS.map((spec) => spec.platform)).toEqual([
+  it('lists all fourteen platforms', () => {
+    expect(PLATFORMS.map((spec) => spec.platform).slice(0, 14)).toEqual([
       'telegram',
       'discord',
       'slack',
@@ -100,12 +100,14 @@ describe('resolvePlatforms', () => {
       'signal',
       'imessage',
       'tlon_urbit',
-      'wechat',
-      'wecom',
-      'yuanbao',
-      'zalo',
       'sms',
     ])
+  })
+
+  it('lists wechat, wecom, yuanbao and zalo after the first fourteen', () => {
+    const names = PLATFORMS.map((spec) => spec.platform)
+    expect(names).toHaveLength(18)
+    expect(names.slice(14)).toEqual(['wechat', 'wecom', 'yuanbao', 'zalo'])
   })
 
   it('hands a configured platform the settings its adapter reads', () => {

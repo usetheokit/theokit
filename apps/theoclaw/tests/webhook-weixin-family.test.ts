@@ -99,3 +99,24 @@ describe('Zalo route', () => {
     expect(events).toHaveLength(1)
   })
 })
+
+describe('oversize bodies and wrong methods', () => {
+  const big = 'x'.repeat(1024 * 1024 + 1)
+  const never = { handleWebhook: async () => ({ status: 200 }) }
+
+  it('refuses an oversize body with 413 on every route', async () => {
+    const post = () => new Request('http://x/w?a=b', { method: 'POST', body: big })
+    expect((await createWeixinRoute(never as never)(post())).status).toBe(413)
+    expect((await createYuanbaoRoute(never as never)(post())).status).toBe(413)
+    expect((await createZaloRoute(never as never)(post())).status).toBe(413)
+  })
+
+  it('does not route a GET on the POST-only platforms', async () => {
+    const { webhookPlatform } = await import('../src/webhooks/platform-routes.js')
+    const deps = { write: () => undefined, verifierFactory: () => async () => ({ ok: false }) as never }
+    const yuanbao = webhookPlatform({ platform: 'yuanbao', settings: { appId: 'a', appSecret: 's', callbackSecret: 'c' } }, deps)
+    const zalo = webhookPlatform({ platform: 'zalo', settings: { appId: 'a', oaSecretKey: 's', accessToken: 't' } }, deps)
+    expect(yuanbao?.methods).not.toContain('GET')
+    expect(zalo?.methods).not.toContain('GET')
+  })
+})
