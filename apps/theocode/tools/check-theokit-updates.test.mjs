@@ -12,7 +12,13 @@
  * prerelease has already said which channel it tracks, and asking it to say so twice is a second
  * place to drift.
  */
-import { describe, expect, it } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { channelFor, publishedFor } from './check-theokit-updates.mjs'
 
@@ -56,5 +62,65 @@ describe('#73 — the version a row compares against', () => {
     // A version with no channel beside it is the ambiguity that produced this issue: the row said
     // 4.63.4 and the reader could not tell which question it answered.
     expect(publishedFor('5.0.0-next.1', tags).channel).toBe('next')
+  })
+})
+
+/**
+ * #1898 — a `workspace:` declaration is a link to this monorepo, not a registry pin.
+ *
+ * The script finds its root from its own location, so it is copied into a throwaway tree with a
+ * manifest, an installed copy of each package, and a fake `npm` that answers the dist-tags query.
+ */
+describe('#1898 — workspace links are not compared with the registry', () => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const dirs = []
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+  })
+
+  function run(dependencies, installed, published) {
+    const root = mkdtempSync(join(tmpdir(), 'theokit-updates-'))
+    dirs.push(root)
+    mkdirSync(join(root, 'tools'))
+    mkdirSync(join(root, 'packages'))
+    mkdirSync(join(root, 'bin'))
+    copyFileSync(join(here, 'check-theokit-updates.mjs'), join(root, 'tools', 'check-theokit-updates.mjs'))
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies }))
+    for (const [name, version] of Object.entries(installed)) {
+      const dir = join(root, 'node_modules', ...name.split('/'))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version }))
+    }
+    const npm = join(root, 'bin', 'npm')
+    writeFileSync(
+      npm,
+      `#!/bin/sh\ncase "$2" in\n${Object.entries(published)
+        .map(([n, v]) => `${n}) echo '{"latest":"${v}"}';;`)
+        .join('\n')}\n*) exit 1;;\nesac\n`,
+    )
+    chmodSync(npm, 0o755)
+    return spawnSync(process.execPath, [join(root, 'tools', 'check-theokit-updates.mjs'), '--json'], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}` },
+    })
+  }
+
+  it('does not count a workspace link as behind when the local version is ahead of the registry', () => {
+    const res = run({ '@theokit/agents': 'workspace:*' }, { '@theokit/agents': '2.0.0' }, { '@theokit/agents': '1.0.0' })
+    const report = JSON.parse(res.stdout)
+    expect(res.status).toBe(0)
+    expect(report.rows).toEqual([])
+    expect(report.workspaceLinks).toEqual(['@theokit/agents'])
+  })
+
+  it('still exits 1 for a registry pin that is behind', () => {
+    const res = run(
+      { '@theokit/agents': 'workspace:*', '@theokit/sdk': '5.15.3' },
+      { '@theokit/agents': '2.0.0', '@theokit/sdk': '5.15.3' },
+      { '@theokit/agents': '1.0.0', '@theokit/sdk': '5.16.0' },
+    )
+    const report = JSON.parse(res.stdout)
+    expect(res.status).toBe(1)
+    expect(report.rows.map((r) => r.name)).toEqual(['@theokit/sdk'])
   })
 })

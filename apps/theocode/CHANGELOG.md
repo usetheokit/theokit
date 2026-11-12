@@ -118,6 +118,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Fixed
 
+- **`deps:theokit` no longer reads a `workspace:*` link as a registry pin.** Between a version bump and its publish the local version is ahead of the registry, so the link read as behind and the staleness report would have opened an issue for it. Workspace links are now left out of the comparison and listed on their own line. (#1898)
 - An architecture review reported `sessionAndScreen` at cyclomatic complexity 49 — the worst hotspot of its run, double the next entry. It does not exist. `lizard` reads TypeScript with a JavaScript tokenizer that merges adjacent functions when a signature carries type annotations, and it had absorbed seven siblings; the real function is 66 lines with a 7-case switch. Nothing in this repository needed changing: `eslint.config.mjs:50` already sets `complexity: ['error', 10]` at the consensus McCabe threshold, it runs in `npm run lint`, and it reports the file clean. Verified that the rule genuinely engages rather than silently skipping the file — lowered to 3 it fires seven times. The recommendation the review made to this project was for a gate that was already here; the defect and its fix belong to the auditing plugin, which now refuses to present a merged measurement as citable.
 
 ### Added
