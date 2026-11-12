@@ -516,9 +516,9 @@ export function forkBeforeUserTurn(
   // exactly that set, so passing it is not extra safety — it is the guard finally being fed.
   forkTranscript(src, dst, {
     beforeRecordIndex: selected.index,
-    liveSessionPaths: [...protectedTranscriptPaths(options.cwd, root).keys()].map((id) =>
-      transcriptPath(root, options.cwd, id),
-    ),
+    // The keys are already transcript paths; mapping them through `transcriptPath` again would
+    // build paths that match nothing and the SDK guard would never fire.
+    liveSessionPaths: [...protectedTranscriptPaths(options.cwd, root).keys()],
   })
   // `selectedText` so a surface can re-seed its composer with what the user typed. Returning only
   // an index forces every consumer to re-read the transcript to learn what it just selected — which
