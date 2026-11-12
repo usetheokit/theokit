@@ -59,7 +59,8 @@ not from `status`, because the SDK reports every finished call as `completed`. A
 exit code is not a failure.
 
 `fromWireChunk` is the other door — from the transport wire into the canonical event, which is what
-a client-side surface receives. `fromInteractionUpdate` covers interactive runs.
+a client-side surface receives. `createWireReader()` wraps it with the state a stream needs: it keeps
+the call-name map and attaches the `data-error-code` code (`WIRE_ERROR_CODE_PART`) to the next `error` event. `fromInteractionUpdate` covers interactive runs.
 
 A `Presenter<TOut>` is `surface` + `present(event)`, with optional `start()` / `finish()` framing for
 stateful surfaces. `UIMessageStreamPresenter` holds open-block state and is therefore instantiated

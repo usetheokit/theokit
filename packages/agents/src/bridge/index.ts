@@ -127,7 +127,7 @@ export {
   type ToolInvokeRouteOptions,
 } from './tool-invoke-route.js'
 export { BodyTooLargeError, MAX_REQUEST_BODY_BYTES, readCappedBody } from './read-capped-body.js'
-export { presentUIMessageStream } from './present-ui-message-stream.js'
+export { ERROR_CODE_DATA_PART, presentUIMessageStream } from './present-ui-message-stream.js'
 // B-376 — the `run.events()` timeline translator, so a consumer that streams live text deltas
 // translates them with the code `sdk-adapter.ts` uses rather than a copy (REQ-7).
 export {

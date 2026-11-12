@@ -11,6 +11,7 @@ export {
   WIRE_APPROVAL_DETAIL_PART,
   WIRE_CHUNK_TYPES,
   WIRE_DATA_PART_PREFIX,
+  WIRE_ERROR_CODE_PART,
   wireChunkSchema,
   type WireChunk,
   type WireDataPart,

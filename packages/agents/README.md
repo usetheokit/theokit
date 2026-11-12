@@ -34,7 +34,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | Subpath | What lives there |
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
-| `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals |
+| `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
 | `./testing` | Test seams: compiled-agent inspection, mock streams |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |

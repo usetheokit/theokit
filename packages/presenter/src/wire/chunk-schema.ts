@@ -196,3 +196,12 @@ export const WIRE_DATA_PART_PREFIX = 'data-'
  * string literal by coincidence is how a wire silently stops carrying something.
  */
 export const WIRE_APPROVAL_DETAIL_PART = 'data-approval'
+
+/**
+ * The `data-*` part carrying a failed turn's error `code`, emitted just before the `error` frame.
+ *
+ * `{ type: 'data-error-code', data: { code } }`. The code cannot ride on the `error` chunk itself
+ * (`ai`'s strict schema rejects extra keys), so it travels as its own part. Exported so the
+ * producer (`@theokit/agents`) and the reader (`createWireReader`) name it once.
+ */
+export const WIRE_ERROR_CODE_PART = 'data-error-code'
