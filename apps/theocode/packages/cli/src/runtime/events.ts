@@ -1,4 +1,9 @@
-import { foldTurnLifecycle, fromWireChunk, type TurnLifecycle } from '@theokit/presenter'
+import {
+  foldTurnLifecycle,
+  fromWireChunk,
+  type AgentOutputEvent,
+  type TurnLifecycle,
+} from '@theokit/presenter'
 import type { WireChunk } from '@theokit/presenter/wire'
 
 type TurnFold = TurnLifecycle<unknown>
@@ -68,7 +73,6 @@ function blendedTotal(u: Record<string, number>): number {
   return nonCachedInput + Math.max(0, u.output_tokens ?? 0)
 }
 
-import type { AgentOutputEvent } from '@theokit/presenter'
 import { toolLine } from './tool-line.js'
 import type { ToolChunk } from './tool-line.js'
 import { changedPaths } from './changed-paths.js'
@@ -168,13 +172,6 @@ export function createHumanProcessor(
     },
   }
 
-  const track = (event: ReturnType<ReturnType<typeof wireTranslator>>[number]): boolean => {
-    if (event.type === 'text') message.delta(event.text)
-    if (event.type === 'tool-call') message.cut()
-    if (event.type === 'tool-result' && event.isError === true) failedCalls.add(event.callId)
-    return event.type === 'error'
-  }
-
   return {
     process(chunk) {
       if (chunk.type === 'finish') {
@@ -237,7 +234,9 @@ function toContentChunk(event: AgentOutputEvent): Parameters<TurnFold['observe']
 }
 
 /** The Codex dialect, as constructors the fold calls. This product's words, and only its words. */
-function codexDialect(failed: ReadonlySet<string>): Parameters<typeof foldTurnLifecycle<unknown>>[0] {
+function codexDialect(
+  failed: ReadonlySet<string>,
+): Parameters<typeof foldTurnLifecycle<unknown>>[0] {
   return {
     threadStarted: (id) => ({ type: 'thread.started', thread_id: id }),
     turnStarted: () => ({ type: 'turn.started' }),
@@ -294,6 +293,13 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
   const translate = wireTranslator()
   const turn = foldTurnLifecycle<unknown>(codexDialect(failedCalls), threadId)
   for (const event of turn.opened) emit(event)
+
+  const track = (event: AgentOutputEvent): boolean => {
+    if (event.type === 'text') message.delta(event.text)
+    if (event.type === 'tool-call') message.cut()
+    if (event.type === 'tool-result' && event.isError === true) failedCalls.add(event.callId)
+    return event.type === 'error'
+  }
 
   return {
     process(chunk) {
