@@ -1,6 +1,6 @@
 import { mkdtempSync } from 'node:fs'
 import { createServer } from 'node:http'
-import type { AddressInfo } from 'node:net'
+import type { AddressInfo, Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -19,10 +19,21 @@ async function relayServer() {
       setTimeout(() => res.writeHead(200).end(JSON.stringify({ jobs: [] })), 20)
     })
   })
+  const sockets = new Set<Socket>()
+  server.on('connection', (socket) => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
     polls: () => polls,
+    /** Drops every connection and resolves once all are closed, so no request can still land. */
+    settled: async () => {
+      const open = [...sockets].map((socket) => new Promise<void>((r) => socket.once('close', () => r())))
+      server.closeAllConnections()
+      await Promise.all(open)
+    },
     close: () => new Promise<void>((r) => (server.closeAllConnections(), server.close(() => r()))),
   }
 }
@@ -46,10 +57,10 @@ describe('the MCP relay in the composition', () => {
     expect(on.output()).toContain('mcp-relay: connected')
     expect(on.output()).not.toContain(TOKEN)
     await stop(on)
+    await relay.settled()
     const seen = relay.polls()
-    await new Promise((r) => setTimeout(r, 80))
-    expect(relay.polls()).toBe(seen)
     await relay.close()
+    expect(relay.polls()).toBe(seen)
   })
 
   it('refuses a plain-http remote URL, naming the variable', async () => {
