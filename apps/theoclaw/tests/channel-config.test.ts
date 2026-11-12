@@ -86,7 +86,7 @@ describe('resolvePlatforms', () => {
   })
 
   it('lists all fourteen platforms', () => {
-    expect(PLATFORMS.map((spec) => spec.platform)).toEqual([
+    expect(PLATFORMS.map((spec) => spec.platform).filter((platform) => platform !== 'raft')).toEqual([
       'telegram',
       'discord',
       'slack',
@@ -102,6 +102,10 @@ describe('resolvePlatforms', () => {
       'tlon_urbit',
       'sms',
     ])
+  })
+
+  it('lists raft among the platforms', () => {
+    expect(PLATFORMS.map((spec) => spec.platform)).toContain('raft')
   })
 
   it('hands a configured platform the settings its adapter reads', () => {

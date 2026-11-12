@@ -9,6 +9,7 @@ import { MattermostAdapter } from '@theokit/gateway-mattermost'
 import { IMessageAdapter } from '@theokit/gateway-imessage'
 import { SlackAdapter } from '@theokit/gateway-slack'
 import { SignalAdapter } from '@theokit/gateway-signal'
+import { RaftAdapter } from '@theokit/gateway-raft'
 import { SMSAdapter } from '@theokit/gateway-sms'
 import type { TwilioOptions } from '@theokit/gateway-sms'
 import { TeamsAdapter } from '@theokit/gateway-teams'
@@ -148,7 +149,7 @@ export class GuardedSlackAdapter extends SlackAdapter {
 }
 
 /**
- * The one module that imports the eleven gateway packages: a missing peer or a renamed class fails
+ * The one module that imports the gateway packages: a missing peer or a renamed class fails
  * here and nowhere else. No constructor connects; some validate their options and throw, which
  * fails only that platform's builder.
  */
@@ -180,6 +181,7 @@ const ADAPTERS: AdapterConstructors = {
   google_chat: (settings) => new GoogleChatAdapter(googleChatOptions(settings)),
   signal: (settings) => new NumberKeyedSignalAdapter(settings),
   imessage: (settings) => new IMessageAdapter(settings),
+  raft: (settings) => new RaftAdapter(settings),
   tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }

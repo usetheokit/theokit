@@ -17,6 +17,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A Raft platform: `THEOCLAW_RAFT_ENABLED=1` wakes the agent from the Raft CLI (`raft wake --json`) and replies through `raft reply`, using `@theokit/gateway-raft` 0.1.0 from `theokit-gateways`; optional `THEOCLAW_RAFT_CLI_PATH`. Not yet run against a real Raft account. (OC-126, #1544)
 - `theoclaw hooks list` prints each project hook in `.theokit/settings.json` with its event, its fingerprint and whether `THEOCLAW_APPROVED_HOOKS` approves it. (OC-87, #1615)
 - A test runs `theoclaw skills publish`, `search` and `install` against the reference registry and shows the installed skill is offered on the next turn of an open session. (OC-72, #1586)
 - `THEOCLAW_ACK_REACTION=👀` reacts to each inbound message when its turn starts, through the adapter's `react` method; the gateway packages are raised to the releases that ship typing and reactions on Discord, Slack and Matrix (Teams still has no typing indicator). (#1542)
