@@ -38,6 +38,25 @@ describe('a managed policy', () => {
     )
   })
 
+  // #1907 — the security floor recomputed these two keys without the managed layer and overwrote it.
+  describe.each([
+    ['sandbox_mode', 'read-only', 'danger-full-access'],
+    ['approval_policy', 'untrusted', 'never'],
+  ] as const)('%s', (key, managedValue, looseValue) => {
+    it.each(['user', 'project', 'env', 'cli'] as const)(
+      'is not overridden by the %s layer',
+      (layer) => {
+        const resolved = resolveConfig({
+          managed: { [key]: managedValue, model: 'm/x' },
+          [layer]: { [key]: looseValue },
+        })
+
+        expect(resolved[key]).toBe(managedValue)
+        expect(resolved.model).toBe('m/x')
+      },
+    )
+  })
+
   it('test_without_one_nothing_changes', () => {
     // The control: a machine with no managed file must resolve exactly as it did before, or this tier
     // would quietly become a new source of defaults.

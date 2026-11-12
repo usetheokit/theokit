@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Security
+- **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
+
 ### Fixed
 - **Session cleanup deletes only the SDK's own temp files.** The collector treated any old `*.tmp` file in a session directory as its own; it now matches only the `<file>.<pid>.<16 hex>.tmp` names the SDK's atomic writer leaves, so `notes.tmp` or an editor swap file is left alone. (#1911)
 - **Headless `exec` keeps parallel and failed tool calls apart.** The processors keyed tool calls by an `id` the wire never carries, so parallel calls shared one JSONL item id, and a `tool-output-error` produced no `item.completed` and no line on stderr. Chunks now go through `fromWireChunk`: each call has its own id, a failed call completes with `status: "failed"` and prints `failed: <error>`, and the completed item keeps the tool name. (#1891)
