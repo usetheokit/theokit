@@ -775,6 +775,11 @@
     "note": "not shipped, no live check run: a typing indicator is shown through the adapter's startTyping/stopTyping while a turn or /goal runs (offline tests only); typingMode and per-channel ackReaction are not built, the installed @theokit/gateway has no reaction API"
   },
   {
+    "id": "OC-116",
+    "status": "open",
+    "reason": "not shipped, no live check run: the hosted MCP relay (theoclaw mcp-relay serve|grant|list|revoke) with per-client grants, read-only by default, and the instance connector via THEOCLAW_MCP_RELAY_URL and THEOCLAW_MCP_RELAY_TOKEN are implemented with offline tests only; no real ChatGPT, Claude or Codex client and no real-model run has been made; the relay sees tool names and results in clear text; a hosted Control UI 'connected apps' view is not built"
+  },
+  {
     "id": "H-1",
     "status": "shipped",
     "check": {

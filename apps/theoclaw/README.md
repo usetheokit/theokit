@@ -578,6 +578,46 @@ LD_LIBRARY_PATH=~/.cache/chromium-user-libs PLAYWRIGHT_BROWSERS_PATH=~/.cache/ms
   pnpm --filter theoclaw exec vitest run tests/live/browser.live.test.ts
 ```
 
+### MCP relay
+
+The MCP relay lets a remote MCP client (ChatGPT, Claude, Codex) call an instance's tools without a
+route into the instance. The instance polls the relay; the client posts to it. The commands are
+`theoclaw mcp-relay serve|grant|list|revoke`; the sections below say what each does.
+
+**The relay is a bridge, not a vault.** It sees tool names, arguments and results in clear text.
+Unlike the end-to-end encrypted instance mailbox relay, nothing is encrypted to the instance.
+Run it on a host you trust and put TLS in front of it.
+
+1. Run the relay on the host that clients can reach:
+
+   ```bash
+   THEOCLAW_MCP_RELAY_TOKEN=<instance-token> theoclaw mcp-relay serve --port 8788 [--host 0.0.0.0]
+   ```
+
+   `THEOCLAW_MCP_RELAY_TOKEN` guards `/instance/poll` and `/instance/respond`; the start refuses
+   without it. The relay serves `POST /mcp` for clients.
+
+2. On the instance, set `THEOCLAW_MCP_RELAY_URL` to the relay's address (`https://<relay>`) and
+   `THEOCLAW_MCP_RELAY_TOKEN` to the same token.
+
+3. Create a grant for each client (run it where the relay keeps its grants):
+
+   ```bash
+   theoclaw mcp-relay grant <name> [--tools a,b]
+   theoclaw mcp-relay list
+   theoclaw mcp-relay revoke <name|id>
+   ```
+
+   `grant` prints the client token once; only its hash is stored. `revoke` stops that client.
+
+4. In ChatGPT, Claude or Codex, add a connector (a remote MCP server) with the URL
+   `https://<relay>/mcp` and the client token as its bearer token.
+
+A grant without `--tools` gets read-only tools only (`list_dir`, `read_file`). A host-changing tool
+(for example `shell_exec` or `write_file`) needs both an explicit `--tools` naming it and
+`THEOCLAW_HOST_TOOLS=on` on the instance. There is no hosted Control UI "connected apps" view yet.
+Parity row OC-116 stays open (see `parity/ledger.json`).
+
 ### MCP servers and ACP agents
 
 `THEOCLAW_PROVIDERS` registers OpenAI-compatible providers (Particle, a Neon AI Gateway branch URL, any
