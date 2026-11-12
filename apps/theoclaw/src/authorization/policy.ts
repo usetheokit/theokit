@@ -59,7 +59,8 @@ const UNAUTHENTICATED_BECAUSE = {
   raft: null,
   // The adapter answers only allowlisted authors (or guests under a daily cap); messages carry the author's X id.
   x: null,
-  // Each of these signs its webhook and names the sender by a platform id.
+  // Each signs its webhook and names the sender by a platform id. Unverified against real accounts
+  // (the packages say so); Yuanbao's header names are the package's own assumption.
   wechat: null,
   wecom: null,
   yuanbao: null,

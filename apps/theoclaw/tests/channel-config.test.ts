@@ -85,7 +85,7 @@ describe('resolvePlatforms', () => {
     expect(JSON.stringify(resolved.skipped)).not.toContain('bot-token-value')
   })
 
-  it('lists all nineteen platforms', () => {
+  it('lists every platform except raft and x, in start order', () => {
     expect(PLATFORMS.map((spec) => spec.platform).filter((platform) => platform !== 'raft' && platform !== 'x')).toEqual([
       'telegram',
       'discord',
@@ -109,7 +109,7 @@ describe('resolvePlatforms', () => {
     ])
   })
 
-  it('runs the Chinese and Vietnamese platforms from their variables, masking every value', () => {
+  it('runs WeChat from its variables, masking every value, and skips QQ missing its secret', () => {
     const resolved = resolvePlatforms({
       THEOCLAW_WECHAT_APP_ID: 'wx1',
       THEOCLAW_WECHAT_APP_SECRET: ' s1 ',
