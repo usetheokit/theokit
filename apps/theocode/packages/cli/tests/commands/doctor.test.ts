@@ -25,7 +25,12 @@ afterAll(() => {
   for (const r of roots) rmSync(r, { recursive: true, force: true })
 })
 
-import { credentialState, doctorCwd, runtimeCredentialState } from '../../src/commands/doctor.js'
+import { parseExecArgs } from '../../src/runtime/args.js'
+import {
+  credentialState,
+  resolveDoctorTarget,
+  runtimeCredentialState,
+} from '../../src/commands/doctor.js'
 
 const NOW = 1_700_000_000_000
 
@@ -144,31 +149,32 @@ describe('runtimeCredentialState', () => {
 
 describe('#1895 — doctor honours -c/--sandbox and applies -C once', () => {
   it('test_sandbox_override_beats_the_user_file', async () => {
-    const { resolveEffectiveConfig } = await import('@theocode/agent/config')
     const home = mkdtempSync(join(tmpdir(), 'theocode-doctor-home-'))
     roots.push(home)
     mkdirSync(join(home, '.theocode'))
     writeFileSync(join(home, '.theocode', 'settings.json'), '{"sandbox_mode":"workspace-write"}')
-    const env = { HOME: home }
-    const base = { cwd: home, userDir: home, env }
+    const base = { userDir: home, env: { HOME: home } }
 
-    expect(resolveEffectiveConfig(base).sandbox_mode).toBe('workspace-write')
-    expect(resolveEffectiveConfig({ ...base, cli: ['sandbox_mode=read-only'] }).sandbox_mode).toBe(
-      'read-only',
-    )
+    expect((await resolveDoctorTarget(base)).cfg.sandbox_mode).toBe('workspace-write')
+
+    const args = parseExecArgs(['doctor', '--sandbox', 'read-only'], false)
+    if (args.mode !== 'doctor') throw new Error('expected doctor')
+    expect((await resolveDoctorTarget({ ...base, ...args })).cfg.sandbox_mode).toBe('read-only')
   })
 
-  it('test_a_relative_cd_is_inspected_once', () => {
+  it('test_a_relative_cd_is_inspected_once', async () => {
     const parent = mkdtempSync(join(tmpdir(), 'theocode-doctor-cd-'))
     roots.push(parent)
-    const sub = join(parent, 'sub')
-    mkdirSync(sub)
+    mkdirSync(join(parent, 'sub'))
     const before = process.cwd()
     try {
       // What main.ts does for `-C sub` before dispatching the command.
       process.chdir(parent)
-      process.chdir('sub')
-      expect(doctorCwd()).toBe(realpathSync(sub))
+      const args = parseExecArgs(['doctor', '-C', 'sub'], false)
+      if (args.mode !== 'doctor') throw new Error('expected doctor')
+      process.chdir(args.cd!)
+      const { cwd } = await resolveDoctorTarget(args)
+      expect(cwd).toBe(realpathSync(join(parent, 'sub')))
     } finally {
       process.chdir(before)
     }
