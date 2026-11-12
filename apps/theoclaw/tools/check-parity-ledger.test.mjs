@@ -75,7 +75,7 @@ describe('check-parity-ledger: the id set', () => {
   it('counts each row once when the ledger answers it twice', () => {
     const ids = [...ALL_IDS.filter((id) => id !== 'H-2'), 'H-1']
     const result = run(ids.map(validOut))
-    expect(result.counts).toEqual({ shipped: 0, out: 112, open: 0 })
+    expect(result.counts).toEqual({ shipped: 0, out: 113, open: 0 })
   })
 
   it('fails instead of passing when a source parses to fewer rows than its floor', () => {
@@ -465,7 +465,7 @@ describe('check-parity-ledger: the parity command', () => {
   it('runCli returns 0 and prints only the counts for a fully answered ledger', () => {
     const { code, lines } = runCliCapturing(cliRepo())
     expect(code).toBe(0)
-    expect(lines).toEqual(['shipped 1 · out 112 · open 0'])
+    expect(lines).toEqual(['shipped 1 · out 113 · open 0'])
   })
 
   it('runCli reports an absent inventory as source-parse and returns 1', () => {
@@ -532,7 +532,7 @@ describe('check-parity-ledger: the command run by node', () => {
     const result = runNode(copy, root)
     expect(result.stderr).toBe('')
     expect(result.status).toBe(1)
-    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 111 · open 1', 'OC-2 open: no check and no reason'])
+    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 112 · open 1', 'OC-2 open: no check and no reason'])
   })
 
   it('node on the module exits 0 and prints only the counts for a fully answered ledger', () => {
@@ -552,7 +552,7 @@ describe('check-parity-ledger: the command run by node', () => {
     const result = runNode(copy, root)
     expect(result.stderr).toBe('')
     expect(result.status).toBe(0)
-    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 112 · open 0'])
+    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 113 · open 0'])
   })
 
   it('node on the real tree prints what runCli computes and exits with its code', () => {
