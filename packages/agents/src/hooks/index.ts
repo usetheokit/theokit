@@ -19,6 +19,8 @@ export {
   parseHookSpecs,
 } from './hook-spec.js'
 export type { BuildHookHandlersOptions, HookEvent, HookSpec } from './hook-spec.js'
+export { CLAUDE_HOOK_EVENT_ALIASES, parseClaudeHooks } from './claude-hooks.js'
+export type { ParsedClaudeHooks } from './claude-hooks.js'
 export { hookFingerprint } from './hook-fingerprint.js'
 export type { HookIdentity } from './hook-fingerprint.js'
 export {

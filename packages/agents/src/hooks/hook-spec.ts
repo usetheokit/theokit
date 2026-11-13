@@ -77,6 +77,11 @@ export interface BuildHookHandlersOptions {
   readonly continuationBudget?: number
   /** Environment for the subprocess. Passed explicitly so a caller can restrict it. */
   readonly env?: Readonly<Record<string, string>>
+  /**
+   * Name of an environment variable (for example `CLAUDE_PROJECT_DIR`) set to `cwd` in every hook
+   * process. Applied on top of `env`, or of the process environment when `env` is absent.
+   */
+  readonly projectDirEnv?: string
   /** Where a refused, failed or truncated hook is reported. */
   readonly onWarn?: (message: string) => void
   /**
@@ -147,6 +152,13 @@ export type WiredEvent = (typeof WIRED_EVENT_LIST)[number]
 
 const WIRED_EVENTS = new Set<HookEvent>(WIRED_EVENT_LIST)
 
+/** Fold `projectDirEnv` into `env` once, so every spawn site reads one field. */
+function withProjectDirEnv(options: BuildHookHandlersOptions): BuildHookHandlersOptions {
+  if (options.projectDirEnv === undefined) return options
+  const base = options.env ?? (process.env as Record<string, string>)
+  return { ...options, env: { ...base, [options.projectDirEnv]: options.cwd } }
+}
+
 /**
  * Compile specs into the `HookHandlers` the seam already accepts.
  *
@@ -155,8 +167,9 @@ const WIRED_EVENTS = new Set<HookEvent>(WIRED_EVENT_LIST)
  */
 export function buildHookHandlers(
   specs: readonly HookSpec[],
-  options: BuildHookHandlersOptions,
+  input: BuildHookHandlersOptions,
 ): HookHandlers {
+  const options = withProjectDirEnv(input)
   const warn = options.onWarn ?? IGNORE_WARNING
   if (!options.trusted) {
     if (specs.length > 0) {
