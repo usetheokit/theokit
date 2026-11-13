@@ -1,14 +1,20 @@
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 import { routeCommand } from './command-router.js'
 import type { CommandDefinition, RoutedInput } from './command-router.js'
 
 /** Thrown at creation when two definitions or aliases claim the same name. */
-export class CommandRegistryError extends Error {
+export class CommandRegistryError extends TheokitAgentError {
+  override readonly name = 'CommandRegistryError'
   readonly claimed: string
   readonly owners: readonly [string, string]
 
   constructor(claimed: string, first: string, second: string) {
-    super(`command name "${claimed}" is claimed by both "${first}" and "${second}"`)
-    this.name = 'CommandRegistryError'
+    super(`command name "${claimed}" is claimed by both "${first}" and "${second}"`, {
+      code: 'COMMAND_NAME_COLLISION',
+      // the same definitions collide the same way on every attempt.
+      isRetryable: false,
+    })
     this.claimed = claimed
     this.owners = [first, second]
   }
