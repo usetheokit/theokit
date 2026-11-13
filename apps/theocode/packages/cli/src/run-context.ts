@@ -30,7 +30,10 @@ export interface RunContext {
  * B-033 — one environment feeds posture, store and config. Shared by `run` and `goal` so neither
  * can read one of them from the ambient `process.env` while the other does not.
  */
-export function resolveRunContext(overrides: CliOverrides, seams: CompositionSeams = {}): RunContext {
+export function resolveRunContext(
+  overrides: CliOverrides,
+  seams: CompositionSeams = {},
+): RunContext {
   const cwd = seams.cwd ?? process.cwd()
   const env = seams.env ?? process.env
   const store = seams.store ?? trustStorePath(env)
