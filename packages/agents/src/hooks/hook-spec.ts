@@ -148,6 +148,47 @@ export type WiredEvent = (typeof WIRED_EVENT_LIST)[number]
 const WIRED_EVENTS = new Set<HookEvent>(WIRED_EVENT_LIST)
 
 /**
+ * The trust and approval gate, shared by {@link buildHookHandlers} and `runHostHooks`.
+ *
+ * Returns the specs that may run. Untrusted returns none and warns once; an unapproved spec is
+ * dropped with a warning naming it. `rejected` lists the unapproved ones for a caller that reports them.
+ */
+export function gateHookSpecs(
+  specs: readonly HookSpec[],
+  options: {
+    readonly trusted: boolean
+    readonly approved: ReadonlySet<string>
+    readonly fingerprint?: (identity: HookIdentity) => string
+    readonly onWarn?: (message: string) => void
+  },
+): { readonly runnable: readonly HookSpec[]; readonly rejected: readonly HookSpec[] } {
+  const warn = options.onWarn ?? IGNORE_WARNING
+  if (!options.trusted) {
+    if (specs.length > 0) {
+      warn(
+        `${String(specs.length)} hook(s) declared but the directory is not trusted — none will run.`,
+      )
+    }
+    return { runnable: [], rejected: [] }
+  }
+
+  const fingerprintOf = options.fingerprint ?? hookFingerprint
+  const rejected: HookSpec[] = []
+  const runnable = specs.filter((spec) => {
+    const approved = options.approved.has(fingerprintOf(identityOf(spec)))
+    if (!approved) {
+      rejected.push(spec)
+      warn(
+        `hook not approved and will not run: "${spec.command}" on ${spec.event}. Approve it by ` +
+          `fingerprint — editing the command invalidates any previous approval, by design.`,
+      )
+    }
+    return approved
+  })
+  return { runnable, rejected }
+}
+
+/**
  * Compile specs into the `HookHandlers` the seam already accepts.
  *
  * Returns an EMPTY object when nothing is trusted or approved — an agent with no hooks, which is the
@@ -158,26 +199,7 @@ export function buildHookHandlers(
   options: BuildHookHandlersOptions,
 ): HookHandlers {
   const warn = options.onWarn ?? IGNORE_WARNING
-  if (!options.trusted) {
-    if (specs.length > 0) {
-      warn(
-        `${String(specs.length)} hook(s) declared but the directory is not trusted — none will run.`,
-      )
-    }
-    return {}
-  }
-
-  const fingerprintOf = options.fingerprint ?? hookFingerprint
-  const runnable = specs.filter((spec) => {
-    const approved = options.approved.has(fingerprintOf(identityOf(spec)))
-    if (!approved) {
-      warn(
-        `hook not approved and will not run: "${spec.command}" on ${spec.event}. Approve it by ` +
-          `fingerprint — editing the command invalidates any previous approval, by design.`,
-      )
-    }
-    return approved
-  })
+  const { runnable } = gateHookSpecs(specs, options)
   if (runnable.length === 0) return {}
 
   // Six of the eight declared events produce no handler here, and until this warning they produced
