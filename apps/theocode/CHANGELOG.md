@@ -17,6 +17,8 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **`doctor` now reports the wiring `buildChatAgent` publishes.** The build was not awaited, so the MCP, skills, hooks and AGENTS.md rows could describe an empty placeholder, and a build failure became an unhandled rejection. It is awaited, and a failure is a failed `wiring` check. (#1894)
+- **Session delete and fork now refuse the session `<cwd>/.theokit/tui-session` names.** An open but idle TUI session that was not the newest and had no writer lease could be deleted, although the refusal message said otherwise. `protectedSessions` now includes the TUI pointer. (#1905)
 - **The ACP entry now runs the same startup steps as the CLI and TUI.** `dist/acp-entry.mjs` skipped the project `.env`, `THEOCODE_HOME` / `home_dir`, the credential-store pointer and `CLAUDE_PROJECT_DIR`, so an ACP session could use a different session root and credential store. The steps now live in one function, `bootstrapSurface` in `@theocode/agent/bootstrap`, called by all three entries. (#1893)
 
 ### Security
