@@ -278,7 +278,10 @@ describe("deleteSession — the transcript mechanics are the framework's", () =>
     // Pillar of the migration: the mechanics live in `@theokit/agents/session`, not here. Asserted
     // on the seam — this module must not reach for `node:fs` to remove a transcript, because two
     // owners of "how a transcript is deleted" is how the two answers drift apart.
-    const source = readFileSync(new URL('../../src/session/session-ops.ts', import.meta.url), 'utf8')
+    const source = readFileSync(
+      new URL('../../src/session/session-ops.ts', import.meta.url),
+      'utf8',
+    )
     expect(source).toContain("from '@theokit/agents/session'")
 
     // Comments stripped first. The prose above the delegation NAMES the call it replaced, and a
@@ -321,7 +324,9 @@ describe('#1905 — the TUI pointer protects an older, unleased session', () => 
     writeTranscript('tui-newest', 1)
     point('tui-pointed')
 
-    expect(() => forkSession('tui-source', 'tui-pointed', { cwd, baseDir: base })).toThrow()
+    expect(() => forkSession('tui-source', 'tui-pointed', { cwd, baseDir: base })).toThrow(
+      /refusing to write over a live session/,
+    )
     expect(existsSync(pointed)).toBe(true)
   })
 
