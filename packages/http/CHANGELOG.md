@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.5.0
+
+### Minor Changes
+
+- 7ff03d4: `TheoApp.create({ module })` now resolves providers and controllers through an `@theokit/di` `Container` instead of a private map built with `new`, so constructor dependencies, scopes and `@PreDestroy` work. New `container` option; `@theokit/di` is an optional peer dependency, required for `module`.
+
+### Patch Changes
+
+- bf0d475: The Node runtime no longer sends a thrown error's message in the 500 body. The client gets `Internal Server Error`; the real error goes to the new optional `onError(err, request)` option of `createServer`, or to `console.error`.
+- f24d02c: ### Fixed
+
+  - `resolveOrNew` no longer swallows every container error and builds the class with no arguments. It falls back to `new Ctor()` only when the container has no registration for the class itself; a missing dependency, scope violation, cycle or throwing constructor now propagates to the caller.
+
 ## 2.4.0
 
 ### Minor Changes

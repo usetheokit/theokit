@@ -1,5 +1,22 @@
 # theo
 
+## 0.80.2
+
+### Patch Changes
+
+- ee2cf60: `SUPPORTED_SDK_RANGE` now mirrors the `^5.17.0` peer floor, so `theokit start` refuses `@theokit/sdk` 4.x and 5.0 to 5.15.2 at boot instead of failing on the first agent request.
+- Updated dependencies [8742832]
+- Updated dependencies [5d55198]
+- Updated dependencies [82e9aa1]
+- Updated dependencies [7ff03d4]
+- Updated dependencies [bf0d475]
+- Updated dependencies [f24d02c]
+- Updated dependencies [2aacc53]
+- Updated dependencies [5d55198]
+  - @theokit/agents@16.6.0
+  - @theokit/http@2.5.0
+  - @theokit/presenter@0.12.0
+
 ## 0.80.1
 
 ### Patch Changes
@@ -462,8 +479,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                were found and every /api/agents/* route will 404.
+                                                  [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                  were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
