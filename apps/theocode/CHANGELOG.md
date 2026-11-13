@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **The ACP entry now runs the same startup steps as the CLI and TUI.** `dist/acp-entry.mjs` skipped them, so an ACP session ignored `THEOCODE_HOME`, the configured `home_dir` and the project `.env`, was not pointed at TheoCode's credential store, and gave hooks no `CLAUDE_PROJECT_DIR`. The steps now live in one `bootstrapSurface` that all three entries call. (#1893)
 - **`/review` no longer throws a TypeError when a finding has no `body`.** `parseReviewOutput` now normalizes each finding to the real shape (a missing or non-string `body` becomes `''`, malformed optional fields are dropped), so `formatReviewFindings` renders the title alone. (#1906)
 
 ### Security
