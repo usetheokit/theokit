@@ -428,3 +428,9 @@ Two consequences worth stating, because they are the cost:
 ## Licence
 
 See `LICENSE`.
+
+## Sessions
+
+`@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
+`listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
+the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
