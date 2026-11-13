@@ -1,11 +1,10 @@
-import { expandTemplate } from './command-template.js'
+import { expandCommandTemplate, type TemplateDeps } from '@theokit/agents/config'
 import { subagentPath } from './subagent-inventory.js'
 import type { CustomCommand } from './custom-commands.js'
 import { nextApprovalMode, parseApprovalMode, type ApprovalMode } from '../consent/index.js'
 import { execFile } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { readFileSync, realpathSync } from 'node:fs'
+import { isAbsolute, relative, resolve } from 'node:path'
 
 import type { Dispatch, SetStateAction } from 'react'
 
@@ -114,16 +113,30 @@ export interface CustomCommandDeps {
 }
 
 /**
+ * Reads a `@file` reference only when it resolves inside the working directory. `../`, absolute
+ * paths, `~/` and symlinks leading out are all refused (undefined = not found).
+ */
+function readContainedFile(fileName: string): string | undefined {
+  try {
+    const root = realpathSync(workingDirectory())
+    const real = realpathSync(resolve(root, fileName))
+    const rel = relative(root, real)
+    if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return undefined
+    // A directory makes `readFileSync` throw EISDIR, which the catch turns into undefined.
+    return readFileSync(real, 'utf8')
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Exported for the wiring test: that `shell_timeout_ms` reaches `execFile` is a claim about a real
  * child process, and the only honest way to assert it is to run one.
  *
  * `shellTimeoutMs` is a parameter rather than a read inside, so the caller decides when config is
  * resolved and the test can drive both sides of the bound without writing a `config.toml`.
  */
-export function expansionDeps(
-  warn: (m: string) => void,
-  shellTimeoutMs: number,
-): Parameters<typeof expandTemplate>[2] {
+export function expansionDeps(warn: (m: string) => void, shellTimeoutMs: number): TemplateDeps {
   return {
     shell: (cmd) =>
       new Promise((resolveShell) => {
@@ -135,19 +148,7 @@ export function expansionDeps(
             resolveShell({ text: `${stdout ?? ''}${stderr ?? ''}`, ok: err === null }),
         )
       }),
-    readFile: (fileName) => {
-      const path = fileName.startsWith('~/')
-        ? join(homedir(), fileName.slice(2))
-        : resolve(workingDirectory(), fileName)
-      try {
-        // No `statSync` first: a directory makes `readFileSync` throw EISDIR and the catch below
-        // already returns undefined for it. The check bought a branch for a case the error path
-        // handled, and paid a race — the path could be replaced between the two calls.
-        return readFileSync(path, 'utf8')
-      } catch {
-        return undefined
-      }
-    },
+    readFile: readContainedFile,
     warn,
   }
 }
@@ -192,7 +193,7 @@ export function handleCustomCommand(
   }
   void (async () => {
     try {
-      const expanded = await expandTemplate(
+      const expanded = await expandCommandTemplate(
         command.template,
         arg,
         expansionDeps(

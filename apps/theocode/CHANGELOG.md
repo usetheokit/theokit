@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Security
+- **Custom command templates no longer inline files named in shell output.** Template expansion now uses the framework's `expandCommandTemplate`: shell output is never scanned for `@file`, `KEY=!`cmd`` is not run, `\$1` stays literal, a ```` ```! ```` block or a failed command shows an error and sends nothing, and `@file` reads are limited to the working directory (`../` and `~/` are refused). (#1899)
 - **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
 
 ### Fixed
