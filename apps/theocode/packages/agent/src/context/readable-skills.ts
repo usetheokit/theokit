@@ -1,4 +1,3 @@
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { discoverSkills, loadSkillInstructions } from '@theokit/sdk/skills'
@@ -43,8 +42,8 @@ import { bundleSkillRoots } from './bundle-skill-roots.js'
  */
 export async function readableSkills(
   cwd: string,
-  home: string = homedir(),
-  projectAllowed = true,
+  home: string,
+  projectAllowed: boolean,
 ): Promise<InlineSkill[]> {
   // #1904 — the project roots follow the same trust gate as the `<skills>` block (`posture.allows.skills`);
   // the operator's own root does not, for the reason above.
@@ -87,8 +86,8 @@ export async function readableSkills(
  */
 export async function skillReadTool(
   cwd: string,
-  home: string = homedir(),
-  projectAllowed = true,
+  home: string,
+  projectAllowed: boolean,
 ): Promise<CustomTool[]> {
   const skills = await readableSkills(cwd, home, projectAllowed)
   return skills.length > 0 ? [SkillReadTool.create(skills)] : []
