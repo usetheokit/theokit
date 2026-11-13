@@ -130,3 +130,11 @@ describe('custom commands from `.theokit/commands/` route the same way (M76)', (
     expect(routed).toMatchObject({ kind: 'error', reason: 'ambiguous-command' })
   })
 })
+
+describe('routeCommand resolves aliases', () => {
+  it('routes an alias to its definition, keeping the argument', () => {
+    const quit = defineCommand({ name: 'quit', description: 'leave', aliases: ['exit'] })
+    const routed = routeCommand('/exit now', [quit])
+    expect(routed).toEqual({ kind: 'command', command: quit, arg: 'now' })
+  })
+})
