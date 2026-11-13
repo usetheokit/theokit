@@ -14,6 +14,8 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
+vi.mock('../../src/working-directory.js', () => ({ workingDirectory: () => '/nonexistent-cwd' }))
+
 import type { ToastPayload } from '../../src/screen-types.js'
 import { sendMessage } from '../../src/commands/command-content.js'
 
@@ -60,5 +62,17 @@ describe('sendMessage — a running goal owns the agent', () => {
     expect(lastSentMessage.current).toBe('hello')
     // No toast: an ordinary send is not an event worth interrupting the surface for.
     expect(setToast).not.toHaveBeenCalled()
+  })
+})
+
+describe('sendMessage — a mention that is not attached is reported', () => {
+  it('test_a_missing_mention_is_named_in_a_toast_with_its_reason', () => {
+    const { agent, lastSentMessage, setToast } = harness()
+
+    sendMessage('see @missing.ts', false, agent, lastSentMessage, setToast)
+
+    const payload = vi.mocked(setToast).mock.calls[0]?.[0] as ToastPayload
+    expect(payload.message).toContain('Not attached: @missing.ts (file not found)')
+    expect(agent.send).toHaveBeenCalledWith({ message: 'see @missing.ts' })
   })
 })

@@ -29,7 +29,7 @@ describe('a skill inside a plugin bundle', () => {
     write(join(cwd, '.claude', 'skills', 'greet'), 'greet', 'PLAIN-OK')
     write(join(cwd, '.claude', 'plugins', 'sample', 'skills', 'bundled'), 'bundled', 'BUNDLED-OK')
 
-    const names = (await readableSkills(cwd, join(cwd, 'nowhere'))).map((s) => s.name)
+    const names = (await readableSkills(cwd, join(cwd, 'nowhere'), true)).map((s) => s.name)
 
     expect(names, 'the control: an ordinary skill must keep loading').toContain('greet')
     expect(names, 'the bundled skill is on disk and must be readable').toContain('bundled')

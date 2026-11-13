@@ -24,6 +24,7 @@ import type { InteractiveBackend } from '@theokit/agents/interactive'
 import { PtyInteractiveBackend } from '@theokit/agents-pty'
 import { z } from 'zod'
 
+import type { ProjectDocParts } from '../context/agents-md.js'
 import { MAX_AGGREGATE, agentsMdChain, composeInstructions, loadAgentsMd, loadUserAgentsMd } from '../context/index.js'
 import type { RulesLoad } from '../context/rules.js'
 import type { InlineSkill } from '@theokit/sdk'
@@ -211,7 +212,7 @@ export async function buildChatAgent(overrides: {
   // every answer would be "no such skill".
   const allTools = [
     ...profileScopedTools,
-    ...(await skillReadTool(overrides.cwd)),
+    ...(await skillReadTool(overrides.cwd, operatorHome, posture.allows.skills)),
     ...(overrides?.extraTools ?? []),
   ]
   return allTools.reduce((acc, tool) => acc.tool(tool), chain).build()
@@ -291,10 +292,11 @@ function projectDocument(
    * have shown four.
    */
   home: string,
-): string {
-  const user = [loadUserAgentsMd(home), rules.user.text].filter(Boolean).join('\n\n')
-  if (!posture.allows.agentsMd) return user
-  return [user, loadAgentsMd(cwd), rules.project.text].filter(Boolean).join('\n\n')
+): ProjectDocParts {
+  const userAgentsMd = loadUserAgentsMd(home)
+  const userRules = rules.user.text
+  if (!posture.allows.agentsMd) return { userAgentsMd, userRules, projectAgentsMd: '', projectRules: '' }
+  return { userAgentsMd, userRules, projectAgentsMd: loadAgentsMd(cwd), projectRules: rules.project.text }
 }
 
 function resolveProviderPlugins(

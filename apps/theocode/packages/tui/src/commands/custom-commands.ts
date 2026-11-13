@@ -1,7 +1,10 @@
 import { FOREIGN_SURFACES } from '@theocode/agent'
-import { loadCustomCommands as loadInFramework, frontmatterValue } from '@theokit/agents/config'
+import {
+  loadCustomCommands as loadInFramework,
+  frontmatterValue,
+  templateHints,
+} from '@theokit/agents/config'
 
-import { hints } from './command-template.js'
 import { BUILTIN_COMMAND_NAMES } from './registry.js'
 
 export interface CustomCommand {
@@ -86,7 +89,7 @@ export function loadCustomCommands(options: LoadOptions): Map<string, CustomComm
       template,
       ...(command.description !== undefined ? { description: command.description } : {}),
       ...readOwnKeys(command.frontmatter),
-      hints: hints(template),
+      hints: templateHints(template),
     })
   }
   return loaded
