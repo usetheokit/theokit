@@ -51,7 +51,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable |
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
-| `./commands` | Command routing and the shutdown/cleanup contract |
+| `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
 | `./doctor` | Environment diagnostics |
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
