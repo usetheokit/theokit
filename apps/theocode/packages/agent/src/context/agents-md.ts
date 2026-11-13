@@ -162,72 +162,92 @@ function trimBlocksFromStart(text: string, budget: number): string {
   return blocks.join(RULE_SEPARATOR)
 }
 
-function splitProjectDoc(doc: string): { rules: string; agentsMd: string } {
-  const i = doc.indexOf(RULE_SEPARATOR)
-  if (i < 0) return { rules: '', agentsMd: doc }
-  const breakAt = doc.lastIndexOf('\n\n', i)
-  return breakAt < 0
-    ? { rules: doc, agentsMd: '' }
-    : { agentsMd: doc.slice(0, breakAt), rules: doc.slice(breakAt + 2) }
+/**
+ * The project document as the four named sources it is made of, in the order they are rendered.
+ * Each is trimmed by its own policy, so a `---` horizontal rule inside an AGENTS.md is never
+ * mistaken for the boundary of a rules block.
+ */
+export interface ProjectDocParts {
+  readonly userAgentsMd: string
+  readonly userRules: string
+  readonly projectAgentsMd: string
+  readonly projectRules: string
 }
 
-function joinProjectDoc(rules: string, agentsMd: string): string {
-  return [agentsMd, rules].filter((s) => s.length > 0).join('\n\n')
+export type ProjectDoc = string | ProjectDocParts
+
+type PartKey = keyof ProjectDocParts
+const PART_ORDER: readonly PartKey[] = ['userAgentsMd', 'userRules', 'projectAgentsMd', 'projectRules']
+/** Rules go first, the project's before the user's; AGENTS.md follows, the user's before the project's. */
+const RULES_TRIM_ORDER: readonly PartKey[] = ['projectRules', 'userRules']
+const AGENTS_MD_TRIM_ORDER: readonly PartKey[] = ['userAgentsMd', 'projectAgentsMd']
+
+function toParts(doc: ProjectDoc): ProjectDocParts {
+  return typeof doc === 'string'
+    ? { userAgentsMd: '', userRules: '', projectAgentsMd: doc, projectRules: '' }
+    : doc
+}
+
+function renderParts(parts: ProjectDocParts): string {
+  return PART_ORDER.map((k) => parts[k]).filter((s) => s.length > 0).join('\n\n')
 }
 
 export function composeInstructions(
   base: string,
-  projectDoc: string,
+  projectDoc: ProjectDoc,
   surfaceDoc = '',
   opts?: AggregateBudget,
   /** Basenames the project document was read from, so the header can name them honestly. */
   sources?: readonly string[],
 ): ComposedInstructions {
-  if (opts === undefined) return { text: build(base, projectDoc, surfaceDoc, sources), cuts: [] }
+  if (opts === undefined) {
+    return { text: build(base, renderParts(toParts(projectDoc)), surfaceDoc, sources), cuts: [] }
+  }
   if (opts.maxChars <= 0) {
     throw new RangeError(`maxChars=${String(opts.maxChars)} — the aggregate budget must be > 0`)
   }
-  return withinBudget(base, projectDoc, surfaceDoc, opts, sources)
+  return withinBudget(base, toParts(projectDoc), surfaceDoc, opts, sources)
 }
 
 function withinBudget(
   base: string,
-  projectDoc: string,
+  projectDoc: ProjectDocParts,
   surfaceDoc: string,
   opts: AggregateBudget,
   sources?: readonly string[],
 ): ComposedInstructions {
-  let doc = projectDoc
+  const parts: Record<PartKey, string> = { ...projectDoc }
   let surface = surfaceDoc
   const cuts: InstructionCut[] = []
-  const total = (): number => build(base, doc, surface, sources).length
+  const total = (): number => build(base, renderParts(parts), surface, sources).length
 
-  if (total() > opts.maxChars) {
-    const { rules, agentsMd } = splitProjectDoc(doc)
-    const truncatedRules = trimBlocksFromStart(
-      rules,
-      Math.max(0, rules.length - (total() - opts.maxChars)),
+  const trimSource = (
+    source: 'rules' | 'agentsMd',
+    keys: readonly PartKey[],
+    trim: (text: string, budget: number) => string,
+  ): void => {
+    let from = 0
+    let to = 0
+    for (const key of keys) {
+      const before = parts[key]
+      if (before.length === 0) continue
+      const over = Math.max(0, total() - opts.maxChars)
+      const after = over === 0 ? before : trim(before, Math.max(0, before.length - over))
+      from += before.length
+      to += after.length
+      parts[key] = after
+    }
+    if (to === from) return
+    cuts.push({ source, from, to })
+    opts.warn(
+      `[instructions] source '${source}' truncated from ${String(from)} to ` +
+        `${String(to)} chars (aggregate budget ${String(opts.maxChars)})`,
     )
-    if (truncatedRules.length !== rules.length) {
-      cuts.push({ source: 'rules', from: rules.length, to: truncatedRules.length })
-      opts.warn(
-        `[instructions] source 'rules' truncated from ${String(rules.length)} to ` +
-          `${String(truncatedRules.length)} chars (aggregate budget ${String(opts.maxChars)})`,
-      )
-    }
-    doc = joinProjectDoc(truncatedRules, agentsMd)
   }
+
+  if (total() > opts.maxChars) trimSource('rules', RULES_TRIM_ORDER, trimBlocksFromStart)
   if (total() > opts.maxChars) {
-    const { rules, agentsMd } = splitProjectDoc(doc)
-    const truncatedMd = agentsMd.slice(-Math.max(0, agentsMd.length - (total() - opts.maxChars)))
-    if (truncatedMd.length !== agentsMd.length) {
-      cuts.push({ source: 'agentsMd', from: agentsMd.length, to: truncatedMd.length })
-      opts.warn(
-        `[instructions] source 'agentsMd' truncated from ${String(agentsMd.length)} to ` +
-          `${String(truncatedMd.length)} chars (aggregate budget ${String(opts.maxChars)})`,
-      )
-    }
-    doc = joinProjectDoc(rules, truncatedMd)
+    trimSource('agentsMd', AGENTS_MD_TRIM_ORDER, (t, budget) => (budget === 0 ? '' : t.slice(-budget)))
   }
   if (total() > opts.maxChars && surface.length > 0) {
     const before = surface.length
@@ -250,7 +270,7 @@ function withinBudget(
         `(${String(total())} > ${String(opts.maxChars)}) — nothing was truncated`,
     )
   }
-  return { text: build(base, doc, surface, sources), cuts }
+  return { text: build(base, renderParts(parts), surface, sources), cuts }
 }
 
 /**
