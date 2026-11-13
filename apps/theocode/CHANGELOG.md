@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Fixed
+- **`/review` no longer throws a TypeError when a finding has no `body`.** `parseReviewOutput` now normalizes each finding to the real shape (a missing or non-string `body` becomes `''`, malformed optional fields are dropped), so `formatReviewFindings` renders the title alone. (#1906)
+
 ### Security
 - **A project `.env` can no longer set the SDK's sovereign keys, on the CLI or the TUI.** One `loadProjectEnv` now protects the union of the SDK's `SOVEREIGN_ENV_KEYS` (`THEOKIT_REDACT_SECRETS`, `THEOKIT_TRUSTED_PROVIDERS`, `THEOKIT_OAUTH_TX_SALT`, …) and TheoCode's own keys; the TUI no longer calls `process.loadEnvFile` directly, so its `.env` also stops setting `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` and `THEOCODE_TRUST_ALL_DIRS`. (#1892)
 
