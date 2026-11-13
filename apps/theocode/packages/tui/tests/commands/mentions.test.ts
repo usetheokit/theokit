@@ -1,13 +1,19 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
 import { resolveMentions } from '../../src/commands/mentions.js'
 
+const made: string[] = []
+afterAll(() => {
+  for (const d of made) rmSync(d, { recursive: true, force: true })
+})
+
 function project(): string {
   const cwd = mkdtempSync(join(tmpdir(), 'mentions-'))
+  made.push(cwd)
   mkdirSync(join(cwd, 'src'))
   writeFileSync(join(cwd, 'src/a.ts'), 'export const a = 1\n')
   return cwd
@@ -35,6 +41,7 @@ describe('resolveMentions', () => {
 
   it('accepts a ~/ path the @ menu offers', () => {
     const home = mkdtempSync(join(tmpdir(), 'home-'))
+    made.push(home)
     writeFileSync(join(home, 'note-1900.txt'), 'hi')
     const prev = process.env.HOME
     process.env.HOME = home
