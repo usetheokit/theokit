@@ -25,7 +25,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { transcriptPath } from '@theokit/agents/persistence'
+import { LiveTranscriptError, transcriptPath } from '@theokit/agents/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -319,8 +319,24 @@ describe('#1905 — the TUI pointer protects an older, unleased session', () => 
     writeTranscript('tui-newest', 1)
     point('tui-pointed')
 
-    expect(() => forkSession('tui-source', 'tui-pointed', { cwd, baseDir: base })).toThrow()
+    // LiveTranscriptError, not the bare EEXIST the existing file would give: that is the pointer guard.
+    expect(() => forkSession('tui-source', 'tui-pointed', { cwd, baseDir: base })).toThrow(
+      LiveTranscriptError,
+    )
     expect(readFileSync(pointed, 'utf8')).toBe('{}\n')
+  })
+
+  it('forkSession onto a pointed id with no file on disk throws instead of creating it', () => {
+    writeTranscript('tui-source', 4000)
+    writeTranscript('tui-newest', 1)
+    point('tui-ghost')
+    const ghost = transcriptPath(base, cwd, 'tui-ghost')
+
+    expect(protectedSessions(cwd, base)).toContain(ghost)
+    expect(() => forkSession('tui-source', 'tui-ghost', { cwd, baseDir: base })).toThrow(
+      LiveTranscriptError,
+    )
+    expect(existsSync(ghost)).toBe(false)
   })
 
   it('a session neither pointed at, newest nor leased is still deletable', async () => {

@@ -244,7 +244,8 @@ export async function deleteSession(
 export function protectedSessions(cwd: string, baseDir: string): string[] {
   const paths = new Set(protectedTranscriptPaths(cwd, baseDir).keys())
   // TheoCode's own pointer (`<cwd>/.theokit/tui-session`) is not the framework's `last-session`, so
-  // the framework set cannot see it (#1905).
+  // the framework set cannot see it (#1905). `readPointerId` throws on any read error but ENOENT, so
+  // delete and fork fail closed rather than run with the pointed session unprotected.
   const pointed = readPointerId(cwd)
   if (pointed !== undefined) paths.add(transcriptPath(baseDir, cwd, pointed))
   return [...paths]
