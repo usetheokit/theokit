@@ -1,13 +1,16 @@
 /** #1900 — trailing punctuation, reported skips, and `~/` paths from the `@` menu. */
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { resolveMentions } from '../../src/commands/mentions.js'
 
+const made: string[] = []
+
 function project(): string {
   const cwd = mkdtempSync(join(tmpdir(), 'mentions-'))
+  made.push(cwd)
   mkdirSync(join(cwd, 'src'))
   writeFileSync(join(cwd, 'src', 'a.ts'), 'export const a = 1\n')
   return cwd
@@ -15,6 +18,7 @@ function project(): string {
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 
 describe('resolveMentions', () => {
