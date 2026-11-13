@@ -194,8 +194,12 @@ export function sendMessage(
     })
     return
   }
-  const { message, attached } = resolveMentions(text, workingDirectory())
-  if (attached.length > 0) {
+  const { message, attached, skipped } = resolveMentions(text, workingDirectory())
+  if (skipped.length > 0) {
+    const notAttached = skipped.map((s) => `@${s.ref} (${s.reason})`).join(', ')
+    const head = attached.length > 0 ? `Attached: ${attached.join(', ')}. ` : ''
+    setToast({ message: `${head}Not attached: ${notAttached}`, variant: 'error' })
+  } else if (attached.length > 0) {
     setToast({ message: `Attached: ${attached.join(', ')}`, variant: 'info' })
   }
   lastSentMessage.current = message
