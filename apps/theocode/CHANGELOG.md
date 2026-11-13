@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Fixed
+- **Session delete and fork now refuse the session `<cwd>/.theokit/tui-session` names.** `protectedSessions` only held the framework's set (pointer, newest, leased), so an open but idle TUI session that was not the newest could be deleted, against what `LiveSessionDeletionError` says. The TUI pointer is now in the set. (#1905)
+
 ### Security
 - **Custom command templates no longer inline files named in shell output, and `@file` is contained to the working directory.** Templates now expand through `expandCommandTemplate` from `@theokit/agents/config` (the local `command-template.ts` is gone): shell output is never scanned for `@file`, `` !`cmd` `` and `@file` need a word boundary (`` KEY=!`cmd` `` no longer runs), `\$1` stays literal, and a ```` ```! ```` block or a failed command stops the expansion with an error toast. `@../x` and `@~/x` are no longer read. (#1899)
 

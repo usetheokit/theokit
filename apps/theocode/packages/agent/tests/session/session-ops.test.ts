@@ -28,7 +28,12 @@ import { dirname, join } from 'node:path'
 import { transcriptPath } from '@theokit/agents/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { LiveSessionDeletionError, deleteSession, protectedSessions } from '../../src/session/session-ops.js'
+import {
+  LiveSessionDeletionError,
+  deleteSession,
+  forkSession,
+  protectedSessions,
+} from '../../src/session/session-ops.js'
 
 let base: string
 let cwd: string
@@ -182,6 +187,49 @@ describe('B-078 — deleteSession', () => {
 })
 
 /** The guard half — separated so each block stays readable, not to dodge the length rule. */
+describe('#1905 — the TUI pointer protects an older, idle session', () => {
+  function pointAt(id: string): void {
+    mkdirSync(join(cwd, '.theokit'), { recursive: true })
+    writeFileSync(join(cwd, '.theokit', 'tui-session'), `${id}\n`)
+  }
+
+  it('test_deleteSession_refuses_the_pointed_older_session', async () => {
+    const pointed = writeTranscript('tui-pointed-old', 5000)
+    writeTranscript('tui-newest', 1)
+    pointAt('tui-pointed-old')
+
+    await expect(
+      deleteSession('tui-pointed-old', { cwd, baseDir: base, removeFromRegistry: async () => {} }),
+    ).rejects.toThrow(LiveSessionDeletionError)
+    expect(existsSync(pointed)).toBe(true)
+  })
+
+  it('test_forkSession_refuses_the_pointed_older_session_as_destination', () => {
+    const pointed = writeTranscript('tui-pointed-old', 5000)
+    writeTranscript('tui-newest', 1)
+    writeTranscript('tui-source', 3000)
+    pointAt('tui-pointed-old')
+
+    expect(() => forkSession('tui-source', 'tui-pointed-old', { cwd, baseDir: base })).toThrow()
+    expect(readFileSync(pointed, 'utf8')).toBe('{}\n')
+  })
+
+  it('test_a_session_neither_pointed_newest_nor_leased_is_deletable', async () => {
+    const other = writeTranscript('tui-other', 5000)
+    writeTranscript('tui-pointed-old', 4000)
+    writeTranscript('tui-newest', 1)
+    pointAt('tui-pointed-old')
+
+    const res = await deleteSession('tui-other', {
+      cwd,
+      baseDir: base,
+      removeFromRegistry: async () => {},
+    })
+    expect(res.transcriptRemoved).toBe(true)
+    expect(existsSync(other)).toBe(false)
+  })
+})
+
 describe('B-078 — deleteSession refuses a live session', () => {
   it('test_refuses_to_delete_a_live_session', async () => {
     // The newest transcript is the one a running TUI is most likely still appending to.
