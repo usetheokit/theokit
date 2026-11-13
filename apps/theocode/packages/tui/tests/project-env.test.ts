@@ -11,9 +11,9 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 
-it('TUI startup uses loadProjectEnv, not process.loadEnvFile', () => {
+it('TUI startup uses bootstrapSurface (which loads the env), not process.loadEnvFile', () => {
   const src = readFileSync(fileURLToPath(new URL('../src/main.tsx', import.meta.url)), 'utf8')
-  expect(src).toMatch(/\bloadProjectEnv\(\)/)
+  expect(src).toMatch(/\bbootstrapSurface\(/)
   expect(src).not.toMatch(/process\.loadEnvFile/)
 })
 

@@ -85,3 +85,10 @@ describe('B-026 — the bootstrap does not hide inside the import block', () => 
     ).toBeGreaterThan(chdir)
   })
 })
+
+describe('#1893 — the CLI runs the shared bootstrap', () => {
+  it('test_main_imports_and_calls_bootstrapSurface', () => {
+    expect(SOURCE).toMatch(/import \{ bootstrapSurface \} from '@theocode\/agent\/bootstrap'/)
+    expect(SOURCE).toMatch(/bootstrapSurface\(\{/)
+  })
+})
