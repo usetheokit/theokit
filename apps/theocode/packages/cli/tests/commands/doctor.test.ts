@@ -184,7 +184,7 @@ describe('#1895 — doctor honours -c/--sandbox and applies -C once', () => {
 
 describe('#1894 — doctor reads the wiring buildChatAgent publishes', () => {
   async function runDoctor(project: string, home: string) {
-    const saved = { cwd: process.cwd(), env: { ...process.env } }
+    const saved = { dir: process.cwd(), env: { ...process.env } }
     const out: string[] = []
     const unhandled: unknown[] = []
     const onUnhandled = (e: unknown) => unhandled.push(e)
@@ -206,7 +206,7 @@ describe('#1894 — doctor reads the wiring buildChatAgent publishes', () => {
       err.mockRestore()
       exit.mockRestore()
       process.off('unhandledRejection', onUnhandled)
-      process.chdir(saved.cwd)
+      process.chdir(saved.dir)
       process.env = saved.env
     }
   }
