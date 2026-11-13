@@ -65,7 +65,8 @@ export function agentsMdRow(
 
   if (wired === undefined) {
     const onDisk = onDiskChain(workingDirectory())
-    const project = onDisk.length === 0 ? '' : `${relative(onDisk)}  (on disk — not loaded yet)`
+    const project =
+      onDisk.length === 0 ? '' : `${relative(onDisk)}  (on disk — not loaded yet)`
     return joinParts(project, userNote)
   }
   const entity = wired.agentsMd

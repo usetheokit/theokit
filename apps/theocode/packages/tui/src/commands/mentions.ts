@@ -46,6 +46,10 @@ function locate(path: string, cwd: string): string {
 function readMention(path: string, cwd: string): { content: string } | { reason: string } {
   try {
     if (isForbiddenPath(path)) return { reason: 'forbidden path' }
+    // Home holds credentials (~/.ssh, ~/.theocode/auth.json…): refuse any hidden segment there.
+    if (path.startsWith('~/') && path.split('/').some((seg) => seg.startsWith('.') && seg !== '')) {
+      return { reason: 'hidden paths under ~ are not attached' }
+    }
     const abs = locate(path, cwd)
     assertNoSymlinkEscape(abs, path.startsWith('~/') ? homedir() : cwd)
     if (!existsSync(abs)) return { reason: 'file not found' }

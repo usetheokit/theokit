@@ -52,4 +52,29 @@ describe('resolveMentions', () => {
       process.env.HOME = prev
     }
   })
+
+  it('refuses secret-like paths under ~/ with a reason', () => {
+    const home = mkdtempSync(join(tmpdir(), 'home-'))
+    made.push(home)
+    mkdirSync(join(home, '.ssh'))
+    writeFileSync(join(home, '.ssh/id_rsa'), 'SECRET')
+    const prev = process.env.HOME
+    process.env.HOME = home
+    try {
+      const r = resolveMentions('see @~/.ssh/id_rsa', project())
+      expect(r.attached).toEqual([])
+      expect(r.message).not.toContain('SECRET')
+      expect(r.skipped[0]?.reason.length).toBeGreaterThan(0)
+    } finally {
+      process.env.HOME = prev
+    }
+  })
+
+  it('refuses a forbidden project path with a reason', () => {
+    const cwd = project()
+    writeFileSync(join(cwd, '.env'), 'K=1')
+    const r = resolveMentions('see @.env', cwd)
+    expect(r.attached).toEqual([])
+    expect(r.skipped).toEqual([{ ref: '@.env', reason: 'forbidden path' }])
+  })
 })
