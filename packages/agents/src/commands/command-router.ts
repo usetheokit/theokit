@@ -7,9 +7,10 @@
  * `@theokit/ui` / `@theokit/tui`. What has no counterpart anywhere is this: a registry, longest-prefix
  * routing, and the interpreter shape.
  *
- * What is deliberately NOT here (Top-risk 1 of the milestone): help rendering, aliases, completions.
- * Each of those is a mini CLI framework growing inside the agents package, and each needs its own ADR
- * with demand behind it. The ~50 command NAMES stay in the product; only the routing crosses.
+ * What is deliberately NOT here (Top-risk 1 of the milestone): help rendering and completions.
+ * Each is a mini CLI framework growing inside the agents package, and each needs its own ADR with
+ * demand behind it. Aliases and hidden names have that ADR (0036). The ~50 command NAMES stay in the
+ * product; only the routing crosses.
  *
  * ## Longest prefix, not first match
  *
@@ -23,20 +24,30 @@
 export type CommandArgument = 'none' | 'optional' | 'required'
 
 /** One routable command. The NAME is the contract: it is what the user types and what logs record. */
-export interface CommandDefinition {
+export interface CommandDefinition<Ctx = void> {
   readonly name: string
   readonly description: string
   /** Omitted ⇒ `'optional'`, the shape that refuses nothing. */
   readonly arg: CommandArgument
+  /** Other names routed to this definition; never shown in the palette. */
+  readonly aliases?: readonly string[]
+  /** Routed, but not shown in the palette. */
+  readonly hidden?: boolean
+  /** Called by a registry's `dispatch` with the argument and the caller's context. */
+  readonly run?: (arg: string, ctx: Ctx) => void | Promise<void>
 }
 
 /** Declare a command. A function rather than an object literal so the default is stated once. */
-export function defineCommand(input: {
+export function defineCommand<Ctx = void>(input: {
   name: string
   description: string
   arg?: CommandArgument
-}): CommandDefinition {
-  return { name: input.name, description: input.description, arg: input.arg ?? 'optional' }
+  aliases?: readonly string[]
+  hidden?: boolean
+  run?: (arg: string, ctx: Ctx) => void | Promise<void>
+}): CommandDefinition<Ctx> {
+  const { arg, ...rest } = input
+  return { ...rest, arg: arg ?? 'optional' }
 }
 
 /** Why an input could not be routed. */
@@ -47,8 +58,8 @@ export type RouteFailure =
   | 'ambiguous-command'
 
 /** What the input turned out to be. */
-export type RoutedInput =
-  | { readonly kind: 'command'; readonly command: CommandDefinition; readonly arg: string }
+export type RoutedInput<Ctx = void> =
+  | { readonly kind: 'command'; readonly command: CommandDefinition<Ctx>; readonly arg: string }
   | { readonly kind: 'message'; readonly text: string }
   | { readonly kind: 'error'; readonly reason: RouteFailure; readonly input: string }
 
@@ -62,15 +73,22 @@ const PREFIX = '/'
  * unrecognised one is an ERROR rather than prose — sending `/moddel gpt-5` to the model as text
  * hides a typo behind a plausible answer.
  */
-export function routeCommand(input: string, commands: readonly CommandDefinition[]): RoutedInput {
+export function routeCommand<Ctx = void>(
+  input: string,
+  commands: readonly CommandDefinition<Ctx>[],
+): RoutedInput<Ctx> {
   if (!input.startsWith(PREFIX)) return { kind: 'message', text: input }
 
   const body = input.slice(PREFIX.length)
 
   // Longest first, so a name can never be swallowed by its own prefix. Ties are resolved after the
   // match, where the ambiguity can be REPORTED rather than silently decided.
-  const byLength = [...commands].sort((a, b) => b.name.length - a.name.length)
-  const matches = byLength.filter((command) => matchesName(body, command.name))
+  // Aliases are routed names too; the match carries the canonical definition and the typed name.
+  const entries = commands.flatMap((command) =>
+    [command.name, ...(command.aliases ?? [])].map((typed) => ({ typed, command })),
+  )
+  const byLength = [...entries].sort((a, b) => b.typed.length - a.typed.length)
+  const matches = byLength.filter((entry) => matchesName(body, entry.typed))
   // Guarded by LENGTH rather than by `matches[0] === undefined`: without
   // `noUncheckedIndexedAccess`, indexing an empty array is typed as present, so the compiler calls
   // the undefined-check impossible while the runtime value is exactly that. Checking the length is
@@ -81,20 +99,21 @@ export function routeCommand(input: string, commands: readonly CommandDefinition
   // Two commands of the SAME name — a custom one from `.theokit/commands/` shadowing a builtin. Same
   // posture as the M76 loader: this layer reports the collision and does not choose, because only
   // the product knows what its builtins do.
-  if (matches.length > 1 && matches[1].name.length === best.name.length) {
+  if (matches.length > 1 && matches[1].typed.length === best.typed.length) {
     return { kind: 'error', reason: 'ambiguous-command', input }
   }
 
-  const arg = body.slice(best.name.length).trim()
-  if (arg !== '' && best.arg === 'none') {
+  const arg = body.slice(best.typed.length).trim()
+  const command = best.command
+  if (arg !== '' && command.arg === 'none') {
     // `/clear everything` is a user who believes the word did something. Dropping it silently makes
     // the terminal look like it obeyed.
     return { kind: 'error', reason: 'unexpected-argument', input }
   }
-  if (arg === '' && best.arg === 'required') {
+  if (arg === '' && command.arg === 'required') {
     return { kind: 'error', reason: 'missing-argument', input }
   }
-  return { kind: 'command', command: best, arg }
+  return { kind: 'command', command, arg }
 }
 
 /**

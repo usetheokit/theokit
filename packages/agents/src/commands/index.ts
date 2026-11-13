@@ -7,14 +7,17 @@
  *
  * ## What is here, and what is deliberately not
  *
- * Here: the registry, longest-prefix routing, the interpreter shape, and the shutdown watchdog.
+ * Here: the registry (aliases, hidden names, a palette list, handlers — ADR 0036), longest-prefix
+ * routing, the interpreter shape, and the shutdown watchdog.
  *
- * NOT here (Top-risk 1 of the milestone): help rendering, aliases, completions — each a mini CLI
+ * NOT here (Top-risk 1 of the milestone): help rendering and completions — each a mini CLI
  * framework growing inside the agents package. Nor argument PARSING, which ADR 0042 puts out of
  * scope with its reasons: a terminal router reads a line a human typed mid-session; an `argv` parser
  * reads the process's launch, and that domain already has `node:util`'s `parseArgs`.
  */
 export { defineCommand, routeCommand } from './command-router.js'
+export { createCommandRegistry, CommandRegistryError } from './command-registry.js'
+export type { CommandRegistry } from './command-registry.js'
 export type {
   CommandArgument,
   CommandDefinition,
@@ -22,5 +25,16 @@ export type {
   RoutedInput,
 } from './command-router.js'
 
-export { createShutdown, DEFAULT_WATCHDOG_MS, SHUTDOWN_EXIT_CODES } from './shutdown.js'
-export type { CleanupTask, Shutdown, ShutdownDeps, ShutdownOutcome } from './shutdown.js'
+export {
+  createShutdown,
+  exitAfterDrain,
+  DEFAULT_WATCHDOG_MS,
+  SHUTDOWN_EXIT_CODES,
+} from './shutdown.js'
+export type {
+  CleanupTask,
+  ExitAfterDrainDeps,
+  Shutdown,
+  ShutdownDeps,
+  ShutdownOutcome,
+} from './shutdown.js'

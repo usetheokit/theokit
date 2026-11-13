@@ -82,6 +82,16 @@ export class SubagentsCapability extends FieldCapability<'subagents'> {
   readonly name = 'subagents'
   protected readonly field = 'subagents' as const
 }
+/**
+ * #1912 — `.withholdBuiltinTools([...])` → `withheldBuiltinTools`, reaching
+ * `Agent.create({ withheldBuiltinTools })`. A capability for the same reason as
+ * {@link SubagentsCapability}: `capability-zero-behavior.test.ts` demands every builder-reachable
+ * waist field be expressible by one.
+ */
+export class WithheldBuiltinToolsCapability extends FieldCapability<'withheldBuiltinTools'> {
+  readonly name = 'withheld-builtin-tools'
+  protected readonly field = 'withheldBuiltinTools' as const
+}
 /** `@Guardrails` → `guardrails`. */
 export class GuardrailsCapability extends FieldCapability<'guardrails'> {
   readonly name = 'guardrails'

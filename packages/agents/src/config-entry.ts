@@ -33,6 +33,22 @@ export {
   type ProvenancePerKey,
 } from './config/layered-config.js'
 
+/**
+ * One declared setup, run once from every entry of an app (CLI, TUI, ACP server, sidecar), so no
+ * entry can skip a step another one runs. `assertBootstrapped` lets a module that resolves SDK
+ * paths fail loudly when it is reached too early.
+ */
+export {
+  assertBootstrapped,
+  BootstrapNotRunError,
+  BootstrapStepError,
+  defineAppBootstrap,
+  projectEnvStep,
+  type AppBootstrap,
+  type BootstrapContext,
+  type BootstrapStep,
+} from './config/app-bootstrap.js'
+
 export { TrustStore, TrustStorePermissionsError, type TrustRecord } from './config/trust-store.js'
 
 /**
@@ -224,6 +240,18 @@ export {
   type LoadSettingsResult,
   type Settings,
 } from './config/settings-file.js'
+
+export {
+  CLAUDE_SETTINGS_KEYS,
+  FOREIGN_KEY_DECISIONS,
+  firstSettingsFile,
+  readSettingsFile,
+  settingsCandidates,
+  type ReadSettingsFileOptions,
+  type SettingsCandidate,
+  type SettingsCandidates,
+  type SettingsFileRead,
+} from './config/settings-roots.js'
 
 export { frontmatterValue, splitFrontmatter, type ParsedFrontmatter } from './config/frontmatter.js'
 

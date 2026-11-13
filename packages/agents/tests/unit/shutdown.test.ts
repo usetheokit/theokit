@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { SHUTDOWN_EXIT_CODES, createShutdown } from '../../src/commands/shutdown.js'
+import { SHUTDOWN_EXIT_CODES, createShutdown, exitAfterDrain } from '../../src/commands/shutdown.js'
 
 /**
  * M83 — orderly shutdown, with a watchdog.
@@ -120,5 +120,68 @@ describe('signals are injected, never installed by the module', () => {
     const onSignal = vi.fn()
     createShutdown({ onSignal })
     expect(onSignal.mock.calls.map((c) => c[0])).toEqual(['SIGINT', 'SIGTERM'])
+  })
+})
+
+describe('disposer and exitAfterDrain', () => {
+  it('a disposed cleanup does not run on shutdown', async () => {
+    const run = vi.fn()
+    const shutdown = createShutdown()
+    const dispose = shutdown.register({ name: 'x', run })
+    dispose()
+    await shutdown.run()
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('disposing after run started is a no-op and does not throw', async () => {
+    const run = vi.fn()
+    const shutdown = createShutdown()
+    const dispose = shutdown.register({ name: 'x', run })
+    const p = shutdown.run()
+    expect(() => dispose()).not.toThrow()
+    await p
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('exitAfterDrain sets the exit code and does not call exit before capMs', () => {
+    vi.useFakeTimers()
+    const exit = vi.fn()
+    const setExitCode = vi.fn()
+    exitAfterDrain(3, { exit, setExitCode, capMs: 100 })
+    vi.advanceTimersByTime(99)
+    expect(setExitCode).toHaveBeenCalledWith(3)
+    expect(exit).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('exitAfterDrain calls exit with the code once capMs elapses', () => {
+    vi.useFakeTimers()
+    const exit = vi.fn()
+    exitAfterDrain(3, { exit, setExitCode: vi.fn(), capMs: 100 })
+    vi.advanceTimersByTime(100)
+    expect(exit).toHaveBeenCalledWith(3)
+    vi.useRealTimers()
+  })
+
+  it("the exitAfterDrain timer is unref'd", () => {
+    const unref = vi.fn()
+    const spy = vi
+      .spyOn(globalThis, 'setTimeout')
+      .mockImplementation((() => ({ unref })) as unknown as typeof setTimeout)
+    exitAfterDrain(0, { exit: vi.fn(), setExitCode: vi.fn() })
+    spy.mockRestore()
+    expect(unref).toHaveBeenCalledTimes(1)
+  })
+
+  it('createShutdown with drain true exits through exitAfterDrain', async () => {
+    vi.useFakeTimers()
+    const exit = vi.fn()
+    const shutdown = createShutdown({ exit, drain: true })
+    await shutdown.run()
+    expect(exit).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(3_000)
+    expect(exit).toHaveBeenCalledWith(130)
+    vi.useRealTimers()
+    process.exitCode = undefined
   })
 })
