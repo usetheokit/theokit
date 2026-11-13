@@ -41,7 +41,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./interactive` | The interactive-shell backend contract |
 | `./pty` | The node-pty implementation of that contract |
 | `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes`, `RefreshFailure` |
-| `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`) |
+| `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`); `defineAppBootstrap` runs one setup from every entry |
 | `./tools` | Built-in tool factories (read, list, grep, git, patch, edit, shell, …) |
 | `./client` | Transports for driving an agent from a client. `AgentClient.sendAndWait(input)` resolves when that turn settles (`done`/`error`/`aborted`, never rejects), and `asGoalLoopAgent(client)` adapts a client to the SDK `GoalLoopAgent` so `runGoalLoop` can drive it without polling |
 | `./client/react` | `useAgent` and the React bindings |
@@ -71,6 +71,30 @@ await registry.dispatch('/exit', { exit: () => process.exit(0) })
 ```
 
 `AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
+
+## One bootstrap for every entry
+
+An app with several entries (CLI, ACP server) declares its setup once. Each step runs once, in order,
+before anything resolves an SDK path; a failing step throws `BootstrapStepError` and later steps do not run.
+
+```ts
+// bootstrap.ts
+import { defineAppBootstrap, projectEnvStep } from '@theokit/agents/config'
+
+export const bootstrap = defineAppBootstrap([
+  projectEnvStep, // loads .env, refusing the SDK's sovereign keys
+  { name: 'home', run: (ctx) => void (ctx.env.THEOKIT_HOME ??= ctx.home) },
+])
+
+// cli.ts and acp.ts both begin with the same call
+import { homedir } from 'node:os'
+import { bootstrap } from './bootstrap.js'
+await bootstrap.run({ env: process.env, cwd: process.cwd(), home: homedir() })
+
+// any module that resolves SDK paths
+import { assertBootstrapped } from '@theokit/agents/config'
+assertBootstrapped(bootstrap, 'openTranscriptStore')
+```
 
 ## The shapes worth knowing before you start
 
