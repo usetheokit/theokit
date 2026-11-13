@@ -28,7 +28,7 @@ import { dirname, join } from 'node:path'
 import { transcriptPath } from '@theokit/agents/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { LiveSessionDeletionError, deleteSession, protectedSessions } from '../../src/session/session-ops.js'
+import { LiveSessionDeletionError, deleteSession, forkSession, protectedSessions } from '../../src/session/session-ops.js'
 
 let base: string
 let cwd: string
@@ -280,5 +280,44 @@ describe("deleteSession — the transcript mechanics are the framework's", () =>
     // file — the opposite of what it is for.
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
     expect(code, 'session-ops.ts still unlinks transcripts by hand').not.toMatch(/\brmSync\(/)
+  })
+})
+
+describe('#1905 — the TUI pointer protects an idle, older session', () => {
+  function point(id: string): void {
+    mkdirSync(join(cwd, '.theokit'), { recursive: true })
+    writeFileSync(join(cwd, '.theokit', 'tui-session'), `${id}\n`)
+  }
+
+  it('test_deleteSession_refuses_the_pointed_session_that_is_not_newest', async () => {
+    const pointed = writeTranscript('tui-pointed', 5000)
+    writeTranscript('tui-newest', 1)
+    point('tui-pointed')
+
+    await expect(
+      deleteSession('tui-pointed', { cwd, baseDir: base, removeFromRegistry: async () => {} }),
+    ).rejects.toThrow(LiveSessionDeletionError)
+    expect(existsSync(pointed)).toBe(true)
+  })
+
+  it('test_forkSession_refuses_to_overwrite_the_pointed_session', () => {
+    writeTranscript('src', 4000)
+    const pointed = writeTranscript('tui-pointed', 5000)
+    writeTranscript('tui-newest', 1)
+    point('tui-pointed')
+
+    expect(() => forkSession('src', 'tui-pointed', { cwd, baseDir: base })).toThrow()
+    expect(readFileSync(pointed, 'utf8')).toBe('{}\n')
+  })
+
+  it('test_an_unpointed_unleased_non_newest_session_is_still_deletable', async () => {
+    const other = writeTranscript('tui-other', 5000)
+    writeTranscript('tui-pointed', 4000)
+    writeTranscript('tui-newest', 1)
+    point('tui-pointed')
+
+    const result = await deleteSession('tui-other', { cwd, baseDir: base, removeFromRegistry: async () => {} })
+    expect(result.transcriptRemoved).toBe(true)
+    expect(existsSync(other)).toBe(false)
   })
 })
