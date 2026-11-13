@@ -12,7 +12,7 @@
  *
  * WHY THIS TEST IS STRUCTURAL, stated rather than hidden: an end-to-end demonstration needs a `.env`
  * whose effect is observable from a cheap command. The obvious candidate — `THEOKIT_HOME`, which
- * relocates the session store — is a SOVEREIGN key (`project-env.ts:2`), deliberately not
+ * relocates the session store — is a SOVEREIGN key (`project-env.ts`), deliberately not
  * overridable from a project `.env` so a repository cannot redirect where sessions and credentials
  * live. A first attempt used it and produced identical output before and after the fix; that was
  * correct behaviour, not evidence, and the test was invalid. No other non-sovereign variable

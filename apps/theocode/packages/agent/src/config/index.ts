@@ -26,3 +26,5 @@ export { ENV_HOME } from './env-knobs.js'
 export { findStrandedConfigs, migrateConfigFile } from './migrate-config.js'
 
 export { settingsReport } from './settings-load.js'
+
+export { loadProjectEnv, PROTECTED_ENV_KEYS } from './project-env.js'

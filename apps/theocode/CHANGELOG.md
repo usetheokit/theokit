@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Security
+- **A project `.env` can no longer set `THEOKIT_REDACT_SECRETS`, `THEOKIT_TRUSTED_PROVIDERS` or `THEOKIT_OAUTH_TX_SALT`, and the TUI no longer lets it set any sovereign key.** The CLI's copy of `loadProjectEnv` protected only five keys and the TUI called `process.loadEnvFile()` with none. Both now use one function that protects the SDK's `SOVEREIGN_ENV_KEYS` plus TheoCode's own. (#1892)
 - **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
 
 ### Fixed
