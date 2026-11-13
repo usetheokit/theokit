@@ -134,7 +134,15 @@ export async function doctorCommand(opts: {
     agentsMdFiles: [],
     sandboxMode: cfg.sandbox_mode,
   })
-  agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
+  // Awaited: `buildChatAgent` publishes the wiring only after its disk reads finish, so reading
+  // `wired` earlier reports the placeholder. A failed build is a failed check, not an unhandled
+  // rejection (#1894).
+  let buildFailure: string | undefined
+  try {
+    await agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
+  } catch (err) {
+    buildFailure = err instanceof Error ? err.message : String(err)
+  }
 
   const { AGENT } = await import('@theocode/shared/agent')
   const checks = agent.collectChecks({
@@ -186,6 +194,13 @@ export async function doctorCommand(opts: {
       : {}),
     wired,
   })
+  if (buildFailure !== undefined) {
+    checks.push({
+      name: 'agent',
+      status: 'fail',
+      detail: `could not be built — ${buildFailure}`,
+    })
+  }
   const result = agent.diagnose(checks)
 
   if (opts.json) process.stdout.write(`${JSON.stringify({ type: 'doctor', ...result })}\n`)

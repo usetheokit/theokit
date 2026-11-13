@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 
 /**
  * Scratch roots, removed when the file finishes.
@@ -177,6 +177,81 @@ describe('#1895 — doctor honours -c/--sandbox and applies -C once', () => {
       expect(cwd).toBe(realpathSync(join(parent, 'sub')))
     } finally {
       process.chdir(before)
+    }
+  })
+})
+
+describe('#1894 — doctor reports the wiring buildChatAgent publishes', () => {
+  async function runDoctor(project: string, home: string) {
+    const { doctorCommand } = await import('../../src/commands/doctor.js')
+    const before = process.cwd()
+    const out: string[] = []
+    const envKeys = ['THEOCODE_TRUST_ALL_DIRS', 'THEOCODE_HOME', 'HOME']
+    const saved = envKeys.map((k) => process.env[k])
+    process.env.THEOCODE_TRUST_ALL_DIRS = '1'
+    process.env.THEOCODE_HOME = join(home, '.theocode')
+    process.env.HOME = home
+    const exit = vi.spyOn(process, 'exit').mockImplementation(((c?: number) => {
+      throw new Error(`exit:${c}`)
+    }) as never)
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(((s: string) => {
+      out.push(String(s))
+      return true
+    }) as never)
+    const unhandled: unknown[] = []
+    const onUnhandled = (e: unknown) => unhandled.push(e)
+    process.on('unhandledRejection', onUnhandled)
+    let code: string | undefined
+    try {
+      process.chdir(project)
+      await doctorCommand({ json: true })
+    } catch (e) {
+      code = (e as Error).message
+    } finally {
+      process.chdir(before)
+      exit.mockRestore()
+      write.mockRestore()
+      envKeys.forEach((k, i) => {
+        if (saved[i] === undefined) delete process.env[k]
+        else process.env[k] = saved[i]
+      })
+    }
+    await new Promise((r) => setTimeout(r, 20))
+    process.off('unhandledRejection', onUnhandled)
+    return { code, out: out.join(''), unhandled }
+  }
+
+  it('test_the_mcp_row_names_a_project_server', async () => {
+    const project = mkdtempSync(join(tmpdir(), 'theocode-doctor-mcp-'))
+    const home = mkdtempSync(join(tmpdir(), 'theocode-doctor-mcp-home-'))
+    roots.push(project, home)
+    writeFileSync(
+      join(project, '.mcp.json'),
+      JSON.stringify({ mcpServers: { zebra_server: { command: 'true', args: [] } } }),
+    )
+    const r = await runDoctor(project, home)
+    expect(r.out).toContain('zebra_server')
+    expect(r.unhandled).toEqual([])
+  })
+
+  it('test_a_rejecting_build_is_a_failed_check_not_an_unhandled_rejection', async () => {
+    const project = mkdtempSync(join(tmpdir(), 'theocode-doctor-fail-'))
+    const home = mkdtempSync(join(tmpdir(), 'theocode-doctor-fail-home-'))
+    roots.push(project, home)
+    vi.resetModules()
+    vi.doMock('@theocode/agent', async (orig) => {
+      const real = await orig<typeof import('@theocode/agent')>()
+      return { ...real, buildChatAgent: () => Promise.reject(new Error('boom-1894')) }
+    })
+    try {
+      const r = await runDoctor(project, home)
+      expect(r.code).not.toBe('exit:0')
+      expect(r.code).toMatch(/^exit:[1-9]/)
+      expect(r.out).toContain('boom-1894')
+      expect(r.unhandled).toEqual([])
+    } finally {
+      vi.doUnmock('@theocode/agent')
+      vi.resetModules()
     }
   })
 })

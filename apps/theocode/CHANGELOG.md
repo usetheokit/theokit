@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **`doctor` reports the wiring `buildChatAgent` publishes, and a failed build is a failed check.** The build was not awaited, so the MCP, skills, hooks and AGENTS.md rows could describe the empty placeholder, and a rejection became an unhandled rejection. It is now awaited; a build error adds a failing `agent` check and a non-zero exit. (#1894)
 - **Headless `exec` no longer exits 0 for a turn the loop cut.** A finish chunk carrying `stopReason` (`step_limit` or `no_progress`) now exits 2, the `[exec]` line reads `status=cut stop=<reason>`, and the JSONL stream closes the turn with `turn.failed` (`turn cut: <reason>`). Exit 1 stays for errors and empty turns; the usage text lists the code. (#1897)
 
 ### Security
