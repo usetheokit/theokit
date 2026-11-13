@@ -225,6 +225,18 @@ export {
   type Settings,
 } from './config/settings-file.js'
 
+export {
+  CLAUDE_SETTINGS_KEYS,
+  FOREIGN_KEY_DECISIONS,
+  firstSettingsFile,
+  readSettingsFile,
+  settingsCandidates,
+  type ReadSettingsFileOptions,
+  type SettingsCandidate,
+  type SettingsCandidates,
+  type SettingsFileRead,
+} from './config/settings-roots.js'
+
 export { frontmatterValue, splitFrontmatter, type ParsedFrontmatter } from './config/frontmatter.js'
 
 export {
