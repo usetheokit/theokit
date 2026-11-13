@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Scratch roots, removed when the file finishes.
@@ -28,6 +28,7 @@ afterAll(() => {
 import { parseExecArgs } from '../../src/runtime/args.js'
 import {
   credentialState,
+  doctorCommand,
   resolveDoctorTarget,
   runtimeCredentialState,
 } from '../../src/commands/doctor.js'
@@ -178,5 +179,87 @@ describe('#1895 — doctor honours -c/--sandbox and applies -C once', () => {
     } finally {
       process.chdir(before)
     }
+  })
+})
+
+describe('#1894 — doctor reports the wiring buildChatAgent publishes', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.doUnmock('@theocode/agent')
+    vi.resetModules()
+  })
+
+  async function runDoctor(project: string): Promise<{ out: string; code: number | undefined }> {
+    const before = process.cwd()
+    const home = mkdtempSync(join(tmpdir(), 'theocode-doctor-home-'))
+    roots.push(home)
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('THEOCODE_TRUST_ALL_DIRS', '1')
+    let out = ''
+    vi.spyOn(process.stdout, 'write').mockImplementation((c) => ((out += String(c)), true))
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    let code: number | undefined
+    vi.spyOn(process, 'exit').mockImplementation(((c?: number) => {
+      code = c
+      throw new Error('exit')
+    }) as never)
+    try {
+      process.chdir(project)
+      await doctorCommand({ json: true })
+    } catch (e) {
+      if ((e as Error).message !== 'exit') throw e
+    } finally {
+      process.chdir(before)
+      vi.unstubAllEnvs()
+    }
+    return { out, code }
+  }
+
+  it('test_the_mcp_row_names_a_mcp_json_server', async () => {
+    const project = mkdtempSync(join(tmpdir(), 'theocode-doctor-mcp-'))
+    roots.push(project)
+    writeFileSync(
+      join(project, '.mcp.json'),
+      JSON.stringify({ mcpServers: { zebra1894: { command: 'node', args: ['-e', ''] } } }),
+    )
+    const { out } = await runDoctor(project)
+    const mcp = JSON.parse(out).checks.find((c: { name: string }) => c.name === 'mcp')
+    expect(mcp.detail).toContain('zebra1894')
+  })
+
+  it('test_a_build_failure_is_a_failed_check_not_an_unhandled_rejection', async () => {
+    const actual = await vi.importActual<typeof import('@theocode/agent')>('@theocode/agent')
+    vi.resetModules()
+    vi.doMock('@theocode/agent', () => ({
+      ...actual,
+      buildChatAgent: () => Promise.reject(new Error('boom1894')),
+    }))
+    const { doctorCommand: doctor } = await import('../../src/commands/doctor.js')
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    const project = mkdtempSync(join(tmpdir(), 'theocode-doctor-fail-'))
+    roots.push(project)
+    const before = process.cwd()
+    let out = ''
+    let code: number | undefined
+    vi.spyOn(process.stdout, 'write').mockImplementation((c) => ((out += String(c)), true))
+    vi.spyOn(process, 'exit').mockImplementation(((c?: number) => {
+      code = c
+      throw new Error('exit')
+    }) as never)
+    try {
+      process.chdir(project)
+      await doctor({ json: true })
+    } catch (e) {
+      if ((e as Error).message !== 'exit') throw e
+    } finally {
+      process.chdir(before)
+      await new Promise((r) => setTimeout(r, 10))
+      process.off('unhandledRejection', unhandled)
+    }
+    expect(code).not.toBe(0)
+    expect(code).toBeDefined()
+    expect(out).toContain('boom1894')
+    expect(unhandled).not.toHaveBeenCalled()
   })
 })
