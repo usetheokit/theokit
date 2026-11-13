@@ -131,6 +131,31 @@ agent you call answers the caller, and the caller keeps the turn.
 refused with a `ConfigurationError`. `toAgentFactory({ withholdBuiltinShell: true })` still works;
 when both are set, the union is passed.
 
+## One bootstrap, every entry
+
+`defineAppBootstrap` declares an app's setup once. Each entry calls `run`; the steps run once, in order,
+and a second call returns the first call's promise. A failing step throws `BootstrapStepError` (code
+`bootstrap_step_failed`, names the step, keeps the cause) and the later steps do not run.
+`projectEnvStep` loads the project `.env` without its sovereign keys.
+
+```ts
+// bootstrap.ts
+import { defineAppBootstrap, projectEnvStep } from '@theokit/agents/config'
+
+export const bootstrap = defineAppBootstrap([
+  projectEnvStep,
+  { name: 'home', run: (ctx) => { ctx.env.MYAPP_HOME = ctx.home } },
+])
+
+// cli.ts and acp.ts, each entry the same call
+const ctx = { env: process.env, cwd: process.cwd(), home: '/home/me/.myapp' }
+await bootstrap.run(ctx)
+
+// a module that resolves SDK paths
+import { assertBootstrapped } from '@theokit/agents/config'
+assertBootstrapped(bootstrap, 'resolveTranscriptDir') // throws BootstrapNotRunError if too early
+```
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the

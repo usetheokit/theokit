@@ -249,3 +249,18 @@ export {
  *
  * It stays reachable from `theokit/server` for the consumers that actually have it.
  */
+
+/**
+ * One declared setup, run from every entry of an app, in order, once. `assertBootstrapped` lets a
+ * module that resolves SDK paths refuse to run before it.
+ */
+export {
+  BootstrapNotRunError,
+  BootstrapStepError,
+  assertBootstrapped,
+  defineAppBootstrap,
+  projectEnvStep,
+  type AppBootstrap,
+  type BootstrapContext,
+  type BootstrapStep,
+} from './config/app-bootstrap.js'
