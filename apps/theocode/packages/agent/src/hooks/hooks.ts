@@ -28,14 +28,16 @@ const EVENTS = HOOK_EVENTS
 
 const DEFAULT_TIMEOUT_MS = 5_000
 
-const CONTROL_CHARS = /[\u0000-\u001f\u007f]/
-
 export const CONTROL_CHARS_MESSAGE =
   'command contains control characters that would be hidden in the approval dialog'
 
 /** True when a command carries a character the approval prompt would not show. */
 export function hasControlChars(command: string): boolean {
-  return CONTROL_CHARS.test(command)
+  for (let i = 0; i < command.length; i++) {
+    const code = command.charCodeAt(i)
+    if (code <= 0x1f || code === 0x7f) return true
+  }
+  return false
 }
 
 const hookSchema = z
