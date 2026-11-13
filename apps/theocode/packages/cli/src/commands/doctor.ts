@@ -90,6 +90,37 @@ export function runtimeCredentialState(
   return credentialState(path, now)
 }
 
+/**
+ * Awaited: `onWired` fires only after the disk reads inside the build finish, so reading `wired`
+ * earlier reports the placeholder. A build failure is a failed check, not an unhandled rejection.
+ */
+async function buildWiring(
+  agent: typeof import('@theocode/agent'),
+  cwd: string,
+  posture: Parameters<typeof import('@theocode/agent').wiredCapabilities>[0]['posture'],
+  sandboxMode: Parameters<typeof import('@theocode/agent').wiredCapabilities>[0]['sandboxMode'],
+): Promise<{
+  wired: ReturnType<typeof import('@theocode/agent').wiredCapabilities>
+  buildFailure: string | undefined
+}> {
+  let wired = agent.wiredCapabilities({
+    posture,
+    projectSourcesAllowed: false,
+    mcpServers: {},
+    configuredSkills: [],
+    hookEvents: [],
+    agentsMdFiles: [],
+    sandboxMode,
+  })
+  let buildFailure: string | undefined
+  try {
+    await agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
+  } catch (err) {
+    buildFailure = err instanceof Error ? err.message : String(err)
+  }
+  return { wired, buildFailure }
+}
+
 export async function doctorCommand(opts: { json: boolean; cd?: string }): Promise<void> {
   const agent = await import('@theocode/agent')
   const { authFilePath, strayCredentialFiles } = await import('@theocode/agent/auth')
@@ -104,24 +135,7 @@ export async function doctorCommand(opts: { json: boolean; cd?: string }): Promi
 
   // Built for real, so the wiring reported is the wiring an actual turn would get. A cheaper
   // "read the files again" would reproduce the defect B-071 was reopened for.
-  let wired = agent.wiredCapabilities({
-    posture,
-    projectSourcesAllowed: false,
-    mcpServers: {},
-    configuredSkills: [],
-    hookEvents: [],
-    agentsMdFiles: [],
-    sandboxMode: cfg.sandbox_mode,
-  })
-  // Awaited: `onWired` fires only after the disk reads inside the build finish, so reading `wired`
-  // earlier reports the placeholder above. A build failure is a failed check, not an unhandled
-  // rejection.
-  let buildFailure: string | undefined
-  try {
-    await agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
-  } catch (err) {
-    buildFailure = err instanceof Error ? err.message : String(err)
-  }
+  const { wired, buildFailure } = await buildWiring(agent, cwd, posture, cfg.sandbox_mode)
 
   const { AGENT } = await import('@theocode/shared/agent')
   const checks = agent.collectChecks({
