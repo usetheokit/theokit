@@ -282,6 +282,7 @@ export interface AgentBuilder<
    * #1912 — withhold SDK builtin tools (e.g. `'shell'`) so the model never sees their schema.
    * Projected to `Agent.create({ withheldBuiltinTools })` on every run path. A name the SDK does
    * not know is refused with a `ConfigurationError` at assembly.
+   * Calling it again REPLACES the earlier list; it does not accumulate.
    */
   withholdBuiltinTools(
     names: readonly BuiltinToolName[],

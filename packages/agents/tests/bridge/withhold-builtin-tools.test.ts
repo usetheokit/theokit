@@ -42,23 +42,16 @@ function base() {
 
 describe('withholdBuiltinTools', () => {
   it('withheld builtins reach Agent.create on the in-process path', async () => {
+    h.created.length = 0
     const def = base().withholdBuiltinTools(['shell']).build()
-    let seen: unknown
-    const deps = {
-      stream: async function* (compiled: unknown) {
-        seen = compiled
-        yield* []
-      } as never,
+    // Default deps: the real `streamAgentUIMessages`, down to the fake SDK runtime.
+    for await (const _ of streamAgentTurnInProcess({ default: def } as never, 'key', {
+      message: 'hi',
+    })) {
+      // drain: running the generator is what builds the agent
     }
-    for await (const _ of streamAgentTurnInProcess(
-      { default: def } as never,
-      'key',
-      { message: 'hi' },
-      deps,
-    )) {
-      // drain
-    }
-    expect(assembleM8CreateOptions(seen as never).options.withheldBuiltinTools).toEqual(['shell'])
+    expect(h.created).toHaveLength(1)
+    expect(h.created[0]?.withheldBuiltinTools).toEqual(['shell'])
   })
 
   it('reaches Agent.create through toAgentFactory', async () => {
