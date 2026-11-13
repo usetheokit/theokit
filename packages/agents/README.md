@@ -243,6 +243,23 @@ A consumer that wants it passes it. Measured 2026-09-15 while auditing this tabl
 was listed as `read`. The word describes the mechanism existing; a reader takes it as the behaviour
 happening.
 
+### Reading settings under two roots
+
+An app with its own root (`.myapp/`) that also honours `.claude/` uses `settingsCandidates` (per scope,
+own root before foreign root; `foreignRoot: false` reads only the own root) and `firstSettingsFile` /
+`readSettingsFile`. The first existing file in a scope wins.
+
+```ts
+const c = settingsCandidates({ cwd, home, ownRoot: '.myapp' })
+const read = firstSettingsFile(c.project, { ownKeys: ['model'], renames: { outputStyle: 'style' }, onWarn })
+```
+
+In an own-root file an unknown key stays in `values`, so your strict schema rejects it by name. In a
+foreign-root file it is listed in `unrecognised`. A Claude Code key you do not implement, `$schema` and
+`_`-prefixed keys go to `ignored`. `permissions` becomes `permissionRules`, and entries that cannot be
+rendered are in `unsupportedPermissions`. `hooks` is returned raw. A file that exists but cannot be
+parsed is reported through `onWarn` and yields `undefined`.
+
 ### `settings.json` — `env`
 
 `outputStyle` is read AND applied: `loadSettings` returns it and `resolveOutputStyle` hands it to
