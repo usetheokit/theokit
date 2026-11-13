@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Fixed
+- **Headless `exec` no longer exits 0 for a turn the loop cut.** A finish chunk carrying `stopReason` (`step_limit` or `no_progress`) now exits 2, the `[exec]` line reads `status=cut stop=<reason>`, and the JSONL stream closes the turn with `turn.failed` (`turn cut: <reason>`). Exit 1 stays for errors and empty turns; the usage text lists the code. (#1897)
+
 ### Security
 - **`skill_read` no longer serves the repository's skills in an untrusted directory, and reads the configured home.** It read `<cwd>/.theokit/skills`, `.claude/skills` and plugin bundles whatever the trust posture, and its not-found answer listed their names; it also fell back to the real home instead of the `home` override, as did role discovery for named subagents. Project roots now follow `posture.allows.skills`, and both use the configured home. (#1904)
 - **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)

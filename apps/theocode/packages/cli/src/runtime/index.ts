@@ -12,6 +12,7 @@ export type { ExecGoal, ExecReview, ExecRun, ExecSessions, CliOverrides } from '
 export {
   createHumanProcessor,
   createJsonlProcessor,
+  execExitCode,
   silentEmptyTurnDiagnostic,
   type ExecProcessor,
 } from './events.js'

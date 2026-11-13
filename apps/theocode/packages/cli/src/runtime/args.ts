@@ -14,7 +14,6 @@ import {
   type StdinBehavior,
 } from './exec-args.js'
 
-
 function resolveResume(
   values: OptionValues,
   positionals: string[],
@@ -41,10 +40,7 @@ function resolveResume(
 function resolveInput(
   rawPrompt: string,
   stdinIsTTY: boolean,
-):
-  | { prompt: string | undefined; stdinBehavior: StdinBehavior }
-  | { ui: true }
-  | { error: string } {
+): { prompt: string | undefined; stdinBehavior: StdinBehavior } | { ui: true } | { error: string } {
   const raw = rawPrompt.length > 0 ? rawPrompt : undefined
   if (raw === '-') return { prompt: undefined, stdinBehavior: 'forced' }
   if (raw === undefined) {
@@ -60,7 +56,6 @@ function resolveInput(
   }
   return { prompt: raw, stdinBehavior: stdinIsTTY ? 'none' : 'append' }
 }
-
 
 /**
  * An interactive session, or a refusal naming the flags it would have dropped.

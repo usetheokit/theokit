@@ -11,12 +11,18 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { createHumanProcessor, createJsonlProcessor, type ExecIo } from '../../src/runtime/events.js'
+import {
+  createHumanProcessor,
+  createJsonlProcessor,
+  execExitCode,
+  type ExecIo,
+} from '../../src/runtime/events.js'
 
 function capture() {
   const lines: string[] = []
-  const io: ExecIo = { out: (l) => lines.push(l), err: () => {} }
-  return { io, events: () => lines.map((l) => JSON.parse(l) as Record<string, unknown>) }
+  const err: string[] = []
+  const io: ExecIo = { out: (l) => lines.push(l), err: (l) => err.push(l) }
+  return { io, err, events: () => lines.map((l) => JSON.parse(l) as Record<string, unknown>) }
 }
 
 const types = (events: Record<string, unknown>[]) => events.map((e) => e['type'])
@@ -181,5 +187,40 @@ describe('createJsonlProcessor — tool calls open and close items', () => {
     p.process({ type: 'reasoning-delta', id: 'r1', delta: 'thinking' })
 
     expect(types(c.events())).toEqual(['thread.started', 'turn.started'])
+  })
+})
+
+describe('a turn cut by the loop', () => {
+  const cut = { type: 'finish', messageMetadata: { stopReason: 'step_limit' } } as never
+  it('test_jsonl_cut_turn_fails_and_carries_the_reason', () => {
+    const c = capture()
+    const p = createJsonlProcessor(c.io, 't')
+    p.process(cut)
+    const result = p.finish('finished')
+    expect(types(c.events())).toContain('turn.failed')
+    expect(types(c.events())).not.toContain('turn.completed')
+    expect(JSON.stringify(c.events())).toContain('turn cut: step_limit')
+    expect(result.stopReason).toBe('step_limit')
+    expect(execExitCode(result, undefined)).toBe(2)
+  })
+
+  it('test_a_finish_without_stop_reason_still_exits_zero', () => {
+    const c = capture()
+    const p = createJsonlProcessor(c.io, 't')
+    p.process({ type: 'finish', messageMetadata: { usage: {} } } as never)
+    const result = p.finish('finished')
+    expect(types(c.events())).toContain('turn.completed')
+    expect(result.stopReason).toBeUndefined()
+    expect(execExitCode(result, undefined)).toBe(0)
+  })
+
+  it('test_human_exec_line_says_why_the_turn_was_cut', () => {
+    const err: string[] = []
+    const p = createHumanProcessor({ out: () => {}, err: (l) => err.push(l) }, 't')
+    p.process(cut)
+    const result = p.finish('finished')
+    expect(err.join('\n')).toContain('status=cut stop=step_limit')
+    expect(result.stopReason).toBe('step_limit')
+    expect(execExitCode(result, undefined)).not.toBe(0)
   })
 })
