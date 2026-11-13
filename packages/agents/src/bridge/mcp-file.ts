@@ -153,7 +153,9 @@ export class McpFileError extends TheokitAgentError {
  * direction that matters: a user who declares a server in their home directory sees no server and no
  * complaint, and every symptom points at the project file that never mentioned it.
  *
- * It is not implemented HERE because a second location is a precedence decision, not a second
+ * The merge now exists as `loadMcpScopes` (`mcp-scopes.ts`), which owns the trust gate and the clash
+ * rule (personal wins by default, so a repository cannot replace an operator's server). It is not
+ * implemented HERE because a second location is a precedence decision, not a second
  * `readFileSync`: which file wins per key, whether a user may add a server the project did not
  * declare, and how that interacts with the operator gates in `operator-policy.ts` that already
  * decide which servers may start. `rules/` names precedence as a thing to settle deliberately, and
