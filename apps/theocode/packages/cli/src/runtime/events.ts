@@ -145,6 +145,46 @@ function finalMessage(): {
   }
 }
 
+function humanStatus(
+  errorSeen: boolean,
+  stop: AgentTurnMetadata['stopReason'],
+  status: string,
+): string {
+  if (errorSeen) return 'error'
+  return stop === undefined ? status : 'cut'
+}
+
+/** The prose is the agent's claim; the diff is the artifact. Silent when nothing changed. */
+function emitDiff(
+  io: ExecIo,
+  git: (args: string[]) => { ok: boolean; stdout: string },
+  writes: ToolChunk[],
+): void {
+  const diff = turnDiff(git, changedPaths(writes))
+  if (diff !== undefined) io.err(diff)
+}
+
+function execLine(
+  sessionId: string,
+  status: string,
+  stop: AgentTurnMetadata['stopReason'],
+  u: ReturnType<typeof toCodexUsage>,
+): string {
+  const why = stop === undefined ? '' : ` stop=${stop}`
+  return `[exec] session=${sessionId} status=${status}${why} tokens=${blendedTotal(u)}`
+}
+
+function jsonlOutcome(
+  failed: boolean,
+  stop: AgentTurnMetadata['stopReason'],
+  usage: Record<string, number> | undefined,
+  error: string | undefined,
+): { status: 'ok' | 'error'; error?: string; usage: Record<string, number> | undefined } {
+  if (failed) return { status: 'error', error: error ?? 'turn failed', usage }
+  if (stop !== undefined) return { status: 'error', error: `turn cut: stop=${stop}`, usage }
+  return { status: 'ok', usage }
+}
+
 export function createHumanProcessor(
   io: ExecIo,
   sessionId: string,
@@ -208,19 +248,12 @@ export function createHumanProcessor(
       const finalText = message.done()
       if (finalText.length > 0) io.out(finalText)
       // #105 — after the answer, before the accounting line: what the tree now holds, from git.
-      // The prose above is the agent's claim; this is the artifact. Silent when nothing changed.
-      if (git !== undefined) {
-        const diff = turnDiff(git, changedPaths(writes))
-        if (diff !== undefined) io.err(diff)
-      }
-      const cut = !errorSeen && stopReason !== undefined
+      if (git !== undefined) emitDiff(io, git, writes)
+      const stop = errorSeen ? undefined : stopReason
       const u = toCodexUsage(extra?.usage ?? usage)
-      io.err(
-        `[exec] session=${sessionId} status=${errorSeen ? 'error' : cut ? 'cut' : status}${
-          cut ? ` stop=${stopReason}` : ''
-        } tokens=${blendedTotal(u)}`,
-      )
-      return { finalText, errorSeen, usage: u, ...(cut ? { stopReason } : {}) }
+      io.err(execLine(sessionId, humanStatus(errorSeen, stop, status), stop, u))
+      const cut = stop === undefined ? {} : { stopReason: stop }
+      return { finalText, errorSeen, usage: u, ...cut }
     },
   }
 }
@@ -343,19 +376,15 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
     finish(status, extra) {
       const raw = extra?.usage ?? usage
       const failed = status === 'error' || errorSeen
-      const cut = !failed && stopReason !== undefined
-      const outcome = failed
-        ? { status: 'error' as const, error: extra?.error ?? 'turn failed', usage: raw }
-        : cut
-          ? { status: 'error' as const, error: `turn cut: stop=${stopReason}`, usage: raw }
-          : { status: 'ok' as const, usage: raw }
+      const stop = failed ? undefined : stopReason
+      const outcome = jsonlOutcome(failed, stop, raw, extra?.error)
 
       for (const event of turn.finish(outcome)) emit(event)
       return {
         finalText: message.done(),
         errorSeen: failed,
         usage: toCodexUsage(raw),
-        ...(cut ? { stopReason } : {}),
+        ...(stop === undefined ? {} : { stopReason: stop }),
       }
     },
   }
