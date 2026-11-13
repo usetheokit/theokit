@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Fixed
+- **`theocode doctor` reports the wiring a turn would get, and a failed build is a failed check.** `buildChatAgent` is now awaited before the checks are collected, so the MCP, skills, hooks and AGENTS.md rows describe the disk instead of an empty placeholder; a build error is reported as a failing `wiring` check with a non-zero exit instead of an unhandled rejection. (#1894)
+
 ### Security
 - **Custom command templates no longer inline files named in shell output, and `@file` is contained to the working directory.** Templates now expand through `expandCommandTemplate` from `@theokit/agents/config` (the local `command-template.ts` is gone): shell output is never scanned for `@file`, `` !`cmd` `` and `@file` need a word boundary (`` KEY=!`cmd` `` no longer runs), `\$1` stays literal, and a ```` ```! ```` block or a failed command stops the expansion with an error toast. `@../x` and `@~/x` are no longer read. (#1899)
 
