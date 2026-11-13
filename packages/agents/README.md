@@ -57,6 +57,19 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
 
+A terminal command list, with aliases, hidden names and handlers, from `./commands`:
+
+```ts
+import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
+
+const registry = createCommandRegistry<{ exit(): void }>([
+  defineCommand({ name: 'quit', description: 'leave', aliases: ['exit'], arg: 'none', run: (_arg, ctx) => ctx.exit() }),
+  defineCommand({ name: 'debug', description: 'toggle debug', hidden: true }),
+])
+registry.palette() // [{ name: 'quit', description: 'leave' }]
+await registry.dispatch('/exit', { exit: () => process.exit(0) })
+```
+
 `AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
 
 ## The shapes worth knowing before you start
