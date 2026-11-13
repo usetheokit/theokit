@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **The ACP entry now runs the same startup steps as the CLI and the TUI.** `dist/acp-entry.mjs` skipped the project `.env`, `THEOCODE_HOME` / `home_dir`, the credential-store home and `CLAUDE_PROJECT_DIR`, so an ACP session could use a different session root and credential store. The steps now live in one `bootstrapSurface` (`@theocode/agent/bootstrap`) that the CLI, the TUI and the ACP entry all call; the TUI now also loads `.env` through the sovereign-key guard. (#1893)
 - **Headless `exec` no longer exits 0 for a turn the loop cut.** A finish chunk carrying `stopReason` (`step_limit` or `no_progress`) now exits 2, the `[exec]` line reads `status=cut stop=<reason>`, and the JSONL stream closes the turn with `turn.failed` (`turn cut: <reason>`). Exit 1 stays for errors and empty turns; the usage text lists the code. (#1897)
 
 ### Security

@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { resolveFreshCredential } from '../auth/index.js'
 import { toAgentFactory } from '@theokit/agents'
 
+import { bootstrapSurface } from '../bootstrap/index.js'
 import { buildChatAgent } from './chat.js'
 
 import { setDiagnosticsSink } from '@theokit/agents'
@@ -10,6 +11,12 @@ import { setDiagnosticsSink } from '@theokit/agents'
 import { installDiagnosticSink } from '@theocode/shared/diagnostic-sink'
 
 installDiagnosticSink(setDiagnosticsSink)
+
+// The same startup steps, in the same order, as the CLI and the TUI — before the agent is built, so
+// `THEOCODE_HOME`, the project `.env`, the credential store and `CLAUDE_PROJECT_DIR` are in place
+// before anything resolves an SDK path. The ACP client is launched in the project it has open, so
+// the process directory is the answer here (see the `buildChatAgent` call below).
+bootstrapSurface({ env: process.env, cwd: process.cwd(), home: homedir() })
 
 // B-007 — the error propagates on purpose. Returning `''` here handed the SDK a value it cannot tell
 // apart from a real key, so an authentication failure resurfaced later at the provider with a

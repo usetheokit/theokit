@@ -23,4 +23,3 @@ export { consumeWithForkIfBusy, availableIdOrFork } from './session-busy.js'
 
 export { gitGate } from './preflight.js'
 
-export { loadProjectEnv } from './project-env.js'
