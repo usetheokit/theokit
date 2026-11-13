@@ -15,6 +15,7 @@
  * below expect NO cut, which is the only shape that can fail such a mutant.
  */
 import { describe, expect, test } from 'vitest'
+import { withAggregateCut } from '../../src/composition/composition-record.js'
 import { MAX_AGGREGATE, composeInstructions } from '../../src/context/agents-md.js'
 
 const silent = (): void => {}
@@ -35,7 +36,7 @@ describe('composeInstructions reports what the aggregate ceiling cut', () => {
     // with; without it the whole document reads as AGENTS.md and the cut lands there instead.
     const rules = ['R'.repeat(2_000), 'S'.repeat(2_000)].join('\n\n---\n\n')
     const agentsMd = 'A'.repeat(100)
-    const composed = composeInstructions('base', `${agentsMd}\n\n${rules}`, '', budget(2_000))
+    const composed = composeInstructions('base', { agentsMd, rules }, '', budget(2_000))
 
     const cut = composed.cuts.find((c) => c.source === 'rules')
     expect(cut).toBeDefined()
@@ -48,7 +49,7 @@ describe('composeInstructions reports what the aggregate ceiling cut', () => {
     // An upper bound too, because `from` is PRINTED verbatim in the status row: review showed
     // that direction alone let `rules.length + agentsMd.length` through, putting a number on
     // screen that describes a block bigger than the document it came from.
-    expect(cut?.from).toBeLessThanOrEqual(`${agentsMd}\n\n${rules}`.length - agentsMd.length)
+    expect(cut?.from).toBeLessThanOrEqual(rules.length)
     expect(composed.text.length).toBeLessThanOrEqual(2_000)
   })
 
@@ -108,5 +109,37 @@ describe('composeInstructions reports what the aggregate ceiling cut', () => {
     const composed = composeInstructions('base', 'rules', 'surface')
 
     expect(composed.cuts).toEqual([])
+  })
+
+  test('a --- rule inside AGENTS.md is not a rules boundary (#1903)', () => {
+    const agentsMd = 'HEAD-SECTION ' + 'a'.repeat(500) + '\n\n---\n\n' + 'TAIL-SECTION ' + 'b'.repeat(500)
+    const composed = composeInstructions('BASE', agentsMd, '', budget(900))
+
+    expect(composed.cuts.length).toBeGreaterThan(0)
+    expect(composed.cuts.every((c) => c.source === 'agentsMd')).toBe(true)
+    expect(composed.text).toContain('TAIL-SECTION')
+    expect(composed.text.length).toBeLessThanOrEqual(900)
+  })
+
+  test('rules and an AGENTS.md holding --- are each cut under their own source (#1903)', () => {
+    const agentsMd = 'HEAD ' + 'a'.repeat(600) + '\n\n---\n\n' + 'TAIL ' + 'b'.repeat(600)
+    const rules = ['R1 ' + 'r'.repeat(400), 'R2 ' + 'r'.repeat(400)].join('\n\n---\n\n')
+    const composed = composeInstructions('BASE', { agentsMd, rules }, '', budget(700))
+
+    const rulesCut = composed.cuts.find((c) => c.source === 'rules')
+    const mdCut = composed.cuts.find((c) => c.source === 'agentsMd')
+    expect(rulesCut?.from).toBe(rules.length)
+    expect(rulesCut?.to).toBe(0)
+    expect(mdCut?.from).toBe(agentsMd.length)
+    expect(mdCut?.to).toBeLessThan(agentsMd.length)
+    expect(composed.text).toContain('b'.repeat(50))
+  })
+
+  test('the /status rules record shows no cut when only AGENTS.md was cut (#1903)', () => {
+    const agentsMd = 'x'.repeat(500) + '\n\n---\n\n' + 'y'.repeat(500)
+    const { cuts } = composeInstructions('BASE', agentsMd, '', budget(900))
+    const record = { truncated: false } as unknown as Parameters<typeof withAggregateCut>[0]
+
+    expect(withAggregateCut(record, cuts)).toBe(record)
   })
 })

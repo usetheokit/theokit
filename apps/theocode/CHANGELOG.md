@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Fixed
+- **A `---` rule inside AGENTS.md is no longer read as the start of the rules.** Over the instruction budget, the second half of such an AGENTS.md was dropped and reported as a `rules` cut in `/status`. The sources now reach the budget as separate named parts, each trimmed by its own policy. (#1903)
+
 ### Security
 - **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
 
