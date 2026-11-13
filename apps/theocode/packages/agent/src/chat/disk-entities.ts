@@ -24,7 +24,7 @@ export async function diskEntities(
 }> {
   const [operatorSkills, namedSubagents] = await Promise.all([
     userSkills(operatorHome),
-    namedSubagentDefinitions(cwd, posture.allows.subagents, operatorHome),
+    namedSubagentDefinitions(cwd, posture.allows.subagents),
   ])
   return { operatorSkills, namedSubagents }
 }

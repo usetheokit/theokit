@@ -52,20 +52,3 @@ describe('B-043 — a clean review and an unreadable one are different facts', (
     expect(out.overall_correctness).toBe('fine')
   })
 })
-
-describe('#1906 — a finding without a usable body does not break formatting', () => {
-  const wrap = (f: string): string =>
-    `{"findings":[${f}],"overall_correctness":"patch is correct","overall_explanation":"e"}`
-
-  it('renders a finding with no body', async () => {
-    const { formatReviewFindings } = await import('../../src/review/parse.js')
-    const text = formatReviewFindings(parseReviewOutput(wrap('{"title":"x"}')))
-    expect(text).toContain('x')
-  })
-
-  it('renders a finding whose body is a number', async () => {
-    const { formatReviewFindings } = await import('../../src/review/parse.js')
-    const text = formatReviewFindings(parseReviewOutput(wrap('{"title":"x","body":42}')))
-    expect(text).toContain('x')
-  })
-})

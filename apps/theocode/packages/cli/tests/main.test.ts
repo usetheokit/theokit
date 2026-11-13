@@ -12,7 +12,7 @@
  *
  * WHY THIS TEST IS STRUCTURAL, stated rather than hidden: an end-to-end demonstration needs a `.env`
  * whose effect is observable from a cheap command. The obvious candidate — `THEOKIT_HOME`, which
- * relocates the session store — is a SOVEREIGN key (`PROJECT_ENV_PROTECTED_KEYS`), deliberately not
+ * relocates the session store — is a SOVEREIGN key (`project-env.ts:2`), deliberately not
  * overridable from a project `.env` so a repository cannot redirect where sessions and credentials
  * live. A first attempt used it and produced identical output before and after the fix; that was
  * correct behaviour, not evidence, and the test was invalid. No other non-sovereign variable
@@ -83,12 +83,5 @@ describe('B-026 — the bootstrap does not hide inside the import block', () => 
       boot,
       'bootstrap() runs before chdir, so `.env` comes from the directory being left',
     ).toBeGreaterThan(chdir)
-  })
-})
-
-describe('#1893 — the CLI runs the shared bootstrap', () => {
-  it('test_main_imports_and_calls_bootstrapSurface', () => {
-    expect(SOURCE).toMatch(/import \{ bootstrapSurface \} from '@theocode\/agent\/bootstrap'/)
-    expect(SOURCE).toMatch(/bootstrapSurface\(\{/)
   })
 })

@@ -1,13 +1,13 @@
+import { expandTemplate } from './command-template.js'
 import { subagentPath } from './subagent-inventory.js'
 import type { CustomCommand } from './custom-commands.js'
 import { nextApprovalMode, parseApprovalMode, type ApprovalMode } from '../consent/index.js'
 import { execFile } from 'node:child_process'
-import { readFileSync, realpathSync } from 'node:fs'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
 
 import type { Dispatch, SetStateAction } from 'react'
-
-import { expandCommandTemplate, type TemplateDeps } from '@theokit/agents/config'
 
 import {
   EFFORT_LEVELS,
@@ -123,7 +123,7 @@ export interface CustomCommandDeps {
 export function expansionDeps(
   warn: (m: string) => void,
   shellTimeoutMs: number,
-): TemplateDeps {
+): Parameters<typeof expandTemplate>[2] {
   return {
     shell: (cmd) =>
       new Promise((resolveShell) => {
@@ -136,21 +136,9 @@ export function expansionDeps(
         )
       }),
     readFile: (fileName) => {
-      // Containment, which the framework leaves to the caller: only files inside the working
-      // directory are readable. `~/` is not kept — nothing asks for it, and a template should not
-      // reach the home directory. Checked on real paths so a symlink cannot lead out either.
-      const root = workingDirectory()
-      const path = resolve(root, fileName)
-      const inside = (base: string, target: string): boolean => {
-        const rel = relative(base, target)
-        return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
-      }
-      if (!inside(root, path)) return undefined
-      try {
-        if (!inside(realpathSync(root), realpathSync(path))) return undefined
-      } catch {
-        return undefined
-      }
+      const path = fileName.startsWith('~/')
+        ? join(homedir(), fileName.slice(2))
+        : resolve(workingDirectory(), fileName)
       try {
         // No `statSync` first: a directory makes `readFileSync` throw EISDIR and the catch below
         // already returns undefined for it. The check bought a branch for a case the error path
@@ -204,7 +192,7 @@ export function handleCustomCommand(
   }
   void (async () => {
     try {
-      const expanded = await expandCommandTemplate(
+      const expanded = await expandTemplate(
         command.template,
         arg,
         expansionDeps(

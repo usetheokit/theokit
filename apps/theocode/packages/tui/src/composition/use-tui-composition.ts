@@ -22,6 +22,7 @@ import { useTuiKeyboard } from '../terminal-io/index.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 
+import { homedir } from 'node:os'
 import { basename } from 'node:path'
 
 import { AGENT } from '@theocode/shared/agent'
@@ -29,9 +30,27 @@ import { AGENT } from '@theocode/shared/agent'
 import { workingDirectory } from '../working-directory.js'
 
 import { currentQuestion, setListener } from '@theocode/agent/ask'
+import { installAuthHome } from '@theocode/agent/auth'
+import { installClaudeProjectDir } from '@theocode/agent/hooks'
 
 import { useBacktrack } from '../backtrack/index.js'
 import type { ReasoningEffort } from '@theocode/agent/config'
+
+// The same call the CLI's bootstrap makes. It used to be a hand-rolled `??=` here and a function
+// call there, which is how the two surfaces came to disagree about whether the variable got set.
+installAuthHome(process.env, homedir())
+// Beside it for the same reason: a variable the SDK's hook runner will need, supplied before the
+// first turn rather than discovered as a denial. See `claude-project-dir.ts` for why it is needed
+// at all (usetheokit/theokit-sdk#522).
+//
+// `process.cwd()` and NOT `workingDirectory()`, which this file imports and uses elsewhere. This
+// statement is module-level, so ESM runs it before `main.tsx` reaches `setWorkingDirectory` — the
+// hoisting hazard `working-directory.ts` documents. The slot is unset here, and `workingDirectory()`
+// falls back to `process.cwd()` anyway, so the two are identical at this point; writing the slot
+// accessor would only read as honouring a selection that cannot exist yet, and would start silently
+// differing the day the ordering changed. Left explicit, with the reason, because a sweep for direct
+// cwd reads will otherwise "fix" it.
+installClaudeProjectDir(process.env, process.cwd())
 
 function useConversationState(s: ReturnType<typeof useTuiSession>) {
   const { currentSessionId, SESSION } = s

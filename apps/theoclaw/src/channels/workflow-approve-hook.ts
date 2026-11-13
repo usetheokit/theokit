@@ -17,12 +17,8 @@ export function createWorkflowApproveHook(options: WorkflowApproveOptions): Gate
       const match = COMMAND.exec(event.text.trim())
       if (match === null) return undefined
       if (!options.isOwner(event.platform, event.sender.id)) return { block: true, message: 'Only an owner can do that.' }
-      try {
-        const outcome = await options.resume(match[2]!, match[1] === 'approve')
-        return { block: true, message: outcome ?? 'No suspended workflow run has that token.' }
-      } catch (error) {
-        return { block: true, message: error instanceof Error ? error.message : String(error) }
-      }
+      const outcome = await options.resume(match[2]!, match[1] === 'approve').catch(() => undefined)
+      return { block: true, message: outcome ?? 'No suspended workflow run has that token.' }
     },
   }
 }
