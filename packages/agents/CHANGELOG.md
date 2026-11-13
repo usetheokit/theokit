@@ -1,5 +1,19 @@
 # @theokit/agents
 
+## 16.6.0
+
+### Minor Changes
+
+- 5d55198: Export `ERROR_CODE_DATA_PART` from `@theokit/agents/bridge`; it is now an alias of `WIRE_ERROR_CODE_PART` from `@theokit/presenter/wire`.
+- 82e9aa1: `RefreshFailure` now extends `TheokitAgentError` (code `oauth_refresh_failed`, `isRetryable` mirrors `.transient`, `cause` is the original error), so `isTransientError` works on a refresh failure. It is exported from `@theokit/agents/auth`.
+
+### Patch Changes
+
+- 8742832: `blockAppliesTo` no longer matches `src/**/test.ts` against `src/mytest.ts`: `**/` now matches whole directories only.
+- Updated dependencies [2aacc53]
+- Updated dependencies [5d55198]
+  - @theokit/presenter@0.12.0
+
 ## 16.5.2
 
 ### Patch Changes
