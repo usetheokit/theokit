@@ -211,7 +211,7 @@ export async function buildChatAgent(overrides: {
   // every answer would be "no such skill".
   const allTools = [
     ...profileScopedTools,
-    ...(await skillReadTool(overrides.cwd)),
+    ...(await skillReadTool(overrides.cwd, operatorHome, posture.allows.skills)),
     ...(overrides?.extraTools ?? []),
   ]
   return allTools.reduce((acc, tool) => acc.tool(tool), chain).build()
