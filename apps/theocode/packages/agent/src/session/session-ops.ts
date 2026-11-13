@@ -8,6 +8,7 @@ import { forkTranscript, transcriptPath, transcriptRoot } from '@theokit/agents/
 import { deleteSession as deleteInFramework, protectedTranscriptPaths } from '@theokit/agents/session'
 
 import { listAgents } from './agent-list.js'
+import { readPointerId } from './gc/pointer.js'
 
 const defaultBaseDir = transcriptRoot
 
@@ -241,7 +242,12 @@ export async function deleteSession(
  * miss rather than an incident.
  */
 export function protectedSessions(cwd: string, baseDir: string): string[] {
-  return [...protectedTranscriptPaths(cwd, baseDir).keys()]
+  const paths = new Set(protectedTranscriptPaths(cwd, baseDir).keys())
+  // The framework does not know TheoCode's own pointer (`<cwd>/.theokit/tui-session`; TheoCode never
+  // writes `last-session`), so the session the TUI has open is added here (#1905).
+  const pointed = readPointerId(cwd)
+  if (pointed !== undefined) paths.add(transcriptPath(baseDir, cwd, pointed))
+  return [...paths]
 }
 
 export function forkSession(

@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Fixed
+- **Deleting or forking onto the session the TUI has open is now refused.** `deleteSession` and `forkSession` protected only the framework's pointer, the newest session and leased sessions, so an open but idle session that was not the newest could be deleted despite the refusal message. `<cwd>/.theokit/tui-session` is now in the protected set. (#1905)
+
 ### Security
 - **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
 
