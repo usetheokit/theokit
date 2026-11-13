@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **`goal -m <model>` now routes the model through the credential, as `run -m` does.** With a ChatGPT sign-in, `goal -m openai/gpt-5` used to skip the `openai-chatgpt/` rewrite and reach an API host the credential cannot use. `goal` and `run` now share one function for the model route and the posture/store/config triple, all read from the same `env`. (#1896)
 - **`/review` no longer throws a TypeError when a finding has no `body`.** `parseReviewOutput` now normalizes each finding to the real shape (a missing or non-string `body` becomes `''`, malformed optional fields are dropped), so `formatReviewFindings` renders the title alone. (#1906)
 
 ### Security
