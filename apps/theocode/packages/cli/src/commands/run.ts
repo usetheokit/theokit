@@ -5,6 +5,7 @@ import {
   createHumanProcessor,
   createJsonlProcessor,
   type ExecProcessor,
+  execExitCode,
   silentEmptyTurnDiagnostic,
 } from '../runtime/index.js'
 import { consumeWithForkIfBusy, availableIdOrFork } from '../runtime/index.js'
@@ -283,5 +284,5 @@ export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<voi
   // So collection belongs to the long-lived surface (the TUI spawns a child), and `sessions gc`
   // remains here as the explicit command it always was.
   const drainedExit = createDrainedProcessOutput(DEFAULT_WATCHDOG_MS)
-  drainedExit(result.errorSeen || emptyTurn !== undefined ? 1 : 0)
+  drainedExit(execExitCode(result, emptyTurn))
 }

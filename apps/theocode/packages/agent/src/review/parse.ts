@@ -16,15 +16,42 @@ export interface ReviewOutput {
   overall_confidence_score?: number
 }
 
+function coerceLocation(v: unknown): ReviewFinding['code_location'] {
+  if (v === null || typeof v !== 'object') return undefined
+  const l = v as { absolute_file_path?: unknown; line_range?: unknown }
+  if (typeof l.absolute_file_path !== 'string') return undefined
+  const r = l.line_range as { start?: unknown; end?: unknown } | null | undefined
+  const range =
+    r !== null && typeof r === 'object' && typeof r.start === 'number' && typeof r.end === 'number'
+      ? { line_range: { start: r.start, end: r.end } }
+      : {}
+  return { absolute_file_path: l.absolute_file_path, ...range }
+}
+
+/** Normalize a model-supplied finding to the real shape; `undefined` when it has no string title. */
+function coerceFinding(f: unknown): ReviewFinding | undefined {
+  if (f === null || typeof f !== 'object') return undefined
+  const r = f as Record<string, unknown>
+  if (typeof r.title !== 'string') return undefined
+  const loc = coerceLocation(r.code_location)
+  return {
+    title: r.title,
+    body: typeof r.body === 'string' ? r.body : '',
+    ...(typeof r.confidence_score === 'number' ? { confidence_score: r.confidence_score } : {}),
+    ...(typeof r.priority === 'number' || r.priority === null ? { priority: r.priority } : {}),
+    ...(loc !== undefined ? { code_location: loc } : {}),
+  }
+}
+
 function coerce(parsed: unknown): ReviewOutput | undefined {
   if (parsed === null || typeof parsed !== 'object') return undefined
   const p = parsed as Record<string, unknown>
   if (!Array.isArray(p.findings)) return undefined
   return {
-    findings: p.findings.filter(
-      (f): f is ReviewFinding =>
-        f !== null && typeof f === 'object' && typeof (f as { title?: unknown }).title === 'string',
-    ),
+    findings: p.findings.flatMap((f) => {
+      const c = coerceFinding(f)
+      return c === undefined ? [] : [c]
+    }),
     overall_correctness: typeof p.overall_correctness === 'string' ? p.overall_correctness : '',
     overall_explanation: typeof p.overall_explanation === 'string' ? p.overall_explanation : '',
     ...(typeof p.overall_confidence_score === 'number'

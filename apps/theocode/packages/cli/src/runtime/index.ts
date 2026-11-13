@@ -12,6 +12,7 @@ export type { ExecGoal, ExecReview, ExecRun, ExecSessions, CliOverrides } from '
 export {
   createHumanProcessor,
   createJsonlProcessor,
+  execExitCode,
   silentEmptyTurnDiagnostic,
   type ExecProcessor,
 } from './events.js'
@@ -22,4 +23,4 @@ export { consumeWithForkIfBusy, availableIdOrFork } from './session-busy.js'
 
 export { gitGate } from './preflight.js'
 
-export { loadProjectEnv } from './project-env.js'
+export { loadProjectEnv } from '@theocode/agent/config'

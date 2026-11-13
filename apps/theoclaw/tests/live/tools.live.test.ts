@@ -62,6 +62,8 @@ function liveSettings(prepare?: (toolRoot: string) => void): ToolSettings {
 interface Turn {
   readonly answer: string
   readonly toolCalls: string[]
+  /** What each finished tool returned, by tool name. */
+  readonly toolOutputs: Record<string, string>
 }
 
 /** One turn on a fresh agent; fails naming the status when the run does not finish. */
@@ -71,12 +73,14 @@ async function turn(settings: ToolSettings, prompt: string): Promise<Turn> {
   try {
     const run = await agent.send(prompt)
     const toolCalls: string[] = []
+    const toolOutputs: Record<string, string> = {}
     for await (const event of run.stream()) {
       if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
+      if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'completed' && 'result' in event) toolOutputs[String(event.name)] = JSON.stringify(event.result)
     }
     const outcome = await run.wait()
     if (outcome.status !== 'finished') throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
-    return { answer: String((outcome as { result?: unknown }).result ?? ''), toolCalls }
+    return { answer: String((outcome as { result?: unknown }).result ?? ''), toolCalls, toolOutputs }
   } finally {
     await agent[Symbol.asyncDispose]()
   }
@@ -115,7 +119,10 @@ describe.skipIf(!LIVE)('the core tools against a real model', () => {
     )
     expect(result.toolCalls).toContain('todolist')
     expect(result.toolCalls).toContain('web_fetch')
-    expect(result.answer).toContain('Example Domain')
+    // The page's heading has changed over time, so the fetch is proven by the tool's own result: the
+    // page has always said it is for use in documentation.
+    expect(result.toolOutputs['web_fetch']).toMatch(/documentation/i)
+    expect(result.answer.length).toBeGreaterThan(0)
   })
 
   it('a real model lists, writes, edits and patches a file in the tool root', { timeout: 180_000 }, async () => {

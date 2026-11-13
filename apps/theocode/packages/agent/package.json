@@ -1,6 +1,6 @@
 {
   "name": "@theocode/agent",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "type": "module",
   "description": "The agent and everything that composes it.",
@@ -9,6 +9,7 @@
     "./chat": "./src/chat/chat.ts",
     "./ask": "./src/ask/index.ts",
     "./auth": "./src/auth/index.ts",
+    "./bootstrap": "./src/bootstrap/index.ts",
     "./config": "./src/config/index.ts",
     "./context": "./src/context/index.ts",
     "./goal": "./src/goal/index.ts",

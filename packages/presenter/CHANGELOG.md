@@ -1,5 +1,15 @@
 # @theokit/presenter
 
+## 0.12.0
+
+### Minor Changes
+
+- 5d55198: Add `createWireReader`, a stateful wire reader that attaches the `data-error-code` code to the next `error` event and tracks tool names, and export `WIRE_ERROR_CODE_PART` from `@theokit/presenter/wire`.
+
+### Patch Changes
+
+- 2aacc53: `fromSdkMessage` now reports a tool call with a non-zero `result.exitCode` (failed, timed out, vetoed, unknown tool) as `isError: true`, matching `@theokit/agents`. It used to read only `status`, which the SDK sets to `completed` for every finished call.
+
 ## 0.11.0
 
 ### Minor Changes

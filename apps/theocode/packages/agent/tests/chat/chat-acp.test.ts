@@ -20,12 +20,18 @@ const toAgentFactory = vi.fn((factory: unknown, _options?: unknown) => factory)
 const resolveFreshCredential = vi.fn()
 
 vi.mock('../../src/chat/chat.js', () => ({ buildChatAgent }))
-vi.mock('@theokit/agents', () => ({
+// The entry now runs the real bootstrap (#1893), which reaches the rest of `@theokit/agents` and the
+// real `installAuthHome`; only the entry's own seams are replaced.
+vi.mock('@theokit/agents', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@theokit/agents')>()),
   toAgentFactory,
   setDiagnosticsSink: vi.fn(),
 }))
 vi.mock('@theocode/shared/diagnostic-sink', () => ({ installDiagnosticSink: vi.fn() }))
-vi.mock('../../src/auth/index.js', () => ({ resolveFreshCredential }))
+vi.mock('../../src/auth/index.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/auth/index.js')>()),
+  resolveFreshCredential,
+}))
 
 describe('B-001 — the ACP entry declares the headless profile', () => {
   beforeEach(() => {
@@ -92,5 +98,38 @@ describe('B-007 — credential failure is not degraded to an empty key', () => {
     const options = toAgentFactory.mock.calls[0]?.[1] as { apiKey: () => Promise<string> }
 
     await expect(options.apiKey()).resolves.toBe('sk-real-key')
+  })
+})
+
+describe('#1893 — the ACP entry runs the shared bootstrap', () => {
+  it('test_acp_entry_installs_sdk_homes_from_THEOCODE_HOME_before_the_factory_is_exported', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const dir = mkdtempSync(join(tmpdir(), 'acp-boot-'))
+    const keys = ['THEOCODE_HOME', 'THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'CLAUDE_PROJECT_DIR']
+    const saved = keys.map((k) => [k, process.env[k]] as const)
+    vi.clearAllMocks()
+    vi.resetModules()
+    for (const k of keys) delete process.env[k]
+    // The SDK home variable the bootstrap installs from; `THEOCODE_HOME` is only a protected key.
+    process.env.THEOKIT_HOME = dir
+    let seen: Record<string, string | undefined> = {}
+    toAgentFactory.mockImplementationOnce((f: unknown) => {
+      seen = Object.fromEntries(keys.map((k) => [k, process.env[k]]))
+      return f
+    })
+    try {
+      await import('../../src/chat/chat-acp.js')
+      expect(seen.THEOKIT_HOME).toBe(dir)
+      expect(seen.THEOKIT_AUTH_HOME).toMatch(/\.theocode$/)
+      expect(seen.CLAUDE_PROJECT_DIR).toBe(process.cwd())
+    } finally {
+      for (const [k, v] of saved) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
