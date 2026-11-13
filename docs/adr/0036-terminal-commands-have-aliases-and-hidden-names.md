@@ -20,7 +20,7 @@ to the canonical definition) and `dispatch()` (routes, then calls `run`). A name
 twice throws `CommandRegistryError` at creation, instead of `ambiguous-command` at the first
 keystroke. `routeCommand` keeps its signature and resolves aliases too.
 
-Help rendering and completions stay out, and so does argument parsing for process launch (ADR 0042
+Help rendering and completions stay out, and so does argument parsing for process launch (the
 reasoning in the `commands/index.ts` docblock). Command names and wording stay in the product.
 
 ## Consequences
