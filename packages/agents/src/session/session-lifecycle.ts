@@ -4,6 +4,7 @@
  * feature: a module whose job is listing and deleting sessions cannot address them by literal.
  */
 import { closeSync, openSync, readFileSync, readdirSync, readSync, rmSync, statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
@@ -524,6 +525,33 @@ export function forkBeforeUserTurn(
   // an index forces every consumer to re-read the transcript to learn what it just selected — which
   // is what TheoCode's backtrack module had to do.
   return { transcript: dst, recordIndex: selected.index, selectedText: selected.text }
+}
+
+/** One user turn a backtrack UI can offer. */
+export interface UserTurnPreview {
+  /** 1-based, the same number `forkBeforeUserTurn` takes. */
+  nth: number
+  text: string
+}
+
+/**
+ * List the user turns `forkBeforeUserTurn` can cut before, using the same rule and the same read
+ * (`reachableUserTurns`), so entry `nth` here is the turn that `nth` selects there.
+ *
+ * A missing transcript resolves to `[]`. A torn last line is tolerated by the shared read.
+ */
+export async function listUserTurns(
+  sessionId: string,
+  options: { readonly cwd: string; readonly root?: string },
+): Promise<readonly UserTurnPreview[]> {
+  const path = transcriptPath(options.root ?? transcriptRoot(), options.cwd, sessionId)
+  try {
+    await stat(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error
+  }
+  return reachableUserTurns(path).map((turn, i) => ({ nth: i + 1, text: turn.text }))
 }
 
 /**
