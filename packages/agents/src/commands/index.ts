@@ -22,5 +22,16 @@ export type {
   RoutedInput,
 } from './command-router.js'
 
-export { createShutdown, DEFAULT_WATCHDOG_MS, SHUTDOWN_EXIT_CODES } from './shutdown.js'
-export type { CleanupTask, Shutdown, ShutdownDeps, ShutdownOutcome } from './shutdown.js'
+export {
+  createShutdown,
+  exitAfterDrain,
+  DEFAULT_WATCHDOG_MS,
+  SHUTDOWN_EXIT_CODES,
+} from './shutdown.js'
+export type {
+  CleanupTask,
+  ExitAfterDrainDeps,
+  Shutdown,
+  ShutdownDeps,
+  ShutdownOutcome,
+} from './shutdown.js'
