@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 
 /**
  * Scratch roots, removed when the file finishes.
@@ -26,8 +26,11 @@ afterAll(() => {
 })
 
 import { parseExecArgs } from '../../src/runtime/args.js'
+import * as agentModule from '@theocode/agent'
+import { trustDir } from '@theocode/agent/config'
 import {
   credentialState,
+  doctorCommand,
   resolveDoctorTarget,
   runtimeCredentialState,
 } from '../../src/commands/doctor.js'
@@ -178,5 +181,62 @@ describe('#1895 — doctor honours -c/--sandbox and applies -C once', () => {
     } finally {
       process.chdir(before)
     }
+  })
+})
+
+describe('#1894 — doctor awaits the build', () => {
+  async function runDoctor(project: string, home: string) {
+    const before = process.cwd()
+    const prevHome = process.env['THEOKIT_HOME']
+    const out: string[] = []
+    const unhandled: unknown[] = []
+    const onUnhandled = (e: unknown) => unhandled.push(e)
+    process.on('unhandledRejection', onUnhandled)
+    process.env['THEOKIT_HOME'] = home
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    const w = vi.spyOn(process.stdout, 'write').mockImplementation((c) => (out.push(String(c)), true))
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      process.chdir(project)
+      await doctorCommand({ json: true })
+      await new Promise((r) => setTimeout(r, 20))
+      return { out: out.join(''), code: exit.mock.calls[0]?.[0], unhandled }
+    } finally {
+      process.chdir(before)
+      process.off('unhandledRejection', onUnhandled)
+      if (prevHome === undefined) delete process.env['THEOKIT_HOME']
+      else process.env['THEOKIT_HOME'] = prevHome
+      w.mockRestore()
+      exit.mockRestore()
+      vi.restoreAllMocks()
+    }
+  }
+
+  function scratch() {
+    const home = mkdtempSync(join(tmpdir(), 'theocode-doctor-th-'))
+    const project = realpathSync(mkdtempSync(join(tmpdir(), 'theocode-doctor-proj-')))
+    roots.push(home, project)
+    return { home, project }
+  }
+
+  it('test_the_mcp_row_names_a_server_from_mcp_json', async () => {
+    const { home, project } = scratch()
+    writeFileSync(
+      join(project, '.mcp.json'),
+      JSON.stringify({ mcpServers: { zebra1894: { command: 'node', args: ['x.js'] } } }),
+    )
+    process.env['THEOKIT_HOME'] = home
+    await trustDir(project)
+    const r = await runDoctor(project, home)
+    expect(r.out).toContain('zebra1894')
+  })
+
+  it('test_a_rejecting_build_is_a_failed_check', async () => {
+    const { home, project } = scratch()
+    vi.spyOn(agentModule, 'buildChatAgent').mockRejectedValue(new Error('boom1894'))
+    const r = await runDoctor(project, home)
+    expect(r.out).toContain('boom1894')
+    expect(r.code).not.toBe(0)
+    expect(r.unhandled).toEqual([])
   })
 })

@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **`theocode doctor` now reports the wiring `buildChatAgent` publishes.** It read the wiring without waiting for the build, so the MCP, skills, hooks and AGENTS.md rows could describe an empty placeholder, and a build failure was an unhandled rejection. The build is awaited and a failure is a failed `agent-build` check. (#1894)
 - **The ACP entry now runs the same startup steps as the CLI and TUI.** `dist/acp-entry.mjs` skipped the project `.env`, `THEOCODE_HOME` / `home_dir`, the credential-store pointer and `CLAUDE_PROJECT_DIR`, so an ACP session could use a different session root and credential store. The steps now live in one function, `bootstrapSurface` in `@theocode/agent/bootstrap`, called by all three entries. (#1893)
 
 ### Security
