@@ -56,7 +56,7 @@ export interface RunComposition {
   readonly model: string
 }
 
-export async function composeRun(
+export function resolveRunContext(
   args: {
     readonly overrides: CliOverrides
     readonly model?: string
@@ -76,7 +76,7 @@ export async function composeRun(
     readonly routeModel?: (model: string) => string
   },
   seams: CompositionSeams = {},
-): Promise<RunComposition> {
+) {
   const cwd = seams.cwd ?? process.cwd()
 
   // B-033 — the same environment that feeds config resolution below. These used to be two
@@ -94,16 +94,25 @@ export async function composeRun(
     cli: args.overrides,
   })
 
+  // `cfg.model` is what `buildChatAgent` would fall back to on its own (`overrides?.model ??
+  // cfg.model`), named here so `routeModel` sees the id that is actually going to be used rather
+  // than `undefined`. Shared with `goal`, so `-m` is routed through the credential in both.
+  const requested = args.model ?? cfg.model
+  const model = args.routeModel === undefined ? requested : args.routeModel(requested)
+
+  return { cwd, env, store, posture, cfg, model }
+}
+
+export async function composeRun(
+  args: Parameters<typeof resolveRunContext>[0],
+  seams: CompositionSeams = {},
+): Promise<RunComposition> {
+  const { cwd, posture, cfg, model } = resolveRunContext(args, seams)
+
   const policy = resolveHeadlessApproval(
     cfg.approval_policy,
     resolveSandboxPosture({ mode: cfg.sandbox_mode }),
   )
-
-  // `cfg.model` is what `buildChatAgent` would fall back to on its own (`overrides?.model ??
-  // cfg.model`), named here so `routeModel` sees the id that is actually going to be used rather
-  // than `undefined`.
-  const requested = args.model ?? cfg.model
-  const model = args.routeModel === undefined ? requested : args.routeModel(requested)
 
   return {
     cfg,

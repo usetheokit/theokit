@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **`goal -m <model>` routes the model through the credential, as `run -m` does.** An explicit `-m` skipped the `openai-chatgpt/` rewrite, so a ChatGPT sign-in was sent to `api.openai.com`, which refuses it (surfacing as a 429). `goal` now shares `run`'s context resolution, so posture, trust store and config also come from one `env` instead of `process.env`. (#1896)
 - **Headless `exec` no longer exits 0 for a turn the loop cut.** A finish chunk carrying `stopReason` (`step_limit` or `no_progress`) now exits 2, the `[exec]` line reads `status=cut stop=<reason>`, and the JSONL stream closes the turn with `turn.failed` (`turn cut: <reason>`). Exit 1 stays for errors and empty turns; the usage text lists the code. (#1897)
 
 ### Security

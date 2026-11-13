@@ -4,6 +4,7 @@ import { createGoalCancellation } from '../runtime/index.js'
 import { createDrainedProcessOutput } from '../runtime/index.js'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import type { CompositionSeams } from '../run-composition.js'
 import type { ExecGoal } from '../runtime/index.js'
 import type { Shutdown } from '@theokit/agents/commands'
 import type { resolveEffectiveConfig, resolveTrustPosture } from '@theocode/agent/config'
@@ -22,6 +23,7 @@ interface GoalAgentContext {
   readonly routedModel: string
   readonly oracle: EffectiveConfig['goal_oracle']
   readonly updateGoalSignal: GoalUpdateSignal
+  readonly env: Record<string, string | undefined>
 }
 
 async function buildGoalAgent({
@@ -31,6 +33,7 @@ async function buildGoalAgent({
   routedModel,
   oracle,
   updateGoalSignal,
+  env,
 }: GoalAgentContext) {
   const { toAgentFactory } = await import('@theokit/agents')
   const { buildChatAgent } = await import('@theocode/agent/chat')
@@ -58,7 +61,7 @@ async function buildGoalAgent({
     }),
     {
       apiKey: () =>
-        resolveCredentialForModel(routedModel, { env: process.env, home: homedir() }).then(
+        resolveCredentialForModel(routedModel, { env, home: homedir() }).then(
           (c) => c.apiKey,
         ),
       approvals: headlessApprovalPosture(
@@ -88,23 +91,35 @@ function reportGoalOutcome(
   return finalStatus
 }
 
-async function resolveGoalContext(args: ExecGoal) {
-  const { resolveCredential, resolveCredentialForModel } = await import('@theocode/agent/auth')
-  const { trustStorePath, resolveEffectiveConfig, resolveTrustPosture } =
-    await import('@theocode/agent/config')
-  const { routeGoalModel } = await import('@theocode/agent/goal')
-  const routingCred = resolveCredential({ env: process.env, home: homedir() })
-  const goalCwd = process.cwd()
-  const posture = resolveTrustPosture(goalCwd)
-  const cfg = resolveEffectiveConfig({ cwd: goalCwd, store: trustStorePath(), cli: args.overrides })
-  const routedModel = args.model ?? routeGoalModel(routingCred, cfg.model)
-  const cred = await resolveCredentialForModel(routedModel, { env: process.env, home: homedir() })
-  return { cwd: goalCwd, posture, cfg, oracle: cfg.goal_oracle, routedModel, cred }
+export async function resolveGoalContext(args: ExecGoal, seams: CompositionSeams = {}) {
+  const { resolveCredential, resolveCredentialForModel, routeToCredential } =
+    await import('@theocode/agent/auth')
+  const { resolveRunContext } = await import('../run-composition.js')
+  // One env for posture, store, config and credentials: the same source `run` uses (B-033).
+  const env = seams.env ?? process.env
+  const home = homedir()
+  const routingCred = resolveCredential({ env, home })
+  // Route AFTER choosing `args.model ?? cfg.model`, as `run` does, so `-m` is routed too (#1896).
+  const {
+    cwd,
+    posture,
+    cfg,
+    model: routedModel,
+  } = resolveRunContext(
+    {
+      overrides: args.overrides,
+      ...(args.model !== undefined ? { model: args.model } : {}),
+      routeModel: (id) => routeToCredential(routingCred, id),
+    },
+    { ...seams, env },
+  )
+  const cred = await resolveCredentialForModel(routedModel, { env, home })
+  return { cwd, posture, cfg, oracle: cfg.goal_oracle, routedModel, cred, env }
 }
 
 export async function goalCommand(args: ExecGoal, shutdown: Shutdown): Promise<void> {
   const { GOAL_DEFAULTS, runGoal, makeSignalJudge } = await import('@theocode/agent/goal')
-  const { cwd, posture, cfg, oracle, routedModel, cred } = await resolveGoalContext(args)
+  const { cwd, posture, cfg, oracle, routedModel, cred, env } = await resolveGoalContext(args)
   const updateGoalSignal: GoalUpdateSignal = {}
   try {
     const goalAgent = await buildGoalAgent({
@@ -114,6 +129,7 @@ export async function goalCommand(args: ExecGoal, shutdown: Shutdown): Promise<v
       routedModel,
       oracle,
       updateGoalSignal,
+      env,
     })
     const cancellation = createGoalCancellation(shutdown, { watchdogMs: DEFAULT_WATCHDOG_MS })
     shutdown.register({ name: 'dispose-goal-agent', run: () => goalAgent.dispose() })
