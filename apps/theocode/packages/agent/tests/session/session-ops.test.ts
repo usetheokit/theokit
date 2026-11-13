@@ -28,7 +28,12 @@ import { dirname, join } from 'node:path'
 import { transcriptPath } from '@theokit/agents/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { LiveSessionDeletionError, deleteSession, forkSession, protectedSessions } from '../../src/session/session-ops.js'
+import {
+  LiveSessionDeletionError,
+  deleteSession,
+  forkSession,
+  protectedSessions,
+} from '../../src/session/session-ops.js'
 
 let base: string
 let cwd: string
@@ -272,7 +277,10 @@ describe("deleteSession — the transcript mechanics are the framework's", () =>
     // Pillar of the migration: the mechanics live in `@theokit/agents/session`, not here. Asserted
     // on the seam — this module must not reach for `node:fs` to remove a transcript, because two
     // owners of "how a transcript is deleted" is how the two answers drift apart.
-    const source = readFileSync(new URL('../../src/session/session-ops.ts', import.meta.url), 'utf8')
+    const source = readFileSync(
+      new URL('../../src/session/session-ops.ts', import.meta.url),
+      'utf8',
+    )
     expect(source).toContain("from '@theokit/agents/session'")
 
     // Comments stripped first. The prose above the delegation NAMES the call it replaced, and a
@@ -306,7 +314,9 @@ describe('#1905 — the TUI pointer protects an idle, older session', () => {
     writeTranscript('tui-newest', 1)
     point('tui-pointed')
 
-    expect(() => forkSession('src', 'tui-pointed', { cwd, baseDir: base })).toThrow()
+    expect(() => forkSession('src', 'tui-pointed', { cwd, baseDir: base })).toThrow(
+      /refusing to write over a live session/,
+    )
     expect(readFileSync(pointed, 'utf8')).toBe('{}\n')
   })
 
@@ -316,7 +326,11 @@ describe('#1905 — the TUI pointer protects an idle, older session', () => {
     writeTranscript('tui-newest', 1)
     point('tui-pointed')
 
-    const result = await deleteSession('tui-other', { cwd, baseDir: base, removeFromRegistry: async () => {} })
+    const result = await deleteSession('tui-other', {
+      cwd,
+      baseDir: base,
+      removeFromRegistry: async () => {},
+    })
     expect(result.transcriptRemoved).toBe(true)
     expect(existsSync(other)).toBe(false)
   })
