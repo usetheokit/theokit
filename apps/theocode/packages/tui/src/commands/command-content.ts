@@ -65,8 +65,7 @@ export function agentsMdRow(
 
   if (wired === undefined) {
     const onDisk = onDiskChain(workingDirectory())
-    const project =
-      onDisk.length === 0 ? '' : `${relative(onDisk)}  (on disk — not loaded yet)`
+    const project = onDisk.length === 0 ? '' : `${relative(onDisk)}  (on disk — not loaded yet)`
     return joinParts(project, userNote)
   }
   const entity = wired.agentsMd
@@ -194,8 +193,12 @@ export function sendMessage(
     })
     return
   }
-  const { message, attached } = resolveMentions(text, workingDirectory())
-  if (attached.length > 0) {
+  const { message, attached, skipped } = resolveMentions(text, workingDirectory())
+  if (skipped.length > 0) {
+    const notAttached = skipped.map((s) => `${s.ref} (${s.reason})`).join(', ')
+    const head = attached.length > 0 ? `Attached: ${attached.join(', ')}. ` : ''
+    setToast({ message: `${head}Not attached: ${notAttached}`, variant: 'error' })
+  } else if (attached.length > 0) {
     setToast({ message: `Attached: ${attached.join(', ')}`, variant: 'info' })
   }
   lastSentMessage.current = message

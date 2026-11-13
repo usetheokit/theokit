@@ -62,3 +62,16 @@ describe('sendMessage — a running goal owns the agent', () => {
     expect(setToast).not.toHaveBeenCalled()
   })
 })
+
+describe('sendMessage — a mention that is not attached is reported', () => {
+  it('test_a_missing_file_mention_is_toasted_with_its_reason', () => {
+    const { agent, lastSentMessage, setToast } = harness()
+
+    sendMessage('look at @missing-file-1900.ts', false, agent, lastSentMessage, setToast)
+
+    const payload = vi.mocked(setToast).mock.calls[0]?.[0] as ToastPayload
+    expect(payload.message).toContain('@missing-file-1900.ts')
+    expect(payload.message).toContain('file not found')
+    expect(agent.send).toHaveBeenCalledTimes(1)
+  })
+})
