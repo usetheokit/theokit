@@ -23,7 +23,7 @@ export interface ProcessorResult {
 }
 
 /** Exit code of a turn cut by the step limit or the no-progress guard (1 stays failure). */
-export const CUT_TURN_EXIT_CODE = 2
+const CUT_TURN_EXIT_CODE = 2
 
 export function execExitCode(result: ProcessorResult, emptyTurn: string | undefined): number {
   if (result.errorSeen || emptyTurn !== undefined) return 1
