@@ -4,6 +4,7 @@ import {
   type AgentOutputEvent,
   type TurnLifecycle,
 } from '@theokit/presenter'
+import type { AgentTurnMetadata } from '@theokit/agents/bridge'
 import type { WireChunk } from '@theokit/presenter/wire'
 
 type TurnFold = TurnLifecycle<unknown>
@@ -17,6 +18,54 @@ export interface ProcessorResult {
   finalText: string
   errorSeen: boolean
   usage: Record<string, number>
+  /** Set when the loop stopped the model before it finished (`step_limit` / `no_progress`). */
+  stopReason?: AgentTurnMetadata['stopReason']
+}
+
+/** Exit code of a turn cut by the step limit or the no-progress guard (1 stays failure). */
+const CUT_TURN_EXIT_CODE = 2
+
+export function execExitCode(result: ProcessorResult, emptyTurn: string | undefined): number {
+  if (result.errorSeen || emptyTurn !== undefined) return 1
+  return result.stopReason !== undefined ? CUT_TURN_EXIT_CODE : 0
+}
+
+type StopReason = AgentTurnMetadata['stopReason']
+
+function withStopReason(result: ProcessorResult, stopReason: StopReason): ProcessorResult {
+  return stopReason === undefined ? result : { ...result, stopReason }
+}
+
+/** The `[exec]` accounting line; a cut turn says `status=cut stop=<reason>`. */
+function execLine(
+  sessionId: string,
+  status: 'finished' | 'error',
+  stopReason: StopReason,
+  tokens: number,
+): string {
+  const cut = status !== 'error' && stopReason !== undefined
+  const shown = cut ? `cut stop=${stopReason}` : status
+  return `[exec] session=${sessionId} status=${shown} tokens=${tokens}`
+}
+
+/** A turn the loop cut closes as failed in JSONL, naming the reason. */
+function jsonlOutcome(
+  failed: boolean,
+  error: string | undefined,
+  stopReason: StopReason,
+  usage: Record<string, number> | undefined,
+) {
+  if (failed) return { status: 'error' as const, error: error ?? 'turn failed', usage }
+  if (stopReason !== undefined)
+    return { status: 'error' as const, error: `turn cut: ${stopReason}`, usage }
+  return { status: 'ok' as const, usage }
+}
+
+function readFinish(chunk: WireChunk): {
+  usage?: Record<string, number>
+  stopReason?: AgentTurnMetadata['stopReason']
+} {
+  return (chunk as { messageMetadata?: Partial<AgentTurnMetadata> }).messageMetadata ?? {}
 }
 
 /**
@@ -141,6 +190,7 @@ export function createHumanProcessor(
   const message = finalMessage()
   let errorSeen = false
   let usage: Record<string, number> | undefined
+  let stopReason: AgentTurnMetadata['stopReason']
   // #105 — collected as they go past, so the diff at the end is scoped to what THIS turn wrote
   // rather than to whatever the working tree happens to hold.
   const writes: ToolChunk[] = []
@@ -175,7 +225,9 @@ export function createHumanProcessor(
   return {
     process(chunk) {
       if (chunk.type === 'finish') {
-        usage = (chunk.messageMetadata as { usage?: Record<string, number> } | undefined)?.usage
+        const meta = readFinish(chunk)
+        usage = meta.usage
+        stopReason = meta.stopReason
         return
       }
       for (const event of translate(chunk)) onEvent[event.type]?.(event)
@@ -194,10 +246,8 @@ export function createHumanProcessor(
         if (diff !== undefined) io.err(diff)
       }
       const u = toCodexUsage(extra?.usage ?? usage)
-      io.err(
-        `[exec] session=${sessionId} status=${errorSeen ? 'error' : status} tokens=${blendedTotal(u)}`,
-      )
-      return { finalText, errorSeen, usage: u }
+      io.err(execLine(sessionId, errorSeen ? 'error' : status, stopReason, blendedTotal(u)))
+      return withStopReason({ finalText, errorSeen, usage: u }, stopReason)
     },
   }
 }
@@ -282,6 +332,7 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
   }
 
   let usage: Record<string, number> | undefined
+  let stopReason: AgentTurnMetadata['stopReason']
   // The same rule as the human processor. The JSONL events themselves already arrive separated by
   // `turn.observe`; it is `finalText` — what `-o/--output-last-message` writes — that ran them
   // together, so a script reading that file got the preambles glued to the answer.
@@ -304,7 +355,9 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
   return {
     process(chunk) {
       if (chunk.type === 'finish') {
-        usage = (chunk.messageMetadata as { usage?: Record<string, number> } | undefined)?.usage
+        const meta = readFinish(chunk)
+        usage = meta.usage
+        stopReason = meta.stopReason
         return
       }
       for (const event of translate(chunk)) {
@@ -317,12 +370,13 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
     finish(status, extra) {
       const raw = extra?.usage ?? usage
       const failed = status === 'error' || errorSeen
-      const outcome = failed
-        ? { status: 'error' as const, error: extra?.error ?? 'turn failed', usage: raw }
-        : { status: 'ok' as const, usage: raw }
+      const outcome = jsonlOutcome(failed, extra?.error, stopReason, raw)
 
       for (const event of turn.finish(outcome)) emit(event)
-      return { finalText: message.done(), errorSeen: failed, usage: toCodexUsage(raw) }
+      return withStopReason(
+        { finalText: message.done(), errorSeen: failed, usage: toCodexUsage(raw) },
+        stopReason,
+      )
     },
   }
 }
