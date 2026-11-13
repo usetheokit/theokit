@@ -123,6 +123,14 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
+## Withholding SDK builtin tools
+
+`AgentBuilder.withholdBuiltinTools(['shell'])` keeps the named SDK builtin tools (`shell`,
+`memory_search`, `memory_get`) out of the model's tool list, on every run path: `createSdkAgentStream`,
+`streamAgentTurnInProcess`, the client's `InProcessTransport` and `toAgentFactory`. An unknown name is
+refused with a `ConfigurationError`. `toAgentFactory({ withholdBuiltinShell: true })` still works;
+when both are set, the union is passed.
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the

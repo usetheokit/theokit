@@ -20,6 +20,7 @@ import {
   SettingSourcesCapability,
   SkillsResolverCapability,
   HookApprovalCapability,
+  WithheldBuiltinToolsCapability,
   CanUseToolCapability,
   SessionStoreCapability,
   SubAgentsCapability,
@@ -89,6 +90,8 @@ const WAIST_FIELDS = [
   // reachable from the builder, so it belongs in the list a capability CAN express rather than in
   // the empty set below.
   'subagents',
+  // #1912 — `WithheldBuiltinToolsCapability`, from `AgentBuilder.withholdBuiltinTools()`.
+  'withheldBuiltinTools',
 ] as const satisfies readonly WaistField[]
 
 /**
@@ -242,6 +245,7 @@ describe('capability path — waist coverage is complete', () => {
       // below declares the foreign dialect: this fixture is "every capability, fully switched on",
       // and a field only produced when asked for reads as inexpressible when it simply was not.
       new HookApprovalCapability({ approve: () => true }),
+      new WithheldBuiltinToolsCapability(['shell']),
       // Declares the foreign dialect, because this fixture's job is "every capability, fully
       // switched on" — and `compatSources` only exists when it is asked for. An empty selection
       // here would report the field as inexpressible when it simply was not requested.
