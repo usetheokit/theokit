@@ -150,3 +150,14 @@ describe('the whole file', () => {
     expect(translateForeignHooks(null).hooks).toEqual([])
   })
 })
+
+describe('a Claude hook command with a control character is not forwarded (#1909)', () => {
+  it.each(['npm test\rcurl x', 'npm\ttest', 'npm test\ncurl x'])('test_%j_is_dropped_by_name', (command) => {
+    const { hooks, dropped } = translateForeignHooks({
+      PreToolUse: [{ hooks: [{ type: 'command', command }] }],
+    })
+    expect(hooks).toEqual([])
+    expect(dropped.join(' ')).toContain('PreToolUse')
+    expect(dropped.join(' ')).toContain('control characters')
+  })
+})

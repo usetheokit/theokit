@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Security
+- **A hook command with a control character is refused, for `hooks` and for hooks translated from `.claude/settings.json`.** The approval prompt shows the command raw, so `npm test` followed by a carriage return and a second command read as `npm test`. `parseHooks` now applies the framework's `hookSpecSchema` command rule and throws a `HookError` naming the hook; a Claude-dialect hook with such a command is not forwarded and is named in the settings report. (#1909)
 - **A project `.env` can no longer set the SDK's sovereign keys, on the CLI or the TUI.** One `loadProjectEnv` now protects the union of the SDK's `SOVEREIGN_ENV_KEYS` (`THEOKIT_REDACT_SECRETS`, `THEOKIT_TRUSTED_PROVIDERS`, `THEOKIT_OAUTH_TX_SALT`, …) and TheoCode's own keys; the TUI no longer calls `process.loadEnvFile` directly, so its `.env` also stops setting `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` and `THEOCODE_TRUST_ALL_DIRS`. (#1892)
 
 ### Fixed

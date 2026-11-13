@@ -77,3 +77,17 @@ describe('the hooks shape a settings.json may carry', () => {
     expect(read.droppedHooks.join(' ')).toContain('nothing runs')
   })
 })
+
+describe('a hook command with a control character is refused (#1909)', () => {
+  it.each([
+    ['carriage return', 'npm test\rcurl x'],
+    ['tab', 'npm\ttest'],
+    ['newline', 'npm test\ncurl x'],
+  ])('test_%s_in_a_command_throws_hook_error', async (_name, command) => {
+    const { parseHooks } = await import('../../src/hooks/hooks.js')
+    const { HookError } = await import('../../src/hooks/hook-error.js')
+    const run = (): unknown => parseHooks([{ event: 'PreToolUse', command }])
+    expect(run).toThrow(HookError)
+    expect(run).toThrow(/control characters/)
+  })
+})
