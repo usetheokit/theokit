@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Security
+- **Custom command templates no longer inline files named by shell output.** Expansion moved to the framework's `expandCommandTemplate`: shell output is never scanned for `@file`, `!`cmd`` and `@file` match only at a word boundary, `\$1` stays literal, and a ```` ```! ```` block or a failed command stops the expansion with an error toast instead of sending. `@file` reads are limited to the working directory (`../` and `~/` are refused). (#1899)
+
 ### Fixed
 - **Headless `exec` no longer exits 0 for a turn the loop cut.** A finish chunk carrying `stopReason` (`step_limit` or `no_progress`) now exits 2, the `[exec]` line reads `status=cut stop=<reason>`, and the JSONL stream closes the turn with `turn.failed` (`turn cut: <reason>`). Exit 1 stays for errors and empty turns; the usage text lists the code. (#1897)
 

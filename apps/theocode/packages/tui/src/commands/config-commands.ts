@@ -1,12 +1,11 @@
-import { expandTemplate } from './command-template.js'
 import { subagentPath } from './subagent-inventory.js'
 import type { CustomCommand } from './custom-commands.js'
 import { nextApprovalMode, parseApprovalMode, type ApprovalMode } from '../consent/index.js'
 import { execFile } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { readFileSync, realpathSync } from 'node:fs'
+import { isAbsolute, relative, resolve } from 'node:path'
 
+import { expandCommandTemplate, type TemplateDeps } from '@theokit/agents/config'
 import type { Dispatch, SetStateAction } from 'react'
 
 import {
@@ -123,7 +122,7 @@ export interface CustomCommandDeps {
 export function expansionDeps(
   warn: (m: string) => void,
   shellTimeoutMs: number,
-): Parameters<typeof expandTemplate>[2] {
+): TemplateDeps {
   return {
     shell: (cmd) =>
       new Promise((resolveShell) => {
@@ -136,10 +135,13 @@ export function expansionDeps(
         )
       }),
     readFile: (fileName) => {
-      const path = fileName.startsWith('~/')
-        ? join(homedir(), fileName.slice(2))
-        : resolve(workingDirectory(), fileName)
       try {
+        // Containment: only files inside the working directory (symlinks resolved), so `../` and
+        // `~/` references cannot pull outside files into the prompt.
+        const root = realpathSync(workingDirectory())
+        const path = realpathSync(resolve(root, fileName))
+        const rel = relative(root, path)
+        if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return undefined
         // No `statSync` first: a directory makes `readFileSync` throw EISDIR and the catch below
         // already returns undefined for it. The check bought a branch for a case the error path
         // handled, and paid a race — the path could be replaced between the two calls.
@@ -192,7 +194,7 @@ export function handleCustomCommand(
   }
   void (async () => {
     try {
-      const expanded = await expandTemplate(
+      const expanded = await expandCommandTemplate(
         command.template,
         arg,
         expansionDeps(
