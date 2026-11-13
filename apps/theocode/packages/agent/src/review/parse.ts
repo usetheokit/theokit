@@ -16,15 +16,38 @@ export interface ReviewOutput {
   overall_confidence_score?: number
 }
 
+function coerceFinding(f: unknown): ReviewFinding | undefined {
+  if (f === null || typeof f !== 'object') return undefined
+  const r = f as Record<string, unknown>
+  if (typeof r.title !== 'string') return undefined
+  const out: ReviewFinding = { title: r.title, body: typeof r.body === 'string' ? r.body : '' }
+  if (typeof r.confidence_score === 'number') out.confidence_score = r.confidence_score
+  if (typeof r.priority === 'number' || r.priority === null) out.priority = r.priority
+  const loc = r.code_location as Record<string, unknown> | null | undefined
+  if (loc !== null && typeof loc === 'object' && typeof loc.absolute_file_path === 'string') {
+    const lr = loc.line_range as Record<string, unknown> | null | undefined
+    out.code_location = {
+      absolute_file_path: loc.absolute_file_path,
+      ...(lr !== null &&
+      typeof lr === 'object' &&
+      typeof lr.start === 'number' &&
+      typeof lr.end === 'number'
+        ? { line_range: { start: lr.start, end: lr.end } }
+        : {}),
+    }
+  }
+  return out
+}
+
 function coerce(parsed: unknown): ReviewOutput | undefined {
   if (parsed === null || typeof parsed !== 'object') return undefined
   const p = parsed as Record<string, unknown>
   if (!Array.isArray(p.findings)) return undefined
   return {
-    findings: p.findings.filter(
-      (f): f is ReviewFinding =>
-        f !== null && typeof f === 'object' && typeof (f as { title?: unknown }).title === 'string',
-    ),
+    findings: p.findings.flatMap((f) => {
+      const c = coerceFinding(f)
+      return c === undefined ? [] : [c]
+    }),
     overall_correctness: typeof p.overall_correctness === 'string' ? p.overall_correctness : '',
     overall_explanation: typeof p.overall_explanation === 'string' ? p.overall_explanation : '',
     ...(typeof p.overall_confidence_score === 'number'
