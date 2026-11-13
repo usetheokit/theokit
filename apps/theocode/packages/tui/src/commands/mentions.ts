@@ -17,7 +17,7 @@ function parseMentions(text: string): string[] {
   return Array.from(text.matchAll(MENTION_RE), (m) => m[1])
 }
 
-export interface SkippedMention {
+interface SkippedMention {
   ref: string
   reason: string
 }
