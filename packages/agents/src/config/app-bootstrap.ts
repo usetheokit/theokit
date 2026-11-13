@@ -69,6 +69,9 @@ export function defineAppBootstrap(steps: readonly BootstrapStep[]): AppBootstra
   let done = false
 
   const execute = async (ctx: BootstrapContext): Promise<{ ran: readonly string[] }> => {
+    // Yield first so `pending` is assigned before any step runs: a step that calls `run()` again
+    // then gets this same promise instead of starting a second execution.
+    await Promise.resolve()
     const ran: string[] = []
     for (const step of list) {
       try {

@@ -47,6 +47,30 @@ describe('app bootstrap', () => {
     expect(b.done).toBe(true)
   })
 
+  it('a step that calls run() again gets the same promise and runs once', async () => {
+    let calls = 0
+    let inner: Promise<unknown> | undefined
+    const b = defineAppBootstrap([
+      {
+        name: 'a',
+        run: () => {
+          calls += 1
+          inner = b.run(ctx())
+        },
+      },
+      {
+        name: 'b',
+        run: () => {
+          calls += 10
+        },
+      },
+    ])
+    const outer = b.run(ctx())
+    await outer
+    expect(inner).toBe(outer)
+    expect(calls).toBe(11)
+  })
+
   it('a failing step throws BootstrapStepError naming the step and skips the rest', async () => {
     const boom = new Error('boom')
     let later = false
