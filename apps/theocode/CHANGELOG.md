@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **Session delete and fork now protect the session `<cwd>/.theokit/tui-session` names.** `protectedSessions` adds the TUI pointer to the framework's protected set, so an open but idle, non-newest session is refused with `LiveSessionDeletionError` as the message says. (#1905)
 - **`/review` no longer throws a TypeError when a finding has no `body`.** `parseReviewOutput` now normalizes each finding to the real shape (a missing or non-string `body` becomes `''`, malformed optional fields are dropped), so `formatReviewFindings` renders the title alone. (#1906)
 
 ### Security
