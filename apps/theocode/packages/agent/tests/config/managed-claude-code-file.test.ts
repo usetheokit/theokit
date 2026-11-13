@@ -1,14 +1,16 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+
+import { tempRoot } from '../helpers/temp-root.js'
 
 import { resolveConfig } from '../../src/config/config.js'
 import { readManagedSettingsFile } from '../../src/config/managed-settings.js'
 import { settingsReport } from '../../src/config/settings-load.js'
 
 function managedFile(content: string): string {
-  const path = join(mkdtempSync(join(tmpdir(), 'managed-')), 'managed-settings.json')
+  const path = join(tempRoot('managed-'), 'managed-settings.json')
   writeFileSync(path, content)
   return path
 }
