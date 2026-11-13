@@ -28,7 +28,12 @@ import { dirname, join } from 'node:path'
 import { transcriptPath } from '@theokit/agents/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { LiveSessionDeletionError, deleteSession, protectedSessions } from '../../src/session/session-ops.js'
+import {
+  LiveSessionDeletionError,
+  deleteSession,
+  forkSession,
+  protectedSessions,
+} from '../../src/session/session-ops.js'
 
 let base: string
 let cwd: string
@@ -280,5 +285,56 @@ describe("deleteSession — the transcript mechanics are the framework's", () =>
     // file — the opposite of what it is for.
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
     expect(code, 'session-ops.ts still unlinks transcripts by hand').not.toMatch(/\brmSync\(/)
+  })
+})
+
+describe('#1905 — the TUI pointer protects an older, unleased session', () => {
+  function point(id: string): void {
+    mkdirSync(join(cwd, '.theokit'), { recursive: true })
+    writeFileSync(join(cwd, '.theokit', 'tui-session'), `${id}\n`)
+  }
+
+  it('deleteSession refuses the pointed session though it is not the newest', async () => {
+    const pointed = writeTranscript('tui-pointed', 5000)
+    writeTranscript('tui-newest', 1)
+    point('tui-pointed')
+    const removed: string[] = []
+
+    await expect(
+      deleteSession('tui-pointed', {
+        cwd,
+        baseDir: base,
+        removeFromRegistry: async (id) => {
+          removed.push(id)
+        },
+      }),
+    ).rejects.toThrow(LiveSessionDeletionError)
+    expect(existsSync(pointed)).toBe(true)
+    expect(removed).toEqual([])
+  })
+
+  it('forkSession refuses to fork onto the pointed session', () => {
+    writeTranscript('tui-source', 4000)
+    const pointed = writeTranscript('tui-pointed', 5000)
+    writeTranscript('tui-newest', 1)
+    point('tui-pointed')
+
+    expect(() => forkSession('tui-source', 'tui-pointed', { cwd, baseDir: base })).toThrow()
+    expect(readFileSync(pointed, 'utf8')).toBe('{}\n')
+  })
+
+  it('a session neither pointed at, newest nor leased is still deletable', async () => {
+    const other = writeTranscript('tui-other', 6000)
+    writeTranscript('tui-pointed', 5000)
+    writeTranscript('tui-newest', 1)
+    point('tui-pointed')
+
+    const result = await deleteSession('tui-other', {
+      cwd,
+      baseDir: base,
+      removeFromRegistry: async () => {},
+    })
+    expect(result.transcriptRemoved).toBe(true)
+    expect(existsSync(other)).toBe(false)
   })
 })
