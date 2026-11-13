@@ -16,15 +16,41 @@ export interface ReviewOutput {
   overall_confidence_score?: number
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object'
+}
+
+function coerceLocation(v: unknown): ReviewFinding['code_location'] {
+  if (!isRecord(v) || typeof v.absolute_file_path !== 'string') return undefined
+  const r = v.line_range
+  if (isRecord(r) && typeof r.start === 'number' && typeof r.end === 'number') {
+    return { absolute_file_path: v.absolute_file_path, line_range: { start: r.start, end: r.end } }
+  }
+  return { absolute_file_path: v.absolute_file_path }
+}
+
+/** A finding needs a string title; every other field is defaulted or dropped when mistyped. */
+function coerceFinding(f: unknown): ReviewFinding | undefined {
+  if (!isRecord(f) || typeof f.title !== 'string') return undefined
+  const location = coerceLocation(f.code_location)
+  return {
+    title: f.title,
+    body: typeof f.body === 'string' ? f.body : '',
+    ...(typeof f.confidence_score === 'number' ? { confidence_score: f.confidence_score } : {}),
+    ...(typeof f.priority === 'number' || f.priority === null ? { priority: f.priority } : {}),
+    ...(location !== undefined ? { code_location: location } : {}),
+  }
+}
+
 function coerce(parsed: unknown): ReviewOutput | undefined {
   if (parsed === null || typeof parsed !== 'object') return undefined
   const p = parsed as Record<string, unknown>
   if (!Array.isArray(p.findings)) return undefined
   return {
-    findings: p.findings.filter(
-      (f): f is ReviewFinding =>
-        f !== null && typeof f === 'object' && typeof (f as { title?: unknown }).title === 'string',
-    ),
+    findings: p.findings.flatMap((f) => {
+      const finding = coerceFinding(f)
+      return finding === undefined ? [] : [finding]
+    }),
     overall_correctness: typeof p.overall_correctness === 'string' ? p.overall_correctness : '',
     overall_explanation: typeof p.overall_explanation === 'string' ? p.overall_explanation : '',
     ...(typeof p.overall_confidence_score === 'number'
