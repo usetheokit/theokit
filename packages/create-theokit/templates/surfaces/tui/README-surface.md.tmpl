@@ -25,6 +25,16 @@ npm run dev                      # tsx tui/main.tsx
 
 Type a message + Enter; Esc to quit. The agent lives in `agents/chat.ts` (edit its model / system prompt).
 
+## Bundle into one file (optional)
+
+```bash
+npm run build:bin                # dist/{{name}}.mjs, executable
+```
+
+`build:bin` is optional: `dev` and `start` run from source and `build` stays `tsc --noEmit`. The bundle is
+ESM for Node 22+. `node-pty`, `better-sqlite3` and `proper-lockfile` stay external, so install them beside
+the file if you ship it. Options live in `scripts/build-bin.mjs`, each commented with the failure it prevents.
+
 ## Architecture (System Design)
 
 The TUI surface is a small React (Ink) app with ONE composition root and three presentational pieces.

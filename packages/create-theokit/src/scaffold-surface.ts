@@ -78,7 +78,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       figlet: '^1.7.0',
       lowlight: '^3.0.0',
     },
-    devDeps: { tsx: '^4.19.0' },
+    devDeps: { tsx: '^4.19.0', esbuild: '^0.28.2' },
     scripts: {
       dev: 'tsx tui/main.tsx',
       start: 'tsx tui/main.tsx',
@@ -90,6 +90,8 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       // script whose first act is to demand a directory this scaffold just deleted
       // (usetheokit/theokit#374).
       build: 'tsc --noEmit',
+      // Optional: one runnable ESM file at dist/<app>.mjs (see scripts/build-bin.mjs).
+      'build:bin': 'node scripts/build-bin.mjs',
     },
     tsconfigInclude: [
       'tui/**/*.ts',
