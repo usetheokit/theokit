@@ -545,11 +545,11 @@ export async function listUserTurns(
   options: { readonly cwd: string; readonly root?: string },
 ): Promise<readonly UserTurnPreview[]> {
   const path = transcriptPath(options.root ?? transcriptRoot(), options.cwd, sessionId)
-  const exists = await stat(path).then(
-    () => true,
-    () => false,
-  )
-  if (!exists) return []
+  try {
+    await stat(path)
+  } catch {
+    return []
+  }
   return reachableUserTurns(path).map((turn, i) => ({ nth: i + 1, text: turn.text }))
 }
 
