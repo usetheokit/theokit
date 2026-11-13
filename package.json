@@ -43,6 +43,7 @@
     "check:licenses:published": "node scripts/verify-published-license-matches.mjs",
     "probe:hydration": "node scripts/probe-hydration.mjs",
     "baseline:adr-citations": "node scripts/adr-citation-baseline.mjs",
+    "check:app-deps": "node scripts/check-app-dependencies.mjs",
     "check:docs": "node scripts/check-doc-citations.mjs",
     "check:changelog": "node scripts/check-changelog-current.mjs",
     "check:audit": "pnpm audit --prod --audit-level=high",
