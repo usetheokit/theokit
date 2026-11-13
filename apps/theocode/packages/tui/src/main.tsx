@@ -13,11 +13,10 @@ import { setDiagnosticsSink } from '@theokit/agents'
 import { installDiagnosticSink } from '@theocode/shared/diagnostic-sink'
 import { setWorkingDirectory, workingDirectory } from './working-directory.js'
 import { guardedSweepStart } from '@theocode/agent/session'
-import { installConfiguredHome, loadProjectEnv, resolveEffectiveConfig } from '@theocode/agent/config'
+import { bootstrapSurface } from '@theocode/agent/bootstrap'
+import { resolveEffectiveConfig } from '@theocode/agent/config'
 
 installDiagnosticSink(setDiagnosticsSink)
-
-loadProjectEnv()
 
 // B-057 — chosen ONCE, here, before anything reads it. The TUI has no directory flag yet, so this
 // is the process directory today; when a `--cd` arrives it becomes a one-line change instead of
@@ -28,12 +27,7 @@ setWorkingDirectory(process.cwd())
 // AFTER the working directory is set and BEFORE anything resolves an SDK path: this decides which
 // directory the transcripts, the trust store and the collector all use, and it needs the cwd the
 // operator selected rather than the one the process started in.
-installConfiguredHome({
-  env: process.env,
-  home: homedir(),
-  read: () => resolveEffectiveConfig({ cwd: workingDirectory() }),
-  onWarn: (m) => process.stderr.write(`${m}\n`),
-})
+bootstrapSurface({ env: process.env, cwd: workingDirectory(), home: homedir() })
 
 installStderrGuard(join(workingDirectory(), '.theokit', 'tui-stderr.log'))
 

@@ -25,6 +25,7 @@ vi.mock('@theokit/agents', () => ({
   setDiagnosticsSink: vi.fn(),
 }))
 vi.mock('@theocode/shared/diagnostic-sink', () => ({ installDiagnosticSink: vi.fn() }))
+vi.mock('../../src/bootstrap/index.js', () => ({ bootstrapSurface: vi.fn() }))
 vi.mock('../../src/auth/index.js', () => ({ resolveFreshCredential }))
 
 describe('B-001 — the ACP entry declares the headless profile', () => {
