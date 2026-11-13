@@ -213,7 +213,18 @@ export interface AgentClientOptions {
   readonly chatId?: string
 }
 
+/** How one turn ended, as `sendAndWait` reports it. */
+export interface TurnSettled {
+  readonly status: 'done' | 'error' | 'aborted'
+  /** Concatenated text parts of the turn's last assistant message. */
+  readonly text?: string
+  readonly usage?: { readonly totalTokens?: number }
+  readonly error?: Error
+}
+
 export class AgentClient<TInput = unknown> {
+  /** The in-flight `sendAndWait` turn: settled from where `#drive` sets the final status. */
+  #waiter: { controller: AbortController; resolve: (settled: TurnSettled) => void } | undefined
   readonly #transport: AgentTransport
   readonly #chatId: string
   readonly #listeners = new Set<() => void>()
@@ -360,6 +371,25 @@ export class AgentClient<TInput = unknown> {
     this.#messages = next
   }
 
+  /** Resolve the pending `sendAndWait` waiter (if any) for `controller`; never rejects. */
+  #settle(controller: AbortController, status: TurnSettled['status']): void {
+    const waiter = this.#waiter
+    if (waiter?.controller !== controller) return
+    this.#waiter = undefined
+    const last = [...this.#messages].reverse().find((m) => m.role === 'assistant')
+    const text = last?.parts
+      .map((part) => (part.type === 'text' && 'text' in part ? String(part.text) : ''))
+      .join('')
+    const totalTokens = (last?.metadata as { usage?: { totalTokens?: unknown } } | undefined)?.usage
+      ?.totalTokens
+    waiter.resolve({
+      status,
+      ...(text === undefined ? {} : { text }),
+      ...(typeof totalTokens === 'number' ? { usage: { totalTokens } } : {}),
+      ...(status === 'error' && this.#error ? { error: this.#error } : {}),
+    })
+  }
+
   async #drive(
     open: () => Promise<ReadableStream<UIMessageChunk> | null>,
     controller: AbortController,
@@ -375,6 +405,7 @@ export class AgentClient<TInput = unknown> {
         // Nothing to resume (e.g. reconnect after the run completed). Settle without error.
         this.#status = this.#messages.length > 0 ? 'done' : 'idle'
         this.#emit()
+        this.#settle(controller, 'done')
         return
       }
       const outcome = await consumeChunkStream(stream, (message) => {
@@ -397,15 +428,18 @@ export class AgentClient<TInput = unknown> {
         this.#error = new AgentStreamInterruptedError(outcome.chunksReceived)
         this.#status = 'error'
         this.#emit()
+        this.#settle(controller, 'error')
         return
       }
       this.#status = 'done'
       this.#emit()
+      this.#settle(controller, 'done')
     } catch (err) {
       if (aborted()) return
       this.#error = err instanceof Error ? err : new Error(String(err))
       this.#status = 'error'
       this.#emit()
+      this.#settle(controller, 'error')
     }
   }
 
@@ -448,8 +482,24 @@ export class AgentClient<TInput = unknown> {
     )
   }
 
+  /**
+   * Same as `send`, and resolves when THIS turn settles — from the same place `#drive` sets the final
+   * status, never from a timer. Never rejects; a superseded or aborted turn resolves `'aborted'`.
+   */
+  sendAndWait = (input: TInput): Promise<TurnSettled> => {
+    // `send` aborts the prior turn first, which resolves that turn's waiter as 'aborted'.
+    const promise = new Promise<TurnSettled>((resolve) => {
+      this.send(input)
+      const controller = this.#controller
+      if (controller === null) resolve({ status: 'aborted' })
+      else this.#waiter = { controller, resolve }
+    })
+    return promise
+  }
+
   /** Resume an interrupted stream via the transport's `reconnectToStream` (no-op when unavailable). */
   reconnect = (): void => {
+    this.#abortWaiter()
     const controller = new AbortController()
     this.#controller = controller
     // Reconnecting before any send() (or after reset()) leaves #currentAssistantId empty — fabricate one
@@ -471,8 +521,15 @@ export class AgentClient<TInput = unknown> {
     )
   }
 
+  #abortWaiter(): void {
+    const waiter = this.#waiter
+    this.#waiter = undefined
+    waiter?.resolve({ status: 'aborted' })
+  }
+
   /** Abort an in-flight stream (not an error — leaves messages as-is). */
   abort = (): void => {
+    this.#abortWaiter()
     this.#controller?.abort()
     this.#controller = null
     // Finalize the status when the USER aborts an in-flight turn: the aborted `#drive` early-returns

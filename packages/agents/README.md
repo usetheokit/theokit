@@ -43,7 +43,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes`, `RefreshFailure` |
 | `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`) |
 | `./tools` | Built-in tool factories (read, list, grep, git, patch, edit, shell, …) |
-| `./client` | Transports for driving an agent from a client |
+| `./client` | Transports for driving an agent from a client. `AgentClient.sendAndWait(input)` resolves when that turn settles (`done`/`error`/`aborted`, never rejects), and `asGoalLoopAgent(client)` adapts a client to the SDK `GoalLoopAgent` so `runGoalLoop` can drive it without polling |
 | `./client/react` | `useAgent` and the React bindings |
 | `./session` | Session lifecycle, listing, fork/rewind, transcript GC with a retention floor |
 | `./hooks` | The lifecycle-hook engine and its fingerprint gate |
