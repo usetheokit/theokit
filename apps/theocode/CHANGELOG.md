@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **`/review` no longer throws when a finding has no `body`.** Each finding is now coerced to the `ReviewFinding` shape: a missing or non-string `body` becomes `''` and malformed optional fields are dropped, so `formatReviewFindings` renders the title alone. (#1906)
 - **Headless `exec` no longer exits 0 for a turn the loop cut.** A finish chunk carrying `stopReason` (`step_limit` or `no_progress`) now exits 2, the `[exec]` line reads `status=cut stop=<reason>`, and the JSONL stream closes the turn with `turn.failed` (`turn cut: <reason>`). Exit 1 stays for errors and empty turns; the usage text lists the code. (#1897)
 
 ### Security

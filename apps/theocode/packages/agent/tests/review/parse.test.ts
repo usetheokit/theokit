@@ -10,7 +10,11 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { ReviewOutputUnparseableError, parseReviewOutput } from '../../src/review/parse.js'
+import {
+  ReviewOutputUnparseableError,
+  formatReviewFindings,
+  parseReviewOutput,
+} from '../../src/review/parse.js'
 
 describe('B-043 — a clean review and an unreadable one are different facts', () => {
   it('test_a_review_with_no_findings_parses_to_an_empty_list', () => {
@@ -50,5 +54,20 @@ describe('B-043 — a clean review and an unreadable one are different facts', (
     )
 
     expect(out.overall_correctness).toBe('fine')
+  })
+})
+
+describe('#1906 — a finding without a usable body does not break formatting', () => {
+  const wrap = (f: unknown): string =>
+    JSON.stringify({ findings: [f], overall_correctness: 'patch is correct', overall_explanation: 'e' })
+
+  it('test_a_finding_with_no_body_is_rendered_by_title', () => {
+    const text = formatReviewFindings(parseReviewOutput(wrap({ title: 'x' })))
+    expect(text).toContain('x')
+  })
+
+  it('test_a_finding_with_a_numeric_body_is_rendered_by_title', () => {
+    const text = formatReviewFindings(parseReviewOutput(wrap({ title: 'x', body: 42 })))
+    expect(text).toContain('x')
   })
 })
