@@ -13,7 +13,6 @@ import process from 'node:process'
 
 import { CONFIG_SCHEMA_KEYS, ConfigError } from './config-contract.js'
 import { DEFAULT_HOME_DIR, LEGACY_HOME_DIR, homeStateDir } from './home-dir.js'
-import { readManagedSettingsTranslated } from './managed-settings.js'
 import { translateSettings } from './settings-json.js'
 import type { PermissionRule } from '@theokit/agents/config'
 
@@ -71,17 +70,13 @@ function readSettingsIfPresent(candidate: SettingsCandidate): unknown | null {
  * Once that file exists the refusal lifts for that scope, and the leftover is reported by `doctor`
  * instead of blocking every run.
  */
-export function refuseStrandedToml(
-  scope: string,
-  tomls: readonly string[],
-  foundSettings: boolean,
-): void {
+export function refuseStrandedToml(scope: string, tomls: readonly string[], foundSettings: boolean): void {
   if (foundSettings) return
   const stranded = tomls.filter((p) => existsSync(p))
   if (stranded.length === 0) return
   throw new ConfigError(
     `${stranded.join(', ')} is no longer read — the ${scope} configuration file is now ` +
-      'settings.json, in the same directory. Convert it with `theocode migrate-config`, ' +
+      "settings.json, in the same directory. Convert it with `theocode migrate-config`, " +
       'or delete it if it is obsolete.',
   )
 }
@@ -132,11 +127,7 @@ export function settingsCandidates(opts: {
       ours(join(ourHome, SETTINGS_FILE)),
       ours(join(opts.userDir, LEGACY_HOME_DIR, SETTINGS_FILE)),
       // Foreign vocabulary, but nothing runs its hooks: `loadHookConfig` never sees the user level.
-      {
-        path: join(opts.userDir, FOREIGN_ROOT, SETTINGS_FILE),
-        foreignRoot: true,
-        hooksDelivery: 'inert',
-      },
+      { path: join(opts.userDir, FOREIGN_ROOT, SETTINGS_FILE), foreignRoot: true, hooksDelivery: 'inert' },
     ],
     project: [
       sdkReadsProject(join(opts.projectDir, DEFAULT_HOME_DIR, SETTINGS_FILE)),
@@ -231,7 +222,7 @@ function reportOne(candidate: SettingsCandidate): SettingsFileReport | 'skip' | 
       unrecognised: [],
       droppedHooks: [(err as Error).message],
       unsupportedPermissions: [],
-      permissionRules: [],
+        permissionRules: [],
     }
   }
 }
@@ -240,8 +231,6 @@ export function settingsReport(opts: {
   projectDir?: string
   userDir?: string
   env?: Record<string, string | undefined>
-  /** Where to look for the managed file; defaults to the platform paths Claude Code uses. */
-  managedPaths?: readonly string[]
 }): SettingsFileReport[] {
   const env = opts.env ?? process.env
   const candidates = settingsCandidates({
@@ -257,20 +246,6 @@ export function settingsReport(opts: {
       if (result !== 'stop') out.push(result)
       break // first existing candidate wins — the report describes what the loader used
     }
-  }
-  // #1908 — the organisation's managed file, which outranks the rest, listed with its path.
-  const managed = readManagedSettingsTranslated({
-    ...(opts.managedPaths === undefined ? {} : { paths: opts.managedPaths }),
-  })
-  if (managed !== null) {
-    out.push({
-      path: managed.path,
-      ignored: managed.ignored,
-      unrecognised: managed.unrecognised,
-      droppedHooks: managed.droppedHooks,
-      unsupportedPermissions: managed.unsupportedPermissions.map((u) => `${u.entry} — ${u.reason}`),
-      permissionRules: managed.permissionRules,
-    })
   }
   return out
 }

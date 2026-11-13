@@ -21,10 +21,14 @@ import {
   ENV_SHELL_TIMEOUT_MS,
 } from './env-knobs.js'
 import { LAYERS, foldLayers, type Layer } from './layers.js'
-import { firstSettings, refuseStrandedToml, settingsCandidates } from './settings-load.js'
+import {
+  firstSettings,
+  refuseStrandedToml,
+  settingsCandidates,
+} from './settings-load.js'
 import type { TrustPosture } from './trust-posture.js'
 import { applySecurityFloor } from './security-floor.js'
-import { readManagedSettingsTranslated, translateManaged } from './managed-settings.js'
+import { readManagedSettings } from './managed-settings.js'
 
 /**
  * How long an operator-supplied shell command may run before it is killed.
@@ -148,6 +152,7 @@ export interface AgentConfig {
   output_style?: string
   profile?: string
 }
+
 
 interface EnvPath {
   readonly knob: string
@@ -292,6 +297,7 @@ export function modelLabel(modelId: string): string {
   return slash >= 0 ? modelId.slice(slash + 1) : modelId
 }
 
+
 const scalarSchema = z
   .object({
     model: z.string().min(1, 'model: empty model id — supply `provider/model`').optional(),
@@ -304,10 +310,7 @@ const scalarSchema = z
     memory: z.boolean().optional(),
     home_dir: z
       .string()
-      .refine(
-        isValidHomeDirName,
-        'home_dir: expected a single directory name under your home, such as ".theokit" or ".claude" — not a path',
-      )
+      .refine(isValidHomeDirName, 'home_dir: expected a single directory name under your home, such as ".theokit" or ".claude" — not a path')
       .optional(),
     shell_timeout_ms: z
       .number()
@@ -445,14 +448,7 @@ export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
   const cli = fromFile(layers.cli, 'cli (-c)')
   // #737 — the enterprise policy. Parsed through the SAME schema as every other layer: a
   // managed file with a typo must fail by name, not be tolerated because of where it came from.
-  // #1908 — it is a Claude Code file as often as ours, so it is read as a foreign-root file: Claude Code
-  // keys are translated or reported by `settingsReport`, never fatal at startup.
-  const managed = fromFile(
-    layers.managed === null || layers.managed === undefined
-      ? layers.managed
-      : translateManaged(layers.managed).values,
-    'managed-settings.json',
-  )
+  const managed = fromFile(layers.managed, 'managed-settings.json')
 
   const { name: selectedProfile, values: profile } = chosenProfile([
     user,
@@ -526,13 +522,6 @@ function discoverSettings(opts: {
   }
 }
 
-function readManagedLayer(): Record<string, unknown> | null {
-  const read = readManagedSettingsTranslated({
-    onWarn: (m) => process.stderr.write(`warning: ${m}\n`),
-  })
-  return read === null ? null : read.values
-}
-
 export function loadConfig(opts: {
   projectDir?: string
   userDir?: string
@@ -551,8 +540,7 @@ export function loadConfig(opts: {
   // #737 — read here rather than in `discoverSettings`, which is about the files a PROJECT and a
   // USER own. This one is neither: an administrator deployed it to a path they cannot write, and no
   // trust posture gates it — the policy binds the untrusted repository too.
-  // #1908 — a file that does not parse warns on every start instead of reading as no policy.
-  const managedSettings = readManagedLayer()
+  const managedSettings = readManagedSettings()
   const { user, project, projectLocal, projectAllowed, ourHome } = discoverSettings({
     projectDir,
     userDir,

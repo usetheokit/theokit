@@ -20,18 +20,6 @@ const MATCH_ALL_IN_THEIR_DIALECT = '*'
 import { translateSettings, translateForeignHooks } from '../../src/config/settings-json.js'
 
 describe('hooks — the two dialects, and the four ways the foreign one breaks ours', () => {
-  it.each(['npm test\rcurl x', 'npm\ttest', 'npm test\ncurl x'])(
-    'test_a_command_with_control_characters_is_not_forwarded_and_is_reported (%j)',
-    (command) => {
-      const { hooks, dropped } = translateForeignHooks({
-        PreToolUse: [{ hooks: [{ type: 'command', command }] }],
-      })
-      expect(hooks).toEqual([])
-      expect(dropped.join(' ')).toContain('PreToolUse')
-      expect(dropped.join(' ')).toContain('control characters')
-    },
-  )
-
   it('test_the_foreign_nested_shape_becomes_our_flat_one', () => {
     const { hooks } = translateForeignHooks({
       PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'guard.sh' }] }],

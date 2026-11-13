@@ -16,32 +16,10 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
-### Fixed
-- **The ACP entry now runs the same startup steps as the CLI and TUI.** `dist/acp-entry.mjs` skipped the project `.env`, `THEOCODE_HOME` / `home_dir`, the credential-store pointer and `CLAUDE_PROJECT_DIR`, so an ACP session could use a different session root and credential store. The steps now live in one function, `bootstrapSurface` in `@theocode/agent/bootstrap`, called by all three entries. (#1893)
-
 ### Security
-- **A hook command with a control character is refused.** `parseHooks` now applies the framework's `hookSpecSchema` command rule and throws a `HookError` naming the hook; `.claude/settings.json` hooks with such a command are not forwarded and are listed as dropped. The review prompt can no longer show `npm test` for a command that carries more after a carriage return. (#1909)
-- **Custom command templates no longer inline files named in shell output, and `@file` is contained to the working directory.** Templates now expand through `expandCommandTemplate` from `@theokit/agents/config` (the local `command-template.ts` is gone): shell output is never scanned for `@file`, `` !`cmd` `` and `@file` need a word boundary (`` KEY=!`cmd` `` no longer runs), `\$1` stays literal, and a ```` ```! ```` block or a failed command stops the expansion with an error toast. `@../x` and `@~/x` are no longer read. (#1899)
-
-### Fixed
-- **`goal -m <model>` now routes the model through the credential, as `run -m` does.** With a ChatGPT sign-in, `goal -m openai/gpt-5` used to skip the `openai-chatgpt/` rewrite and reach an API host the credential cannot use. `goal` and `run` now share one function for the model route and the posture/store/config triple, all read from the same `env`. (#1896)
-- **`/review` no longer throws a TypeError when a finding has no `body`.** `parseReviewOutput` now normalizes each finding to the real shape (a missing or non-string `body` becomes `''`, malformed optional fields are dropped), so `formatReviewFindings` renders the title alone. (#1906)
-
-### Security
-- **A project `.env` can no longer set the SDK's sovereign keys, on the CLI or the TUI.** One `loadProjectEnv` now protects the union of the SDK's `SOVEREIGN_ENV_KEYS` (`THEOKIT_REDACT_SECRETS`, `THEOKIT_TRUSTED_PROVIDERS`, `THEOKIT_OAUTH_TX_SALT`, …) and TheoCode's own keys; the TUI no longer calls `process.loadEnvFile` directly, so its `.env` also stops setting `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` and `THEOCODE_TRUST_ALL_DIRS`. (#1892)
-
-### Fixed
-- **A `---` rule inside AGENTS.md is no longer read as the start of the rules when the instruction budget is exceeded.** The composer now receives user AGENTS.md, user rules, project AGENTS.md and project rules as separate parts and trims each by its own policy, so a cut is attributed to the right source, AGENTS.md keeps its tail, and `/status` no longer reports a rules cut that never happened. (#1903)
-- **A Claude Code `managed-settings.json` no longer stops startup, and a malformed one is no longer silent.** The managed file is now read like a `.claude/settings.json`: our keys apply, `permissions` rules are enforced, other Claude Code keys are reported, and `doctor` lists the file with its path and what was ignored. A file that does not parse warns on every start. (#1908)
-- **Headless `exec` no longer exits 0 for a turn the loop cut.** A finish chunk carrying `stopReason` (`step_limit` or `no_progress`) now exits 2, the `[exec]` line reads `status=cut stop=<reason>`, and the JSONL stream closes the turn with `turn.failed` (`turn cut: <reason>`). Exit 1 stays for errors and empty turns; the usage text lists the code. (#1897)
-
-### Security
-- **`skill_read` no longer serves the repository's skills in an untrusted directory, and reads the configured home.** It read `<cwd>/.theokit/skills`, `.claude/skills` and plugin bundles whatever the trust posture, and its not-found answer listed their names; it also fell back to the real home instead of the `home` override, as did role discovery for named subagents. Project roots now follow `posture.allows.skills`, and both use the configured home. (#1904)
 - **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
 
 ### Fixed
-- **An `@file` mention followed by punctuation is attached, and a mention that is not attached is reported.** `@src/a.ts,` and `@src/a.ts.` kept the punctuation in the path and attached nothing, silently. Trailing `, . ; : ) ! ?` is now dropped, `~/` paths the `@` menu offers resolve against the home directory, and every skipped mention is named with its reason in a toast. (#1900)
-- **The context meter shows a 1M-token window as `1m`, not `1000k`.** `fmtK` stopped at `k`; values from one million up now read `1m`, `1.2m`. (#1901)
 - **A bare `500` or `429` in an error message no longer marks the turn error transient.** The classifier matched any status-like number, so `prompt has 500 lines` got the transient label and the `/retry` hint. Only an HTTP status in a status position (`HTTP 503`, `status: 429`), a numeric `status`/`statusCode` on the error or its causes, or a network error code does now. (#1902)
 - **`doctor` honours `-c`, `--sandbox` and `-a`, and applies `-C` once.** `parseDoctor` dropped the config overrides, so the diagnostic reported values the flags had not touched; they now reach the config resolution. A relative `-C sub` was applied by `main.ts` and again by `doctor`, which inspected `sub/sub`. (#1895)
 - **Session cleanup deletes only the SDK's own temp files.** The collector treated any old `*.tmp` file in a session directory as its own; it now matches only the `<file>.<pid>.<16 hex>.tmp` names the SDK's atomic writer leaves, so `notes.tmp` or an editor swap file is left alone. (#1911)

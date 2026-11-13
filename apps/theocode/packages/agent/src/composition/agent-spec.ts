@@ -205,16 +205,8 @@ function refusal(toolName: string, policy: ApprovalPolicy) {
  * Exported because this is the assertion that matters and it has no other seam: the plugin closes
  * over the engine, and an engine does not say what order it was built in.
  */
-export function orderedPermissionRules(
-  cwd: string,
-  operatorHome: string,
-  managedPaths?: readonly string[],
-): readonly PermissionRule[] {
-  const rules = settingsReport({
-    projectDir: cwd,
-    userDir: operatorHome,
-    ...(managedPaths === undefined ? {} : { managedPaths }),
-  }).flatMap(
+export function orderedPermissionRules(cwd: string, operatorHome: string): readonly PermissionRule[] {
+  const rules = settingsReport({ projectDir: cwd, userDir: operatorHome }).flatMap(
     (r) => r.permissionRules,
   )
   // A stable partition, not a sort: within each action the layer order is the one the settings files

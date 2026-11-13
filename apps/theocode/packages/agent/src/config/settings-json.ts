@@ -71,7 +71,6 @@ import { TheokitAgentError } from '@theokit/agents'
 // the framework's own `names nothing a consumer cannot import` gate measured on 2026-09-12.
 import { permissionRulesFromSettings, type PermissionRule } from '@theokit/agents/config'
 
-import { hookSpecSchema } from '@theokit/agents/hooks'
 import { HOOK_EVENTS } from '../hooks/hooks-spec.js'
 import { FOREIGN_SETTINGS_KEYS } from './foreign-keys.js'
 
@@ -237,9 +236,6 @@ function translateOne(
   const type = entry['type']
   if (type !== 'command' || typeof entry['command'] !== 'string') {
     return `${event}: hook of type "${String(type)}" is not a command`
-  }
-  if (!hookSpecSchema.shape.command.safeParse(entry['command']).success) {
-    return `${event}: hook command is empty or contains control characters that would be hidden in the approval dialog`
   }
   // Seconds there, milliseconds here. The unit change is the whole reason this is not a spread.
   const seconds = entry['timeout']

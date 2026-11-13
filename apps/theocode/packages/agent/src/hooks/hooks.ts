@@ -1,4 +1,3 @@
-import { hookSpecSchema } from '@theokit/agents/hooks'
 import { z } from 'zod'
 
 import { HOOK_EVENTS, type HookEvent, type HookSpec } from './hooks-spec.js'
@@ -32,8 +31,7 @@ const DEFAULT_TIMEOUT_MS = 5_000
 const hookSchema = z
   .object({
     event: z.string(),
-    // The framework's rule: no control characters (they are hidden in the approval prompt).
-    command: hookSpecSchema.shape.command,
+    command: z.string().min(1),
     matcher: z.string().optional(),
     timeout_ms: z.number().int().positive().optional(),
   })

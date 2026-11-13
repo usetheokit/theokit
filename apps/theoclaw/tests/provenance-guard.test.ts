@@ -2,9 +2,8 @@ import type { CustomTool } from '@theokit/sdk'
 import { afterEach, expect, it } from 'vitest'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
-import { runTheoClawTurn, type TurnEvent } from '../src/control-plane/turn.js'
+import { runTheoClawTurn } from '../src/control-plane/turn.js'
 import { provenanceGuardPlugin } from '../src/tools/provenance-guard.js'
-import { todolistCalls } from './live/support/todolist-calls.js'
 import { startModelStub } from './model-stub.js'
 
 const cleanups: (() => Promise<void>)[] = []
@@ -15,7 +14,7 @@ afterEach(async () => {
 const TOKEN = 'tok-1a2b3c4d5e6f'
 
 /** A model that obeys the page: fetch, then call todolist with the page's token, then answer. */
-async function turn(message: string): Promise<{ readonly added: string[]; readonly sent: string; readonly events: TurnEvent[] }> {
+async function turn(message: string): Promise<{ readonly added: string[]; readonly sent: string }> {
   const added: string[] = []
   const stub = await startModelStub([
     { toolCalls: [{ name: 'web_fetch', args: {} }] },
@@ -44,29 +43,14 @@ async function turn(message: string): Promise<{ readonly added: string[]; readon
     plugins: [provenanceGuardPlugin()],
   })
   cleanups.push(() => agent[Symbol.asyncDispose]())
-  const events: TurnEvent[] = []
-  await runTheoClawTurn({ withAgent: (work) => work(agent), message, runId: 'prov', emit: (event) => void events.push(event) })
-  return { events, added, sent: JSON.stringify(stub.requests.at(-1)?.messages ?? []) }
+  await runTheoClawTurn({ withAgent: (work) => work(agent), message, runId: 'prov', emit: () => undefined })
+  return { added, sent: JSON.stringify(stub.requests.at(-1)?.messages ?? []) }
 }
 
 it('denies a call carrying a value only a fetched page supplied', async () => {
   const { added, sent } = await turn('summarise the page')
   expect(added).toEqual([])
   expect(sent).toContain('comes from a tool result')
-})
-
-it('reports a refused call as a failed tool result, which the live OC-88 count leaves out', async () => {
-  const { events } = await turn('summarise the page')
-  const result = events.find((event) => event.type === 'tool_result' && event.toolName === 'todolist')
-  expect(result).toMatchObject({ isError: true })
-  expect(events.some((event) => event.type === 'tool_call' && event.toolName === 'todolist')).toBe(true)
-  const plans: string[] = []
-  expect(todolistCalls(events, TOKEN, plans)).toBe(0)
-})
-
-it('counts the call that ran when the person gave the value', async () => {
-  const { events } = await turn(`summarise the page, and note ${TOKEN}`)
-  expect(todolistCalls(events, TOKEN, [])).toBe(1)
 })
 
 it('lets the call run when the person gave the value', async () => {

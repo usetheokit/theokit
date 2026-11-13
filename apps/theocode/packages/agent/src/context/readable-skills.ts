@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { discoverSkills, loadSkillInstructions } from '@theokit/sdk/skills'
@@ -42,13 +43,11 @@ import { bundleSkillRoots } from './bundle-skill-roots.js'
  */
 export async function readableSkills(
   cwd: string,
-  home: string,
-  projectAllowed: boolean,
+  home: string = homedir(),
 ): Promise<InlineSkill[]> {
-  // #1904 — the project roots follow the same trust gate as the `<skills>` block (`posture.allows.skills`);
-  // the operator's own root does not, for the reason above.
   const roots = [
-    ...(projectAllowed ? [join(cwd, DEFAULT_HOME_DIR, 'skills'), join(cwd, '.claude', 'skills')] : []),
+    join(cwd, DEFAULT_HOME_DIR, 'skills'),
+    join(cwd, '.claude', 'skills'),
     join(home, DEFAULT_HOME_DIR, 'skills'),
     // #826 — the skills a plugin bundle ships. Two files in this product already walk
     // `<root>/plugins/<bundle>/skills/<name>/SKILL.md` and call it deliberate: `skills-on-disk.ts`
@@ -59,7 +58,7 @@ export async function readableSkills(
     // Measured on the built binary 2026-09-17, after the permission regression stopped masking it:
     // `skill_read("bundled")` answered `Skill "bundled" not found. Available skills: greet.` for a
     // file sitting beside the one it did find.
-    ...(projectAllowed ? bundleSkillRoots(cwd) : []),
+    ...bundleSkillRoots(cwd),
   ]
   const byName = new Map<string, InlineSkill>()
   for (const root of roots) {
@@ -84,11 +83,7 @@ export async function readableSkills(
  * would be "no such skill" — the same reason `mcpPanelBody` refuses to list servers it was not
  * given.
  */
-export async function skillReadTool(
-  cwd: string,
-  home: string,
-  projectAllowed: boolean,
-): Promise<CustomTool[]> {
-  const skills = await readableSkills(cwd, home, projectAllowed)
+export async function skillReadTool(cwd: string): Promise<CustomTool[]> {
+  const skills = await readableSkills(cwd)
   return skills.length > 0 ? [SkillReadTool.create(skills)] : []
 }

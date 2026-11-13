@@ -1,8 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-
-import { CONFIG_SCHEMA_KEYS } from './config-contract.js'
-import { translateSettings, type SettingsRead } from './settings-json.js'
+import { join } from 'node:path'
 
 /**
  * Where an administrator deploys `managed-settings.json`, per platform.
@@ -23,46 +20,25 @@ const MANAGED_PATHS: readonly string[] = [
   join('C:\\', 'ProgramData', 'ClaudeCode', 'managed-settings.json'),
 ]
 
-/** The managed file as Claude Code's dialect: translated like a foreign-root settings file (#1908). */
-export interface ManagedSettingsRead extends SettingsRead {
-  readonly path: string
-}
-
-/** Translate a managed document the way a `.claude/settings.json` is read: foreign keys reported, not fatal. */
-export function translateManaged(raw: unknown, baseDir?: string): SettingsRead {
-  return translateSettings(raw, {
-    ownKeys: CONFIG_SCHEMA_KEYS,
-    foreignRoot: true,
-    hooksDelivery: 'inert',
-    ...(baseDir === undefined ? {} : { baseDir }),
-  })
-}
-
 /**
- * The enterprise policy, or `null` when no administrator deployed one. A file that exists and does not
- * parse is reported through `onWarn` and treated as absent: throwing would take the terminal down at
- * startup, silence would read a broken policy as no policy.
+ * The enterprise policy, or `null` when no administrator deployed one.
  *
- * The managed file, its path, and what translating it kept and ignored; `null` when absent or unreadable. */
-export function readManagedSettingsTranslated(
-  opts: {
-    readonly paths?: readonly string[]
-    readonly onWarn?: (message: string) => void
-  } = {},
-): ManagedSettingsRead | null {
-  const found = readManagedFile(opts)
-  if (found === null) return null
-  return { path: found.path, ...translateManaged(found.raw, dirname(found.path)) }
-}
-
-function readManagedFile(opts: {
+ * Returns the RAW parsed object. Translating it is the caller's, through the same schema every other
+ * layer goes through — a managed file with a typo must fail by name rather than be tolerated because
+ * of where it came from.
+ *
+ * A file that exists and does not parse is reported and treated as absent. Throwing would let a
+ * malformed policy take the terminal down at startup; silently ignoring it would let a broken policy
+ * read as no policy. Reporting is the only option that is neither.
+ */
+export function readManagedSettings(opts: {
   readonly paths?: readonly string[]
   readonly onWarn?: (message: string) => void
-}): { path: string; raw: unknown } | null {
+} = {}): unknown | null {
   for (const path of opts.paths ?? MANAGED_PATHS) {
     if (!existsSync(path)) continue
     try {
-      return { path, raw: JSON.parse(readFileSync(path, 'utf8')) as unknown }
+      return JSON.parse(readFileSync(path, 'utf8')) as unknown
     } catch (err) {
       opts.onWarn?.(
         `managed-settings.json at ${path} could not be read, so the organisation policy in it is ` +
