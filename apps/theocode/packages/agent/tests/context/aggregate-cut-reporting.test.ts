@@ -31,25 +31,40 @@ describe('composeInstructions reports what the aggregate ceiling cut', () => {
   })
 
   test('cutting the rules names the rules, with the chars on both sides', () => {
-    // The rules segment is recognised by the `\n\n---\n\n` separator the loader joins blocks
-    // with; without it the whole document reads as AGENTS.md and the cut lands there instead.
     const rules = ['R'.repeat(2_000), 'S'.repeat(2_000)].join('\n\n---\n\n')
     const agentsMd = 'A'.repeat(100)
-    const composed = composeInstructions('base', `${agentsMd}\n\n${rules}`, '', budget(2_000))
+    const composed = composeInstructions('base', { agentsMd, rules }, '', budget(2_000))
 
     const cut = composed.cuts.find((c) => c.source === 'rules')
-    expect(cut).toBeDefined()
-    // Deliberately NOT asserting `from === rules.length`. `splitProjectDoc` recognises the rules
-    // segment from the first `---` onward, so the two differ by the leading block — and a test
-    // that pinned the splitter's arithmetic would break on a refactor that changed nothing
-    // observable. What must hold is the direction: something was there, less of it survived.
-    expect(cut?.from).toBeGreaterThan(0)
-    expect(cut?.to).toBeLessThan(cut?.from ?? 0)
-    // An upper bound too, because `from` is PRINTED verbatim in the status row: review showed
-    // that direction alone let `rules.length + agentsMd.length` through, putting a number on
-    // screen that describes a block bigger than the document it came from.
-    expect(cut?.from).toBeLessThanOrEqual(`${agentsMd}\n\n${rules}`.length - agentsMd.length)
+    expect(cut?.from).toBe(rules.length)
+    expect(cut?.to).toBeLessThan(rules.length)
+    expect(composed.cuts.find((c) => c.source === 'agentsMd')).toBeUndefined()
     expect(composed.text.length).toBeLessThanOrEqual(2_000)
+  })
+
+  test('a --- rule inside AGENTS.md is not a rules boundary (#1903)', () => {
+    const agentsMd = `HEAD-SECTION ${'a'.repeat(500)}\n\n---\n\nTAIL-SECTION ${'b'.repeat(500)}`
+    const composed = composeInstructions('BASE', { agentsMd }, '', budget(900))
+
+    expect(composed.cuts.length).toBeGreaterThan(0)
+    expect(composed.cuts.every((c) => c.source === 'agentsMd')).toBe(true)
+    expect(composed.text).toContain('TAIL-SECTION')
+    expect(composed.text).not.toContain('HEAD-SECTION')
+    expect(composed.text.length).toBeLessThanOrEqual(900)
+  })
+
+  test('rules and an AGENTS.md holding --- are each cut and attributed to their own source', () => {
+    const agentsMd = `HEAD ${'a'.repeat(400)}\n\n---\n\nTAIL ${'b'.repeat(400)}`
+    const rules = ['R'.repeat(300), 'S'.repeat(300)].join('\n\n---\n\n')
+    const composed = composeInstructions('BASE', { agentsMd, rules }, '', budget(900))
+
+    const rulesCut = composed.cuts.find((c) => c.source === 'rules')
+    const mdCut = composed.cuts.find((c) => c.source === 'agentsMd')
+    expect(rulesCut?.from).toBe(rules.length)
+    expect(rulesCut?.to).toBe(0)
+    expect(mdCut?.from).toBe(agentsMd.length)
+    expect(mdCut?.to).toBeLessThan(agentsMd.length)
+    expect(composed.text).toContain('TAIL')
   })
 
   test('cutting the surface document does NOT report a rules cut', () => {
@@ -67,9 +82,8 @@ describe('composeInstructions reports what the aggregate ceiling cut', () => {
     // relabelling this push `source: 'rules'` — the same defect the surface arm guards —
     // survived all 1192 tests in the agent and TUI packages.
     //
-    // A document with no `\n\n---\n\n` separator is entirely AGENTS.md as far as
-    // `splitProjectDoc` is concerned, so the first branch finds no rules to trim and the
-    // second branch is the one that fires.
+    // A plain string is AGENTS.md, so the rules branch finds nothing to trim and the AGENTS.md
+    // branch is the one that fires.
     const composed = composeInstructions('base', 'A'.repeat(4_000), '', budget(1_000))
 
     expect(composed.cuts.map((c) => c.source)).toContain('agentsMd')
