@@ -13,17 +13,11 @@ import { setDiagnosticsSink } from '@theokit/agents'
 import { installDiagnosticSink } from '@theocode/shared/diagnostic-sink'
 import { setWorkingDirectory, workingDirectory } from './working-directory.js'
 import { guardedSweepStart } from '@theocode/agent/session'
-import { installConfiguredHome, resolveEffectiveConfig } from '@theocode/agent/config'
+import { installConfiguredHome, loadProjectEnv, resolveEffectiveConfig } from '@theocode/agent/config'
 
 installDiagnosticSink(setDiagnosticsSink)
 
-if (typeof process.loadEnvFile === 'function') {
-  try {
-    process.loadEnvFile()
-  } catch {
-    // no .env on disk — rely on the ambient environment
-  }
-}
+loadProjectEnv()
 
 // B-057 — chosen ONCE, here, before anything reads it. The TUI has no directory flag yet, so this
 // is the process directory today; when a `--cd` arrives it becomes a one-line change instead of
