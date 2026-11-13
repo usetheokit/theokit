@@ -54,7 +54,7 @@ describe('composeInstructions reports what the aggregate ceiling cut', () => {
   })
 
   test('rules and an AGENTS.md holding --- are each cut and attributed to their own source', () => {
-    const agentsMd = `HEAD ${'a'.repeat(400)}\n\n---\n\nTAIL ${'b'.repeat(400)}`
+    const agentsMd = `HEAD ${'a'.repeat(600)}\n\n---\n\nTAIL ${'b'.repeat(600)}`
     const rules = ['R'.repeat(300), 'S'.repeat(300)].join('\n\n---\n\n')
     const composed = composeInstructions('BASE', { agentsMd, rules }, '', budget(900))
 

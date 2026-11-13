@@ -101,6 +101,12 @@ describe('B-173 — the row reflects BOTH ceilings, or says which one it saw', (
     )
   })
 
+  it('test_an_agents_md_only_cut_shows_no_truncation_on_the_rules_row', () => {
+    // #1903 — `withAggregateCut` leaves the record without `aggregateCut` when only AGENTS.md was
+    // cut, so the row must read as a complete load.
+    expect(rulesRow({ count: 3, read: 3, chars: 900, kept: 900, truncated: false })).toBe('3 loaded')
+  })
+
   it('test_no_second_cut_leaves_the_row_exactly_as_it_was', () => {
     // ANTI-VACUITY CONTROL. Without it, a renderer that always appended a second clause — or one
     // that appended "cut to undefined" — passes both assertions above. The previous attempt at

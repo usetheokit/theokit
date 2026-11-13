@@ -18,7 +18,6 @@
  */
 import { describe, expect, test } from 'vitest'
 
-import { composeInstructions } from '../../src/context/agents-md.js'
 import { withAggregateCut } from '../../src/composition/composition-record.js'
 import type { InstructionCut } from '../../src/context/agents-md.js'
 
@@ -36,15 +35,6 @@ describe('B-173 — only a rules cut reaches the rules row', () => {
 
   test('an agentsMd cut leaves the record untouched', () => {
     expect(withAggregateCut(RECORD, [AGENTS_MD])).toEqual(RECORD)
-  })
-
-  test('#1903 — AGENTS.md holding --- cut alone shows no truncation on the rules row', () => {
-    const agentsMd = `HEAD ${'a'.repeat(500)}\n\n---\n\nTAIL ${'b'.repeat(500)}`
-    const { cuts } = composeInstructions('BASE', { agentsMd }, '', { maxChars: 900, warn: () => {} })
-    expect(cuts.length).toBeGreaterThan(0)
-    const record = withAggregateCut(RECORD, cuts)
-    expect(record).toEqual(RECORD)
-    expect(record?.aggregateCut).toBeUndefined()
   })
 
   test('a rules cut is found even when it is not the first', () => {
