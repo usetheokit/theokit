@@ -134,10 +134,17 @@ export async function doctorCommand(opts: {
     agentsMdFiles: [],
     sandboxMode: cfg.sandbox_mode,
   })
-  agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
+  // #1894 — awaited: `onWired` fires only after the async disk reads, so reading `wired` earlier
+  // reported the placeholder. A failed build is a failed check, not an unhandled rejection.
+  let buildFailure: string | undefined
+  try {
+    await agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
+  } catch (err) {
+    buildFailure = err instanceof Error ? err.message : String(err)
+  }
 
   const { AGENT } = await import('@theocode/shared/agent')
-  const checks = agent.collectChecks({
+  const checks = [...agent.collectChecks({
     cwd,
     // #128 — the one fact every bug report asks for, from the literal `agent.test.ts` holds against
     // the manifest. Reading the manifest here would be a second answer to one question.
@@ -185,7 +192,11 @@ export async function doctorCommand(opts: {
         }
       : {}),
     wired,
-  })
+  }),
+    ...(buildFailure !== undefined
+      ? [{ name: 'agent', status: 'fail' as const, detail: `could not build the agent: ${buildFailure}` }]
+      : []),
+  ]
   const result = agent.diagnose(checks)
 
   if (opts.json) process.stdout.write(`${JSON.stringify({ type: 'doctor', ...result })}\n`)
