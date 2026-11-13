@@ -112,21 +112,6 @@ export async function resolveDoctorTarget(opts: {
   return { cwd, cfg, posture: resolveTrustPosture(cwd) }
 }
 
-/** Builds the agent for real; returns a failed check if the build throws. */
-async function buildFailureOf(
-  agent: typeof import('@theocode/agent'),
-  cwd: string,
-  onWired: (w: ReturnType<typeof import('@theocode/agent').wiredCapabilities>) => void,
-): Promise<{ name: string; status: 'fail'; detail: string }[]> {
-  try {
-    await agent.buildChatAgent({ cwd, surface: 'headless', onWired })
-    return []
-  } catch (err) {
-    const detail = `buildChatAgent failed: ${err instanceof Error ? err.message : String(err)}`
-    return [{ name: 'wiring', status: 'fail', detail }]
-  }
-}
-
 export async function doctorCommand(opts: {
   json: boolean
   cd?: string
@@ -149,9 +134,7 @@ export async function doctorCommand(opts: {
     agentsMdFiles: [],
     sandboxMode: cfg.sandbox_mode,
   })
-  // Awaited, so `wired` is what the build published rather than the placeholder above; a build
-  // that throws becomes a failed check instead of an unhandled rejection.
-  const buildFailures = await buildFailureOf(agent, cwd, (w) => (wired = w))
+  agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
 
   const { AGENT } = await import('@theocode/shared/agent')
   const checks = agent.collectChecks({
@@ -203,7 +186,7 @@ export async function doctorCommand(opts: {
       : {}),
     wired,
   })
-  const result = agent.diagnose([...checks, ...buildFailures])
+  const result = agent.diagnose(checks)
 
   if (opts.json) process.stdout.write(`${JSON.stringify({ type: 'doctor', ...result })}\n`)
   else process.stderr.write(`${agent.renderDiagnosis(result)}\n`)
