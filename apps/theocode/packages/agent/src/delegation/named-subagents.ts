@@ -39,8 +39,9 @@ export interface AgentDefinitionLike {
 export async function namedSubagentDefinitions(
   cwd: string,
   projectAllowed: boolean,
+  home?: string,
 ): Promise<Record<string, AgentDefinitionLike>> {
-  const roles = await discoverRoles({ cwd, projectAllowed })
+  const roles = await discoverRoles({ cwd, projectAllowed, ...(home === undefined ? {} : { home }) })
   const out: Record<string, AgentDefinitionLike> = {}
   for (const [name, def] of Object.entries(roles)) out[name] = definitionFrom(def, name)
   return out

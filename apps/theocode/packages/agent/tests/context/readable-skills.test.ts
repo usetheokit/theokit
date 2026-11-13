@@ -48,41 +48,41 @@ function tree(spec: Record<string, readonly string[]>): string {
 describe('readableSkills', () => {
   it('carries the BODY, which is the whole point — a name and a description are already in the prompt', async () => {
     const cwd = tree({ '.theokit/skills': ['alpha'] })
-    const [skill] = await readableSkills(cwd, join(cwd, 'nohome'))
+    const [skill] = await readableSkills(cwd, join(cwd, 'nohome'), true)
     expect(skill?.name).toBe('alpha')
     expect(skill?.instructions).toContain('BODY OF alpha')
   })
 
   it("reads the repository's .claude/skills — the root that holds them in practice", async () => {
     const cwd = tree({ '.claude/skills': ['beta'] })
-    const names = (await readableSkills(cwd, join(cwd, 'nohome'))).map((s) => s.name)
+    const names = (await readableSkills(cwd, join(cwd, 'nohome'), true)).map((s) => s.name)
     expect(names).toContain('beta')
   })
 
   it('reads the operator\'s own ~/.theokit/skills', async () => {
     const home = tree({ '.theokit/skills': ['mine'] })
     const cwd = tree({})
-    const names = (await readableSkills(cwd, home)).map((s) => s.name)
+    const names = (await readableSkills(cwd, home, true)).map((s) => s.name)
     expect(names).toContain('mine')
   })
 
   it('does NOT read ~/.claude/skills — another kit\'s corpus, per user-skills.ts', async () => {
     const home = tree({ '.claude/skills': ['foreign-corpus'] })
     const cwd = tree({})
-    const names = (await readableSkills(cwd, home)).map((s) => s.name)
+    const names = (await readableSkills(cwd, home, true)).map((s) => s.name)
     expect(names).not.toContain('foreign-corpus')
   })
 
   it('returns [] for a project with no skills anywhere, rather than throwing', async () => {
     const cwd = tree({})
-    await expect(readableSkills(cwd, join(cwd, 'nohome'))).resolves.toEqual([])
+    await expect(readableSkills(cwd, join(cwd, 'nohome'), true)).resolves.toEqual([])
   })
 
   it('keeps one entry per name when two roots declare it, project first', async () => {
     // The project is the more specific context — the same precedence `user-skills.ts` states.
     const home = tree({ '.theokit/skills': ['dup'] })
     const cwd = tree({ '.theokit/skills': ['dup'] })
-    const found = (await readableSkills(cwd, home)).filter((s) => s.name === 'dup')
+    const found = (await readableSkills(cwd, home, true)).filter((s) => s.name === 'dup')
     expect(found).toHaveLength(1)
     expect(found[0]?.instructions).toContain('BODY OF dup')
   })
