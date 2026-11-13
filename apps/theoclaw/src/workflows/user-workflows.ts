@@ -2,7 +2,15 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { CustomTool } from '@theokit/sdk'
-import { fn, Workflow, workflowAsTool, workflowResumeTool, type WorkflowRun } from '@theokit/sdk/workflow'
+import {
+  fn,
+  Workflow,
+  workflowAsTool,
+  workflowResumeTool,
+  WorkflowResumeWorkflowMismatchError,
+  WorkflowSnapshotNotFoundError,
+  type WorkflowRun,
+} from '@theokit/sdk/workflow'
 import { z } from 'zod'
 
 import type { GenerateObject } from './triage-workflow.js'
@@ -142,13 +150,19 @@ export function loadUserWorkflows(options: {
   }
   const resume = async (token: string, approved: boolean): Promise<string | undefined> => {
     for (const { name, workflow } of committed) {
+      let run: WorkflowRun
       try {
-        const run = await Workflow.resume({ workflow, runId: token, payload: { approved } } as never)
-        options.write(`theoclaw-workflow: ${name} ${token} ${run.status}`)
-        return `${name} ${token}: ${run.status}${run.status === 'completed' ? ` ${JSON.stringify(run.output)}` : ''}`
-      } catch {
-        // Not this workflow's run (or no such snapshot): try the next.
+        run = await Workflow.resume({ workflow, runId: token, payload: { approved } } as never)
+      } catch (error) {
+        // Only "this workflow does not own the token" moves on to the next workflow.
+        if (error instanceof WorkflowSnapshotNotFoundError || error instanceof WorkflowResumeWorkflowMismatchError) continue
+        const reason = error instanceof Error ? error.message : String(error)
+        options.write(`theoclaw-workflow: ${name} ${token} resume failed: ${reason}`)
+        throw new Error(`${name} ${token}: resume failed: ${reason}`, { cause: error })
       }
+      options.write(`theoclaw-workflow: ${name} ${token} ${run.status}`)
+      const detail = run.status === 'failed' ? ` ${run.error?.message ?? ''}`.trimEnd() : ''
+      return `${name} ${token}: ${run.status}${run.status === 'completed' ? ` ${JSON.stringify(run.output)}` : detail}`
     }
     return undefined
   }
