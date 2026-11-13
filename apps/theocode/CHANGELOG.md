@@ -20,6 +20,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 - **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
 
 ### Fixed
+- **The context meter shows a 1M-token window as `1m`, not `1000k`.** `fmtK` now switches to millions from one million up (`1m`, `1.2m`). (#1901)
 - **`doctor` honours `-c`, `--sandbox` and `-a`, and applies `-C` once.** `parseDoctor` dropped the config overrides, so the diagnostic reported values the flags had not touched; they now reach the config resolution. A relative `-C sub` was applied by `main.ts` and again by `doctor`, which inspected `sub/sub`. (#1895)
 - **Session cleanup deletes only the SDK's own temp files.** The collector treated any old `*.tmp` file in a session directory as its own; it now matches only the `<file>.<pid>.<16 hex>.tmp` names the SDK's atomic writer leaves, so `notes.tmp` or an editor swap file is left alone. (#1911)
 - **`doctor`'s settings row no longer carries a dead `permissions` branch.** It still held a message for `permissions` sitting in `ignored`, and comments saying enforcement was missing, though translation stopped reporting that key when the engine was wired. The row now names only the permission entries that did not translate. (#1910)
