@@ -235,6 +235,16 @@ describe('a changeset that no release publishes is refused', () => {
     expect(out.status, out.stderr).toBe(1)
     expect(out.stderr).toMatch(/quoted\.md: names only priv \(private\)/)
   })
+
+  it('test_a_changeset_that_names_no_package_is_refused_naming_the_file', () => {
+    // #2069: an empty frontmatter consumes nothing, so `changeset version` bumps nothing and the
+    // Release workflow refuses on every run.
+    const out = run(fixture({ changesets: { 'empty.md': '---\n\n---\n\nNothing to release.\n' } }))
+
+    expect(out.status, out.stderr).toBe(1)
+    expect(out.stderr).toMatch(/\.changeset\/empty\.md: names no package/)
+    expect(out.stderr).toMatch(/delete the changeset/)
+  })
 })
 
 describe('a changeset some release publishes still passes', () => {
@@ -248,13 +258,6 @@ describe('a changeset some release publishes still passes', () => {
     const out = run(
       fixture({ changesets: { 'both.md': changeset('"priv": patch\n"@scope/pub": minor') } }),
     )
-
-    expect(out.status, out.stderr).toBe(0)
-  })
-
-  it('test_a_changeset_that_names_no_package_passes', () => {
-    // EC-4: an empty changeset releases nothing and stops nothing.
-    const out = run(fixture({ changesets: { 'empty.md': '---\n\n---\n\nNothing to release.\n' } }))
 
     expect(out.status, out.stderr).toBe(0)
   })
