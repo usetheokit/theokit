@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **A Claude Code `managed-settings.json` no longer stops startup, and a malformed one is no longer silent.** The managed file is now read like a `.claude/settings.json`: our keys apply, `permissions` rules are enforced, other Claude Code keys are reported, and `doctor` lists the file with its path and what was ignored. A file that does not parse warns on every start. (#1908)
 - **Headless `exec` no longer exits 0 for a turn the loop cut.** A finish chunk carrying `stopReason` (`step_limit` or `no_progress`) now exits 2, the `[exec]` line reads `status=cut stop=<reason>`, and the JSONL stream closes the turn with `turn.failed` (`turn cut: <reason>`). Exit 1 stays for errors and empty turns; the usage text lists the code. (#1897)
 
 ### Security
