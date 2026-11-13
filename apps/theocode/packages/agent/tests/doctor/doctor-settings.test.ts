@@ -9,7 +9,14 @@
  * A warning, never a failure. Nothing is broken by a key we chose not to implement, and exiting
  * non-zero over one would report a working install as broken.
  */
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
+
+import { tempRoot } from '../helpers/temp-root.js'
+
+import { settingsReport } from '../../src/config/settings-load.js'
 
 import { collectChecks, diagnose } from '../../src/doctor/doctor.js'
 
@@ -40,6 +47,21 @@ const REPORT = [
 ]
 
 describe('the settings row', () => {
+  it('test_the_managed_file_is_listed_with_its_path_and_what_was_ignored', () => {
+    // #1908
+    const dir = tempRoot('managed-doctor-')
+    const path = join(dir, 'managed-settings.json')
+    writeFileSync(path, JSON.stringify({ model: 'm/x', alwaysThinkingEnabled: true, futureKey: 1 }))
+    const report = settingsReport({ projectDir: dir, userDir: dir, managedPaths: [path] })
+    const check = collectChecks({ ...base, settingsIgnored: report }).find(
+      (c) => c.name === 'settings',
+    )
+
+    expect(check?.detail).toContain(path)
+    expect(check?.detail).toContain('alwaysThinkingEnabled')
+    expect(check?.detail).toContain('futureKey')
+  })
+
   it('test_it_names_the_file_and_the_keys_it_did_not_act_on', () => {
     const check = collectChecks({ ...base, settingsIgnored: REPORT }).find(
       (c) => c.name === 'settings',
@@ -91,7 +113,14 @@ describe('the settings row', () => {
     const rows = collectChecks({
       ...base,
       settingsIgnored: [
-        { path: '/tmp/p/.theokit/settings.json', ignored: [], unrecognised: [], droppedHooks: [], unsupportedPermissions: [], permissionRules: [] },
+        {
+          path: '/tmp/p/.theokit/settings.json',
+          ignored: [],
+          unrecognised: [],
+          droppedHooks: [],
+          unsupportedPermissions: [],
+          permissionRules: [],
+        },
       ],
     })
     expect(rows.find((c) => c.name === 'settings')).toBeUndefined()
@@ -130,7 +159,6 @@ describe('the output-style row', () => {
     expect(collectChecks(base).find((c) => c.name === 'output-style')).toBeUndefined()
   })
 })
-
 
 describe('the version row', () => {
   it('test_doctor_names_the_build', () => {
