@@ -40,6 +40,18 @@ const REPORT = [
 ]
 
 describe('the settings row', () => {
+  it('test_it_lists_the_managed_file_with_its_path_and_what_was_ignored', () => {
+    const check = collectChecks({
+      ...base,
+      settingsIgnored: [
+        { ...REPORT[0]!, path: '/etc/claude-code/managed-settings.json', unrecognised: ['bogusKey'] },
+      ],
+    }).find((c) => c.name === 'settings')
+
+    expect(check?.detail).toContain('/etc/claude-code/managed-settings.json')
+    expect(check?.detail).toContain('bogusKey')
+  })
+
   it('test_it_names_the_file_and_the_keys_it_did_not_act_on', () => {
     const check = collectChecks({ ...base, settingsIgnored: REPORT }).find(
       (c) => c.name === 'settings',

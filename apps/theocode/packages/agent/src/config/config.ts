@@ -25,6 +25,7 @@ import {
   firstSettings,
   refuseStrandedToml,
   settingsCandidates,
+  translateManaged,
 } from './settings-load.js'
 import type { TrustPosture } from './trust-posture.js'
 import { applySecurityFloor } from './security-floor.js'
@@ -448,7 +449,12 @@ export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
   const cli = fromFile(layers.cli, 'cli (-c)')
   // #737 — the enterprise policy. Parsed through the SAME schema as every other layer: a
   // managed file with a typo must fail by name, not be tolerated because of where it came from.
-  const managed = fromFile(layers.managed, 'managed-settings.json')
+  const managed = fromFile(
+    layers.managed === null || layers.managed === undefined
+      ? layers.managed
+      : translateManaged(layers.managed, 'managed-settings.json').values,
+    'managed-settings.json',
+  )
 
   const { name: selectedProfile, values: profile } = chosenProfile([
     user,
@@ -540,7 +546,9 @@ export function loadConfig(opts: {
   // #737 — read here rather than in `discoverSettings`, which is about the files a PROJECT and a
   // USER own. This one is neither: an administrator deployed it to a path they cannot write, and no
   // trust posture gates it — the policy binds the untrusted repository too.
-  const managedSettings = readManagedSettings()
+  const managedSettings = readManagedSettings({
+    onWarn: (message) => process.stderr.write(`theocode: ${message}\n`),
+  })
   const { user, project, projectLocal, projectAllowed, ourHome } = discoverSettings({
     projectDir,
     userDir,

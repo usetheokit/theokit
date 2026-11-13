@@ -13,7 +13,8 @@ import process from 'node:process'
 
 import { CONFIG_SCHEMA_KEYS, ConfigError } from './config-contract.js'
 import { DEFAULT_HOME_DIR, LEGACY_HOME_DIR, homeStateDir } from './home-dir.js'
-import { translateSettings } from './settings-json.js'
+import { readManagedSettingsFile } from './managed-settings.js'
+import { translateSettings, type SettingsRead } from './settings-json.js'
 import type { PermissionRule } from '@theokit/agents/config'
 
 /**
@@ -227,10 +228,57 @@ function reportOne(candidate: SettingsCandidate): SettingsFileReport | 'skip' | 
   }
 }
 
+/**
+ * #1908 — the managed document read the way a foreign-root file is: TheoCode's keys apply, Claude
+ * Code keys are translated or reported, unknown keys are reported. A refused key (`hooks`) is
+ * reported rather than thrown: a managed policy must not take the terminal down at startup.
+ */
+export function translateManaged(raw: unknown, path: string): SettingsRead {
+  try {
+    return translateSettings(raw, {
+      ownKeys: CONFIG_SCHEMA_KEYS,
+      foreignRoot: true,
+      hooksDelivery: 'ours',
+      baseDir: dirname(path),
+    })
+  } catch (err) {
+    return {
+      values: {},
+      ignored: [],
+      unrecognised: [],
+      droppedHooks: [(err as Error).message],
+      permissionRules: [],
+      unsupportedPermissions: [],
+    }
+  }
+}
+
+function managedReport(opts: {
+  managedPaths?: readonly string[]
+  onWarn?: (message: string) => void
+}): SettingsFileReport | null {
+  const file = readManagedSettingsFile({
+    ...(opts.managedPaths !== undefined ? { paths: opts.managedPaths } : {}),
+    ...(opts.onWarn !== undefined ? { onWarn: opts.onWarn } : {}),
+  })
+  if (file === null) return null
+  const read = translateManaged(file.raw, file.path)
+  return {
+    path: file.path,
+    ignored: read.ignored,
+    unrecognised: read.unrecognised,
+    droppedHooks: read.droppedHooks,
+    unsupportedPermissions: read.unsupportedPermissions.map((u) => `${u.entry} — ${u.reason}`),
+    permissionRules: read.permissionRules,
+  }
+}
+
 export function settingsReport(opts: {
   projectDir?: string
   userDir?: string
   env?: Record<string, string | undefined>
+  managedPaths?: readonly string[]
+  onWarn?: (message: string) => void
 }): SettingsFileReport[] {
   const env = opts.env ?? process.env
   const candidates = settingsCandidates({
@@ -238,7 +286,8 @@ export function settingsReport(opts: {
     userDir: opts.userDir ?? homedir(),
     env,
   })
-  const out: SettingsFileReport[] = []
+  const managed = managedReport(opts)
+  const out: SettingsFileReport[] = managed === null ? [] : [managed]
   for (const list of [candidates.user, candidates.project, candidates.projectLocal]) {
     for (const candidate of list) {
       const result = reportOne(candidate)

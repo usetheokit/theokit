@@ -21,24 +21,23 @@ const MANAGED_PATHS: readonly string[] = [
 ]
 
 /**
- * The enterprise policy, or `null` when no administrator deployed one.
+ * The enterprise policy and the path it was read from, or `null` when no administrator deployed one.
  *
- * Returns the RAW parsed object. Translating it is the caller's, through the same schema every other
- * layer goes through — a managed file with a typo must fail by name rather than be tolerated because
- * of where it came from.
+ * Returns the RAW parsed object. The caller runs it through `translateSettings` as a foreign-root
+ * file (#1908): the file is Claude Code's own, so it carries Claude Code keys.
  *
  * A file that exists and does not parse is reported and treated as absent. Throwing would let a
  * malformed policy take the terminal down at startup; silently ignoring it would let a broken policy
  * read as no policy. Reporting is the only option that is neither.
  */
-export function readManagedSettings(opts: {
+export function readManagedSettingsFile(opts: {
   readonly paths?: readonly string[]
   readonly onWarn?: (message: string) => void
-} = {}): unknown | null {
+} = {}): { readonly path: string; readonly raw: unknown } | null {
   for (const path of opts.paths ?? MANAGED_PATHS) {
     if (!existsSync(path)) continue
     try {
-      return JSON.parse(readFileSync(path, 'utf8')) as unknown
+      return { path, raw: JSON.parse(readFileSync(path, 'utf8')) as unknown }
     } catch (err) {
       opts.onWarn?.(
         `managed-settings.json at ${path} could not be read, so the organisation policy in it is ` +
@@ -48,4 +47,11 @@ export function readManagedSettings(opts: {
     }
   }
   return null
+}
+
+export function readManagedSettings(opts: {
+  readonly paths?: readonly string[]
+  readonly onWarn?: (message: string) => void
+} = {}): unknown | null {
+  return readManagedSettingsFile(opts)?.raw ?? null
 }
