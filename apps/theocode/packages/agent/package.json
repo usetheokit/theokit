@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./chat": "./src/chat/chat.ts",
     "./ask": "./src/ask/index.ts",
+    "./bootstrap": "./src/bootstrap-surface.ts",
     "./auth": "./src/auth/index.ts",
     "./config": "./src/config/index.ts",
     "./context": "./src/context/index.ts",

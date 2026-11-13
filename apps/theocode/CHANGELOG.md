@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Fixed
+- **The ACP entry runs the same startup steps as the CLI and the TUI.** `dist/acp-entry.mjs` never loaded the project `.env`, applied `THEOCODE_HOME` / `home_dir`, pointed the SDK at the credential store, or set `CLAUDE_PROJECT_DIR`, so an ACP session could use a different session root and credentials. The steps now live in one function, `bootstrapSurface`, called by all three entries. The TUI now reads `.env` through the same guarded loader as the CLI, so a project `.env` can no longer override `THEOCODE_HOME` or the trust keys there. (#1893)
+
 ### Security
 - **`skill_read` no longer serves the repository's skills in an untrusted directory, and reads the configured home.** It read `<cwd>/.theokit/skills`, `.claude/skills` and plugin bundles whatever the trust posture, and its not-found answer listed their names; it also fell back to the real home instead of the `home` override, as did role discovery for named subagents. Project roots now follow `posture.allows.skills`, and both use the configured home. (#1904)
 - **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
