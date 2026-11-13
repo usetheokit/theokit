@@ -19,6 +19,8 @@ export {
   parseHookSpecs,
 } from './hook-spec.js'
 export type { BuildHookHandlersOptions, HookEvent, HookSpec } from './hook-spec.js'
+export { runHostHooks } from './host-hooks.js'
+export type { HostHookOutcome } from './host-hooks.js'
 export { hookFingerprint } from './hook-fingerprint.js'
 export type { HookIdentity } from './hook-fingerprint.js'
 export {

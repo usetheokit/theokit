@@ -131,6 +131,17 @@ agent you call answers the caller, and the caller keeps the turn.
 refused with a `ConfigurationError`. `toAgentFactory({ withholdBuiltinShell: true })` still works;
 when both are set, the union is passed.
 
+## Hooks the host owns
+
+`buildHookHandlers` wires hooks into one agent loop. Some events belong to the host instead:
+`on_session_start` fires once per loop context, so an app that builds a fresh agent per turn would
+run a session-start hook on every message. For those, call `runHostHooks(event, specs, options)` from
+`@theokit/agents/hooks` at the moment the host starts the session. It applies the same trust and
+fingerprint gate as `buildHookHandlers`, ignores specs of other events, and returns one
+`HostHookOutcome` per spec (`ran`, `not-approved`, `failed`, `timed-out` or `could-not-start`)
+without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
+is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
