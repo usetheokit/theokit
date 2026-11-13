@@ -8,11 +8,17 @@
  */
 import { createRequire } from 'node:module'
 
-import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
+import type {
+  BuiltinToolName,
+  ContextSettings,
+  SkillsSettings,
+  SystemPromptResolver,
+} from '@theokit/sdk'
 import type { CostBreakdown, MemorySettings, TelemetrySettings, TokenUsage } from '@theokit/sdk'
 import { PermissionEngine, PermissionPlugin } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
+import { ConfigurationError } from '../errors.js'
 import type { McpServersMap } from '../types.js'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
@@ -78,6 +84,8 @@ interface M8CreateOptions {
    * up, where `CompiledAgentOptions.agents` IS `Record<string, SubagentDefinition>`.
    */
   agents?: Record<string, unknown>
+  /** #1912 — builtin tools withheld from the model. */
+  withheldBuiltinTools?: readonly BuiltinToolName[]
 }
 
 /**
@@ -392,6 +400,37 @@ function applyHookApproval(
   applied.push('hookApproval')
 }
 
+/** The builtin names the SDK declares (`BuiltinToolName`); typed so a drift fails to compile. */
+const KNOWN_BUILTIN_TOOLS: Record<BuiltinToolName, true> = {
+  shell: true,
+  memory_search: true,
+  memory_get: true,
+}
+
+/** #1912 — project `withheldBuiltinTools`, refusing a name the SDK does not know. */
+function applyWithheldBuiltins(
+  compiled: CompiledAgentOptions,
+  options: M8CreateOptions,
+  applied: string[],
+): void {
+  const names = compiled.withheldBuiltinTools
+  if (names === undefined) return
+  for (const name of names) {
+    if (!Object.prototype.hasOwnProperty.call(KNOWN_BUILTIN_TOOLS, name)) {
+      throw new ConfigurationError(
+        `withholdBuiltinTools: unknown builtin tool "${name as string}" — expected one of ${Object.keys(KNOWN_BUILTIN_TOOLS).join(', ')}`,
+      )
+    }
+  }
+  options.withheldBuiltinTools = [...new Set(names)]
+  applied.push('withheldBuiltinTools')
+}
+
+/** #1912 — the builder's withheld builtins plus `shell`, for `toAgentFactory({ withholdBuiltinShell })`. */
+export function withShell(options: M8CreateOptions): BuiltinToolName[] {
+  return [...new Set<BuiltinToolName>([...(options.withheldBuiltinTools ?? []), 'shell'])]
+}
+
 export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   options: M8CreateOptions
   applied: string[]
@@ -427,6 +466,7 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   }
   applyLocalSources(compiled, options, applied)
   applyHookApproval(compiled, options, applied)
+  applyWithheldBuiltins(compiled, options, applied)
   if (compiled.context) {
     options.context = compiled.context
     applied.push('context')
