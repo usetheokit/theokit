@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Security
+- **A hook command with a control character is refused at parse time.** TheoCode's own `hooks` parser accepted any non-empty string, so `npm test` followed by a carriage return and a second command was shown in the review prompt as `npm test`. `parseHooks` now throws a `HookError` naming the hook (the framework's rule), and a `.claude/settings.json` hook with such a command is not forwarded and is named in the settings report. (#1909)
 - **`skill_read` no longer serves the repository's skills in an untrusted directory, and reads the configured home.** It read `<cwd>/.theokit/skills`, `.claude/skills` and plugin bundles whatever the trust posture, and its not-found answer listed their names; it also fell back to the real home instead of the `home` override, as did role discovery for named subagents. Project roots now follow `posture.allows.skills`, and both use the configured home. (#1904)
 - **A managed `sandbox_mode` or `approval_policy` is no longer overwritten by the user's own value.** The security floor recomputed both keys from every layer except `managed`, so a `user`, `project`, `env` or `cli` value replaced the organisation's. The managed value now wins, as the #737 entry promised. (#1907)
 

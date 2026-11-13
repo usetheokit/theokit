@@ -28,10 +28,21 @@ const EVENTS = HOOK_EVENTS
 
 const DEFAULT_TIMEOUT_MS = 5_000
 
+/**
+ * Same rule as the framework's `hookSpecSchema`: a control character is invisible in the approval
+ * prompt, so `npm test` + carriage return + another command would be approved as `npm test`.
+ */
+export function hasControlChars(command: string): boolean {
+  // eslint-disable-next-line no-control-regex -- the control characters are the subject of the check
+  return /[\u0000-\u001f\u007f]/.test(command)
+}
+
 const hookSchema = z
   .object({
     event: z.string(),
-    command: z.string().min(1),
+    command: z.string().min(1).refine((value) => !hasControlChars(value), {
+      message: 'command contains control characters that would be hidden in the approval dialog',
+    }),
     matcher: z.string().optional(),
     timeout_ms: z.number().int().positive().optional(),
   })

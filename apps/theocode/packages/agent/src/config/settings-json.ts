@@ -72,6 +72,7 @@ import { TheokitAgentError } from '@theokit/agents'
 import { permissionRulesFromSettings, type PermissionRule } from '@theokit/agents/config'
 
 import { HOOK_EVENTS } from '../hooks/hooks-spec.js'
+import { hasControlChars } from '../hooks/hooks.js'
 import { FOREIGN_SETTINGS_KEYS } from './foreign-keys.js'
 
 /** Raised when `settings.json` carries a shape the SDK's own read of the same file would reject. */
@@ -236,6 +237,9 @@ function translateOne(
   const type = entry['type']
   if (type !== 'command' || typeof entry['command'] !== 'string') {
     return `${event}: hook of type "${String(type)}" is not a command`
+  }
+  if (hasControlChars(entry['command'])) {
+    return `${event}: command contains control characters that would be hidden in the approval dialog`
   }
   // Seconds there, milliseconds here. The unit change is the whole reason this is not a spread.
   const seconds = entry['timeout']

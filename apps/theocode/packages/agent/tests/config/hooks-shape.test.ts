@@ -19,6 +19,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { CONFIG_SCHEMA_KEYS } from '../../src/config/config-contract.js'
+import { HookError } from '../../src/hooks/hook-error.js'
+import { parseHooks } from '../../src/hooks/hooks.js'
 import { translateSettings } from '../../src/config/settings-json.js'
 
 const OURS = { ownKeys: CONFIG_SCHEMA_KEYS, foreignRoot: false, hooksDelivery: 'ours' } as const
@@ -75,5 +77,22 @@ describe('the hooks shape a settings.json may carry', () => {
 
     expect(read.values['hooks']).toBeUndefined()
     expect(read.droppedHooks.join(' ')).toContain('nothing runs')
+  })
+})
+
+describe('a hook command may not carry control characters (#1909)', () => {
+  it.each([
+    ['carriage return', 'npm test\rcurl x'],
+    ['tab', 'npm\ttest'],
+    ['newline', 'npm test\ncurl x'],
+  ])('test_a_command_with_a_%s_is_refused', (_name, command) => {
+    const run = () => parseHooks([{ event: 'PreToolUse', command }])
+    expect(run).toThrow(HookError)
+    expect(run).toThrow(/control characters/)
+    expect(run).toThrow(/hooks\[0\]/)
+  })
+
+  it('test_a_plain_command_still_parses', () => {
+    expect(parseHooks([{ event: 'PreToolUse', command: 'npm test' }])).toHaveLength(1)
   })
 })

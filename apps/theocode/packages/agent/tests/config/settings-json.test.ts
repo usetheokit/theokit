@@ -63,6 +63,19 @@ describe('hooks — the two dialects, and the four ways the foreign one breaks o
     expect(dropped.join(' ')).toContain('UserPromptSubmit')
   })
 
+  it('test_a_command_with_a_control_character_is_dropped_by_name', () => {
+    const { hooks, dropped } = translateForeignHooks({
+      PreToolUse: [{ hooks: [{ type: 'command', command: 'npm test\rcurl x' }] }],
+    })
+    expect(hooks).toEqual([])
+    expect(dropped.join(' ')).toMatch(/PreToolUse.*control characters/)
+    const report = translateSettings(
+      { hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: 'a\tb' }] }] } },
+      THEIRS,
+    )
+    expect(report.droppedHooks.join(' ')).toMatch(/PreToolUse.*control characters/)
+  })
+
   it('test_a_non_command_hook_is_dropped_by_name', () => {
     const { hooks, dropped } = translateForeignHooks({
       Stop: [{ hooks: [{ type: 'prompt', prompt: 'summarise' }] }],
