@@ -1,3 +1,4 @@
+import { hookSpecSchema } from '@theokit/agents/hooks'
 import { z } from 'zod'
 
 import { HOOK_EVENTS, type HookEvent, type HookSpec } from './hooks-spec.js'
@@ -31,11 +32,17 @@ const DEFAULT_TIMEOUT_MS = 5_000
 const hookSchema = z
   .object({
     event: z.string(),
-    command: z.string().min(1),
+    command: hookSpecSchema.shape.command,
     matcher: z.string().optional(),
     timeout_ms: z.number().int().positive().optional(),
   })
   .strict()
+
+/** Why a command may not run (a control character the approval prompt would hide), or null. */
+export function commandRefusal(command: string): string | null {
+  const r = hookSpecSchema.shape.command.safeParse(command)
+  return r.success ? null : (r.error.issues[0]?.message ?? 'command is invalid')
+}
 
 function validateShape(entry: unknown, i: number): z.infer<typeof hookSchema> {
   try {
