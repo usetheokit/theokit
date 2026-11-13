@@ -112,10 +112,15 @@ function globToRegExp(scope: string): RegExp {
     const char = scope[i]
     if (char === '*') {
       if (scope[i + 1] === '*') {
-        out += '.*'
         i += 1
-        // `**/` should also match zero directories, so `a/**/b.ts` covers `a/b.ts`.
-        if (scope[i + 1] === '/') i += 1
+        if (scope[i + 1] === '/') {
+          // `**/` matches zero or more WHOLE directories, so `a/**/b.ts` covers `a/b.ts` but not
+          // `a/xb.ts`: the optional group keeps the directory boundary.
+          out += '(?:.*/)?'
+          i += 1
+        } else {
+          out += '.*'
+        }
         continue
       }
       out += '[^/]*'
@@ -129,7 +134,8 @@ function globToRegExp(scope: string): RegExp {
   }
   // The pattern is BUILT here, not taken from the file: every character of `scope` that is not one
   // of the three wildcards is escaped above, so the only metacharacters in `out` are the `.*`,
-  // `[^/]*` and `[^/]` this function emitted. There is no alternation and no nested quantifier, so
+  // `(?:.*/)?`, `[^/]*` and `[^/]` this function emitted. There is no alternation and the only group
+  // is a single optional one with no quantifier nested inside another, so
   // the catastrophic-backtracking shapes this rule exists to catch cannot be constructed from a
   // `paths:` value.
   // eslint-disable-next-line security/detect-non-literal-regexp

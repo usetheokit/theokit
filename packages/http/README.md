@@ -178,6 +178,18 @@ export class AgentsController {
 The request is delegated straight to the one agent runtime. Guards run on that route; interceptors
 do not.
 
+## `module` and `container`
+
+`TheoApp.create({ module })` resolves providers and controllers through an `@theokit/di`
+`Container`: constructor dependencies, scopes, `@PostConstruct` and `@PreDestroy` are honoured, the
+whole import graph is loaded, and a missing provider rejects `create()` with the container's typed
+error. **`@theokit/di` must be installed for `module`** (it is an optional peer dependency).
+
+Pass `container` to use your own; the module is registered into it and you dispose it yourself.
+Without `container`, `create` builds one and `app.close()` disposes it. Inline `providers` without
+`module` or `container` are built with `new` only when their constructor takes no parameters;
+otherwise `create` throws.
+
 ## Decorators reference
 
 | Decorator | Kind | Purpose |

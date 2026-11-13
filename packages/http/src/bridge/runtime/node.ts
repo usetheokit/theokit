@@ -72,21 +72,29 @@ export async function writeResponseToNode(
 /** Create a Node.js HTTP server that delegates to a Web Standard handler. */
 export function createNodeAdapter(): RuntimeAdapter {
   return {
-    createServer(handler) {
+    createServer(handler, options) {
       const server = createServer((nodeReq, nodeRes) => {
         void (async () => {
+          let request: Request | undefined
           try {
-            const request = nodeIncomingToRequest(nodeReq)
+            request = nodeIncomingToRequest(nodeReq)
             const response = await handler(request)
             await writeResponseToNode(response, nodeRes)
           } catch (err) {
-            if (!nodeRes.destroyed) {
+            // The real error goes to the server side only, never to the client (CWE-209).
+            try {
+              if (options?.onError) options.onError(err, request)
+              else console.error(err)
+            } catch {
+              // a failing hook must not escape the last-resort handler
+            }
+            if (!nodeRes.headersSent && !nodeRes.destroyed) {
               nodeRes.writeHead(500, { 'content-type': 'application/json' })
               nodeRes.end(
                 JSON.stringify({
                   error: {
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: err instanceof Error ? err.message : 'Unknown error',
+                    message: 'Internal Server Error',
                   },
                 }),
               )

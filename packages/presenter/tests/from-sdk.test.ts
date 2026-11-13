@@ -99,6 +99,35 @@ describe('fromSdkMessage (buffered run.stream path)', () => {
   })
 })
 
+describe('fromSdkMessage exit code', () => {
+  const call = (result: unknown) => ({
+    type: 'tool_call',
+    call_id: 'c1',
+    name: 'shell',
+    status: 'completed',
+    result,
+  })
+
+  it.each([1, 124, 126, 127])(
+    'a completed tool_call with a non-zero exitCode becomes a tool-result with isError true (%i)',
+    (exitCode) => {
+      const out = fromSdkMessage(call({ stdout: '', stderr: 'boom', exitCode }))
+      expect(out).toHaveLength(1)
+      expect(out[0]).toMatchObject({ type: 'tool-result', callId: 'c1', isError: true })
+    },
+  )
+
+  it('a completed tool_call with exitCode 0 or no exitCode stays isError false', () => {
+    for (const result of [{ exitCode: 0 }, { stdout: 'ok' }, { exitCode: '1' }, null]) {
+      expect(fromSdkMessage(call(result))[0]).toMatchObject({ isError: false })
+    }
+  })
+
+  it('a completed tool_call whose result is a string stays isError false', () => {
+    expect(fromSdkMessage(call('exitCode: 1 failed'))[0]).toMatchObject({ isError: false })
+  })
+})
+
 describe('fromInteractionUpdate (chronological onDelta path)', () => {
   it('maps each streamed update to the right canonical variant', () => {
     expect(fromInteractionUpdate({ type: 'text-delta', text: 'a' } as InteractionUpdate)).toEqual([
