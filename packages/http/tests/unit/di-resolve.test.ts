@@ -1,7 +1,10 @@
 import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
 import { Container, Injectable } from '@theokit/di'
-import { resolveOrNew } from '../../src/bridge/di-resolve.js'
+import { resolveOrNew, type DiContainer } from '../../src/bridge/di-resolve.js'
+
+/** Real container; @theokit/di's Token<T> is wider than DiContainer's Function. */
+const asDi = (c: Container): DiContainer => c as unknown as DiContainer
 
 const deps = (C: Function, ...d: Function[]): void => {
   Injectable()(C as never)
@@ -20,7 +23,7 @@ describe('resolveOrNew', () => {
     deps(Repo, Db)
     const c = new Container()
     c.register(Repo)
-    expect(() => resolveOrNew(Repo, c)).toThrow(
+    expect(() => resolveOrNew(Repo, asDi(c))).toThrow(
       expect.objectContaining({ name: 'TokenNotFoundError' }),
     )
   })
@@ -37,7 +40,7 @@ describe('resolveOrNew', () => {
     deps(Boom)
     const c = new Container()
     c.register(Boom)
-    expect(() => resolveOrNew(Boom, c)).toThrow('boom')
+    expect(() => resolveOrNew(Boom, asDi(c))).toThrow('boom')
     expect(runs).toBe(1)
   })
 
@@ -45,7 +48,7 @@ describe('resolveOrNew', () => {
     class Plain {
       readonly x = 1
     }
-    expect(resolveOrNew(Plain, new Container())).toBeInstanceOf(Plain)
+    expect(resolveOrNew(Plain, asDi(new Container()))).toBeInstanceOf(Plain)
   })
 
   it('builds with new when there is no container', () => {
