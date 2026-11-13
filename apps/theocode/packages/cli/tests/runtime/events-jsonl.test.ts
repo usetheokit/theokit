@@ -17,6 +17,7 @@ import {
   execExitCode,
   type ExecIo,
 } from '../../src/runtime/events.js'
+import { USAGE } from '../../src/runtime/usage.js'
 
 function capture() {
   const lines: string[] = []
@@ -222,5 +223,9 @@ describe('a turn cut by the loop', () => {
     expect(err.join('\n')).toContain('status=cut stop=step_limit')
     expect(result.stopReason).toBe('step_limit')
     expect(execExitCode(result, undefined)).not.toBe(0)
+  })
+
+  it('test_usage_text_lists_the_cut_turn_exit_code', () => {
+    expect(USAGE).toContain('Exit code is 2 when the loop cut the turn')
   })
 })
