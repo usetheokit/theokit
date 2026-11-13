@@ -25,7 +25,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { transcriptPath } from '@theokit/agents/persistence'
+import { LiveTranscriptError, transcriptPath } from '@theokit/agents/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -186,7 +186,6 @@ describe('B-078 — deleteSession', () => {
   })
 })
 
-/** The guard half — separated so each block stays readable, not to dodge the length rule. */
 describe('#1905 — the TUI pointer protects an older, idle session', () => {
   function pointAt(id: string): void {
     mkdirSync(join(cwd, '.theokit'), { recursive: true })
@@ -204,14 +203,18 @@ describe('#1905 — the TUI pointer protects an older, idle session', () => {
     expect(existsSync(pointed)).toBe(true)
   })
 
-  it('test_forkSession_refuses_the_pointed_older_session_as_destination', () => {
-    const pointed = writeTranscript('tui-pointed-old', 5000)
+  it('test_forkSession_refuses_the_pointed_session_as_destination', () => {
+    // The pointed file does not exist yet, so the `wx` open could not have refused: only the
+    // live-path check can.
     writeTranscript('tui-newest', 1)
-    writeTranscript('tui-source', 3000)
-    pointAt('tui-pointed-old')
+    const src = writeTranscript('tui-source', 3000)
+    pointAt('tui-pointed-new')
 
-    expect(() => forkSession('tui-source', 'tui-pointed-old', { cwd, baseDir: base })).toThrow()
-    expect(readFileSync(pointed, 'utf8')).toBe('{}\n')
+    expect(() => forkSession('tui-source', 'tui-pointed-new', { cwd, baseDir: base })).toThrow(
+      LiveTranscriptError,
+    )
+    expect(existsSync(transcriptPath(base, cwd, 'tui-pointed-new'))).toBe(false)
+    expect(existsSync(src)).toBe(true)
   })
 
   it('test_a_session_neither_pointed_newest_nor_leased_is_deletable', async () => {
@@ -230,6 +233,7 @@ describe('#1905 — the TUI pointer protects an older, idle session', () => {
   })
 })
 
+/** The guard half — separated so each block stays readable, not to dodge the length rule. */
 describe('B-078 — deleteSession refuses a live session', () => {
   it('test_refuses_to_delete_a_live_session', async () => {
     // The newest transcript is the one a running TUI is most likely still appending to.
@@ -320,7 +324,10 @@ describe("deleteSession — the transcript mechanics are the framework's", () =>
     // Pillar of the migration: the mechanics live in `@theokit/agents/session`, not here. Asserted
     // on the seam — this module must not reach for `node:fs` to remove a transcript, because two
     // owners of "how a transcript is deleted" is how the two answers drift apart.
-    const source = readFileSync(new URL('../../src/session/session-ops.ts', import.meta.url), 'utf8')
+    const source = readFileSync(
+      new URL('../../src/session/session-ops.ts', import.meta.url),
+      'utf8',
+    )
     expect(source).toContain("from '@theokit/agents/session'")
 
     // Comments stripped first. The prose above the delegation NAMES the call it replaced, and a
