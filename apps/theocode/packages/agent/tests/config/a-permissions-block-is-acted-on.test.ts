@@ -57,6 +57,9 @@ describe('a permissions block is acted on, not ignored', () => {
       read.ignored,
       'doctor would tell an operator their deny is inert while it is refusing reads',
     ).not.toContain('permissions')
+    expect(
+      foreign({ permissions: { deny: ['Bash(curl:*)'] } }).permissionRules,
+    ).toHaveLength(1)
   })
 
   it('renders a deny entry into rules, which is what the engine is built from', () => {

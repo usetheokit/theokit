@@ -34,13 +34,13 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | Subpath | What lives there |
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
-| `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals |
+| `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
 | `./testing` | Test seams: compiled-agent inspection, mock streams |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
 | `./interactive` | The interactive-shell backend contract |
 | `./pty` | The node-pty implementation of that contract |
-| `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes` |
+| `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes`, `RefreshFailure` |
 | `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`) |
 | `./tools` | Built-in tool factories (read, list, grep, git, patch, edit, shell, …) |
 | `./client` | Transports for driving an agent from a client |
@@ -56,6 +56,8 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
+
+`AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
 
 ## The shapes worth knowing before you start
 

@@ -1,6 +1,7 @@
 /* eslint-disable security/detect-non-literal-regexp, complexity, sonarjs/cognitive-complexity, max-depth, max-lines, max-lines-per-function */
 import 'reflect-metadata'
 
+import type { DiContainer } from './bridge/di-resolve.js'
 import { HttpDecoratorsConfigError } from './bridge/errors.js'
 import { createExecutionContext } from './bridge/execution-context.js'
 import { runGuards } from './bridge/guard-chain.js'
@@ -137,6 +138,12 @@ export interface TheoAppOptions {
   agents?: AgentAppEntry[]
   /** @Module class for structured DI. */
   module?: Function
+  /**
+   * DI container (an `@theokit/di` Container). With `module`, the module is registered into it;
+   * without one, `module` builds a Container from `@theokit/di`, which must then be installed.
+   * A container passed here belongs to the caller and is not disposed by `close()`.
+   */
+  container?: DiContainer
   /** Provider/toolbox classes — instantiated and injected into controllers + agents. */
   providers?: Function[]
   /** LLM API key for agent execution (reads OPENROUTER_API_KEY env if not set). */
@@ -197,9 +204,27 @@ interface RouteEntry {
   needsBody?: boolean
 }
 
+async function createDiContainer(): Promise<unknown> {
+  try {
+    const specifier = '@theokit/di'
+    const di = (await import(/* @vite-ignore */ specifier)) as {
+      Container: new () => unknown
+    }
+    return new di.Container()
+  } catch (cause) {
+    throw new HttpDecoratorsConfigError(
+      '[TheoApp] `module` needs `@theokit/di` installed (or pass your own `container`). ' +
+        `Install it with: npm install @theokit/di (${(cause as Error).message})`,
+    )
+  }
+}
+
 export class TheoApp {
   private serverHandle: ServerHandle
   private readonly routes: RouteEntry[] = []
+  private diContainer?: DiContainer
+  /** Set only when `create` built the container itself; `close()` disposes it. */
+  private ownedContainer?: DiContainer
   private frontendHtml?: string
   private streamingRoot?: unknown
   private staticHandler?: (request: Request) => Promise<Response | null>
@@ -243,60 +268,91 @@ export class TheoApp {
   static async create(opts: TheoAppOptions): Promise<TheoApp> {
     const app = new TheoApp(opts)
 
-    // ── DI Container (replaces manual Map<Function, object>) ──
-    // Uses @theokit/di Container for: scopes, lifecycle, async, typed errors.
-    // Fallback to manual resolution when @theokit/di is not available.
-    const registry = new Map<Function, object>()
-
-    // 1. Module resolution (@Module metadata)
-    if (opts.module) {
-      const moduleMeta = Reflect.getMetadata('usetheo:di:module', opts.module)
-      if (moduleMeta) {
-        const allModules = [opts.module, ...(moduleMeta.imports ?? [])]
-        for (const Mod of allModules) {
-          const meta = Reflect.getMetadata('usetheo:di:module', Mod)
-          if (!meta) continue
-          for (const Prov of (meta.providers ?? []) as Function[]) {
-            if (!registry.has(Prov)) {
-              registry.set(Prov, new (Prov as new () => object)())
-            }
-          }
+    // ── Dependency resolution ──
+    // `module` / `container` → a real @theokit/di Container (scopes, @PostConstruct/@PreDestroy,
+    // typed errors, full import graph). Inline `providers` alone stay a plain zero-argument
+    // construction: a provider with constructor parameters is refused rather than built with
+    // missing arguments. Nothing falls back to a private map when `module` is given.
+    let container: DiContainer | undefined
+    const legacy = new Map<Function, object>()
+    if (opts.module || opts.container) {
+      container = opts.container
+      if (container === undefined) {
+        container = (await createDiContainer()) as DiContainer
+        app.ownedContainer = container
+      }
+      const c = container as DiContainer & {
+        registerModule?: (m: Function) => void
+        register?: (p: Function) => void
+        has?: (t: Function) => boolean
+      }
+      if (opts.module) {
+        if (typeof c.registerModule !== 'function') {
+          throw new HttpDecoratorsConfigError(
+            '[TheoApp] `module` needs a container with `registerModule` (an `@theokit/di` Container).',
+          )
+        }
+        c.registerModule(opts.module)
+      }
+      // Providers and controllers join the same container before the first resolve (it freezes).
+      // Controllers are not required to carry @Injectable(); mark them so the container accepts them.
+      for (const Ctl of opts.controllers) {
+        if (!Reflect.hasMetadata('usetheo:di:injectable', Ctl)) {
+          Reflect.defineMetadata('usetheo:di:injectable', {}, Ctl)
         }
       }
-    }
-
-    // 2. Inline providers (EC-2: BEFORE controllers and agents)
-    if (opts.providers) {
-      for (const Prov of opts.providers) {
-        if (!registry.has(Prov)) {
-          registry.set(Prov, new (Prov as new () => object)())
+      for (const cls of [...(opts.providers ?? []), ...opts.controllers]) {
+        if (typeof c.register === 'function' && !(c.has?.(cls) ?? false)) c.register(cls)
+      }
+    } else {
+      for (const Prov of opts.providers ?? []) {
+        const params = (Reflect.getMetadata('design:paramtypes', Prov) ?? []) as unknown[]
+        if (params.length > 0 || Prov.length > 0) {
+          throw new HttpDecoratorsConfigError(
+            `[TheoApp] Provider ${Prov.name} has constructor dependencies. Pass \`module\` ` +
+              'or `container` (needs @theokit/di) so they can be resolved.',
+          )
         }
+        if (!legacy.has(Prov)) legacy.set(Prov, new (Prov as new () => object)())
       }
     }
+    app.diContainer = container
 
     // 3. Controllers with DI
     for (const Controller of opts.controllers) {
-      const paramTypes: Function[] = Reflect.getMetadata('design:paramtypes', Controller) ?? []
-      const args = paramTypes.map((pt: Function) => {
-        const dep = registry.get(pt)
-        if (!dep) {
-          throw new Error(
-            `[TheoApp] Cannot resolve ${pt.name} for ${Controller.name}. ` +
-              `Add ${pt.name} to providers (or to @Module({ providers: [...] })).`,
-          )
+      let instance: object
+      if (container) {
+        const withAsync = container as DiContainer & {
+          resolveAsync?: (t: Function) => Promise<unknown>
         }
-        return dep
-      })
-      const instance = new (Controller as new (...a: unknown[]) => object)(...args)
+        instance = (
+          withAsync.resolveAsync
+            ? await withAsync.resolveAsync(Controller)
+            : container.resolve(Controller)
+        ) as object
+      } else {
+        const paramTypes: Function[] = Reflect.getMetadata('design:paramtypes', Controller) ?? []
+        const args = paramTypes.map((pt: Function) => {
+          const dep = legacy.get(pt)
+          if (!dep) {
+            throw new Error(
+              `[TheoApp] Cannot resolve ${pt.name} for ${Controller.name}. ` +
+                `Add ${pt.name} to providers (or to @Module({ providers: [...] })).`,
+            )
+          }
+          return dep
+        })
+        instance = new (Controller as new (...a: unknown[]) => object)(...args)
 
-      // Lifecycle: call @PostConstruct if present
-      const postConstruct = Reflect.getMetadata('usetheo:di:post-construct', Controller)
-      if (
-        postConstruct &&
-        typeof (instance as Record<string, Function>)[postConstruct] === 'function'
-      ) {
-        const result = (instance as Record<string, Function>)[postConstruct]()
-        if (result instanceof Promise) await result // EC-1: await async PostConstruct
+        // Lifecycle: call @PostConstruct if present
+        const postConstruct = Reflect.getMetadata('usetheo:di:post-construct', Controller)
+        if (
+          postConstruct &&
+          typeof (instance as Record<string, Function>)[postConstruct] === 'function'
+        ) {
+          const result = (instance as Record<string, Function>)[postConstruct]()
+          if (result instanceof Promise) await result // EC-1: await async PostConstruct
+        }
       }
 
       const walks = walkControllerMetadata(Controller)
@@ -346,7 +402,7 @@ export class TheoApp {
     // The framework handles EVERYTHING — walk, compile, mount, stream.
     // Consumer writes: agents: [MyAgent] — and that's it.
     if (opts.agents?.length) {
-      app.autoWireAgents(opts.agents, registry, opts)
+      app.autoWireAgents(opts.agents, legacy, opts)
     }
 
     return app
@@ -370,11 +426,14 @@ export class TheoApp {
   }
 
   async close(): Promise<void> {
-    return new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       this.serverHandle.close(() => {
         resolve()
       })
     })
+    const owned = this.ownedContainer as { dispose?: () => Promise<void> | void } | undefined
+    this.ownedContainer = undefined
+    await owned?.dispose?.()
   }
 
   // ── Auto-wire agents (the "SpringApplication.run()" moment) ──

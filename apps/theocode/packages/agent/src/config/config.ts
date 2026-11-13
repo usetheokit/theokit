@@ -490,6 +490,8 @@ export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
       profile: perLayer.profile[key] as string | undefined,
       env: perLayer.env[key] as string | undefined,
       cli: perLayer.cli[key] as string | undefined,
+      // #1907 — without this the floor answered from the other layers and overwrote the managed value.
+      managed: perLayer.managed[key] as string | undefined,
     })
     if (resolved !== undefined) folded[key] = resolved
   }

@@ -49,10 +49,20 @@ function manifests() {
 /** Every `@theokit/*` range declared anywhere, with who declares it. */
 function declaredRanges() {
   const byPackage = new Map()
+  // `workspace:` ranges are links to this monorepo, not registry pins: the registry has no answer
+  // for them, and between a version bump and its publish the local version is ahead of it, which
+  // would read as "behind" (#1898). They are listed apart and never compared.
+  const workspaceLinks = new Map()
   // One place records how a declaration is accumulated — the entry shape lives here and nowhere
   // else, so a change to it is made once.
   const record = (name, label, field, range) => {
     if (!name.startsWith(SCOPE)) return
+    if (typeof range === 'string' && range.startsWith('workspace:')) {
+      const labels = workspaceLinks.get(name) ?? []
+      labels.push(label)
+      workspaceLinks.set(name, labels)
+      return
+    }
     const entry = byPackage.get(name) ?? { name, declarations: [] }
     entry.declarations.push({ label, field, range })
     byPackage.set(name, entry)
@@ -70,7 +80,10 @@ function declaredRanges() {
       record(name, label, 'overrides', range)
     }
   }
-  return [...byPackage.values()].sort((a, b) => a.name.localeCompare(b.name))
+  return {
+    ranges: [...byPackage.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    workspaceLinks: [...workspaceLinks.keys()].sort(),
+  }
 }
 
 /**
@@ -167,8 +180,9 @@ function majorOf(version) {
 function collectRows() {
   const rows = []
   const failures = []
+  const { ranges, workspaceLinks } = declaredRanges()
 
-  for (const { name, declarations } of declaredRanges()) {
+  for (const { name, declarations } of ranges) {
     const { version: installed, split } = installedAcross(declarations, name)
     let latest
     let channel
@@ -197,11 +211,11 @@ function collectRows() {
     })
   }
 
-  return { rows, failures }
+  return { rows, failures, workspaceLinks }
 }
 
 /** Human table rendering — a distinct reason to change from the fetching above. */
-function renderTable(rows, failures) {
+function renderTable(rows, failures, workspaceLinks) {
   const width = (pick) => Math.max(...rows.map((r) => pick(r).length), 0)
   const nameWidth = Math.max(width((r) => r.name), 'package'.length)
   const installedWidth = Math.max(width((r) => r.installed), 'installed'.length)
@@ -223,6 +237,11 @@ function renderTable(rows, failures) {
     )
   }
   const behind = rows.filter((r) => !r.current)
+  if (workspaceLinks.length > 0) {
+    process.stdout.write(
+      `\nWorkspace links, not compared with the registry: ${workspaceLinks.join(', ')}\n`,
+    )
+  }
   process.stdout.write(
     behind.length === 0
       // "on the tag it tracks", not "at latest": since #73 a prerelease pin is compared against
@@ -234,12 +253,12 @@ function renderTable(rows, failures) {
 }
 
 function main() {
-  const { rows, failures } = collectRows()
+  const { rows, failures, workspaceLinks } = collectRows()
 
   if (process.argv.includes('--json')) {
-    process.stdout.write(`${JSON.stringify({ rows, failures }, null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify({ rows, failures, workspaceLinks }, null, 2)}\n`)
   } else {
-    renderTable(rows, failures)
+    renderTable(rows, failures, workspaceLinks)
   }
 
   if (failures.length > 0) process.exit(2)
