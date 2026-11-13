@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Fixed
+- **`theocode doctor` reports the wiring `buildChatAgent` publishes, not a placeholder.** The build is now awaited before the checks are collected, so the MCP, skills, hooks and AGENTS.md rows reflect the disk; a build failure becomes a failed `wiring` check (non-zero exit) instead of an unhandled rejection. (#1894)
 - **`/review` no longer throws a TypeError when a finding has no `body`.** `parseReviewOutput` now normalizes each finding to the real shape (a missing or non-string `body` becomes `''`, malformed optional fields are dropped), so `formatReviewFindings` renders the title alone. (#1906)
 
 ### Security

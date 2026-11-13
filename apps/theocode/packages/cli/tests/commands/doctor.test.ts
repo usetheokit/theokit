@@ -180,3 +180,73 @@ describe('#1895 — doctor honours -c/--sandbox and applies -C once', () => {
     }
   })
 })
+
+describe('doctorCommand wiring (#1894)', () => {
+  async function run(setup: (proj: string) => void, rejectWith?: Error) {
+    const { vi } = await import('vitest')
+    const home = mkdtempSync(join(tmpdir(), 'theocode-doctor-home-'))
+    const proj = realpathSync(mkdtempSync(join(tmpdir(), 'theocode-doctor-proj-')))
+    roots.push(home, proj)
+    setup(proj)
+    const prevHome = process.env['THEOKIT_HOME']
+    process.env['THEOKIT_HOME'] = home
+    const cwd = process.cwd()
+    process.chdir(proj)
+    let out = ''
+    let exitCalls: unknown[][] = []
+    const unhandled: unknown[] = []
+    const onUnhandled = (e: unknown) => unhandled.push(e)
+    process.on('unhandledRejection', onUnhandled)
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(((c: string) => {
+      out += c
+      return true
+    }) as never)
+    const agent = await import('@theocode/agent')
+    const build = rejectWith
+      ? vi.spyOn(agent, 'buildChatAgent').mockRejectedValue(rejectWith)
+      : undefined
+    try {
+      const { trustDir } = await import('@theocode/agent/config')
+      await trustDir(proj)
+      const { doctorCommand } = await import('../../src/commands/doctor.js')
+      await doctorCommand({ json: true })
+      await new Promise((r) => setTimeout(r, 20))
+    } finally {
+      process.chdir(cwd)
+      process.off('unhandledRejection', onUnhandled)
+      if (prevHome === undefined) delete process.env['THEOKIT_HOME']
+      else process.env['THEOKIT_HOME'] = prevHome
+      exitCalls = [...exit.mock.calls]
+      exit.mockRestore()
+      write.mockRestore()
+      build?.mockRestore()
+    }
+    return { out, exitCalls, unhandled }
+  }
+
+  it('test_the_mcp_row_names_a_server_from_the_project_mcp_json', async () => {
+    const { out } = await run((p) =>
+      writeFileSync(
+        join(p, '.mcp.json'),
+        JSON.stringify({ mcpServers: { zebra: { command: 'node', args: ['x.js'] } } }),
+      ),
+    )
+    const mcp = JSON.parse(out.trim().split('\n').pop() ?? '{}').checks.find(
+      (c: { name: string }) => c.name === 'mcp',
+    )
+    expect(mcp.detail).toContain('zebra')
+  })
+
+  it('test_a_build_failure_is_a_failed_check_not_an_unhandled_rejection', async () => {
+    const { out, exitCalls, unhandled } = await run(() => undefined, new Error('boom-1894'))
+    const checks = JSON.parse(out.trim().split('\n').pop() ?? '{}').checks as {
+      name: string
+      status: string
+      detail: string
+    }[]
+    expect(checks.some((c) => c.status === 'fail' && c.detail.includes('boom-1894'))).toBe(true)
+    expect(exitCalls).toEqual([[1]])
+    expect(unhandled).toEqual([])
+  })
+})

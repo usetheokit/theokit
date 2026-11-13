@@ -18,6 +18,7 @@ import { MissingCredentialError, resolveCredential } from '@theocode/agent/auth'
 // `exports` map, and `tsconfig.json` maps `@theocode/agent/*` straight onto `src/*` — so TypeScript
 // resolves it happily and the bundle would fail at runtime. README.md names this exact trap.
 import type { CredentialState } from '@theocode/agent'
+import type { Check } from '@theokit/agents/doctor'
 
 /** Presence only — the file is opened to tell "absent" from "corrupt", never to read a secret. */
 /**
@@ -134,7 +135,18 @@ export async function doctorCommand(opts: {
     agentsMdFiles: [],
     sandboxMode: cfg.sandbox_mode,
   })
-  agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
+  // Awaited: `buildChatAgent` publishes the wiring only after it has read the disk, and a rejection
+  // left unhandled would be a crash instead of a failed check (#1894).
+  let buildFailure: Check | undefined
+  try {
+    await agent.buildChatAgent({ cwd, surface: 'headless', onWired: (w) => (wired = w) })
+  } catch (err) {
+    buildFailure = {
+      name: 'wiring',
+      status: 'fail',
+      detail: `buildChatAgent failed: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
 
   const { AGENT } = await import('@theocode/shared/agent')
   const checks = agent.collectChecks({
@@ -186,7 +198,7 @@ export async function doctorCommand(opts: {
       : {}),
     wired,
   })
-  const result = agent.diagnose(checks)
+  const result = agent.diagnose(buildFailure ? [...checks, buildFailure] : checks)
 
   if (opts.json) process.stdout.write(`${JSON.stringify({ type: 'doctor', ...result })}\n`)
   else process.stderr.write(`${agent.renderDiagnosis(result)}\n`)
