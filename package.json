@@ -34,6 +34,7 @@
     "version-packages": "changeset version && node scripts/sync-template-pins.mjs && node scripts/record-root-changelog.mjs && node scripts/verify-version-not-published.mjs",
     "release": "pnpm build && node scripts/check-pack-no-workspace.mjs && node scripts/publish-and-record.mjs && node scripts/verify-release-published.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
+    "check:app-deps": "node scripts/check-app-dependencies.mjs",
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
     "check:pack-exports": "node scripts/check-pack-exports-resolve.mjs",
     "check:pack-loads": "node scripts/check-pack-entry-points-load.mjs",
