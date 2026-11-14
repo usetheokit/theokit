@@ -26,7 +26,7 @@ import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk
 import { type SdkMessage } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
-import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
+import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
 import type { SdkRunUsage } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
 import {
@@ -934,7 +934,7 @@ export function toAgentFactory(
       tools: sdkTools,
       ...m8,
       ...extra,
-      ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: ['shell'] } : {}),
+      ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     })
     return withGuardrails(
       withStepCeiling(agent as unknown as SdkAgentHandle, compiled.maxIterations),

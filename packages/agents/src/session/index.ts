@@ -9,6 +9,7 @@ export {
   deleteSession,
   forkBeforeUserTurn,
   listSessions,
+  listUserTurns,
   protectedTranscriptPaths,
   // The migration path for #668, and it has to cross with the rename. A consumer holding a session
   // id needs id -> path to use the renamed map at all; shipping the break without it would leave
@@ -24,6 +25,7 @@ export {
   // found by consuming the PUBLISHED package rather than by reading the source (#675).
   type RegistryOutcome,
   type SessionSummary,
+  type UserTurnPreview,
 } from './session-lifecycle.js'
 
 export { loadOrCreateSessionId, persistSessionId, sessionPointerPath } from './session-pointer.js'

@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -404,5 +405,51 @@ describe('a scaffolded surface declares no script it cannot run (#374)', () => {
     // command that exits non-zero on a correct project.
     const build = scriptsOf('tui').build
     expect(build === undefined || /tsc\b/.test(build)).toBe(true)
+  })
+})
+
+describe('build:bin (#1890)', () => {
+  let targetDir: string
+  beforeEach(() => {
+    targetDir = join(tmpdir(), `cts-buildbin-${randomUUID()}`)
+  })
+  afterEach(() => {
+    rmSync(targetDir, { recursive: true, force: true })
+  })
+  const pkgOf = (): { scripts: Record<string, string>; devDependencies: Record<string, string> } =>
+    JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
+
+  it('the tui surface scaffold has a build:bin script and esbuild as a dev dependency', () => {
+    scaffold(targetDir, 'my-tui')
+    applySurface({ targetDir, projectName: 'my-tui', surface: 'tui' })
+    const pkg = pkgOf()
+    expect(pkg.scripts['build:bin']).toBe('node scripts/build-bin.mjs')
+    expect(pkg.scripts.build).toBe('tsc --noEmit')
+    expect(pkg.devDependencies.esbuild).toBeDefined()
+  })
+
+  it('the scaffolded bundleOptions use esm format and the createRequire banner', async () => {
+    scaffold(targetDir, 'my-tui')
+    applySurface({ targetDir, projectName: 'my-tui', surface: 'tui' })
+    const mod = (await import(pathToFileURL(join(targetDir, 'scripts/build-bin.mjs')).href)) as {
+      bundleOptions: (root: string) => Record<string, unknown> & {
+        banner: { js: string }
+        external: string[]
+      }
+    }
+    const opts = mod.bundleOptions(targetDir)
+    expect(opts.format).toBe('esm')
+    expect(opts.platform).toBe('node')
+    expect(opts.target).toBe('node22')
+    expect(opts.banner.js).toContain('#!/usr/bin/env node')
+    expect(opts.banner.js).toContain('createRequire')
+    expect(opts.external).toContain('node-pty')
+    expect(String(opts.outfile)).toMatch(/dist[\\/]my-tui\.mjs$/)
+  })
+
+  it.each(['web', 'desktop'] as const)('the %s surface has no build:bin script', (surface) => {
+    scaffold(targetDir, 'my-app')
+    applySurface({ targetDir, projectName: 'my-app', surface })
+    expect(pkgOf().scripts['build:bin']).toBeUndefined()
   })
 })

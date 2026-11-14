@@ -10,7 +10,13 @@
  * NEVER calls an LLM. It imports only `zod` (types) + the compiler shape — no `theokit`
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
-import type { CustomTool, InlineSkill, MemorySettings, TelemetrySettings } from '@theokit/sdk'
+import type {
+  BuiltinToolName,
+  CustomTool,
+  InlineSkill,
+  MemorySettings,
+  TelemetrySettings,
+} from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { Guardrail } from '../guardrails/index.js'
@@ -148,6 +154,12 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * rather than forwarded, because a gate that silently does not gate is worse than none.
    */
   hookApproval?: HookApprovalGate
+  /**
+   * #1912 — SDK builtin tools to withhold from the model (`Agent.create({ withheldBuiltinTools })`),
+   * so their schema is never declared, rather than refused at call time. Unknown names are refused
+   * at assembly with a `ConfigurationError`.
+   */
+  withheldBuiltinTools?: readonly BuiltinToolName[]
   /**
    * B-054 — `MEMORY.md` here is NOT the Claude Code CLI's auto-memory file. This is the durable
    * subsystem below: a SQLite+FTS5 store under `.theokit/memory/`, with `memory_search`/`memory_get`
@@ -356,6 +368,9 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // `defineAgent({ hooks })` is already the LIFECYCLE seam: two security-relevant things under one
     // name is how a consumer configures the wrong one and believes they configured the other.
     ...(def.hookApproval !== undefined ? { hookApproval: def.hookApproval } : {}),
+    ...(def.withheldBuiltinTools !== undefined
+      ? { withheldBuiltinTools: def.withheldBuiltinTools }
+      : {}),
     // M49 — memory flows to the projection layer; `assembleM8CreateOptions` forwards it to Agent.create.
     ...(def.memory !== undefined ? { memory: def.memory } : {}),
     // B-072 — same shape, same reason: the projection layer forwards it to Agent.create. Spread

@@ -51,11 +51,44 @@ export interface ShutdownDeps {
   readonly onWarn?: (message: string) => void
   /** Watchdog budget in ms. */
   readonly watchdogMs?: number
+  /** Exit through `exitAfterDrain` (let the event loop drain) instead of calling `exit` at once. */
+  readonly drain?: boolean
+}
+
+export interface ExitAfterDrainDeps {
+  /** Forces the exit. Default `process.exit`. */
+  readonly exit?: (code: number) => void
+  /** Records the exit code. Default sets `process.exitCode`. */
+  readonly setExitCode?: (code: number) => void
+  /** How long the loop may take to drain before the exit is forced. Default `DEFAULT_WATCHDOG_MS`. */
+  readonly capMs?: number
+}
+
+/**
+ * Set the exit code and let the event loop drain; force the exit only if it has not ended within
+ * `capMs`. A bare `process.exit` right after a stdout write can cut piped output. The timer is
+ * unref'd so it never keeps a finished process alive.
+ */
+export function exitAfterDrain(code: number, deps: ExitAfterDrainDeps = {}): void {
+  const setExitCode =
+    deps.setExitCode ??
+    ((c: number): void => {
+      process.exitCode = c
+    })
+  const exit = deps.exit ?? ((c: number): void => process.exit(c))
+  setExitCode(code)
+  const timer = setTimeout(() => {
+    exit(code)
+  }, deps.capMs ?? DEFAULT_WATCHDOG_MS)
+  timer.unref()
 }
 
 export interface Shutdown {
-  /** Register a cleanup. Runs in registration order. */
-  register(task: CleanupTask): void
+  /**
+   * Register a cleanup. Runs in registration order. Returns a disposer: calling it before `run()`
+   * removes the task, after `run()` it is a no-op.
+   */
+  register(task: CleanupTask): () => void
   /** Run every cleanup, then exit. Idempotent: a second Ctrl-C does not start a second teardown. */
   run(): Promise<ShutdownOutcome>
 }
@@ -72,6 +105,13 @@ export function createShutdown(deps: ShutdownDeps = {}): Shutdown {
   const tasks: CleanupTask[] = []
   const warn = deps.onWarn ?? IGNORE
   const exit = deps.exit ?? IGNORE
+  const finish = (code: number): void => {
+    if (deps.drain !== true) {
+      exit(code)
+      return
+    }
+    exitAfterDrain(code, deps.exit === undefined ? {} : { exit: deps.exit })
+  }
   const watchdogMs = deps.watchdogMs ?? DEFAULT_WATCHDOG_MS
   let running: Promise<ShutdownOutcome> | undefined
 
@@ -116,12 +156,17 @@ export function createShutdown(deps: ShutdownDeps = {}): Shutdown {
   const shutdown: Shutdown = {
     register(task) {
       tasks.push(task)
+      return () => {
+        if (running !== undefined) return
+        const i = tasks.indexOf(task)
+        if (i !== -1) tasks.splice(i, 1)
+      }
     },
     run() {
       // Idempotent: a second Ctrl-C while teardown is in flight must not start a second sequence
       // over the same resources — that is how a double-release turns a clean exit into a crash.
       running ??= withWatchdog().then((outcome) => {
-        exit(SHUTDOWN_EXIT_CODES[outcome])
+        finish(SHUTDOWN_EXIT_CODES[outcome])
         return outcome
       })
       return running

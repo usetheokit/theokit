@@ -13,7 +13,7 @@ import type {
   SystemPromptResolver,
   TelemetrySettings,
 } from '@theokit/sdk'
-import type { PermissionGate, SessionStore } from '@theokit/sdk'
+import type { BuiltinToolName, PermissionGate, SessionStore } from '@theokit/sdk'
 import type { AgentDefinition as SubagentDefinition } from '@theokit/sdk/subagents-loader'
 
 import { ConfigurationError } from '../errors.js'
@@ -303,6 +303,12 @@ export interface CompiledAgentOptions {
    * a foreign dialect imported through `compatSources` — is spawned at all.
    */
   hookApproval?: HookApprovalGate
+  /**
+   * #1912 — SDK builtin tools to withhold from the model (`Agent.create({ withheldBuiltinTools })`),
+   * so their schema is never declared, rather than refused at call time. Unknown names are refused
+   * at assembly with a `ConfigurationError`.
+   */
+  withheldBuiltinTools?: readonly BuiltinToolName[]
   /** Code `Plugin` objects forwarded to `Agent.create({ plugins })` (lifecycle-hook seam). */
   /**
    * Code plugins — `{ name, register }` objects registered with the SDK's lifecycle-hook seam.

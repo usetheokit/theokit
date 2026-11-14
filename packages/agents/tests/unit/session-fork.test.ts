@@ -21,7 +21,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { acquireSessionWriter, LiveTranscriptError } from '../../src/persistence-entry.js'
-import { forkBeforeUserTurn } from '../../src/session/session-lifecycle.js'
+import { forkBeforeUserTurn, listUserTurns } from '../../src/session/session-lifecycle.js'
 import { transcriptPath } from '../../src/persistence-entry.js'
 
 let root: string
@@ -276,5 +276,55 @@ describe('forkBeforeUserTurn — onto a protected session', () => {
     } finally {
       await (lease as { release?: () => Promise<void> }).release?.()
     }
+  })
+})
+
+describe('listUserTurns', () => {
+  function write(id: string, lines: string[], tail = '\n'): void {
+    const path = transcriptPath(root, cwd, id)
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, `${lines.join('\n')}${tail}`, 'utf8')
+  }
+  const boundary = JSON.stringify({ type: 'system', subtype: 'compact_boundary' })
+  const toolResult = JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: [{ type: 'tool_result', content: 'ok' }] },
+  })
+  const lines = [
+    record('user', 'one'),
+    boundary,
+    record('user', 'two'),
+    toolResult,
+    record('user', '[[theokit:goal-continuation]] go on'),
+    record('assistant', 'reply'),
+    record('user', 'three'),
+  ]
+
+  it('lists the reachable typed turns with 1-based nth', async () => {
+    write('lst', lines)
+    expect(await listUserTurns('lst', { cwd, root })).toEqual([
+      { nth: 1, text: 'two' },
+      { nth: 2, text: 'three' },
+    ])
+  })
+
+  it('every entry nth selects the same text in forkBeforeUserTurn', async () => {
+    write('lst', lines)
+    for (const entry of await listUserTurns('lst', { cwd, root })) {
+      const out = forkBeforeUserTurn('lst', `dst-${String(entry.nth)}`, entry.nth, { cwd, root })
+      expect(out.selectedText).toBe(entry.text)
+    }
+  })
+
+  it('resolves to [] for a missing transcript', async () => {
+    expect(await listUserTurns('nope', { cwd, root })).toEqual([])
+  })
+
+  it('tolerates a torn last line', async () => {
+    write('torn', [record('user', 'one'), record('user', 'two')], '\n{"type":"user","mess')
+    expect(await listUserTurns('torn', { cwd, root })).toEqual([
+      { nth: 1, text: 'one' },
+      { nth: 2, text: 'two' },
+    ])
   })
 })
