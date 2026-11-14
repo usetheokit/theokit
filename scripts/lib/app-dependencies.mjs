@@ -35,6 +35,16 @@ function overrideName(key) {
   return at === -1 ? last : last.slice(0, at)
 }
 
+/** The `{ name, spec }` along an override path; `spec` is the version selector of `c@1`, if any. */
+export const overrideSelectors = (path) =>
+  path.split(' > ').flatMap((key) =>
+    key.split('>').map((part) => {
+      const last = part.trim()
+      const at = last.indexOf('@', 1)
+      return at === -1 ? { name: last } : { name: last.slice(0, at), spec: last.slice(at + 1) }
+    }),
+  )
+
 /** The package names along an override path (`a > @theokit/sdk@^1` gives `a`, `@theokit/sdk`). */
 export const overridePackages = (path) =>
   path.split(' > ').flatMap((key) => key.split('>').map(overrideName))

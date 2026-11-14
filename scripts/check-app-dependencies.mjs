@@ -14,7 +14,7 @@ import {
   collectDeclarations,
   compareVersions,
   exactVersionViolations,
-  overridePackages,
+  overrideSelectors,
   theokitStaleness,
 } from './lib/app-dependencies.mjs'
 
@@ -127,8 +127,12 @@ function installedCopies(starts, name) {
 /** Every installed copy an override path applies to: each ancestor anywhere beneath the one before it. */
 function overrideTargets(dir, segments) {
   let frontier = [resolve(dir)]
-  for (const segment of segments) {
-    frontier = installedCopies(frontier, segment)
+  for (const { name, spec } of segments) {
+    // A selector such as `c@1` applies only to installed copies of that version.
+    frontier = installedCopies(frontier, name).filter((copy) => {
+      const version = readVersion(join(copy, 'package.json'))
+      return spec === undefined || version === undefined || satisfiesRange(version, spec) !== false
+    })
     if (frontier.length === 0) return []
   }
   return frontier
@@ -148,7 +152,7 @@ function installedFrom(dir) {
       return own === undefined ? undefined : readVersion(join(own, 'package.json'))
     }
     const versions = new Set()
-    for (const target of overrideTargets(dir, overridePackages(declaration.override))) {
+    for (const target of overrideTargets(dir, overrideSelectors(declaration.override))) {
       const version = readVersion(join(target, 'package.json'))
       if (version === undefined || satisfiesRange(version, declaration.range) !== true)
         return undefined

@@ -359,4 +359,27 @@ describe('app dependency checks', () => {
     )
     expect(run(app, () => ({ latest: '1.2.0' })).code).toBe(2)
   })
+
+  it('the CLI applies a qualified ancestor override only to the selected ancestor version', () => {
+    const layout = (sdkUnderC2: string) =>
+      fixture(
+        {
+          '.': {
+            dependencies: { a: '1.0.0', b: '1.0.0' },
+            overrides: { 'c@1>@theokit/sdk': '1.0.0' },
+          },
+          'node_modules/a': { version: '1.0.0', dependencies: { c: '1.0.0' } },
+          'node_modules/b': { version: '1.0.0', dependencies: { c: '2.0.0' } },
+          'node_modules/a/node_modules/c': { version: '1.0.0' },
+          'node_modules/b/node_modules/c': { version: '2.0.0' },
+        },
+        {
+          'node_modules/a/node_modules/c': { '@theokit/sdk': '1.0.0' },
+          'node_modules/b/node_modules/c': { '@theokit/sdk': sdkUnderC2 },
+        },
+      )
+    const app = layout('3.0.0')
+    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
+    expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
+  })
 })

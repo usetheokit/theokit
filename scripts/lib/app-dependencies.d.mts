@@ -41,3 +41,4 @@ export function theokitStaleness(
 export function compareVersions(a: string, b: string): number
 /** The package names along an override path, outermost first. */
 export function overridePackages(path: string): string[]
+export function overrideSelectors(path: string): { name: string; spec?: string }[]
