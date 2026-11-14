@@ -28,19 +28,37 @@ export function exactVersionViolations(manifest) {
   return violations
 }
 
+const nameOfKey = (key) => {
+  const at = key.indexOf('@', 1)
+  return at === -1 ? key : key.slice(0, at)
+}
+
+/** Flattens npm `overrides`: `name@range` keys, `"."` entries of nested objects, nested children; `$ref` values are skipped. */
+function overrideDeclarations(overrides, out) {
+  for (const [key, value] of Object.entries(overrides)) {
+    const name = nameOfKey(key)
+    if (isPlainObject(value)) {
+      const { '.': own, ...children } = value
+      if (typeof own === 'string' && !own.startsWith('$')) out.push({ name, range: own })
+      overrideDeclarations(children, out)
+    } else if (typeof value === 'string' && !value.startsWith('$')) out.push({ name, range: value })
+  }
+}
+
 /** Every `{ name, range }` a manifest declares in the dependency sections and `overrides`. */
 export function collectDeclarations(manifest) {
   const out = []
-  for (const section of [...SECTIONS, 'peerDependencies', 'overrides']) {
+  for (const section of [...SECTIONS, 'peerDependencies']) {
     if (!isPlainObject(manifest[section])) continue
     for (const [name, range] of Object.entries(manifest[section])) out.push({ name, range })
   }
+  if (isPlainObject(manifest.overrides)) overrideDeclarations(manifest.overrides, out)
   return out
 }
 
 /** `next` for a prerelease installed, `latest` otherwise. */
 export function channelFor(installed) {
-  return typeof installed === 'string' && installed.includes('-') ? 'next' : 'latest'
+  return typeof installed === 'string' && installed.split('+')[0].includes('-') ? 'next' : 'latest'
 }
 
 const identifierOrder = (a, b) => {

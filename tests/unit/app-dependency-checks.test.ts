@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runCli } from '../../scripts/check-app-dependencies.mjs'
 import {
+  channelFor,
   collectDeclarations,
   compareVersions,
   exactVersionViolations,
@@ -42,6 +43,27 @@ describe('app dependency checks', () => {
       dependencies: { a: '^1.2.3', b: 'workspace:*', c: '1.2.3-next.0' },
     })
     expect(violations).toEqual([{ section: 'dependencies', name: 'a', specifier: '^1.2.3' }])
+  })
+
+  it('parses version-qualified, nested and referenced overrides', () => {
+    expect(
+      collectDeclarations({
+        overrides: {
+          '@theokit/sdk@^1': '1.2.3',
+          '@theokit/tui': { '.': '0.80.0', inner: '2.0.0' },
+          other: '$other',
+        },
+      }),
+    ).toEqual([
+      { name: '@theokit/sdk', range: '1.2.3' },
+      { name: '@theokit/tui', range: '0.80.0' },
+      { name: 'inner', range: '2.0.0' },
+    ])
+  })
+
+  it('build metadata with a hyphen is not a prerelease', () => {
+    expect(channelFor('1.2.3+build-1')).toBe('latest')
+    expect(channelFor('1.2.3-next.0+build')).toBe('next')
   })
 
   it('the CLI exits 1 and names the manifest and dependency for a violation', () => {
