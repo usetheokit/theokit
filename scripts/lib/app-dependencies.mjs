@@ -35,6 +35,10 @@ function overrideName(key) {
   return at === -1 ? last : last.slice(0, at)
 }
 
+/** The package names along an override path (`a > @theokit/sdk@^1` gives `a`, `@theokit/sdk`). */
+export const overridePackages = (path) =>
+  path.split(' > ').flatMap((key) => key.split('>').map(overrideName))
+
 /** Declarations from one override entry: a string range, or an object whose `.` is the range and whose other keys are nested overrides. */
 function overrideDeclarations(key, value, parent) {
   const path = parent === undefined ? key : `${parent} > ${key}`

@@ -13,6 +13,7 @@ import {
   channelFor,
   collectDeclarations,
   exactVersionViolations,
+  overridePackages,
   theokitStaleness,
 } from './lib/app-dependencies.mjs'
 
@@ -45,39 +46,35 @@ const readVersion = (path) => {
   }
 }
 
-/**
- * An override has no link beside the manifest. It is judged only when its range is an exact version
- * and pnpm's virtual store holds that very version; any other case cannot be tied to the declaration.
- */
-function fromVirtualStore(store, name, range) {
-  if (typeof range !== 'string' || !EXACT_VERSION.test(range)) return undefined
-  const prefix = `${name.replace('/', '+')}@`
-  let entries
-  try {
-    entries = readdirSync(store).filter((entry) => entry.startsWith(prefix))
-  } catch {
-    return undefined
+/** Node's lookup of `name` from `dir` (own node_modules, then each ancestor's); the package's real directory. */
+function resolvePackage(dir, name) {
+  for (let current = resolve(dir); ; current = dirname(current)) {
+    const candidate = join(current, 'node_modules', name)
+    if (existsSync(join(candidate, 'package.json'))) return realpathSync(candidate)
+    if (dirname(current) === current) return undefined
   }
-  const found = entries.some(
-    (entry) => readVersion(join(store, entry, 'node_modules', name, 'package.json')) === range,
-  )
-  return found ? range : undefined
 }
 
 /**
- * Per declaration: a direct dependency resolves through Node's lookup (own node_modules, then each
- * ancestor's); an override resolves only through the virtual store, never to a direct install.
+ * The installed version a declaration resolves to, from the installation itself (pnpm links or a flat
+ * node_modules). A dependency resolves from its manifest's directory; an override resolves along its
+ * path, each package from the real directory of the one before it. An exact override whose resolved
+ * version differs is left unjudged: the installation does not follow it.
  */
 function installedFrom(dir) {
   return (name, declaration) => {
-    for (let current = resolve(dir); ; current = dirname(current)) {
-      const modules = join(current, 'node_modules')
-      const found =
-        declaration.override === undefined
-          ? readVersion(join(modules, name, 'package.json'))
-          : fromVirtualStore(join(modules, '.pnpm'), name, declaration.range)
-      if (found !== undefined || dirname(current) === current) return found
+    let current = dir
+    for (const segment of declaration.override === undefined
+      ? [name]
+      : overridePackages(declaration.override)) {
+      current = resolvePackage(current, segment)
+      if (current === undefined) return undefined
     }
+    const version = readVersion(join(current, 'package.json'))
+    const exact = typeof declaration.range === 'string' && EXACT_VERSION.test(declaration.range)
+    return declaration.override !== undefined && exact && version !== declaration.range
+      ? undefined
+      : version
   }
 }
 

@@ -39,3 +39,5 @@ export function theokitStaleness(
 }
 /** Semver precedence: negative, 0 or positive as `a` is lower than, equal to or higher than `b`. */
 export function compareVersions(a: string, b: string): number
+/** The package names along an override path, outermost first. */
+export function overridePackages(path: string): string[]

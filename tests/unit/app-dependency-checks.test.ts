@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -191,13 +191,46 @@ describe('app dependency checks', () => {
     expect(channelFor('1.2.3-next.0+b')).toBe('next')
   })
 
-  it("the CLI judges a transitive override installed only in pnpm's virtual store", () => {
-    const app = fixture(
-      { '.': { overrides: { '@theokit/sdk@^1': '1.0.0' } } },
-      { 'node_modules/.pnpm/@theokit+sdk@1.0.0': { '@theokit/sdk': '1.0.0' } },
-    )
+  const pnpmLayout = (app: string, sdkVersion: string | undefined) => {
+    const store = 'node_modules/.pnpm/a@1.0.0'
+    const installed: Record<string, string> = { a: '1.0.0' }
+    if (sdkVersion) installed['@theokit/sdk'] = sdkVersion
+    for (const [name, version] of Object.entries(installed)) {
+      mkdirSync(join(app, store, 'node_modules', name), { recursive: true })
+      writeFileSync(
+        join(app, store, 'node_modules', name, 'package.json'),
+        JSON.stringify({ version }),
+      )
+    }
+    mkdirSync(join(app, 'node_modules'), { recursive: true })
+    symlinkSync(join(app, store, 'node_modules', 'a'), join(app, 'node_modules', 'a'))
+  }
+
+  it('the CLI judges a nested override by following its path through the pnpm links', () => {
+    const app = fixture({ '.': { overrides: { 'a>@theokit/sdk': '1.0.0' } } })
+    pnpmLayout(app, '1.0.0')
     expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
     expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
+  })
+
+  it('the CLI judges a range override from the installation', () => {
+    const app = fixture(
+      { '.': { overrides: { '@theokit/sdk@^1': '^1.2.3' } } },
+      { '.': { '@theokit/sdk': '1.2.4' } },
+    )
+    expect(run(app, () => ({ latest: '1.2.4' })).code).toBe(0)
+    expect(run(app, () => ({ latest: '1.3.0' })).code).toBe(1)
+  })
+
+  it('the CLI leaves an override unjudged when the store holds the version for another package', () => {
+    const app = fixture(
+      { '.': { overrides: { 'a>@theokit/sdk': '1.0.0' } } },
+      { 'node_modules/.pnpm/@theokit+sdk@1.0.0': { '@theokit/sdk': '1.0.0' } },
+    )
+    pnpmLayout(app, undefined)
+    const result = run(app, () => ({ latest: '1.0.0' }))
+    expect(result.code).toBe(2)
+    expect(result.out).toContain('cannot be judged')
   })
 
   it('the CLI does not judge a nested override by the direct install of the same package', () => {
@@ -217,15 +250,5 @@ describe('app dependency checks', () => {
     expect(result.code).toBe(2)
     expect(result.out).toContain('other>@theokit/sdk')
     expect(result.out).not.toContain('installed 2.0.0')
-  })
-
-  it('the CLI leaves an override unjudged when the store lacks the version it pins', () => {
-    const app = fixture(
-      { '.': { overrides: { '@theokit/sdk@^1': '1.0.0' } } },
-      { 'node_modules/.pnpm/@theokit+sdk@2.0.0': { '@theokit/sdk': '2.0.0' } },
-    )
-    const result = run(app, () => ({ latest: '2.0.0' }))
-    expect(result.code).toBe(2)
-    expect(result.out).toContain('not installed')
   })
 })
