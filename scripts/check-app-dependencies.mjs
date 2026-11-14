@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import {
   channelFor,
   collectDeclarations,
+  compareVersions,
   exactVersionViolations,
   overridePackages,
   theokitStaleness,
@@ -55,26 +56,104 @@ function resolvePackage(dir, name) {
   }
 }
 
+/** Caret: `^0.x` pins the minor, `^0.0.x` pins the patch. */
+function caretAllows([major, minor, patch], want) {
+  if (major > 0) return minor > want[1] || (minor === want[1] && patch >= (want[2] ?? 0))
+  if (minor !== want[1]) return false
+  if (want[2] === undefined) return true
+  return minor > 0 ? patch >= want[2] : patch === want[2]
+}
+
+const parseVersion = (v) => String(v).split('+')[0].split('-')[0].split('.').map(Number)
+
+/**
+ * Whether `version` satisfies `range` for exact, caret, tilde and x-ranges; undefined for a range
+ * form this tool does not parse (the caller then accepts the version).
+ */
+function satisfiesRange(version, range) {
+  const text = String(range).trim()
+  if (EXACT_VERSION.test(text)) return compareVersions(version, text) === 0
+  const match = /^([\^~]?)(\d+)(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?$/.exec(text)
+  if (!match) return undefined
+  if (version.split('+')[0].includes('-')) return false
+  const [major, minor, patch] = parseVersion(version)
+  const [, op, m, n, p] = match
+  const want = [
+    Number(m),
+    /^\d+$/.test(n ?? '') ? Number(n) : undefined,
+    /^\d+$/.test(p ?? '') ? Number(p) : undefined,
+  ]
+  if (major !== want[0]) return false
+  if (want[1] === undefined) return true
+  if (op === '') return minor === want[1] && (want[2] === undefined || patch === want[2])
+  if (op === '~') return minor === want[1] && patch >= (want[2] ?? 0)
+  // caret: ^0.x pins the minor, ^0.0.x pins the patch
+  return caretAllows([major, minor, patch], want)
+}
+
+const readDeps = (dir) => {
+  try {
+    const m = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+    return [m.dependencies, m.optionalDependencies, m.peerDependencies].flatMap((d) =>
+      d && typeof d === 'object' ? Object.keys(d) : [],
+    )
+  } catch {
+    return []
+  }
+}
+
+/** Real directories of every installed copy of `name`, the direct one first, then through the dependency graph. */
+function installedCopies(dir, name) {
+  const found = []
+  const seen = new Set()
+  const queue = [resolve(dir)]
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (seen.has(current)) continue
+    seen.add(current)
+    const own = resolvePackage(current, name)
+    if (own !== undefined && !found.includes(own)) found.push(own)
+    for (const dep of readDeps(current)) {
+      const next = resolvePackage(current, dep)
+      if (next !== undefined) queue.push(next)
+    }
+  }
+  return found
+}
+
 /**
  * The installed version a declaration resolves to, from the installation itself (pnpm links or a flat
  * node_modules). A dependency resolves from its manifest's directory; an override resolves along its
- * path, each package from the real directory of the one before it. An exact override whose resolved
- * version differs is left unjudged: the installation does not follow it.
+ * path, each package from the real directory of the one before it; a top-level override may apply only
+ * to transitive copies, so every installed copy is searched. A version that does not satisfy the
+ * override's range is left unjudged: the installation does not follow it.
  */
 function installedFrom(dir) {
   return (name, declaration) => {
-    let current = dir
-    for (const segment of declaration.override === undefined
-      ? [name]
-      : overridePackages(declaration.override)) {
-      current = resolvePackage(current, segment)
-      if (current === undefined) return undefined
+    if (declaration.override === undefined)
+      return readVersion(join(resolvePackage(dir, name) ?? '', 'package.json'))
+    const segments = overridePackages(declaration.override)
+    let candidates
+    if (segments.length === 1) {
+      candidates = installedCopies(dir, name)
+    } else {
+      let current = dir
+      for (const segment of segments) {
+        current = resolvePackage(current, segment)
+        if (current === undefined) return undefined
+      }
+      candidates = [current]
     }
-    const version = readVersion(join(current, 'package.json'))
-    const exact = typeof declaration.range === 'string' && EXACT_VERSION.test(declaration.range)
-    return declaration.override !== undefined && exact && version !== declaration.range
-      ? undefined
-      : version
+    for (const candidate of candidates) {
+      const version = readVersion(join(candidate, 'package.json'))
+      if (version === undefined) continue
+      if (
+        typeof declaration.range !== 'string' ||
+        satisfiesRange(version, declaration.range) !== false
+      )
+        return version
+    }
+    return undefined
   }
 }
 

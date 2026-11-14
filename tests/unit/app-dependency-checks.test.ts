@@ -251,4 +251,23 @@ describe('app dependency checks', () => {
     expect(result.out).toContain('other>@theokit/sdk')
     expect(result.out).not.toContain('installed 2.0.0')
   })
+
+  it('the CLI judges a top-level override that applies only to a transitive copy', () => {
+    const app = fixture({
+      '.': { dependencies: { a: '1.0.0' }, overrides: { '@theokit/sdk': '1.0.0' } },
+    })
+    pnpmLayout(app, '1.0.0')
+    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
+    expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
+  })
+
+  it('the CLI leaves a range override unjudged when the resolved version does not satisfy it', () => {
+    const app = fixture(
+      { '.': { overrides: { '@theokit/sdk': '^1.2.3' } } },
+      { '.': { '@theokit/sdk': '2.0.0' } },
+    )
+    const result = run(app, () => ({ latest: '2.0.0' }))
+    expect(result.code).toBe(2)
+    expect(result.out).toContain('cannot be judged')
+  })
 })
