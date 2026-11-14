@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import {
   channelFor,
   collectDeclarations,
+  compareVersions,
   exactVersionViolations,
   theokitStaleness,
 } from './lib/app-dependencies.mjs'
@@ -35,16 +36,38 @@ function readManifest(path) {
   return manifest
 }
 
-/** Node's lookup: the manifest's own node_modules first, then each ancestor's. */
+const readVersion = (path) => {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')).version
+  } catch {
+    return undefined
+  }
+}
+
+/** A transitive package has no link beside the manifest: look in pnpm's virtual store, highest version first. */
+function fromVirtualStore(store, name) {
+  const prefix = `${name.replace('/', '+')}@`
+  let entries
+  try {
+    entries = readdirSync(store).filter((entry) => entry.startsWith(prefix))
+  } catch {
+    return undefined
+  }
+  const versions = entries
+    .map((entry) => readVersion(join(store, entry, 'node_modules', name, 'package.json')))
+    .filter((version) => typeof version === 'string')
+  return versions.sort(compareVersions).pop()
+}
+
+/** Node's lookup (own node_modules, then each ancestor's), then pnpm's virtual store for transitive overrides. */
 function installedFrom(dir) {
   return (name) => {
     for (let current = resolve(dir); ; current = dirname(current)) {
-      try {
-        return JSON.parse(readFileSync(join(current, 'node_modules', name, 'package.json'), 'utf8'))
-          .version
-      } catch {
-        if (dirname(current) === current) return undefined
-      }
+      const modules = join(current, 'node_modules')
+      const found =
+        readVersion(join(modules, name, 'package.json')) ??
+        fromVirtualStore(join(modules, '.pnpm'), name)
+      if (found !== undefined || dirname(current) === current) return found
     }
   }
 }

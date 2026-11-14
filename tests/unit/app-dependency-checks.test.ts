@@ -160,7 +160,7 @@ describe('app dependency checks', () => {
       overrides: {
         '@theokit/sdk@^1': '1.2.3',
         '@theokit/tui': { '.': '0.80.0', nested: '2.0.0' },
-        '@theokit/agents': { child: '$child' },
+        '@theokit/agents': { child: '$child', '.': '$agents' },
         other: '$other',
       },
     })
@@ -175,5 +175,14 @@ describe('app dependency checks', () => {
     expect(channelFor('1.2.3+build-1')).toBe('latest')
     expect(channelFor('1.2.3-next.0')).toBe('next')
     expect(channelFor('1.2.3-next.0+b')).toBe('next')
+  })
+
+  it("the CLI judges a transitive override installed only in pnpm's virtual store", () => {
+    const app = fixture(
+      { '.': { overrides: { '@theokit/sdk@^1': '1.0.0' } } },
+      { 'node_modules/.pnpm/@theokit+sdk@1.0.0': { '@theokit/sdk': '1.0.0' } },
+    )
+    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
+    expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
   })
 })

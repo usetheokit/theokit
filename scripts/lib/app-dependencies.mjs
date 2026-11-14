@@ -40,7 +40,8 @@ function overrideDeclarations(key, value) {
   const name = overrideName(key)
   if (typeof value === 'string') return value.startsWith('$') ? [] : [{ name, range: value }]
   if (!isPlainObject(value)) return []
-  const out = typeof value['.'] === 'string' ? [{ name, range: value['.'] }] : []
+  const own = value['.']
+  const out = typeof own === 'string' && !own.startsWith('$') ? [{ name, range: own }] : []
   for (const [child, nested] of Object.entries(value)) {
     if (child !== '.') out.push(...overrideDeclarations(child, nested))
   }
