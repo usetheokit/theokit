@@ -36,16 +36,17 @@ function overrideName(key) {
 }
 
 /** Declarations from one override entry: a string range, or an object whose `.` is the range and whose other keys are nested overrides. */
-function overrideDeclarations(key, value) {
+function overrideDeclarations(key, value, parent) {
+  const path = parent === undefined ? key : `${parent} > ${key}`
   const name = overrideName(key)
   if (typeof value === 'string')
-    return value.startsWith('$') ? [] : [{ name, range: value, override: key }]
+    return value.startsWith('$') ? [] : [{ name, range: value, override: path }]
   if (!isPlainObject(value)) return []
   const own = value['.']
   const out =
-    typeof own === 'string' && !own.startsWith('$') ? [{ name, range: own, override: key }] : []
+    typeof own === 'string' && !own.startsWith('$') ? [{ name, range: own, override: path }] : []
   for (const [child, nested] of Object.entries(value)) {
-    if (child !== '.') out.push(...overrideDeclarations(child, nested))
+    if (child !== '.') out.push(...overrideDeclarations(child, nested, path))
   }
   return out
 }

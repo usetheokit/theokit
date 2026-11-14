@@ -167,7 +167,21 @@ describe('app dependency checks', () => {
     expect(declarations).toEqual([
       { name: '@theokit/sdk', range: '1.2.3', override: '@theokit/sdk@^1' },
       { name: '@theokit/tui', range: '0.80.0', override: '@theokit/tui' },
-      { name: 'nested', range: '2.0.0', override: 'nested' },
+      { name: 'nested', range: '2.0.0', override: '@theokit/tui > nested' },
+    ])
+  })
+
+  it('keeps the full path so nested overrides of one package are judged separately', () => {
+    const declarations = collectDeclarations({
+      overrides: { a: { '@theokit/sdk': '1.0.0' }, b: { '@theokit/sdk': '2.0.0' } },
+    })
+    const result = theokitStaleness(declarations, {
+      installedVersion: (_name, d) => d.range,
+      publishedVersion: () => '2.0.0',
+    })
+    expect(result.rows.map((r) => [r.override, r.current])).toEqual([
+      ['a > @theokit/sdk', false],
+      ['b > @theokit/sdk', true],
     ])
   })
 

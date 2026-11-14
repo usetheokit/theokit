@@ -8,9 +8,12 @@ export interface ExactViolation {
 export interface Declaration {
   name: string
   range: string
+  /** Full override path (nested keys joined with ` > `); absent for dependency sections. */
+  override?: string
 }
 export interface StalenessRow {
   name: string
+  override?: string
   installed: string
   latest: string
   current: boolean
@@ -25,10 +28,14 @@ export function channelFor(installed: string | undefined): 'next' | 'latest'
 export function theokitStaleness(
   declarations: readonly Declaration[],
   options: {
-    installedVersion: (name: string) => string | undefined
-    publishedVersion: (name: string) => string | undefined
+    installedVersion: (name: string, declaration: Declaration) => string | undefined
+    publishedVersion: (name: string, installed: string) => string | undefined
     skipProtocols?: readonly string[]
   },
-): { rows: StalenessRow[]; inRepo: string[]; unjudged: { name: string; reason: string }[] }
+): {
+  rows: StalenessRow[]
+  inRepo: string[]
+  unjudged: { name: string; override?: string; reason: string }[]
+}
 /** Semver precedence: negative, 0 or positive as `a` is lower than, equal to or higher than `b`. */
 export function compareVersions(a: string, b: string): number
