@@ -44,30 +44,13 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 
-// An optional first argument names another checkout to measure; the tests use it on a scratch repo.
-const REPO_ROOT = process.argv[2]
-  ? resolve(process.argv[2])
-  : resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** `theokit@0.52.1`, `create-theokit@1.23.11`, `@theokit/agents@11.0.0` — not `v1.0.0`. */
 const RELEASE_TAG = /^(?:@[a-z0-9-]+\/)?[a-z0-9-]+@\d+\.\d+\.\d+/
 
-/**
- * `git tag` argv, hoisted so the call below fits on one line — see the directive there.
- *
- * `--merged HEAD`: only releases the checked-out history contains can be asked of its record. A
- * promotion pull request (workspace -> develop) is checked out without a release that was cut on
- * `main` after the branches diverged; that release's section reaches the record when `main` is
- * merged back, and failing the promotion for it blocked `develop` (#2035, #2106). The tag is
- * still measured the moment the history carries it.
- */
-const TAG_ARGV = [
-  'tag',
-  '--merged',
-  'HEAD',
-  '--sort=-creatordate',
-  '--format=%(refname:short) %(creatordate:short)',
-]
+/** `git tag` argv, hoisted so the call below fits on one line — see the directive there. */
+const TAG_ARGV = ['tag', '--sort=-creatordate', '--format=%(refname:short) %(creatordate:short)']
 
 /** The newest release tag and the day it was created, or null when git cannot answer. */
 function newestReleaseTag() {
