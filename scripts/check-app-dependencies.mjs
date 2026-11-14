@@ -94,8 +94,8 @@ function satisfiesRange(version, range) {
 const readDeps = (dir) => {
   try {
     const m = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-    return [m.dependencies, m.optionalDependencies, m.peerDependencies].flatMap((d) =>
-      d && typeof d === 'object' ? Object.keys(d) : [],
+    return [m.dependencies, m.devDependencies, m.optionalDependencies, m.peerDependencies].flatMap(
+      (d) => (d && typeof d === 'object' ? Object.keys(d) : []),
     )
   } catch {
     return []
@@ -130,8 +130,10 @@ function installedCopies(dir, name) {
  */
 function installedFrom(dir) {
   return (name, declaration) => {
-    if (declaration.override === undefined)
-      return readVersion(join(resolvePackage(dir, name) ?? '', 'package.json'))
+    if (declaration.override === undefined) {
+      const own = resolvePackage(dir, name)
+      return own === undefined ? undefined : readVersion(join(own, 'package.json'))
+    }
     const segments = overridePackages(declaration.override)
     let candidates
     if (segments.length === 1) {
@@ -144,15 +146,15 @@ function installedFrom(dir) {
       }
       candidates = [current]
     }
+    // Every copy the override applies to must resolve to one version that satisfies its range;
+    // differing copies, or a range this tool cannot evaluate, are left unjudged.
+    const versions = new Set()
     for (const candidate of candidates) {
       const version = readVersion(join(candidate, 'package.json'))
-      if (version === undefined) continue
-      if (
-        typeof declaration.range !== 'string' ||
-        satisfiesRange(version, declaration.range) !== false
-      )
-        return version
+      if (version !== undefined && satisfiesRange(version, declaration.range) === true)
+        versions.add(version)
     }
+    if (versions.size === 1) return [...versions][0]
     return undefined
   }
 }

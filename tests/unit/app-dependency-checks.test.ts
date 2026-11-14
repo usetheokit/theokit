@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runCli } from '../../scripts/check-app-dependencies.mjs'
 import {
@@ -269,5 +269,46 @@ describe('app dependency checks', () => {
     const result = run(app, () => ({ latest: '2.0.0' }))
     expect(result.code).toBe(2)
     expect(result.out).toContain('cannot be judged')
+  })
+
+  it('the CLI leaves an override unjudged when installed copies differ', () => {
+    const app = fixture(
+      {
+        '.': { dependencies: { a: '1.0.0', b: '1.0.0' }, overrides: { '@theokit/sdk': '^1.0.0' } },
+      },
+      {
+        node_modules: { a: '1.0.0', b: '1.0.0' },
+        'node_modules/a': { '@theokit/sdk': '1.5.0' },
+        'node_modules/b': { '@theokit/sdk': '1.2.0' },
+      },
+    )
+    expect(run(app, () => ({ latest: '1.5.0' })).code).toBe(2)
+  })
+
+  it('the CLI leaves a range it cannot evaluate unjudged', () => {
+    const app = fixture(
+      { '.': { overrides: { '@theokit/sdk': '>=1 <2' } } },
+      { '.': { '@theokit/sdk': '2.0.0' } },
+    )
+    expect(run(app, () => ({ latest: '2.0.0' })).code).toBe(2)
+  })
+
+  it('the CLI follows a transitive override through a devDependency', () => {
+    const app = fixture({
+      '.': { devDependencies: { a: '1.0.0' }, overrides: { '@theokit/sdk': '1.0.0' } },
+    })
+    pnpmLayout(app, '1.0.0')
+    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
+  })
+
+  it('the CLI does not read an unresolved dependency from the working directory', () => {
+    const app = fixture({ '.': { dependencies: { '@theokit/sdk': '1.0.0' } } })
+    const cwd = fixture({ '.': { version: '1.0.0' } })
+    const result = spawnSync(
+      process.execPath,
+      [resolve('scripts/check-app-dependencies.mjs'), app],
+      { cwd, encoding: 'utf8' },
+    )
+    expect(result.status).toBe(2)
   })
 })
