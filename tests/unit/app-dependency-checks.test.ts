@@ -311,4 +311,52 @@ describe('app dependency checks', () => {
     )
     expect(result.status).toBe(2)
   })
+
+  it('the CLI leaves an override unjudged when a copy outside the range sits beside a matching one', () => {
+    const app = fixture(
+      {
+        '.': { dependencies: { a: '1.0.0', b: '1.0.0' }, overrides: { '@theokit/sdk': '^1.0.0' } },
+      },
+      {
+        node_modules: { a: '1.0.0', b: '1.0.0' },
+        'node_modules/a': { '@theokit/sdk': '1.5.0' },
+        'node_modules/b': { '@theokit/sdk': '2.0.0' },
+      },
+    )
+    expect(run(app, () => ({ latest: '1.5.0' })).code).toBe(2)
+  })
+
+  it('the CLI applies a nested override beneath a transitive ancestor', () => {
+    const app = fixture(
+      {
+        '.': { dependencies: { a: '1.0.0' }, overrides: { 'b>@theokit/sdk': '1.0.0' } },
+        'node_modules/a': { version: '1.0.0', dependencies: { b: '1.0.0' } },
+        'node_modules/a/node_modules/b': { version: '1.0.0', dependencies: { c: '1.0.0' } },
+        'node_modules/a/node_modules/b/node_modules/c': {
+          version: '1.0.0',
+          dependencies: { '@theokit/sdk': '1.0.0' },
+        },
+      },
+      { 'node_modules/a/node_modules/b/node_modules/c': { '@theokit/sdk': '1.0.0' } },
+    )
+    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
+    expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
+  })
+
+  it('the CLI judges every ancestor copy of a nested override', () => {
+    const app = fixture(
+      {
+        '.': { dependencies: { a: '1.0.0', b: '1.0.0' }, overrides: { 'c>@theokit/sdk': '1.0.0' } },
+        'node_modules/a': { version: '1.0.0', dependencies: { c: '1.0.0' } },
+        'node_modules/b': { version: '1.0.0', dependencies: { c: '1.0.0' } },
+        'node_modules/a/node_modules/c': { version: '1.0.0' },
+        'node_modules/b/node_modules/c': { version: '1.0.0' },
+      },
+      {
+        'node_modules/a/node_modules/c': { '@theokit/sdk': '1.0.0' },
+        'node_modules/b/node_modules/c': { '@theokit/sdk': '1.2.0' },
+      },
+    )
+    expect(run(app, () => ({ latest: '1.2.0' })).code).toBe(2)
+  })
 })

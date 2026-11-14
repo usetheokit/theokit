@@ -102,11 +102,14 @@ const readDeps = (dir) => {
   }
 }
 
-/** Real directories of every installed copy of `name`, the direct one first, then through the dependency graph. */
-function installedCopies(dir, name) {
+/**
+ * Real directories of every installed copy of `name` that a package in `starts`, or anything beneath
+ * it in the dependency graph, resolves.
+ */
+function installedCopies(starts, name) {
   const found = []
   const seen = new Set()
-  const queue = [resolve(dir)]
+  const queue = [...starts]
   while (queue.length > 0) {
     const current = queue.shift()
     if (seen.has(current)) continue
@@ -121,12 +124,22 @@ function installedCopies(dir, name) {
   return found
 }
 
+/** Every installed copy an override path applies to: each ancestor anywhere beneath the one before it. */
+function overrideTargets(dir, segments) {
+  let frontier = [resolve(dir)]
+  for (const segment of segments) {
+    frontier = installedCopies(frontier, segment)
+    if (frontier.length === 0) return []
+  }
+  return frontier
+}
+
 /**
  * The installed version a declaration resolves to, from the installation itself (pnpm links or a flat
- * node_modules). A dependency resolves from its manifest's directory; an override resolves along its
- * path, each package from the real directory of the one before it; a top-level override may apply only
- * to transitive copies, so every installed copy is searched. A version that does not satisfy the
- * override's range is left unjudged: the installation does not follow it.
+ * node_modules). A dependency resolves from its manifest's directory. An override applies to every
+ * installed copy of its package beneath each installed copy of its ancestors, wherever they sit in the
+ * dependency graph; all of them must resolve to one version satisfying the override's range, otherwise
+ * (differing, unreadable or non-matching copies, or a range this tool cannot evaluate) it is left unjudged.
  */
 function installedFrom(dir) {
   return (name, declaration) => {
@@ -134,28 +147,14 @@ function installedFrom(dir) {
       const own = resolvePackage(dir, name)
       return own === undefined ? undefined : readVersion(join(own, 'package.json'))
     }
-    const segments = overridePackages(declaration.override)
-    let candidates
-    if (segments.length === 1) {
-      candidates = installedCopies(dir, name)
-    } else {
-      let current = dir
-      for (const segment of segments) {
-        current = resolvePackage(current, segment)
-        if (current === undefined) return undefined
-      }
-      candidates = [current]
-    }
-    // Every copy the override applies to must resolve to one version that satisfies its range;
-    // differing copies, or a range this tool cannot evaluate, are left unjudged.
     const versions = new Set()
-    for (const candidate of candidates) {
-      const version = readVersion(join(candidate, 'package.json'))
-      if (version !== undefined && satisfiesRange(version, declaration.range) === true)
-        versions.add(version)
+    for (const target of overrideTargets(dir, overridePackages(declaration.override))) {
+      const version = readVersion(join(target, 'package.json'))
+      if (version === undefined || satisfiesRange(version, declaration.range) !== true)
+        return undefined
+      versions.add(version)
     }
-    if (versions.size === 1) return [...versions][0]
-    return undefined
+    return versions.size === 1 ? [...versions][0] : undefined
   }
 }
 
