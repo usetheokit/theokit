@@ -65,8 +65,12 @@ function translateGroup(
     dropped.push(`${at}: group is not an object`)
     return
   }
+  if (group.matcher !== undefined && typeof group.matcher !== 'string') {
+    dropped.push(`${at}: matcher must be a string`)
+    return
+  }
   const matcher =
-    typeof group.matcher === 'string' && group.matcher !== '*' && group.matcher !== ''
+    group.matcher !== undefined && group.matcher !== '*' && group.matcher !== ''
       ? group.matcher
       : undefined
   if (!Array.isArray(group.hooks)) {

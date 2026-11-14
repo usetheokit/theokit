@@ -57,6 +57,15 @@ describe('parseClaudeHooks', () => {
     expect(dropped).toHaveLength(4)
   })
 
+  it('a group with a non-string matcher is dropped, not widened to every tool', () => {
+    const out = parseClaudeHooks({
+      PreToolUse: [{ matcher: 123, hooks: [{ type: 'command', command: 'echo a' }] }],
+    })
+    expect(out.specs).toEqual([])
+    expect(out.dropped).toHaveLength(1)
+    expect(out.dropped[0]).toContain('matcher must be a string')
+  })
+
   it('aliases override defaults, and null means not delivered', () => {
     const { specs, dropped } = parseClaudeHooks(
       { PostToolUse: [{ hooks: [cmd('x')] }], Stop: [{ hooks: [cmd('y')] }] },
