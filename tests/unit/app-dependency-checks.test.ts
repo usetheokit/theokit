@@ -165,9 +165,9 @@ describe('app dependency checks', () => {
       },
     })
     expect(declarations).toEqual([
-      { name: '@theokit/sdk', range: '1.2.3' },
-      { name: '@theokit/tui', range: '0.80.0' },
-      { name: 'nested', range: '2.0.0' },
+      { name: '@theokit/sdk', range: '1.2.3', override: '@theokit/sdk@^1' },
+      { name: '@theokit/tui', range: '0.80.0', override: '@theokit/tui' },
+      { name: 'nested', range: '2.0.0', override: 'nested' },
     ])
   })
 
@@ -186,13 +186,29 @@ describe('app dependency checks', () => {
     expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
   })
 
-  it('the CLI leaves a transitive override unjudged when the store holds several versions', () => {
+  it('the CLI does not judge a nested override by the direct install of the same package', () => {
     const app = fixture(
-      { '.': { overrides: { '@theokit/sdk@^1': '1.0.0' } } },
       {
-        'node_modules/.pnpm/@theokit+sdk@1.0.0': { '@theokit/sdk': '1.0.0' },
+        '.': {
+          dependencies: { '@theokit/sdk': '2.0.0' },
+          overrides: { 'other>@theokit/sdk': '1.0.0' },
+        },
+      },
+      {
+        'node_modules/@theokit/sdk': { '@theokit/sdk': '2.0.0' },
         'node_modules/.pnpm/@theokit+sdk@2.0.0': { '@theokit/sdk': '2.0.0' },
       },
+    )
+    const result = run(app, () => ({ latest: '2.0.0' }))
+    expect(result.code).toBe(2)
+    expect(result.out).toContain('other>@theokit/sdk')
+    expect(result.out).not.toContain('installed 2.0.0')
+  })
+
+  it('the CLI leaves an override unjudged when the store lacks the version it pins', () => {
+    const app = fixture(
+      { '.': { overrides: { '@theokit/sdk@^1': '1.0.0' } } },
+      { 'node_modules/.pnpm/@theokit+sdk@2.0.0': { '@theokit/sdk': '2.0.0' } },
     )
     const result = run(app, () => ({ latest: '2.0.0' }))
     expect(result.code).toBe(2)

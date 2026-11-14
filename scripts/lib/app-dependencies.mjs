@@ -38,10 +38,12 @@ function overrideName(key) {
 /** Declarations from one override entry: a string range, or an object whose `.` is the range and whose other keys are nested overrides. */
 function overrideDeclarations(key, value) {
   const name = overrideName(key)
-  if (typeof value === 'string') return value.startsWith('$') ? [] : [{ name, range: value }]
+  if (typeof value === 'string')
+    return value.startsWith('$') ? [] : [{ name, range: value, override: key }]
   if (!isPlainObject(value)) return []
   const own = value['.']
-  const out = typeof own === 'string' && !own.startsWith('$') ? [{ name, range: own }] : []
+  const out =
+    typeof own === 'string' && !own.startsWith('$') ? [{ name, range: own, override: key }] : []
   for (const [child, nested] of Object.entries(value)) {
     if (child !== '.') out.push(...overrideDeclarations(child, nested))
   }
@@ -96,6 +98,9 @@ export function compareVersions(a, b) {
   return Math.sign(aIds.length - bIds.length)
 }
 
+const publishedOf = (publishedVersion, name, installed) =>
+  installed === undefined ? undefined : publishedVersion(name, installed)
+
 const majorOf = (version) => Number(String(version).split('.')[0])
 
 /**
@@ -107,27 +112,33 @@ export function theokitStaleness(
   { installedVersion, publishedVersion, skipProtocols = DEFAULT_SKIP },
 ) {
   const inRepo = new Set()
-  const pinned = new Set()
-  for (const { name, range } of declarations) {
+  const pinned = new Map()
+  for (const declaration of declarations) {
+    const { name, range, override } = declaration
     if (!name.startsWith(SCOPE)) continue
     if (typeof range === 'string' && skipProtocols.some((p) => range.startsWith(p)))
       inRepo.add(name)
-    else pinned.add(name)
+    else pinned.set(`${name}\0${override ?? ''}`, declaration)
   }
   const rows = []
   const unjudged = []
-  for (const name of [...pinned].sort()) {
-    const installed = installedVersion(name)
-    const latest = publishedVersion(name)
+  for (const [, declaration] of [...pinned].sort(([a], [b]) => (a < b ? -1 : Number(a > b)))) {
+    const { name, override } = declaration
+    // A declaration is resolved on its own: a direct pin and an override of the same package may differ.
+    const via = override === undefined ? {} : { override }
+    const installed = installedVersion(name, declaration)
+    const latest = publishedOf(publishedVersion, name, installed)
     if (installed === undefined || latest === undefined) {
       unjudged.push({
         name,
+        ...via,
         reason: installed === undefined ? 'not installed' : 'published version unavailable',
       })
       continue
     }
     rows.push({
       name,
+      ...via,
       installed,
       latest,
       // `current` means not behind: a pin ahead of the published tag is not stale.

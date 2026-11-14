@@ -16,6 +16,8 @@ import {
   theokitStaleness,
 } from './lib/app-dependencies.mjs'
 
+const EXACT_VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
+
 function manifestPaths(appDir) {
   const found = [join(appDir, 'package.json')]
   const packagesDir = join(appDir, 'packages')
@@ -43,8 +45,12 @@ const readVersion = (path) => {
   }
 }
 
-/** A transitive package has no link beside the manifest: look in pnpm's virtual store, only when exactly one version is installed. */
-function fromVirtualStore(store, name) {
+/**
+ * An override has no link beside the manifest. It is judged only when its range is an exact version
+ * and pnpm's virtual store holds that very version; any other case cannot be tied to the declaration.
+ */
+function fromVirtualStore(store, name, range) {
+  if (typeof range !== 'string' || !EXACT_VERSION.test(range)) return undefined
   const prefix = `${name.replace('/', '+')}@`
   let entries
   try {
@@ -52,22 +58,24 @@ function fromVirtualStore(store, name) {
   } catch {
     return undefined
   }
-  const versions = entries
-    .map((entry) => readVersion(join(store, entry, 'node_modules', name, 'package.json')))
-    .filter((version) => typeof version === 'string')
-  // Several versions: nothing says which one the override resolved, so leave it unjudged.
-  const distinct = [...new Set(versions)]
-  return distinct.length === 1 ? distinct[0] : undefined
+  const found = entries.some(
+    (entry) => readVersion(join(store, entry, 'node_modules', name, 'package.json')) === range,
+  )
+  return found ? range : undefined
 }
 
-/** Node's lookup (own node_modules, then each ancestor's), then pnpm's virtual store for transitive overrides. */
+/**
+ * Per declaration: a direct dependency resolves through Node's lookup (own node_modules, then each
+ * ancestor's); an override resolves only through the virtual store, never to a direct install.
+ */
 function installedFrom(dir) {
-  return (name) => {
+  return (name, declaration) => {
     for (let current = resolve(dir); ; current = dirname(current)) {
       const modules = join(current, 'node_modules')
       const found =
-        readVersion(join(modules, name, 'package.json')) ??
-        fromVirtualStore(join(modules, '.pnpm'), name)
+        declaration.override === undefined
+          ? readVersion(join(modules, name, 'package.json'))
+          : fromVirtualStore(join(modules, '.pnpm'), name, declaration.range)
       if (found !== undefined || dirname(current) === current) return found
     }
   }
@@ -102,8 +110,8 @@ function checkManifest(path, failures, publishedTags) {
   const staleness = declarations.some((d) => d.name.startsWith('@theokit/'))
     ? theokitStaleness(declarations, {
         installedVersion,
-        publishedVersion: (name) =>
-          publishedFor(installedVersion(name), name, failures, publishedTags),
+        publishedVersion: (name, installed) =>
+          publishedFor(installed, name, failures, publishedTags),
       })
     : { rows: [], inRepo: [], unjudged: [] }
   return { manifest: path, violations, ...staleness }
@@ -113,7 +121,10 @@ function render(report, write) {
   for (const v of report.violations) write(`${v.manifest}: ${v.section} ${v.name} ${v.specifier}`)
   if (report.inRepo.length > 0)
     write(`in-repo (not compared with the registry): ${report.inRepo.join(', ')}`)
-  for (const u of report.unjudged) write(`${u.manifest}: ${u.name} cannot be judged (${u.reason})`)
+  for (const u of report.unjudged) {
+    const via = u.override ? ` (override ${u.override})` : ''
+    write(`${u.manifest}: ${u.name}${via} cannot be judged (${u.reason})`)
+  }
   for (const r of report.rows) {
     if (!r.current)
       write(
