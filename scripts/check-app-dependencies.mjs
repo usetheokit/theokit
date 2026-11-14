@@ -12,7 +12,6 @@ import { fileURLToPath } from 'node:url'
 import {
   channelFor,
   collectDeclarations,
-  compareVersions,
   exactVersionViolations,
   theokitStaleness,
 } from './lib/app-dependencies.mjs'
@@ -44,7 +43,7 @@ const readVersion = (path) => {
   }
 }
 
-/** A transitive package has no link beside the manifest: look in pnpm's virtual store, highest version first. */
+/** A transitive package has no link beside the manifest: look in pnpm's virtual store, only when exactly one version is installed. */
 function fromVirtualStore(store, name) {
   const prefix = `${name.replace('/', '+')}@`
   let entries
@@ -56,7 +55,9 @@ function fromVirtualStore(store, name) {
   const versions = entries
     .map((entry) => readVersion(join(store, entry, 'node_modules', name, 'package.json')))
     .filter((version) => typeof version === 'string')
-  return versions.sort(compareVersions).pop()
+  // Several versions: nothing says which one the override resolved, so leave it unjudged.
+  const distinct = [...new Set(versions)]
+  return distinct.length === 1 ? distinct[0] : undefined
 }
 
 /** Node's lookup (own node_modules, then each ancestor's), then pnpm's virtual store for transitive overrides. */

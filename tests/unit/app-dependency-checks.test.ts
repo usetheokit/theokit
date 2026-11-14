@@ -185,4 +185,17 @@ describe('app dependency checks', () => {
     expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
     expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
   })
+
+  it('the CLI leaves a transitive override unjudged when the store holds several versions', () => {
+    const app = fixture(
+      { '.': { overrides: { '@theokit/sdk@^1': '1.0.0' } } },
+      {
+        'node_modules/.pnpm/@theokit+sdk@1.0.0': { '@theokit/sdk': '1.0.0' },
+        'node_modules/.pnpm/@theokit+sdk@2.0.0': { '@theokit/sdk': '2.0.0' },
+      },
+    )
+    const result = run(app, () => ({ latest: '2.0.0' }))
+    expect(result.code).toBe(2)
+    expect(result.out).toContain('not installed')
+  })
 })
