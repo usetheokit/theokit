@@ -31,7 +31,7 @@ export function exactVersionViolations(manifest) {
 /** Every `{ name, range }` a manifest declares in the dependency sections and `overrides`. */
 export function collectDeclarations(manifest) {
   const out = []
-  for (const section of [...SECTIONS, 'overrides']) {
+  for (const section of [...SECTIONS, 'peerDependencies', 'overrides']) {
     if (!isPlainObject(manifest[section])) continue
     for (const [name, range] of Object.entries(manifest[section])) out.push({ name, range })
   }
@@ -62,10 +62,17 @@ export function theokitStaleness(
     else pinned.add(name)
   }
   const rows = []
+  const unjudged = []
   for (const name of [...pinned].sort()) {
     const installed = installedVersion(name)
     const latest = publishedVersion(name)
-    if (installed === undefined || latest === undefined) continue
+    if (installed === undefined || latest === undefined) {
+      unjudged.push({
+        name,
+        reason: installed === undefined ? 'not installed' : 'published version unavailable',
+      })
+      continue
+    }
     rows.push({
       name,
       installed,
@@ -74,5 +81,5 @@ export function theokitStaleness(
       major: majorOf(latest) > majorOf(installed),
     })
   }
-  return { rows, inRepo: [...inRepo].sort() }
+  return { rows, inRepo: [...inRepo].sort(), unjudged }
 }

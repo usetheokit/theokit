@@ -21,7 +21,7 @@ export interface StalenessRow {
 export function exactVersionViolations(manifest: Record<string, unknown>): ExactViolation[]
 export function collectDeclarations(manifest: Record<string, unknown>): Declaration[]
 export function channelFor(installed: string | undefined): 'next' | 'latest'
-/** Registry pins only; in-repo protocols are listed in `inRepo`. A pin with no installed or published version is left out. */
+/** Registry pins only; in-repo protocols are listed in `inRepo`. A pin with no installed or published version is listed in `unjudged`. */
 export function theokitStaleness(
   declarations: readonly Declaration[],
   options: {
@@ -29,4 +29,4 @@ export function theokitStaleness(
     publishedVersion: (name: string) => string | undefined
     skipProtocols?: readonly string[]
   },
-): { rows: StalenessRow[]; inRepo: string[] }
+): { rows: StalenessRow[]; inRepo: string[]; unjudged: { name: string; reason: string }[] }

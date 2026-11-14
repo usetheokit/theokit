@@ -7,7 +7,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   channelFor,
@@ -56,9 +56,9 @@ function npmTags(name) {
 }
 
 /** The tag matching the installed channel, falling back to `latest`; undefined when npm cannot answer. */
-function publishedFor(installed, name, failures) {
+function publishedFor(installed, name, failures, publishedTags) {
   try {
-    const tags = npmTags(name)
+    const tags = publishedTags(name)
     return tags[channelFor(installed)] ?? tags.latest
   } catch (error) {
     failures.push({ name, reason: error instanceof Error ? error.message : String(error) })
@@ -66,22 +66,25 @@ function publishedFor(installed, name, failures) {
   }
 }
 
-function checkManifest(path, appDir, failures) {
+function checkManifest(path, failures, publishedTags) {
   const manifest = readManifest(path)
   const violations = exactVersionViolations(manifest).map((v) => ({ manifest: path, ...v }))
   const declarations = collectDeclarations(manifest)
-  const installedVersion = installedFrom(appDir)
+  // Resolved from the declaring manifest's own directory: pnpm links a package's dependencies there.
+  const installedVersion = installedFrom(dirname(path))
   const staleness = declarations.some((d) => d.name.startsWith('@theokit/'))
     ? theokitStaleness(declarations, {
         installedVersion,
-        publishedVersion: (name) => publishedFor(installedVersion(name), name, failures),
+        publishedVersion: (name) =>
+          publishedFor(installedVersion(name), name, failures, publishedTags),
       })
-    : { rows: [], inRepo: [] }
+    : { rows: [], inRepo: [], unjudged: [] }
   return { manifest: path, violations, ...staleness }
 }
 
 function render(report, write) {
   for (const v of report.violations) write(`${v.manifest}: ${v.section} ${v.name} ${v.specifier}`)
+  for (const u of report.unjudged) write(`${u.manifest}: ${u.name} cannot be judged (${u.reason})`)
   for (const r of report.rows) {
     if (!r.current)
       write(
@@ -91,12 +94,12 @@ function render(report, write) {
 }
 
 /** Judges the app at `appDir`, writes the report, and returns the exit code. */
-export function runCli({ appDir, json = false, write, writeError }) {
+export function runCli({ appDir, json = false, write, writeError, publishedTags = npmTags }) {
   const failures = []
   const results = []
   try {
     for (const path of manifestPaths(appDir))
-      results.push(checkManifest(path, resolve(appDir), failures))
+      results.push(checkManifest(path, failures, publishedTags))
   } catch (error) {
     writeError(`cannot read ${appDir}: ${error instanceof Error ? error.message : String(error)}`)
     return 2
@@ -105,12 +108,19 @@ export function runCli({ appDir, json = false, write, writeError }) {
     violations: results.flatMap((r) => r.violations),
     rows: results.flatMap((r) => r.rows.map((row) => ({ manifest: r.manifest, ...row }))),
     inRepo: [...new Set(results.flatMap((r) => r.inRepo))].sort(),
+    unjudged: results.flatMap((r) => r.unjudged.map((u) => ({ manifest: r.manifest, ...u }))),
     failures,
   }
   if (json) write(JSON.stringify(report, null, 2))
   else render(report, write)
   for (const f of failures) writeError(`could not read published version of ${f.name}: ${f.reason}`)
-  return report.violations.length > 0 ? 1 : 0
+  return exitCode(report)
+}
+
+/** 1 for an exact-pin violation or a registry pin behind; 2 when a pin could not be judged; else 0. */
+function exitCode(report) {
+  if (report.violations.length > 0 || report.rows.some((r) => !r.current)) return 1
+  return report.unjudged.length > 0 ? 2 : 0
 }
 
 function isDirectRun() {
