@@ -4,7 +4,7 @@
   "ignoreWorkspaces": ["apps/**", "my-test*"],
   "workspaces": {
     ".": {
-      "ignore": ["tests/**", "docs/**", "**/*.d.mts"]
+      "ignore": ["tests/**", "docs/**", "**/*.d.mts", "tooling/depcruise/**"]
     },
     "packages/theo": {
       "entry": [

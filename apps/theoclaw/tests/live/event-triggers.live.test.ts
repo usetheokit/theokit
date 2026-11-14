@@ -165,8 +165,13 @@ describe.skipIf(!LIVE)('event triggers, the hook gate and /goal against a real m
     // A goal one turn cannot finish: the SDK's judge answers `done` before the budget is read, so a
     // goal the first turn completes ends `completed` whatever the budget (measured on this run).
     // "Write only chapter 1 now" let gemini-2.5-flash's judge call the goal done after chapter 1
-    // (develop run 42794879186, twice), so the goal names its end: all twenty chapters.
-    const goal = '/goal write a twenty-chapter story, one short chapter per turn, and stop only when all twenty chapters are written'
+    // (develop run 42794879186, twice), so the goal names its end: all twenty chapters. Promotion
+    // #2098 (3870c3f) then got `completed: I can write a story for you…`: the model offered instead of
+    // writing, and the judge called that done. So the goal is an imperative that starts at once, and
+    // an offer or a question cannot meet its end: the numbered chapters themselves.
+    const goal =
+      '/goal start now, with no questions and no offers: write the twenty chapters of a story, each headed "Chapter N" for N from 1 to 20, ' +
+      'one short chapter per turn. The goal is met only when the text contains the heading "Chapter 20"'
     await telegram.deliver(messageEvent('telegram', goal, 'live-goal-user'))
     await waitFor(() => telegram.sent.length === 1, 90_000, 'the goal reply')
     expect(telegram.sent[0]?.text).toMatch(/^budget_limited: /)

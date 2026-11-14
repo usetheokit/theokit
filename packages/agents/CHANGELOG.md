@@ -1,5 +1,19 @@
 # @theokit/agents
 
+## 16.7.0
+
+### Minor Changes
+
+- 817296c: Add `defineAppBootstrap`, `assertBootstrapped` and `projectEnvStep` to `@theokit/agents/config`, so every entry of an agent app runs the same setup once, in order.
+- 98829ee: `AgentClient.sendAndWait` resolves when its own turn settles, and `asGoalLoopAgent` adapts a client to the SDK `GoalLoopAgent` contract so `runGoalLoop` can drive a UI client without polling.
+- e104596: `@theokit/agents/commands` adds `createCommandRegistry` and `CommandRegistryError`. Command definitions take `aliases`, `hidden` and `run`; `routeCommand` resolves aliases.
+- 2da7cde: Add `listUserTurns` to `@theokit/agents/session`, listing the user turns `forkBeforeUserTurn` counts.
+- b4526ae: `@theokit/agents/bridge` exports `loadMcpScopes`, which merges personal and project MCP servers with a trust gate for the project and a clash rule (personal wins by default).
+- f5452e3: `@theokit/agents/hooks` exports `runHostHooks`, which runs the approved hooks of one event the host owns (such as session start) outside an agent loop, with the same trust and approval gate as `buildHookHandlers` and an explicit, required environment.
+- 787c3c6: `@theokit/agents/config` adds `settingsCandidates`, `readSettingsFile` and `firstSettingsFile` to read `settings.json` under an own root and the `.claude` root, reporting `ignored` and `unrecognised` keys and unsupported permission entries. `CLAUDE_SETTINGS_KEYS` and `FOREIGN_KEY_DECISIONS` are exported.
+- fd25499: `Shutdown.register` now returns a disposer, and `@theokit/agents/commands` exports `exitAfterDrain` for a normal exit that lets output drain. `createShutdown` takes `drain: true` to use it.
+- aa5755c: `AgentBuilder.withholdBuiltinTools(names)` withholds SDK builtin tools (such as `shell`) on every run path, not only `toAgentFactory`. Unknown names are refused with a `ConfigurationError`; `withholdBuiltinShell` is unioned with it.
+
 ## 16.6.0
 
 ### Minor Changes
