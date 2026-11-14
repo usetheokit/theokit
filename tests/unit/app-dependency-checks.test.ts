@@ -126,6 +126,15 @@ describe('app dependency checks', () => {
     expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
   })
 
+  it('the CLI judges an overridden transitive package installed beneath its parent or in the pnpm store', () => {
+    const manifests = { '.': { overrides: { '@theokit/sdk@^1': '1.0.0' } } }
+    for (const dir of ['node_modules/parent', 'node_modules/.pnpm/parent@1']) {
+      const app = fixture(manifests, { [dir]: { '@theokit/sdk': '1.0.0' } })
+      expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
+      expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
+    }
+  })
+
   it('the CLI exits 2 when a pin is not installed or the registry is unavailable', () => {
     const app = fixture({ '.': { dependencies: { '@theokit/sdk': '1.0.0' } } })
     expect(run(app, () => ({ latest: '1.0.0' })).out).toContain('not installed')

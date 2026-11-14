@@ -35,17 +35,57 @@ function readManifest(path) {
   return manifest
 }
 
-/** Node's lookup: the manifest's own node_modules first, then each ancestor's. */
+const versionAt = (dir) => {
+  try {
+    return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version
+  } catch {
+    return undefined
+  }
+}
+
+const listDir = (dir) => {
+  try {
+    return readdirSync(dir).sort()
+  } catch {
+    return []
+  }
+}
+
+/** Parents inside a node_modules directory: plain and `@scope/` packages. */
+function parentsIn(modules) {
+  return listDir(modules).flatMap((entry) =>
+    entry.startsWith('@')
+      ? listDir(join(modules, entry)).map((child) => join(modules, entry, child))
+      : [join(modules, entry)],
+  )
+}
+
+/** An overridden transitive package: beneath a parent's own node_modules, or in pnpm's store. */
+function installedBeneath(root, name) {
+  const modules = join(root, 'node_modules')
+  const storeModules = listDir(join(modules, '.pnpm')).map((e) =>
+    join(modules, '.pnpm', e, 'node_modules'),
+  )
+  const parents = [
+    ...parentsIn(modules).filter((p) => !p.endsWith('.pnpm')),
+    ...storeModules.flatMap(parentsIn),
+  ]
+  for (const dir of [...storeModules, ...parents.map((p) => join(p, 'node_modules'))]) {
+    const version = versionAt(join(dir, name))
+    if (version !== undefined) return version
+  }
+  return undefined
+}
+
+/** Node's lookup (own node_modules, then each ancestor's), then transitive installs beneath them. */
 function installedFrom(dir) {
   return (name) => {
     for (let current = resolve(dir); ; current = dirname(current)) {
-      try {
-        return JSON.parse(readFileSync(join(current, 'node_modules', name, 'package.json'), 'utf8'))
-          .version
-      } catch {
-        if (dirname(current) === current) return undefined
-      }
+      const version = versionAt(join(current, 'node_modules', name))
+      if (version !== undefined) return version
+      if (dirname(current) === current) break
     }
+    return installedBeneath(resolve(dir), name)
   }
 }
 
