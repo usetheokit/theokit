@@ -249,6 +249,8 @@ export {
 // this one reads `<cwd>/.mcp.json`. The layer exposed the rare cases and not the common one, so every
 // consumer wrote the loader by hand.
 export { loadMcpJson, loadPersonalMcpServers, McpFileError } from './mcp-file.js'
+export { loadMcpScopes } from './mcp-scopes.js'
+export type { McpScopesResult } from './mcp-scopes.js'
 
 // M68 — the `settingSources` trust gate (ADR 0063/0064/0065).
 export * from './setting-sources-gate.js'

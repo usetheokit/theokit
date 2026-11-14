@@ -1,0 +1,79 @@
+// Optional: bundle the terminal app into ONE runnable ESM file (`npm run build:bin`).
+// Each option below prevents a failure that builds cleanly and breaks only at runtime.
+import { chmodSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+// Ink's optional `react-devtools-core` is hoisted as a static import by the bundle; `external` would
+// leave it unresolved (ERR_MODULE_NOT_FOUND on startup), so resolve it to an empty module.
+const devtoolsStub = {
+  name: 'ink-devtools-stub',
+  setup(build) {
+    build.onResolve({ filter: /^react-devtools-core$/ }, () => ({
+      path: 'react-devtools-core',
+      namespace: 'ink-devtools-stub',
+    }))
+    build.onLoad({ filter: /.*/, namespace: 'ink-devtools-stub' }, () => ({
+      contents: 'export default {}\nexport const connectToDevTools = () => {}\n',
+      loader: 'js',
+    }))
+  },
+}
+
+const REACT_RUNTIME = /[\\/]node_modules[\\/](?:react|react-dom|react-reconciler|scheduler)[\\/]/
+
+// Nothing sets NODE_ENV for a user of the binary, so React would ship its slow development build.
+// Pinned per file instead of a global `define`, which would also flip theokit's own NODE_ENV checks.
+const reactProduction = {
+  name: 'react-production',
+  setup(build) {
+    build.onLoad({ filter: /\.js$/ }, async (args) => {
+      if (!REACT_RUNTIME.test(args.path)) return undefined
+      const source = await readFile(args.path, 'utf8')
+      return {
+        contents: source.replaceAll('process.env.NODE_ENV', "'production'"),
+        loader: 'js',
+        resolveDir: dirname(args.path),
+      }
+    })
+  },
+}
+
+export function bundleOptions(root = ROOT) {
+  return {
+    entryPoints: [join(root, 'tui', 'main.tsx')],
+    outfile: join(root, 'dist', '{{name}}.mjs'),
+    bundle: true,
+    platform: 'node',
+    // ESM is mandatory: a CJS bundle breaks `import.meta.url`, which the SDK uses to resolve
+    // persistence paths (symptom: "path undefined" at runtime, no build error).
+    format: 'esm',
+    target: 'node22',
+    // node-pty / better-sqlite3 / `*.node` are native and cannot be bundled; proper-lockfile is CJS and
+    // calls `require` at load, so bundled it silently runs without a cross-process lock;
+    // `readline/promises` lacks the `node:` scheme in a dependency and fails the build.
+    external: ['node-pty', 'better-sqlite3', 'proper-lockfile', '*.node', 'readline/promises'],
+    plugins: [devtoolsStub, reactProduction],
+    banner: {
+      // The shebang makes the file directly executable; the createRequire shim lets bundled CJS
+      // dependencies (Ink's signal-exit) call `require`, else "Dynamic require of "assert" is not supported".
+      js: [
+        '#!/usr/bin/env node',
+        "import { createRequire as __nodeCreateRequire } from 'node:module'",
+        'const require = __nodeCreateRequire(import.meta.url)',
+      ].join('\n'),
+    },
+    logLevel: 'warning',
+  }
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const { build } = await import('esbuild')
+  const options = bundleOptions()
+  await build(options)
+  chmodSync(options.outfile, 0o755)
+  process.stdout.write(`built ${options.outfile}\n`)
+}

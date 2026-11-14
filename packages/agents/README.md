@@ -41,9 +41,9 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./interactive` | The interactive-shell backend contract |
 | `./pty` | The node-pty implementation of that contract |
 | `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes`, `RefreshFailure` |
-| `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`) |
+| `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`); `defineAppBootstrap` runs one setup from every entry |
 | `./tools` | Built-in tool factories (read, list, grep, git, patch, edit, shell, …) |
-| `./client` | Transports for driving an agent from a client |
+| `./client` | Transports for driving an agent from a client. `AgentClient.sendAndWait(input)` resolves when that turn settles (`done`/`error`/`aborted`, never rejects), and `asGoalLoopAgent(client)` adapts a client to the SDK `GoalLoopAgent` so `runGoalLoop` can drive it without polling |
 | `./client/react` | `useAgent` and the React bindings |
 | `./session` | Session lifecycle, listing, fork/rewind, transcript GC with a retention floor |
 | `./hooks` | The lifecycle-hook engine and its fingerprint gate |
@@ -51,13 +51,50 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable |
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
-| `./commands` | Command routing and the shutdown/cleanup contract |
+| `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
 | `./doctor` | Environment diagnostics |
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
 
+A terminal command list, with aliases, hidden names and handlers, from `./commands`:
+
+```ts
+import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
+
+const registry = createCommandRegistry<{ exit(): void }>([
+  defineCommand({ name: 'quit', description: 'leave', aliases: ['exit'], arg: 'none', run: (_arg, ctx) => ctx.exit() }),
+  defineCommand({ name: 'debug', description: 'toggle debug', hidden: true }),
+])
+registry.palette() // [{ name: 'quit', description: 'leave' }]
+await registry.dispatch('/exit', { exit: () => process.exit(0) })
+```
+
 `AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
+
+## One bootstrap for every entry
+
+An app with several entries (CLI, ACP server) declares its setup once. Each step runs once, in order,
+before anything resolves an SDK path; a failing step throws `BootstrapStepError` and later steps do not run.
+
+```ts
+// bootstrap.ts
+import { defineAppBootstrap, projectEnvStep } from '@theokit/agents/config'
+
+export const bootstrap = defineAppBootstrap([
+  projectEnvStep, // loads .env, refusing the SDK's sovereign keys
+  { name: 'home', run: (ctx) => void (ctx.env.THEOKIT_HOME ??= ctx.home) },
+])
+
+// cli.ts and acp.ts both begin with the same call
+import { homedir } from 'node:os'
+import { bootstrap } from './bootstrap.js'
+await bootstrap.run({ env: process.env, cwd: process.cwd(), home: homedir() })
+
+// any module that resolves SDK paths
+import { assertBootstrapped } from '@theokit/agents/config'
+assertBootstrapped(bootstrap, 'openTranscriptStore')
+```
 
 ## The shapes worth knowing before you start
 
@@ -122,6 +159,25 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
+
+## Withholding SDK builtin tools
+
+`AgentBuilder.withholdBuiltinTools(['shell'])` keeps the named SDK builtin tools (`shell`,
+`memory_search`, `memory_get`) out of the model's tool list, on every run path: `createSdkAgentStream`,
+`streamAgentTurnInProcess`, the client's `InProcessTransport` and `toAgentFactory`. An unknown name is
+refused with a `ConfigurationError`. `toAgentFactory({ withholdBuiltinShell: true })` still works;
+when both are set, the union is passed.
+
+## Hooks the host owns
+
+`buildHookHandlers` wires hooks into one agent loop. Some events belong to the host instead:
+`on_session_start` fires once per loop context, so an app that builds a fresh agent per turn would
+run a session-start hook on every message. For those, call `runHostHooks(event, specs, options)` from
+`@theokit/agents/hooks` at the moment the host starts the session. It applies the same trust and
+fingerprint gate as `buildHookHandlers`, ignores specs of other events, and returns one
+`HostHookOutcome` per spec (`ran`, `not-approved`, `failed`, `timed-out` or `could-not-start`)
+without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
+is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
 
 ## What changed recently
 
@@ -188,6 +244,8 @@ gap worth declaring and one worth closing — so it was closed. `loadPersonalMcp
 and only that key, and returns empty on a malformed file rather than throwing, because one stray comma
 in a shared home file must not break every project on the machine.
 
+**MCP scopes.** `loadMcpScopes({ cwd, home, projectAllowed, onClash?, personalFiles?, onWarn? })` (from `@theokit/agents/bridge`) merges the personal servers (`~/.claude.json` by default) with `<cwd>/.mcp.json`. When `projectAllowed` is false the project's servers are withheld: the file is parsed only to list its names in `projectWithheld`. On a name clash the personal server wins by default, so a repository cannot replace a server the operator configured; pass `onClash: 'project-wins'` for the reference format. Clashes are returned as data in `shadowed`. A malformed project file throws `McpFileError`; a malformed personal file only warns.
+
 Both MCP readers are called by the host, not from inside this package — `loadMcpJson` has no internal
 caller either, and a library with no `main()` cannot have one. That is why both rows say **read**: the
 criterion is not who calls, it is whether the chain is intact. Nothing drops an MCP server.
@@ -232,6 +290,23 @@ A consumer that wants it passes it. Measured 2026-09-15 while auditing this tabl
 `CLAUDE.md`, `settings.json` → `env` and `agent-memory/` are each resolvable by the host, and each
 was listed as `read`. The word describes the mechanism existing; a reader takes it as the behaviour
 happening.
+
+### Reading settings under two roots
+
+An app with its own root (`.myapp/`) that also honours `.claude/` uses `settingsCandidates` (per scope,
+own root before foreign root; `foreignRoot: false` reads only the own root) and `firstSettingsFile` /
+`readSettingsFile`. The first existing file in a scope wins.
+
+```ts
+const c = settingsCandidates({ cwd, home, ownRoot: '.myapp' })
+const read = firstSettingsFile(c.project, { ownKeys: ['model'], renames: { outputStyle: 'style' }, onWarn })
+```
+
+In an own-root file an unknown key stays in `values`, so your strict schema rejects it by name. In a
+foreign-root file it is listed in `unrecognised`. A Claude Code key you do not implement, `$schema` and
+`_`-prefixed keys go to `ignored`. `permissions` becomes `permissionRules`, and entries that cannot be
+rendered are in `unsupportedPermissions`. `hooks` is returned raw. A file that exists but cannot be
+parsed is reported through `onWarn` and yields `undefined`.
 
 ### `settings.json` — `env`
 
@@ -390,3 +465,9 @@ Two consequences worth stating, because they are the cost:
 ## Licence
 
 See `LICENSE`.
+
+## Sessions
+
+`@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
+`listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
+the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.

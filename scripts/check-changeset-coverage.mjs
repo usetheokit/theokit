@@ -31,6 +31,9 @@
  * that names an ignored package beside a publishable one keeps its publishable lines: only the
  * ignored package's line is removed.
  *
+ * A changeset with an empty frontmatter names no package at all and is refused the same way
+ * (#2069): `changeset version` bumps nothing and `verify-version-not-published` refuses.
+ *
  * An ignored package is never versioned, so a change to its source needs no changeset either.
  *
  * ## Why the readers are hand-written
@@ -234,6 +237,8 @@ function unpublishable(named, packages, isIgnored) {
     if (isIgnored(n)) return `${n} (ignored)`
     return packages.get(n)?.private === true ? `${n} (private)` : undefined
   }
+  // A changeset naming no package consumes nothing: `changeset version` bumps nothing (#2069).
+  if (named.length === 0) return { reasons: [], mixed: false, empty: true }
   const labels = named.map(label)
   const mixed = labels.includes(undefined)
   // A private package beside a publishable one is harmless; an ignored one is not (EC-1).
@@ -297,7 +302,8 @@ if (uncovered.length === 0 && refused.length === 0) {
 if (refused.length > 0) reportRefused(refused)
 
 /** What a refused changeset names; "only" just when nothing else in it is publishable. */
-function refusalLine(reasons, mixed) {
+function refusalLine(reasons, mixed, empty) {
+  if (empty) return 'names no package, so no release consumes it'
   const listed = reasons.join(', ')
   if (mixed) return `names ${listed} beside a package a release publishes`
   const only = reasons.length === 1 ? 'only ' : ''
@@ -309,13 +315,13 @@ function reportRefused(list) {
   console.error(
     `check-changeset-coverage: ${String(list.length)} changeset(s) no release consumes:\n`,
   )
-  for (const [entry, { reasons, mixed }] of list) {
-    console.error(`  .changeset/${entry}: ${refusalLine(reasons, mixed)}`)
+  for (const [entry, { reasons, mixed, empty }] of list) {
+    console.error(`  .changeset/${entry}: ${refusalLine(reasons, mixed, empty)}`)
   }
   console.error(
-    '\nA private or ignored package is never versioned, so the changeset stays pending and the',
+    '\nA private or ignored package is never versioned and an empty changeset names none, so the',
   )
-  console.error('Release workflow refuses on every run.')
+  console.error('changeset stays pending and the Release workflow refuses on every run.')
   if (list.some(([, v]) => !v.mixed)) {
     console.error("Record the change in that package's CHANGELOG and delete the changeset.")
   }

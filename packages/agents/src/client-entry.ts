@@ -47,7 +47,8 @@ export type {
 } from './client/channel-transport.js'
 
 export { AgentClient } from './client/agent-client.js'
-export type { AgentClientState } from './client/agent-client.js'
+export type { AgentClientState, TurnSettled } from './client/agent-client.js'
+export { asGoalLoopAgent, GoalTurnFailedError } from './client/goal-loop-agent.js'
 // usetheokit/theokit#392 — the outstanding HITL decision the snapshot publishes. Exported because a
 // non-React surface (TUI, desktop, a plain script) reads it off `getState()` and needs to type it.
 export type { PendingApproval } from './client/agent-client.js'
