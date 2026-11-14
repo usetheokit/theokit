@@ -43,6 +43,35 @@ export function channelFor(installed) {
   return typeof installed === 'string' && installed.includes('-') ? 'next' : 'latest'
 }
 
+const identifierOrder = (a, b) => {
+  const aNum = /^\d+$/.test(a)
+  const bNum = /^\d+$/.test(b)
+  if (aNum && bNum) return Math.sign(Number(a) - Number(b))
+  if (aNum !== bNum) return aNum ? -1 : 1
+  return a < b ? -1 : Number(a > b)
+}
+
+/** Semver precedence: negative when `a` is lower than `b`, 0 when equal, positive when higher. Build metadata is ignored. */
+export function compareVersions(a, b) {
+  const [aCore, aPre] = String(a).split('+')[0].split(/-(.*)/s)
+  const [bCore, bPre] = String(b).split('+')[0].split(/-(.*)/s)
+  const aNums = aCore.split('.').map(Number)
+  const bNums = bCore.split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    const diff = (aNums[i] ?? 0) - (bNums[i] ?? 0)
+    if (diff !== 0) return Math.sign(diff)
+  }
+  if (aPre === undefined || bPre === undefined)
+    return Number(aPre === undefined) - Number(bPre === undefined)
+  const aIds = aPre.split('.')
+  const bIds = bPre.split('.')
+  for (let i = 0; i < Math.min(aIds.length, bIds.length); i++) {
+    const order = identifierOrder(aIds[i], bIds[i])
+    if (order !== 0) return order
+  }
+  return Math.sign(aIds.length - bIds.length)
+}
+
 const majorOf = (version) => Number(String(version).split('.')[0])
 
 /**
@@ -77,7 +106,8 @@ export function theokitStaleness(
       name,
       installed,
       latest,
-      current: installed === latest,
+      // `current` means not behind: a pin ahead of the published tag is not stale.
+      current: compareVersions(installed, latest) >= 0,
       major: majorOf(latest) > majorOf(installed),
     })
   }

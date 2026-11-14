@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { runCli } from '../../scripts/check-app-dependencies.mjs'
 import {
   collectDeclarations,
+  compareVersions,
   exactVersionViolations,
   theokitStaleness,
 } from '../../scripts/lib/app-dependencies.mjs'
@@ -122,5 +123,34 @@ describe('app dependency checks', () => {
     expect(collectDeclarations({ peerDependencies: { '@theokit/tui': '0.80.0' } })).toEqual([
       { name: '@theokit/tui', range: '0.80.0' },
     ])
+  })
+
+  it('a pin ahead of the published version is not behind, prereleases included', () => {
+    const behind = (installed: string, latest: string) =>
+      theokitStaleness([{ name: '@theokit/sdk', range: installed }], {
+        installedVersion: () => installed,
+        publishedVersion: () => latest,
+      }).rows.some((row) => !row.current)
+    expect(behind('2.0.0', '1.9.0')).toBe(false)
+    expect(behind('1.0.0', '1.0.0-next.3')).toBe(false)
+    expect(behind('1.0.0-next.10', '1.0.0-next.9')).toBe(false)
+    expect(behind('1.0.0-next.1', '1.0.0')).toBe(true)
+    expect(behind('1.0.0-alpha', '1.0.0-alpha.1')).toBe(true)
+    expect(compareVersions('1.0.0-alpha.1', '1.0.0-alpha.beta')).toBeLessThan(0)
+  })
+
+  it('the CLI finds a hoisted installation and lists in-repo links in text mode', () => {
+    const app = fixture(
+      {
+        '.': {},
+        'packages/one': {
+          dependencies: { '@theokit/sdk': '1.0.0', '@theokit/agents': 'workspace:*' },
+        },
+      },
+      { '.': { '@theokit/sdk': '1.0.0' } },
+    )
+    const result = run(app, () => ({ latest: '1.0.0' }))
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('@theokit/agents')
   })
 })

@@ -7,7 +7,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   channelFor,
@@ -35,13 +35,16 @@ function readManifest(path) {
   return manifest
 }
 
+/** Node's lookup: the manifest's own node_modules first, then each ancestor's. */
 function installedFrom(dir) {
   return (name) => {
-    try {
-      return JSON.parse(readFileSync(join(dir, 'node_modules', name, 'package.json'), 'utf8'))
-        .version
-    } catch {
-      return undefined
+    for (let current = resolve(dir); ; current = dirname(current)) {
+      try {
+        return JSON.parse(readFileSync(join(current, 'node_modules', name, 'package.json'), 'utf8'))
+          .version
+      } catch {
+        if (dirname(current) === current) return undefined
+      }
     }
   }
 }
@@ -84,6 +87,8 @@ function checkManifest(path, failures, publishedTags) {
 
 function render(report, write) {
   for (const v of report.violations) write(`${v.manifest}: ${v.section} ${v.name} ${v.specifier}`)
+  if (report.inRepo.length > 0)
+    write(`in-repo (not compared with the registry): ${report.inRepo.join(', ')}`)
   for (const u of report.unjudged) write(`${u.manifest}: ${u.name} cannot be judged (${u.reason})`)
   for (const r of report.rows) {
     if (!r.current)

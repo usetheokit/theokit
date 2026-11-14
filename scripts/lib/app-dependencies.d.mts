@@ -30,3 +30,5 @@ export function theokitStaleness(
     skipProtocols?: readonly string[]
   },
 ): { rows: StalenessRow[]; inRepo: string[]; unjudged: { name: string; reason: string }[] }
+/** Semver precedence: negative, 0 or positive as `a` is lower than, equal to or higher than `b`. */
+export function compareVersions(a: string, b: string): number
