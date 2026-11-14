@@ -60,7 +60,11 @@ function parentsIn(modules) {
   )
 }
 
-/** An overridden transitive package: beneath a parent's own node_modules, or in pnpm's store. */
+/**
+ * An overridden transitive package: beneath a parent's own node_modules, or in pnpm's store.
+ * Only an unambiguous answer counts: when copies at different versions are installed, which one the
+ * override governs cannot be told from here, so the package is left unjudged.
+ */
 function installedBeneath(root, name) {
   const modules = join(root, 'node_modules')
   const storeModules = listDir(join(modules, '.pnpm')).map((e) =>
@@ -70,22 +74,25 @@ function installedBeneath(root, name) {
     ...parentsIn(modules).filter((p) => !p.endsWith('.pnpm')),
     ...storeModules.flatMap(parentsIn),
   ]
-  for (const dir of [...storeModules, ...parents.map((p) => join(p, 'node_modules'))]) {
-    const version = versionAt(join(dir, name))
-    if (version !== undefined) return version
-  }
-  return undefined
+  const dirs = [...storeModules, ...parents.map((p) => join(p, 'node_modules'))]
+  const versions = new Set(
+    dirs.map((dir) => versionAt(join(dir, name))).filter((v) => v !== undefined),
+  )
+  return versions.size === 1 ? [...versions][0] : undefined
 }
 
-/** Node's lookup (own node_modules, then each ancestor's), then transitive installs beneath them. */
-function installedFrom(dir) {
+/**
+ * Node's lookup (own node_modules, then each ancestor's). A name the manifest does not declare as a
+ * dependency (an override of a transitive package) may also be found beneath those installs.
+ */
+function installedFrom(dir, declaredDirect) {
   return (name) => {
     for (let current = resolve(dir); ; current = dirname(current)) {
       const version = versionAt(join(current, 'node_modules', name))
       if (version !== undefined) return version
       if (dirname(current) === current) break
     }
-    return installedBeneath(resolve(dir), name)
+    return declaredDirect.has(name) ? undefined : installedBeneath(resolve(dir), name)
   }
 }
 
@@ -114,7 +121,12 @@ function checkManifest(path, failures, publishedTags) {
   const violations = exactVersionViolations(manifest).map((v) => ({ manifest: path, ...v }))
   const declarations = collectDeclarations(manifest)
   // Resolved from the declaring manifest's own directory: pnpm links a package's dependencies there.
-  const installedVersion = installedFrom(dirname(path))
+  const direct = new Set(
+    ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'].flatMap(
+      (section) => Object.keys(manifest[section] ?? {}),
+    ),
+  )
+  const installedVersion = installedFrom(dirname(path), direct)
   const staleness = declarations.some((d) => d.name.startsWith('@theokit/'))
     ? theokitStaleness(declarations, {
         installedVersion,

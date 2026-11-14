@@ -135,6 +135,20 @@ describe('app dependency checks', () => {
     }
   })
 
+  it('the CLI leaves an override unjudged when copies at different versions are installed, and never reads a transitive copy for a direct dependency', () => {
+    const copies = {
+      'node_modules/a': { '@theokit/sdk': '1.0.0' },
+      'node_modules/b': { '@theokit/sdk': '1.1.0' },
+    }
+    const overridden = fixture({ '.': { overrides: { '@theokit/sdk': '1.0.0' } } }, copies)
+    expect(run(overridden, () => ({ latest: '1.1.0' })).code).toBe(2)
+    const direct = fixture(
+      { '.': { dependencies: { '@theokit/sdk': '1.0.0' } } },
+      { 'node_modules/a': { '@theokit/sdk': '1.1.0' } },
+    )
+    expect(run(direct, () => ({ latest: '1.1.0' })).code).toBe(2)
+  })
+
   it('the CLI exits 2 when a pin is not installed or the registry is unavailable', () => {
     const app = fixture({ '.': { dependencies: { '@theokit/sdk': '1.0.0' } } })
     expect(run(app, () => ({ latest: '1.0.0' })).out).toContain('not installed')
