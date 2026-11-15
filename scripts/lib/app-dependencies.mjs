@@ -35,8 +35,11 @@ const namesTheokit = (key, value) => (key + JSON.stringify(value)).includes(SCOP
 
 /** Top-level entries of `overrides` and `pnpm.overrides`. */
 const overrideEntries = (manifest) =>
-  [manifest.overrides, manifest.pnpm?.overrides].flatMap((map) =>
-    isPlainObject(map) ? Object.entries(map) : [],
+  [
+    ['overrides', manifest.overrides],
+    ['pnpm.overrides', manifest.pnpm?.overrides],
+  ].flatMap(([source, map]) =>
+    isPlainObject(map) ? Object.entries(map).map(([key, value]) => [key, value, source]) : [],
   )
 
 /**
@@ -50,8 +53,9 @@ export function collectDeclarations(manifest) {
     if (!isPlainObject(manifest[section])) continue
     for (const [name, range] of Object.entries(manifest[section])) out.push({ name, range })
   }
-  for (const [key, value] of overrideEntries(manifest)) {
-    if (isPlainOverride(key, value)) out.push({ name: key, range: value, override: key })
+  for (const [key, value, source] of overrideEntries(manifest)) {
+    if (isPlainOverride(key, value))
+      out.push({ name: key, range: value, override: `${source}: ${key}` })
   }
   return out
 }

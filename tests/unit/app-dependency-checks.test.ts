@@ -173,9 +173,22 @@ describe('app dependency checks', () => {
     })
     const behind = run(app, () => ({ latest: '1.1.0' }))
     expect(behind.code).toBe(1)
-    expect(behind.out).toContain('@theokit/sdk installed 1.0.0, published 1.1.0')
+    expect(behind.out).toMatch(/@theokit\/sdk \(.*\) installed 1.0.0, published 1.1.0/)
     expect(behind.out).toContain('not judged: a>@theokit/tui: "1.0.0"')
     expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
+  })
+
+  it('overrides and pnpm.overrides declaring one package are both judged', () => {
+    const app = fixture({
+      '.': {
+        overrides: { '@theokit/sdk': '1.0.0' },
+        pnpm: { overrides: { '@theokit/sdk': '2.0.0' } },
+      },
+    })
+    const result = run(app, () => ({ latest: '1.5.0' }))
+    expect(result.code).toBe(1)
+    expect(result.out).toContain('(overrides: @theokit/sdk) installed 1.0.0, published 1.5.0')
+    expect(result.out).not.toContain('installed 2.0.0')
   })
 
   it('a plain exact override is judged', () => {
@@ -183,7 +196,7 @@ describe('app dependency checks', () => {
     expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
     const behind = run(app, () => ({ latest: '1.1.0' }))
     expect(behind.code).toBe(1)
-    expect(behind.out).toContain('@theokit/sdk installed 1.0.0, published 1.1.0')
+    expect(behind.out).toMatch(/@theokit\/sdk \(.*\) installed 1.0.0, published 1.1.0/)
   })
 
   const notJudged: Record<string, unknown>[] = [

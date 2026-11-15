@@ -111,10 +111,10 @@ function render(report, write) {
   }
   for (const n of report.notJudged) write(`${n.manifest}: not judged: ${n.declaration}`)
   for (const r of report.rows) {
-    if (!r.current)
-      write(
-        `${r.manifest}: ${r.name} installed ${r.installed}, published ${r.latest}${r.major ? ' (major)' : ''}`,
-      )
+    if (r.current) continue
+    const via = r.override ? ` (${r.override})` : ''
+    const major = r.major ? ' (major)' : ''
+    write(`${r.manifest}: ${r.name}${via} installed ${r.installed}, published ${r.latest}${major}`)
   }
 }
 
