@@ -161,6 +161,23 @@ describe('app dependency checks', () => {
     expect(channelFor('1.2.3-next.0+b')).toBe('next')
   })
 
+  it('a peerDependencies range is an exact-version violation', () => {
+    expect(exactVersionViolations({ peerDependencies: { '@theokit/sdk': '^1.0.0' } })).toEqual([
+      { section: 'peerDependencies', name: '@theokit/sdk', specifier: '^1.0.0' },
+    ])
+  })
+
+  it('a plain exact pnpm.overrides entry is judged and other forms are listed', () => {
+    const app = fixture({
+      '.': { pnpm: { overrides: { '@theokit/sdk': '1.0.0', 'a>@theokit/tui': '1.0.0' } } },
+    })
+    const behind = run(app, () => ({ latest: '1.1.0' }))
+    expect(behind.code).toBe(1)
+    expect(behind.out).toContain('@theokit/sdk installed 1.0.0, published 1.1.0')
+    expect(behind.out).toContain('not judged: a>@theokit/tui: "1.0.0"')
+    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
+  })
+
   it('a plain exact override is judged', () => {
     const app = fixture({ '.': { overrides: { '@theokit/sdk': '1.0.0' } } })
     expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)

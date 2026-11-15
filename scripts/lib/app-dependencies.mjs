@@ -3,7 +3,7 @@
  * registry pins are not behind what is published. In-repo links are never compared with the registry.
  */
 
-const SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies']
+const SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']
 const EXACT = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
 const SCOPE = '@theokit/'
 const DEFAULT_SKIP = ['workspace:', 'link:', 'file:']
@@ -33,6 +33,12 @@ const isPlainOverride = (key, value) =>
 
 const namesTheokit = (key, value) => (key + JSON.stringify(value)).includes(SCOPE)
 
+/** Top-level entries of `overrides` and `pnpm.overrides`. */
+const overrideEntries = (manifest) =>
+  [manifest.overrides, manifest.pnpm?.overrides].flatMap((map) =>
+    isPlainObject(map) ? Object.entries(map) : [],
+  )
+
 /**
  * Every `{ name, range }` a manifest declares in the dependency sections, plus plain overrides: a
  * top-level key that is a bare package name with an exact version. Other overrides are not judged,
@@ -40,22 +46,19 @@ const namesTheokit = (key, value) => (key + JSON.stringify(value)).includes(SCOP
  */
 export function collectDeclarations(manifest) {
   const out = []
-  for (const section of [...SECTIONS, 'peerDependencies']) {
+  for (const section of SECTIONS) {
     if (!isPlainObject(manifest[section])) continue
     for (const [name, range] of Object.entries(manifest[section])) out.push({ name, range })
   }
-  if (isPlainObject(manifest.overrides)) {
-    for (const [key, value] of Object.entries(manifest.overrides)) {
-      if (isPlainOverride(key, value)) out.push({ name: key, range: value, override: key })
-    }
+  for (const [key, value] of overrideEntries(manifest)) {
+    if (isPlainOverride(key, value)) out.push({ name: key, range: value, override: key })
   }
   return out
 }
 
 /** Overrides naming an `@theokit` package that are not a plain exact override, as written. */
 export function unjudgedOverrides(manifest) {
-  if (!isPlainObject(manifest.overrides)) return []
-  return Object.entries(manifest.overrides)
+  return overrideEntries(manifest)
     .filter(([key, value]) => namesTheokit(key, value) && !isPlainOverride(key, value))
     .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
 }
