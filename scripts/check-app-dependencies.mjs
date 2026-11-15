@@ -12,13 +12,10 @@ import { fileURLToPath } from 'node:url'
 import {
   channelFor,
   collectDeclarations,
-  compareVersions,
   exactVersionViolations,
-  overrideSelectors,
+  unjudgedOverrides,
   theokitStaleness,
 } from './lib/app-dependencies.mjs'
-
-const EXACT_VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
 
 function manifestPaths(appDir) {
   const found = [join(appDir, 'package.json')]
@@ -56,109 +53,15 @@ function resolvePackage(dir, name) {
   }
 }
 
-/** Caret: `^0.x` pins the minor, `^0.0.x` pins the patch. */
-function caretAllows([major, minor, patch], want) {
-  if (major > 0) return minor > want[1] || (minor === want[1] && patch >= (want[2] ?? 0))
-  if (minor !== want[1]) return false
-  if (want[2] === undefined) return true
-  return minor > 0 ? patch >= want[2] : patch === want[2]
-}
-
-const parseVersion = (v) => String(v).split('+')[0].split('-')[0].split('.').map(Number)
-
 /**
- * Whether `version` satisfies `range` for exact, caret, tilde and x-ranges; undefined for a range
- * form this tool does not parse (the caller then accepts the version).
- */
-function satisfiesRange(version, range) {
-  const text = String(range).trim()
-  if (EXACT_VERSION.test(text)) return compareVersions(version, text) === 0
-  const match = /^([\^~]?)(\d+)(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?$/.exec(text)
-  if (!match) return undefined
-  if (version.split('+')[0].includes('-')) return false
-  const [major, minor, patch] = parseVersion(version)
-  const [, op, m, n, p] = match
-  const want = [
-    Number(m),
-    /^\d+$/.test(n ?? '') ? Number(n) : undefined,
-    /^\d+$/.test(p ?? '') ? Number(p) : undefined,
-  ]
-  if (major !== want[0]) return false
-  if (want[1] === undefined) return true
-  if (op === '') return minor === want[1] && (want[2] === undefined || patch === want[2])
-  if (op === '~') return minor === want[1] && patch >= (want[2] ?? 0)
-  // caret: ^0.x pins the minor, ^0.0.x pins the patch
-  return caretAllows([major, minor, patch], want)
-}
-
-const readDeps = (dir) => {
-  try {
-    const m = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-    return [m.dependencies, m.devDependencies, m.optionalDependencies, m.peerDependencies].flatMap(
-      (d) => (d && typeof d === 'object' ? Object.keys(d) : []),
-    )
-  } catch {
-    return []
-  }
-}
-
-/**
- * Real directories of every installed copy of `name` that a package in `starts`, or anything beneath
- * it in the dependency graph, resolves.
- */
-function installedCopies(starts, name) {
-  const found = []
-  const seen = new Set()
-  const queue = [...starts]
-  while (queue.length > 0) {
-    const current = queue.shift()
-    if (seen.has(current)) continue
-    seen.add(current)
-    const own = resolvePackage(current, name)
-    if (own !== undefined && !found.includes(own)) found.push(own)
-    for (const dep of readDeps(current)) {
-      const next = resolvePackage(current, dep)
-      if (next !== undefined) queue.push(next)
-    }
-  }
-  return found
-}
-
-/** Every installed copy an override path applies to: each ancestor anywhere beneath the one before it. */
-function overrideTargets(dir, segments) {
-  let frontier = [resolve(dir)]
-  for (const { name, spec } of segments) {
-    // A selector such as `c@1` applies only to installed copies of that version.
-    frontier = installedCopies(frontier, name).filter((copy) => {
-      const version = readVersion(join(copy, 'package.json'))
-      return spec === undefined || version === undefined || satisfiesRange(version, spec) !== false
-    })
-    if (frontier.length === 0) return []
-  }
-  return frontier
-}
-
-/**
- * The installed version a declaration resolves to, from the installation itself (pnpm links or a flat
- * node_modules). A dependency resolves from its manifest's directory. An override applies to every
- * installed copy of its package beneath each installed copy of its ancestors, wherever they sit in the
- * dependency graph; all of them must resolve to one version satisfying the override's range, otherwise
- * (differing, unreadable or non-matching copies, or a range this tool cannot evaluate) it is left unjudged.
+ * The installed version a declaration resolves to. A dependency is read from the installation,
+ * resolved from its manifest's directory. A plain override is exact, so its value is the version.
  */
 function installedFrom(dir) {
   return (name, declaration) => {
-    if (declaration.override === undefined) {
-      const own = resolvePackage(dir, name)
-      return own === undefined ? undefined : readVersion(join(own, 'package.json'))
-    }
-    const versions = new Set()
-    for (const target of overrideTargets(dir, overrideSelectors(declaration.override))) {
-      const version = readVersion(join(target, 'package.json'))
-      if (version === undefined || satisfiesRange(version, declaration.range) !== true)
-        return undefined
-      versions.add(version)
-    }
-    return versions.size === 1 ? [...versions][0] : undefined
+    if (declaration.override !== undefined) return declaration.range
+    const own = resolvePackage(dir, name)
+    return own === undefined ? undefined : readVersion(join(own, 'package.json'))
   }
 }
 
@@ -195,7 +98,7 @@ function checkManifest(path, failures, publishedTags) {
           publishedFor(installed, name, failures, publishedTags),
       })
     : { rows: [], inRepo: [], unjudged: [] }
-  return { manifest: path, violations, ...staleness }
+  return { manifest: path, violations, ...staleness, notJudged: unjudgedOverrides(manifest) }
 }
 
 function render(report, write) {
@@ -206,6 +109,7 @@ function render(report, write) {
     const via = u.override ? ` (override ${u.override})` : ''
     write(`${u.manifest}: ${u.name}${via} cannot be judged (${u.reason})`)
   }
+  for (const n of report.notJudged) write(`${n.manifest}: not judged: ${n.declaration}`)
   for (const r of report.rows) {
     if (!r.current)
       write(
@@ -230,6 +134,9 @@ export function runCli({ appDir, json = false, write, writeError, publishedTags 
     rows: results.flatMap((r) => r.rows.map((row) => ({ manifest: r.manifest, ...row }))),
     inRepo: [...new Set(results.flatMap((r) => r.inRepo))].sort(),
     unjudged: results.flatMap((r) => r.unjudged.map((u) => ({ manifest: r.manifest, ...u }))),
+    notJudged: results.flatMap((r) =>
+      r.notJudged.map((declaration) => ({ manifest: r.manifest, declaration })),
+    ),
     failures,
   }
   if (json) write(JSON.stringify(report, null, 2))

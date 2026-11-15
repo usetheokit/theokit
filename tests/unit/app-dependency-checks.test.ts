@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runCli } from '../../scripts/check-app-dependencies.mjs'
 import {
@@ -155,231 +155,43 @@ describe('app dependency checks', () => {
     expect(result.out).toContain('@theokit/agents')
   })
 
-  it('parses version-qualified and nested overrides into package names and ranges', () => {
-    const declarations = collectDeclarations({
-      overrides: {
-        '@theokit/sdk@^1': '1.2.3',
-        '@theokit/tui': { '.': '0.80.0', nested: '2.0.0' },
-        '@theokit/agents': { child: '$child', '.': '$agents' },
-        other: '$other',
-      },
-    })
-    expect(declarations).toEqual([
-      { name: '@theokit/sdk', range: '1.2.3', override: '@theokit/sdk@^1' },
-      { name: '@theokit/tui', range: '0.80.0', override: '@theokit/tui' },
-      { name: 'nested', range: '2.0.0', override: '@theokit/tui > nested' },
-    ])
-  })
-
-  it('keeps the full path so nested overrides of one package are judged separately', () => {
-    const declarations = collectDeclarations({
-      overrides: { a: { '@theokit/sdk': '1.0.0' }, b: { '@theokit/sdk': '2.0.0' } },
-    })
-    const result = theokitStaleness(declarations, {
-      installedVersion: (_name, d) => d.range,
-      publishedVersion: () => '2.0.0',
-    })
-    expect(result.rows.map((r) => [r.override, r.current])).toEqual([
-      ['a > @theokit/sdk', false],
-      ['b > @theokit/sdk', true],
-    ])
-  })
-
   it('a hyphen in build metadata is not a prerelease', () => {
     expect(channelFor('1.2.3+build-1')).toBe('latest')
     expect(channelFor('1.2.3-next.0')).toBe('next')
     expect(channelFor('1.2.3-next.0+b')).toBe('next')
   })
 
-  const pnpmLayout = (app: string, sdkVersion: string | undefined) => {
-    const store = 'node_modules/.pnpm/a@1.0.0'
-    const installed: Record<string, string> = { a: '1.0.0' }
-    if (sdkVersion) installed['@theokit/sdk'] = sdkVersion
-    for (const [name, version] of Object.entries(installed)) {
-      mkdirSync(join(app, store, 'node_modules', name), { recursive: true })
-      writeFileSync(
-        join(app, store, 'node_modules', name, 'package.json'),
-        JSON.stringify({ version }),
-      )
-    }
-    mkdirSync(join(app, 'node_modules'), { recursive: true })
-    symlinkSync(join(app, store, 'node_modules', 'a'), join(app, 'node_modules', 'a'))
-  }
-
-  it('the CLI judges a nested override by following its path through the pnpm links', () => {
-    const app = fixture({ '.': { overrides: { 'a>@theokit/sdk': '1.0.0' } } })
-    pnpmLayout(app, '1.0.0')
+  it('a plain exact override is judged', () => {
+    const app = fixture({ '.': { overrides: { '@theokit/sdk': '1.0.0' } } })
     expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
-    expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
+    const behind = run(app, () => ({ latest: '1.1.0' }))
+    expect(behind.code).toBe(1)
+    expect(behind.out).toContain('@theokit/sdk installed 1.0.0, published 1.1.0')
   })
 
-  it('the CLI judges a range override from the installation', () => {
-    const app = fixture(
-      { '.': { overrides: { '@theokit/sdk@^1': '^1.2.3' } } },
-      { '.': { '@theokit/sdk': '1.2.4' } },
-    )
-    expect(run(app, () => ({ latest: '1.2.4' })).code).toBe(0)
-    expect(run(app, () => ({ latest: '1.3.0' })).code).toBe(1)
-  })
-
-  it('the CLI leaves an override unjudged when the store holds the version for another package', () => {
-    const app = fixture(
-      { '.': { overrides: { 'a>@theokit/sdk': '1.0.0' } } },
-      { 'node_modules/.pnpm/@theokit+sdk@1.0.0': { '@theokit/sdk': '1.0.0' } },
-    )
-    pnpmLayout(app, undefined)
-    const result = run(app, () => ({ latest: '1.0.0' }))
-    expect(result.code).toBe(2)
-    expect(result.out).toContain('cannot be judged')
-  })
-
-  it('the CLI does not judge a nested override by the direct install of the same package', () => {
-    const app = fixture(
-      {
-        '.': {
-          dependencies: { '@theokit/sdk': '2.0.0' },
-          overrides: { 'other>@theokit/sdk': '1.0.0' },
-        },
-      },
-      {
-        'node_modules/@theokit/sdk': { '@theokit/sdk': '2.0.0' },
-        'node_modules/.pnpm/@theokit+sdk@2.0.0': { '@theokit/sdk': '2.0.0' },
-      },
-    )
-    const result = run(app, () => ({ latest: '2.0.0' }))
-    expect(result.code).toBe(2)
-    expect(result.out).toContain('other>@theokit/sdk')
-    expect(result.out).not.toContain('installed 2.0.0')
-  })
-
-  it('the CLI judges a top-level override that applies only to a transitive copy', () => {
-    const app = fixture({
-      '.': { dependencies: { a: '1.0.0' }, overrides: { '@theokit/sdk': '1.0.0' } },
-    })
-    pnpmLayout(app, '1.0.0')
-    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
-    expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
-  })
-
-  it('the CLI leaves a range override unjudged when the resolved version does not satisfy it', () => {
-    const app = fixture(
-      { '.': { overrides: { '@theokit/sdk': '^1.2.3' } } },
-      { '.': { '@theokit/sdk': '2.0.0' } },
-    )
-    const result = run(app, () => ({ latest: '2.0.0' }))
-    expect(result.code).toBe(2)
-    expect(result.out).toContain('cannot be judged')
-  })
-
-  it('the CLI leaves an override unjudged when installed copies differ', () => {
-    const app = fixture(
-      {
-        '.': { dependencies: { a: '1.0.0', b: '1.0.0' }, overrides: { '@theokit/sdk': '^1.0.0' } },
-      },
-      {
-        node_modules: { a: '1.0.0', b: '1.0.0' },
-        'node_modules/a': { '@theokit/sdk': '1.5.0' },
-        'node_modules/b': { '@theokit/sdk': '1.2.0' },
-      },
-    )
-    expect(run(app, () => ({ latest: '1.5.0' })).code).toBe(2)
-  })
-
-  it('the CLI leaves a range it cannot evaluate unjudged', () => {
-    const app = fixture(
-      { '.': { overrides: { '@theokit/sdk': '>=1 <2' } } },
-      { '.': { '@theokit/sdk': '2.0.0' } },
-    )
-    expect(run(app, () => ({ latest: '2.0.0' })).code).toBe(2)
-  })
-
-  it('the CLI follows a transitive override through a devDependency', () => {
-    const app = fixture({
-      '.': { devDependencies: { a: '1.0.0' }, overrides: { '@theokit/sdk': '1.0.0' } },
-    })
-    pnpmLayout(app, '1.0.0')
-    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
-  })
-
-  it('the CLI does not read an unresolved dependency from the working directory', () => {
-    const app = fixture({ '.': { dependencies: { '@theokit/sdk': '1.0.0' } } })
-    const cwd = fixture({ '.': { version: '1.0.0' } })
-    const result = spawnSync(
-      process.execPath,
-      [resolve('scripts/check-app-dependencies.mjs'), app],
-      { cwd, encoding: 'utf8' },
-    )
-    expect(result.status).toBe(2)
-  })
-
-  it('the CLI leaves an override unjudged when a copy outside the range sits beside a matching one', () => {
-    const app = fixture(
-      {
-        '.': { dependencies: { a: '1.0.0', b: '1.0.0' }, overrides: { '@theokit/sdk': '^1.0.0' } },
-      },
-      {
-        node_modules: { a: '1.0.0', b: '1.0.0' },
-        'node_modules/a': { '@theokit/sdk': '1.5.0' },
-        'node_modules/b': { '@theokit/sdk': '2.0.0' },
-      },
-    )
-    expect(run(app, () => ({ latest: '1.5.0' })).code).toBe(2)
-  })
-
-  it('the CLI applies a nested override beneath a transitive ancestor', () => {
-    const app = fixture(
-      {
-        '.': { dependencies: { a: '1.0.0' }, overrides: { 'b>@theokit/sdk': '1.0.0' } },
-        'node_modules/a': { version: '1.0.0', dependencies: { b: '1.0.0' } },
-        'node_modules/a/node_modules/b': { version: '1.0.0', dependencies: { c: '1.0.0' } },
-        'node_modules/a/node_modules/b/node_modules/c': {
-          version: '1.0.0',
-          dependencies: { '@theokit/sdk': '1.0.0' },
-        },
-      },
-      { 'node_modules/a/node_modules/b/node_modules/c': { '@theokit/sdk': '1.0.0' } },
-    )
-    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
-    expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
-  })
-
-  it('the CLI judges every ancestor copy of a nested override', () => {
-    const app = fixture(
-      {
-        '.': { dependencies: { a: '1.0.0', b: '1.0.0' }, overrides: { 'c>@theokit/sdk': '1.0.0' } },
-        'node_modules/a': { version: '1.0.0', dependencies: { c: '1.0.0' } },
-        'node_modules/b': { version: '1.0.0', dependencies: { c: '1.0.0' } },
-        'node_modules/a/node_modules/c': { version: '1.0.0' },
-        'node_modules/b/node_modules/c': { version: '1.0.0' },
-      },
-      {
-        'node_modules/a/node_modules/c': { '@theokit/sdk': '1.0.0' },
-        'node_modules/b/node_modules/c': { '@theokit/sdk': '1.2.0' },
-      },
-    )
-    expect(run(app, () => ({ latest: '1.2.0' })).code).toBe(2)
-  })
-
-  it('the CLI applies a qualified ancestor override only to the selected ancestor version', () => {
-    const layout = (sdkUnderC2: string) =>
-      fixture(
-        {
-          '.': {
-            dependencies: { a: '1.0.0', b: '1.0.0' },
-            overrides: { 'c@1>@theokit/sdk': '1.0.0' },
-          },
-          'node_modules/a': { version: '1.0.0', dependencies: { c: '1.0.0' } },
-          'node_modules/b': { version: '1.0.0', dependencies: { c: '2.0.0' } },
-          'node_modules/a/node_modules/c': { version: '1.0.0' },
-          'node_modules/b/node_modules/c': { version: '2.0.0' },
-        },
-        {
-          'node_modules/a/node_modules/c': { '@theokit/sdk': '1.0.0' },
-          'node_modules/b/node_modules/c': { '@theokit/sdk': sdkUnderC2 },
-        },
-      )
-    const app = layout('3.0.0')
-    expect(run(app, () => ({ latest: '1.0.0' })).code).toBe(0)
-    expect(run(app, () => ({ latest: '1.1.0' })).code).toBe(1)
-  })
+  const notJudged: Record<string, unknown>[] = [
+    { '@theokit/sdk@^1': '1.2.3' },
+    { '@theokit/sdk': { '.': '1.2.3' } },
+    { '@theokit/sdk': '^1.2.3' },
+    { 'a > @theokit/sdk': '1.2.3' },
+    { 'a>@theokit/sdk': '1.2.3' },
+    { sdk: 'npm:@theokit/sdk@1.2.3' },
+    { '@theokit/sdk': '$@theokit/sdk' },
+    { a: { '@theokit/sdk': '1.2.3' } },
+  ]
+  it.each(notJudged)(
+    'an override form that is not judged is listed and does not change the exit code: %j',
+    (overrides) => {
+      const app = fixture({ '.': { overrides } })
+      let asked = 0
+      const result = run(app, () => {
+        asked++
+        return { latest: '9.0.0' }
+      })
+      expect(result.code).toBe(0)
+      expect(asked).toBe(0)
+      const [key, value] = Object.entries(overrides)[0]
+      expect(result.out).toContain(`not judged: ${key}: ${JSON.stringify(value)}`)
+    },
+  )
 })

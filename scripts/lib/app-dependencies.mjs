@@ -28,44 +28,16 @@ export function exactVersionViolations(manifest) {
   return violations
 }
 
-/** Splits an override key such as `@theokit/sdk@^1` or `a>b` into the package name it targets. */
-function overrideName(key) {
-  const last = key.split('>').pop().trim()
-  const at = last.indexOf('@', 1)
-  return at === -1 ? last : last.slice(0, at)
-}
+const isPlainOverride = (key, value) =>
+  typeof value === 'string' && EXACT.test(value) && !/[>@\s]/.test(key.slice(1))
 
-/** The `{ name, spec }` along an override path; `spec` is the version selector of `c@1`, if any. */
-export const overrideSelectors = (path) =>
-  path.split(' > ').flatMap((key) =>
-    key.split('>').map((part) => {
-      const last = part.trim()
-      const at = last.indexOf('@', 1)
-      return at === -1 ? { name: last } : { name: last.slice(0, at), spec: last.slice(at + 1) }
-    }),
-  )
+const namesTheokit = (key, value) => (key + JSON.stringify(value)).includes(SCOPE)
 
-/** The package names along an override path (`a > @theokit/sdk@^1` gives `a`, `@theokit/sdk`). */
-export const overridePackages = (path) =>
-  path.split(' > ').flatMap((key) => key.split('>').map(overrideName))
-
-/** Declarations from one override entry: a string range, or an object whose `.` is the range and whose other keys are nested overrides. */
-function overrideDeclarations(key, value, parent) {
-  const path = parent === undefined ? key : `${parent} > ${key}`
-  const name = overrideName(key)
-  if (typeof value === 'string')
-    return value.startsWith('$') ? [] : [{ name, range: value, override: path }]
-  if (!isPlainObject(value)) return []
-  const own = value['.']
-  const out =
-    typeof own === 'string' && !own.startsWith('$') ? [{ name, range: own, override: path }] : []
-  for (const [child, nested] of Object.entries(value)) {
-    if (child !== '.') out.push(...overrideDeclarations(child, nested, path))
-  }
-  return out
-}
-
-/** Every `{ name, range }` a manifest declares in the dependency sections and `overrides`. */
+/**
+ * Every `{ name, range }` a manifest declares in the dependency sections, plus plain overrides: a
+ * top-level key that is a bare package name with an exact version. Other overrides are not judged,
+ * see `unjudgedOverrides`.
+ */
 export function collectDeclarations(manifest) {
   const out = []
   for (const section of [...SECTIONS, 'peerDependencies']) {
@@ -73,10 +45,19 @@ export function collectDeclarations(manifest) {
     for (const [name, range] of Object.entries(manifest[section])) out.push({ name, range })
   }
   if (isPlainObject(manifest.overrides)) {
-    for (const [key, value] of Object.entries(manifest.overrides))
-      out.push(...overrideDeclarations(key, value))
+    for (const [key, value] of Object.entries(manifest.overrides)) {
+      if (isPlainOverride(key, value)) out.push({ name: key, range: value, override: key })
+    }
   }
   return out
+}
+
+/** Overrides naming an `@theokit` package that are not a plain exact override, as written. */
+export function unjudgedOverrides(manifest) {
+  if (!isPlainObject(manifest.overrides)) return []
+  return Object.entries(manifest.overrides)
+    .filter(([key, value]) => namesTheokit(key, value) && !isPlainOverride(key, value))
+    .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
 }
 
 /** `next` for a prerelease installed, `latest` otherwise. */
