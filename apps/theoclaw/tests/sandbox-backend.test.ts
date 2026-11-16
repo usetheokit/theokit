@@ -79,6 +79,9 @@ describe('THEOCLAW_SANDBOX_BACKEND=docker', () => {
 
 const dockerUp = spawnSync('docker', ['info'], { stdio: 'ignore' }).status === 0
 
+// A cold runner may pull the image before the first container starts; the 5 s default is too short.
+const DOCKER_COLD_START_TIMEOUT_MS = 120_000
+
 describe.skipIf(!dockerUp)('docker backend against a real daemon (skipped: `docker info` fails)', () => {
   it('runs shell_exec in the image and refuses a write under read-only', async () => {
     const workspace = makeHostToolsWorkspace()
@@ -93,5 +96,5 @@ describe.skipIf(!dockerUp)('docker backend against a real daemon (skipped: `dock
     const write = await ro.sandbox.execute('echo hi > /workspace/f.txt')
     expect(write.exitCode).not.toBe(0)
     expect(write.stderr).toMatch(/Read-only file system/)
-  })
+  }, DOCKER_COLD_START_TIMEOUT_MS)
 })
