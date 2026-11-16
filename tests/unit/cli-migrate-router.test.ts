@@ -18,7 +18,7 @@ import {
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createServer, type Server } from 'node:net'
+import { createServer, type AddressInfo, type Server } from 'node:net'
 
 let routesDir: string
 let blockingServer: Server | null = null
@@ -123,15 +123,22 @@ describe('G6 T2.1 — routerMigrateCommand (CLI wrapper)', () => {
   })
 
   it('test_isPortInUse_returns_true_when_a_server_holds_the_port (EC-2 plumbing)', async () => {
-    // Pick a high port to avoid collisions with anything real on the dev box
-    const port = 39_487
+    // Take both ports from the OS so no other test can be holding them.
+    const listenOnFreePort = async (server: Server): Promise<number> => {
+      await new Promise<void>((resolveListen) =>
+        server.listen(0, '127.0.0.1', () => resolveListen()),
+      )
+      return (server.address() as AddressInfo).port
+    }
     blockingServer = createServer()
-    await new Promise<void>((resolveListen) =>
-      blockingServer!.listen(port, '127.0.0.1', () => resolveListen()),
-    )
+    const port = await listenOnFreePort(blockingServer)
+
+    const spare = createServer()
+    const freePort = await listenOnFreePort(spare)
+    await new Promise<void>((resolveClose) => spare.close(() => resolveClose()))
 
     expect(await isPortInUse(port)).toBe(true)
-    expect(await isPortInUse(port + 1)).toBe(false)
+    expect(await isPortInUse(freePort)).toBe(false)
   })
 
   it('test_pre_flight_refuses_without_force_when_dev_port_in_use (EC-2 contract)', async () => {
