@@ -117,10 +117,11 @@ export async function discoverOidcProvider(issuer: string | URL): Promise<OidcMe
     url = undefined
   }
   if (!url || !isSafeOidcUrl(issuerStr)) {
+    const received = url ? `"${url.protocol}//${url.hostname}…"` : 'a malformed URL'
     throw new OidcInsecureEndpointError(
       'issuer',
       issuerStr,
-      `OIDC issuer must use HTTPS (received ${url ? `"${url.protocol}//${url.hostname}…"` : 'a malformed URL'}). ` +
+      `OIDC issuer must use HTTPS (received ${received}). ` +
         `RFC 8414 §3 forbids plain HTTP except for loopback hosts.`,
     )
   }
