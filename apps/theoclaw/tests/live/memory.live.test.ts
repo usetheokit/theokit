@@ -23,7 +23,7 @@ const LIVE = process.env.THEOCLAW_LIVE === '1'
 const TURN_TIMEOUT_MS = 180_000
 
 // A real, recognizable city: a model "corrects" a random letter string, so a nonsense word cannot be recalled verbatim.
-const CITIES = ['Lisbon', 'Nairobi', 'Reykjavik', 'Osaka', 'Valparaiso', 'Tallinn', 'Marrakesh', 'Dunedin', 'Bergen', 'Kraków']
+const CITIES = ['Lisbon', 'Nairobi', 'Reykjavik', 'Osaka', 'Tallinn', 'Dunedin', 'Bergen', 'Oslo', 'Perth', 'Denver']
 const pickCity = (): string => CITIES[randomInt(CITIES.length)] as string
 const lower = (text: string): string => text.toLowerCase()
 
