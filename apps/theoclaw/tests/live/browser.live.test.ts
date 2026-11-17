@@ -128,6 +128,8 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
       for await (const event of run.stream()) {
         if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
         // Keep what each browser call returned, so a failed run shows what the model was given.
+        if (event.type === 'tool_call' && 'status' in event && event.status !== 'running') toolResults.push(JSON.stringify(event).slice(0, 2000))
+        // Keep what each browser call returned, so a failed run shows what the model was given.
         if (event.type === 'tool_call' && 'status' in event && event.status !== 'running') toolResults.push(JSON.stringify(event).slice(0, 1000))
       }
       const outcome = await run.wait()
@@ -138,7 +140,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     }
     console.log(`OC-60 live: model=${model} toolCalls=${JSON.stringify(toolCalls)} answer=${JSON.stringify(answer)} toolResults=${toolResults.join(' | ')}`)
     expect(toolCalls.some((name) => name.includes('browser_navigate')), JSON.stringify(toolCalls)).toBe(true)
-    expect(answer).toContain(value)
+    expect(answer, `tool results: ${toolResults.join(' | ')}`).toContain(value)
   })
 
   it('leaves no browser server or its directory behind after the agent is disposed', { timeout: 180_000 }, async () => {
