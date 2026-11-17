@@ -47,6 +47,9 @@ function surface(dts: string, extra: Record<string, string> = {}): Baseline {
   )
   writeFileSync(join(dir, 'dist', 'index.d.ts'), dts)
   writeFileSync(join(dir, 'dist', 'b.d.ts'), extra.b ?? 'export declare const b: number\n')
+  for (const [file, text] of Object.entries(extra)) {
+    if (file !== 'b') writeFileSync(join(dir, 'dist', file), text)
+  }
   return gate.extractSurface(dir)
 }
 
@@ -106,7 +109,7 @@ describe('public surface gate', () => {
     const src = (inner: string) =>
       `interface Inner { ${inner} }\nexport type Outer = Inner\nexport {}\n`
     const prev = surface(src('a: string'))
-    expect(prev.entries['.']?.internals.Inner).toContain('a: string')
+    expect(prev.entries['.']?.internals['dist/index.d.ts#Inner']).toContain('a: string')
     expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
     expect(run(prev, surface(src('a: number')))).toEqual([
       expect.stringContaining('referenced type Inner changed'),
@@ -118,11 +121,27 @@ describe('public surface gate', () => {
     const src = (inner: string) =>
       `/** @experimental */\nexport interface Exp { ${inner} }\nexport type Outer = Exp\n`
     const prev = surface(src('a: string'))
-    expect(prev.entries['.']?.internals.Exp).toContain('a: string')
+    expect(prev.entries['.']?.internals['dist/index.d.ts#Exp']).toContain('a: string')
     expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
     expect(run(prev, surface(src('a: number')))).toEqual([
       expect.stringContaining('referenced type Exp changed'),
     ])
+  })
+
+  it('keys referenced declarations by source file, so same-named types do not overwrite each other', () => {
+    const src = (inner: string) => ({
+      'one.d.ts': 'export interface Shared { a: string }\n',
+      'two.d.ts': `export interface Shared { ${inner} }\n`,
+    })
+    const index = `import { Shared as A } from './one'\nimport { Shared as B } from './two'\nexport type Out = [A, B]\n`
+    const prev = surface(index, src('b: string'))
+    const keys = Object.keys(prev.entries['.']?.internals ?? {})
+    expect(keys).toEqual(['dist/one.d.ts#Shared', 'dist/two.d.ts#Shared'])
+    // A change to the second one is not hidden by the first one with the same name.
+    expect(run(prev, surface(index, src('b: number')))).toEqual([
+      expect.stringContaining('referenced type dist/two.d.ts#Shared changed'),
+    ])
+    expect(run(prev, surface(index, src('b: string; c?: number')))).toEqual([])
   })
 
   it('fails a stable value export turned into a type-only export', () => {

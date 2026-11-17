@@ -21,7 +21,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import ts from 'typescript'
@@ -83,22 +83,32 @@ function printDecl(d, printer) {
  */
 function collectInternals(roots, ctx, internals) {
   const queue = [...roots]
-  const own = new Set(roots.map((r) => r.name?.getText()))
+  const seen = new Set(roots)
   while (queue.length > 0) {
     const root = queue.pop()
     ts.forEachChild(root, function visit(node) {
       if (ts.isIdentifier(node)) {
         const raw = ctx.checker.getSymbolAtLocation(node)
         const sym = raw && resolveAlias(raw, ctx.checker)
-        const fresh = (sym?.declarations ?? []).filter((d) => isOwnDeclaration(d, ctx))
-        if (sym && fresh.length > 0 && !own.has(sym.name) && !internals.has(sym.name)) {
-          internals.set(sym.name, fresh.map((d) => printDecl(d, ctx.printer)).join('\n'))
-          queue.push(...fresh)
+        for (const d of sym?.declarations ?? []) {
+          if (seen.has(d) || !isOwnDeclaration(d, ctx)) continue
+          seen.add(d)
+          // Identity is the declaration, not its name: two files may declare the same name.
+          const key = declKey(d, ctx)
+          const text = printDecl(d, ctx.printer)
+          internals.set(key, internals.has(key) ? `${internals.get(key)}\n${text}` : text)
+          queue.push(d)
         }
       }
       ts.forEachChild(node, visit)
     })
   }
+}
+
+/** `<file relative to the package>#<name>`. Overloads and merged declarations in one file share a key. */
+function declKey(d, ctx) {
+  const file = relative(ctx.pkgDir, d.getSourceFile().fileName).split(sep).join('/')
+  return `${file}#${d.name?.getText() ?? '(anonymous)'}`
 }
 
 function isOwnDeclaration(d, ctx) {
@@ -168,7 +178,7 @@ export function extractSurface(pkgDir) {
     const sf = program.getSourceFile(files[entry])
     const modSym = sf && checker.getSymbolAtLocation(sf)
     const syms = modSym ? checker.getExportsOfModule(modSym) : []
-    const ctx = { program, checker, printer }
+    const ctx = { program, checker, printer, pkgDir }
     const names = {}
     const internals = {}
     for (const [name, rec] of syms.map((x) => [x.name, describeSymbol(x, ctx)]).sort(byName)) {
