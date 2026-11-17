@@ -35,8 +35,8 @@ unrelated files is where a real change hides, and this repository has the receip
 
 **Before formatting anything, check `.prettierignore`.** It is not a tidiness list. Every entry is a
 file some program PARSES, and the comments there record what happened when one was reformatted —
-`prettier --write .` took three `fixed_in:` lines in `BACKLOG.md` off column 0 and turned
-`tools/check-backlog-crossval.py` from 0 problems into 3. Adding a machine-read record to this
+`prettier --write .` took three `fixed_in:` lines in `BACKLOG.md` off column 0 and broke
+the backlog cross-validation check, since retired. Adding a machine-read record to this
 repository means adding a line there in the same change.
 
 Green gates are necessary and not sufficient. For a change that alters what the product *does* —
@@ -175,8 +175,7 @@ A guard test has two halves and both carry load:
   nothing* and *rejects everything* — each half alone is satisfied by one of the two degenerate
   guards, and those are the two failure modes a checker actually has.
 
-`tools/check-artifact-promotion.test.mjs`, `tools/check-doc-references.test.mjs` and
-`tools/check-english-only.test.mjs` are written this way and say so in their headers.
+`tools/check-doc-references.test.mjs` and `tools/check-english-only.test.mjs` are written this way and say so in their headers.
 
 **It is not only for checkers**, and the case that bought the convention was not one.
 `packages/agent/tests/aggregate-cut-wiring.test.ts` asserts that an oversized rule corpus gets cut —
