@@ -52,6 +52,8 @@ describe.skipIf(!isVitest)('an upload controller behind the dispatcher', () => {
         duplex: 'half',
       } as RequestInit),
     )
+    expect(res).not.toBeNull()
+    if (!res) throw new Error('expected a response')
     expect(res.status).toBe(413)
     await new Promise((r) => setTimeout(r, 10))
     expect(state.cancelled).toBe(true)
