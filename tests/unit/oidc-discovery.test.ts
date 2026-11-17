@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   discoverOidcProvider,
   clearOidcCache,
+  isSafeOidcUrl,
+  OidcInsecureEndpointError,
 } from '../../packages/theo/src/server/auth/oidc-discovery.js'
 
 /**
@@ -70,5 +72,62 @@ describe('T7.4 — discoverOidcProvider', () => {
 
   it('allows http://localhost for dev', async () => {
     await expect(discoverOidcProvider('http://localhost:8080')).resolves.toBeDefined()
+  })
+
+  const respondWith = (doc: Record<string, unknown>) =>
+    fetchSpy.mockImplementation(async () => new Response(JSON.stringify(doc), { status: 200 }))
+
+  it.each(['authorization_endpoint', 'token_endpoint', 'userinfo_endpoint', 'jwks_uri'])(
+    'rejects an http %s with OidcInsecureEndpointError',
+    async (field) => {
+      respondWith({ ...mockMetadata, [field]: 'http://evil.example/x' })
+      const err = await discoverOidcProvider('https://provider.example').catch((e) => e)
+      expect(err).toBeInstanceOf(OidcInsecureEndpointError)
+      expect(err.field).toBe(field)
+      expect(err.code).toBe('oidc_insecure_endpoint')
+      expect(err.url).toBe('http://evil.example/x')
+    },
+  )
+
+  it('accepts loopback http endpoints (127.0.0.2, [::1])', async () => {
+    respondWith({
+      ...mockMetadata,
+      token_endpoint: 'http://127.0.0.2:8080/token',
+      userinfo_endpoint: 'http://[::1]/token',
+    })
+    await expect(discoverOidcProvider('https://provider.example')).resolves.toBeDefined()
+  })
+
+  it('rejects http://0.0.0.0 endpoints', async () => {
+    respondWith({ ...mockMetadata, token_endpoint: 'http://0.0.0.0:8080/token' })
+    await expect(discoverOidcProvider('https://provider.example')).rejects.toMatchObject({
+      field: 'token_endpoint',
+    })
+  })
+
+  it('does not cache a rejected metadata document', async () => {
+    respondWith({ ...mockMetadata, token_endpoint: 'http://evil.example/token' })
+    await expect(discoverOidcProvider('https://provider.example')).rejects.toBeInstanceOf(
+      OidcInsecureEndpointError,
+    )
+    respondWith(mockMetadata)
+    await expect(discoverOidcProvider('https://provider.example')).resolves.toBeDefined()
+  })
+
+  it('throws a typed error for an http issuer, field issuer', async () => {
+    await expect(discoverOidcProvider('http://insecure.example')).rejects.toMatchObject({
+      name: 'OidcInsecureEndpointError',
+      field: 'issuer',
+    })
+  })
+
+  it('isSafeOidcUrl', () => {
+    expect(isSafeOidcUrl('https://a.example/x')).toBe(true)
+    expect(isSafeOidcUrl('http://localhost/x')).toBe(true)
+    expect(isSafeOidcUrl('http://127.0.0.2/x')).toBe(true)
+    expect(isSafeOidcUrl('http://[::1]/x')).toBe(true)
+    expect(isSafeOidcUrl('http://0.0.0.0/x')).toBe(false)
+    expect(isSafeOidcUrl('http://a.example/x')).toBe(false)
+    expect(isSafeOidcUrl('not a url')).toBe(false)
   })
 })
