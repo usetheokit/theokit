@@ -466,6 +466,61 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       })
     })
 
+    describe('cancelInTransaction', () => {
+      const cancel = async (key: string, outcome: 'COMMIT' | 'ROLLBACK' = 'COMMIT') => {
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          const removed = await backend.cancelInTransaction(client, {
+            name: 'cancel-me',
+            idempotencyKey: key,
+          })
+          await client.query(outcome)
+          return removed
+        } finally {
+          client.release()
+        }
+      }
+      const count = async (key: string) =>
+        (await pool.query(`SELECT id FROM theokit_jobs_ci WHERE idempotency_key = $1`, [key])).rows
+          .length
+
+      it('test_removes_a_queued_job_once', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-queued' })
+        expect(await cancel('k-queued')).toBe(true)
+        expect(await count('k-queued')).toBe(0)
+        expect(await cancel('k-queued')).toBe(false)
+      })
+
+      it('test_a_rolled_back_cancel_keeps_the_job', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-rollback' })
+        expect(await cancel('k-rollback', 'ROLLBACK')).toBe(true)
+        expect(await count('k-rollback')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-rollback'`)
+      })
+
+      it('test_a_leased_job_with_an_expired_lease_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-leased' })
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET locked_until = NOW() - INTERVAL '1 minute', attempts = 1
+           WHERE idempotency_key = 'k-leased'`,
+        )
+        expect(await cancel('k-leased')).toBe(false)
+        expect(await count('k-leased')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-leased'`)
+      })
+
+      it('test_a_failed_job_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-failed' })
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NOW() WHERE idempotency_key = 'k-failed'`,
+        )
+        expect(await cancel('k-failed')).toBe(false)
+        expect(await count('k-failed')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-failed'`)
+      })
+    })
+
     // usetheokit/theokit#1072 — `theokit start` now runs migrate() at boot, so every replica runs it
     // at the same moment. Concurrent `CREATE TABLE IF NOT EXISTS` on a fresh table fails in Postgres
     // with a unique violation on pg_type: 36 of 80 calls (8 at a time, 10 fresh tables) failed

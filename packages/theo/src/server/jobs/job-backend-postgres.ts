@@ -265,6 +265,25 @@ export class PostgresJobBackend implements JobBackend {
     return this.#insertJob(client, input)
   }
 
+  /**
+   * Remove a job no worker ever leased, through the caller's transaction (usetheokit/theokit#2118).
+   * A leased job (even with an expired lease) or a failed one is kept: a run may be going on.
+   * Returns whether a job was removed.
+   */
+  async cancelInTransaction(
+    client: PoolLike,
+    input: { name: string; idempotencyKey: string },
+  ): Promise<boolean> {
+    const res = await client.query<{ id: string }>(
+      `DELETE FROM ${this.#table}
+       WHERE name = $1 AND idempotency_key = $2
+         AND locked_until IS NULL AND failed_at IS NULL AND attempts = 0
+       RETURNING id`,
+      [input.name, input.idempotencyKey],
+    )
+    return res.rows.length > 0
+  }
+
   async #insertJob(db: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }> {
     const t = this.#table
     const values = [

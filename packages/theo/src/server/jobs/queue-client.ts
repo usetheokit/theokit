@@ -56,6 +56,33 @@ export interface QueueClient {
     input: JobRegistry[JobName],
     opts?: EnqueueOptions,
   ): Promise<{ jobId: string }>
+  /**
+   * Remove the queued job `(name, idempotencyKey)` through `client`, inside your transaction, so
+   * the removal commits or rolls back with your writes (usetheokit/theokit#2118). Resolves `true`
+   * when a job was removed, `false` when none was: a job a worker leased (even with an expired
+   * lease) or that failed is left alone. A backend without `cancelInTransaction` rejects with
+   * `TransactionalCancelUnsupportedError`.
+   */
+  cancelInTransaction<JobName extends keyof JobRegistry>(
+    client: PoolLike,
+    name: JobName,
+    opts: { idempotencyKey: string },
+  ): Promise<boolean>
+}
+
+/** `ctx.queue.cancelInTransaction` was called with a `jobs.backend` that has no such method. */
+export class TransactionalCancelUnsupportedError extends Error {
+  readonly code = 'TRANSACTIONAL_CANCEL_UNSUPPORTED'
+  readonly backend: string
+  constructor(backend: string) {
+    super(
+      `jobs.backend (${backend}) cannot cancel a job inside the caller's transaction: it has no ` +
+        'cancelInTransaction method. Use PostgresJobBackend with its table in the database the ' +
+        'transaction runs on.',
+    )
+    this.name = 'TransactionalCancelUnsupportedError'
+    this.backend = backend
+  }
 }
 
 /**
@@ -147,6 +174,16 @@ export function createQueueClient(
         idempotencyKey: enqueueOpts?.idempotencyKey,
         delaySeconds: enqueueOpts?.delaySeconds,
         traceparent,
+      })
+    },
+
+    async cancelInTransaction(client, name, cancelOpts) {
+      if (backend.cancelInTransaction === undefined) {
+        throw new TransactionalCancelUnsupportedError(backend.name)
+      }
+      return backend.cancelInTransaction(client, {
+        name: name as string,
+        idempotencyKey: cancelOpts.idempotencyKey,
       })
     },
   }

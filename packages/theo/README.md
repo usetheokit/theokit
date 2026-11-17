@@ -175,6 +175,12 @@ The job commits or rolls back with the row, and workers cannot see it before the
 backend with `enqueueInTransaction` (`PostgresJobBackend` has it); any other backend rejects with
 `TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction.
 
+To take back a queued job in a transaction, call
+`ctx.queue.cancelInTransaction(client, 'process-task', { idempotencyKey })`. It removes the job
+only while no worker ever leased it and resolves `true` if it removed one; a leased job (even with
+an expired lease) or a failed one is left alone. A backend without `cancelInTransaction` rejects
+with `TransactionalCancelUnsupportedError`.
+
 `theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
 and a backend is set: it polls the backend, runs each job and backs off while the backend is
 unreachable. On `SIGTERM`, `start` stops polling and waits for the job in progress before closing
