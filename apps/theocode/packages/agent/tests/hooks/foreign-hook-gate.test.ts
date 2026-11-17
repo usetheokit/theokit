@@ -15,15 +15,14 @@ import { describe, expect, it } from 'vitest'
 
 import { refusalNotice, refuseForeignHook } from '../../src/hooks/foreign-hook-gate.js'
 
-// The SDK's request type narrows `event` to `HookEvent` and carries the resolved timeout; the gate
-// ignores both, so the helper widens here rather than the framework type.
-const request = (over = {}): HookApprovalRequest =>
-  ({
-    command: '/repo/mark.sh',
-    event: 'preToolUse',
-    sourcePath: '/repo/.claude/settings.json',
-    ...over,
-  }) as unknown as HookApprovalRequest
+const request = (over: Partial<HookApprovalRequest> = {}): HookApprovalRequest => ({
+  command: '/repo/mark.sh',
+  event: 'preToolUse',
+  sourceEvent: 'PreToolUse',
+  timeoutMs: 30_000,
+  sourcePath: '/repo/.claude/settings.json',
+  ...over,
+})
 
 describe('#130 — hooks the framework loaded itself', () => {
   it('test_a_hook_this_product_did_not_translate_is_refused', () => {
