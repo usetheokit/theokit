@@ -41,7 +41,7 @@ describe('compileRouteRules + resolveRouteRule', () => {
     })
   })
 
-  it('EC-5: complex glob patterns work ', () => {
+  it('EC-5: complex glob patterns work (brace + wildcard)', () => {
     const compiled = compileRouteRules({
       '/api/{users,posts}/**/*.json': { maxAge: 60 },
     })
@@ -61,10 +61,43 @@ describe('compileRouteRules + resolveRouteRule', () => {
     expect(resolveRouteRule('/a/b12.txt', compiled)).toBeUndefined()
   })
 
-  it('treats extglob syntax literally and does not backtrack exponentially', () => {
+  it('keeps bracket, extglob, brace-range and escape syntax', () => {
+    const m = (glob: string, path: string): boolean =>
+      resolveRouteRule(path, compileRouteRules({ [glob]: { maxAge: 1 } })) !== undefined
+    expect(m('/api/[ab]', '/api/a')).toBe(true)
+    expect(m('/api/[ab]', '/api/c')).toBe(false)
+    expect(m('/api/[!ab]', '/api/c')).toBe(true)
+    expect(m('/api/[a-c]x', '/api/bx')).toBe(true)
+    expect(m('/img/+(a|b).png', '/img/ab.png')).toBe(true)
+    expect(m('/img/+(a|b).png', '/img/c.png')).toBe(false)
+    expect(m('/img/@(a|b).png', '/img/ab.png')).toBe(false)
+    expect(m('/img/?(a).png', '/img/.png')).toBe(true)
+    expect(m('/img/*(a).png', '/img/aaa.png')).toBe(true)
+    expect(m('/img/!(a).png', '/img/b.png')).toBe(true)
+    expect(m('/img/!(a).png', '/img/a.png')).toBe(false)
+    expect(m('/p/{1..3}', '/p/2')).toBe(true)
+    expect(m('/p/{1..3}', '/p/4')).toBe(false)
+    expect(m('/a/**/b', '/a/b')).toBe(true)
+    expect(m('/a/**/b', '/a/x/y/b')).toBe(true)
+    expect(m('/a/*/b', '/a/x/y/b')).toBe(false)
+    expect(m('/a/**', '/a')).toBe(true)
+    expect(m('/a/**', '/a/x/y')).toBe(true)
+    expect(m('/a/*', '/a/x/y')).toBe(false)
+    expect(m('/a/\\*', '/a/*')).toBe(true)
+    expect(m('/a/\\*', '/a/x')).toBe(false)
+  })
+
+  it('does not backtrack excessively on overlapping wildcards', () => {
+    const compiled = compileRouteRules({ '/a/*a*a*a*a*a*a*a*b': { maxAge: 1 } })
+    const start = Date.now()
+    expect(resolveRouteRule('/a/' + 'a'.repeat(40), compiled)).toBeUndefined()
+    expect(Date.now() - start).toBeLessThan(100)
+  })
+
+  it('does not blow up on repeated single-branch extglobs', () => {
     const compiled = compileRouteRules({ '+(*a)': { maxAge: 1 } })
     const start = Date.now()
     expect(resolveRouteRule('a'.repeat(40) + '!', compiled)).toBeUndefined()
-    expect(Date.now() - start).toBeLessThan(500)
+    expect(Date.now() - start).toBeLessThan(100)
   })
 })
