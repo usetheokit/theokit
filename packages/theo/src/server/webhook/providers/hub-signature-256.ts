@@ -18,27 +18,10 @@
  */
 import type { VerifyFn } from '../webhook-types.js'
 
-import { verifyHmacSha256, type DecodeResult } from './hmac-sha256.js'
+import { decodeHexSignature, verifyHmacSha256 } from './hmac-sha256.js'
 
 const HEADER = 'x-hub-signature-256'
 const PREFIX = 'sha256='
-
-/** Strip the `sha256=` prefix and decode hex to bytes, or say which of the two failed. */
-function fromPrefixedHex(value: string): DecodeResult {
-  if (!value.startsWith(PREFIX)) {
-    return { ok: false, reason: `malformed ${HEADER} header (missing ${PREFIX} prefix)` }
-  }
-  const hex = value.slice(PREFIX.length)
-  if (hex.length % 2 !== 0) return { ok: false, reason: 'malformed signature hex' }
-
-  const bytes = new Uint8Array(hex.length / 2)
-  for (let i = 0; i < bytes.length; i++) {
-    const byte = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16)
-    if (Number.isNaN(byte)) return { ok: false, reason: 'malformed signature hex' }
-    bytes[i] = byte
-  }
-  return { ok: true, bytes }
-}
 
 /**
  * Build a {@link VerifyFn} that checks `X-Hub-Signature-256` against `secrets`.
@@ -54,5 +37,10 @@ export function verifyHubSignature256(
   secrets: string | readonly string[],
   option: string,
 ): VerifyFn {
-  return verifyHmacSha256({ header: HEADER, secrets, option, decode: fromPrefixedHex })
+  return verifyHmacSha256({
+    header: HEADER,
+    secrets,
+    option,
+    decode: decodeHexSignature(PREFIX, HEADER),
+  })
 }

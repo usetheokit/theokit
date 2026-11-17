@@ -92,3 +92,53 @@ export function verifyHmacSha256(opts: {
     return matched ? { ok: true } : { ok: false, reason: 'signature mismatch' }
   }
 }
+
+/** Standard base64: the alphabet plus `=` padding. LINE does not use the URL-safe variant. */
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
+
+/** Standard base64 (LINE's rule): decode to bytes, or say why the header value could not be one. */
+export function decodeBase64Signature(value: string): DecodeResult {
+  // `atob` accepts some inputs a strict decoder would not, so the shape is checked first: an
+  // unchecked `atob` turns a typo into a length mismatch and then into "signature mismatch",
+  // which sends the reader looking at their secret instead of at their header.
+  if (value.length === 0 || value.length % 4 !== 0 || !BASE64.test(value)) {
+    return { ok: false, reason: 'malformed signature base64' }
+  }
+  try {
+    const binary = atob(value)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return { ok: true, bytes }
+  } catch {
+    return { ok: false, reason: 'malformed signature base64' }
+  }
+}
+
+/**
+ * Hex (GitHub/Meta's rule), with an optional required `prefix` such as `'sha256='`.
+ *
+ * `header` is only used to name the header in the missing-prefix reason.
+ */
+export function decodeHexSignature(prefix = '', header?: string): DecodeSignature {
+  return (value) => {
+    if (prefix && !value.startsWith(prefix)) {
+      return {
+        ok: false,
+        reason: header
+          ? `malformed ${header} header (missing ${prefix} prefix)`
+          : `malformed signature (missing ${prefix} prefix)`,
+      }
+    }
+    const hex = value.slice(prefix.length)
+    if (hex.length % 2 !== 0) return { ok: false, reason: 'malformed signature hex' }
+
+    const bytes = new Uint8Array(hex.length / 2)
+    for (let i = 0; i < bytes.length; i++) {
+      const pair = hex.slice(i * 2, i * 2 + 2)
+      const byte = /^[0-9a-fA-F]{2}$/.test(pair) ? Number.parseInt(pair, 16) : Number.NaN
+      if (Number.isNaN(byte)) return { ok: false, reason: 'malformed signature hex' }
+      bytes[i] = byte
+    }
+    return { ok: true, bytes }
+  }
+}
