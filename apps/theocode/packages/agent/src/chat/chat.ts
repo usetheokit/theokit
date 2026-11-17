@@ -36,7 +36,7 @@ import {
 import { interactiveWrapCommand } from '@theokit/agents/sandbox'
 import { loadApprovedHooks } from '../hooks/index.js'
 import { buildHookHandlers, withBuiltinShellVeto, parseHooks } from '../hooks/index.js'
-import { sandboxWritePolicy } from '../config/index.js'
+import { sandboxWritePolicy } from '@theokit/agents/tool-scope'
 import { resolveTrustPosture, type TrustPosture } from '../config/index.js'
 import { baseInstructionsFor } from '../output-style-wiring.js'
 import { createAnalystSubagent, createDelegateToTeamTool } from '../delegation/index.js'
@@ -243,7 +243,7 @@ function chatContext(overrides: {
   return {
     posture,
     cfg,
-    writePolicy: sandboxWritePolicy(cfg.sandbox_mode),
+    writePolicy: sandboxWritePolicy(cfg.sandbox_mode, cwd),
     registry: new ToolRegistry(resolveToolScope(cfg, cwd)),
     modelId: overrides?.model ?? cfg.model,
     cwd,
