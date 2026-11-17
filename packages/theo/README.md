@@ -87,6 +87,16 @@ export const GET = route()
 | `./vite-plugin` | The plugin that makes all of the above work |
 | `./boot`, `./adapters/web-shim`, `./adapters/ws-shim` | Runtime shims |
 
+## OIDC discovery
+
+`discoverOidcProvider(issuer)` from `theokit/server/auth` fetches and caches a provider's
+metadata. The issuer and every endpoint it returns (`authorization_endpoint`, `token_endpoint`,
+and `userinfo_endpoint`, `jwks_uri`, `end_session_endpoint` when present) must be https, or http
+on a loopback host (`localhost`, `[::1]`, `127.0.0.0/8`; never `0.0.0.0`). Endpoints need not
+share the issuer's host. Otherwise it throws `OidcInsecureEndpointError` (`code:
+'oidc_insecure_endpoint'`, with `field` and `url`), and the failure is not cached.
+`isSafeOidcUrl(url)` applies the same rule.
+
 ## Storage
 
 `theo.config.ts > storage` declares servers and databases; route code gets a cached client from

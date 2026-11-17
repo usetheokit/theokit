@@ -116,6 +116,18 @@ describe('T7.4 — discoverOidcProvider', () => {
     await expect(discoverOidcProvider('https://provider.example')).resolves.toBeDefined()
   })
 
+  it.each([
+    ['userinfo_endpoint', null],
+    ['token_endpoint', null],
+    ['authorization_endpoint', ''],
+  ])('rejects a present invalid %s (%j) with the typed error', async (field, value) => {
+    respondWith({ ...mockMetadata, [field]: value })
+    await expect(discoverOidcProvider('https://provider.example')).rejects.toMatchObject({
+      name: 'OidcInsecureEndpointError',
+      field,
+    })
+  })
+
   it('throws a typed error for an http issuer, field issuer', async () => {
     await expect(discoverOidcProvider('http://insecure.example')).rejects.toMatchObject({
       name: 'OidcInsecureEndpointError',

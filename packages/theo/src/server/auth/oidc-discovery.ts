@@ -79,7 +79,8 @@ const OPTIONAL_ENDPOINTS = ['userinfo_endpoint', 'jwks_uri', 'end_session_endpoi
 function assertSafeEndpoints(metadata: OidcMetadata): void {
   for (const field of [...REQUIRED_ENDPOINTS, ...OPTIONAL_ENDPOINTS]) {
     const value: unknown = metadata[field]
-    if (value === undefined || value === null) {
+    // Absent (undefined) differs from present-but-invalid (null, '', non-string): the latter is typed.
+    if (value === undefined) {
       if ((REQUIRED_ENDPOINTS as readonly string[]).includes(field)) {
         throw new Error(`OIDC metadata missing ${field} — provider response is invalid`)
       }
@@ -139,9 +140,6 @@ export async function discoverOidcProvider(issuer: string | URL): Promise<OidcMe
       throw new Error(`OIDC discovery failed: ${res.status} ${res.statusText} at ${wellKnown}`)
     }
     const metadata = (await res.json()) as OidcMetadata
-    if (!metadata.authorization_endpoint) {
-      throw new Error('OIDC metadata missing authorization_endpoint — provider response is invalid')
-    }
     assertSafeEndpoints(metadata)
     return metadata
   })()
