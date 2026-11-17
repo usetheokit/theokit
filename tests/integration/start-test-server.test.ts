@@ -1,4 +1,6 @@
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { createServer as createHttp } from 'node:http'
+import { createServer as createTcp, type Server } from 'node:net'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -70,4 +72,68 @@ describe('startTestServer', () => {
       await Promise.all([a.close(), b.close()])
     }
   }, 120_000)
+
+  describe.skipIf(process.platform !== 'linux')('port substitution', () => {
+    const open: Server[] = []
+    afterAll(async () => {
+      await Promise.all(open.map((s) => new Promise((r) => s.close(r))))
+    })
+    function occupy(kind: 'http404' | 'raw'): Promise<number> {
+      const srv =
+        kind === 'http404'
+          ? createHttp((_req, res) => {
+              res.statusCode = 404
+              res.end()
+            })
+          : createTcp((sock) => sock.destroy())
+      open.push(srv as Server)
+      return new Promise((r) => {
+        srv.listen(0, () => r((srv.address() as { port: number }).port))
+      })
+    }
+
+    it.each(['http404', 'raw'] as const)(
+      'retries on another port when an unrelated %s listener holds the first',
+      async (kind) => {
+        const taken = await occupy(kind)
+        const ports = [taken]
+        const server = await startTestServer({
+          cwd: ok,
+          pickPort: async () => {
+            const next = ports.shift()
+            if (next !== undefined) return next
+            const probe = createTcp()
+            return new Promise((r) => {
+              probe.listen(0, () => {
+                const { port } = probe.address() as { port: number }
+                probe.close(() => r(port))
+              })
+            })
+          },
+        })
+        try {
+          expect(server.origin).not.toBe(`http://localhost:${String(taken)}`)
+          expect((await fetch(`${server.origin}/__theo/health`)).status).toBe(200)
+        } finally {
+          await server.close()
+        }
+      },
+      90_000,
+    )
+
+    it('reports exhaustion when every attempt finds the port taken', async () => {
+      const taken = await occupy('http404')
+      let picks = 0
+      const err = await startTestServer({
+        cwd: ok,
+        pickPort: async () => {
+          picks++
+          return taken
+        },
+      }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(TestServerBootError)
+      expect((err as Error).message).toContain('was taken by another process')
+      expect(picks).toBe(3)
+    }, 120_000)
+  })
 })

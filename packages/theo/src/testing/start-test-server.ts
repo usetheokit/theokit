@@ -13,6 +13,8 @@ export interface StartTestServerOptions {
   env?: Record<string, string>
   /** Boot deadline. Default 60_000. */
   timeoutMs?: number
+  /** @internal Test hook: picks the port for each boot attempt. */
+  pickPort?: () => Promise<number>
 }
 
 export interface TestServer {
@@ -85,6 +87,14 @@ function groupListensOn(port: number, pgid: number): boolean | undefined {
   const inodes = listeningInodes(port)
   if (inodes.size === 0) return false
   return readdirSync('/proc').some((pid) => /^\d+$/.test(pid) && holdsSocket(pid, pgid, inodes))
+}
+
+/** Whether a listener on `port` exists that no process of the child's group holds (Linux only). */
+function foreignListener(port: number, pgid: number): boolean {
+  if (!existsSync('/proc/net/tcp')) return false
+  const inodes = listeningInodes(port)
+  if (inodes.size === 0) return false
+  return !readdirSync('/proc').some((pid) => /^\d+$/.test(pid) && holdsSocket(pid, pgid, inodes))
 }
 
 function resolveTheokitBin(cwd: string): string {
@@ -171,7 +181,7 @@ async function bootOnce(
   timeoutMs: number,
 ): Promise<TestServer> {
   const mode = options.mode ?? 'dev'
-  const port = await freePort()
+  const port = await (options.pickPort ?? freePort)()
   const origin = `http://localhost:${String(port)}`
   let output = ''
   let spawnError: Error | undefined
@@ -223,6 +233,13 @@ async function bootOnce(
 
   while (Date.now() < deadline) {
     if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+    // Independent of the readiness answer: a foreign listener may reply 404, refuse, or not speak HTTP.
+    if (child.pid !== undefined && foreignListener(port, child.pid)) {
+      return await fail(
+        `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
+        PortSubstitutedError,
+      )
+    }
     let ready = false
     try {
       const res = await fetch(`${origin}/__theo/ready`, { signal: AbortSignal.timeout(1000) })
