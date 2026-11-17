@@ -78,7 +78,7 @@ const OPTIONAL_ENDPOINTS = ['userinfo_endpoint', 'jwks_uri', 'end_session_endpoi
 
 function assertSafeEndpoints(metadata: OidcMetadata): void {
   for (const field of [...REQUIRED_ENDPOINTS, ...OPTIONAL_ENDPOINTS]) {
-    const value = metadata[field]
+    const value: unknown = metadata[field]
     if (value === undefined || value === null) {
       if ((REQUIRED_ENDPOINTS as readonly string[]).includes(field)) {
         throw new Error(`OIDC metadata missing ${field} — provider response is invalid`)
@@ -86,7 +86,10 @@ function assertSafeEndpoints(metadata: OidcMetadata): void {
       continue
     }
     if (typeof value !== 'string' || !isSafeOidcUrl(value)) {
-      throw new OidcInsecureEndpointError(field, String(value))
+      throw new OidcInsecureEndpointError(
+        field,
+        typeof value === 'string' ? value : JSON.stringify(value),
+      )
     }
   }
 }
