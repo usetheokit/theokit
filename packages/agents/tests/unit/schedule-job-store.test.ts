@@ -131,6 +131,25 @@ describe('createJobStore', () => {
     expect((await stat(dirname(file))).mode & 0o777).toBe(0o700)
   })
 
+  it('test_the_store_file_is_owner_only_under_a_permissive_umask', async () => {
+    const previous = process.umask(0o002)
+    try {
+      const store = createJobStore(file)
+      await store.put(job('a'))
+      expect((await stat(file)).mode & 0o777).toBe(0o600)
+      expect((await stat(dirname(file))).mode & 0o777).toBe(0o700)
+    } finally {
+      process.umask(previous)
+    }
+  })
+
+  it('test_the_saved_bytes_are_unchanged', async () => {
+    const jobs = [job('a'), job('b', { name: 'n', timezone: 'UTC' })]
+    const store = createJobStore(file)
+    for (const j of jobs) await store.put(j)
+    expect(await readFile(file, 'utf8')).toBe(`${JSON.stringify({ version: 1, jobs }, null, 2)}\n`)
+  })
+
   /** Make every save fail (the directory refuses the temporary file) while `act` runs. */
   async function withSavesRefused(act: () => Promise<void>): Promise<void> {
     await chmod(dirname(file), 0o500)
