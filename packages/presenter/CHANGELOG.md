@@ -1,5 +1,11 @@
 # @theokit/presenter
 
+## 0.13.0
+
+### Minor Changes
+
+- 27de3e9: Add `readToolResult`, which reads any tool result (a string or an object, in either shell dialect) into one `ToolResultView`: shell output with an exit code, a diff, an error, or text.
+
 ## 0.12.0
 
 ### Minor Changes
