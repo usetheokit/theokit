@@ -133,3 +133,23 @@ export type {
 // script carries none and the browser refuses it. `NonceProvider` is exported beside the hook because
 // a consumer testing a component that calls `useNonce()` has to be able to supply the value.
 export { NonceProvider, NonceContext, useNonce } from './nonce.js'
+
+// i18n — typed dictionaries, `t()`, provider, locale negotiation and Intl formatting helpers.
+export {
+  defineI18n,
+  I18nProvider,
+  useI18n,
+  negotiateLocale,
+  formatDate,
+  formatNumber,
+  formatRelativeTime,
+} from './i18n.js'
+export type {
+  Dictionary,
+  DictionaryKey,
+  I18n,
+  I18nConfig,
+  I18nContextValue,
+  I18nProviderProps,
+  TranslateParams,
+} from './i18n.js'
