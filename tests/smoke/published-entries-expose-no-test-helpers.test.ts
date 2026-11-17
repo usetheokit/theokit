@@ -24,17 +24,24 @@ function typesOf(target: Target): string | undefined {
 describe('no published entry of theokit exposes a test-only helper', () => {
   const found: Record<string, string[]> = {}
   const checked: string[] = []
+  const unresolved: string[] = []
+  const expected: string[] = []
 
   beforeAll(() => {
     buildTheokitPackageOnce()
     const pkg = JSON.parse(readFileSync(resolve(packageRoot, 'package.json'), 'utf8')) as {
       exports: Record<string, Target>
     }
-    const files = Object.entries(pkg.exports).flatMap(([entry, target]) => {
+    // `./package.json` is the only non-module entry; every other entry must resolve.
+    const applicable = Object.entries(pkg.exports).filter(([entry]) => entry !== './package.json')
+    const files: (readonly [string, string])[] = []
+    for (const [entry, target] of applicable) {
       const t = typesOf(target)
       const file = t === undefined ? undefined : resolve(packageRoot, t)
-      return file !== undefined && existsSync(file) ? [[entry, file] as const] : []
-    })
+      if (file === undefined || !existsSync(file)) unresolved.push(entry)
+      else files.push([entry, file] as const)
+    }
+    expected.push(...applicable.map(([entry]) => entry))
     const program = ts.createProgram(
       files.map(([, f]) => f),
       {
@@ -49,7 +56,10 @@ describe('no published entry of theokit exposes a test-only helper', () => {
     for (const [entry, file] of files) {
       const source = program.getSourceFile(file)
       const symbol = source === undefined ? undefined : checker.getSymbolAtLocation(source)
-      if (symbol === undefined) continue
+      if (symbol === undefined) {
+        unresolved.push(entry)
+        continue
+      }
       checked.push(entry)
       const names = checker.getExportsOfModule(symbol).map((s) => s.getName())
       const bad = names.filter((n) => TEST_HELPER.test(n))
@@ -58,7 +68,9 @@ describe('no published entry of theokit exposes a test-only helper', () => {
   }, BUILD_HOOK_TIMEOUT_MS)
 
   it('resolves every entry and finds no name matching the test-helper pattern', () => {
-    expect(checked.length).toBeGreaterThan(10)
+    expect(unresolved).toEqual([])
+    expect(expected.length).toBeGreaterThan(10)
+    expect(checked).toEqual(expected)
     expect(found).toEqual({})
   })
 })

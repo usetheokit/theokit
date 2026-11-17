@@ -107,24 +107,22 @@ describe('storage manager and cache engine are one instance across the built bun
     expect(copies.length, 'no built chunk exports initCacheEngine').toBeGreaterThan(0)
     const server = pathToFileURL(resolvePublished('./server')).href
 
-    const result = runInNode(`
-      const copies = ${JSON.stringify(copies.map((c) => pathToFileURL(c).href))}
-      const { revalidateTag } = await import(${JSON.stringify(server)})
-      const outcomes = []
-      for (const href of copies) {
-        const m = await import(href)
-        m._resetCacheEngine?.()
+    // One fresh process per copy: no engine state can leak from one copy into the next, so each
+    // outcome independently shows whether that copy shares the engine `theokit/server` reads.
+    const result = copies.map((copy) => {
+      const outcome = runInNode(`
+        const { revalidateTag } = await import(${JSON.stringify(server)})
+        const m = await import(${JSON.stringify(pathToFileURL(copy).href)})
         m.initCacheEngine({ enabled: true, storage: 'memory', maxEntries: 10, defaults: { maxAge: 60, cacheErrors: false } })
         try {
           await revalidateTag('posts')
-          outcomes.push({ href: href.split('/').pop(), ok: true })
+          console.log(JSON.stringify({ ok: true }))
         } catch (err) {
-          outcomes.push({ href: href.split('/').pop(), ok: false, error: String(err && err.message) })
+          console.log(JSON.stringify({ ok: false, error: String(err && err.message) }))
         }
-        m._resetCacheEngine?.()
-      }
-      console.log(JSON.stringify(outcomes))
-    `) as { href: string; ok: boolean; error?: string }[]
+      `) as { ok: boolean; error?: string }
+      return { href: copy.split('/').pop(), ...outcome }
+    })
 
     expect(result.filter((r) => !r.ok)).toEqual([])
   })
