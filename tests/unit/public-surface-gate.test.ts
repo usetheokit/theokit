@@ -112,7 +112,7 @@ describe('public surface gate', () => {
     expect(prev.entries['.']?.internals['dist/index.d.ts#Inner']).toContain('a: string')
     expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
     expect(run(prev, surface(src('a: number')))).toEqual([
-      expect.stringContaining('referenced type Inner changed'),
+      expect.stringContaining('referenced type dist/index.d.ts#Inner changed'),
     ])
     expect(run(prev, surface(src('a: string; b: number')), true)).toEqual([])
   })
@@ -124,7 +124,7 @@ describe('public surface gate', () => {
     expect(prev.entries['.']?.internals['dist/index.d.ts#Exp']).toContain('a: string')
     expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
     expect(run(prev, surface(src('a: number')))).toEqual([
-      expect.stringContaining('referenced type Exp changed'),
+      expect.stringContaining('referenced type dist/index.d.ts#Exp changed'),
     ])
   })
 
@@ -168,7 +168,7 @@ describe('public surface gate', () => {
       `declare function g(${a}): void\ndeclare function g(${b}): void\nexport declare const h: typeof g\nexport {}\n`
     const prev = surface(src('x: string', 'x: number'))
     expect(run(prev, surface(src('x: number', 'x: string')))).toEqual([
-      expect.stringContaining('referenced type g changed'),
+      expect.stringContaining('referenced type dist/index.d.ts#g changed'),
     ])
   })
 
