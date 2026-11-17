@@ -41,9 +41,7 @@ describe('compileRouteRules + resolveRouteRule', () => {
     })
   })
 
-  it('EC-5: complex glob patterns work (proves picomatch loaded at runtime)', () => {
-    // If picomatch was missing, compileRouteRules would throw on import.
-    // This nontrivial pattern exercises picomatch's brace + wildcard handling.
+  it('EC-5: complex glob patterns work ', () => {
     const compiled = compileRouteRules({
       '/api/{users,posts}/**/*.json': { maxAge: 60 },
     })
@@ -54,5 +52,19 @@ describe('compileRouteRules + resolveRouteRule', () => {
       maxAge: 60,
     })
     expect(resolveRouteRule('/api/users/42/profile.html', compiled)).toBeUndefined()
+  })
+
+  it('matches dotfiles, ?, and zero-segment **', () => {
+    const compiled = compileRouteRules({ '/a/**/b?.txt': { maxAge: 1 } })
+    expect(resolveRouteRule('/a/b1.txt', compiled)).toBeDefined()
+    expect(resolveRouteRule('/a/.x/y/b2.txt', compiled)).toBeDefined()
+    expect(resolveRouteRule('/a/b12.txt', compiled)).toBeUndefined()
+  })
+
+  it('treats extglob syntax literally and does not backtrack exponentially', () => {
+    const compiled = compileRouteRules({ '+(*a)': { maxAge: 1 } })
+    const start = Date.now()
+    expect(resolveRouteRule('a'.repeat(40) + '!', compiled)).toBeUndefined()
+    expect(Date.now() - start).toBeLessThan(500)
   })
 })
