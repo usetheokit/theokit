@@ -97,10 +97,7 @@ export async function persistSessionId(
     // this code produced the very shape the store's own check rejects — and the helper additionally
     // repairs a directory another process already created loose, which a `mode:` argument cannot.
     ensureSecureDir(target)
-    // Same upstream `.d.ts` gap as in `session-lifecycle.ts`: declared in the barrel, absent from
-    // the module's declaration file, so the symbol arrives unresolved. It is a real async function
-    // (measured), and awaiting it is what the first draft got wrong.
-    await (atomicWriteText as (p: string, c: string) => Promise<unknown>)(target, `${sessionId}\n`)
+    await atomicWriteText(target, `${sessionId}\n`)
     return { persisted: true }
   } catch {
     return { persisted: false }
