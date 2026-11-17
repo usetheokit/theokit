@@ -132,6 +132,8 @@ describe('createJobStore', () => {
   })
 
   it('test_the_store_file_is_owner_only_under_a_permissive_umask', async () => {
+    // The test needs a permissive umask on purpose, to prove the file is still 0600.
+    // eslint-disable-next-line sonarjs/file-permissions
     const previous = process.umask(0o002)
     try {
       const store = createJobStore(file)
