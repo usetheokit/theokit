@@ -44,7 +44,7 @@ afterEach(async () => {
  */
 async function renderedPage(value: string): Promise<{ readonly url: string; readonly rawBody: string }> {
   const reversed = [...value].reverse().join('')
-  const rawBody = `<!doctype html><html><body><div id="v"></div><script>document.getElementById('v').textContent='${reversed}'.split('').reverse().join('')</script></body></html>`
+  const rawBody = `<!doctype html><html><body><p id="v"></p><script>document.getElementById('v').textContent='${reversed}'.split('').reverse().join('')</script></body></html>`
   const server: Server = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     response.end(rawBody)
@@ -119,6 +119,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     const agent = await createTheoClawAgent(theoClawAgentOptions({ model, apiKey, toolOptions: agentToolOptions(settings) }))
     let answer = ''
     const toolCalls: string[] = []
+    const toolResults: string[] = []
     try {
       // The page shows one value. The question names what a person sees, not the element's id: the
       // browser's snapshot is the accessibility tree, which carries no ids, so a model asked for
@@ -126,6 +127,8 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
       const run = await agent.send(`Open ${page.url} in the browser and tell me the exact text the page shows.`)
       for await (const event of run.stream()) {
         if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
+        // Keep what each browser call returned, so a failed run shows what the model was given.
+        if (event.type === 'tool_call' && 'status' in event && event.status !== 'running') toolResults.push(JSON.stringify(event).slice(0, 1000))
       }
       const outcome = await run.wait()
       if (outcome.status !== 'finished') throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
@@ -133,7 +136,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     } finally {
       await agent[Symbol.asyncDispose]()
     }
-    console.log(`OC-60 live: model=${model} toolCalls=${JSON.stringify(toolCalls)} answer=${JSON.stringify(answer)}`)
+    console.log(`OC-60 live: model=${model} toolCalls=${JSON.stringify(toolCalls)} answer=${JSON.stringify(answer)} toolResults=${toolResults.join(' | ')}`)
     expect(toolCalls.some((name) => name.includes('browser_navigate')), JSON.stringify(toolCalls)).toBe(true)
     expect(answer).toContain(value)
   })
