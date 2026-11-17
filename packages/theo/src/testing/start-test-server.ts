@@ -61,30 +61,39 @@ function listeningInodes(port: number): Set<string> {
   return inodes
 }
 
-/** Whether `pid` is in group `pgid` and holds one of `inodes` as an open socket. */
-function holdsSocket(pid: string, pgid: number, inodes: Set<string>): boolean {
+/** The `inodes` that `pid` holds as open sockets, when it is in group `pgid`. */
+function socketsHeldBy(pid: string, pgid: number, inodes: Set<string>): string[] {
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
     // After the ")" closing the command name: state, ppid, pgrp.
-    if (stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2] !== String(pgid)) return false
-    return readdirSync(`/proc/${pid}/fd`).some((fd) => {
+    if (stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2] !== String(pgid)) return []
+    const held: string[] = []
+    for (const fd of readdirSync(`/proc/${pid}/fd`)) {
       const m = /^socket:\[(\d+)\]$/.exec(readlinkSync(`/proc/${pid}/fd/${fd}`))
-      return m?.[1] !== undefined && inodes.has(m[1])
-    })
+      if (m?.[1] !== undefined && inodes.has(m[1])) held.push(m[1])
+    }
+    return held
   } catch {
-    return false // the process went away or is not ours to read
+    return [] // the process went away or is not ours to read
   }
 }
 
+type Listeners = 'none' | 'own' | 'foreign'
+
 /**
- * Whether a process of the child's group holds the listening socket on `port`, read from /proc.
+ * Who listens on `port`, read from /proc: `own` when every listening socket (IPv4 and IPv6) is held
+ * by the child's group, `foreign` when any is not, `none` when nothing listens.
  * `undefined` where /proc is unavailable (not Linux): ownership cannot be established there.
  */
-function groupListensOn(port: number, pgid: number): boolean | undefined {
+function groupListensOn(port: number, pgid: number): Listeners | undefined {
   if (!existsSync('/proc/net/tcp')) return undefined
   const inodes = listeningInodes(port)
-  if (inodes.size === 0) return false
-  return readdirSync('/proc').some((pid) => /^\d+$/.test(pid) && holdsSocket(pid, pgid, inodes))
+  if (inodes.size === 0) return 'none'
+  const held = new Set<string>()
+  for (const pid of readdirSync('/proc')) {
+    if (/^\d+$/.test(pid)) for (const i of socketsHeldBy(pid, pgid, inodes)) held.add(i)
+  }
+  return [...inodes].every((i) => held.has(i)) ? 'own' : 'foreign'
 }
 
 /** Runs a command and returns its stdout; throws when it cannot run or exits non-zero. */
@@ -147,7 +156,8 @@ export interface PortOwnerProbe {
 }
 
 /**
- * Whether the child (or a descendant) holds the listening socket on `port`.
+ * Who listens on `port`: `own` when every listener is the child or a descendant, `foreign` when any
+ * is not, `none` when nothing listens.
  * Linux reads /proc; macOS and Windows ask lsof / netstat for the listening pids and walk their
  * parents up to the child. `unknown` carries why ownership could not be established: never treat
  * it as `own`.
@@ -156,17 +166,19 @@ export function portOwnership(
   port: number,
   childPid: number,
   probe: PortOwnerProbe = {},
-): { owner: 'own' | 'foreign' } | { owner: 'unknown'; reason: string } {
+): { owner: Listeners } | { owner: 'unknown'; reason: string } {
   const platform = probe.platform ?? process.platform
   if (probe.run === undefined && platform === 'linux') {
     const viaProc = groupListensOn(port, childPid)
-    if (viaProc !== undefined) return { owner: viaProc ? 'own' : 'foreign' }
+    if (viaProc !== undefined) return { owner: viaProc }
   }
   const run = probe.run ?? runCommand
   try {
     const pids = listeningPids(port, platform, run)
-    if (pids.length === 0) return { owner: 'foreign' }
-    return { owner: pids.some((p) => descendsFrom(p, childPid, platform, run)) ? 'own' : 'foreign' }
+    if (pids.length === 0) return { owner: 'none' }
+    // Every listener counts: a foreign one on the other address family can answer `localhost` too.
+    const all = pids.every((p) => descendsFrom(p, childPid, platform, run))
+    return { owner: all ? 'own' : 'foreign' }
   } catch (err) {
     const tool = platform === 'win32' ? 'netstat' : 'lsof'
     return {
@@ -321,18 +333,18 @@ async function bootOnce(
 
   while (Date.now() < deadline) {
     if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
-    if (await answers()) {
+    // Checked on every poll, whatever the listener answers: a foreign server that returns 404 or
+    // does not speak HTTP would otherwise make Vite bind another port while we wait for the deadline.
+    const own = child.pid === undefined ? { owner: 'own' as const } : portOwnership(port, child.pid)
+    if (own.owner === 'unknown') return await fail(own.reason)
+    if (own.owner === 'foreign') {
+      return await fail(
+        `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
+        PortSubstitutedError,
+      )
+    }
+    if (own.owner === 'own' && (await answers())) {
       if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
-      // Any server on the port can answer: only a listener held by the child (or its group) counts.
-      const own =
-        child.pid === undefined ? { owner: 'own' as const } : portOwnership(port, child.pid)
-      if (own.owner === 'unknown') return await fail(own.reason)
-      if (own.owner === 'foreign') {
-        return await fail(
-          `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
-          PortSubstitutedError,
-        )
-      }
       return { origin, pid: child.pid, output: () => output, close }
     }
     await sleep(250)
