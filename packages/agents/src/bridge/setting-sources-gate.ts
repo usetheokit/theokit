@@ -200,7 +200,6 @@ export type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skil
 // Build-time guard: every SDK surface must be a member of the union above, so a surface the SDK adds
 // and this gate does not know fails the build instead of being dropped.
 const _covers: readonly CompatSurface[] = [] as readonly SdkCompatSurface[]
-void _covers
 
 const EVERY_SURFACE: readonly CompatSurface[] = [
   'commands',
@@ -215,8 +214,8 @@ const IGNORE_WARNING = (): void => undefined
 
 /** What `resolveCompatSources` returns: the whole root, or the root narrowed to some surfaces. */
 export type ResolvedCompatSource =
-  | CompatSource
-  | { readonly kind: CompatSource; readonly import: readonly CompatSurface[] }
+  | 'claude-code'
+  | { readonly kind: 'claude-code'; readonly import: readonly CompatSurface[] }
 
 /**
  * Refusal to read the working directory for lack of trust.
@@ -427,7 +426,7 @@ export function resolveCompatSources(
       'projectSettings',
     )
   }
-  // The SDK's `CompatSource` is the type of the literal. The SDK DROPS an unrecognised name in
+  // The literal is checked against the SDK's `CompatSource` below. The SDK DROPS an unrecognised name in
   // silence, so a wrong constant here would be a forward that is declared, gated, projected, and then
   // discarded with no message — the exact failure #634 exists to prevent.
   // #686 — an EMPTY list is the one input where "nothing" and "unset, so everything" are both
@@ -445,6 +444,7 @@ export function resolveCompatSources(
   }
   // The two places the compat brand is minted. Both are past every posture check above, which is
   // the property the type then carries for the rest of the program.
+  const dialect = 'claude-code' satisfies CompatSource
   const gated = (source: ResolvedCompatSource): GatedCompatSource => source as GatedCompatSource
 
   // B-042 — the operator's refusal, applied where the root is granted. This gate's own message above
@@ -459,9 +459,9 @@ export function resolveCompatSources(
     const kept = (surfaces ?? EVERY_SURFACE).filter((surface) => surface !== 'hooks')
     // No empty `import` list: `#686` refuses that as ambiguous, and it would be a lie here anyway.
     // Nothing survived, so nothing is granted.
-    return kept.length === 0 ? [] : [gated({ kind: 'claude-code' satisfies CompatSource, import: kept })]
+    return kept.length === 0 ? [] : [gated({ kind: dialect, import: kept })]
   }
 
-  if (surfaces !== undefined) return [gated({ kind: 'claude-code', import: [...surfaces] })]
-  return [gated('claude-code')]
+  if (surfaces !== undefined) return [gated({ kind: dialect, import: [...surfaces] })]
+  return [gated(dialect)]
 }
