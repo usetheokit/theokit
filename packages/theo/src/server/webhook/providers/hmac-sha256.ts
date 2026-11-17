@@ -71,7 +71,9 @@ export function verifyHmacSha256(opts: {
     if (!decoded.ok) return { ok: false, reason: decoded.reason }
 
     const encoder = new TextEncoder()
-    const body = encoder.encode(await req.text())
+    // Raw bytes, not `text()`: a UTF-8 round trip drops a leading BOM and rewrites invalid
+    // sequences, so a signature over the bytes actually sent would stop matching.
+    const body = new Uint8Array(await req.arrayBuffer())
 
     let matched = false
     for (const secret of secrets) {

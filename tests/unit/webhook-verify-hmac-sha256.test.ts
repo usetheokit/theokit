@@ -61,6 +61,22 @@ describe('verifyHmacSha256 (public)', () => {
   })
 })
 
+describe('verifyHmacSha256 raw bytes', () => {
+  it('verifies a body whose bytes do not survive a UTF-8 text round trip', async () => {
+    // Leading BOM plus an invalid sequence: `text()` would drop the first and rewrite the second.
+    const body = new Uint8Array([0xef, 0xbb, 0xbf, 0x7b, 0xff, 0xfe, 0x7d])
+    const sig = createHmac('sha256', 'new').update(body).digest('base64')
+    const r = await verify(
+      new Request('https://x.test/hook', {
+        method: 'POST',
+        body,
+        headers: { 'x-webhook-signature': sig },
+      }),
+    )
+    expect(r).toEqual({ ok: true })
+  })
+})
+
 describe('decodeHexSignature', () => {
   it('names the prefix when it is missing', () => {
     const r = decodeHexSignature('sha256=')('abcd')
