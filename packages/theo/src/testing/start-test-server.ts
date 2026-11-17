@@ -70,6 +70,26 @@ const sleep = (ms: number): Promise<void> =>
     setTimeout(resolve, ms)
   })
 
+function groupAlive(child: ChildProcess): boolean {
+  if (process.platform === 'win32' || child.pid === undefined) return false
+  try {
+    process.kill(-child.pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Resolves true once the whole group is gone, false when `ms` passes first. */
+async function groupGone(child: ChildProcess, ms: number): Promise<boolean> {
+  const until = Date.now() + ms
+  while (groupAlive(child)) {
+    if (Date.now() > until) return false
+    await sleep(25)
+  }
+  return true
+}
+
 function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
   try {
     if (process.platform !== 'win32' && child.pid !== undefined) process.kill(-child.pid, signal)
@@ -84,11 +104,13 @@ function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
  * `/__theo/ready` answers 200.
  */
 export async function startTestServer(options: StartTestServerOptions): Promise<TestServer> {
-  const { cwd, mode = 'dev', timeoutMs = 60_000 } = options
+  const { mode = 'dev', timeoutMs = 60_000 } = options
+  const cwd = resolve(options.cwd)
   const bin = resolveTheokitBin(cwd)
   const port = await freePort()
   const origin = `http://localhost:${String(port)}`
   let output = ''
+  let spawnError: Error | undefined
   const child = spawn(process.execPath, [bin, mode, '--port', String(port)], {
     cwd,
     env: { ...process.env, ...options.env },
@@ -100,6 +122,12 @@ export async function startTestServer(options: StartTestServerOptions): Promise<
   let exited = false
   const hasExited = (): boolean => exited
   const ended = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+    // A failed spawn emits `error` and need not emit `exit`: settle on either.
+    child.once('error', (err) => {
+      spawnError = err
+      exited = true
+      resolve({ code: null, signal: null })
+    })
     child.once('exit', (code, signal) => {
       exited = true
       resolve({ code, signal })
@@ -108,32 +136,39 @@ export async function startTestServer(options: StartTestServerOptions): Promise<
   let closing: ReturnType<TestServer['close']> | undefined
   const close: TestServer['close'] = () => {
     closing ??= (async () => {
-      if (!exited) {
+      if (!exited || groupAlive(child)) {
         signalGroup(child, 'SIGTERM')
-        const timer = setTimeout(() => {
+        // The leader can exit before its descendants: wait for the whole group, then escalate.
+        if (!(await groupGone(child, GRACE_MS))) {
           signalGroup(child, 'SIGKILL')
-        }, GRACE_MS)
-        const result = await ended
-        clearTimeout(timer)
-        // The leader may exit before the rest of the group; make sure none is left.
-        signalGroup(child, 'SIGKILL')
-        return result
+          await groupGone(child, GRACE_MS)
+        }
       }
-      signalGroup(child, 'SIGKILL')
       return ended
     })()
     return closing
   }
 
+  const fail = async (message: string): Promise<never> => {
+    await close()
+    throw new TestServerBootError(
+      spawnError === undefined ? message : `${message}: ${spawnError.message}`,
+      output,
+    )
+  }
+
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    if (hasExited()) {
-      await close()
-      throw new TestServerBootError(`theokit ${mode} exited before it was ready`, output)
-    }
+    if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
     try {
       const res = await fetch(`${origin}/__theo/ready`, { signal: AbortSignal.timeout(1000) })
       if (res.status === 200) {
+        // The port was free when picked, not reserved: another server may have taken it, and the
+        // child then moves to another port. Only a child that is alive and has not moved is ready.
+        if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+        const moved = [...output.matchAll(/localhost:(\d+)/g)].some((m) => m[1] !== String(port))
+        if (moved)
+          return await fail(`theokit ${mode} did not bind the requested port ${String(port)}`)
         return { origin, pid: child.pid, output: () => output, close }
       }
     } catch {
@@ -141,9 +176,5 @@ export async function startTestServer(options: StartTestServerOptions): Promise<
     }
     await sleep(250)
   }
-  await close()
-  throw new TestServerBootError(
-    `theokit ${mode} was not ready within ${String(timeoutMs)}ms`,
-    output,
-  )
+  return await fail(`theokit ${mode} was not ready within ${String(timeoutMs)}ms`)
 }
