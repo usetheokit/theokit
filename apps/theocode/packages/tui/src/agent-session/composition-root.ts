@@ -12,7 +12,6 @@ import { forkSession } from '@theocode/agent/session'
 import { createChatTransport } from './chat-transport.js'
 import { credential } from './credential-helpers.js'
 import { loadCustomCommands } from '../commands/index.js'
-import { forkCurrentSessionWith } from '../persistence/index.js'
 import { createTuiSession, type TuiSession } from './tui-session.js'
 import { persistSessionId } from '../persistence/index.js'
 import { workingDirectory } from '../working-directory.js'
@@ -27,7 +26,7 @@ export interface TuiRoot {
   readonly customCommands: ReturnType<typeof loadCustomCommands>
   readonly customCommandNames: ReadonlySet<string>
   readonly resetSession: () => void
-  readonly sessionFork: () => Promise<{ newId: string; copied: boolean }>
+  readonly sessionFork: () => { newId: string; copied: boolean }
   readonly pointToSession: (id: string) => void
   /** B-055 — install the surface's veto renderer; queued vetoes are replayed into it. */
   readonly onHookVeto: (listen: (veto: { tool: string; reason: string }) => void) => void
@@ -124,16 +123,22 @@ function build(): TuiRoot {
       // read that `/new` repeats, so the bare `void` cannot become an unhandled rejection.
       void fireSessionStart(session.session(), cwd)
     },
-    sessionFork: () =>
-      forkCurrentSessionWith({
-        newId: () => `tui-${randomUUID()}`,
-        fork: (from, to) => forkSession(from, to),
-        current: () => session.session(),
-        commit: (id) => {
-          session.setSession(id)
-          void persistSessionId(sessionPointer, id)
-        },
-      }),
+    // `forkSession` is async now (its live-session guard reads the SDK listing), but the callers of
+    // `sessionFork` are synchronous. The fork runs in the background and the switch to the new
+    // session is committed only if the user is still on the session that was forked: a turn, `/new`
+    // or a resume in the meantime must not be redirected by a late commit.
+    sessionFork: () => {
+      const from = session.session()
+      const newId = `tui-${randomUUID()}`
+      void forkSession(from, newId)
+        .then((out) => {
+          if (!out.copied || session.session() !== from) return
+          session.setSession(out.newId)
+          void persistSessionId(sessionPointer, out.newId)
+        })
+        .catch(() => undefined)
+      return { newId, copied: true }
+    },
     pointToSession: (id) => {
       session.setSession(id)
       void persistSessionId(sessionPointer, id)

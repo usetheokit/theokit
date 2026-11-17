@@ -83,9 +83,7 @@ describe('listSessions', () => {
     writeTranscriptFile('older', 60)
     writeTranscriptFile('newer', 0)
     const ids = (await listSessions(CWD, root)).map((s) => s.id)
-    expect(ids).toHaveLength(2)
-    expect(ids).toContain('older')
-    expect(ids).toContain('newer')
+    expect(ids).toEqual(['newer', 'older'])
   })
 
   it('test_it_ignores_entries_that_are_not_transcripts', async () => {
