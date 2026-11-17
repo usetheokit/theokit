@@ -27,3 +27,4 @@ export {
   type TurnOutcome,
 } from './turn-lifecycle.js'
 export * from './source/wire-reader.js'
+export * from './approvals/pending-approvals.js'

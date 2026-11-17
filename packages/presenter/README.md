@@ -71,6 +71,13 @@ key is unknown — never a silent fallback.
 `foldTurnLifecycle` collapses a turn's events into a `TurnLifecycle` when a surface wants the
 outcome rather than the stream.
 
+## Pending approvals
+
+`pendingApprovals(messages)` reads every outstanding HITL approval off a wire thread, in order, as
+`PendingApproval { approvalId, toolCallId, toolName, input, question?, timeoutMs? }`. It returns one
+shared empty array when none is outstanding. `readPendingApproval(part)` reads a single part. A part
+in `approval-requested` with no `approval.id` is skipped, never settled by its `toolCallId`.
+
 ## Subpaths
 
 | Subpath | What lives there |
