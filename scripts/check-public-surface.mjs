@@ -107,7 +107,11 @@ function collectInternals(roots, ctx, internals) {
 
 /** `<file relative to the package>#<name>`. Overloads and merged declarations in one file share a key. */
 function declKey(d, ctx) {
-  const file = relative(ctx.pkgDir, d.getSourceFile().fileName).split(sep).join('/')
+  // Bundler chunks carry a content hash (`agent-compiler-aubY9WIa.d.ts`) that changes on every build.
+  const file = relative(ctx.pkgDir, d.getSourceFile().fileName)
+    .split(sep)
+    .join('/')
+    .replace(/-[\w-]{8}(?=\.d\.[cm]?ts$)/, '')
   return `${file}#${d.name?.getText() ?? '(anonymous)'}`
 }
 

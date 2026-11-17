@@ -144,6 +144,15 @@ describe('public surface gate', () => {
     expect(run(prev, surface(index, src('b: string; c?: number')))).toEqual([])
   })
 
+  it('keys a declaration in a hashed chunk without the hash, so a rebuild does not drift', () => {
+    const at = (hash: string) =>
+      surface(`import { C } from './chunk-${hash}'\nexport type Out = C\n`, {
+        [`chunk-${hash}.d.ts`]: 'export interface C { a: string }\n',
+      })
+    expect(Object.keys(at('aubY9WIa').entries['.']?.internals ?? {})).toEqual(['dist/chunk.d.ts#C'])
+    expect(at('aubY9WIa')).toEqual(at('Zz09_-xY'))
+  })
+
   it('fails a stable value export turned into a type-only export', () => {
     const prev = surface('declare class K {}\nexport { K }\n')
     const next = surface('declare class K {}\nexport type { K }\n')
