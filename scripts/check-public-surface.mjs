@@ -69,7 +69,6 @@ const DECLARATION_KINDS = new Set([
 ])
 
 function resolveAlias(sym, checker) {
-  // eslint-disable-next-line sonarjs/bitwise-operators -- ts.SymbolFlags is a bit set
   return sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym
 }
 
@@ -118,6 +117,17 @@ function isOwnDeclaration(d, ctx) {
   )
 }
 
+/** True when the export exists at runtime: a value that is not re-exported through `export type`. */
+function hasRuntimeValue(sym, target, checker) {
+  let cur = sym
+  while (cur && cur.flags & ts.SymbolFlags.Alias) {
+    if ((cur.declarations ?? []).some((d) => ts.isTypeOnlyImportOrExportDeclaration(d)))
+      return false
+    cur = checker.getImmediateAliasedSymbol(cur)
+  }
+  return Boolean(target.flags & ts.SymbolFlags.Value)
+}
+
 function describeSymbol(sym, ctx) {
   const target = resolveAlias(sym, ctx.checker)
   const tags = [...tagsOf(sym, ctx.checker), ...tagsOf(target, ctx.checker)]
@@ -128,10 +138,9 @@ function describeSymbol(sym, ctx) {
   collectInternals(decls, ctx, refs)
   return {
     tier: tags.some((t) => t.name === 'experimental') ? 'experimental' : 'stable',
-    declaration: decls
-      .map((d) => printDecl(d, ctx.printer))
-      .sort()
-      .join('\n'),
+    // Source order, not sorted: overload order decides which signature TypeScript picks.
+    declaration: decls.map((d) => printDecl(d, ctx.printer)).join('\n'),
+    runtime: hasRuntimeValue(sym, target, ctx.checker),
     deprecatedSince: since ? since[1] : null,
     references: [...refs.keys()].sort(),
     refTexts: refs,
@@ -181,8 +190,28 @@ export function extractSurface(pkgDir) {
   return { package: manifest.name, entries }
 }
 
+/** JSON in the shape Prettier prints it (short arrays on one line), so the file passes `format:check`. */
 export function serialize(baseline) {
-  return `${JSON.stringify(baseline, null, 2)}\n`
+  const lines = JSON.stringify(baseline, null, 2).split('\n')
+  const out = []
+  let i = 0
+  while (i < lines.length) {
+    const flat = flatArray(lines, i)
+    out.push(flat ? flat.text : lines[i])
+    i = flat ? flat.next : i + 1
+  }
+  return `${out.join('\n')}\n`
+}
+
+/** The array opened on `lines[i]` as one line when it holds only strings and fits in 100 columns. */
+function flatArray(lines, i) {
+  if (!lines[i].endsWith('[')) return null
+  const close = lines.findIndex((l, j) => j > i && l.trim().startsWith(']'))
+  const items = lines.slice(i + 1, close)
+  if (close < 0 || items.length === 0 || !items.every((l) => /^ +"/.test(l))) return null
+  const comma = lines[close].endsWith(',') ? ',' : ''
+  const text = `${lines[i]}${items.map((l) => l.trim().replace(/,$/, '')).join(', ')}]${comma}`
+  return text.length <= 100 ? { text, next: close + 1 } : null
 }
 
 /** Text of a declaration with its member list cut out, plus the members, or null when it has none. */
@@ -208,10 +237,13 @@ export function addsOnlyOptionalMembers(prev, next) {
   const a = shape(prev)
   const b = shape(next)
   if (!a || !b || a.shell !== b.shell) return false
-  const before = new Set(a.list.map((m) => m.text))
-  const after = new Set(b.list.map((m) => m.text))
-  if (![...before].every((t) => after.has(t))) return false
-  return b.list.every((m) => before.has(m.text) || m.optional)
+  // The old members must appear in `b` in the same order; anything between them must be optional.
+  let i = 0
+  for (const m of b.list) {
+    if (i < a.list.length && m.text === a.list[i].text) i++
+    else if (!m.optional) return false
+  }
+  return i === a.list.length
 }
 
 function referenceBreakage(old, oldInternals, curInternals) {
@@ -229,6 +261,7 @@ function referenceBreakage(old, oldInternals, curInternals) {
 function breakage(old, cur, oldInternals, curInternals) {
   if (!cur) return 'removed or renamed'
   if (cur.tier !== 'stable') return 'demoted to experimental'
+  if (old.runtime && !cur.runtime) return 'runtime export became type-only'
   if (
     cur.declaration !== old.declaration &&
     !addsOnlyOptionalMembers(old.declaration, cur.declaration)

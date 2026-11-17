@@ -125,6 +125,25 @@ describe('public surface gate', () => {
     ])
   })
 
+  it('fails a stable value export turned into a type-only export', () => {
+    const prev = surface('declare class K {}\nexport { K }\n')
+    const next = surface('declare class K {}\nexport type { K }\n')
+    expect(prev.entries['.']?.names.K).toMatchObject({ runtime: true })
+    expect(run(prev, next)).toEqual([expect.stringContaining('type-only')])
+    expect(run(prev, next, true)).toEqual([])
+  })
+
+  it('treats reordered overloads and members as breaking', () => {
+    const fns = (a: string, b: string) =>
+      `export declare function f(${a}): void\nexport declare function f(${b}): void\n`
+    const prev = surface(fns('x: string', 'x: number'))
+    expect(run(prev, surface(fns('x: number', 'x: string')))).toHaveLength(1)
+    const ifc = (a: string, b: string) => `export interface I { ${a}; ${b} }\n`
+    const p2 = surface(ifc('a(x: string): void', 'a(x: number): void'))
+    expect(run(p2, surface(ifc('a(x: number): void', 'a(x: string): void')))).toHaveLength(1)
+    expect(run(p2, surface(ifc('a(x: string): void', 'a(x: number): void; b?: 1')))).toEqual([])
+  })
+
   it('reads a major declaration from changeset frontmatter', () => {
     expect(gate.declaresMajor(["---\n'@x/pkg': major\n---\n\nx"], '@x/pkg')).toBe(true)
     expect(gate.declaresMajor(["---\n'@x/pkg': minor\n---\n"], '@x/pkg')).toBe(false)
