@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/wire/index.ts'],
+  entry: ['src/index.ts', 'src/wire/index.ts', 'src/diff/index.ts'],
   // One `external`, deliberately. There were two keys in this literal, and the second silently won
   // (CodeQL `js/overwritten-property`, alert 258): `external: ['zod', '@theokit/sdk']` here and
   // `external: ['@theokit/sdk', 'ai']` below. So the line naming `zod` had no effect at all.
