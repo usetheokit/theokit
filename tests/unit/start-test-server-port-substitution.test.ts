@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { portOwnership, type RunCommand } from '../../packages/theo/src/testing/start-test-server.js'
+import {
+  portOwnership,
+  type RunCommand,
+} from '../../packages/theo/src/testing/start-test-server.js'
 
 const CHILD = 100
 const PORT = 4000

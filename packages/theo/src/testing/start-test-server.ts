@@ -76,6 +76,17 @@ function holdsSocket(pid: string, pgid: number, inodes: Set<string>): boolean {
   }
 }
 
+/**
+ * Whether a process of the child's group holds the listening socket on `port`, read from /proc.
+ * `undefined` where /proc is unavailable (not Linux): ownership cannot be established there.
+ */
+function groupListensOn(port: number, pgid: number): boolean | undefined {
+  if (!existsSync('/proc/net/tcp')) return undefined
+  const inodes = listeningInodes(port)
+  if (inodes.size === 0) return false
+  return readdirSync('/proc').some((pid) => /^\d+$/.test(pid) && holdsSocket(pid, pgid, inodes))
+}
+
 /** Runs a command and returns its stdout; throws when it cannot run or exits non-zero. */
 export type RunCommand = (cmd: string, args: string[]) => string
 
@@ -89,7 +100,7 @@ function listeningPids(port: number, platform: NodeJS.Platform, run: RunCommand)
     for (const line of run('netstat', ['-ano', '-p', 'tcp']).split('\n')) {
       const col = line.trim().split(/\s+/)
       // Proto, Local Address, Foreign Address, State, PID
-      if (col[3] === 'LISTENING' && col[1]?.endsWith(`:${String(port)}`) === true) {
+      if (col[3] === 'LISTENING' && (col[1] ?? '').endsWith(`:${String(port)}`)) {
         pids.push(Number(col[4]))
       }
     }
@@ -137,8 +148,9 @@ export interface PortOwnerProbe {
 
 /**
  * Whether the child (or a descendant) holds the listening socket on `port`.
- * Linux reads /proc; macOS and Windows ask lsof / netstat for the listening pids and walk their parents
- * up to the child. `unknown` carries why ownership could not be established: never treat it as `own`.
+ * Linux reads /proc; macOS and Windows ask lsof / netstat for the listening pids and walk their
+ * parents up to the child. `unknown` carries why ownership could not be established: never treat
+ * it as `own`.
  */
 export function portOwnership(
   port: number,
@@ -298,27 +310,30 @@ async function bootOnce(
     throw new Err(spawnError === undefined ? message : `${message}: ${spawnError.message}`, output)
   }
 
-  while (Date.now() < deadline) {
-    if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+  const answers = async (): Promise<boolean> => {
     try {
       const res = await fetch(`${origin}/__theo/ready`, { signal: AbortSignal.timeout(1000) })
-      if (res.status === 200) {
-        if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
-        // Any server on the port can answer: only a listener held by the child's own group counts.
-        if (child.pid !== undefined) {
-          const own = portOwnership(port, child.pid)
-          if (own.owner === 'foreign') {
-            return await fail(
-              `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
-              PortSubstitutedError,
-            )
-          }
-          if (own.owner === 'unknown') return await fail(own.reason)
-        }
-        return { origin, pid: child.pid, output: () => output, close }
-      }
+      return res.status === 200
     } catch {
-      // not listening yet
+      return false // not listening yet
+    }
+  }
+
+  while (Date.now() < deadline) {
+    if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+    if (await answers()) {
+      if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+      // Any server on the port can answer: only a listener held by the child (or its group) counts.
+      const own =
+        child.pid === undefined ? { owner: 'own' as const } : portOwnership(port, child.pid)
+      if (own.owner === 'unknown') return await fail(own.reason)
+      if (own.owner === 'foreign') {
+        return await fail(
+          `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
+          PortSubstitutedError,
+        )
+      }
+      return { origin, pid: child.pid, output: () => output, close }
     }
     await sleep(250)
   }
