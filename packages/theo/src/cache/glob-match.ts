@@ -15,7 +15,8 @@ type Node =
   | { t: 'any' }
   | { t: 'deep' }
   | { t: 'tail' }
-  | { t: 'set'; neg: boolean; items: [string, string][] }
+  | { t: 'set'; neg: boolean; items: [string, string][]; classes: string[] }
+  | { t: 'star1' }
   | { t: 'group'; k: string; alts: Node[][] }
 
 interface Cursor {
@@ -25,31 +26,54 @@ interface Cursor {
 
 const MAX_RANGE = 1000
 
+const POSIX: Record<string, RegExp> = {
+  alpha: /[A-Za-z]/,
+  digit: /\d/,
+  alnum: /[A-Za-z0-9]/,
+  upper: /[A-Z]/,
+  lower: /[a-z]/,
+  space: /\s/,
+  blank: /[ \t]/,
+  punct: /[!-/:-@[-`{-~]/,
+  xdigit: /[0-9A-Fa-f]/,
+  word: /\w/,
+}
+
+/** One member of a bracket expression, from `i`: a `[:class:]`, a range or a single character. */
+function parseSetMember(
+  p: string,
+  i: number,
+  set: { items: [string, string][]; classes: string[] },
+): number {
+  const posix = /^\[:([a-z]+):\]/.exec(p.slice(i, i + 12))
+  if (posix !== null && Object.hasOwn(POSIX, posix[1])) {
+    set.classes.push(posix[1])
+    return i + posix[0].length
+  }
+  let lo = p.charAt(i)
+  if (lo === '\\' && i + 1 < p.length) lo = p.charAt(++i)
+  i++
+  if (p.charAt(i) === '-' && i + 1 < p.length && p.charAt(i + 1) !== ']') {
+    set.items.push([lo, p.charAt(i + 1)])
+    return i + 2
+  }
+  set.items.push([lo, lo])
+  return i
+}
+
 function parseSet(cur: Cursor): Node | undefined {
-  const start = cur.i
-  let i = start + 1
-  let neg = false
-  if (cur.p[i] === '!' || cur.p[i] === '^') {
-    neg = true
-    i++
-  }
-  const items: [string, string][] = []
+  let i = cur.i + 1
+  const neg = cur.p.charAt(i) === '!' || cur.p.charAt(i) === '^'
+  if (neg) i++
+  const set = { items: [] as [string, string][], classes: [] as string[] }
   let first = true
-  while (i < cur.p.length && (cur.p[i] !== ']' || first)) {
+  while (i < cur.p.length && (cur.p.charAt(i) !== ']' || first)) {
     first = false
-    let lo = cur.p[i] ?? ''
-    if (lo === '\\' && i + 1 < cur.p.length) lo = cur.p[++i] ?? ''
-    i++
-    if (cur.p[i] === '-' && i + 1 < cur.p.length && cur.p[i + 1] !== ']') {
-      items.push([lo, cur.p[i + 1] ?? lo])
-      i += 2
-    } else {
-      items.push([lo, lo])
-    }
+    i = parseSetMember(cur.p, i, set)
   }
-  if (cur.p[i] !== ']') return undefined
+  if (cur.p.charAt(i) !== ']') return undefined
   cur.i = i + 1
-  return { t: 'set', neg, items }
+  return { t: 'set', neg, ...set }
 }
 
 function parseAlts(cur: Cursor, sep: string, close: string): Node[][] | undefined {
@@ -63,17 +87,29 @@ function parseAlts(cur: Cursor, sep: string, close: string): Node[][] | undefine
   }
 }
 
+function rangeEnds(parts: string[]): [number, number, boolean] | undefined {
+  const x = parts[0] ?? ''
+  const y = parts[1] ?? ''
+  if (/^-?\d+$/.test(x) && /^-?\d+$/.test(y)) return [Number(x), Number(y), false]
+  if (/^[A-Za-z]$/.test(x) && /^[A-Za-z]$/.test(y)) return [x.charCodeAt(0), y.charCodeAt(0), true]
+  return undefined
+}
+
+/** `{1..3}` and `{a..c}` as alternatives. */
 function numericRange(alts: Node[][]): Node[][] | undefined {
   if (alts.length !== 1) return undefined
   const text = (alts[0] ?? []).map((n) => (n.t === 'lit' ? n.c : '\0')).join('')
   const parts = text.split('..')
-  if (parts.length !== 2) return undefined
-  const [a, b] = parts.map((x) => (/^-?\d+$/.test(x) ? Number(x) : NaN)) as [number, number]
-  if (Number.isNaN(a) || Number.isNaN(b) || Math.abs(b - a) > MAX_RANGE) return undefined
-  const out: Node[][] = []
+  const ends = parts.length === 2 ? rangeEnds(parts) : undefined
+  if (ends === undefined || Math.abs(ends[1] - ends[0]) > MAX_RANGE) return undefined
+  const [a, b, letters] = ends
   const step = a <= b ? 1 : -1
+  const out: Node[][] = []
   for (let k = 0; k <= Math.abs(b - a); k++) {
-    out.push(Array.from(String(a + k * step), (c): Node => ({ t: 'lit', c })))
+    const v = a + k * step
+    out.push(
+      Array.from(letters ? String.fromCharCode(v) : String(v), (c): Node => ({ t: 'lit', c })),
+    )
   }
   return out
 }
@@ -120,6 +156,7 @@ function parseStars(cur: Cursor): Node {
     cur.i++
     return { t: 'deep' }
   }
+  if (n === 1 && atStart && cur.i >= cur.p.length && cur.i > 1) return { t: 'star1' }
   return { t: 'star' }
 }
 
@@ -158,32 +195,58 @@ function parseSeq(cur: Cursor, stop: string): Node[] {
 }
 
 function inSet(node: Extract<Node, { t: 'set' }>, ch: string): boolean {
-  const hit = node.items.some(([lo, hi]) => ch >= lo && ch <= hi)
+  const hit =
+    node.items.some(([lo, hi]) => ch >= lo && ch <= hi) ||
+    node.classes.some((name) => POSIX[name].test(ch))
   return hit !== node.neg
 }
 
+interface Ctx {
+  s: string
+  /** Ends of a node list from one start, so nested groups are evaluated once per (list, start). */
+  memo: Map<Node[], Map<number, Set<number>>>
+}
+
 /** Ends of `nodes` run from every start in `starts`. */
-function run(nodes: Node[], s: string, starts: Set<number>): Set<number> {
+function run(nodes: Node[], ctx: Ctx, starts: Set<number>): Set<number> {
   let cur = starts
   for (const node of nodes) {
     if (cur.size === 0) break
-    cur = step(node, s, cur)
+    cur = step(node, ctx, cur)
   }
   return cur
 }
 
-function alts(g: Extract<Node, { t: 'group' }>, s: string, from: Set<number>): Set<number> {
+function runFrom(nodes: Node[], ctx: Ctx, from: Set<number>): Set<number> {
   const out = new Set<number>()
-  for (const alt of g.alts) for (const e of run(alt, s, from)) out.add(e)
+  let byStart = ctx.memo.get(nodes)
+  if (byStart === undefined) {
+    byStart = new Map()
+    ctx.memo.set(nodes, byStart)
+  }
+  for (const i of from) {
+    let ends = byStart.get(i)
+    if (ends === undefined) {
+      ends = run(nodes, ctx, new Set([i]))
+      byStart.set(i, ends)
+    }
+    for (const e of ends) out.add(e)
+  }
   return out
 }
 
-function closure(g: Extract<Node, { t: 'group' }>, s: string, seed: Set<number>): Set<number> {
+function alts(g: Extract<Node, { t: 'group' }>, ctx: Ctx, from: Set<number>): Set<number> {
+  const out = new Set<number>()
+  for (const alt of g.alts) for (const e of runFrom(alt, ctx, from)) out.add(e)
+  return out
+}
+
+function closure(g: Extract<Node, { t: 'group' }>, ctx: Ctx, seed: Set<number>): Set<number> {
   const seen = new Set(seed)
   let frontier = seed
   while (frontier.size > 0) {
     const next = new Set<number>()
-    for (const e of alts(g, s, frontier)) {
+    for (const e of alts(g, ctx, frontier)) {
       if (!seen.has(e)) {
         seen.add(e)
         next.add(e)
@@ -194,30 +257,30 @@ function closure(g: Extract<Node, { t: 'group' }>, s: string, seed: Set<number>)
   return seen
 }
 
-function negate(g: Extract<Node, { t: 'group' }>, s: string, from: Set<number>): Set<number> {
+function negate(g: Extract<Node, { t: 'group' }>, ctx: Ctx, from: Set<number>): Set<number> {
   const out = new Set<number>()
   for (const i of from) {
-    const matched = alts(g, s, new Set([i]))
-    for (let j = i; j <= s.length; j++) {
+    const matched = alts(g, ctx, new Set([i]))
+    for (let j = i; j <= ctx.s.length; j++) {
       if (!matched.has(j)) out.add(j)
-      if (s[j] === '/') break
+      if (ctx.s[j] === '/') break
     }
   }
   return out
 }
 
-function stepGroup(g: Extract<Node, { t: 'group' }>, s: string, from: Set<number>): Set<number> {
+function stepGroup(g: Extract<Node, { t: 'group' }>, ctx: Ctx, from: Set<number>): Set<number> {
   switch (g.k) {
     case '!':
-      return negate(g, s, from)
+      return negate(g, ctx, from)
     case '?':
-      return new Set([...from, ...alts(g, s, from)])
+      return new Set([...from, ...alts(g, ctx, from)])
     case '*':
-      return closure(g, s, from)
+      return closure(g, ctx, from)
     case '+':
-      return closure(g, s, alts(g, s, from))
+      return closure(g, ctx, alts(g, ctx, from))
     default:
-      return alts(g, s, from)
+      return alts(g, ctx, from)
   }
 }
 
@@ -232,11 +295,11 @@ function reach(s: string, from: Set<number>, crossSlash: boolean, minAdvance = 0
   return out
 }
 
-function stepChar(node: Node, s: string, from: Set<number>): Set<number> {
+function stepChar(node: Node, ctx: Ctx, from: Set<number>): Set<number> {
   const out = new Set<number>()
   for (const i of from) {
-    if (i >= s.length) continue
-    const ch = s.charAt(i)
+    if (i >= ctx.s.length) continue
+    const ch = ctx.s.charAt(i)
     const ok =
       node.t === 'lit' ? ch === node.c : ch !== '/' && (node.t !== 'set' || inSet(node, ch))
     if (ok) out.add(i + 1)
@@ -244,16 +307,18 @@ function stepChar(node: Node, s: string, from: Set<number>): Set<number> {
   return out
 }
 
-function step(node: Node, s: string, from: Set<number>): Set<number> {
+function step(node: Node, ctx: Ctx, from: Set<number>): Set<number> {
   switch (node.t) {
     case 'star':
-      return reach(s, from, false)
+      return reach(ctx.s, from, false)
+    case 'star1':
+      return reach(ctx.s, from, false, 1)
     case 'any':
-      return reach(s, from, true)
+      return reach(ctx.s, from, true)
     case 'deep': {
       // `**/`: zero or more whole segments.
       const out = new Set<number>()
-      for (const j of reach(s, from, true)) if (from.has(j) || s[j - 1] === '/') out.add(j)
+      for (const j of reach(ctx.s, from, true)) if (from.has(j) || ctx.s[j - 1] === '/') out.add(j)
       return out
     }
     case 'tail': {
@@ -261,18 +326,24 @@ function step(node: Node, s: string, from: Set<number>): Set<number> {
       const out = new Set<number>()
       for (const i of from) {
         out.add(i)
-        if (s[i] === '/') for (const j of reach(s, new Set([i + 1]), true)) out.add(j)
+        if (ctx.s[i] === '/') for (const j of reach(ctx.s, new Set([i + 1]), true)) out.add(j)
       }
       return out
     }
     case 'group':
-      return stepGroup(node, s, from)
+      return stepGroup(node, ctx, from)
     default:
-      return stepChar(node, s, from)
+      return stepChar(node, ctx, from)
   }
 }
 
 export function compileGlob(pattern: string): (path: string) => boolean {
   const nodes = parseSeq({ p: pattern, i: 0 }, '')
-  return (path) => run(nodes, path, new Set([0])).has(path.length)
+  return (path) => {
+    const ends = run(nodes, { s: path, memo: new Map() }, new Set([0]))
+    // picomatch ignores one trailing slash on the path (`/api/*` matches `/api/a/`).
+    return (
+      ends.has(path.length) || (path.length > 1 && path.endsWith('/') && ends.has(path.length - 1))
+    )
+  }
 }

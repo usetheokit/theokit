@@ -54,7 +54,7 @@ describe('compileRouteRules + resolveRouteRule', () => {
     expect(resolveRouteRule('/api/users/42/profile.html', compiled)).toBeUndefined()
   })
 
-  it('matches dotfiles, ?, and zero-segment **', () => {
+  it('matches dotfiles, ? and zero-segment ** (/a/**/b?.txt)', () => {
     const compiled = compileRouteRules({ '/a/**/b?.txt': { maxAge: 1 } })
     expect(resolveRouteRule('/a/b1.txt', compiled)).toBeDefined()
     expect(resolveRouteRule('/a/.x/y/b2.txt', compiled)).toBeDefined()
@@ -87,10 +87,31 @@ describe('compileRouteRules + resolveRouteRule', () => {
     expect(m('/a/\\*', '/a/x')).toBe(false)
   })
 
+  it('keeps picomatch semantics for classes, letter ranges and trailing slashes', () => {
+    const m = (glob: string, path: string): boolean =>
+      resolveRouteRule(path, compileRouteRules({ [glob]: { maxAge: 1 } })) !== undefined
+    expect(m('/api/[[:alpha:]]', '/api/a')).toBe(true)
+    expect(m('/api/[[:alpha:]]', '/api/1')).toBe(false)
+    expect(m('/p/{a..c}', '/p/b')).toBe(true)
+    expect(m('/p/{a..c}', '/p/d')).toBe(false)
+    expect(m('/api/*', '/api/a/')).toBe(true)
+    expect(m('/api/*', '/api/')).toBe(false)
+    expect(m('/api/**', '/api/')).toBe(true)
+    expect(m('/api/*/', '/api/a/')).toBe(true)
+  })
+
   it('does not backtrack excessively on overlapping wildcards', () => {
     const compiled = compileRouteRules({ '/a/*a*a*a*a*a*a*a*b': { maxAge: 1 } })
     const start = Date.now()
     expect(resolveRouteRule('/a/' + 'a'.repeat(40), compiled)).toBeUndefined()
+    expect(Date.now() - start).toBeLessThan(100)
+  })
+
+  it('does not blow up on nested extglobs', () => {
+    const inner = '!(*a!(*a!(*a!(*a!(*a)))))'
+    const compiled = compileRouteRules({ [`/a/*${inner}z`]: { maxAge: 1 } })
+    const start = Date.now()
+    expect(resolveRouteRule('/a/' + 'b'.repeat(40), compiled)).toBeUndefined()
     expect(Date.now() - start).toBeLessThan(100)
   })
 
