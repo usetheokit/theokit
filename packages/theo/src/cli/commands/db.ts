@@ -83,12 +83,14 @@ function assertBinExists(cwd: string, bin: string): void {
  * an unreviewed diff with no record of it. `migrate` now applies the generated files, and the old
  * behaviour stays available, under its real name, as `push`.
  */
+const DRIZZLE_KIT = 'drizzle-kit' as const
+
 const DRIZZLE_KIT_VERBS = {
-  migrate: { args: ['drizzle-kit', 'migrate'], message: 'Migrations applied' },
-  push: { args: ['drizzle-kit', 'push'], message: 'Schema pushed to the database' },
-  generate: { args: ['drizzle-kit', 'generate'], message: 'Migration files generated' },
-  studio: { args: ['drizzle-kit', 'studio'], message: 'Studio stopped' },
-  check: { args: ['drizzle-kit', 'check'], message: 'Migrations are consistent' },
+  migrate: { args: [DRIZZLE_KIT, 'migrate'], message: 'Migrations applied' },
+  push: { args: [DRIZZLE_KIT, 'push'], message: 'Schema pushed to the database' },
+  generate: { args: [DRIZZLE_KIT, 'generate'], message: 'Migration files generated' },
+  studio: { args: [DRIZZLE_KIT, 'studio'], message: 'Studio stopped' },
+  check: { args: [DRIZZLE_KIT, 'check'], message: 'Migrations are consistent' },
 } as const
 
 async function runProjectScript(
@@ -155,14 +157,14 @@ export async function dbCommand(
     }
     const verb = DRIZZLE_KIT_VERBS[dbAction]
     assertFileExists(cwd, 'drizzle.config.ts', 'Create a drizzle.config.ts for your project.')
-    assertBinExists(cwd, 'drizzle-kit')
+    assertBinExists(cwd, DRIZZLE_KIT)
     console.log(`\n  ▸ Running ${verb.args.join(' ')}...\n`)
     const extra: string[] = []
     if (dbAction === 'studio') {
       if (options.host !== undefined) extra.push('--host', options.host)
       if (options.port !== undefined) extra.push('--port', String(options.port))
     }
-    run('drizzle-kit', [...verb.args.slice(1), ...extra], cwd)
+    run(DRIZZLE_KIT, [...verb.args.slice(1), ...extra], cwd)
     return { status: 'success', message: verb.message, action: dbAction }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

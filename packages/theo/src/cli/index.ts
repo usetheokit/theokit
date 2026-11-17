@@ -292,7 +292,7 @@ cli
       if (port !== undefined && !Number.isInteger(port)) throw new Error('--port must be a number')
       await dbCommandCli(action, {
         force: options.force,
-        host: options.host === undefined ? undefined : String(options.host),
+        host: options.host,
         port,
       })
     } catch (err) {
