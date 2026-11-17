@@ -14,7 +14,11 @@ export class FormDataEncodingError extends Error {
   }
 }
 
-type AnyDef = { shape?: Record<string, unknown>; innerType?: unknown; element?: unknown }
+interface AnyDef {
+  shape?: Record<string, unknown>
+  innerType?: unknown
+  element?: unknown
+}
 
 function ctorName(schema: unknown): string {
   return (schema as { constructor?: { name?: string } } | null)?.constructor?.name ?? ''
@@ -52,13 +56,13 @@ function asBlobList(v: unknown): Blob[] | undefined {
   const len = (v as { length?: unknown }).length
   if (typeof len !== 'number') return undefined
   const items = Array.from(v as ArrayLike<unknown>)
-  return items.length > 0 && items.every(isBlob) ? (items as Blob[]) : undefined
+  return items.length > 0 && items.every(isBlob) ? items : undefined
 }
 
-function encodeScalar(v: unknown): string | Blob {
-  if (isBlob(v)) return v
-  if (typeof v === 'boolean') return v ? 'true' : 'false'
-  return String(v)
+function appendScalar(fd: FormData, key: string, v: unknown): void {
+  if (isBlob(v)) fd.append(key, v)
+  else if (typeof v === 'boolean') fd.append(key, v ? 'true' : 'false')
+  else fd.append(key, String(v))
 }
 
 function appendValue(fd: FormData, key: string, schema: unknown, value: unknown): void {
@@ -82,7 +86,7 @@ function appendValue(fd: FormData, key: string, schema: unknown, value: unknown)
     }
     const list = Array.isArray(value) ? value : (asBlobList(value) ?? Array.from(value as ArrayLike<unknown>))
     for (const item of list) {
-      if (item !== null && item !== undefined) fd.append(key, encodeScalar(item))
+      if (item !== null && item !== undefined) appendScalar(fd, key, item)
     }
     return
   }
@@ -92,7 +96,7 @@ function appendValue(fd: FormData, key: string, schema: unknown, value: unknown)
     for (const f of files) fd.append(key, f)
     return
   }
-  fd.append(key, encodeScalar(value))
+  appendScalar(fd, key, value)
 }
 
 function appendObject(
