@@ -26,9 +26,6 @@ export async function resolveBody(
   jsonResponse: (status: number, body: unknown) => Response,
 ): Promise<unknown> {
   if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
-  // No `@Body` on the handler: nothing here would read the result, and `clone().text()` would pull
-  // the whole upload through the tee before the handler (e.g. `readCappedFormData`) can cap it.
-  if (!walk.paramEntries.some((p) => p.source === 'body')) return undefined
 
   let body: unknown
   try {
