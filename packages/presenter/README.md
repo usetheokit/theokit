@@ -77,6 +77,7 @@ outcome rather than the stream.
 |---|---|
 | `.` | The event, the `Presenter` contract, the registry, the sources, the three presenters |
 | `./wire` | The wire-format types shared with transports |
+| `./diff` | The one unified-diff model for UI kits: `parseUnifiedDiff`, `foldDiffLines`, `segmentWords`, `pairIntraLines`, `DiffParseError`. Data only; the only entry that loads `parse-diff` and `diff` |
 
 ## Licence
 
