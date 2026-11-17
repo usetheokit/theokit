@@ -24,7 +24,13 @@ format — so no surface leaks into the contract.
 pnpm add @theokit/presenter
 ```
 
-Peers: `@theokit/sdk` and `zod`.
+Peers (`@theokit/sdk` and `zod`) are optional. What each entry needs:
+
+- `@theokit/presenter` (root): neither at runtime.
+- `@theokit/presenter/wire`: `zod`.
+- The `.d.ts` files reference types from both packages, so a TypeScript consumer without them needs `skipLibCheck` (or installs them as devDependencies).
+
+New root exports must stay free of runtime imports of either peer; `tests/root-entry-has-no-runtime-peers.test.ts` pins it.
 
 ## The canonical event
 
