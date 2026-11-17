@@ -280,12 +280,21 @@ cli
 cli
   .command(
     'db <action>',
-    'Database commands: generate (write SQL migration files), migrate (apply them), push (diff the schema into the database, no files), seed',
+    'Database commands: generate (write SQL migration files), migrate (apply them), push (diff the schema into the database, no files), seed, studio, check, reset (needs --force)',
   )
-  .action(async (action: string) => {
+  .option('--force', 'Confirm a destructive db action (reset)')
+  .option('--host <host>', 'Host for db studio')
+  .option('--port <port>', 'Port for db studio')
+  .action(async (action: string, options: { force?: boolean; host?: string; port?: string }) => {
     try {
       const { dbCommandCli } = await import('./commands/db.js')
-      await dbCommandCli(action)
+      const port = options.port === undefined ? undefined : Number(options.port)
+      if (port !== undefined && !Number.isInteger(port)) throw new Error('--port must be a number')
+      await dbCommandCli(action, {
+        force: options.force,
+        host: options.host,
+        port,
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`\n  ✗ ${msg}\n`)
