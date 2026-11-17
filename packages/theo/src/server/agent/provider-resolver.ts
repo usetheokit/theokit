@@ -118,7 +118,7 @@ export interface ResolvedProvider {
  * rule and no per-provider literal to drift. `tests/unit/provider-resolver.test.ts` pins the order
  * against `resolveAgentCredential`.
  */
-const CLOUD_PROVIDERS: ReadonlyArray<{ name: string; baseUrl: string; gateway?: true }> = [
+const CLOUD_PROVIDERS: readonly { name: string; baseUrl: string; gateway?: true }[] = [
   { name: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', gateway: true },
   { name: 'anthropic', baseUrl: 'https://api.anthropic.com' },
   { name: 'openai', baseUrl: 'https://api.openai.com/v1' },
