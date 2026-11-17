@@ -45,4 +45,12 @@ describe('pendingApprovals', () => {
     const msgs = [{ parts: [part({ state: 'output-available' })] }]
     expect(pendingApprovals(msgs)).toBe(pendingApprovals([]))
   })
+
+  it('one caller cannot corrupt later empty results', () => {
+    const empty = pendingApprovals([])
+    expect(() =>
+      empty.push({ approvalId: 'x', toolCallId: 'x', toolName: undefined, input: 1 }),
+    ).toThrow(TypeError)
+    expect(pendingApprovals([])).toEqual([])
+  })
 })

@@ -22,7 +22,9 @@ export interface PendingApproval {
   readonly timeoutMs?: number
 }
 
-const NO_PENDING_APPROVALS: PendingApproval[] = []
+// Frozen: the one array is shared by every empty result, so a caller's `push` must throw rather
+// than leak an entry into later results.
+const NO_PENDING_APPROVALS = Object.freeze([] as PendingApproval[]) as PendingApproval[]
 
 /**
  * One part as a pending approval, or `undefined` when it is not an approval request with a settle id.
@@ -45,7 +47,9 @@ export function readPendingApproval(part: unknown): PendingApproval | undefined 
 }
 
 /** Every outstanding approval across `messages`, in order. Returns one shared empty array when none. */
-export function pendingApprovals(messages: readonly Pick<WireMessage, 'parts'>[]): PendingApproval[] {
+export function pendingApprovals(
+  messages: readonly Pick<WireMessage, 'parts'>[],
+): PendingApproval[] {
   let pending: PendingApproval[] | undefined
   for (const message of messages) {
     for (const part of message.parts) {
