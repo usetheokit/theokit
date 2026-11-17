@@ -56,11 +56,11 @@ describe('version helpers', () => {
 })
 
 describe('theokit requires a vite past the launch-editor advisory', () => {
-  it('the vite floor theokit declares is the first release past the launch-editor advisory', () => {
+  it('the vite floor theokit declares as a peer is the first release past the launch-editor advisory', () => {
     const manifest = JSON.parse(readFileSync(THEO_MANIFEST, 'utf-8')) as {
-      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
     }
-    const range = manifest.dependencies?.vite ?? '(absent)'
+    const range = manifest.peerDependencies?.vite ?? '(absent)'
     // A bare pin is not a floor an app inherits, so only a caret range is read.
     const floor = range.startsWith('^') ? versionParts(range) : undefined
     expect(floor, `theokit declares vite "${range}", which is not a ^X.Y.Z range`).toBeDefined()
