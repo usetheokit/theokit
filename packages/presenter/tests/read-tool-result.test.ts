@@ -60,4 +60,16 @@ describe('readToolResult', () => {
     const o = Object.assign(Object.create(null) as Record<string, unknown>, { n: 1n })
     expect(readToolResult(o).kind).toBe('text')
   })
+  it('an object whose every conversion throws reads as text without throwing', () => {
+    const hostile = {
+      n: 1n,
+      [Symbol.toPrimitive]: () => {
+        throw new Error('no primitive')
+      },
+      get [Symbol.toStringTag](): string {
+        throw new Error('no tag')
+      },
+    }
+    expect(readToolResult(hostile)).toEqual({ kind: 'text', text: '[unreadable tool result]' })
+  })
 })

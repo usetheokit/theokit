@@ -23,7 +23,11 @@ function safeString(raw: unknown): string {
   try {
     return String(raw)
   } catch {
-    return Object.prototype.toString.call(raw)
+    try {
+      return Object.prototype.toString.call(raw)
+    } catch {
+      return '[unreadable tool result]'
+    }
   }
 }
 
