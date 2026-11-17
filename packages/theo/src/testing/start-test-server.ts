@@ -223,21 +223,23 @@ async function bootOnce(
 
   while (Date.now() < deadline) {
     if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+    let ready = false
     try {
       const res = await fetch(`${origin}/__theo/ready`, { signal: AbortSignal.timeout(1000) })
-      if (res.status === 200) {
-        if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
-        // Any server on the port can answer: only a listener held by the child's own group counts.
-        if (child.pid !== undefined && groupListensOn(port, child.pid) === false) {
-          return await fail(
-            `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
-            PortSubstitutedError,
-          )
-        }
-        return { origin, pid: child.pid, output: () => output, close }
-      }
+      ready = res.status === 200
     } catch {
-      // not listening yet
+      // not listening yet: only fetch errors are swallowed here
+    }
+    if (ready) {
+      if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+      // Any server on the port can answer: only a listener held by the child's own group counts.
+      if (child.pid !== undefined && groupListensOn(port, child.pid) === false) {
+        return await fail(
+          `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
+          PortSubstitutedError,
+        )
+      }
+      return { origin, pid: child.pid, output: () => output, close }
     }
     await sleep(250)
   }
