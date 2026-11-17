@@ -61,21 +61,40 @@ function listeningInodes(port: number): Set<string> {
   return inodes
 }
 
+export interface ProcFs {
+  readFileSync: (path: string, enc: 'utf8') => string
+  readdirSync: (path: string) => string[]
+  readlinkSync: (path: string) => string
+}
+
 /** The `inodes` that `pid` holds as open sockets, when it is in group `pgid`. */
-function socketsHeldBy(pid: string, pgid: number, inodes: Set<string>): string[] {
+export function socketsHeldBy(
+  pid: string,
+  pgid: number,
+  inodes: Set<string>,
+  fs: ProcFs = { readFileSync, readdirSync, readlinkSync },
+): string[] {
+  let fds: string[]
   try {
-    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8')
     // After the ")" closing the command name: state, ppid, pgrp.
     if (stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2] !== String(pgid)) return []
-    const held: string[] = []
-    for (const fd of readdirSync(`/proc/${pid}/fd`)) {
-      const m = /^socket:\[(\d+)\]$/.exec(readlinkSync(`/proc/${pid}/fd/${fd}`))
-      if (m?.[1] !== undefined && inodes.has(m[1])) held.push(m[1])
-    }
-    return held
+    fds = fs.readdirSync(`/proc/${pid}/fd`)
   } catch {
     return [] // the process went away or is not ours to read
   }
+  const held: string[] = []
+  for (const fd of fds) {
+    let target: string
+    try {
+      target = fs.readlinkSync(`/proc/${pid}/fd/${fd}`)
+    } catch {
+      continue // this descriptor was closed since the listing; the others still count
+    }
+    const m = /^socket:\[(\d+)\]$/.exec(target)
+    if (m?.[1] !== undefined && inodes.has(m[1])) held.push(m[1])
+  }
+  return held
 }
 
 type Listeners = 'none' | 'own' | 'foreign'
@@ -331,10 +350,8 @@ async function bootOnce(
     }
   }
 
-  while (Date.now() < deadline) {
-    if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
-    // Checked on every poll, whatever the listener answers: a foreign server that returns 404 or
-    // does not speak HTTP would otherwise make Vite bind another port while we wait for the deadline.
+  /** Whether the child owns every listener on the port; fails on a foreign or unknowable one. */
+  const childListens = async (): Promise<boolean> => {
     const own = child.pid === undefined ? { owner: 'own' as const } : portOwnership(port, child.pid)
     if (own.owner === 'unknown') return await fail(own.reason)
     if (own.owner === 'foreign') {
@@ -343,7 +360,15 @@ async function bootOnce(
         PortSubstitutedError,
       )
     }
-    if (own.owner === 'own' && (await answers())) {
+    return own.owner === 'own'
+  }
+
+  while (Date.now() < deadline) {
+    if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+    // Checked on every poll, whatever the listener answers: a foreign server that returns 404 or
+    // does not speak HTTP would otherwise make Vite bind another port while we wait for the deadline.
+    // Checked again after a 200, since the listener may have changed while the request was in flight.
+    if ((await childListens()) && (await answers()) && (await childListens())) {
       if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
       return { origin, pid: child.pid, output: () => output, close }
     }

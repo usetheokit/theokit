@@ -51,6 +51,7 @@ vi.mock('node:child_process', async () => {
 
 import {
   portOwnership,
+  socketsHeldBy,
   startTestServer,
   TestServerBootError,
   type RunCommand,
@@ -183,6 +184,18 @@ describe.each(['darwin', 'win32'] as const)('startTestServer substitution on %s'
     await server.close()
   }, 30_000)
 
+  it('rejects a foreign server that takes the port while the readiness request is in flight', async () => {
+    h.listeners = (_port, attempt) => (swapped ? [555] : [own(attempt)])
+    let swapped = false
+    h.status = () => {
+      swapped = true // the child's listener goes away and a foreign one answers 200
+      return 200
+    }
+    const err = await startTestServer({ cwd: app, timeoutMs: 20_000 }).catch((e: unknown) => e)
+    expect((err as Error).message).toContain('taken by another process')
+    expect(h.children.every((c) => c.exited)).toBe(true)
+  }, 30_000)
+
   it('rejects a foreign listener that shares the port with the child', async () => {
     h.listeners = (_port, attempt) => [own(attempt), 555]
     const err = await startTestServer({ cwd: app, timeoutMs: 20_000 }).catch((e: unknown) => e)
@@ -196,5 +209,37 @@ describe.each(['darwin', 'win32'] as const)('startTestServer substitution on %s'
     expect((err as Error).message).toContain('not found')
     expect(h.children).toHaveLength(1)
     expect(h.children[0]?.exited).toBe(true)
+  })
+})
+
+describe('socketsHeldBy', () => {
+  const fs = (readlink: (p: string) => string) => ({
+    readFileSync: () => '1 (node) S 1 77 77 0',
+    readdirSync: () => ['3', '4', '5'],
+    readlinkSync: readlink,
+  })
+
+  it('keeps the listening socket when another descriptor vanishes during the scan', () => {
+    const held = socketsHeldBy(
+      '10',
+      77,
+      new Set(['999']),
+      fs((p) => {
+        if (p.endsWith('/4')) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+        return p.endsWith('/5') ? 'socket:[999]' : 'pipe:[1]'
+      }),
+    )
+    expect(held).toEqual(['999'])
+  })
+
+  it('ignores a process of another group', () => {
+    expect(
+      socketsHeldBy(
+        '10',
+        78,
+        new Set(['999']),
+        fs(() => 'socket:[999]'),
+      ),
+    ).toEqual([])
   })
 })
