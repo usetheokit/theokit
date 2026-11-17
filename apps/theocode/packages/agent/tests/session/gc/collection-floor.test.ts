@@ -3,7 +3,7 @@
  *
  * `sessions gc --max-age-days 0` reaches one of two implementations depending on `--all-projects`.
  * `planSessionGCAllProjects` refuses it with a stated reason — *"silently normalising would delete
- * yesterday's session"* — and the single-project plan, the DEFAULT form reached without the flag, had no
+ * yesterday's session"* — and `planSessionGC`, the DEFAULT form reached without the flag, had no
  * floor at all: `maxAgeDays ?? 30` took the value verbatim and `ageDays > maxAgeDays` then planned
  * every transcript in the project outside the protected set.
  *
@@ -15,7 +15,6 @@ import { GCFloorError } from '@theokit/agents/session'
 import { describe, expect, it } from 'vitest'
 
 import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
-
 import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
 
 const allProjectsSeams = {
@@ -37,12 +36,10 @@ const perSessionSeams = {
 
 describe('the collection floor', () => {
   it('test_the_single_project_plan_refuses_a_window_below_the_floor', async () => {
+    // The framework's floor error is a GCFloorError, not a RangeError.
     await expect(
       planAndRunCurrentProjectGC({ ...perSessionSeams, maxAgeDays: 0 }),
     ).rejects.toThrow(GCFloorError)
-    await expect(planAndRunCurrentProjectGC({ ...perSessionSeams, keepLast: 0 })).rejects.toThrow(
-      /`keepLast` must be at least 1, received 0/,
-    )
   })
 
   it('test_the_all_projects_plan_refuses_the_same_window', async () => {

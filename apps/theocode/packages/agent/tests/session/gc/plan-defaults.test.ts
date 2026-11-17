@@ -1,45 +1,78 @@
 /**
- * The two numeric defaults of `theocode sessions gc` that decide what gets DELETED.
+ * The two numeric defaults of `planSessionGC` that decide what gets DELETED downstream.
  *
- * These tests omit `keepLast` / `maxAgeDays` on purpose: they pin 10 and 30 in the command, so a
- * silent change to either number is a red test rather than a silently wider deletion window.
+ * `resolvePlanOptions` is a defaults block — idiomatic TS, low branching in substance — but the
+ * 2026-09-10 architecture review measured its defaulting paths untested, and which default is in
+ * force here is exactly what the sweep deletes. These tests omit `keepLast` / `maxAgeDays` on
+ * purpose: they pin 10 and 30, so a silent change to either number is a red test rather than a
+ * silently wider (or narrower) deletion window.
+ *
+ * The seams (`readdir`, `list`, `readPointer`, `now`, dirs) stay injected — the subject is the
+ * numeric defaults, not the filesystem.
  */
-import { describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { transcriptPath } from '@theokit/agents/persistence'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
-import { NOW, useFixture, writeTranscript } from './gc-command-fixture.js'
 
-const fx = useFixture()
-const plan = (extra: { keepLast?: number; maxAgeDays?: number } = {}) =>
-  planAndRunCurrentProjectGC({
-    cwd: fx.cwd,
-    root: fx.root,
-    now: NOW,
-    apply: false,
-    listRegistry: async () => [],
-    ...extra,
-  }).then((r) => r.plan)
+const DAY = 86_400_000
+const NOW = 1_700_000_000_000
 
-describe('sessions gc defaults', () => {
+function entriesAgedDays(ages: number[]): { id: string; mtimeMs: number }[] {
+  return ages.map((age, i) => ({ id: `t-${String(i).padStart(2, '0')}`, mtimeMs: NOW - age * DAY }))
+}
+
+// The framework planner has no `readdir`/`list`/`readPointer` seams, so the entries are written to a
+// temp transcript root and the registry listing is the only seam left.
+let root = ''
+let cwd = ''
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'theocode-gc-root-'))
+  cwd = mkdtempSync(join(tmpdir(), 'theocode-gc-cwd-'))
+})
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true })
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+function seams(onDisk: { id: string; mtimeMs: number }[]) {
+  for (const e of onDisk) {
+    const path = transcriptPath(root, cwd, e.id)
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, `${JSON.stringify({ type: 'user', sessionId: e.id })}\n`)
+    utimesSync(path, new Date(e.mtimeMs), new Date(e.mtimeMs))
+  }
+  return { cwd, root, now: NOW, apply: false, listRegistry: async () => [] }
+}
+
+const planSessionGC = (o: Parameters<typeof planAndRunCurrentProjectGC>[0]) =>
+  planAndRunCurrentProjectGC(o).then((r) => r.plan)
+
+describe('planSessionGC defaults', () => {
   it('keeps_the_ten_newest_transcripts_when_keepLast_is_not_given', async () => {
-    for (let i = 0; i < 12; i++) writeTranscript(fx, `t-${String(i).padStart(2, '0')}`, 100 + i)
+    // Twelve transcripts, all far past any age window: only the keep-last quota decides.
+    const onDisk = entriesAgedDays([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111])
 
-    const p = await plan()
+    const plan = await planSessionGC(seams(onDisk))
 
-    expect(p.candidates.map((c) => c.id).sort((a, b) => String(a).localeCompare(String(b)))).toEqual(
-      ['t-10', 't-11'],
-    )
-    expect(p.kept).toHaveLength(10)
+    expect(plan.kept).toHaveLength(10)
+    expect(plan.candidates.map((c) => c.id).sort()).toEqual(['t-10', 't-11'])
   })
 
   it('collects_past_thirty_days_and_keeps_younger_when_maxAgeDays_is_not_given', async () => {
-    writeTranscript(fx, 't-00', 1)
-    writeTranscript(fx, 't-01', 29)
-    writeTranscript(fx, 't-02', 31)
+    // keepLast pinned to 1 (the framework floor) so the age window is the only default under test.
+    // The newest transcript
+    // is protected as most-recent regardless; the 29-day one sits inside the default window and the
+    // 31-day one outside it.
+    const onDisk = entriesAgedDays([1, 29, 31])
 
-    const p = await plan({ keepLast: 1 })
+    const plan = await planSessionGC({ ...seams(onDisk), keepLast: 1 })
 
-    expect(p.candidates.map((c) => c.id)).toEqual(['t-02'])
-    expect(p.kept.map((k) => k.id)).toContain('t-01')
+    expect(plan.candidates.map((c) => c.id)).toEqual(['t-02'])
+    expect(plan.kept.map((k) => k.id)).toContain('t-01')
   })
 })

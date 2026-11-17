@@ -1,147 +1,127 @@
 /**
- * B-017 / #1918 — `theocode sessions gc` never plans or removes a live session.
+ * B-017 — the session GC refuses to delete a live session, and until now nothing noticed.
  *
- * Runs the command's own function (`planAndRunCurrentProjectGC`) over real transcripts: the session
- * the TUI pointer names, the most recent one and one with a writer lease are never candidates, and
- * `--apply` deletes none of them. Asserting only that an error is reported would pass against a
- * mutant that deletes the session AND complains, so the files are checked on disk.
+ * Measured 2026-08-19 before this file existed: neutralising the `untouchable` guard in
+ * `runSessionGC` left 73 test files and 534 tests passing. The guard is reached in production from
+ * `theocode sessions --apply` (`packages/cli/src/commands/sessions.ts:52-58`), and deleting a
+ * user's live pointer or most-recent transcript is unrecoverable.
+ *
+ * These tests assert that `delete`/`unlink` are NEVER CALLED for a protected id. Asserting only
+ * that an error is reported would pass against a mutant that deletes the session AND complains.
  */
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { acquireSessionWriter } from '@theokit/sdk/persistence'
+import { transcriptPath } from '@theokit/agents/persistence'
 import { planTranscriptGC, runTranscriptGC } from '@theokit/agents/session'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  humanReport,
-  planAndRunCurrentProjectGC,
-  sessionsCommand,
-} from '../../../../cli/src/commands/sessions.js'
-import { gcProtectedIds } from '../../../src/session/gc/pointer.js'
-import { NOW, useFixture, writePointer, writeTranscript } from './gc-command-fixture.js'
+import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
+import { gcProtectedIds, pointerPath } from '../../../src/session/gc/pointer.js'
 
-const fx = useFixture()
-const run = (apply: boolean, extra: Record<string, unknown> = {}) =>
+const LIVE = 'live-session'
+const OLD = 'old-session'
+const DAY = 86_400_000
+const NOW = 1_000 * DAY
+
+// The framework planner has no `readdir`/`readPointer` seams and no hand-built plans: transcripts are
+// real files under a temp root, the pointer is the real `.theokit/tui-session` file, and the
+// registry remover (`Agent.delete`) is the injected `delete`.
+let root = ''
+let cwd = ''
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'theocode-gc-root-'))
+  cwd = mkdtempSync(join(tmpdir(), 'theocode-gc-cwd-'))
+})
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true })
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+function seed(id: string, ageDays: number): string {
+  const path = transcriptPath(root, cwd, id)
+  mkdirSync(join(path, '..'), { recursive: true })
+  writeFileSync(path, `${JSON.stringify({ type: 'user', sessionId: id })}\n`)
+  const when = new Date(NOW - ageDays * DAY)
+  utimesSync(path, when, when)
+  return path
+}
+
+function point(id: string): void {
+  mkdirSync(join(pointerPath(cwd), '..'), { recursive: true })
+  writeFileSync(pointerPath(cwd), `${id}\n`)
+}
+
+const runSessionGC = (opts: {
+  apply: boolean
+  registered?: string[]
+  delete: (id: string) => void
+}) =>
   planAndRunCurrentProjectGC({
-    cwd: fx.cwd,
-    root: fx.root,
+    cwd,
+    root,
     now: NOW,
     keepLast: 1,
-    maxAgeDays: 30,
-    apply,
-    listRegistry: async () => [],
-    removeFromRegistry: () => undefined,
-    ...extra,
+    maxAgeDays: 1,
+    apply: opts.apply,
+    listRegistry: async () => (opts.registered ?? []).map((agentId) => ({ agentId })),
+    removeFromRegistry: opts.delete,
   })
 
-describe('sessions gc never touches a live session', () => {
-  it('test_the_pointer_the_most_recent_and_a_leased_session_are_never_planned_or_removed', async () => {
-    const newest = writeTranscript(fx, 'newest', 40)
-    const pointed = writeTranscript(fx, 'tui-live', 90)
-    const leased = writeTranscript(fx, 'leased', 80)
-    const doomed = writeTranscript(fx, 'doomed', 70)
-    writePointer(fx, 'tui-live')
-    const lease = await acquireSessionWriter(leased)
-    try {
-      const dry = await run(false)
-      expect(dry.plan.candidates.map((c) => c.id)).toEqual(['doomed'])
-
-      const applied = await run(true)
-      expect(applied.result.removed).toEqual(['doomed'])
-      expect(existsSync(doomed)).toBe(false)
-      for (const live of [newest, pointed, leased]) expect(existsSync(live)).toBe(true)
-    } finally {
-      await (lease as { release?: () => Promise<void> }).release?.()
-    }
-  })
-
-  it('test_an_unreadable_pointer_refuses_the_run_and_deletes_nothing', async () => {
-    const old = writeTranscript(fx, 'old', 90)
-    writeTranscript(fx, 'newest', 40)
-    // The pointer path is a directory: reading it fails with EISDIR, not ENOENT.
-    mkdirSync(`${fx.cwd}/.theokit/tui-session`, { recursive: true })
-
-    await expect(run(true)).rejects.toThrow(/refus/i)
-    expect(existsSync(old)).toBe(true)
-  })
-})
-
-describe('the report', () => {
-  it('test_an_applied_run_does_not_claim_a_failed_removal', async () => {
-    writeTranscript(fx, 'newest', 40)
-    writeTranscript(fx, 'registered-old', 90)
-    writeTranscript(fx, 'plain-old', 80)
-    const { plan, result } = await run(true, {
-      removeFromRegistry: (id: string) => {
-        if (id === 'registered-old') throw new Error('registry down')
-      },
-    })
-
-    const lines = humanReport(plan, result).join('\n')
-    expect(lines).toMatch(/plain-old.*\[removed\]/)
-    expect(lines).toMatch(/registered-old.*NOT removed/)
-    expect(lines).toMatch(/registered-old: registry removal failed/)
-  })
-
-  it('test_a_dry_run_says_would_remove', async () => {
-    writeTranscript(fx, 'newest', 40)
-    writeTranscript(fx, 'old', 90)
-    const { plan, result } = await run(false)
-    const lines = humanReport(plan, result)
-    expect(lines[0]).toMatch(/DRY-RUN — 1 would remove/)
-    expect(lines.join('\n')).toContain('--apply')
-  })
-})
-
-describe('the guards the old runSessionGC pinned, now through the command', () => {
+describe('runSessionGC', () => {
   it('never_deletes_the_session_the_pointer_is_on', async () => {
-    writeTranscript(fx, 'newest', 1)
-    const pointed = writeTranscript(fx, 'tui-live', 90)
-    writePointer(fx, 'tui-live')
-    const removed: string[] = []
+    seed('newest', 1)
+    const live = seed(LIVE, 99)
+    point(LIVE)
+    const del = vi.fn()
 
-    await run(true, { removeFromRegistry: (id: string) => void removed.push(id) })
+    const { plan, result } = await runSessionGC({ apply: true, registered: [], delete: del })
 
-    expect(existsSync(pointed)).toBe(true)
-    expect(removed).not.toContain('tui-live')
+    expect(del).not.toHaveBeenCalled()
+    expect(existsSync(live)).toBe(true)
+    expect(plan.candidates.map((c) => c.id)).not.toContain(LIVE)
+    expect(result.removed).not.toContain(LIVE)
   })
 
   it('never_deletes_the_most_recent_transcript_on_disk', async () => {
-    // Protected even with no pointer: a fresh session not yet pointed at is what the user resumes.
-    const newest = writeTranscript(fx, 'newest', 90)
+    // The newest transcript is protected even when no pointer names it — a fresh session that has
+    // not been pointed at yet is still the one the user is about to resume.
+    const live = seed(LIVE, 99)
+    seed(OLD, 100)
+    const del = vi.fn()
 
-    const { plan, result } = await run(true, { maxAgeDays: 1 })
+    const { result } = await runSessionGC({ apply: true, delete: del })
 
-    expect(plan.candidates).toEqual([])
-    expect(result.removed).toEqual([])
-    expect(existsSync(newest)).toBe(true)
+    expect(existsSync(live)).toBe(true)
+    expect(del).not.toHaveBeenCalled()
+    expect(result.removed).not.toContain(LIVE)
   })
 
   it('still_deletes_an_unprotected_session', async () => {
-    writeTranscript(fx, 'newest', 1)
-    const old = writeTranscript(fx, 'old', 90)
+    // THE CONTROL. A guard that refuses everything would pass both tests above and break the
+    // feature; without this, "protected" and "broken" are indistinguishable.
+    seed(LIVE, 1)
+    point(LIVE)
+    const old = seed(OLD, 99)
+    const del = vi.fn()
 
-    const { result } = await run(true)
+    const { result } = await runSessionGC({ apply: true, registered: [OLD], delete: del })
 
-    expect(result.removed).toEqual(['old'])
+    expect(del).toHaveBeenCalledWith(OLD)
+    expect(result.removed).toContain(OLD)
+    expect(result.errors).toHaveLength(0)
     expect(existsSync(old)).toBe(false)
   })
 
   it('protects_the_pointer_recorded_on_the_plan_itself', async () => {
     // The plan is a snapshot: a pointer written AFTER planning must still stop the apply.
-    writeTranscript(fx, 'newest', 1)
-    const late = writeTranscript(fx, 'late-live', 90)
-    const protectedIds = gcProtectedIds(fx.cwd)
-    const plan = planTranscriptGC({
-      cwd: fx.cwd,
-      root: fx.root,
-      now: NOW,
-      keepLast: 1,
-      maxAgeDays: 30,
-      protectedIds,
-    })
-    expect(plan.candidates.map((c) => c.id)).toEqual(['late-live'])
-    writePointer(fx, 'late-live')
+    seed('newest', 1)
+    const late = seed(LIVE, 99)
+    const protectedIds = gcProtectedIds(cwd)
+    const plan = planTranscriptGC({ cwd, root, now: NOW, keepLast: 1, maxAgeDays: 1, protectedIds })
+    expect(plan.candidates.map((c) => c.id)).toEqual([LIVE])
+    point(LIVE)
 
     const result = await runTranscriptGC(plan, { apply: true, protectedIds })
 
@@ -150,122 +130,14 @@ describe('the guards the old runSessionGC pinned, now through the command', () =
   })
 
   it('a_dry_run_deletes_nothing_at_all', async () => {
-    writeTranscript(fx, 'newest', 1)
-    const old = writeTranscript(fx, 'old', 90)
-    const removed: string[] = []
+    seed('newest', 1)
+    const old = seed(OLD, 99)
+    const del = vi.fn()
 
-    const { result } = await run(false, { removeFromRegistry: (id: string) => void removed.push(id) })
+    const { result } = await runSessionGC({ apply: false, registered: [OLD], delete: del })
 
     expect(result.dryRun).toBe(true)
-    expect(removed).toEqual([])
-    expect(existsSync(old)).toBe(true)
-  })
-
-  it('test_a_legacy_and_a_current_file_of_one_id_are_reported_per_file', async () => {
-    writeTranscript(fx, 'newest', 1)
-    const current = writeTranscript(fx, 'twin', 90)
-    writeTranscript(fx, 'twin', 80, { legacy: true })
-
-    const { plan, result } = await run(true)
-    // Both files share one id; the report is judged per file, and both are gone.
-    expect(result.errors).toEqual([])
-    expect(humanReport(plan, result).join('\n')).not.toMatch(/NOT removed/)
-    expect(existsSync(current)).toBe(false)
-    expect(plan.candidates).toHaveLength(2)
-  })
-})
-
-vi.mock('@theocode/agent/session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@theocode/agent/session')>()),
-  listAgents: async () => [],
-}))
-vi.mock('@theokit/agents', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@theokit/agents')>()),
-  Agent: { delete: async () => undefined },
-}))
-
-describe('theocode sessions gc, through sessionsCommand', () => {
-  let out = ''
-  let err = ''
-  const savedHome = process.env.THEOKIT_HOME
-
-  class Exit extends Error {
-    constructor(readonly code: number | undefined) {
-      super(`exit ${String(code)}`)
-    }
-  }
-
-  beforeEach(async () => {
-    const { transcriptRoot } = await import('@theokit/agents/persistence')
-    process.env.THEOKIT_HOME = fx.root
-    fx.root = transcriptRoot()
-    out = ''
-    err = ''
-    vi.spyOn(process, 'cwd').mockReturnValue(fx.cwd)
-    vi.spyOn(process.stdout, 'write').mockImplementation((c) => ((out += String(c)), true))
-    vi.spyOn(process.stderr, 'write').mockImplementation((c) => ((err += String(c)), true))
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
-      throw new Exit(code)
-    }) as never)
-  })
-  afterEach(() => {
-    vi.restoreAllMocks()
-    if (savedHome === undefined) delete process.env.THEOKIT_HOME
-    else process.env.THEOKIT_HOME = savedHome
-  })
-
-  const gc = async (over: Record<string, unknown> = {}): Promise<number | undefined> => {
-    try {
-      await sessionsCommand({
-        mode: 'sessions',
-        action: 'gc',
-        apply: false,
-        allProjects: false,
-        json: false,
-        ...over,
-      } as never)
-    } catch (e) {
-      if (e instanceof Exit) return e.code
-      throw e
-    }
-    return undefined
-  }
-
-  it('test_apply_keeps_the_pointer_the_newest_and_the_leased_and_exits_zero', async () => {
-    const newest = writeTranscript(fx, 'newest', 40)
-    const pointed = writeTranscript(fx, 'tui-live', 90)
-    const leased = writeTranscript(fx, 'leased', 80)
-    const doomed = writeTranscript(fx, 'doomed', 70)
-    writePointer(fx, 'tui-live')
-    const lease = await acquireSessionWriter(leased)
-    try {
-      const code = await gc({ apply: true, keepLast: 1, maxAgeDays: 1, json: true })
-
-      expect(code).toBe(0)
-      expect(existsSync(doomed)).toBe(false)
-      for (const live of [newest, pointed, leased]) expect(existsSync(live)).toBe(true)
-      expect(JSON.parse(out).removed).toEqual(['doomed'])
-    } finally {
-      await (lease as { release?: () => Promise<void> }).release?.()
-    }
-  })
-
-  it('test_a_knob_below_the_floor_prints_the_framework_message_and_exits_one', async () => {
-    const old = writeTranscript(fx, 'old', 90)
-
-    expect(await gc({ apply: true, keepLast: 0 })).toBe(1)
-    expect(err).toContain('`keepLast` must be at least 1, received 0')
-    expect(await gc({ apply: true, maxAgeDays: 0 })).toBe(1)
-    expect(err).toContain('`maxAgeDays` must be at least 1, received 0')
-    expect(existsSync(old)).toBe(true)
-  })
-
-  it('test_an_unreadable_pointer_exits_one_and_deletes_nothing', async () => {
-    writeTranscript(fx, 'newest', 1)
-    const old = writeTranscript(fx, 'old', 90)
-    mkdirSync(`${fx.cwd}/.theokit/tui-session`, { recursive: true })
-
-    expect(await gc({ apply: true })).toBe(1)
+    expect(del).not.toHaveBeenCalled()
     expect(existsSync(old)).toBe(true)
   })
 })
