@@ -84,7 +84,9 @@ function appendValue(fd: FormData, key: string, schema: unknown, value: unknown)
         `Field '${key}' is an array of objects; formDataToObject cannot read that back.`,
       )
     }
-    const list = Array.isArray(value) ? value : (asBlobList(value) ?? Array.from(value as ArrayLike<unknown>))
+    const list = Array.isArray(value)
+      ? value
+      : (asBlobList(value) ?? Array.from(value as ArrayLike<unknown>))
     for (const item of list) {
       if (item !== null && item !== undefined) appendScalar(fd, key, item)
     }
