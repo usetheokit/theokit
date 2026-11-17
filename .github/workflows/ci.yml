@@ -121,6 +121,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The public-surface gate diffs against the PR base, so it needs the base ref and history.
+          fetch-depth: 0
       - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
       # imports from `packages/theo/dist/*` to validate the npm publish
@@ -130,6 +132,14 @@ jobs:
       # but the binstub points to dist/cli/index.js which doesn't exist
       # until the theo package finishes building → ordering blow-up).
       - run: pnpm build:packages
+      # Public-surface gate, after the build (it reads `dist/*.d.ts`). A non-zero exit fails the job.
+      # Pull requests compare with their own base branch; any other event (push to main) with origin/main.
+      - name: Public surface gate (@theokit/agents)
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          node scripts/check-public-surface.mjs @theokit/agents --base "origin/${BASE_REF}"
       # `typecheck:only`, not `typecheck`: the latter is `pnpm build:packages && tsc --noEmit`,
       # and the step above already built. Measured on run 33179795266 — build:packages 51s, then
       # typecheck 67s, of which ~50s was that build running a second time.
