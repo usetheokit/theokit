@@ -82,6 +82,56 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
     expect(preloadBody).toContain('"main"')
   })
 
+  it('studio runs drizzle-kit studio, with --host and --port when given', async () => {
+    expect((await dbCommand('studio', dir, run)).status).toBe('success')
+    await dbCommand('studio', dir, run, { host: '0.0.0.0', port: 4000 })
+    expect(ran).toEqual([
+      ['drizzle-kit', 'studio'],
+      ['drizzle-kit', 'studio', '--host', '0.0.0.0', '--port', '4000'],
+    ])
+  })
+
+  it('check runs drizzle-kit check', async () => {
+    expect((await dbCommand('check', dir, run)).status).toBe('success')
+    expect(ran).toEqual([['drizzle-kit', 'check']])
+  })
+
+  it('reset without --force errors and runs nothing', async () => {
+    const result = await dbCommand('reset', dir, run)
+    expect(result.status).toBe('error')
+    expect(result.message).toContain('--force')
+    expect(ran).toEqual([])
+  })
+
+  it('reset --force names a missing reset file', async () => {
+    const result = await dbCommand('reset', dir, run, { force: true })
+    expect(result.status).toBe('error')
+    expect(result.message).toContain('db/reset.ts')
+    expect(ran).toEqual([])
+  })
+
+  it('reset --force runs reset.ts through tsx with the storage preload', async () => {
+    writeFileSync(
+      join(dir, 'theo.config.ts'),
+      `export default { serverDir: 'src/server', storage: { servers: { primary: { host: 'localhost', port: 5432, user: 'postgres', password: 'x' } }, databases: { main: { server: 'primary', database: 'app' } } } }\n`,
+    )
+    writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
+    mkdirSync(join(dir, 'src', 'server', 'db'), { recursive: true })
+    writeFileSync(join(dir, 'src', 'server', 'db', 'reset.ts'), '')
+    const result = await dbCommand('reset', dir, run, { force: true })
+    expect(result.status).toBe('success')
+    expect(ran[0]?.[0]).toBe('tsx')
+    expect(ran[0]?.[1]).toBe('--import')
+    expect(ran[0]?.[3]).toBe('src/server/db/reset.ts')
+  })
+
+  it('lists all seven actions when the verb is unknown', async () => {
+    const result = await dbCommand('nope', dir, run)
+    for (const a of ['migrate', 'push', 'generate', 'seed', 'studio', 'check', 'reset']) {
+      expect(result.message).toContain(a)
+    }
+  })
+
   it('lists push among the valid actions when the verb is unknown', async () => {
     const result = await dbCommand('nope', dir, run)
     expect(result.status).toBe('invalid_action')

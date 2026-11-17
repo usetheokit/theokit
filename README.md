@@ -511,6 +511,10 @@ theokit info                             # Print environment info
 theokit openapi                          # Emit openapi.json from route schemas
 theokit db generate                      # Write SQL migration files from the Drizzle schema
 theokit db migrate                       # Apply them (drizzle-kit migrate); `db push` diffs without files
+theokit db studio [--host h] [--port p]  # drizzle-kit studio (reads drizzle.config.ts)
+theokit db check                         # drizzle-kit check (reads drizzle.config.ts)
+theokit db seed                          # Run <serverDir>/db/seed.ts
+theokit db reset --force                 # Run <serverDir>/db/reset.ts (destructive; you write the script)
 theokit migrate router                   # One-shot convention migrations
 theokit add <package>                    # Install a known adapter or plugin (whitelist-only)
 theokit docker                           # Generate a production Dockerfile
