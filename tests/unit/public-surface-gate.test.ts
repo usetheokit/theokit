@@ -144,6 +144,15 @@ describe('public surface gate', () => {
     expect(run(p2, surface(ifc('a(x: string): void', 'a(x: number): void; b?: 1')))).toEqual([])
   })
 
+  it('treats reordered overloads of a referenced unexported function as breaking', () => {
+    const src = (a: string, b: string) =>
+      `declare function g(${a}): void\ndeclare function g(${b}): void\nexport declare const h: typeof g\nexport {}\n`
+    const prev = surface(src('x: string', 'x: number'))
+    expect(run(prev, surface(src('x: number', 'x: string')))).toEqual([
+      expect.stringContaining('referenced type g changed'),
+    ])
+  })
+
   it('reads a major declaration from changeset frontmatter', () => {
     expect(gate.declaresMajor(["---\n'@x/pkg': major\n---\n\nx"], '@x/pkg')).toBe(true)
     expect(gate.declaresMajor(["---\n'@x/pkg': minor\n---\n"], '@x/pkg')).toBe(false)

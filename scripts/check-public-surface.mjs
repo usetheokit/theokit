@@ -92,13 +92,7 @@ function collectInternals(roots, ctx, internals) {
         const sym = raw && resolveAlias(raw, ctx.checker)
         const fresh = (sym?.declarations ?? []).filter((d) => isOwnDeclaration(d, ctx))
         if (sym && fresh.length > 0 && !own.has(sym.name) && !internals.has(sym.name)) {
-          internals.set(
-            sym.name,
-            fresh
-              .map((d) => printDecl(d, ctx.printer))
-              .sort()
-              .join('\n'),
-          )
+          internals.set(sym.name, fresh.map((d) => printDecl(d, ctx.printer)).join('\n'))
           queue.push(...fresh)
         }
       }
