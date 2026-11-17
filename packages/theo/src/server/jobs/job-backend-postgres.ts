@@ -225,10 +225,12 @@ export class PostgresJobBackend implements JobBackend {
     // Set the first time a worker leases the job and never cleared, not even by a replay that
     // resets `attempts`, so `cancelInTransaction` can tell a job that was ever leased.
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS leased_at TIMESTAMPTZ`)
-    // A row leased before this column existed has it NULL: backfill every row that was ever leased.
+    // A row leased before this column existed has it NULL: backfill every row that was ever leased,
+    // including one already replayed (`last_error` survives a nack and a replay).
     await this.#pool.query(
       `UPDATE ${t} SET leased_at = NOW()
-       WHERE leased_at IS NULL AND (attempts > 0 OR failed_at IS NOT NULL OR locked_until IS NOT NULL)`,
+       WHERE leased_at IS NULL AND (attempts > 0 OR failed_at IS NOT NULL OR locked_until IS NOT NULL
+              OR last_error IS NOT NULL)`,
     )
     await this.#pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ${t}_idempotency_key_idx
