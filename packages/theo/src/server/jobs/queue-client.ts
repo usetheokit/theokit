@@ -63,9 +63,9 @@ export interface QueueClient {
    * lease) or that failed is left alone. A backend without `cancelInTransaction` rejects with
    * `TransactionalCancelUnsupportedError`.
    */
-  cancelInTransaction<JobName extends keyof JobRegistry>(
+  cancelInTransaction(
     client: PoolLike,
-    name: JobName,
+    name: keyof JobRegistry,
     opts: { idempotencyKey: string },
   ): Promise<boolean>
 }
@@ -182,7 +182,7 @@ export function createQueueClient(
         throw new TransactionalCancelUnsupportedError(backend.name)
       }
       return backend.cancelInTransaction(client, {
-        name: name as string,
+        name,
         idempotencyKey: cancelOpts.idempotencyKey,
       })
     },
