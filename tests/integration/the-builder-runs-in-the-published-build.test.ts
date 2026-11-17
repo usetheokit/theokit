@@ -77,7 +77,6 @@ const FIXTURE_ROOT = join(REPO, 'tests', '.tmp-published-middleware')
 
 let serverDir: string
 let publishedDefine: string
-let resetCache: () => void
 let runMiddlewareAndContext: (
   req: IncomingMessage,
   res: ServerResponse,
@@ -134,16 +133,14 @@ describe('the published builder is invoked by the published runner (B-003)', () 
       /* @vite-ignore */ pathToFileURL(resolvePublished('./server/http')).href
     )) as Record<string, unknown>
     runMiddlewareAndContext = http.runMiddlewareAndContext as typeof runMiddlewareAndContext
-    resetCache = http._resetMiddlewareCacheForTests as () => void
   }, BUILD_HOOK_TIMEOUT_MS)
 
-  // One directory PER TEST, and the cache cleared with it. The runner memoises the scanned chain
-  // per server dir, and both halves of that matter: a shared directory would also leave the
+  // One directory PER TEST. The runner memoises the scanned chain per server dir, so a fresh
+  // directory is also a fresh cache, and both halves of that matter: a shared directory would also leave the
   // previous case's file in the scan, so a later assertion would be about two middlewares.
   beforeEach(() => {
     mkdirSync(FIXTURE_ROOT, { recursive: true })
     serverDir = mkdtempSync(join(FIXTURE_ROOT, 'server-'))
-    resetCache()
   })
 
   afterAll(() => {
