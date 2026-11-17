@@ -26,6 +26,11 @@ export async function resolveBody(
   jsonResponse: (status: number, body: unknown) => Response,
 ): Promise<unknown> {
   if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
+  // A multipart body is never JSON (it starts with `--boundary`), so the read below could only
+  // yield `undefined` after buffering the whole upload. Skipping it is behaviour-neutral and lets
+  // a handler cap the stream itself (`readCappedFormData`).
+  if (/^\s*multipart\/form-data\b/i.test(request.headers.get('content-type') ?? ''))
+    return undefined
 
   let body: unknown
   try {
