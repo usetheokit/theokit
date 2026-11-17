@@ -64,6 +64,25 @@ describe('parseUnifiedDiff', () => {
     expect((err as DiffParseError).code).toBe('diff_unparseable')
   })
 
+  it('drops "No newline at end of file" markers on both sides of a replacement', () => {
+    const patch = `--- a/x
++++ b/x
+@@ -1,2 +1,2 @@
+ keep
+-old
+\\ No newline at end of file
++new
+\\ No newline at end of file
+`
+    const [file] = parseUnifiedDiff(patch)
+    expect(file!.lines.map((l) => [l.kind, l.text])).toEqual([
+      ['context', 'keep'],
+      ['del', 'old'],
+      ['add', 'new'],
+    ])
+    expect(file!.lines.map((l) => l.oldLine ?? l.newLine)).toEqual([1, 2, 2])
+  })
+
   it('handles a very large patch', () => {
     const body = Array.from({ length: 5000 }, (_, i) => `+l${i}`).join('\n')
     const files = parseUnifiedDiff(`--- a/x\n+++ b/x\n@@ -0,0 +1,5000 @@\n${body}\n`)

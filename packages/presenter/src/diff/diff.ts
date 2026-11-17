@@ -48,6 +48,8 @@ export function parseUnifiedDiff(patch: string): DiffFile[] {
     const lines: DiffLine[] = []
     for (const chunk of f.chunks) {
       for (const c of chunk.changes) {
+        // parse-diff emits `\ No newline at end of file` as a change; it is not a line of the file.
+        if (c.content.startsWith('\\')) continue
         if (c.type === 'add') {
           lines.push({ kind: 'add', newLine: c.ln, text: c.content.slice(1) })
         } else if (c.type === 'del') {
