@@ -197,7 +197,7 @@ export class AgentClient<TInput = unknown> {
     thread: [],
     status: 'idle',
     error: undefined,
-    pendingApprovals: NO_PENDING_APPROVALS,
+    pendingApprovals: pendingApprovals([]),
   }
 
   /**
