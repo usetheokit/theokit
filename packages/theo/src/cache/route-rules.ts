@@ -25,38 +25,26 @@ function matcherFor(pattern: string): (path: string) => boolean {
  * Every quantifier is over a single character class, so matching cannot backtrack exponentially.
  */
 function globToRegExp(pattern: string): RegExp {
-  let out = ''
   let depth = 0
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i] as string
-    if (c === '*') {
-      if (pattern[i + 1] === '*') {
-        while (pattern[i + 1] === '*') i++
-        if (pattern[i + 1] === '/') {
-          i++
-          out += '(?:[^/]+/)*'
-        } else {
-          out += '.*'
-        }
-      } else {
-        out += '[^/]*'
-      }
-    } else if (c === '?') {
-      out += '[^/]'
-    } else if (c === '{') {
-      depth++
-      out += '(?:'
-    } else if (c === '}' && depth > 0) {
-      depth--
-      out += ')'
-    } else if (c === ',' && depth > 0) {
-      out += '|'
-    } else {
-      out += c.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
+  const out = pattern.replace(/\*\*\/|\*\*|\*|\?|[{},]|[.+^$()|[\]\\/]/g, (tok) => {
+    if (tok.startsWith('*')) {
+      if (tok === '*') return '[^/]*'
+      return tok.endsWith('/') ? '(?:[^/]+/)*' : '.*'
     }
-  }
-  out += ')'.repeat(depth)
-  return new RegExp(`^${out}$`)
+    if (tok === '?') return '[^/]'
+    if (tok === '{') {
+      depth++
+      return '(?:'
+    }
+    if (depth > 0 && tok === '}') {
+      depth--
+      return ')'
+    }
+    if (depth > 0 && tok === ',') return '|'
+    return `\\${tok}`
+  })
+  // eslint-disable-next-line security/detect-non-literal-regexp -- route pattern from the app's own config, never HTTP input; every quantifier is over one character class
+  return new RegExp(`^${out}${')'.repeat(depth)}$`)
 }
 
 /**
