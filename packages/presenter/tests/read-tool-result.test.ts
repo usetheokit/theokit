@@ -56,4 +56,8 @@ describe('readToolResult', () => {
     o.self = o
     expect(readToolResult(o).kind).toBe('text')
   })
+  it('a null-prototype object with a BigInt reads as text without throwing', () => {
+    const o = Object.assign(Object.create(null) as Record<string, unknown>, { n: 1n })
+    expect(readToolResult(o).kind).toBe('text')
+  })
 })

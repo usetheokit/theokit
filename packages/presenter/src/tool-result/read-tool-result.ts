@@ -19,12 +19,20 @@ function isRecord(v: unknown): v is Rec {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+function safeString(raw: unknown): string {
+  try {
+    return String(raw)
+  } catch {
+    return Object.prototype.toString.call(raw)
+  }
+}
+
 function render(raw: unknown): string {
   try {
     const s = JSON.stringify(raw)
-    return typeof s === 'string' ? s : String(raw)
+    return typeof s === 'string' ? s : safeString(raw)
   } catch {
-    return String(raw)
+    return safeString(raw)
   }
 }
 
@@ -75,6 +83,6 @@ export function readToolResult(raw: unknown): ToolResultView {
     if (isRecord(raw)) return fromObject(raw, raw)
     return { kind: 'text', text: render(raw) }
   } catch {
-    return { kind: 'text', text: String(raw) }
+    return { kind: 'text', text: safeString(raw) }
   }
 }
