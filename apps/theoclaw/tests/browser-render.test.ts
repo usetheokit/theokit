@@ -40,7 +40,7 @@ describe.skipIf(!CHROMIUM)('browser_navigate on the installed Chromium', () => {
   it('reads a value the page renders with JavaScript', { timeout: DEADLINE_MS + 10_000 }, async () => {
     const value = `tok-${randomBytes(6).toString('hex')}`
     const reversed = [...value].reverse().join('')
-    const body = `<!doctype html><html><body><p id="v"></p><script>document.getElementById('v').textContent='${reversed}'.split('').reverse().join('')</script></body></html>`
+    const body = `<!doctype html><html><body><div id="v"></div><script>document.getElementById('v').textContent='${reversed}'.split('').reverse().join('')</script></body></html>`
     const http = createServer((_req, res) => {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
       res.end(body)

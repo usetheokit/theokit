@@ -44,7 +44,7 @@ afterEach(async () => {
  */
 async function renderedPage(value: string): Promise<{ readonly url: string; readonly rawBody: string }> {
   const reversed = [...value].reverse().join('')
-  const rawBody = `<!doctype html><html><body><p id="v"></p><script>document.getElementById('v').textContent='${reversed}'.split('').reverse().join('')</script></body></html>`
+  const rawBody = `<!doctype html><html><body><div id="v"></div><script>document.getElementById('v').textContent='${reversed}'.split('').reverse().join('')</script></body></html>`
   const server: Server = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     response.end(rawBody)
@@ -129,8 +129,6 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
         if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
         // Keep what each browser call returned, so a failed run shows what the model was given.
         if (event.type === 'tool_call' && 'status' in event && event.status !== 'running') toolResults.push(JSON.stringify(event).slice(0, 2000))
-        // Keep what each browser call returned, so a failed run shows what the model was given.
-        if (event.type === 'tool_call' && 'status' in event && event.status !== 'running') toolResults.push(JSON.stringify(event).slice(0, 1000))
       }
       const outcome = await run.wait()
       if (outcome.status !== 'finished') throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
