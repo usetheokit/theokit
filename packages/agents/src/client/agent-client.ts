@@ -1,8 +1,5 @@
-import type {
-  WireMessage as UIMessage,
-  WireChunk as UIMessageChunk,
-} from '@theokit/presenter/wire'
 import { pendingApprovals, type PendingApproval } from '@theokit/presenter'
+import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { consumeChunkStream } from '../wire/consume-ui-message-stream.js'

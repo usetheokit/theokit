@@ -42,7 +42,9 @@ export function readPendingApproval(part: unknown): PendingApproval | undefined 
 }
 
 /** Every outstanding approval across `messages`, in order. Returns one shared empty array when none. */
-export function pendingApprovals(messages: readonly Pick<WireMessage, 'parts'>[]): PendingApproval[] {
+export function pendingApprovals(
+  messages: readonly Pick<WireMessage, 'parts'>[],
+): PendingApproval[] {
   let pending: PendingApproval[] | undefined
   for (const message of messages) {
     for (const part of message.parts) {
