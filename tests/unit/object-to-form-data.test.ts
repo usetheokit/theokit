@@ -74,4 +74,9 @@ describe('objectToFormData', () => {
       expect((e as FormDataEncodingError).path).toBe('group')
     }
   })
+
+  it('refuses a nested object whose fields are all absent', () => {
+    const s = z.object({ group: z.object({ note: z.string().optional() }) })
+    expect(() => objectToFormData({ group: {} }, s)).toThrow(FormDataEncodingError)
+  })
 })

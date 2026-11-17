@@ -75,8 +75,7 @@ function appendValue(fd: FormData, key: string, schema: unknown, value: unknown)
     const before = Array.from(fd.keys()).length
     const obj = value as Record<string, unknown>
     appendObject(fd, `${key}.`, inner, obj)
-    const present = Object.keys(shapeOf(inner)).some((k) => obj[k] !== null && obj[k] !== undefined)
-    if (present && Array.from(fd.keys()).length === before) {
+    if (Array.from(fd.keys()).length === before) {
       throw new FormDataEncodingError(
         key,
         `Field '${key}' is a nested object that emits no entries; formDataToObject cannot read it back.`,

@@ -69,9 +69,11 @@ import { objectToFormData } from 'theokit/client'
 import { z } from 'zod'
 
 // server/actions/profile.ts — served at /api/__actions/profile/uploadAvatar
+import { action } from 'theokit/server'
+
 export const uploadAvatar = action()
-  .policy('public')
   .input(z.object({ title: z.string(), avatar: z.instanceof(File) }))
+  .accept('form')
   .handler(async ({ input }) => ({ name: input.avatar.name }))
   .build()
 
