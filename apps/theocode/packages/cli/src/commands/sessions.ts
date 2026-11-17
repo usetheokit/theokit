@@ -34,46 +34,91 @@ async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
   process.exit(plan.errors.length + result.errors.length > 0 ? 1 : 0)
 }
 
-function humanReport(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string[] {
+export function humanReport(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string[] {
+  const removedIds = new Set(result.removed)
+  const orphaned = new Set(result.orphaned)
+  const failed = new Set(result.errors.map((e) => e.id))
+  const gone = (c: TranscriptGCPlan['candidates'][number]): boolean =>
+    result.dryRun || (c.id !== undefined ? removedIds.has(c.id) : orphaned.has(c.transcript))
+  const removedCount = plan.candidates.filter(gone).length
   const verb = result.dryRun ? 'would remove' : 'removed'
-  const removedCount = result.removed.length + result.orphaned.length
   const lines = [
-    `[sessions gc] ${result.dryRun ? 'DRY-RUN' : 'APPLIED'} — ${removedCount} ${verb}; ${plan.kept.length} kept`,
+    `[sessions gc] ${result.dryRun ? 'DRY-RUN' : 'APPLIED'} — ${removedCount} ${verb}; ${plan.kept.length + plan.candidates.length - removedCount} kept`,
     ...plan.candidates.map((c) => {
       const ageDays = Math.round((Date.now() - c.modifiedAt.getTime()) / 86_400_000)
-      return `  - ${c.id ?? c.transcript} (${ageDays}d) [${verb}]`
+      const outcome = gone(c)
+        ? `[${verb}]`
+        : failed.has(c.id)
+          ? '[NOT removed — see errors]'
+          : '[kept — became protected]'
+      return `  - ${c.id ?? c.transcript} (${ageDays}d) ${outcome}`
     }),
   ]
   if (result.dryRun && plan.candidates.length > 0) lines.push('  → re-run with --apply to delete')
   return [...lines, ...result.errors.map((e) => `  ! ${e.id ?? 'unnamed transcript'}: ${e.message}`)]
 }
 
+export interface CurrentProjectGCOptions {
+  cwd: string
+  keepLast?: number
+  maxAgeDays?: number
+  apply: boolean
+  /** Test seams: the transcript root, the clock, the registry listing and its remover. */
+  root?: string
+  now?: number
+  listRegistry?: (cwd: string) => Promise<{ agentId: string; archived?: boolean }[]>
+  removeFromRegistry?: (id: string) => unknown
+}
+
+/**
+ * `sessions gc` for one project: the framework's planner with TheoCode's protection added — the TUI
+ * pointer, every non-archived registry session, and the legacy-named transcript of each. Throws what
+ * the framework throws (`GCFloorError`, `GCProtectionUnavailableError`); the caller prints it.
+ */
+export async function planAndRunCurrentProjectGC(
+  opts: CurrentProjectGCOptions,
+): Promise<{ plan: TranscriptGCPlan; result: RunTranscriptGCResult }> {
+  const { gcProtectedIds, liveSessionIds, listAgents, withholdLegacyNamed } =
+    await import('@theocode/agent/session')
+  const { cwd } = opts
+  const registered = (await (opts.listRegistry ?? listAgents)(cwd)).filter(
+    (a) => a.archived !== true,
+  )
+  const registryIds = registered.map((a) => a.agentId)
+  const protectedIds = gcProtectedIds(cwd, registryIds)
+  const planned = planTranscriptGC({
+    cwd,
+    keepLast: opts.keepLast ?? 10,
+    maxAgeDays: opts.maxAgeDays ?? 30,
+    protectedIds,
+    ...(opts.root !== undefined ? { root: opts.root } : {}),
+    ...(opts.now !== undefined ? { now: opts.now } : {}),
+  })
+  // Re-read the pointer right before applying: the plan is a snapshot, and the framework's own
+  // re-check only knows the hashed names.
+  const plan = withholdLegacyNamed(planned, liveSessionIds(cwd, registryIds))
+  const result = await runTranscriptGC(plan, {
+    apply: opts.apply,
+    protectedIds,
+    removeFromRegistry: opts.removeFromRegistry ?? ((id) => Agent.delete(id)),
+  })
+  return { plan, result }
+}
+
 async function gcForCurrentProject(args: ExecSessions): Promise<void> {
-  const { gcProtectedIds, listAgents } = await import('@theocode/agent/session')
-  const cwd = process.cwd()
-  let plan: TranscriptGCPlan
-  let protectedIds: () => ReadonlyMap<string, string>
+  let outcome: Awaited<ReturnType<typeof planAndRunCurrentProjectGC>>
   try {
-    const registered = (await listAgents(cwd)).filter((a) => a.archived !== true)
-    protectedIds = gcProtectedIds(
-      cwd,
-      registered.map((a) => a.agentId),
-    )
-    plan = planTranscriptGC({
-      cwd,
-      keepLast: args.keepLast ?? 10,
-      maxAgeDays: args.maxAgeDays ?? 30,
-      protectedIds,
+    outcome = await planAndRunCurrentProjectGC({
+      cwd: process.cwd(),
+      apply: args.apply,
+      ...(args.keepLast !== undefined ? { keepLast: args.keepLast } : {}),
+      ...(args.maxAgeDays !== undefined ? { maxAgeDays: args.maxAgeDays } : {}),
     })
   } catch (err) {
     process.stderr.write(`[sessions gc] ${err instanceof Error ? err.message : String(err)}\n`)
     process.exit(1)
   }
-  const result = await runTranscriptGC(plan, {
-    apply: args.apply,
-    protectedIds,
-    removeFromRegistry: (id) => Agent.delete(id),
-  })
+  const { plan, result } = outcome
   if (args.json) {
     process.stdout.write(
       `${JSON.stringify({ type: 'sessions.gc', dryRun: result.dryRun, removed: [...result.removed, ...result.orphaned], kept: plan.kept.length, keptReasons: plan.kept, errors: result.errors.map((e) => `${e.id ?? 'unnamed transcript'}: ${e.message}`) })}\n`,
