@@ -13,7 +13,10 @@ interface Baseline {
   package: string
   entries: Record<
     string,
-    Record<string, { tier: string; declaration: string; deprecatedSince: string | null }>
+    {
+      internals: Record<string, string>
+      names: Record<string, { tier: string; declaration: string; deprecatedSince: string | null }>
+    }
   >
 }
 interface Gate {
