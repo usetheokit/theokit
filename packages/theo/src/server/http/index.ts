@@ -16,7 +16,13 @@ export { defineReadyRoute, serveReservedRoute } from '../define/health-route.js'
 export { handleRequestError, handleWebRequestError } from './handle-request-error.js'
 export * from './execute.js'
 export * from './action-execute.js'
-export * from './middleware-runner.js'
+export {
+  resolveUserModule,
+  MiddlewareNextUnavailableError,
+  runMiddlewareAndContext,
+  createServerContext,
+} from './middleware-runner.js'
+export type { MiddlewareResult } from './middleware-runner.js'
 export * from './cors.js'
 export * from './cookies.js'
 export * from './batch-handler.js'
