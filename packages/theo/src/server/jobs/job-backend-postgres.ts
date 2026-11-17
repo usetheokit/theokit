@@ -391,7 +391,8 @@ export class PostgresJobBackend implements JobBackend {
       `UPDATE ${t}
        SET locked_until = NOW() + ($2 || ' seconds')::interval,
            attempts = attempts + 1,
-           lease_token = $3
+           lease_token = $3,
+           held_from = NULL
        WHERE id IN (
          SELECT id FROM ${t}
          WHERE (locked_until IS NULL OR locked_until < NOW())

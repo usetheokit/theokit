@@ -138,6 +138,8 @@ describe('PostgresJobBackend (T3.1)', () => {
 })
 
 describe('PostgresJobBackend defer, restore and reschedule', () => {
+  // pg-mem cannot parse 'infinity'; the real-Postgres suite covers it.
+  const FAR = new Date('2999-01-01T00:00:00Z')
   const availableAt = async (id: string): Promise<number> => {
     const r = await pool.query<{ available_at: Date | string }>(
       'SELECT available_at FROM theokit_jobs WHERE id = $1',
@@ -182,12 +184,53 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
     expect(await backend.reschedule(pool, lease.jobId, { availableAt: new Date() })).toBe(false)
   })
 
+  it('forgets the remembered time once a deferred job is claimed', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, maxAttempts: 3 })
+    await backend.defer(pool, { name: 'run-task', until: new Date(Date.now() - 1_000) })
+    const [lease] = await backend.dequeue({})
+    expect(lease.jobId).toBe(a.jobId)
+    await backend.nack(a.jobId, { error: 'flaky', leaseToken: lease.leaseToken })
+    const retryAt = await availableAt(a.jobId)
+    const until = new Date(Date.now() + 3_600_000)
+    await backend.defer(pool, { name: 'run-task', until })
+    await backend.restore(pool, { name: 'run-task' })
+    expect(await availableAt(a.jobId)).toBe(retryAt)
+  })
+
+  it('holds far in the future and restores', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 } })
+    const before = await availableAt(a.jobId)
+    await backend.defer(pool, { name: 'run-task', until: FAR })
+    expect(await backend.dequeue({})).toEqual([])
+    await backend.restore(pool, { name: 'run-task' })
+    expect(await availableAt(a.jobId)).toBe(before)
+  })
+
   it('reschedules a pending job ahead of another', async () => {
     const a = await backend.enqueue({ name: 'run-task', input: {}, delaySeconds: 100 })
     const when = new Date(Date.now() - 5_000)
     expect(await backend.reschedule(pool, a.jobId, { availableAt: when })).toBe(true)
     expect(await availableAt(a.jobId)).toBe(when.getTime())
     expect((await backend.dequeue({})).map((l) => l.jobId)).toEqual([a.jobId])
+  })
+})
+
+describe('PostgresJobBackend migrate on an older table', () => {
+  const FAR = new Date('2999-01-01T00:00:00Z')
+  it('migrate() adds held_from to a table made by an older version', async () => {
+    const own = newDb({ noAstCoverageCheck: true } as never)
+    const ownPool = new (own.adapters.createPg() as { Pool: new () => PoolLike }).Pool()
+    const old = new PostgresJobBackend({ pool: ownPool, tableName: 'theokit_jobs_old' })
+    await ownPool.query(`CREATE TABLE theokit_jobs_old (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, input JSONB NOT NULL,
+      attempts INT NOT NULL DEFAULT 0, max_attempts INT NOT NULL DEFAULT 1,
+      available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), locked_until TIMESTAMPTZ,
+      traceparent TEXT, idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`)
+    await old.migrate()
+    const a = await old.enqueue({ name: 'run-task', input: { taskId: 1 } })
+    expect((await old.defer(ownPool, { name: 'run-task', until: FAR })).length).toBe(1)
+    expect((await old.restore(ownPool, { name: 'run-task' })).length).toBe(1)
+    expect(a.jobId).toBeTruthy()
   })
 })
 
