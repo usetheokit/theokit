@@ -81,7 +81,9 @@ describe('T7.4 — discoverOidcProvider', () => {
     'rejects an http %s with OidcInsecureEndpointError',
     async (field) => {
       respondWith({ ...mockMetadata, [field]: 'http://evil.example/x' })
-      const err = await discoverOidcProvider('https://provider.example').catch((e: unknown) => e as OidcInsecureEndpointError)
+      const err = await discoverOidcProvider('https://provider.example').catch(
+        (e: unknown) => e as OidcInsecureEndpointError,
+      )
       expect(err).toBeInstanceOf(OidcInsecureEndpointError)
       expect(err.field).toBe(field)
       expect(err.code).toBe('oidc_insecure_endpoint')
