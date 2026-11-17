@@ -99,20 +99,27 @@ export function socketsHeldBy(
 
 type Listeners = 'none' | 'own' | 'foreign'
 
+/** `identity` names the listening sockets (inodes, or pid and descriptor), so a rebind changes it. */
+interface Ownership {
+  owner: Listeners
+  identity: string
+}
+
 /**
  * Who listens on `port`, read from /proc: `own` when every listening socket (IPv4 and IPv6) is held
  * by the child's group, `foreign` when any is not, `none` when nothing listens.
  * `undefined` where /proc is unavailable (not Linux): ownership cannot be established there.
  */
-function groupListensOn(port: number, pgid: number): Listeners | undefined {
+function groupListensOn(port: number, pgid: number): Ownership | undefined {
   if (!existsSync('/proc/net/tcp')) return undefined
   const inodes = listeningInodes(port)
-  if (inodes.size === 0) return 'none'
+  if (inodes.size === 0) return { owner: 'none', identity: '' }
   const held = new Set<string>()
   for (const pid of readdirSync('/proc')) {
     if (/^\d+$/.test(pid)) for (const i of socketsHeldBy(pid, pgid, inodes)) held.add(i)
   }
-  return [...inodes].every((i) => held.has(i)) ? 'own' : 'foreign'
+  const identity = [...inodes].sort((a, b) => a.localeCompare(b)).join(',')
+  return { owner: [...inodes].every((i) => held.has(i)) ? 'own' : 'foreign', identity }
 }
 
 /** Runs a command and returns its stdout; throws when it cannot run or exits non-zero. */
@@ -121,8 +128,15 @@ export type RunCommand = (cmd: string, args: string[]) => string
 const runCommand: RunCommand = (cmd, args) =>
   execFileSync(cmd, args, { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] })
 
-/** Pids listening on `port`: `lsof` on macOS and other POSIX, `netstat -ano` on Windows. */
-function listeningPids(port: number, platform: NodeJS.Platform, run: RunCommand): number[] {
+/**
+ * The listeners on `port`: `lsof` on macOS and other POSIX, `netstat -ano` on Windows. `ids` tells the
+ * sockets apart (`pid:fd` from lsof, the pid alone from netstat).
+ */
+function listeners(
+  port: number,
+  platform: NodeJS.Platform,
+  run: RunCommand,
+): { pids: number[]; ids: string[] } {
   if (platform === 'win32') {
     const pids: number[] = []
     for (const line of run('netstat', ['-ano', '-p', 'tcp']).split('\n')) {
@@ -132,19 +146,22 @@ function listeningPids(port: number, platform: NodeJS.Platform, run: RunCommand)
         pids.push(Number(col[4]))
       }
     }
-    return pids
+    return { pids, ids: pids.map(String) }
   }
   // lsof exits 1 when nothing listens: that is an answer ("nobody"), not a failure.
   let out = ''
   try {
-    out = run('lsof', ['-nP', `-iTCP:${String(port)}`, '-sTCP:LISTEN', '-Fp'])
+    out = run('lsof', ['-nP', `-iTCP:${String(port)}`, '-sTCP:LISTEN', '-Fpf'])
   } catch (err) {
     if ((err as { status?: number }).status !== 1) throw err
   }
-  return out
-    .split('\n')
-    .filter((l) => l.startsWith('p'))
-    .map((l) => Number(l.slice(1)))
+  const pids: number[] = []
+  const ids: string[] = []
+  for (const line of out.split('\n')) {
+    if (line.startsWith('p')) pids.push(Number(line.slice(1)))
+    else if (line.startsWith('f')) ids.push(`${String(pids.at(-1))}:${line.slice(1)}`)
+  }
+  return { pids, ids: ids.length > 0 ? ids : pids.map(String) }
 }
 
 function parentPid(pid: number, platform: NodeJS.Platform, run: RunCommand): number {
@@ -185,19 +202,19 @@ export function portOwnership(
   port: number,
   childPid: number,
   probe: PortOwnerProbe = {},
-): { owner: Listeners } | { owner: 'unknown'; reason: string } {
+): Ownership | { owner: 'unknown'; reason: string } {
   const platform = probe.platform ?? process.platform
   if (probe.run === undefined && platform === 'linux') {
     const viaProc = groupListensOn(port, childPid)
-    if (viaProc !== undefined) return { owner: viaProc }
+    if (viaProc !== undefined) return viaProc
   }
   const run = probe.run ?? runCommand
   try {
-    const pids = listeningPids(port, platform, run)
-    if (pids.length === 0) return { owner: 'none' }
+    const { pids, ids } = listeners(port, platform, run)
+    if (pids.length === 0) return { owner: 'none', identity: '' }
     // Every listener counts: a foreign one on the other address family can answer `localhost` too.
     const all = pids.every((p) => descendsFrom(p, childPid, platform, run))
-    return { owner: all ? 'own' : 'foreign' }
+    return { owner: all ? 'own' : 'foreign', identity: ids.join(',') }
   } catch (err) {
     const tool = platform === 'win32' ? 'netstat' : 'lsof'
     return {
@@ -350,25 +367,27 @@ async function bootOnce(
     }
   }
 
-  /** Whether the child owns every listener on the port; fails on a foreign or unknowable one. */
-  const childListens = async (): Promise<boolean> => {
-    const own = child.pid === undefined ? { owner: 'own' as const } : portOwnership(port, child.pid)
-    if (own.owner === 'unknown') return await fail(own.reason)
-    if (own.owner === 'foreign') {
+  /** Names the listeners when the child owns all of them; fails on a foreign or unknowable one. */
+  const childListens = async (): Promise<string | undefined> => {
+    const own = child.pid === undefined ? undefined : portOwnership(port, child.pid)
+    if (own?.owner === 'unknown') return await fail(own.reason)
+    if (own?.owner === 'foreign') {
       return await fail(
         `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
         PortSubstitutedError,
       )
     }
-    return own.owner === 'own'
+    return own === undefined || own.owner === 'own' ? (own?.identity ?? '') : undefined
   }
 
   while (Date.now() < deadline) {
     if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
     // Checked on every poll, whatever the listener answers: a foreign server that returns 404 or
     // does not speak HTTP would otherwise make Vite bind another port while we wait for the deadline.
-    // Checked again after a 200, since the listener may have changed while the request was in flight.
-    if ((await childListens()) && (await answers()) && (await childListens())) {
+    const before = await childListens()
+    // The answer counts only if the same listening sockets, all the child's, stood before and after
+    // the request: a listener that was swapped, even for a moment, cannot have its 200 accepted.
+    if (before !== undefined && (await answers()) && before === (await childListens())) {
       if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
       return { origin, pid: child.pid, output: () => output, close }
     }

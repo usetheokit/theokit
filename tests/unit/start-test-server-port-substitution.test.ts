@@ -11,6 +11,8 @@ const h = vi.hoisted(() => ({
   listeners: (_port: number, _attempt: number): number[] => [],
   parents: {} as Record<number, number>,
   toolFails: false,
+  /** Descriptor number the listener of the n-th child holds (lsof only). */
+  fd: (_attempt: number) => 7,
   /** HTTP status of the readiness probe, or undefined for a listener that does not speak HTTP. */
   status: (_port: number, _attempt: number): number | undefined => 200,
 }))
@@ -37,7 +39,9 @@ vi.mock('node:child_process', async () => {
       const last = h.children.length
       const port = h.children[last - 1]?.port ?? 0
       const pids = h.listeners(port, last)
-      if (cmd === 'lsof') return pids.map((p) => `p${String(p)}\n`).join('')
+      if (cmd === 'lsof') {
+        return pids.map((p) => `p${String(p)}\nf${String(h.fd(last))}\n`).join('')
+      }
       if (cmd === 'netstat') {
         return pids
           .map((p) => `  TCP    0.0.0.0:${String(port)}    0.0.0.0:0    LISTENING    ${String(p)}`)
@@ -81,22 +85,22 @@ function fake(opts: { listeners: number[]; parents: Record<number, number>; fail
 describe.each(['darwin', 'win32'] as const)('port ownership on %s', (platform) => {
   it('accepts the child and its descendants', () => {
     const run = fake({ listeners: [102], parents: { 102: 101, 101: CHILD } })
-    expect(portOwnership(PORT, CHILD, { platform, run })).toEqual({ owner: 'own' })
+    expect(portOwnership(PORT, CHILD, { platform, run })).toMatchObject({ owner: 'own' })
   })
 
   it('detects a substituted foreign listener', () => {
     const run = fake({ listeners: [555], parents: { 555: 1 } })
-    expect(portOwnership(PORT, CHILD, { platform, run })).toEqual({ owner: 'foreign' })
+    expect(portOwnership(PORT, CHILD, { platform, run })).toMatchObject({ owner: 'foreign' })
   })
 
   it('reports none for a port nobody listens on', () => {
     const run = fake({ listeners: [], parents: {} })
-    expect(portOwnership(PORT, CHILD, { platform, run })).toEqual({ owner: 'none' })
+    expect(portOwnership(PORT, CHILD, { platform, run })).toMatchObject({ owner: 'none' })
   })
 
   it('is foreign when a foreign listener shares the port with the child (IPv4 vs IPv6)', () => {
     const run = fake({ listeners: [101, 555], parents: { 101: CHILD, 555: 1 } })
-    expect(portOwnership(PORT, CHILD, { platform, run })).toEqual({ owner: 'foreign' })
+    expect(portOwnership(PORT, CHILD, { platform, run })).toMatchObject({ owner: 'foreign' })
   })
 
   it('reports unknown, with the cause, when the probe tool fails', () => {
@@ -120,6 +124,7 @@ describe.each(['darwin', 'win32'] as const)('startTestServer substitution on %s'
     h.toolFails = false
     h.parents = {}
     h.status = () => 200
+    h.fd = () => 7
     Object.defineProperty(process, 'platform', { value: platform })
     vi.spyOn(process, 'kill').mockImplementation(((pid: number, signal?: string | number) => {
       const rec = h.children.find((c) => c.pid === Math.abs(pid))
@@ -195,6 +200,30 @@ describe.each(['darwin', 'win32'] as const)('startTestServer substitution on %s'
     expect((err as Error).message).toContain('taken by another process')
     expect(h.children.every((c) => c.exited)).toBe(true)
   }, 30_000)
+
+  // netstat names no socket, only a pid: a rebind by the same process cannot be told apart there.
+  it.skipIf(platform === 'win32')(
+    'does not accept a 200 when the listener swapped mid-request',
+    async () => {
+      h.listeners = (_port, attempt) => [own(attempt)]
+      let calls = 0
+      h.status = () => {
+        calls++
+        if (calls === 1) {
+          // The child released the port, a foreign server answered, then the child bound it again:
+          // the probe sees the same pid but another socket afterwards.
+          h.fd = () => 9 // the child's new listening socket is not the one that stood before
+        }
+        return 200
+      }
+      const server = await startTestServer({ cwd: app, timeoutMs: 20_000 })
+      // The first answer was refused: the listening socket changed. The next poll accepted a stable one.
+      expect(calls).toBe(2)
+      expect(h.children).toHaveLength(1)
+      await server.close()
+    },
+    30_000,
+  )
 
   it('rejects a foreign listener that shares the port with the child', async () => {
     h.listeners = (_port, attempt) => [own(attempt), 555]
