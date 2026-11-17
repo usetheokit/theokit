@@ -71,6 +71,15 @@ key is unknown — never a silent fallback.
 `foldTurnLifecycle` collapses a turn's events into a `TurnLifecycle` when a surface wants the
 outcome rather than the stream.
 
+## Reading a tool result
+
+`readToolResult(raw)` turns any tool result into one `ToolResultView` (`shell`, `diff`, `error` or `text`) and never throws. It accepts both shell dialects:
+
+- `@theokit/sdk-tools` `shell_exec`: a JSON string `{ok, stdout, stderr, exit_code}`.
+- The SDK runtime: an object `{stdout, stderr, exitCode}`.
+
+When both exit-code spellings are present and differ, `exitCode` wins. A missing exit code stays `undefined`, never 0. `{ok: false, error}` reads as `error` (`tool_failed` when absent, `stderr` as `detail`); `{ok: true, diff}` and a raw unified diff string read as `diff`; anything else is `text`.
+
 ## Subpaths
 
 | Subpath | What lives there |
