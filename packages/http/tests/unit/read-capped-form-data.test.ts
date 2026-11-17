@@ -9,17 +9,21 @@ import {
 function streamOf(chunks: Uint8Array[]) {
   const state = { pulls: 0, cancelled: false }
   let i = 0
-  const stream = new ReadableStream<Uint8Array>({
-    pull(controller) {
-      state.pulls++
-      const next = chunks[i++]
-      if (next) controller.enqueue(next)
-      else controller.close()
+  // highWaterMark 0: the stream pulls only when a reader asks, never on construction.
+  const stream = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        state.pulls++
+        const next = chunks[i++]
+        if (next) controller.enqueue(next)
+        else controller.close()
+      },
+      cancel() {
+        state.cancelled = true
+      },
     },
-    cancel() {
-      state.cancelled = true
-    },
-  })
+    { highWaterMark: 0 },
+  )
   return { stream, state }
 }
 
