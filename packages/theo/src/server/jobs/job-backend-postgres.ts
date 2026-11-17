@@ -31,8 +31,9 @@ import {
  *     KEPT as failed: `failed_at` is set, `last_error` holds the message, and
  *     `dequeue` never returns it again. Query them with
  *     `SELECT * FROM theokit_jobs WHERE failed_at IS NOT NULL`, replay one with
- *     `UPDATE ... SET failed_at = NULL, attempts = 0, available_at = NOW()`,
- *     and purge old ones yourself: nothing deletes them. A failed job keeps its
+ *     `UPDATE ... SET failed_at = NULL, attempts = 0, available_at = NOW()`
+ *     (leave `leased_at` as it is: it marks the job as once leased, so
+ *     `cancelInTransaction` keeps leaving it alone), and purge old ones yourself: nothing deletes them. A failed job keeps its
  *     idempotency key, so enqueueing that key again returns the failed job's id.
  *   - A retried job waits `retryDelaySeconds(attempts)` before it is
  *     available again (default `min(2^attempts, 3600)` seconds), and its
@@ -224,6 +225,11 @@ export class PostgresJobBackend implements JobBackend {
     // Set the first time a worker leases the job and never cleared, not even by a replay that
     // resets `attempts`, so `cancelInTransaction` can tell a job that was ever leased.
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS leased_at TIMESTAMPTZ`)
+    // A row leased before this column existed has it NULL: backfill every row that was ever leased.
+    await this.#pool.query(
+      `UPDATE ${t} SET leased_at = NOW()
+       WHERE leased_at IS NULL AND (attempts > 0 OR failed_at IS NOT NULL OR locked_until IS NOT NULL)`,
+    )
     await this.#pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ${t}_idempotency_key_idx
       ON ${t} (name, idempotency_key)

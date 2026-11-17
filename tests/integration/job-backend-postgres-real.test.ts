@@ -537,6 +537,23 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-replay'`)
       })
 
+      it('test_a_job_leased_before_the_migration_then_replayed_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-premig' })
+        // The state an older version left: leased and failed, with no `leased_at`.
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET leased_at = NULL, attempts = 1, failed_at = NOW()
+           WHERE idempotency_key = 'k-premig'`,
+        )
+        await backend.migrate()
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NULL, attempts = 0, locked_until = NULL,
+           available_at = NOW() WHERE idempotency_key = 'k-premig'`,
+        )
+        expect(await cancel('k-premig')).toBe(false)
+        expect(await count('k-premig')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-premig'`)
+      })
+
       it('test_a_failed_job_is_left_alone', async () => {
         await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-failed' })
         await pool.query(
