@@ -43,10 +43,12 @@ describe('presenter runtime peers', () => {
   })
 
   it('the wire entry does import zod', (ctx) => {
-    if (!existsSync(resolve(distDir, 'wire/index.js'))) {
+    if (!existsSync(resolve(distDir, 'index.js'))) {
       ctx.skip()
       return
     }
+    // The root build exists, so the wire entry must too: a build without it fails here.
+    expect(existsSync(resolve(distDir, 'wire/index.js'))).toBe(true)
     const imports = graph('wire/index.js').some((file) =>
       bareImport('zod').test(readFileSync(file, 'utf8')),
     )
