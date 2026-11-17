@@ -6,9 +6,23 @@ import { dirname, join, resolve } from 'node:path'
 import { loadConfig } from '../../config/load-config.js'
 import { storageSchema } from '../../config/schema.js'
 
-type DbAction = 'migrate' | 'push' | 'generate' | 'seed'
+type DbAction = 'migrate' | 'push' | 'generate' | 'seed' | 'studio' | 'check' | 'reset'
 
-const VALID_ACTIONS = new Set<DbAction>(['migrate', 'push', 'generate', 'seed'])
+const VALID_ACTIONS = new Set<DbAction>([
+  'migrate',
+  'push',
+  'generate',
+  'seed',
+  'studio',
+  'check',
+  'reset',
+])
+
+export interface DbCommandOptions {
+  force?: boolean
+  host?: string
+  port?: number
+}
 
 interface DbCommandResult {
   status: 'success' | 'error' | 'invalid_action'
@@ -73,15 +87,22 @@ const DRIZZLE_KIT_VERBS = {
   migrate: { args: ['drizzle-kit', 'migrate'], message: 'Migrations applied' },
   push: { args: ['drizzle-kit', 'push'], message: 'Schema pushed to the database' },
   generate: { args: ['drizzle-kit', 'generate'], message: 'Migration files generated' },
+  studio: { args: ['drizzle-kit', 'studio'], message: 'Studio stopped' },
+  check: { args: ['drizzle-kit', 'check'], message: 'Migrations are consistent' },
 } as const
 
-async function runSeed(cwd: string, run: RunCommand): Promise<string> {
-  // The seed file lives under the configured `serverDir`; a hardcoded `server/` missed the
+async function runProjectScript(
+  name: 'seed' | 'reset',
+  cwd: string,
+  run: RunCommand,
+  hint: string,
+): Promise<void> {
+  // The script lives under the configured `serverDir`; a hardcoded `server/` missed the
   // scaffold's `src/server` layout.
   const { serverDir, storage } = await loadConfig(cwd)
-  const seedPath = join(serverDir, 'db', 'seed.ts')
-  assertFileExists(cwd, seedPath, `Create ${seedPath} with your seed data.`)
-  console.log('\n  ▸ Running seed...\n')
+  const seedPath = join(serverDir, 'db', `${name}.ts`)
+  assertFileExists(cwd, seedPath, `Create ${seedPath} ${hint}`)
+  console.log(`\n  ▸ Running ${name}...\n`)
   // #1439 — the seed is a bare child process, so `config.storage` never reached its storage manager
   // and any seed importing a `usePostgres('main', ...)` module threw "Database not configured".
   // A preload applies the parsed storage config through the project's own `theokit` instance.
@@ -101,13 +122,13 @@ async function runSeed(cwd: string, run: RunCommand): Promise<string> {
   } finally {
     if (hasStorage) rmSync(preload, { force: true })
   }
-  return 'Database seeded successfully'
 }
 
 export async function dbCommand(
   action: string,
   cwd: string,
   run: RunCommand = runInherited,
+  options: DbCommandOptions = {},
 ): Promise<DbCommandResult> {
   if (!VALID_ACTIONS.has(action as DbAction)) {
     return {
@@ -120,13 +141,28 @@ export async function dbCommand(
 
   try {
     if (dbAction === 'seed') {
-      return { status: 'success', message: await runSeed(cwd, run), action: dbAction }
+      await runProjectScript('seed', cwd, run, 'with your seed data.')
+      return { status: 'success', message: 'Database seeded successfully', action: dbAction }
+    }
+    if (dbAction === 'reset') {
+      if (options.force !== true) {
+        throw new Error(
+          'db reset is destructive: it runs your db/reset.ts against the database. Re-run with --force to confirm.',
+        )
+      }
+      await runProjectScript('reset', cwd, run, 'with the code that resets your database.')
+      return { status: 'success', message: 'Database reset', action: dbAction }
     }
     const verb = DRIZZLE_KIT_VERBS[dbAction]
     assertFileExists(cwd, 'drizzle.config.ts', 'Create a drizzle.config.ts for your project.')
     assertBinExists(cwd, 'drizzle-kit')
     console.log(`\n  ▸ Running ${verb.args.join(' ')}...\n`)
-    run('drizzle-kit', verb.args.slice(1), cwd)
+    const extra: string[] = []
+    if (dbAction === 'studio') {
+      if (options.host !== undefined) extra.push('--host', options.host)
+      if (options.port !== undefined) extra.push('--port', String(options.port))
+    }
+    run('drizzle-kit', [...verb.args.slice(1), ...extra], cwd)
     return { status: 'success', message: verb.message, action: dbAction }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -134,8 +170,8 @@ export async function dbCommand(
   }
 }
 
-export async function dbCommandCli(action: string): Promise<void> {
-  const result = await dbCommand(action, process.cwd())
+export async function dbCommandCli(action: string, options: DbCommandOptions = {}): Promise<void> {
+  const result = await dbCommand(action, process.cwd(), undefined, options)
   if (result.status === 'success') {
     console.log(`\n  ✓ ${result.message}\n`)
   } else {
