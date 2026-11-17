@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHmac, randomBytes } from 'node:crypto'
 
 import { describe, expect, it } from 'vitest'
 
@@ -65,8 +65,15 @@ describe('verifyHmacSha256 raw bytes', () => {
   it('verifies a body whose bytes do not survive a UTF-8 text round trip', async () => {
     // Leading BOM plus an invalid sequence: `text()` would drop the first and rewrite the second.
     const body = new Uint8Array([0xef, 0xbb, 0xbf, 0x7b, 0xff, 0xfe, 0x7d])
-    const sig = createHmac('sha256', 'new').update(body).digest('base64')
-    const r = await verify(
+    const secret = randomBytes(32).toString('hex')
+    const sig = createHmac('sha256', secret).update(body).digest('base64')
+    const verifyRaw = verifyHmacSha256({
+      header: 'x-webhook-signature',
+      secrets: [secret],
+      option: 'signatureKey',
+      decode: decodeBase64Signature,
+    })
+    const r = await verifyRaw(
       new Request('https://x.test/hook', {
         method: 'POST',
         body,
