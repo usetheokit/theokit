@@ -7,6 +7,7 @@
  *
  * Run it AFTER `pnpm build:packages`: it reads the `types` file of each `exports` entry from `dist/`.
  *
+ * - `--allow-missing-base` lets a base without a baseline pass (only the PR that introduces it); otherwise that fails.
  * - `--write` rewrites `packages/<dir>/public-surface-baseline.json`.
  * - Without it, the regenerated baseline must equal the committed one (exit 1 otherwise).
  * - It then compares with the baseline at `<base>` (default `origin/main`): a stable name removed,
@@ -363,7 +364,13 @@ function main(argv) {
   git(['rev-parse', '--verify', `${base}^{commit}`])
   const rel = `${pkgDir.slice(ROOT.length + 1)}/${BASELINE_FILE}`
   const exists = git(['ls-tree', '--name-only', base, rel]).trim() !== ''
-  if (!exists) return code
+  if (!exists) {
+    if (argv.includes('--allow-missing-base')) return code
+    console.error(
+      `check-public-surface: ${base} has no ${rel}, so nothing to compare with. Pass --allow-missing-base only for the PR that introduces the baseline.`,
+    )
+    return 1
+  }
   const prev = JSON.parse(git(['show', `${base}:${rel}`]))
   const added = git([
     'diff',

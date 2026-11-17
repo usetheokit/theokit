@@ -270,6 +270,20 @@ describe('public surface gate CLI', () => {
     expect(gate(removal(MAJOR, true), 'pkg', '--base', 'main').status).toBe(1)
   })
 
+  it('fails when the base has no baseline, unless bootstrapping is explicit', () => {
+    const root = repo()
+    writeFileSync(join(root, 'README.md'), 'x')
+    commit(root, 'base without a baseline')
+    git(root, 'checkout', '-q', '-b', 'pr')
+    setDts(root, 'export declare function f(): void\n')
+    gate(root, 'pkg', '--write')
+    commit(root, 'pr adds the baseline')
+    const strict = gate(root, 'pkg', '--base', 'main')
+    expect(strict.status).toBe(1)
+    expect(strict.stderr).toContain('--allow-missing-base')
+    expect(gate(root, 'pkg', '--base', 'main', '--allow-missing-base').status).toBe(0)
+  })
+
   it('exits 2 for an unknown package and for an unreadable base', () => {
     const root = removal(MAJOR)
     expect(gate(root, 'nope', '--base', 'main').status).toBe(2)
