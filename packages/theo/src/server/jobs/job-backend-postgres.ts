@@ -10,10 +10,13 @@ import type { PoolLike } from '../storage/storage-types.js'
 
 import {
   type JobBackend,
+  type JobDeferInput,
   type JobEnqueueInput,
   type JobLease,
   type JobLeaseFence,
   type JobNackOptions,
+  type JobRescheduleInput,
+  type JobSelector,
   JobLeaseLostError,
 } from './job-backend.js'
 
@@ -212,7 +215,8 @@ export class PostgresJobBackend implements JobBackend {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         lease_token TEXT,
         last_error TEXT,
-        failed_at TIMESTAMPTZ
+        failed_at TIMESTAMPTZ,
+        held_from TIMESTAMPTZ
       )
     `)
     // Columns added after the first release. `CREATE TABLE IF NOT EXISTS` leaves a table created by
@@ -220,6 +224,7 @@ export class PostgresJobBackend implements JobBackend {
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS lease_token TEXT`)
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS last_error TEXT`)
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ`)
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS held_from TIMESTAMPTZ`)
     await this.#pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ${t}_idempotency_key_idx
       ON ${t} (name, idempotency_key)
@@ -306,6 +311,60 @@ export class PostgresJobBackend implements JobBackend {
         `"${String(input.idempotencyKey)}" conflicted ${String(MAX_ENQUEUE_ROUNDS)} times and the ` +
         'conflicting row was gone each time it was read; the key is being enqueued and acked in a tight loop.',
     )
+  }
+
+  async defer(client: PoolLike, input: JobDeferInput): Promise<string[]> {
+    const t = this.#table
+    const sel = this.#select(input, 2)
+    const until = input.until === 'infinity' ? 'infinity' : input.until.toISOString()
+    const r = await client.query<{ id: string }>(
+      `UPDATE ${t}
+       SET held_from = COALESCE(held_from, available_at), available_at = $1::timestamptz
+       WHERE id IN (${sel.sql})
+       RETURNING id`,
+      [until, ...sel.params],
+    )
+    return r.rows.map((row) => row.id)
+  }
+
+  async restore(client: PoolLike, input: JobSelector): Promise<string[]> {
+    const t = this.#table
+    const sel = this.#select(input, 1, 'AND held_from IS NOT NULL')
+    const r = await client.query<{ id: string }>(
+      `UPDATE ${t}
+       SET available_at = held_from, held_from = NULL
+       WHERE id IN (${sel.sql})
+       RETURNING id`,
+      sel.params,
+    )
+    return r.rows.map((row) => row.id)
+  }
+
+  async reschedule(client: PoolLike, jobId: string, input: JobRescheduleInput): Promise<boolean> {
+    const t = this.#table
+    const r = await client.query<{ id: string }>(
+      `UPDATE ${t} SET available_at = $2::timestamptz
+       WHERE id IN (
+         SELECT id FROM ${t}
+         WHERE id = $1 AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW())
+         FOR UPDATE SKIP LOCKED
+       )
+       RETURNING id`,
+      [jobId, input.availableAt.toISOString()],
+    )
+    return r.rows.length > 0
+  }
+
+  /** Subquery picking the unleased, unfailed jobs of `sel`, locked with SKIP LOCKED. Params start at `$first`. */
+  #select(sel: JobSelector, first: number, extra = ''): { sql: string; params: unknown[] } {
+    const params: unknown[] = [sel.name]
+    let sql = `SELECT id FROM ${this.#table} WHERE name = $${String(first)}`
+    for (const [key, values] of Object.entries(sel.where ?? {})) {
+      params.push(key, values.map(String))
+      sql += ` AND (input ->> $${String(first + params.length - 2)}) = ANY($${String(first + params.length - 1)}::text[])`
+    }
+    sql += ` AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW()) ${extra} FOR UPDATE SKIP LOCKED`
+    return { sql, params }
   }
 
   async dequeue(opts: { batchSize?: number; lockSeconds?: number }): Promise<JobLease[]> {

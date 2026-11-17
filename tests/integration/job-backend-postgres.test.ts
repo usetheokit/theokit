@@ -137,6 +137,60 @@ describe('PostgresJobBackend (T3.1)', () => {
   })
 })
 
+describe('PostgresJobBackend defer, restore and reschedule', () => {
+  const availableAt = async (id: string): Promise<number> => {
+    const r = await pool.query<{ available_at: Date | string }>(
+      'SELECT available_at FROM theokit_jobs WHERE id = $1',
+      [id],
+    )
+    return new Date(r.rows[0].available_at).getTime()
+  }
+
+  it('defers selected jobs and restores each to its own time', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 10 })
+    const b = await backend.enqueue({ name: 'run-task', input: { taskId: 3 }, delaySeconds: 20 })
+    const c = await backend.enqueue({ name: 'run-task', input: { taskId: 4 } })
+    const beforeA = await availableAt(a.jobId)
+    const beforeB = await availableAt(b.jobId)
+    const until = new Date(Date.now() + 3_600_000)
+    const moved = await backend.defer(pool, { name: 'run-task', where: { taskId: [2, 3] }, until })
+    expect(new Set(moved)).toEqual(new Set([a.jobId, b.jobId]))
+    expect(await availableAt(a.jobId)).toBe(until.getTime())
+    // A second defer keeps the first remembered time.
+    await backend.defer(pool, { name: 'run-task', where: { taskId: [2] }, until })
+    const restored = await backend.restore(pool, { name: 'run-task', where: { taskId: [2, 3] } })
+    expect(restored.length).toBe(2)
+    expect(await availableAt(a.jobId)).toBe(beforeA)
+    expect(await availableAt(b.jobId)).toBe(beforeB)
+    expect(await backend.restore(pool, { name: 'run-task' })).toEqual([])
+    expect(c.jobId).toBeTruthy()
+    // The job input is untouched.
+    const r = await pool.query<{ input: unknown }>('SELECT input FROM theokit_jobs WHERE id = $1', [
+      a.jobId,
+    ])
+    expect(r.rows[0].input).toEqual({ taskId: 2 })
+  })
+
+  it('skips a leased job', async () => {
+    await backend.enqueue({ name: 'run-task', input: { taskId: 1 } })
+    const [lease] = await backend.dequeue({})
+    const moved = await backend.defer(pool, {
+      name: 'run-task',
+      until: new Date(Date.now() + 60_000),
+    })
+    expect(moved).toEqual([])
+    expect(await backend.reschedule(pool, lease.jobId, { availableAt: new Date() })).toBe(false)
+  })
+
+  it('reschedules a pending job ahead of another', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: {}, delaySeconds: 100 })
+    const when = new Date(Date.now() - 5_000)
+    expect(await backend.reschedule(pool, a.jobId, { availableAt: when })).toBe(true)
+    expect(await availableAt(a.jobId)).toBe(when.getTime())
+    expect((await backend.dequeue({})).map((l) => l.jobId)).toEqual([a.jobId])
+  })
+})
+
 describe('PostgresJobBackend missing pg (T3.1)', () => {
   it('throws actionable error when pool is undefined', () => {
     expect(() => new PostgresJobBackend({ pool: undefined as never })).toThrow(/pg/i)
