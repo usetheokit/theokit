@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import process from 'node:process'
 
 import { Agent } from '@theokit/agents'
+import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
 import {
   planTranscriptGC,
   runTranscriptGC,
@@ -99,15 +100,23 @@ export async function planAndRunCurrentProjectGC(
   // re-check only knows the hashed names.
   const plan = withholdLegacyNamed(planned, liveSessionIds(cwd, registryIds))
   // A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
-  // first row and hands it to the remover. A candidate transcript is never a live session's own
-  // (those are protected by path), so a live id arriving here belongs to someone else's registry
-  // entry: skip it, and let only the fork's file go.
-  const live = new Set(liveSessionIds(cwd, registryIds))
+  // first row and hands it to the remover. Registry removal is therefore tied to the candidate's own
+  // identity: an id may be removed only when a candidate IS that session's transcript, under either
+  // naming convention. A fork's file is collected, but never speaks for its source.
+  const own = new Set(
+    plan.candidates.flatMap((c) =>
+      c.id !== undefined &&
+      (c.transcript === transcriptPath(plan.root, plan.cwd, c.id) ||
+        c.transcript === legacyTranscriptPath(plan.root, plan.cwd, c.id))
+        ? [c.id]
+        : [],
+    ),
+  )
   const remove = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
   const result = await runTranscriptGC(plan, {
     apply: opts.apply,
     protectedIds,
-    removeFromRegistry: (id) => (live.has(id) ? undefined : remove(id)),
+    removeFromRegistry: (id) => (own.has(id) ? remove(id) : undefined),
   })
   return { plan, result }
 }

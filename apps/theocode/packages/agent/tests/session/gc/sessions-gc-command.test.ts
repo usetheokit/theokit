@@ -163,6 +163,24 @@ describe('a fork of a registered session', () => {
     expect(existsSync(source)).toBe(true)
     expect(removed, 'the live source session lost its registry entry').not.toContain('source-live')
   })
+  it('test_an_old_fork_of_an_archived_protected_source_does_not_remove_the_source', async () => {
+    // The source is ARCHIVED (so not in the live registry set) but its transcript is the newest, hence
+    // protected by recency. The fork still names it in its first row.
+    const source = writeTranscript(fx, 'source-archived', 1)
+    const fork = writeTranscript(fx, 'the-fork', 90, {
+      content: `${JSON.stringify({ type: 'user', sessionId: 'source-archived' })}\n`,
+    })
+    const removed: string[] = []
+
+    await run(true, {
+      listRegistry: async () => [{ agentId: 'source-archived', archived: true }],
+      removeFromRegistry: (id: string) => void removed.push(id),
+    })
+
+    expect(existsSync(fork)).toBe(false)
+    expect(existsSync(source)).toBe(true)
+    expect(removed, 'the protected source lost its registry entry').toEqual([])
+  })
 })
 
 describe('sessions gc floors and legacy names', () => {
