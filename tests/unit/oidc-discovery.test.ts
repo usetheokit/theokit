@@ -123,6 +123,12 @@ describe('T7.4 — discoverOidcProvider', () => {
     })
   })
 
+  it('throws a typed error for a malformed issuer, field issuer', async () => {
+    const err = await discoverOidcProvider('not a url').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(OidcInsecureEndpointError)
+    expect((err as OidcInsecureEndpointError).field).toBe('issuer')
+  })
+
   it('isSafeOidcUrl', () => {
     expect(isSafeOidcUrl('https://a.example/x')).toBe(true)
     expect(isSafeOidcUrl('http://localhost/x')).toBe(true)

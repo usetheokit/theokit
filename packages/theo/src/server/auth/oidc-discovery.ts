@@ -110,12 +110,17 @@ function assertSafeEndpoints(metadata: OidcMetadata): void {
 export async function discoverOidcProvider(issuer: string | URL): Promise<OidcMetadata> {
   const issuerStr = typeof issuer === 'string' ? issuer : issuer.toString()
   // Validate protocol BEFORE checking cache — invalid issuers should never poison.
-  const url = new URL(issuerStr)
-  if (!isSafeOidcUrl(issuerStr)) {
+  let url: URL | undefined
+  try {
+    url = new URL(issuerStr)
+  } catch {
+    url = undefined
+  }
+  if (!url || !isSafeOidcUrl(issuerStr)) {
     throw new OidcInsecureEndpointError(
       'issuer',
       issuerStr,
-      `OIDC issuer must use HTTPS (received "${url.protocol}//${url.hostname}…"). ` +
+      `OIDC issuer must use HTTPS (received ${url ? `"${url.protocol}//${url.hostname}…"` : 'a malformed URL'}). ` +
         `RFC 8414 §3 forbids plain HTTP except for loopback hosts.`,
     )
   }
