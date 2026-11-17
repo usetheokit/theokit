@@ -86,6 +86,6 @@ describe('goal continuation turns', () => {
       userTurn(`${GOAL_CONTINUATION_MARKER} keep going`),
     ])
     const previews = await readUserTurnPreviewsAsync('s2', { cwd, baseDir: base })
-    expect(previews).toHaveLength(1)
+    expect(previews).toEqual(['real question'])
   })
 })
