@@ -92,9 +92,7 @@ export {
   APPROVAL_MODES,
   shouldAutoApprove,
   WRITE_SCOPED_TOOLS,
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- re-exporting the deprecated alias on purpose
   type ApprovalMode,
-  type AutoApproveMode,
   type ShouldAutoApproveOptions,
 } from './approval-decision.js'
 export type { DefinitionOrThunk } from './definition-or-thunk.js'
