@@ -2,7 +2,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
 /** Build-time packages `theokit` loads for the CLI only; they are optional peers, not dependencies. */
-export const CLI_TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'tsx'] as const
+export const CLI_TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'tsx', 'typescript'] as const
 
 /** Throw a clear error naming the first toolchain package the app does not have installed. */
 export function requireToolchain(
