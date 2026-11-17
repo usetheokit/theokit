@@ -69,3 +69,14 @@ describe('default template external dep pins (regression guard)', () => {
     expect(minor).toBeGreaterThanOrEqual(22)
   })
 })
+
+describe('default template carries the toolchain theokit no longer installs', () => {
+  it('lists vite, @vitejs/plugin-react, tsx and typescript in devDependencies', () => {
+    const dev = (
+      JSON.parse(readFileSync(TEMPLATE, 'utf8')) as { devDependencies: Record<string, string> }
+    ).devDependencies
+    for (const name of ['vite', '@vitejs/plugin-react', 'tsx', 'typescript']) {
+      expect(dev[name], name).toBeDefined()
+    }
+  })
+})
