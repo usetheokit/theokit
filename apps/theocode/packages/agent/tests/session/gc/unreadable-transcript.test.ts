@@ -45,4 +45,16 @@ describe('#106 — unreadable is not orphaned', () => {
 
     expect(existsSync(orphan)).toBe(false)
   })
+
+  it('test_an_entry_with_no_idSource_at_all_keeps_todays_behaviour', async () => {
+    // A plain readable transcript carries no extra marker; absence must mean "no reason to doubt",
+    // or adopting the unreadable-keep rule would switch `gc` off for ordinary entries.
+    writeTranscript(fx, 'decoy-newer', 1)
+    const plain = writeTranscript(fx, 'plain-old-entry', 90)
+
+    const { plan } = await run()
+
+    expect(plan.candidates.map((c) => c.id)).toContain('plain-old-entry')
+    expect(existsSync(plain)).toBe(false)
+  })
 })

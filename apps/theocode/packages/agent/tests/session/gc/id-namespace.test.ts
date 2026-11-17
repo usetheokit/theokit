@@ -16,7 +16,7 @@ const PLAIN = 'exec-8918b35d-2341-4545-84a7-c62dc9bee641'
 
 const fx = useFixture()
 
-function plan(registry: { agentId: string; archived?: boolean }[] = []) {
+function planFull(registry: { agentId: string; archived?: boolean }[] = []) {
   writeTranscript(fx, 'newest', 1)
   writeTranscript(fx, PLAIN, 40)
   writeTranscript(fx, REGISTERED, 50)
@@ -29,8 +29,11 @@ function plan(registry: { agentId: string; archived?: boolean }[] = []) {
     maxAgeDays: 30,
     apply: false,
     listRegistry: async () => registry,
-  }).then((r) => r.plan.candidates.map((c) => c.id))
+  }).then((r) => r.plan)
 }
+
+const plan = (registry: { agentId: string; archived?: boolean }[] = []) =>
+  planFull(registry).then((p) => p.candidates.map((c) => c.id))
 
 describe('the protected set and the transcripts are keyed the same way', () => {
   it('test_the_fixture_collects_everything_nobody_claims', async () => {
@@ -44,8 +47,11 @@ describe('the protected set and the transcripts are keyed the same way', () => {
     expect(await plan(), 'the session named by the pointer was planned').not.toContain(LIVE)
   })
 
-  it('test_a_registered_session_is_protected', async () => {
+  it('test_a_registered_session_is_protected_and_reported_as_registered', async () => {
     const ids = await plan([{ agentId: REGISTERED, archived: false }])
     expect(ids, 'a session the registry still lists was planned').not.toContain(REGISTERED)
+    // Reported as registered: the kept list says why, which is what `inRegistry` used to show.
+    const full = await planFull([{ agentId: REGISTERED, archived: false }])
+    expect(full.kept.find((k) => k.id === REGISTERED)?.reason).toBe('registered session')
   })
 })

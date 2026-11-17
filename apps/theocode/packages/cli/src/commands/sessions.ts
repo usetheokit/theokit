@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import process from 'node:process'
 
 import { Agent } from '@theokit/agents'
@@ -35,11 +36,11 @@ async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
 }
 
 export function humanReport(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string[] {
-  const removedIds = new Set(result.removed)
-  const orphaned = new Set(result.orphaned)
   const failed = new Set(result.errors.map((e) => e.id))
+  // Per transcript FILE, not per session id: a current and a legacy file can share an id, and one
+  // can be removed while the other fails. An applied run is judged by what is left on disk.
   const gone = (c: TranscriptGCPlan['candidates'][number]): boolean =>
-    result.dryRun || (c.id !== undefined ? removedIds.has(c.id) : orphaned.has(c.transcript))
+    result.dryRun || !existsSync(c.transcript)
   const removedCount = plan.candidates.filter(gone).length
   const verb = result.dryRun ? 'would remove' : 'removed'
   const lines = [

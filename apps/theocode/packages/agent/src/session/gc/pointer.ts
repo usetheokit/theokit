@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
+
+import { legacyTranscriptPath } from '@theokit/agents/persistence'
 
 /**
  * The live-session pointer: `<cwd>/.theokit/tui-session` holds the id of the session a running TUI
@@ -75,6 +77,8 @@ export function gcProtectedIds(
 }
 
 interface PlanLike {
+  readonly cwd: string
+  readonly root: string
   readonly candidates: readonly { readonly id: string | undefined; readonly transcript: string }[]
   readonly kept: readonly { readonly id: string | undefined; readonly reason: string }[]
 }
@@ -89,11 +93,12 @@ interface PlanLike {
  * matches nothing keeps a file, a name that is missing deletes one, and there is no undo.
  */
 export function withholdLegacyNamed<P extends PlanLike>(plan: P, liveIds: readonly string[]): P {
-  const live = new Set(liveIds)
-  const stem = (path: string): string => basename(path).replace(/\.jsonl$/, '')
+  // The SDK's own id -> legacy path map: it sanitises the id (`a.b` is filed as `a-b.jsonl`), so a
+  // stem comparison against the raw id would miss exactly those sessions.
+  const legacy = new Set(liveIds.map((id) => legacyTranscriptPath(plan.root, plan.cwd, id)))
   // #106 — a transcript whose id could not be read is kept too: "I could not read this" is not
   // "this belongs to nobody", and the framework collects it as an unnameable orphan.
-  const held = plan.candidates.filter((c) => c.id === undefined || live.has(stem(c.transcript)))
+  const held = plan.candidates.filter((c) => c.id === undefined || legacy.has(c.transcript))
   if (held.length === 0) return plan
   return {
     ...plan,

@@ -28,7 +28,7 @@ const run = (registry: { agentId: string; archived?: boolean }[], removed: strin
   })
 
 describe('#102 — deletion speaks the registry vocabulary', () => {
-  it('test_an_archived_session_is_removed_from_the_registry_by_its_session_id_not_its_filename', async () => {
+  it('test_a_registered_session_is_deleted_by_its_session_id_not_its_filename', async () => {
     writeTranscript(fx, 'decoy-newer', 1)
     const file = writeTranscript(fx, AGENT, 90)
     const removed: string[] = []
@@ -39,7 +39,7 @@ describe('#102 — deletion speaks the registry vocabulary', () => {
     expect(existsSync(file)).toBe(false)
   })
 
-  it('test_both_naming_conventions_of_a_registered_session_are_protected', async () => {
+  it('test_both_naming_conventions_of_a_live_session_are_protected', async () => {
     writeTranscript(fx, 'decoy-newer', 1)
     const current = writeTranscript(fx, AGENT, 90)
     const legacy = writeTranscript(fx, AGENT, 90, { legacy: true })
@@ -60,5 +60,19 @@ describe('#102 — deletion speaks the registry vocabulary', () => {
 
     expect(existsSync(current)).toBe(true)
     expect(existsSync(legacy), 'the legacy transcript of the pointed session was deleted').toBe(true)
+  })
+
+  it('test_a_legacy_name_the_sdk_sanitises_is_still_protected', async () => {
+    // `a.b` is filed as `a-b.jsonl` on 4.x: a stem comparison with the raw id would miss it.
+    const id = 'tui.live.1'
+    writeTranscript(fx, 'decoy-newer', 1)
+    const legacy = writeTranscript(fx, id, 90, { legacy: true })
+    writePointer(fx, id)
+
+    await run([])
+
+    expect(existsSync(legacy), 'the sanitised legacy name of the pointed session was deleted').toBe(
+      true,
+    )
   })
 })
