@@ -33,6 +33,7 @@ import {
   shouldAutoApprove,
   WRITE_SCOPED_TOOLS,
   type ApprovalMode,
+  type AutoApproveMode,
 } from '../../src/bridge/approval-decision.js'
 
 const ENFORCED = { enforced: true, mode: 'bwrap', detail: 'kernel namespaces' } as const
@@ -180,5 +181,14 @@ describe('shouldAutoApprove — an absent tool policy is not a permissive one', 
       ;(WRITE_SCOPED_TOOLS as Set<string>).add('rm_rf')
     }).toThrow()
     expect(WRITE_SCOPED_TOOLS.has('rm_rf')).toBe(false)
+  })
+})
+
+describe('AutoApproveMode — the name that does not clash with the SDK', () => {
+  it('test_auto_approve_mode_is_the_same_type_as_the_deprecated_alias', () => {
+    const a: AutoApproveMode = 'auto-edit'
+    const b: ApprovalMode = a
+    expect(shouldAutoApprove(b, 'x')).toBe(false)
+    expect([...APPROVAL_MODES]).toContain(a)
   })
 })

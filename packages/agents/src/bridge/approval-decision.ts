@@ -28,6 +28,14 @@
  * yet supply it writes its own predicate instead, which is how the duplication started.
  *
  * An omitted posture resolves to the conservative answer rather than to a permissive one.
+ *
+ * ## This is the framework's approval engine
+ *
+ * `shouldAutoApprove` is the one engine that decides "may this tool call run without asking a
+ * human". The `@theokit/sdk` functions `decideApproval`, `withBlastRadius` and
+ * `evaluateBlastRadius` are deprecated in favour of it and no product should call them. The SDK
+ * also exports its own `ApprovalMode` (`ask | never-ask | refuse-all`); this layer's mode type is
+ * named {@link AutoApproveMode} so a file importing from both packages needs no alias.
  */
 import type { SandboxPosture } from '@theokit/sdk/sandbox'
 
@@ -39,7 +47,10 @@ import type { SandboxPosture } from '@theokit/sdk/sandbox'
  */
 export const APPROVAL_MODES = ['suggest', 'auto-edit', 'full-auto'] as const
 
-export type ApprovalMode = (typeof APPROVAL_MODES)[number]
+export type AutoApproveMode = (typeof APPROVAL_MODES)[number]
+
+/** @deprecated Use {@link AutoApproveMode}; the SDK exports a different `ApprovalMode`. */
+export type ApprovalMode = AutoApproveMode
 
 /**
  * The runtime's permission posture each local mode means.
@@ -67,7 +78,7 @@ const PERMISSION_MODE_BY_APPROVAL_MODE = {
   suggest: 'default',
   'auto-edit': 'acceptEdits',
   'full-auto': 'bypass',
-} as const satisfies Record<ApprovalMode, string>
+} as const satisfies Record<AutoApproveMode, string>
 
 /**
  * Translate a local approval mode into the runtime's permission mode.
@@ -77,8 +88,8 @@ const PERMISSION_MODE_BY_APPROVAL_MODE = {
  * nobody chose is the shape this area keeps producing.
  */
 export function approvalModeToPermissionMode(
-  mode: ApprovalMode,
-): (typeof PERMISSION_MODE_BY_APPROVAL_MODE)[ApprovalMode] {
+  mode: AutoApproveMode,
+): (typeof PERMISSION_MODE_BY_APPROVAL_MODE)[AutoApproveMode] {
   return PERMISSION_MODE_BY_APPROVAL_MODE[mode]
 }
 
@@ -145,7 +156,7 @@ export interface ShouldAutoApproveOptions {
  *   `danger-full-access`, the operator's explicit request to run without confinement.
  */
 export function shouldAutoApprove(
-  mode: ApprovalMode,
+  mode: AutoApproveMode,
   toolName: string,
   // `mode` is a plain string so callers already passing a wider vocabulary keep compiling.
   posture?: Pick<SandboxPosture, 'enforced'> & { readonly mode?: string },

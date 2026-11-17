@@ -93,6 +93,7 @@ export {
   shouldAutoApprove,
   WRITE_SCOPED_TOOLS,
   type ApprovalMode,
+  type AutoApproveMode,
   type ShouldAutoApproveOptions,
 } from './approval-decision.js'
 export type { DefinitionOrThunk } from './definition-or-thunk.js'
