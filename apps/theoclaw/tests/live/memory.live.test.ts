@@ -22,14 +22,17 @@ import type { SessionAgent } from '../../src/sessions/session-agents.js'
 const LIVE = process.env.THEOCLAW_LIVE === '1'
 const TURN_TIMEOUT_MS = 180_000
 
-const word = (): string => Array.from({ length: 8 }, () => String.fromCharCode(97 + randomInt(26))).join('')
+// A real, recognizable city: a model "corrects" a random letter string, so a nonsense word cannot be recalled verbatim.
+const CITIES = ['Lisbon', 'Nairobi', 'Reykjavik', 'Osaka', 'Valparaiso', 'Tallinn', 'Marrakesh', 'Dunedin', 'Bergen', 'Kraków']
+const pickCity = (): string => CITIES[randomInt(CITIES.length)] as string
+const lower = (text: string): string => text.toLowerCase()
 
 describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', () => {
   it(
     'session_search finds a Telegram session from the control surface, and the reviewer fact is recalled',
     async () => {
       const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-live-'))
-      const city = word()
+      const city = pickCity()
       const env = { ...process.env, THEOCLAW_WORKSPACE: workspace, THEOCLAW_TRANSCRIPTS: 'on', THEOCLAW_MEMORY: 'on', THEOCLAW_OWNERS: 'telegram:u,line:u' }
       const { sessions, withAgent, memory } = chatSessions({
         env,
@@ -48,7 +51,7 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
 
       const store = new MemoryStore(join(workspace, '.theoclaw', 'memory'))
       // A fact the forked reviewer saved with a real model call.
-      expect(store.facts().join(' ')).toContain(city)
+      expect(lower(store.facts().join(' '))).toContain(lower(city))
 
       // A fresh session on another surface recalls the fact from its prompt alone: it has no tool.
       const other = chatSessions({
@@ -66,7 +69,7 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
       })
       await other.memory?.idle()
       await other.sessions.disposeAll()
-      expect(recalled).toContain(city)
+      expect(lower(recalled)).toContain(lower(city))
 
       // A different surface (the control agent) asks session_search through a real model.
       const control = await createChannelAgentFactory(env, (options) =>
@@ -76,7 +79,7 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
         'Use session_search to look up what my home city is called, and answer with just the name.',
       )
       for await (const message of run.stream()) void message
-      expect((await run.wait()).result ?? '').toContain(city)
+      expect(lower((await run.wait()).result ?? '')).toContain(lower(city))
     },
     TURN_TIMEOUT_MS,
   )
