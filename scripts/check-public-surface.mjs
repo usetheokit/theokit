@@ -1,0 +1,265 @@
+#!/usr/bin/env node
+/**
+ * Public-surface gate: compare a package's exported declarations with a committed baseline and with
+ * the baseline at the PR's base, and require a major changeset for a breaking change to a stable name.
+ *
+ * node scripts/check-public-surface.mjs <package dir name | package name> [--write] [--base <ref>]
+ *
+ * Run it AFTER `pnpm build:packages`: it reads the `types` file of each `exports` entry from `dist/`.
+ *
+ * - `--write` rewrites `packages/<dir>/public-surface-baseline.json`.
+ * - Without it, the regenerated baseline must equal the committed one (exit 1 otherwise).
+ * - It then compares with the baseline at `<base>` (default `origin/main`): a stable name removed,
+ *   renamed, demoted, or whose declaration changed other than by an added optional member needs a
+ *   changeset added in `<base>...HEAD` that declares the package `major`; and a stable name removed
+ *   less than DEPRECATION_WINDOW_DAYS after its `deprecatedSince` fails whatever the changesets say.
+ *
+ * Tier: `stable` unless the JSDoc has `@experimental`. `deprecatedSince` is read from a
+ * `@deprecated since YYYY-MM-DD` tag, else null.
+ *
+ * Exit codes: 0 pass, 1 violation or drift, 2 the check could not run (never a pass).
+ */
+import { execFileSync } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+import ts from 'typescript'
+
+const ROOT = resolve(import.meta.dirname, '..')
+
+/** Days a stable name must stay deprecated before it may be removed. The ADR marks 90 as pending confirmation. */
+export const DEPRECATION_WINDOW_DAYS = 90
+export const BASELINE_FILE = 'public-surface-baseline.json'
+const DAY_MS = 86_400_000
+
+function fail(message) {
+  console.error(`check-public-surface: ${message}`)
+  process.exit(2)
+}
+
+/** `exports` entry name → absolute path of its declaration file. */
+function entryTypes(pkgDir, manifest) {
+  const out = {}
+  const exp = manifest.exports
+  if (!exp || typeof exp !== 'object') return out
+  for (const [entry, target] of Object.entries(exp)) {
+    const types = typeof target === 'object' && target !== null ? target.types : undefined
+    if (typeof types === 'string') out[entry] = resolve(pkgDir, types)
+  }
+  return out
+}
+
+function tagsOf(symbol, checker) {
+  return symbol.getJsDocTags(checker)
+}
+
+function tagText(tag) {
+  return (tag.text ?? []).map((p) => p.text).join('')
+}
+
+function describeSymbol(sym, checker, printer) {
+  // eslint-disable-next-line sonarjs/bitwise-operators -- ts.SymbolFlags is a bit set
+  const target = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym
+  const tags = [...tagsOf(sym, checker), ...tagsOf(target, checker)]
+  const deprecated = tags.find((t) => t.name === 'deprecated')
+  const since = deprecated ? /since\s+(\d{4}-\d{2}-\d{2})/.exec(tagText(deprecated)) : null
+  const declaration = (target.declarations ?? [])
+    .map((d) => printer.printNode(ts.EmitHint.Unspecified, d, d.getSourceFile()).trim())
+    .sort()
+    .join('\n')
+  return {
+    tier: tags.some((t) => t.name === 'experimental') ? 'experimental' : 'stable',
+    declaration,
+    deprecatedSince: since ? since[1] : null,
+  }
+}
+
+function byName([a], [b]) {
+  return a < b ? -1 : 1
+}
+
+/** Build the baseline for the package in `pkgDir`, resolving names with the TypeScript checker. */
+export function extractSurface(pkgDir) {
+  const manifest = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
+  const files = entryTypes(pkgDir, manifest)
+  for (const [entry, file] of Object.entries(files)) {
+    if (!existsSync(file))
+      fail(`entry "${entry}" points at ${file}, which does not exist. Build first.`)
+  }
+  const program = ts.createProgram(Object.values(files), {
+    noEmit: true,
+    skipLibCheck: true,
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    types: [],
+  })
+  const checker = program.getTypeChecker()
+  const printer = ts.createPrinter({ removeComments: true, newLine: ts.NewLineKind.LineFeed })
+  const entries = {}
+  for (const entry of Object.keys(files).sort()) {
+    const sf = program.getSourceFile(files[entry])
+    const modSym = sf && checker.getSymbolAtLocation(sf)
+    const names = (modSym ? checker.getExportsOfModule(modSym) : []).map((sym) => [
+      sym.name,
+      describeSymbol(sym, checker, printer),
+    ])
+    entries[entry] = Object.fromEntries(names.sort(byName))
+  }
+  return { package: manifest.name, entries }
+}
+
+export function serialize(baseline) {
+  return `${JSON.stringify(baseline, null, 2)}\n`
+}
+
+/** Text of a declaration with its member list cut out, plus the members, or null when it has none. */
+function shape(text) {
+  const sf = ts.createSourceFile('d.ts', text, ts.ScriptTarget.ES2022, true)
+  const node = sf.statements[0]
+  if (!node) return null
+  let members
+  if (ts.isInterfaceDeclaration(node)) members = node.members
+  else if (ts.isTypeAliasDeclaration(node) && ts.isTypeLiteralNode(node.type))
+    members = node.type.members
+  else return null
+  const shell = text.slice(0, members.pos) + text.slice(members.end)
+  const list = members.map((m) => ({
+    text: m.getText(sf).replace(/[;,]$/, ''),
+    optional: Boolean(m.questionToken),
+  }))
+  return { shell, list }
+}
+
+/** True when `next` only adds optional members to an interface / object type alias. */
+export function addsOnlyOptionalMembers(prev, next) {
+  const a = shape(prev)
+  const b = shape(next)
+  if (!a || !b || a.shell !== b.shell) return false
+  const before = new Set(a.list.map((m) => m.text))
+  const after = new Set(b.list.map((m) => m.text))
+  if (![...before].every((t) => after.has(t))) return false
+  return b.list.every((m) => before.has(m.text) || m.optional)
+}
+
+function breakage(old, cur) {
+  if (!cur) return 'removed or renamed'
+  if (cur.tier !== 'stable') return 'demoted to experimental'
+  if (
+    cur.declaration !== old.declaration &&
+    !addsOnlyOptionalMembers(old.declaration, cur.declaration)
+  ) {
+    return 'declaration changed'
+  }
+  return null
+}
+
+function windowProblem(id, old, cur, now) {
+  if ((cur && cur.tier === 'stable') || !old.deprecatedSince) return null
+  const days = Math.floor((now - Date.parse(old.deprecatedSince)) / DAY_MS)
+  if (days >= DEPRECATION_WINDOW_DAYS) return null
+  return `${id} removed ${days} days after deprecatedSince ${old.deprecatedSince}; the window is ${DEPRECATION_WINDOW_DAYS} days`
+}
+
+/** Breaking changes (and window violations) from `prev` to `next`. `now` is epoch ms. */
+export function comparePolicy(prev, next, { major, now }) {
+  const out = []
+  for (const [entry, names] of Object.entries(prev.entries)) {
+    for (const [name, old] of Object.entries(names)) {
+      if (old.tier !== 'stable') continue
+      const cur = next.entries[entry]?.[name]
+      const id = `${entry}:${name}`
+      const what = breakage(old, cur)
+      if (!what) continue
+      if (!major)
+        out.push(`${id} ${what} and no changeset in the range declares "${prev.package}": major`)
+      const late = windowProblem(id, old, cur, now)
+      if (late) out.push(late)
+    }
+  }
+  return out
+}
+
+/** True when any changeset text declares `pkg` as `major` in its frontmatter. */
+export function declaresMajor(texts, pkg) {
+  const wanted = new Set([`'${pkg}': major`, `"${pkg}": major`, `${pkg}: major`])
+  return texts.some((text) => {
+    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
+    if (!m) return false
+    return m[1].split(/\r?\n/).some((line) => wanted.has(line.split('#')[0].trim()))
+  })
+}
+
+function git(args) {
+  try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
+    return execFileSync('git', args, {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch (err) {
+    return fail(`\`git ${args.join(' ')}\` failed — ${err.message}. This is not a pass.`)
+  }
+}
+
+function findPackage(arg) {
+  const packages = join(ROOT, 'packages')
+  for (const dir of readdirSync(packages)) {
+    const file = join(packages, dir, 'package.json')
+    if (!existsSync(file)) continue
+    if (dir === arg || JSON.parse(readFileSync(file, 'utf8')).name === arg)
+      return join(packages, dir)
+  }
+  return fail(`no package "${arg}" under packages/`)
+}
+
+function main(argv) {
+  const write = argv.includes('--write')
+  const bi = argv.indexOf('--base')
+  const base = bi >= 0 ? argv[bi + 1] : 'origin/main'
+  const arg = argv.find((a, i) => !a.startsWith('--') && argv[i - 1] !== '--base')
+  if (!arg) return fail('usage: check-public-surface.mjs <package> [--write] [--base <ref>]')
+  const pkgDir = findPackage(arg)
+  const baselinePath = join(pkgDir, BASELINE_FILE)
+  const fresh = extractSurface(pkgDir)
+  if (write) {
+    writeFileSync(baselinePath, serialize(fresh))
+    console.log(`check-public-surface: wrote ${baselinePath}`)
+    return 0
+  }
+  let code = 0
+  if (!existsSync(baselinePath) || readFileSync(baselinePath, 'utf8') !== serialize(fresh)) {
+    console.error(
+      `check-public-surface: ${fresh.package}'s surface differs from ${BASELINE_FILE}. Run with --write and commit it.`,
+    )
+    code = 1
+  }
+  git(['rev-parse', '--verify', `${base}^{commit}`])
+  const rel = `${pkgDir.slice(ROOT.length + 1)}/${BASELINE_FILE}`
+  const exists = git(['ls-tree', '--name-only', base, rel]).trim() !== ''
+  if (!exists) return code
+  const prev = JSON.parse(git(['show', `${base}:${rel}`]))
+  const added = git([
+    'diff',
+    '--name-only',
+    '--diff-filter=A',
+    `${base}...HEAD`,
+    '--',
+    '.changeset',
+  ])
+    .split('\n')
+    .filter((f) => /^\.changeset\/.+\.md$/.test(f) && !f.endsWith('README.md'))
+    .map((f) => readFileSync(join(ROOT, f), 'utf8'))
+  const problems = comparePolicy(prev, fresh, {
+    major: declaresMajor(added, fresh.package),
+    now: Date.now(),
+  })
+  for (const p of problems) console.error(`check-public-surface: ${p}`)
+  return problems.length > 0 ? 1 : code
+}
+
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  process.exit(main(process.argv.slice(2)))
+}
