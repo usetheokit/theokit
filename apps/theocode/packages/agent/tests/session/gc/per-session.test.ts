@@ -94,8 +94,10 @@ describe('runSessionGC', () => {
     const { result } = await runSessionGC({ apply: true, delete: del })
 
     expect(existsSync(live)).toBe(true)
-    expect(del).not.toHaveBeenCalled()
+    // The older OLD is an unprotected orphan and is collected; the registry is never asked about LIVE.
+    expect(del).not.toHaveBeenCalledWith(LIVE)
     expect(result.removed).not.toContain(LIVE)
+    expect(result.removed).toContain(OLD)
   })
 
   it('still_deletes_an_unprotected_session', async () => {
@@ -106,8 +108,9 @@ describe('runSessionGC', () => {
     const old = seed(OLD, 99)
     const del = vi.fn()
 
-    const { result } = await runSessionGC({ apply: true, registered: [OLD], delete: del })
+    const { result } = await runSessionGC({ apply: true, registered: [], delete: del })
 
+    // An UNREGISTERED old session is the control: a registered one is protected by design.
     expect(del).toHaveBeenCalledWith(OLD)
     expect(result.removed).toContain(OLD)
     expect(result.errors).toHaveLength(0)
@@ -134,7 +137,7 @@ describe('runSessionGC', () => {
     const old = seed(OLD, 99)
     const del = vi.fn()
 
-    const { result } = await runSessionGC({ apply: false, registered: [OLD], delete: del })
+    const { result } = await runSessionGC({ apply: false, registered: [], delete: del })
 
     expect(result.dryRun).toBe(true)
     expect(del).not.toHaveBeenCalled()

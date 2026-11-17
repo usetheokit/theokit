@@ -143,6 +143,28 @@ describe('the report', () => {
 })
 
 
+describe('a fork of a registered session', () => {
+  it('test_an_old_fork_is_collected_without_removing_its_registered_source', async () => {
+    // A fork copies its source's rows, so its first row names the SOURCE session.
+    writeTranscript(fx, 'newest', 1)
+    const source = writeTranscript(fx, 'source-live', 2)
+    const fork = writeTranscript(fx, 'the-fork', 90, {
+      content: `${JSON.stringify({ type: 'user', sessionId: 'source-live' })}\n`,
+    })
+    const removed: string[] = []
+
+    const { plan } = await run(true, {
+      listRegistry: async () => [{ agentId: 'source-live' }],
+      removeFromRegistry: (id: string) => void removed.push(id),
+    })
+
+    expect(plan.candidates.map((c) => c.transcript)).toContain(fork)
+    expect(existsSync(fork)).toBe(false)
+    expect(existsSync(source)).toBe(true)
+    expect(removed, 'the live source session lost its registry entry').not.toContain('source-live')
+  })
+})
+
 describe('sessions gc floors and legacy names', () => {
   it('test_a_knob_below_the_floor_fails_with_the_frameworks_GCFloorError_message', async () => {
     const old = writeTranscript(fx, 'old', 90)

@@ -98,10 +98,16 @@ export async function planAndRunCurrentProjectGC(
   // Re-read the pointer right before applying: the plan is a snapshot, and the framework's own
   // re-check only knows the hashed names.
   const plan = withholdLegacyNamed(planned, liveSessionIds(cwd, registryIds))
+  // A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
+  // first row and hands it to the remover. A candidate transcript is never a live session's own
+  // (those are protected by path), so a live id arriving here belongs to someone else's registry
+  // entry: skip it, and let only the fork's file go.
+  const live = new Set(liveSessionIds(cwd, registryIds))
+  const remove = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
   const result = await runTranscriptGC(plan, {
     apply: opts.apply,
     protectedIds,
-    removeFromRegistry: opts.removeFromRegistry ?? ((id) => Agent.delete(id)),
+    removeFromRegistry: (id) => (live.has(id) ? undefined : remove(id)),
   })
   return { plan, result }
 }
