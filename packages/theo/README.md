@@ -68,9 +68,17 @@ the matching encoder: dot paths for nested objects, a repeated key for arrays, `
 import { objectToFormData } from 'theokit/client'
 import { z } from 'zod'
 
+// server/actions/profile.ts — served at /api/__actions/profile/uploadAvatar
+export const uploadAvatar = action()
+  .policy('public')
+  .input(z.object({ title: z.string(), avatar: z.instanceof(File) }))
+  .handler(async ({ input }) => ({ name: input.avatar.name }))
+  .build()
+
+// browser
 const schema = z.object({ title: z.string(), avatar: z.instanceof(File) })
 
-await fetch('/api/actions/upload-avatar', {
+await fetch('/api/__actions/profile/uploadAvatar', {
   method: 'POST',
   body: objectToFormData({ title: 'Me', avatar: input.files![0] }, schema),
 })

@@ -63,4 +63,15 @@ describe('objectToFormData', () => {
       expect((e as FormDataEncodingError).code).toBe('form_data_unencodable')
     }
   })
+
+  it('refuses a nested object that emits no entries, naming the path', () => {
+    const s = z.object({ group: z.object({ items: z.array(z.string()) }) })
+    try {
+      objectToFormData({ group: { items: [] } }, s)
+      expect.unreachable()
+    } catch (e) {
+      expect(e).toBeInstanceOf(FormDataEncodingError)
+      expect((e as FormDataEncodingError).path).toBe('group')
+    }
+  })
 })
