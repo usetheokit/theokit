@@ -114,6 +114,17 @@ describe('public surface gate', () => {
     expect(run(prev, surface(src('a: string; b: number')), true)).toEqual([])
   })
 
+  it('sees a change to an exported experimental type that a stable export uses', () => {
+    const src = (inner: string) =>
+      `/** @experimental */\nexport interface Exp { ${inner} }\nexport type Outer = Exp\n`
+    const prev = surface(src('a: string'))
+    expect(prev.entries['.']?.internals.Exp).toContain('a: string')
+    expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
+    expect(run(prev, surface(src('a: number')))).toEqual([
+      expect.stringContaining('referenced type Exp changed'),
+    ])
+  })
+
   it('reads a major declaration from changeset frontmatter', () => {
     expect(gate.declaresMajor(["---\n'@x/pkg': major\n---\n\nx"], '@x/pkg')).toBe(true)
     expect(gate.declaresMajor(["---\n'@x/pkg': minor\n---\n"], '@x/pkg')).toBe(false)

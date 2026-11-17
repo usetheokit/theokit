@@ -79,11 +79,12 @@ function printDecl(d, printer) {
 
 /**
  * Declarations of the package's own types that `roots` mention, transitively, other than the
- * entry's exported names (those have a record of their own). A change to one of them changes
- * the public API even though the exported name's printed text is the same.
+ * root's own name. Exported names are tracked too: an experimental export has no policy record of
+ * its own, yet a change to it changes a stable export that mentions it.
  */
 function collectInternals(roots, ctx, internals) {
   const queue = [...roots]
+  const own = new Set(roots.map((r) => r.name?.getText()))
   while (queue.length > 0) {
     const root = queue.pop()
     ts.forEachChild(root, function visit(node) {
@@ -91,7 +92,7 @@ function collectInternals(roots, ctx, internals) {
         const raw = ctx.checker.getSymbolAtLocation(node)
         const sym = raw && resolveAlias(raw, ctx.checker)
         const fresh = (sym?.declarations ?? []).filter((d) => isOwnDeclaration(d, ctx))
-        if (sym && fresh.length > 0 && !ctx.exported.has(sym.name) && !internals.has(sym.name)) {
+        if (sym && fresh.length > 0 && !own.has(sym.name) && !internals.has(sym.name)) {
           internals.set(
             sym.name,
             fresh
@@ -164,7 +165,7 @@ export function extractSurface(pkgDir) {
     const sf = program.getSourceFile(files[entry])
     const modSym = sf && checker.getSymbolAtLocation(sf)
     const syms = modSym ? checker.getExportsOfModule(modSym) : []
-    const ctx = { program, checker, printer, exported: new Set(syms.map((x) => x.name)) }
+    const ctx = { program, checker, printer }
     const names = {}
     const internals = {}
     for (const [name, rec] of syms.map((x) => [x.name, describeSymbol(x, ctx)]).sort(byName)) {
