@@ -332,8 +332,8 @@ function chatHookChain(
   )
 }
 
-function withWriteTools<T extends ReturnType<typeof baseAgent>['agent']>(
-  base: T,
+function withWriteTools(
+  base: ReturnType<typeof baseAgent>['agent'],
   ctx: {
     writePolicy: ReturnType<typeof sandboxWritePolicy>
     registry: ToolRegistry
@@ -345,7 +345,7 @@ function withWriteTools<T extends ReturnType<typeof baseAgent>['agent']>(
     cwd: string
     reasoning_effort?: ReasoningEffort
   },
-): T {
+) {
   const { writePolicy, registry, modelId, cfg, posture, lifecycleHooks, cwd } = ctx
   const overrides = { reasoning_effort: ctx.reasoning_effort }
   return base.when(writePolicy.writes, (b) =>
@@ -419,7 +419,7 @@ type ShellAndProjectCtx = {
   }
 
 function withShellAndProjectEntities(
-  withWrites: ReturnType<typeof withWriteTools<ReturnType<typeof baseAgent>['agent']>>,
+  withWrites: ReturnType<typeof withWriteTools>,
   ctx: ShellAndProjectCtx,
 ) {
   return withProjectEntities(withShellTools(withWrites, ctx), ctx)
@@ -433,7 +433,7 @@ function withShellAndProjectEntities(
  * `withWriteTools` already takes and returns the builder; this follows the same seam.
  */
 function withShellTools(
-  withWrites: ReturnType<typeof withWriteTools<ReturnType<typeof baseAgent>['agent']>>,
+  withWrites: ReturnType<typeof withWriteTools>,
   ctx: ShellAndProjectCtx,
 ) {
   const { registry, interactiveBackend, modelId, writePolicy } = ctx
