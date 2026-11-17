@@ -112,6 +112,36 @@ describe('M27 — handleChannelWebhook', () => {
     })
   })
 
+  it('accepts an { agent, platform } target instead of a path', async () => {
+    const onMessage = vi.fn()
+    const req = new Request('http://x/telegram', {
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'tok' },
+      body: JSON.stringify({ message: { text: 'hi' } }),
+    })
+    const res = await handleChannelWebhook(
+      req,
+      { agent: 'a', platform: 'telegram' },
+      { validators: { telegram: telegram({ secretToken: 'tok' }) }, onMessage },
+    )
+    expect(res.status).toBe(200)
+    expect(onMessage).toHaveBeenCalledWith({
+      agent: 'a',
+      platform: 'telegram',
+      payload: { message: { text: 'hi' } },
+    })
+  })
+
+  it('answers 404 UNKNOWN_PLATFORM for an object target with an unknown platform', async () => {
+    const res = await handleChannelWebhook(
+      new Request('http://x/nope', { method: 'POST', body: '{}' }),
+      { agent: 'a', platform: 'nope' },
+      { validators: {}, onMessage: vi.fn() },
+    )
+    expect(res.status).toBe(404)
+    expect((await res.json()).error.code).toBe('UNKNOWN_PLATFORM')
+  })
+
   it('rejects an invalid signature with 401 and does NOT hand off (negative case)', async () => {
     const onMessage = vi.fn()
     const req = new Request(`http://x${path}`, {

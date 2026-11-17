@@ -42,6 +42,17 @@ const response = await handleChannelWebhook(request, new URL(request.url).pathna
 The path it expects is `POST /api/agents/<name>/channels/<platform>/webhook`; `<name>` and
 `<platform>` arrive in `onMessage` as `agent` and `platform`.
 
+If your app serves the webhook on its own route (for example `POST /telegram`), pass the target
+directly instead of a path:
+
+```typescript
+const response = await handleChannelWebhook(
+  request,
+  { agent: 'assistant', platform: 'telegram' },
+  config,
+)
+```
+
 ## Platforms that verify the endpoint first (WhatsApp, Instagram, Messenger)
 
 Meta will not deliver anything until it has verified the URL with a `GET` carrying
