@@ -50,6 +50,7 @@ export const APPROVAL_MODES = ['suggest', 'auto-edit', 'full-auto'] as const
 export type AutoApproveMode = (typeof APPROVAL_MODES)[number]
 
 /** @deprecated Use {@link AutoApproveMode}; the SDK exports a different `ApprovalMode`. */
+// eslint-disable-next-line sonarjs/redundant-type-aliases -- deliberate deprecated alias kept for existing importers
 export type ApprovalMode = AutoApproveMode
 
 /**
