@@ -3,7 +3,15 @@
  * locale-aware formatting. A missing key in any locale is a TYPE error, so `tsc` (and the build's
  * typecheck) fails; no runtime check is needed.
  */
-import { createContext, createElement, useCallback, useContext, useMemo, useState } from 'react'
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import type { ReactElement, ReactNode } from 'react'
 
 /** A dictionary: nested objects whose leaves are strings. */
@@ -136,16 +144,21 @@ export interface I18nProviderProps<L extends string> {
 
 export function I18nProvider<L extends string>(props: I18nProviderProps<L>): ReactElement {
   const { i18n, children } = props
-  const [locale, setLocaleState] = useState<L>(() =>
-    props.locale && i18n.locales.includes(props.locale)
-      ? props.locale
-      : negotiateLocale(
-          readStored(i18n.storageKey),
-          browserLanguages(),
-          i18n.locales,
-          i18n.defaultLocale,
-        ),
-  )
+  const forced = props.locale && i18n.locales.includes(props.locale) ? props.locale : undefined
+  // First render uses the forced or default locale so server and client markup match; the stored
+  // preference and browser language are applied right after hydration.
+  const [locale, setLocaleState] = useState<L>(forced ?? i18n.defaultLocale)
+  useEffect(() => {
+    if (forced) return
+    setLocaleState(
+      negotiateLocale(
+        readStored(i18n.storageKey),
+        browserLanguages(),
+        i18n.locales,
+        i18n.defaultLocale,
+      ),
+    )
+  }, [forced, i18n.storageKey, i18n.locales, i18n.defaultLocale])
   const setLocale = useCallback(
     (next: L) => {
       setLocaleState(next)
