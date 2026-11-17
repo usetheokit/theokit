@@ -113,7 +113,7 @@ describe('storage manager and cache engine are one instance across the built bun
       const outcomes = []
       for (const href of copies) {
         const m = await import(href)
-        m._resetCacheEngine()
+        m._resetCacheEngine?.()
         m.initCacheEngine({ enabled: true, storage: 'memory', maxEntries: 10, defaults: { maxAge: 60, cacheErrors: false } })
         try {
           await revalidateTag('posts')
@@ -121,7 +121,7 @@ describe('storage manager and cache engine are one instance across the built bun
         } catch (err) {
           outcomes.push({ href: href.split('/').pop(), ok: false, error: String(err && err.message) })
         }
-        m._resetCacheEngine()
+        m._resetCacheEngine?.()
       }
       console.log(JSON.stringify(outcomes))
     `) as { href: string; ok: boolean; error?: string }[]

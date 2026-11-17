@@ -1,4 +1,4 @@
-export * from './scan.js'
+export { scanServerRoutes, compareRouteSpecificity } from './scan.js'
 export * from './action-scan.js'
 export * from './ws-scan.js'
 export * from './middleware-scan.js'
