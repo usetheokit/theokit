@@ -24,7 +24,12 @@ describe('parseUnifiedDiff', () => {
   it('a two-file git diff parses into two DiffFile entries with names', () => {
     const files = parseUnifiedDiff(TWO)
     expect(files).toHaveLength(2)
-    expect(files[0]).toMatchObject({ oldName: 'a.txt', newName: 'a.txt', additions: 1, deletions: 1 })
+    expect(files[0]).toMatchObject({
+      oldName: 'a.txt',
+      newName: 'a.txt',
+      additions: 1,
+      deletions: 1,
+    })
     expect(files[1]!.newName).toBe('b.txt')
   })
 
@@ -68,15 +73,20 @@ describe('parseUnifiedDiff', () => {
 
 describe('foldDiffLines', () => {
   it('foldDiffLines keeps contextLines around each change and folds the rest', () => {
-    const lines: DiffLine[] = Array.from({ length: 10 }, (_, i) => ({ kind: 'context', text: `c${i}` }))
+    const lines: DiffLine[] = Array.from({ length: 10 }, (_, i) => ({
+      kind: 'context',
+      text: `c${i}`,
+    }))
     lines[5] = { kind: 'add', text: 'x' }
     const rows = foldDiffLines(lines, 1)
-    expect(rows.map((r) => (r.kind === 'fold' ? `fold${r.hidden}` : (r as DiffLine).text))).toEqual([
-      'fold4', 'c4', 'x', 'c6', 'fold3',
-    ])
+    expect(rows.map((r) => (r.kind === 'fold' ? `fold${r.hidden}` : (r as DiffLine).text))).toEqual(
+      ['fold4', 'c4', 'x', 'c6', 'fold3'],
+    )
   })
 
   it('returns a single fold when nothing changed', () => {
-    expect(foldDiffLines([{ kind: 'context', text: 'a' }], 2)).toEqual([{ kind: 'fold', hidden: 1 }])
+    expect(foldDiffLines([{ kind: 'context', text: 'a' }], 2)).toEqual([
+      { kind: 'fold', hidden: 1 },
+    ])
   })
 })

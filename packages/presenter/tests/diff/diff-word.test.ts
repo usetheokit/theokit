@@ -7,8 +7,18 @@ describe('diff-word', () => {
     const del: DiffLine = { kind: 'del', text: 'const a = 1' }
     const add: DiffLine = { kind: 'add', text: 'const a = 2' }
     const map = pairIntraLines([del, add])
-    expect(map.get(del)!.filter((s) => s.changed).map((s) => s.text)).toEqual(['1'])
-    expect(map.get(add)!.filter((s) => s.changed).map((s) => s.text)).toEqual(['2'])
+    expect(
+      map
+        .get(del)!
+        .filter((s) => s.changed)
+        .map((s) => s.text),
+    ).toEqual(['1'])
+    expect(
+      map
+        .get(add)!
+        .filter((s) => s.changed)
+        .map((s) => s.text),
+    ).toEqual(['2'])
   })
 
   it('leaves unpaired lines and context out', () => {
@@ -17,8 +27,16 @@ describe('diff-word', () => {
   })
 
   it('segmentWords concatenates back to the original side', () => {
-    expect(segmentWords('a b c', 'a x c', 'old').map((s) => s.text).join('')).toBe('a b c')
-    expect(segmentWords('a b c', 'a x c', 'new').map((s) => s.text).join('')).toBe('a x c')
+    expect(
+      segmentWords('a b c', 'a x c', 'old')
+        .map((s) => s.text)
+        .join(''),
+    ).toBe('a b c')
+    expect(
+      segmentWords('a b c', 'a x c', 'new')
+        .map((s) => s.text)
+        .join(''),
+    ).toBe('a x c')
   })
 
   it('handles empty and very long lines', () => {

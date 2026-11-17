@@ -71,7 +71,7 @@ export function parseUnifiedDiff(patch: string): DiffFile[] {
 
 /** Keep `contextLines` of context around each change and fold the rest. */
 export function foldDiffLines(lines: DiffLine[], contextLines: number): DiffRow[] {
-  const keep = new Array<boolean>(lines.length).fill(false)
+  const keep = Array.from<boolean>({ length: lines.length }).fill(false)
   const n = Math.max(0, contextLines)
   lines.forEach((l, i) => {
     if (l.kind === 'context') return
