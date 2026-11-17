@@ -7,8 +7,8 @@
  * purpose: they pin 10 and 30, so a silent change to either number is a red test rather than a
  * silently wider (or narrower) deletion window.
  *
- * The seams (`readdir`, `list`, `readPointer`, `now`, dirs) stay injected — the subject is the
- * numeric defaults, not the filesystem.
+ * The subject is the numeric defaults, not the filesystem: entries are written to a temp transcript
+ * root because the framework planner has no `readdir` seam.
  */
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -65,8 +65,7 @@ describe('planSessionGC defaults', () => {
 
   it('collects_past_thirty_days_and_keeps_younger_when_maxAgeDays_is_not_given', async () => {
     // keepLast pinned to 1 (the framework floor) so the age window is the only default under test.
-    // The newest transcript
-    // is protected as most-recent regardless; the 29-day one sits inside the default window and the
+    // The newest transcript is protected as most-recent regardless; the 29-day one sits inside the default window and the
     // 31-day one outside it.
     const onDisk = entriesAgedDays([1, 29, 31])
 
