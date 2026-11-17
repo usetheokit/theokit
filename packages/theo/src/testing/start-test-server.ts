@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, readlinkSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
@@ -37,6 +37,55 @@ export class TestServerBootError extends Error {
 }
 
 const GRACE_MS = 5000
+const PORT_ATTEMPTS = 3
+
+/** The port was taken by another process between picking it and the child binding it. */
+class PortSubstitutedError extends TestServerBootError {}
+
+/** Inodes of the sockets listening on `port`, from /proc/net/tcp and tcp6 (state 0A is LISTEN). */
+function listeningInodes(port: number): Set<string> {
+  const inodes = new Set<string>()
+  for (const file of ['/proc/net/tcp', '/proc/net/tcp6']) {
+    let text = ''
+    try {
+      text = readFileSync(file, 'utf8')
+    } catch {
+      // no IPv6 table
+    }
+    for (const line of text.split('\n').slice(1)) {
+      const col = line.trim().split(/\s+/)
+      const local = Number.parseInt(col[1]?.split(':')[1] ?? '', 16)
+      if (col[3] === '0A' && local === port) inodes.add(col[9])
+    }
+  }
+  return inodes
+}
+
+/** Whether `pid` is in group `pgid` and holds one of `inodes` as an open socket. */
+function holdsSocket(pid: string, pgid: number, inodes: Set<string>): boolean {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    // After the ")" closing the command name: state, ppid, pgrp.
+    if (stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2] !== String(pgid)) return false
+    return readdirSync(`/proc/${pid}/fd`).some((fd) => {
+      const m = /^socket:\[(\d+)\]$/.exec(readlinkSync(`/proc/${pid}/fd/${fd}`))
+      return m?.[1] !== undefined && inodes.has(m[1])
+    })
+  } catch {
+    return false // the process went away or is not ours to read
+  }
+}
+
+/**
+ * Whether a process of the child's group holds the listening socket on `port`, read from /proc.
+ * `undefined` where /proc is unavailable (not Linux): ownership cannot be established there.
+ */
+function groupListensOn(port: number, pgid: number): boolean | undefined {
+  if (!existsSync('/proc/net/tcp')) return undefined
+  const inodes = listeningInodes(port)
+  if (inodes.size === 0) return false
+  return readdirSync('/proc').some((pid) => /^\d+$/.test(pid) && holdsSocket(pid, pgid, inodes))
+}
 
 function resolveTheokitBin(cwd: string): string {
   const req = createRequire(join(cwd, 'package.json'))
@@ -99,14 +148,29 @@ function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
   }
 }
 
-/**
- * Start the app's own `theokit dev|start` as a real process on a free port and resolve once
- * `/__theo/ready` answers 200.
- */
 export async function startTestServer(options: StartTestServerOptions): Promise<TestServer> {
-  const { mode = 'dev', timeoutMs = 60_000 } = options
+  const timeoutMs = options.timeoutMs ?? 60_000
+  const deadline = Date.now() + timeoutMs
   const cwd = resolve(options.cwd)
   const bin = resolveTheokitBin(cwd)
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await bootOnce(options, cwd, bin, deadline, timeoutMs)
+    } catch (err) {
+      // The port is only free when picked, not reserved: retry on another one.
+      if (!(err instanceof PortSubstitutedError) || attempt >= PORT_ATTEMPTS) throw err
+    }
+  }
+}
+
+async function bootOnce(
+  options: StartTestServerOptions,
+  cwd: string,
+  bin: string,
+  deadline: number,
+  timeoutMs: number,
+): Promise<TestServer> {
+  const mode = options.mode ?? 'dev'
   const port = await freePort()
   const origin = `http://localhost:${String(port)}`
   let output = ''
@@ -149,26 +213,27 @@ export async function startTestServer(options: StartTestServerOptions): Promise<
     return closing
   }
 
-  const fail = async (message: string): Promise<never> => {
+  const fail = async (
+    message: string,
+    Err: typeof TestServerBootError = TestServerBootError,
+  ): Promise<never> => {
     await close()
-    throw new TestServerBootError(
-      spawnError === undefined ? message : `${message}: ${spawnError.message}`,
-      output,
-    )
+    throw new Err(spawnError === undefined ? message : `${message}: ${spawnError.message}`, output)
   }
 
-  const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
     try {
       const res = await fetch(`${origin}/__theo/ready`, { signal: AbortSignal.timeout(1000) })
       if (res.status === 200) {
-        // The port was free when picked, not reserved: another server may have taken it, and the
-        // child then moves to another port. Only a child that is alive and has not moved is ready.
         if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
-        const moved = [...output.matchAll(/localhost:(\d+)/g)].some((m) => m[1] !== String(port))
-        if (moved)
-          return await fail(`theokit ${mode} did not bind the requested port ${String(port)}`)
+        // Any server on the port can answer: only a listener held by the child's own group counts.
+        if (child.pid !== undefined && groupListensOn(port, child.pid) === false) {
+          return await fail(
+            `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
+            PortSubstitutedError,
+          )
+        }
         return { origin, pid: child.pid, output: () => output, close }
       }
     } catch {
