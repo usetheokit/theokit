@@ -406,12 +406,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   status: (_args, io) => statusCommand(io, io.runner),
   hooks: (args, io) => Promise.resolve(hooksCommand(args, io)),
-  sessions: (args, io) => Promise.resolve(sessionsCommand(args, io)),
+  sessions: (args, io) => sessionsCommand(args, io),
   transcripts: (args, io) => {
     const [verb, ...rest] = args
     if (verb !== 'list' && verb !== 'show' && verb !== 'export')
       throw new UsageError('theoclaw transcripts: expected list | show <id> | export <id> [--json]')
-    return Promise.resolve(sessionsCommand([verb === 'list' ? 'list' : 'export', ...rest], io))
+    return sessionsCommand([verb === 'list' ? 'list' : 'export', ...rest], io)
   },
   proxy: (args, io) => proxyCommand(args, io),
   orders: (args, io) => {
@@ -508,7 +508,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     })
     return 0
   },
-  resume: (args, io) => Promise.resolve(resumeCommand(args, io)),
+  resume: (args, io) => resumeCommand(args, io),
   attach: async (args, io) => {
     const print = args.includes('--print-config')
     const rest = args.filter((arg) => arg !== '--print-config')

@@ -112,13 +112,15 @@ export function handleLogin(
     )
 }
 
-export function handleFork(
-  forkCurrentSession: () => { newId: string; copied: boolean },
+export async function handleFork(
+  forkCurrentSession: () =>
+    | { newId: string; copied: boolean }
+    | Promise<{ newId: string; copied: boolean }>,
   setToast: SetToast,
-): void {
+): Promise<void> {
   let result: { newId: string; copied: boolean }
   try {
-    result = forkCurrentSession()
+    result = await forkCurrentSession()
   } catch (e) {
     setToast({ message: `Fork failed: ${(e as Error).message}`, variant: 'error' })
     return

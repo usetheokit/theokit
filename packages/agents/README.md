@@ -116,6 +116,8 @@ live writer holds, floors both `keepLast` and `maxAgeDays`, and plans before it 
 app knows about live sessions this package cannot see, inject them — protection is additive and
 never subtractive.
 
+`listSessions(cwd, root?)` in `./session` is the SDK's `listSessions` (the one `./persistence` exports) sorted newest first, minus directories named like a transcript. It is async, as are `protectedTranscriptPaths`, `forkBeforeUserTurn` and `planTranscriptGC`.
+
 **Credentials answer two questions.** Which credential to use, and where it came from. The second
 matters more than it looks: without provenance, "why is it calling Anthropic?" has no answer in the
 data, and a user cannot tell an explicit choice from a precedence fallback.

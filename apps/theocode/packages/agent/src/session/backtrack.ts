@@ -118,12 +118,12 @@ export interface ForkBeforeResult {
   selectedText?: string
 }
 
-export function forkSessionBeforeUserTurn(
+export async function forkSessionBeforeUserTurn(
   srcId: string,
   newId: string,
   nth: number,
   opts: { cwd?: string; baseDir?: string } = {},
-): ForkBeforeResult {
+): Promise<ForkBeforeResult> {
   const cwd = opts.cwd ?? process.cwd()
   const dir = opts.baseDir ?? defaultBaseDir()
   const src = transcriptPath(dir, cwd, srcId)
@@ -137,7 +137,7 @@ export function forkSessionBeforeUserTurn(
   mkdirSync(dirname(dst), { recursive: true })
   forkTranscript(src, dst, {
     beforeRecordIndex: prefix.length,
-    liveSessionPaths: protectedSessions(cwd, dir),
+    liveSessionPaths: await protectedSessions(cwd, dir),
   })
   return { newId, copied: true, selectedText }
 }

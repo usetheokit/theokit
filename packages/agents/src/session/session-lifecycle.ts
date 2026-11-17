@@ -3,25 +3,24 @@
  * a session id or an `encodeProjectDir` hash — never from HTTP input. The variable filename IS the
  * feature: a module whose job is listing and deleting sessions cannot address them by literal.
  */
-import { closeSync, openSync, readFileSync, readdirSync, readSync, rmSync, statSync } from 'node:fs'
+import { readFileSync, rmSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { join } from 'node:path'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import {
-  classifySessionArtifact,
   forkTranscript,
+  listSessions as sdkListSessions,
   loadJsonl,
   sessionHasWriter,
   transcriptPath,
   transcriptRoot,
 } from '@theokit/sdk/persistence'
+import type { SessionListing } from '@theokit/sdk/persistence'
 
 // T2.2 follow-up — the bound lives in ONE place now. `SessionRegistryRemoverError` is re-exported
 // because it was already public from this module: moving a symbol must not remove it from the
 // surface, which would be a breaking change dressed as a refactor.
 import { awaitRegistryRemoval, SessionRegistryRemoverError } from './gc/registry-remover.js'
-import { projectDirFor } from './project-index.js'
 import { sessionPointerPath } from './session-pointer.js'
 
 export { SessionRegistryRemoverError }
@@ -97,118 +96,31 @@ function registryNote(outcome: RegistryOutcome | undefined): string {
 }
 
 /** One session as the lifecycle vocabulary sees it. */
-export interface SessionSummary {
-  /**
-   * The session id read from the transcript's first record, or `undefined` when the record could
-   * not be read. It is NEVER derived from the filename: on `@theokit/sdk` 5.x the name is a one-way
-   * hash of the id, so a name-derived value would name no session at all (usetheokit/theokit#668).
-   */
-  readonly id: string | undefined
-  /** Where {@link SessionSummary.id} came from — so a caller can tell absence from a value. */
-  readonly idSource: 'transcript' | 'unavailable'
-  /** Absolute path of the transcript file. */
-  readonly transcript: string
-  /** Last modification, for recency ordering. */
-  readonly modifiedAt: Date
-}
+/**
+ * One session listing entry. This IS the SDK's `SessionListing`: `id` is read from the transcript
+ * (never from the filename), and `idSource` says whether it could be.
+ */
+export type SessionSummary = SessionListing
 
 /**
- * Sessions with a transcript under `cwd`'s project directory, most recent first.
- *
- * Uses `classifySessionArtifact` rather than matching file names here: the SDK owns what a file in a
- * project directory IS, and a second matcher would answer differently the day the layout changes —
- * silently, on a path whose purpose is deleting things.
+ * Sessions under `cwd`'s project directory, most recent first. Delegates the scan to the SDK's
+ * `listSessions` (the same listing `@theokit/agents/persistence` exports), then drops directories
+ * named like a transcript and sorts newest first.
  */
-export function listSessions(cwd: string, root: string = transcriptRoot()): SessionSummary[] {
-  const dir = projectDirFor(cwd, root)
-  let entries: string[]
-  try {
-    entries = readdirSync(dir)
-  } catch {
-    return [] // no project directory yet — no sessions, not an error
-  }
-
-  const found: SessionSummary[] = []
-  for (const entry of entries) {
-    const path = join(dir, entry)
-    let isDirectory: boolean
-    let modifiedAt: Date
+export async function listSessions(
+  cwd: string,
+  root: string = transcriptRoot(),
+): Promise<readonly SessionSummary[]> {
+  const listed = await sdkListSessions(cwd, { baseDir: root })
+  const found = listed.filter((entry) => {
     try {
-      const stats = statSync(path)
-      isDirectory = stats.isDirectory()
-      modifiedAt = stats.mtime
+      return !statSync(entry.transcript).isDirectory()
     } catch {
-      continue // vanished between readdir and stat — a concurrent delete, not our problem
+      return false // vanished between listing and stat — a concurrent delete
     }
-
-    // `classifySessionArtifact` answers WHAT the entry is; it deliberately does not answer WHICH
-    // session, because the id is in the name and the SDK does not parse names for callers. So the
-    // classification is the SDK's and only the trailing `.jsonl` strip is ours — a much smaller
-    // thing to get wrong than re-deriving the four artifact kinds, which is what the consumer that
-    // motivated this module had done.
-    // The cast is the upstream `.d.ts` gap, named rather than hidden: `@theokit/sdk`'s
-    // `atomic-write.d.ts` re-exports four symbols and declares only one, so several persistence
-    // functions arrive typed as unresolved. They exist and work at runtime (measured). Filed
-    // separately; typing the call site keeps this module honest in the meantime.
-    const kind = (classifySessionArtifact as (n: string, d: boolean) => string | undefined)(
-      entry,
-      isDirectory,
-    )
-    if (kind !== 'transcript') continue
-    const id = sessionIdOf(path)
-    found.push({
-      id,
-      idSource: id === undefined ? 'unavailable' : 'transcript',
-      transcript: path,
-      modifiedAt,
-    })
-  }
+  })
   return found.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime())
 }
-
-/**
- * The session id of a transcript — read from the RECORD, not from the filename.
- *
- * `@theokit/sdk@5.x` writes `${sessionUuidFor(sessionId)}.jsonl`, a SHA-256 over a namespace, where
- * 4.x wrote `${safeSessionId(sessionId)}.jsonl`. So the comment this function replaced — "the id is
- * in the name" — stopped being true, and every caller that keys on the id (listing, protection, GC,
- * deletion) got a UUID where it expected the id it had passed in (usetheokit/theokit#654).
- *
- * The SDK exports no reverse mapping and `sessionUuidFor` appears in no `.d.ts`, so the name cannot
- * be undone. It does not need to be: the SDK writes `sessionId` into every record, on both majors,
- * which makes the content authoritative where the name was only a convention.
- *
- * Only the first record is read, and only a bounded prefix of it. A listing must stay cheap enough
- * that GC can call it, and the id does not change down the file.
- *
- * There is NO filename fallback. A truncated transcript still appears in the listing — a session
- * the GC cannot see is a session the GC never collects — but it appears WITHOUT an id, because the
- * name is a convention and the record is the authority. Returning the stem made "I could not read
- * this" indistinguishable from "this belongs to nobody", and protection was keyed on the result
- * (usetheokit/theokit#668).
- */
-function sessionIdOf(path: string): string | undefined {
-  let fd: number | undefined
-  try {
-    fd = openSync(path, 'r')
-    const buffer = Buffer.alloc(FIRST_RECORD_BYTES)
-    const read = readSync(fd, buffer, 0, FIRST_RECORD_BYTES, 0)
-    const newline = buffer.indexOf(0x0a)
-    const end = newline === -1 || newline > read ? read : newline
-    const first: unknown = JSON.parse(buffer.toString('utf8', 0, end))
-    if (typeof first === 'object' && first !== null) {
-      const id = (first as { sessionId?: unknown }).sessionId
-      if (typeof id === 'string' && id.length > 0) return id
-    }
-  } catch {
-    // Unreadable, truncated, or written before the SDK carried the field.
-  } finally {
-    if (fd !== undefined) closeSync(fd)
-  }
-  return undefined
-}
-
-const FIRST_RECORD_BYTES = 64 * 1024
 
 /**
  * Transcripts that must NOT be collected: the resumable pointer's target, the most recent session,
@@ -233,12 +145,12 @@ const FIRST_RECORD_BYTES = 64 * 1024
  * so a caller finds out at compile time instead of at delete time. Aliasing it would have preserved
  * exactly the silence this rename exists to remove.
  */
-export function protectedTranscriptPaths(
+export async function protectedTranscriptPaths(
   cwd: string,
   root: string = transcriptRoot(),
-): Map<string, string> {
+): Promise<Map<string, string>> {
   const protectedBy = new Map<string, string>()
-  const sessions = listSessions(cwd, root)
+  const sessions = await listSessions(cwd, root)
 
   const pointer = readPointer(cwd, root)
   if (pointer !== undefined) {
@@ -380,7 +292,7 @@ export async function deleteSession(
   if (options.force !== true) {
     // Protection is path-keyed so an unreadable transcript can still be matched (#668); the caller
     // speaks in ids, so the id is mapped forward here rather than the map being keyed backwards.
-    const reason = protectedTranscriptPaths(options.cwd, root).get(
+    const reason = (await protectedTranscriptPaths(options.cwd, root)).get(
       transcriptOf(sessionId, options.cwd, root),
     )
     if (reason !== undefined) throw new SessionInUseError(sessionId, reason)
@@ -447,7 +359,7 @@ export async function deleteSession(
   // recoverable direction this function already chose in the ordering comment above, and the reason
   // the error carries `registryOutcome`.
   if (options.force !== true) {
-    const nowProtected = protectedTranscriptPaths(options.cwd, root).get(
+    const nowProtected = (await protectedTranscriptPaths(options.cwd, root)).get(
       transcriptOf(sessionId, options.cwd, root),
     )
     if (nowProtected !== undefined) {
@@ -475,12 +387,16 @@ export async function deleteSession(
  * `nth` is 1-based, matching how a person counts turns out loud. A 0-based index here would be a
  * silent off-by-one on a destructive-feeling operation.
  */
-export function forkBeforeUserTurn(
+export async function forkBeforeUserTurn(
   srcId: string,
   newId: string,
   nth: number,
   options: { readonly cwd: string; readonly root?: string },
-): { readonly transcript: string; readonly recordIndex: number; readonly selectedText: string } {
+): Promise<{
+  readonly transcript: string
+  readonly recordIndex: number
+  readonly selectedText: string
+}> {
   if (!Number.isInteger(nth) || nth < 1) {
     throw new TheokitAgentError(
       `forkBeforeUserTurn: \`nth\` counts user turns from 1, received ${String(nth)}.`,
@@ -519,7 +435,7 @@ export function forkBeforeUserTurn(
     beforeRecordIndex: selected.index,
     // The keys are already transcript paths; mapping them through `transcriptPath` again would
     // build paths that match nothing and the SDK guard would never fire.
-    liveSessionPaths: [...protectedTranscriptPaths(options.cwd, root).keys()],
+    liveSessionPaths: [...(await protectedTranscriptPaths(options.cwd, root)).keys()],
   })
   // `selectedText` so a surface can re-seed its composer with what the user typed. Returning only
   // an index forces every consumer to re-read the transcript to learn what it just selected — which
