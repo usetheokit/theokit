@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Changed
+- **`sessions gc` now plans with `planTranscriptGC` / `runTranscriptGC` from `@theokit/agents/session`.** The local planner (`gc/per-session.ts`) is gone. `--keep-last` or `--max-age-days` below 1 is refused with the framework's `GCFloorError` message instead of a `RangeError` (or, for `--keep-last 0`, accepted). The newest session, a session with a writer lease, the session `<cwd>/.theokit/tui-session` names and registered sessions are never collected. The report no longer prints `pointer=`/`most-recent=`/`registry|orphan`, and `--json` drops `pointer` and `mostRecent` and adds `keptReasons`. (#1918)
+
 ### Fixed
 - **`doctor` now reports the wiring `buildChatAgent` publishes.** The build was not awaited, so the MCP, skills, hooks and AGENTS.md rows could describe an empty placeholder, and a build failure became an unhandled rejection. It is awaited, and a failure is a failed `wiring` check. (#1894)
 - **Session delete and fork now refuse the session `<cwd>/.theokit/tui-session` names.** An open but idle TUI session that was not the newest and had no writer lease could be deleted, although the refusal message said otherwise. `protectedSessions` now includes the TUI pointer. (#1905)

@@ -1,4 +1,13 @@
 import process from 'node:process'
+
+import { Agent } from '@theokit/agents'
+import {
+  planTranscriptGC,
+  runTranscriptGC,
+  type RunTranscriptGCResult,
+  type TranscriptGCPlan,
+} from '@theokit/agents/session'
+
 import type { ExecSessions } from '../runtime/index.js'
 
 async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
@@ -25,40 +34,49 @@ async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
   process.exit(plan.errors.length + result.errors.length > 0 ? 1 : 0)
 }
 
-function humanReport(
-  plan: {
-    kept: unknown[]
-    pointer?: string
-    mostRecent?: string
-    candidates: { id: string; ageDays: number; inRegistry: boolean }[]
-  },
-  result: { dryRun: boolean; removed: unknown[]; errors: string[] },
-): string[] {
+function humanReport(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string[] {
   const verb = result.dryRun ? 'would remove' : 'removed'
-  const pointer = plan.pointer?.slice(0, 16) ?? 'none'
-  const mostRecent = plan.mostRecent?.slice(0, 16) ?? 'none'
+  const removedCount = result.removed.length + result.orphaned.length
   const lines = [
-    `[sessions gc] ${result.dryRun ? 'DRY-RUN' : 'APPLIED'} — ${result.removed.length} ${verb}; ${plan.kept.length} kept (pointer=${pointer}, most-recent=${mostRecent})`,
-    ...plan.candidates.map(
-      (c) =>
-        `  - ${c.id} (${Math.round(c.ageDays)}d, ${c.inRegistry ? 'registry' : 'orphan'}) [${verb}]`,
-    ),
+    `[sessions gc] ${result.dryRun ? 'DRY-RUN' : 'APPLIED'} — ${removedCount} ${verb}; ${plan.kept.length} kept`,
+    ...plan.candidates.map((c) => {
+      const ageDays = Math.round((Date.now() - c.modifiedAt.getTime()) / 86_400_000)
+      return `  - ${c.id ?? c.transcript} (${ageDays}d) [${verb}]`
+    }),
   ]
   if (result.dryRun && plan.candidates.length > 0) lines.push('  → re-run with --apply to delete')
-  return [...lines, ...result.errors.map((e) => `  ! ${e}`)]
+  return [...lines, ...result.errors.map((e) => `  ! ${e.id ?? 'unnamed transcript'}: ${e.message}`)]
 }
 
 async function gcForCurrentProject(args: ExecSessions): Promise<void> {
-  const { planSessionGC, runSessionGC } = await import('@theocode/agent/session')
-  const plan = await planSessionGC({
-    cwd: process.cwd(),
-    ...(args.keepLast !== undefined ? { keepLast: args.keepLast } : {}),
-    ...(args.maxAgeDays !== undefined ? { maxAgeDays: args.maxAgeDays } : {}),
+  const { gcProtectedIds, listAgents } = await import('@theocode/agent/session')
+  const cwd = process.cwd()
+  let plan: TranscriptGCPlan
+  let protectedIds: () => ReadonlyMap<string, string>
+  try {
+    const registered = (await listAgents(cwd)).filter((a) => a.archived !== true)
+    protectedIds = gcProtectedIds(
+      cwd,
+      registered.map((a) => a.agentId),
+    )
+    plan = planTranscriptGC({
+      cwd,
+      keepLast: args.keepLast ?? 10,
+      maxAgeDays: args.maxAgeDays ?? 30,
+      protectedIds,
+    })
+  } catch (err) {
+    process.stderr.write(`[sessions gc] ${err instanceof Error ? err.message : String(err)}\n`)
+    process.exit(1)
+  }
+  const result = await runTranscriptGC(plan, {
+    apply: args.apply,
+    protectedIds,
+    removeFromRegistry: (id) => Agent.delete(id),
   })
-  const result = await runSessionGC(plan, { apply: args.apply })
   if (args.json) {
     process.stdout.write(
-      `${JSON.stringify({ type: 'sessions.gc', dryRun: result.dryRun, removed: result.removed, kept: plan.kept.length, pointer: plan.pointer, mostRecent: plan.mostRecent, errors: result.errors })}\n`,
+      `${JSON.stringify({ type: 'sessions.gc', dryRun: result.dryRun, removed: [...result.removed, ...result.orphaned], kept: plan.kept.length, keptReasons: plan.kept, errors: result.errors.map((e) => `${e.id ?? 'unnamed transcript'}: ${e.message}`) })}\n`,
     )
   } else {
     for (const l of humanReport(plan, result)) process.stderr.write(`${l}\n`)

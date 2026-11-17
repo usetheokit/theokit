@@ -14,7 +14,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
-import { planSessionGC } from '../../../src/session/gc/per-session.js'
 
 const allProjectsSeams = {
   projectsRoot: '/projects',
@@ -26,18 +25,7 @@ const allProjectsSeams = {
   readPointer: () => undefined,
 }
 
-const perSessionSeams = {
-  cwd: '/home/operator/a-project',
-  list: async () => [] as never,
-  readdir: () => [],
-  readPointer: () => undefined,
-}
-
 describe('the collection floor', () => {
-  it('test_the_single_project_plan_refuses_a_window_below_the_floor', async () => {
-    await expect(planSessionGC({ ...perSessionSeams, maxAgeDays: 0 })).rejects.toThrow(RangeError)
-  })
-
   it('test_the_all_projects_plan_refuses_the_same_window', async () => {
     // The arm that already held. Present so a regression that removes the floor from EITHER path
     // is caught, rather than the two drifting again.
@@ -46,10 +34,9 @@ describe('the collection floor', () => {
     ).rejects.toThrow(RangeError)
   })
 
-  it('test_both_plans_accept_the_floor_itself', async () => {
+  it('test_the_all_projects_plan_accepts_the_floor_itself', async () => {
     // Anti-vacuity. A guard written as `<= FLOOR` rather than `< FLOOR` would pass both cases above
     // and reject the smallest window a user is allowed to ask for.
-    await expect(planSessionGC({ ...perSessionSeams, maxAgeDays: 1 })).resolves.toBeDefined()
     await expect(
       planSessionGCAllProjects({ ...allProjectsSeams, maxAgeDays: 1 }),
     ).resolves.toBeDefined()
