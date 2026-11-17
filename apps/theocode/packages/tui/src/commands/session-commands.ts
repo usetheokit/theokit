@@ -112,22 +112,27 @@ export function handleLogin(
     )
 }
 
-export function handleFork(
-  forkCurrentSession: () => { newId: string; copied: boolean },
+export async function handleFork(
+  forkCurrentSession: () =>
+    | ({ newId: string; copied: boolean } & { switched?: boolean })
+    | Promise<{ newId: string; copied: boolean } & { switched?: boolean }>,
   setToast: SetToast,
-): void {
-  let result: { newId: string; copied: boolean }
+): Promise<void> {
+  let result: { newId: string; copied: boolean } & { switched?: boolean }
   try {
-    result = forkCurrentSession()
+    result = await forkCurrentSession()
   } catch (e) {
     setToast({ message: `Fork failed: ${(e as Error).message}`, variant: 'error' })
     return
   }
-  const { newId, copied } = result
+  const { newId, copied, switched } = result
   setToast({
-    message: copied
-      ? `Forked → ${newId} — the context was copied; this session continues from it.`
-      : `Forked → ${newId} — no prior transcript yet, so a fresh session.`,
+    message:
+      copied && switched === false
+        ? `Forked → ${newId} — the context was copied, but you had moved on, so this session is unchanged.`
+        : copied
+          ? `Forked → ${newId} — the context was copied; this session continues from it.`
+          : `Forked → ${newId} — no prior transcript yet, so a fresh session.`,
     variant: 'success',
   })
 }

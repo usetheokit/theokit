@@ -63,7 +63,9 @@ export interface CommandCapabilities {
    */
   readonly hasLastUsage: boolean
   readonly currentSessionId: () => string
-  readonly forkCurrentSession: () => { newId: string; copied: boolean }
+  readonly forkCurrentSession: () =>
+    | { newId: string; copied: boolean }
+    | Promise<{ newId: string; copied: boolean } & { switched?: boolean }>
   readonly resetSession: () => void
   /** B-087 — repoints the live session, the same seam `backtrack` uses to move after a fork. */
   readonly setSessionAndPersist: (id: string) => void
