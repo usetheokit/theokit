@@ -74,6 +74,10 @@ export type { ChunkStreamOutcome } from './wire/consume-ui-message-stream.js'
 
 export { extractLastUserText } from './client/last-user-text.js'
 
+// The headers a POST to an agent route needs (its strict CSRF gate rejects a missing `X-Theo-Action`)
+// for callers that do not use `HttpTransport`. Import-free module, so the entry stays browser-safe.
+export { AGENT_ACTION_HEADERS, agentRequestHeaders } from './wire/agent-request-headers.js'
+
 // `useAgent` does NOT live here — see `client-react-entry.ts`. This entry is React-free by contract.
 export type { UseAgentStatus } from './client/agent-client.js'
 

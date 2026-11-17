@@ -78,12 +78,22 @@ outcome rather than the stream.
 shared empty array when none is outstanding. `readPendingApproval(part)` reads a single part. A part
 in `approval-requested` with no `approval.id` is skipped, never settled by its `toolCallId`.
 
+## Reading a tool result
+
+`readToolResult(raw)` turns any tool result into one `ToolResultView` (`shell`, `diff`, `error` or `text`) and never throws. It accepts both shell dialects:
+
+- `@theokit/sdk-tools` `shell_exec`: a JSON string `{ok, stdout, stderr, exit_code}`.
+- The SDK runtime: an object `{stdout, stderr, exitCode}`.
+
+When both exit-code spellings are present and differ, `exitCode` wins. A missing exit code stays `undefined`, never 0. `{ok: false, error}` reads as `error` (`tool_failed` when absent, `stderr` as `detail`); `{ok: true, diff}` and a raw unified diff string read as `diff`; anything else is `text`.
+
 ## Subpaths
 
 | Subpath | What lives there |
 |---|---|
 | `.` | The event, the `Presenter` contract, the registry, the sources, the three presenters |
 | `./wire` | The wire-format types shared with transports |
+| `./diff` | The one unified-diff model for UI kits: `parseUnifiedDiff`, `foldDiffLines`, `segmentWords`, `pairIntraLines`, `DiffParseError`. Data only; the only entry that loads `parse-diff` and `diff` |
 
 ## Licence
 
