@@ -84,12 +84,22 @@ toolKindOf('execute_sql') // undefined
 
 Lookup is exact by design. A name that is not in the table gives `undefined`, never a substring guess, so `thread_summary` is not a read tool and `execute_sql` is not a shell tool. The table includes the SDK's builtin tools, pinned to the SDK type at compile time.
 
+## Reading a tool result
+
+`readToolResult(raw)` turns any tool result into one `ToolResultView` (`shell`, `diff`, `error` or `text`) and never throws. It accepts both shell dialects:
+
+- `@theokit/sdk-tools` `shell_exec`: a JSON string `{ok, stdout, stderr, exit_code}`.
+- The SDK runtime: an object `{stdout, stderr, exitCode}`.
+
+When both exit-code spellings are present and differ, `exitCode` wins. A missing exit code stays `undefined`, never 0. `{ok: false, error}` reads as `error` (`tool_failed` when absent, `stderr` as `detail`); `{ok: true, diff}` and a raw unified diff string read as `diff`; anything else is `text`.
+
 ## Subpaths
 
 | Subpath | What lives there |
 |---|---|
 | `.` | The event, the `Presenter` contract, the registry, the sources, the three presenters |
 | `./wire` | The wire-format types shared with transports |
+| `./diff` | The one unified-diff model for UI kits: `parseUnifiedDiff`, `foldDiffLines`, `segmentWords`, `pairIntraLines`, `DiffParseError`. Data only; the only entry that loads `parse-diff` and `diff` |
 
 ## Licence
 
