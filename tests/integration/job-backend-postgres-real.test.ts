@@ -510,6 +510,33 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-leased'`)
       })
 
+      it('test_a_retried_job_whose_lock_was_cleared_is_left_alone', async () => {
+        await backend.enqueue({
+          name: 'cancel-me',
+          input: {},
+          idempotencyKey: 'k-retry',
+          maxAttempts: 3,
+        })
+        const [lease] = await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
+        await backend.nack(lease.jobId, { error: 'boom', leaseToken: lease.leaseToken })
+        expect(await cancel('k-retry')).toBe(false)
+        expect(await count('k-retry')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-retry'`)
+      })
+
+      it('test_a_replayed_failed_job_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-replay' })
+        const [lease] = await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
+        await backend.nack(lease.jobId, { error: 'boom', leaseToken: lease.leaseToken })
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NULL, attempts = 0, available_at = NOW()
+           WHERE idempotency_key = 'k-replay'`,
+        )
+        expect(await cancel('k-replay')).toBe(false)
+        expect(await count('k-replay')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-replay'`)
+      })
+
       it('test_a_failed_job_is_left_alone', async () => {
         await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-failed' })
         await pool.query(

@@ -212,7 +212,8 @@ export class PostgresJobBackend implements JobBackend {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         lease_token TEXT,
         last_error TEXT,
-        failed_at TIMESTAMPTZ
+        failed_at TIMESTAMPTZ,
+        leased_at TIMESTAMPTZ
       )
     `)
     // Columns added after the first release. `CREATE TABLE IF NOT EXISTS` leaves a table created by
@@ -220,6 +221,9 @@ export class PostgresJobBackend implements JobBackend {
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS lease_token TEXT`)
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS last_error TEXT`)
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ`)
+    // Set the first time a worker leases the job and never cleared, not even by a replay that
+    // resets `attempts`, so `cancelInTransaction` can tell a job that was ever leased.
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS leased_at TIMESTAMPTZ`)
     await this.#pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ${t}_idempotency_key_idx
       ON ${t} (name, idempotency_key)
@@ -277,7 +281,7 @@ export class PostgresJobBackend implements JobBackend {
     const res = await client.query<{ id: string }>(
       `DELETE FROM ${this.#table}
        WHERE name = $1 AND idempotency_key = $2
-         AND locked_until IS NULL AND failed_at IS NULL AND attempts = 0
+         AND leased_at IS NULL AND locked_until IS NULL AND failed_at IS NULL AND attempts = 0
        RETURNING id`,
       [input.name, input.idempotencyKey],
     )
@@ -351,6 +355,7 @@ export class PostgresJobBackend implements JobBackend {
       `UPDATE ${t}
        SET locked_until = NOW() + ($2 || ' seconds')::interval,
            attempts = attempts + 1,
+           leased_at = COALESCE(leased_at, NOW()),
            lease_token = $3
        WHERE id IN (
          SELECT id FROM ${t}
