@@ -41,4 +41,20 @@ describe('TOOL_KINDS', () => {
     expect(toolKindOf('thread_summary')).toBeUndefined()
     expect(toolKindOf('execute_sql')).toBeUndefined()
   })
+
+  it('target keys match the TUI header order', () => {
+    const keys = (n: string) => toolKindOf(n)?.targetKeys
+    expect(keys('write_stdin')).toEqual(['sessionId', 'session_id'])
+    expect(keys('run_vitest')).toEqual(['path', 'pattern'])
+    expect(keys('edit_file')).toEqual(['path', 'file', 'filePath'])
+    expect(keys('read_file')).toEqual(['path', 'file', 'filePath'])
+    expect(keys('apply_patch')).toEqual(['path', 'file', 'filePath'])
+    expect(keys('list_dir')).toEqual(['path', 'dir', 'directory'])
+    expect(keys('glob_files')).toEqual(['pattern', 'glob'])
+    expect(keys('search_text')).toEqual(['pattern', 'query'])
+    expect(keys('web_search')).toEqual(['query', 'q'])
+    expect(keys('web_fetch')).toEqual(['url'])
+    expect(keys('question')).toEqual(['question', 'prompt'])
+    expect(keys('git_status')).toEqual([])
+  })
 })
