@@ -69,8 +69,7 @@ export function interpretCommand(
   // replaced answered that by falling out of its loop without effect. Same answer here, so an
   // action added to the registry before its handler stays inert instead of throwing at the user.
   const handler = HANDLERS[action.kind] as
-    | ((action: CommandAction, text: string, cap: CommandCapabilities) => void)
-    | undefined
+    ((action: CommandAction, text: string, cap: CommandCapabilities) => void) | undefined
   handler?.(action, text, cap)
 }
 
@@ -148,7 +147,7 @@ const HANDLERS: CommandHandlers = {
     })
   },
   fork: (_action, _text, cap: IdentityCapabilities) => {
-    void handleFork(cap.forkCurrentSession, cap.setToast)
+    handleFork(cap.forkCurrentSession, cap.setToast)
   },
   listSessions: (_action, _text, cap: IdentityCapabilities) => {
     handleListSessions(cap.currentSessionId, cap.setToast)

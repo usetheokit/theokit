@@ -9,10 +9,10 @@ import { resolveTrustPosture } from '@theocode/agent/config'
 import { createSessionPtyOwner, MAX_PTY_SESSIONS } from '@theocode/agent/pty'
 import { forkSession } from '@theocode/agent/session'
 
-import { forkCurrentSessionWith } from '../persistence/index.js'
 import { createChatTransport } from './chat-transport.js'
 import { credential } from './credential-helpers.js'
 import { loadCustomCommands } from '../commands/index.js'
+import { forkCurrentSessionWith } from '../persistence/index.js'
 import { createTuiSession, type TuiSession } from './tui-session.js'
 import { persistSessionId } from '../persistence/index.js'
 import { workingDirectory } from '../working-directory.js'
@@ -27,7 +27,7 @@ export interface TuiRoot {
   readonly customCommands: ReturnType<typeof loadCustomCommands>
   readonly customCommandNames: ReadonlySet<string>
   readonly resetSession: () => void
-  readonly sessionFork: () => Promise<{ newId: string; copied: boolean; switched?: boolean }>
+  readonly sessionFork: () => { newId: string; copied: boolean }
   readonly pointToSession: (id: string) => void
   /** B-055 — install the surface's veto renderer; queued vetoes are replayed into it. */
   readonly onHookVeto: (listen: (veto: { tool: string; reason: string }) => void) => void
@@ -93,15 +93,10 @@ function build(): TuiRoot {
 
   const vetoRelay = createVetoRelay()
 
-  let epoch = 0 // bumped by every turn start and session transition; see `sessionFork`
-
   const transport = createChatTransport({
     onHookVeto: vetoRelay.emit,
     getEffort: () => session.effort(),
-    getSessionId: () => {
-      epoch++ // a turn is starting: a fork still copying must not move the session under it
-      return session.session()
-    },
+    getSessionId: () => session.session(),
     getSessionPty: () => ptyOwner,
     takePendingImages: () => session.takeImages(),
     takePendingModel: () => session.takeModel(),
@@ -119,7 +114,6 @@ function build(): TuiRoot {
     customCommands,
     customCommandNames: new Set(customCommands.keys()),
     resetSession: () => {
-      epoch++
       session.setSession(`tui-${randomUUID()}`)
       ptyOwner.rotate()
       void persistSessionId(sessionPointer, session.session())
@@ -130,24 +124,17 @@ function build(): TuiRoot {
       // read that `/new` repeats, so the bare `void` cannot become an unhandled rejection.
       void fireSessionStart(session.session(), cwd)
     },
-    // The fork is async (its live-session guard reads the SDK listing). Any session transition or
-    // turn start while it runs bumps `epoch`, and a stale fork then keeps its copy without moving
-    // the live session onto it.
-    sessionFork: () => {
-      const started = epoch
-      return forkCurrentSessionWith({
+    sessionFork: () =>
+      forkCurrentSessionWith({
         newId: () => `tui-${randomUUID()}`,
         fork: (from, to) => forkSession(from, to),
         current: () => session.session(),
-        shouldCommit: () => epoch === started,
         commit: (id) => {
           session.setSession(id)
           void persistSessionId(sessionPointer, id)
         },
-      })
-    },
+      }),
     pointToSession: (id) => {
-      epoch++
       session.setSession(id)
       void persistSessionId(sessionPointer, id)
     },
