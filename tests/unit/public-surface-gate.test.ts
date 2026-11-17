@@ -2,7 +2,8 @@
  * The public-surface gate (#1963): fixture packages with hand-written `.d.ts` files, so the cases
  * do not depend on a build.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -57,10 +58,10 @@ describe('public surface gate', () => {
       `/** @experimental */\nexport declare const e: number\n/** @deprecated since 2026-10-01 use f */\nexport declare const d: number\n${BASE}`,
     )
     expect(Object.keys(s.entries)).toEqual(['.', './b'])
-    expect(s.entries['.']?.e?.tier).toBe('experimental')
-    expect(s.entries['.']?.d?.deprecatedSince).toBe('2026-10-01')
-    expect(s.entries['.']?.f).toMatchObject({ tier: 'stable', deprecatedSince: null })
-    expect(s.entries['.']?.Opts?.declaration).toContain('a: string')
+    expect(s.entries['.']?.names.e?.tier).toBe('experimental')
+    expect(s.entries['.']?.names.d?.deprecatedSince).toBe('2026-10-01')
+    expect(s.entries['.']?.names.f).toMatchObject({ tier: 'stable', deprecatedSince: null })
+    expect(s.entries['.']?.names.Opts?.declaration).toContain('a: string')
   })
 
   it('fails a removal without major and passes it with major', () => {
@@ -98,9 +99,110 @@ describe('public surface gate', () => {
     expect(run(dep('2026-07-20'), surface(BASE), true)).toEqual([])
   })
 
+  it('sees a change to an unexported type that an exported name uses', () => {
+    const src = (inner: string) =>
+      `interface Inner { ${inner} }\nexport type Outer = Inner\nexport {}\n`
+    const prev = surface(src('a: string'))
+    expect(prev.entries['.']?.internals.Inner).toContain('a: string')
+    expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
+    expect(run(prev, surface(src('a: number')))).toEqual([
+      expect.stringContaining('referenced type Inner changed'),
+    ])
+    expect(run(prev, surface(src('a: string; b: number')), true)).toEqual([])
+  })
+
   it('reads a major declaration from changeset frontmatter', () => {
     expect(gate.declaresMajor(["---\n'@x/pkg': major\n---\n\nx"], '@x/pkg')).toBe(true)
     expect(gate.declaresMajor(["---\n'@x/pkg': minor\n---\n"], '@x/pkg')).toBe(false)
     expect(gate.declaresMajor(["---\n'@x/other': major\n---\n"], '@x/pkg')).toBe(false)
+  })
+})
+
+describe('public surface gate CLI', () => {
+  const REPO = resolve(import.meta.dirname, '..', '..')
+  const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')))
+
+  function repo(): string {
+    const root = mkdtempSync(join(tmpdir(), 'surface-cli-'))
+    dirs.push(root)
+    mkdirSync(join(root, 'scripts'))
+    mkdirSync(join(root, '.changeset'))
+    mkdirSync(join(root, 'packages', 'pkg', 'dist'), { recursive: true })
+    copyFileSync(path, join(root, 'scripts', 'check-public-surface.mjs'))
+    symlinkSync(join(REPO, 'node_modules'), join(root, 'node_modules'))
+    writeFileSync(
+      join(root, 'packages', 'pkg', 'package.json'),
+      JSON.stringify({ name: '@x/pkg', exports: { '.': { types: './dist/index.d.ts' } } }),
+    )
+    git(root, 'init', '-q', '-b', 'main')
+    return root
+  }
+  function git(root: string, ...args: string[]) {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- fixture repo, fixed argv
+    const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+      cwd: root,
+      env: ENV,
+      encoding: 'utf8',
+    })
+    expect(r.status, r.stderr).toBe(0)
+  }
+  function gate(root: string, ...args: string[]) {
+    return spawnSync(
+      process.execPath,
+      [join(root, 'scripts', 'check-public-surface.mjs'), ...args],
+      { cwd: root, env: ENV, encoding: 'utf8' },
+    )
+  }
+  function setDts(root: string, text: string) {
+    writeFileSync(join(root, 'packages', 'pkg', 'dist', 'index.d.ts'), text)
+  }
+  function commit(root: string, msg: string) {
+    git(root, 'add', '-A')
+    git(root, 'commit', '-q', '-m', msg)
+  }
+  /** main holds a baseline with `f` and `g`; a branch removes `g` and may add a changeset. */
+  function removal(changeset?: string, changesetOnMain = false): string {
+    const root = repo()
+    setDts(root, 'export declare function f(): void\nexport declare function g(): void\n')
+    expect(gate(root, 'pkg', '--write').status).toBe(0)
+    if (changesetOnMain && changeset) writeFileSync(join(root, '.changeset', 'old.md'), changeset)
+    commit(root, 'base')
+    git(root, 'checkout', '-q', '-b', 'pr')
+    setDts(root, 'export declare function f(): void\n')
+    expect(gate(root, 'pkg', '--write').status).toBe(0)
+    if (changeset && !changesetOnMain) writeFileSync(join(root, '.changeset', 'new.md'), changeset)
+    commit(root, 'pr')
+    return root
+  }
+  const MAJOR = "---\n'@x/pkg': major\n---\n\nx\n"
+
+  it('passes when nothing changed, and fails on drift from the committed baseline', () => {
+    const root = repo()
+    setDts(root, 'export declare function f(): void\n')
+    gate(root, 'pkg', '--write')
+    commit(root, 'base')
+    expect(gate(root, '@x/pkg', '--base', 'main').status).toBe(0)
+    setDts(root, 'export declare function f(): void\nexport declare function h(): void\n')
+    expect(gate(root, 'pkg', '--base', 'main').status).toBe(1)
+  })
+
+  it('fails a removal without a major changeset in the range', () => {
+    const r = gate(removal(), 'pkg', '--base', 'main')
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('.:g')
+  })
+
+  it('passes a removal when a changeset added in the range declares major', () => {
+    expect(gate(removal(MAJOR), 'pkg', '--base', 'main').status).toBe(0)
+  })
+
+  it('ignores a major changeset that was already on the base', () => {
+    expect(gate(removal(MAJOR, true), 'pkg', '--base', 'main').status).toBe(1)
+  })
+
+  it('exits 2 for an unknown package and for an unreadable base', () => {
+    const root = removal(MAJOR)
+    expect(gate(root, 'nope', '--base', 'main').status).toBe(2)
+    expect(gate(root, 'pkg', '--base', 'missing-ref').status).toBe(2)
   })
 })

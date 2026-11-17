@@ -58,20 +58,82 @@ function tagText(tag) {
   return (tag.text ?? []).map((p) => p.text).join('')
 }
 
-function describeSymbol(sym, checker, printer) {
+const DECLARATION_KINDS = new Set([
+  ts.SyntaxKind.InterfaceDeclaration,
+  ts.SyntaxKind.TypeAliasDeclaration,
+  ts.SyntaxKind.ClassDeclaration,
+  ts.SyntaxKind.EnumDeclaration,
+  ts.SyntaxKind.FunctionDeclaration,
+  ts.SyntaxKind.VariableDeclaration,
+  ts.SyntaxKind.ModuleDeclaration,
+])
+
+function resolveAlias(sym, checker) {
   // eslint-disable-next-line sonarjs/bitwise-operators -- ts.SymbolFlags is a bit set
-  const target = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym
-  const tags = [...tagsOf(sym, checker), ...tagsOf(target, checker)]
+  return sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym
+}
+
+function printDecl(d, printer) {
+  return printer.printNode(ts.EmitHint.Unspecified, d, d.getSourceFile()).trim()
+}
+
+/**
+ * Declarations of the package's own types that `roots` mention, transitively, other than the
+ * entry's exported names (those have a record of their own). A change to one of them changes
+ * the public API even though the exported name's printed text is the same.
+ */
+function collectInternals(roots, ctx, internals) {
+  const queue = [...roots]
+  while (queue.length > 0) {
+    const root = queue.pop()
+    ts.forEachChild(root, function visit(node) {
+      if (ts.isIdentifier(node)) {
+        const raw = ctx.checker.getSymbolAtLocation(node)
+        const sym = raw && resolveAlias(raw, ctx.checker)
+        const fresh = (sym?.declarations ?? []).filter((d) => isOwnDeclaration(d, ctx))
+        if (sym && fresh.length > 0 && !ctx.exported.has(sym.name) && !internals.has(sym.name)) {
+          internals.set(
+            sym.name,
+            fresh
+              .map((d) => printDecl(d, ctx.printer))
+              .sort()
+              .join('\n'),
+          )
+          queue.push(...fresh)
+        }
+      }
+      ts.forEachChild(node, visit)
+    })
+  }
+}
+
+function isOwnDeclaration(d, ctx) {
+  const sf = d.getSourceFile()
+  return (
+    DECLARATION_KINDS.has(d.kind) &&
+    !ctx.program.isSourceFileDefaultLibrary(sf) &&
+    !ctx.program.isSourceFileFromExternalLibrary(sf) &&
+    !sf.fileName.includes('/node_modules/')
+  )
+}
+
+function describeSymbol(sym, ctx) {
+  const target = resolveAlias(sym, ctx.checker)
+  const tags = [...tagsOf(sym, ctx.checker), ...tagsOf(target, ctx.checker)]
   const deprecated = tags.find((t) => t.name === 'deprecated')
   const since = deprecated ? /since\s+(\d{4}-\d{2}-\d{2})/.exec(tagText(deprecated)) : null
-  const declaration = (target.declarations ?? [])
-    .map((d) => printer.printNode(ts.EmitHint.Unspecified, d, d.getSourceFile()).trim())
-    .sort()
-    .join('\n')
+  const decls = target.declarations ?? []
+  const refs = new Map()
+  collectInternals(decls, ctx, refs)
   return {
     tier: tags.some((t) => t.name === 'experimental') ? 'experimental' : 'stable',
-    declaration,
+    declaration: decls
+      .map((d) => printDecl(d, ctx.printer))
+      .sort()
+      .join('\n'),
     deprecatedSince: since ? since[1] : null,
+    references: [...refs.keys()].sort(),
+    refTexts: refs,
   }
 }
 
@@ -101,11 +163,19 @@ export function extractSurface(pkgDir) {
   for (const entry of Object.keys(files).sort()) {
     const sf = program.getSourceFile(files[entry])
     const modSym = sf && checker.getSymbolAtLocation(sf)
-    const names = (modSym ? checker.getExportsOfModule(modSym) : []).map((sym) => [
-      sym.name,
-      describeSymbol(sym, checker, printer),
-    ])
-    entries[entry] = Object.fromEntries(names.sort(byName))
+    const syms = modSym ? checker.getExportsOfModule(modSym) : []
+    const ctx = { program, checker, printer, exported: new Set(syms.map((x) => x.name)) }
+    const names = {}
+    const internals = {}
+    for (const [name, rec] of syms.map((x) => [x.name, describeSymbol(x, ctx)]).sort(byName)) {
+      const { refTexts, ...plain } = rec
+      names[name] = plain
+      for (const [k, v] of refTexts) internals[k] = v
+    }
+    entries[entry] = {
+      names,
+      internals: Object.fromEntries(Object.entries(internals).sort(byName)),
+    }
   }
   return { package: manifest.name, entries }
 }
@@ -143,7 +213,19 @@ export function addsOnlyOptionalMembers(prev, next) {
   return b.list.every((m) => before.has(m.text) || m.optional)
 }
 
-function breakage(old, cur) {
+function referenceBreakage(old, oldInternals, curInternals) {
+  for (const ref of old.references ?? []) {
+    const before = oldInternals[ref]
+    const after = curInternals[ref]
+    if (before === after) continue
+    if (after === undefined || !addsOnlyOptionalMembers(before, after)) {
+      return `referenced type ${ref} changed`
+    }
+  }
+  return null
+}
+
+function breakage(old, cur, oldInternals, curInternals) {
   if (!cur) return 'removed or renamed'
   if (cur.tier !== 'stable') return 'demoted to experimental'
   if (
@@ -152,7 +234,7 @@ function breakage(old, cur) {
   ) {
     return 'declaration changed'
   }
-  return null
+  return referenceBreakage(old, oldInternals, curInternals)
 }
 
 function windowProblem(id, old, cur, now) {
@@ -165,12 +247,12 @@ function windowProblem(id, old, cur, now) {
 /** Breaking changes (and window violations) from `prev` to `next`. `now` is epoch ms. */
 export function comparePolicy(prev, next, { major, now }) {
   const out = []
-  for (const [entry, names] of Object.entries(prev.entries)) {
+  for (const [entry, { names, internals }] of Object.entries(prev.entries)) {
     for (const [name, old] of Object.entries(names)) {
       if (old.tier !== 'stable') continue
-      const cur = next.entries[entry]?.[name]
+      const cur = next.entries[entry]?.names[name]
       const id = `${entry}:${name}`
-      const what = breakage(old, cur)
+      const what = breakage(old, cur, internals, next.entries[entry]?.internals ?? {})
       if (!what) continue
       if (!major)
         out.push(`${id} ${what} and no changeset in the range declares "${prev.package}": major`)

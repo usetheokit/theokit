@@ -44,3 +44,6 @@ apps/
 
 # Acceptance records are kept exactly as they were written on the day of the run.
 docs/acceptance/
+
+# Written by scripts/check-public-surface.mjs --write; the gate compares it byte for byte.
+packages/*/public-surface-baseline.json
