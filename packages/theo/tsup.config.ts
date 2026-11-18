@@ -115,9 +115,7 @@ export default defineConfig([
     clean: false,
     target: 'node20',
     banner: {
-      // tsx is an optional peer: register it when present, and let the command's own guard
-      // report it when a command needs it and it is absent.
-      js: '#!/usr/bin/env node\ntry { await import("tsx/esm"); } catch (e) { if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e; }',
+      js: '#!/usr/bin/env node\nimport "tsx/esm";',
     },
     external: [
       // Optional and never installed here, so esbuild cannot resolve it — and must not try.
