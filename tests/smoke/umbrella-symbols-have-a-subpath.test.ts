@@ -56,7 +56,6 @@ const NO_SUBPATH_YET = new Set([
   'validateCacheTags',
   'validateCacheMaxAge',
   'validateCacheExpire',
-  '_resetCacheEngine',
   'DEFAULT_EXCLUDED_QUERY_PARAMS',
   'CACHE_DEFAULT_MAX_AGE',
   'CACHE_DEFAULT_MAX_ENTRY_SIZE',
@@ -67,7 +66,6 @@ const NO_SUBPATH_YET = new Set([
   'LayeredConfig',
   'LayerOutOfOrderError',
   'loadEnv',
-  '_resetEnvCache',
   'CTX_WRITERS',
   'THEO_T_PREFIX',
   // instructions and custom commands
