@@ -8,6 +8,11 @@ export function noteTurnStart(): void {
   submissions += 1
 }
 
+/** How many turns have started; lets a caller tell whether one started since it last looked. */
+export function turnStartCount(): number {
+  return submissions
+}
+
 /** `stale`: the copy finished but the session had moved on, so it was not adopted. */
 export interface ForkResult {
   newId: string

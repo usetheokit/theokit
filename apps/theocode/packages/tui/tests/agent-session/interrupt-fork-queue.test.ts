@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { makeInterruptTurn, newForkGate } from '../../src/agent-session/interrupt.js'
+import { noteTurnStart } from '../../src/persistence/fork-session.js'
 
 const setup = (active: { v: boolean }) => {
   const releases: Array<() => void> = []
@@ -42,12 +43,14 @@ describe('interrupt fork queue', () => {
     expect(forkSession).toHaveBeenCalledTimes(2)
   })
 
-  it('does not start the queued fork while a third turn is running', async () => {
+  it('does not start the queued fork when a third turn started before React showed it', async () => {
+    // `hasActiveTurn` is render state and still says false: only the turn-start tracking knows.
     const active = { v: true }
     const { releases, forkSession, interrupt } = setup(active)
     interrupt() // A
     interrupt() // B, queued
-    active.v = true // C is live when A's fork settles
+    active.v = false
+    noteTurnStart() // C submitted; streaming not yet published
     releases[0]!()
     await new Promise((r) => setTimeout(r, 0))
     expect(forkSession).toHaveBeenCalledTimes(1)
