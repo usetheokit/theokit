@@ -234,6 +234,23 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
     expect(await availableAt(a.jobId)).toBe(at)
   })
 
+  it('locks the selected jobs when reading the time to go ahead of, so a dequeue cannot lease them first', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, delaySeconds: 100 })
+    await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 50 })
+    const statements: string[] = []
+    const recording: PoolLike = {
+      query: ((sql: string, params?: unknown[]) => {
+        statements.push(sql)
+        return pool.query(sql, params)
+      }) as PoolLike['query'],
+    }
+    await backend.reschedule(recording, a.jobId, {
+      ahead: { name: 'run-task', where: { taskId: [2] } },
+    })
+    const read = statements.find((q) => q.includes('SELECT COALESCE(held_from'))
+    expect(read).toMatch(/FOR UPDATE SKIP LOCKED/)
+  })
+
   it('rejects reschedule with neither or both of availableAt and ahead', async () => {
     const a = await backend.enqueue({ name: 'run-task', input: {} })
     await expect(backend.reschedule(pool, a.jobId, {})).rejects.toThrow(/exactly one/)

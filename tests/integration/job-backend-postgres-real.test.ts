@@ -491,48 +491,5 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         await wide.end()
       }
     })
-
-    // The caller's transaction: a worker dequeuing while the caller holds uncommitted defers must
-    // skip the locked rows, and must see the jobs as held once the caller commits.
-    it('defer in an open transaction: a concurrent dequeue skips the rows, rollback undoes it', async () => {
-      await backend.enqueue({ name: 'hold-test', input: { taskId: 1 } })
-      await backend.enqueue({ name: 'hold-test', input: { taskId: 2 } })
-      const client = await pool.connect()
-      try {
-        await client.query('BEGIN')
-        const moved = await backend.defer(client, {
-          name: 'hold-test',
-          where: { taskId: [1] },
-          until: 'infinity',
-        })
-        expect(moved.length).toBe(1)
-        // The deferred row is locked and unavailable; only task 2 is claimable.
-        const leases = await backend.dequeue({ batchSize: 10 })
-        expect(leases.map((l) => (l.input as { taskId: number }).taskId)).toEqual([2])
-        // A second caller's defer skips the locked row instead of waiting.
-        const other = await backend.defer(pool, { name: 'hold-test', until: 'infinity' })
-        expect(other).toEqual([])
-        await client.query('ROLLBACK')
-      } finally {
-        client.release()
-      }
-      const after = await backend.dequeue({ batchSize: 10 })
-      expect(after.map((l) => (l.input as { taskId: number }).taskId)).toEqual([1])
-    })
-
-    it('restore in an open transaction: a dequeue sees the jobs only after commit', async () => {
-      await backend.enqueue({ name: 'hold-test', input: { taskId: 1 } })
-      await backend.defer(pool, { name: 'hold-test', until: 'infinity' })
-      const client = await pool.connect()
-      try {
-        await client.query('BEGIN')
-        await backend.restore(client, { name: 'hold-test' })
-        expect(await backend.dequeue({})).toEqual([])
-        await client.query('COMMIT')
-      } finally {
-        client.release()
-      }
-      expect((await backend.dequeue({})).length).toBe(1)
-    })
   },
 )

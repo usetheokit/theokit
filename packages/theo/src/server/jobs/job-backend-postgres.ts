@@ -349,18 +349,17 @@ export class PostgresJobBackend implements JobBackend {
       )
     }
     // `ahead`: one second before the earliest time the other selected jobs had (a held job counts
-    // at the time it will be restored to), read in the caller's transaction just before the write.
+    // at the time it will be restored to). The selected jobs are read with FOR UPDATE SKIP LOCKED,
+    // so inside the caller's transaction no worker can lease them and no other transaction can move
+    // them until it ends; a job already leased or locked is not pending and is skipped.
     let target = '$2::timestamptz'
     const params: unknown[] = [jobId]
     if (input.ahead) {
-      const sel = this.#select(input.ahead, 2, 'AND id <> $1', false)
+      const sel = this.#select(input.ahead, 2, 'AND id <> $1')
       const times = sel.sql.replace('SELECT id', 'SELECT COALESCE(held_from, available_at) AS at')
-      const earliest = await client.query<{ at: Date | string }>(
-        `${times} ORDER BY at ASC LIMIT 1`,
-        [jobId, ...sel.params],
-      )
-      const at = earliest.rows.length > 0 ? new Date(earliest.rows[0].at).getTime() : Number.NaN
-      if (Number.isNaN(at)) {
+      const others = await client.query<{ at: Date | string }>(times, [jobId, ...sel.params])
+      const at = Math.min(...others.rows.map((row) => new Date(row.at).getTime()))
+      if (!Number.isFinite(at)) {
         // Nothing to be ahead of: leave the time as it is.
         target = 'available_at'
       } else {
@@ -386,19 +385,14 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   /** Subquery picking the unleased, unfailed jobs of `sel`, locked with SKIP LOCKED. Params start at `$first`. */
-  #select(
-    sel: JobSelector,
-    first: number,
-    extra = '',
-    lock = true,
-  ): { sql: string; params: unknown[] } {
+  #select(sel: JobSelector, first: number, extra = ''): { sql: string; params: unknown[] } {
     const params: unknown[] = [sel.name]
     let sql = `SELECT id FROM ${this.#table} WHERE name = $${String(first)}`
     for (const [key, values] of Object.entries(sel.where ?? {})) {
       params.push(key, values.map(String))
       sql += ` AND (input ->> $${String(first + params.length - 2)}) = ANY($${String(first + params.length - 1)}::text[])`
     }
-    sql += ` AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW()) ${extra}${lock ? ' FOR UPDATE SKIP LOCKED' : ''}`
+    sql += ` AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW()) ${extra} FOR UPDATE SKIP LOCKED`
     return { sql, params }
   }
 
