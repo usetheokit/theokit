@@ -1,4 +1,7 @@
+// @vitest-environment happy-dom
 import { createElement } from 'react'
+import { createRoot } from 'react-dom/client'
+import { act } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, it, expect } from 'vitest'
 
@@ -51,5 +54,25 @@ describe('client i18n', () => {
   })
   it('throws outside a provider', () => {
     expect(() => renderToStaticMarkup(createElement(Page))).toThrow(/I18nProvider/)
+  })
+  it('follows a locale prop that changes after mount; setLocale cannot override it', async () => {
+    let set: ((l: 'en' | 'pt') => void) | undefined
+    function Probe(): ReturnType<typeof createElement> {
+      const c = useI18n<'en' | 'pt'>()
+      set = c.setLocale
+      return createElement('p', null, c.t('nav.home'))
+    }
+    const el = document.createElement('div')
+    const root = createRoot(el)
+    const mount = (locale: 'en' | 'pt'): ReturnType<typeof createElement> =>
+      createElement(I18nProvider, { i18n, locale }, createElement(Probe))
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    await act(async () => root.render(mount('en')))
+    expect(el.textContent).toBe('Home')
+    await act(async () => root.render(mount('pt')))
+    expect(el.textContent).toBe('Início')
+    await act(async () => set?.('en'))
+    expect(el.textContent).toBe('Início')
+    await act(async () => root.unmount())
   })
 })

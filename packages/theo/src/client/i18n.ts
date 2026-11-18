@@ -31,10 +31,25 @@ export type DictionaryKey<T> = {
 /** Same shape as `T` (same keys at every level), any string values. */
 export type SameShape<T> = { [K in keyof T]: T[K] extends string ? string : SameShape<T[K]> }
 
+/** Keys of `S` that `Shape` lacks (at any depth) become `never`, so an extra key is a type error. */
+export type NoExtraKeys<S, Shape> = {
+  [K in keyof S]: K extends keyof Shape
+    ? S[K] extends string
+      ? Shape[K] extends string
+        ? S[K]
+        : never
+      : Shape[K] extends string
+        ? never
+        : NoExtraKeys<S[K], Shape[K]>
+    : never
+}
+
 export interface I18nConfig<T extends Record<string, Dictionary>, DL extends keyof T & string> {
   readonly defaultLocale: DL
-  /** Every locale must have every key the default locale has. */
-  readonly dictionaries: T & { readonly [K in keyof T]: SameShape<T[DL]> }
+  /** Every locale must have exactly the keys the default locale has (missing or extra both fail). */
+  readonly dictionaries: T & {
+    readonly [K in keyof T]: SameShape<T[DL]> & NoExtraKeys<T[K], T[DL]>
+  }
   /** localStorage key for the stored preference. Default `theokit.locale`. */
   readonly storageKey?: string
 }
@@ -47,6 +62,8 @@ export interface I18n<L extends string, D extends Dictionary> {
   readonly storageKey: string
   /** Lookup without React (server code, tests). Falls back to the default locale, then the key. */
   translate(locale: L, key: DictionaryKey<D>, params?: TranslateParams): string
+  /** `useI18n` bound to this configuration: `t('bad.key')` is a type error. */
+  useI18n(): I18nContextValue<L, DictionaryKey<D>>
 }
 
 export interface I18nContextValue<L extends string = string, K extends string = string> {
@@ -115,6 +132,7 @@ export function defineI18n<T extends Record<string, Dictionary>, DL extends keyo
     defaultLocale: config.defaultLocale,
     storageKey: config.storageKey ?? 'theokit.locale',
     translate,
+    useI18n: () => useI18n(),
   }
 }
 
@@ -147,7 +165,9 @@ export function I18nProvider<L extends string>(props: I18nProviderProps<L>): Rea
   const forced = props.locale && i18n.locales.includes(props.locale) ? props.locale : undefined
   // First render uses the forced or default locale so server and client markup match; the stored
   // preference and browser language are applied right after hydration.
-  const [locale, setLocaleState] = useState<L>(forced ?? i18n.defaultLocale)
+  const [chosen, setLocaleState] = useState<L>(i18n.defaultLocale)
+  // A forced locale always wins and follows the prop when it changes after mount.
+  const locale = forced ?? chosen
   useEffect(() => {
     if (forced) return
     setLocaleState(
@@ -161,6 +181,7 @@ export function I18nProvider<L extends string>(props: I18nProviderProps<L>): Rea
   }, [forced, i18n.storageKey, i18n.locales, i18n.defaultLocale])
   const setLocale = useCallback(
     (next: L) => {
+      if (forced) return // the locale is forced: a switch must not override it
       setLocaleState(next)
       try {
         if (typeof localStorage !== 'undefined') localStorage.setItem(i18n.storageKey, next)
@@ -168,7 +189,7 @@ export function I18nProvider<L extends string>(props: I18nProviderProps<L>): Rea
         /* storage unavailable: the choice lasts for this session only */
       }
     },
-    [i18n.storageKey],
+    [i18n.storageKey, forced],
   )
   const value = useMemo<I18nContextValue>(
     () => ({
