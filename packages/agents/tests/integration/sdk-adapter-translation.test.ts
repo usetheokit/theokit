@@ -20,6 +20,7 @@ interface SdkMsg {
 const h = vi.hoisted(() => ({
   messages: [] as SdkMsg[],
   /** Called with the SendOptions before the timeline is read, to emit SDK run events. */
+  handleId: undefined as undefined | string,
   onSend: undefined as undefined | ((opts: { onRunEvent?: (e: unknown) => void }) => void),
 }))
 
@@ -30,6 +31,7 @@ vi.mock('@theokit/sdk', () => ({
         send: (_m: unknown, opts?: { onRunEvent?: (e: unknown) => void }) => {
           h.onSend?.(opts ?? {})
           return Promise.resolve({
+            ...(h.handleId !== undefined ? { id: h.handleId } : {}),
             // theokit#140 — the fake's ONE ordered timeline. Delegates to this same fake's `stream()`
             // rather than restating its script: two hand-written copies of one fixture drift, and a fake
             // whose timeline disagreed with its stream would go green while production broke.
@@ -67,6 +69,7 @@ async function drain(messages: SdkMsg[]) {
 afterEach(() => {
   h.messages = []
   h.onSend = undefined
+  h.handleId = undefined
 })
 
 describe('createSdkAgentStream × real SDKMessage shapes (NF-1 end-to-end)', () => {
@@ -211,6 +214,23 @@ describe('permission_denied → typed refusal on the tool result', () => {
     }
     const out = await drain([toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 })])
     expect(results(out)[0]).toMatchObject({ refusal: { by: 'plugin', reason: 'external says no' } })
+  })
+
+  it('two same-tool refusals keep their denial order when the results arrive reordered', async () => {
+    recordRefusal('sdk-run-4', 'Bash', { by: 'human', reason: 'first' })
+    recordRefusal('sdk-run-4', 'Bash', { by: 'policy', reason: 'second' })
+    h.handleId = 'sdk-run-4'
+    h.onSend = (o) => {
+      o.onRunEvent?.(denied('c1', 'plugin', 'm1'))
+      o.onRunEvent?.(denied('c2', 'plugin', 'm2'))
+    }
+    const out = await drain([
+      toolDone('c2', { stdout: '', stderr: 'x', exitCode: 126 }),
+      toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 }),
+    ])
+    const byCall = Object.fromEntries(results(out).map((r) => [r.callId, r.refusal]))
+    expect(byCall.c1).toMatchObject({ by: 'human', reason: 'first' })
+    expect(byCall.c2).toMatchObject({ by: 'policy', reason: 'second' })
   })
 
   it('entries a run left unmatched are dropped when it ends', async () => {

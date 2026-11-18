@@ -690,9 +690,8 @@ function buildSendOptions(
   sendOptions.onRunEvent = (ev) => {
     const found = refusalFromRunEvent(ev)
     if (found !== undefined) {
-      // Match the ledger in denial-event order, and keep the result by call id, so a later
-      // tool_result cannot take a different entry for the same tool.
-      if (found.runId !== undefined) resolveRefusal(found, undefined)
+      // Resolved in denial-event order by `streamTimeline` (which knows the run handle's id; the
+      // SDK event itself carries none) and kept by call id.
       refusals.set(found.callId, found)
     }
     return callerSink?.(ev)
@@ -748,6 +747,9 @@ async function* streamTimeline(
       }
     }
     for await (const ev of run.events()) {
+      // Denials seen so far take their ledger entries in the order they were reported, before any
+      // later tool_result could consume one out of order.
+      for (const p of refusals.values()) resolveRefusal(p, handleId)
       const translated = translateTimelineEvent(ev, runId, seen)
       // theokit#474 — recover the run's TYPED failure, but ONLY for a turn that failed before
       // yielding anything (`lastEventType === ''`): the one case the retry seam can act on, and one
