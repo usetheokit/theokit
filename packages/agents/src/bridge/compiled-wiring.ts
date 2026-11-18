@@ -143,7 +143,8 @@ export function getOrCreateReporting(
   options: Record<string, unknown>,
   listener: ((wiring: CompiledWiring) => void) | undefined,
 ): Promise<unknown> {
-  if (listener === undefined) return resolveReporting(sdk, sessionId, options, listener)
+  // Listener-less calls share the same per-session slot, so a plain `getOrCreate` never runs
+  // beside a listener call's resume/create and cannot dispose or duplicate its live handle.
   const key = sdk as object
   const pending = inFlight.get(key) ?? new Map<string, Promise<unknown>>()
   inFlight.set(key, pending)

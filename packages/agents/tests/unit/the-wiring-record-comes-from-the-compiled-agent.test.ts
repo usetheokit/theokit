@@ -239,6 +239,53 @@ describe('onWired', () => {
     expect(h.created).toHaveLength(1)
   })
 
+  it('a listener call and a plain call racing on one session share one live handle', async () => {
+    const live = new Map<string, { disposed: boolean }>()
+    let creations = 0
+    const sdk = {
+      registry: {
+        get: (id: string) => live.get(id),
+        set: (id: string, a: never) => live.set(id, a),
+      },
+      resume: () =>
+        Promise.reject(Object.assign(new Error('unknown'), { name: 'UnknownAgentError' })),
+      create: async () => {
+        await Promise.resolve()
+        creations++
+        return {
+          disposed: false,
+          dispose() {
+            this.disposed = true
+          },
+        }
+      },
+      // The SDK's own getOrCreate: answers from the registry, else creates and caches.
+      getOrCreate: async (id: string) => {
+        const hit = live.get(id)
+        if (hit) return hit
+        await Promise.resolve()
+        creations++
+        const a = {
+          disposed: false,
+          dispose() {
+            this.disposed = true
+          },
+        }
+        live.set(id, a)
+        return a
+      },
+    }
+    const seen: Wiring[] = []
+    const [a, b] = (await Promise.all([
+      getOrCreateReporting(sdk, 'mix', {}, (w) => seen.push(w)),
+      getOrCreateReporting(sdk, 'mix', {}, undefined),
+    ])) as { disposed: boolean }[]
+    expect(a).toBe(b)
+    expect(creations).toBe(1)
+    expect(a.disposed).toBe(false)
+    expect(live.get('mix')).toBe(a)
+  })
+
   it('a builtin in withheldBuiltinTools is absent from tools', async () => {
     const seen: Wiring[] = []
     const def = base()
