@@ -101,6 +101,28 @@ describe('refusal ledger', () => {
     expect(takeRefusal('r-m', 'Bash', a1)).toEqual({ by: 'human', reason: 'a' })
   })
 
+  it('a marker quoted inside a denial does not select another outstanding entry', () => {
+    const a = recordRefusal('r-q', 'Bash', { by: 'human', reason: 'a' }, 'first')
+    const b = recordRefusal('r-q', 'Bash', { by: 'policy', reason: 'b' }, `hook output ${a}`)
+    expect(takeRefusal('r-q', 'Bash', b)).toEqual({ by: 'policy', reason: 'b' })
+    expect(takeRefusal('r-q', 'Bash', a)).toEqual({ by: 'human', reason: 'a' })
+    dropRunRefusals('r-q')
+    const c = recordRefusal('r-q2', 'Bash', { by: 'human' }, 'x')
+    expect(takeRefusal('r-q2', 'Bash', 'external [veto:000000000000000000000000]')).toBeUndefined()
+    expect(takeRefusal('r-q2', 'Bash', c)).toEqual({ by: 'human' })
+  })
+
+  it('runs that never take or drop their entries are bounded', () => {
+    for (let r = 0; r < 600; r++) recordRefusal(`r-leak-${r}`, 'Bash', { by: 'policy' }, 'm')
+    expect(takeRefusal('r-leak-0', 'Bash')).toBeUndefined()
+    expect(takeRefusal('r-leak-599', 'Bash')).toEqual({ by: 'policy' })
+    for (let i = 0; i < 600; i++) {
+      recordRefusal('r-big', 'Bash', { by: 'policy', reason: `${i}` }, 'm')
+    }
+    expect(takeRefusal('r-big', 'Bash')).toEqual({ by: 'policy', reason: '344' })
+    dropRunRefusals('r-big')
+  })
+
   it('a call refused by the permission gate yields refusal by policy', async () => {
     const store = new PermissionStore({ home: process.env.TMPDIR ?? '/tmp' })
     const gate = grantGate(store, (c) => ({

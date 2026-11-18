@@ -148,7 +148,7 @@ the builder, the *posture* decides whether auto-approval is even permissible (it
 posture as evidence, so "auto-approve without confinement" cannot be expressed), and the *resolver*
 settles an individual request. `./ask` is the inverse channel — the agent asking you.
 
-A refused tool result carries `refusal.by`, saying who refused: `human` (a person denied it; `reason` is the approver's text), `timeout` (the approval window expired with no decision), `policy` (the approval posture or the permission gate), `hook` (a hook spec or delegation hook, or an SDK file hook), or `plugin` (a veto from a plugin this framework did not build). `reason` is the bare reason, not the sentence around it. Each framework veto message ends with a unique ` [veto:N]` marker: tool calls dispatch concurrently and the SDK's denial event carries no call id, so the marker is what binds a denial to its own veto (an external denial has no marker and stays `plugin`).
+A refused tool result carries `refusal.by`, saying who refused: `human` (a person denied it; `reason` is the approver's text), `timeout` (the approval window expired with no decision), `policy` (the approval posture or the permission gate), `hook` (a hook spec or delegation hook, or an SDK file hook), or `plugin` (a veto from a plugin this framework did not build). `reason` is the bare reason, not the sentence around it. Each framework veto message ends with an unguessable ` [veto:<random hex>]` marker: tool calls dispatch concurrently and the SDK's denial event carries no call id, so the marker is what binds a denial to its own veto (an external denial has no marker and stays `plugin`).
 
 **Sessions are deleted carefully or not at all.** `./session` refuses to collect a transcript that a
 live writer holds, floors both `keepLast` and `maxAgeDays`, and plans before it applies. When your
@@ -519,4 +519,4 @@ the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and f
 
 ## Refused tool calls
 
-When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
+When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. A veto the framework made ends its model-facing message with a ` [veto:<random hex>]` marker (see the refusal paragraph above); a veto from an external plugin is passed through as written.
