@@ -1,5 +1,7 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, type Stats } from 'node:fs'
 import { join } from 'node:path'
+
+import { splitFrontmatter } from '../config/frontmatter.js'
 
 import { EVERY_SURFACE, type CompatSurface } from './setting-sources-gate.js'
 
@@ -26,16 +28,31 @@ export interface ForeignSurfaceEntry {
   readonly names?: readonly string[]
 }
 
-type Kind = 'frontmatter-md' | 'agent-memory' | 'scripts' | 'plugin-bundles'
+type Kind = 'agent-md' | 'command-md' | 'agent-memory' | 'scripts' | 'plugin-bundles'
 
-/** Folder → the gate surface that governs it (`null`: no gate surface ever loads it). */
-const FOLDERS: readonly { dir: string; surface: CompatSurface | null; kind: Kind }[] = [
-  { dir: 'agents', surface: 'subagents', kind: 'frontmatter-md' },
-  { dir: 'commands', surface: 'commands', kind: 'frontmatter-md' },
-  { dir: 'agent-memory', surface: 'subagents', kind: 'agent-memory' },
-  { dir: 'workflows', surface: null, kind: 'scripts' },
-  { dir: 'plugins', surface: 'plugins', kind: 'plugin-bundles' },
-]
+interface Folder {
+  readonly dir: string
+  readonly kind: Kind
+}
+
+/**
+ * Every gate surface and the foreign folders it governs. Typed as a record over `CompatSurface`, so
+ * a surface added to the gate fails the build here until its folders (possibly none) are declared.
+ */
+const SURFACE_FOLDERS: Record<CompatSurface, readonly Folder[]> = {
+  subagents: [
+    { dir: 'agents', kind: 'agent-md' },
+    { dir: 'agent-memory', kind: 'agent-memory' },
+  ],
+  commands: [{ dir: 'commands', kind: 'command-md' }],
+  plugins: [{ dir: 'plugins', kind: 'plugin-bundles' }],
+  context: [],
+  hooks: [],
+  skills: [],
+}
+
+/** Folders no gate surface ever loads. */
+const REFUSED_FOLDERS: readonly Folder[] = [{ dir: 'workflows', kind: 'scripts' }]
 
 const SCRIPT_SUFFIXES = ['.js', '.mjs', '.cjs'] as const
 
@@ -45,34 +62,34 @@ interface Count {
   names: string[]
 }
 
-function isDir(p: string): boolean {
+/** `undefined` when the path does not exist; any other failure (EACCES, ELOOP...) propagates. */
+function statIfPresent(p: string): Stats | undefined {
   try {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- caller's project root plus fixed convention
-    return statSync(p).isDirectory()
-  } catch {
-    return false
+    return statSync(p)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
   }
 }
 
-/** Each counter returns whether the entry counts; it may throw when the entry cannot be read. */
-function countsFrontmatterMd(abs: string, name: string): boolean {
-  const p = join(abs, name)
-  if (!name.endsWith('.md') || isDir(p)) return false
+/** Read a file only when it is a regular file, so a FIFO or device can never block the inventory. */
+function readRegularFile(p: string): string | undefined {
+  if (!statIfPresent(p)?.isFile()) return undefined
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
   return readFileSync(p, 'utf8')
-    .replace(/^\uFEFF/, '')
-    .startsWith('---')
+}
+
+/** Each counter says whether the entry counts; it throws when the entry cannot be read. */
+function countsAgentMd(abs: string, name: string): boolean {
+  if (!name.endsWith('.md')) return false
+  const raw = readRegularFile(join(abs, name))
+  return raw?.replace(/^\uFEFF/, '').startsWith('---') === true
 }
 
 function countsAgentMemory(abs: string, name: string): boolean {
-  const p = join(abs, name)
-  if (!isDir(p)) return false
-  const file = join(p, 'MEMORY.md')
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-  if (!existsSync(file)) return false
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-  readFileSync(file, 'utf8')
-  return true
+  if (!statIfPresent(join(abs, name))?.isDirectory()) return false
+  return readRegularFile(join(abs, name, 'MEMORY.md')) !== undefined
 }
 
 function countsScript(_abs: string, name: string): boolean {
@@ -80,31 +97,66 @@ function countsScript(_abs: string, name: string): boolean {
 }
 
 function countsPluginBundle(abs: string, name: string): boolean {
+  if (!statIfPresent(join(abs, name))?.isDirectory()) return false
   const skills = join(abs, name, 'skills')
-  if (!isDir(skills)) return false
+  if (!statIfPresent(skills)?.isDirectory()) return false
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
   readdirSync(skills)
   return true
 }
 
-const COUNTERS: Record<Kind, (abs: string, name: string) => boolean> = {
-  'frontmatter-md': countsFrontmatterMd,
+const COUNTERS: Record<Exclude<Kind, 'command-md'>, (abs: string, name: string) => boolean> = {
+  'agent-md': countsAgentMd,
   'agent-memory': countsAgentMemory,
   scripts: countsScript,
   'plugin-bundles': countsPluginBundle,
 }
 
-function count(root: string, dir: string, kind: Kind): Count {
-  const out: Count = { count: 0, unreadable: [], names: [] }
-  const abs = join(root, dir)
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-  if (!existsSync(abs)) return out
+/** Walk a directory the way `readCommandsDir` does: nested folders, `.md` files, closed frontmatter. */
+function countCommands(abs: string, rel: string, out: Count): void {
   let entries: string[]
   try {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
     entries = readdirSync(abs).sort((a, b) => a.localeCompare(b))
-  } catch {
-    out.unreadable.push(dir)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') out.unreadable.push(rel)
+    return
+  }
+  for (const name of entries) {
+    const path = join(abs, name)
+    const entryRel = `${rel}/${name}`
+    try {
+      const stats = statIfPresent(path)
+      if (stats === undefined) continue
+      if (stats.isDirectory()) {
+        countCommands(path, entryRel, out)
+      } else if (
+        stats.isFile() &&
+        name.endsWith('.md') &&
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+        splitFrontmatter(readFileSync(path, 'utf8')) !== undefined
+      ) {
+        out.count++
+      }
+    } catch {
+      out.unreadable.push(entryRel)
+    }
+  }
+}
+
+function count(root: string, { dir, kind }: Folder): Count {
+  const out: Count = { count: 0, unreadable: [], names: [] }
+  if (kind === 'command-md') {
+    countCommands(join(root, dir), dir, out)
+    return out
+  }
+  const abs = join(root, dir)
+  let entries: string[]
+  try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+    entries = readdirSync(abs).sort((a, b) => a.localeCompare(b))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') out.unreadable.push(dir)
     return out
   }
   for (const name of entries) {
@@ -127,21 +179,35 @@ export function foreignSurfaceInventory(input: {
   readonly cwd: string
   readonly root?: string
   readonly enabled?: readonly CompatSurface[]
+  /** Only scan these folders (e.g. `['workflows']`), so a caller needing one is not slowed by others. */
+  readonly dirs?: readonly string[]
 }): readonly ForeignSurfaceEntry[] {
   const root = join(input.cwd, input.root ?? '.claude')
-  const enabled = new Set<CompatSurface>(input.enabled ?? EVERY_SURFACE)
-  return FOLDERS.map(({ dir, surface, kind }) => {
-    const c = count(root, dir, kind)
-    const read = surface !== null && enabled.has(surface)
-    const reason =
-      surface === null ? WORKFLOWS_REFUSAL_REASON : `the '${surface}' surface is not enabled`
-    return {
-      dir,
-      state: read ? 'read' : 'refused',
-      count: c.count,
-      unreadable: c.unreadable,
-      ...(read ? {} : { reason }),
-      ...(kind === 'scripts' ? { names: c.names } : {}),
-    } satisfies ForeignSurfaceEntry
-  })
+  const gate = new Set<CompatSurface>(EVERY_SURFACE)
+  const enabled = new Set<CompatSurface>(
+    (input.enabled ?? EVERY_SURFACE).filter((surface) => gate.has(surface)),
+  )
+  const rows: { folder: Folder; surface: CompatSurface | null }[] = [
+    ...(Object.keys(SURFACE_FOLDERS) as CompatSurface[]).flatMap((surface) =>
+      SURFACE_FOLDERS[surface].map((folder) => ({ folder, surface })),
+    ),
+    ...REFUSED_FOLDERS.map((folder) => ({ folder, surface: null })),
+  ]
+  const wanted = input.dirs === undefined ? undefined : new Set(input.dirs)
+  return rows
+    .filter(({ folder }) => wanted === undefined || wanted.has(folder.dir))
+    .map(({ folder, surface }) => {
+      const c = count(root, folder)
+      const read = surface !== null && enabled.has(surface)
+      const reason =
+        surface === null ? WORKFLOWS_REFUSAL_REASON : `the '${surface}' surface is not enabled`
+      return {
+        dir: folder.dir,
+        state: read ? 'read' : 'refused',
+        count: c.count,
+        unreadable: c.unreadable,
+        ...(read ? {} : { reason }),
+        ...(folder.kind === 'scripts' ? { names: c.names } : {}),
+      } satisfies ForeignSurfaceEntry
+    })
 }

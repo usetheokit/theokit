@@ -1,4 +1,5 @@
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -47,15 +48,51 @@ describe('foreign surface inventory', () => {
   })
 
   it('an unreadable definition is listed in unreadable and does not throw', () => {
-    const cwd = project({ 'agents/a.md': '---\n---\n' })
-    // A directory named like a file cannot be read as one, whatever the user running the test.
-    mkdirSync(join(cwd, '.claude', 'commands'))
-    const bad = join(cwd, '.claude', 'commands', 'x.md')
-    writeFileSync(bad, '---\n---\n')
-    chmodSync(bad, 0o000)
-    let e
+    const cwd = project({ 'commands/ok.md': 'body' })
+    // A self-referencing symlink fails to stat (ELOOP) for every user, root included.
+    symlinkSync('x.md', join(cwd, '.claude', 'commands', 'x.md'))
+    let e: ReturnType<typeof get> | undefined
     expect(() => (e = get(cwd, 'commands'))).not.toThrow()
-    if (process.getuid?.() !== 0) expect(e!.unreadable).toEqual(['commands/x.md'])
+    expect(e?.unreadable).toEqual(['commands/x.md'])
+    expect(e?.count).toBe(1)
+  })
+
+  it('an inaccessible plugin bundle is listed in unreadable, not omitted', () => {
+    const cwd = project({ 'plugins/p1/skills/s.md': 'x' })
+    mkdirSync(join(cwd, '.claude', 'plugins', 'p2'))
+    symlinkSync('skills', join(cwd, '.claude', 'plugins', 'p2', 'skills'))
+    const e = get(cwd, 'plugins')
+    expect(e.count).toBe(1)
+    expect(e.unreadable).toEqual(['plugins/p2'])
+  })
+
+  it('commands counts what the command loader takes: nested, no frontmatter, closed fences', () => {
+    const cwd = project({
+      'commands/plain.md': 'just a prompt',
+      'commands/ns/deep.md': '---\ndescription: d\n---\nbody',
+      'commands/broken.md': '---\nnever closes',
+      'commands/notes.txt': 'x',
+    })
+    expect(get(cwd, 'commands').count).toBe(2)
+  })
+
+  it('a FIFO named like a definition is never read', () => {
+    const cwd = project({ 'agents/a.md': '---\n---\n' })
+    execFileSync('/usr/bin/mkfifo', [join(cwd, '.claude', 'agents', 'pipe.md')])
+    expect(get(cwd, 'agents').count).toBe(1)
+  })
+
+  it('the workflows warning scan does not touch other surfaces', () => {
+    const cwd = project({ 'workflows/a.js': '' })
+    execFileSync('/usr/bin/mkfifo', [join(cwd, '.claude', 'commands-pipe.md')])
+    const entries = foreignSurfaceInventory({ cwd, dirs: ['workflows'] })
+    expect(entries.map((e) => e.dir)).toEqual(['workflows'])
+  })
+
+  it('an enabled name the gate does not declare is not read', () => {
+    const cwd = project({ 'agents/a.md': '---\n---\n' })
+    const e = get(cwd, 'agents', ['nonsense' as never])
+    expect(e.state).toBe('refused')
   })
 
   it('a surface left out of enabled is reported refused', () => {

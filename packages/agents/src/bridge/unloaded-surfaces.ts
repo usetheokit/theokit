@@ -46,7 +46,9 @@ export interface ReportUnloadedSurfacesInput {
  * and noise is how a real report stops being read.
  */
 export function reportUnloadedSurfaces(input: ReportUnloadedSurfacesInput): void {
-  const entry = foreignSurfaceInventory({ cwd: input.cwd }).find((e) => e.dir === 'workflows')
+  const entry = foreignSurfaceInventory({ cwd: input.cwd, dirs: ['workflows'] }).find(
+    (e) => e.dir === 'workflows',
+  )
   // An unreadable directory is not a workflow anybody wrote; stay quiet rather than fail.
   if (entry?.state !== 'refused' || entry.count === 0) return
 
