@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer as createHttp } from 'node:http'
 import { createServer as createTcp, type Server } from 'node:net'
 import { join, resolve } from 'node:path'
@@ -182,6 +182,35 @@ describe('startTestServer on platforms without /proc (simulated)', () => {
     },
     120_000,
   )
+
+  it('terminates a real descendant of the server on Windows close()', async () => {
+    const pidFile = join(ROOT, 'descendant.pid')
+    const tree = writeApp(
+      'tree',
+      `import { spawn } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+const d = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+writeFileSync(${JSON.stringify(pidFile)}, String(d.pid))
+export default {}
+`,
+    )
+    const server = await startTestServer({
+      cwd: tree,
+      platform: 'win32',
+      // Stand-in for taskkill /T /F: ends the whole group, as the real one ends the tree.
+      killTree: async (pid) => {
+        process.kill(-pid, 'SIGKILL')
+        return 0
+      },
+    })
+    expect(existsSync(pidFile)).toBe(true)
+    const descendant = Number(readFileSync(pidFile, 'utf8'))
+    expect(alive(descendant)).toBe(true)
+    await server.close()
+    const until = Date.now() + 5000
+    while (alive(descendant) && Date.now() < until) await new Promise((r) => setTimeout(r, 50))
+    expect(alive(descendant)).toBe(false)
+  }, 120_000)
 
   it('terminates the Windows process tree on close() and surfaces a failed termination', async () => {
     const killed: number[] = []

@@ -69,15 +69,6 @@ function taskkillTree(pid: number): Promise<number | null> {
   })
 }
 
-function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
-  }
-}
-
 /** Inodes of the sockets listening on `port`, from /proc/net/tcp and tcp6 (state 0A is LISTEN). */
 function listeningInodes(port: number): Set<string> {
   const inodes = new Set<string>()
@@ -215,7 +206,8 @@ async function killWindowsTree(
   kill: (pid: number) => Promise<number | null>,
 ): Promise<void> {
   // kill() reaches only the direct child: end the whole tree and confirm before returning.
-  if (child.pid === undefined || (hasExited() && !pidAlive(child.pid))) return
+  // Descendants can outlive the direct child: terminate the tree even when the child already exited.
+  if (child.pid === undefined) return
   const code = await kill(child.pid)
   // 128: no such process, i.e. already gone.
   if (code !== 0 && code !== 128) {
@@ -316,7 +308,7 @@ async function bootOnce(
   while (Date.now() < deadline) {
     if (hasExited()) return await exitedFailure()
     // Independent of the readiness answer: a foreign listener may reply 404, refuse, or not speak HTTP.
-    if (child.pid !== undefined && foreignListener(port, child.pid)) {
+    if (platform === 'linux' && child.pid !== undefined && foreignListener(port, child.pid)) {
       return await fail(
         `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
         PortSubstitutedError,
@@ -334,7 +326,11 @@ async function bootOnce(
     if (ready) {
       if (hasExited()) return await exitedFailure()
       // Any server on the port can answer: only a listener held by the child's own group counts.
-      if (child.pid !== undefined && groupListensOn(port, child.pid) === false) {
+      if (
+        platform === 'linux' &&
+        child.pid !== undefined &&
+        groupListensOn(port, child.pid) === false
+      ) {
         return await fail(
           `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
           PortSubstitutedError,
