@@ -1,6 +1,6 @@
 {
   "name": "@theokit/presenter",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "TheoKit's presentation layer — the canonical AgentOutputEvent + Presenter Strategy that turns @theokit/sdk agent output into any surface (web UIMessageStream, terminal ANSI, JSON API) from ONE normalized event.",
   "repository": {
     "type": "git",
@@ -24,6 +24,10 @@
       "types": "./dist/wire/index.d.ts",
       "import": "./dist/wire/index.js"
     },
+    "./diff": {
+      "types": "./dist/diff/index.d.ts",
+      "import": "./dist/diff/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -37,6 +41,10 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs ."
+  },
+  "dependencies": {
+    "diff": "^8.0.4",
+    "parse-diff": "^0.12.0"
   },
   "peerDependencies": {
     "@theokit/sdk": "^5.3.0",
