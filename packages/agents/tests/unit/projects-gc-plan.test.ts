@@ -44,7 +44,7 @@ function put(project: string, name: string, ageDays: number, dir = false): strin
 
 function transcript(id: string, ageDays: number): string {
   const path = transcriptPath(root, CWD, id)
-  writeFileSync(path, JSON.stringify({ sessionId: id }) + '\n')
+  writeFileSync(path, JSON.stringify({ sessionId: id, cwd: CWD }) + '\n')
   const t = (NOW - ageDays * DAY) / 1000
   utimesSync(path, t, t)
   return path
@@ -88,7 +88,6 @@ describe('planProjectsGC', () => {
     writeFileSync(join(projects, NAME, 'last-session'), 'pointed')
     const result = await plan({
       keepLast: 2,
-      protectedIds: () => new Map([['pointed', 'app pointer']]),
     })
     const targets = result.candidates.map((c) => c.target)
     expect(targets).toEqual([transcriptPath(root, CWD, 'gone')])
@@ -189,6 +188,17 @@ describe('planProjectsGC', () => {
 })
 
 describe('planProjectsGC protection edge cases', () => {
+  it('a transcript that records no cwd keeps a live project whole', async () => {
+    transcript('new', 1)
+    const anon = transcriptPath(root, CWD, 'anon')
+    writeFileSync(anon, JSON.stringify({ sessionId: 'anon' }) + '\n')
+    const t = (NOW - 300 * DAY) / 1000
+    utimesSync(anon, t, t)
+    const result = await plan()
+    expect(result.candidates).toEqual([])
+    expect(result.touchedProjects).toEqual([])
+  })
+
   function legacy(id: string, ageDays: number): string {
     const path = legacyTranscriptPath(root, CWD, id)
     writeFileSync(path, JSON.stringify({ sessionId: id, cwd: CWD }) + '\n')

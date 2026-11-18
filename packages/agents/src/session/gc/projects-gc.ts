@@ -284,20 +284,30 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
     }
     if (live && cwd !== undefined) {
       const cwds = new Set([cwd])
+      let unattributed: string | undefined
       for (const entry of entries) {
         if (entry.kind !== 'transcript') continue
         try {
           const recorded = (
-            JSON.parse(fs.readFile(entry.path).split('\n', 1)[0] ?? '') as {
-              cwd?: unknown
-            } | null
+            JSON.parse(fs.readFile(entry.path).split('\n', 1)[0] ?? '') as { cwd?: unknown } | null
           )?.cwd
           if (typeof recorded === 'string' && encodeProjectDir(recorded) === project) {
             cwds.add(recorded)
+          } else {
+            unattributed ??= entry.name
           }
         } catch {
-          // A transcript that names no cwd adds no member to the class.
+          unattributed ??= entry.name
         }
+      }
+      // The directory is shared by every cwd that encodes to its name. A transcript that names no
+      // such cwd may belong to one this sweep cannot see, and that cwd's registry was never read.
+      if (unattributed !== undefined) {
+        kept.push({
+          project,
+          reason: `${unattributed}: records no cwd of this project, so its owner cannot be established; project kept whole`,
+        })
+        continue
       }
       try {
         for (const member of cwds) {
