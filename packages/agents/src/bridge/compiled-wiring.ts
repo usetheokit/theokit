@@ -86,3 +86,25 @@ export function reportWiring(
     console.warn('[theokit] onWired listener threw; the agent was still built:', err)
   }
 }
+
+/** Agents already reported: `Agent.getOrCreate` hands back the live agent for a known session. */
+const REPORTED_AGENTS = new WeakSet()
+
+/**
+ * Report the wiring only when `getOrCreate` actually created the agent. A reused agent (resumed
+ * session) keeps the wiring it was built with, which was already reported, so the options of this
+ * call, which the SDK ignored, are not reported again.
+ */
+export function reportWiringIfCreated(
+  listener: ((wiring: CompiledWiring) => void) | undefined,
+  options: Record<string, unknown>,
+  agent: unknown,
+): void {
+  if (typeof agent !== 'object' || agent === null) {
+    reportWiring(listener, options)
+    return
+  }
+  if (REPORTED_AGENTS.has(agent)) return
+  REPORTED_AGENTS.add(agent)
+  reportWiring(listener, options)
+}

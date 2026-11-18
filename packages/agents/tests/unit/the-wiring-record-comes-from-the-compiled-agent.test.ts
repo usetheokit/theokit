@@ -1,6 +1,10 @@
 /**
  * #1866 — `onWired` reports what was handed to `Agent.create`, read from those options.
  */
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
@@ -102,22 +106,77 @@ describe('onWired', () => {
   })
 
   it('a project skill withheld by settingSources is absent from skills.listed and skills.readable', async () => {
+    // A real project skill on disk, under the cwd the agent runs in.
+    const cwd = mkdtempSync(join(tmpdir(), 'wired-'))
+    try {
+      const dir = join(cwd, '.theokit', 'skills', 'project-skill')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(
+        join(dir, 'SKILL.md'),
+        '---\nname: project-skill\ndescription: from the repo\n---\nbody\n',
+      )
+      const trusted = {
+        level: 'trusted',
+        source: 'default',
+        allows: { projectSettings: true },
+      } as never
+
+      const withheld: Wiring[] = []
+      const noGrant = base()
+        .skills(['project-skill', skill('inline-one') as never])
+        .settingSources({ user: true })
+        .onWired((w) => withheld.push(w))
+        .build()
+      await toAgentFactory(noGrant as never, {
+        apiKey: 'k',
+        approvals: POSTURE,
+        overrides: { cwd },
+      })('s2')
+      const w = withheld[0]!
+      expect(w.settingSources).toEqual({ project: false, user: true })
+      expect(w.skills.readable).toEqual(['inline-one'])
+      const local = h.created[0]?.local as { settingSources?: string[]; cwd?: string }
+      expect(local.cwd).toBe(cwd)
+      expect(local.settingSources ?? []).not.toContain('project')
+
+      // Same disk, with the grant: the project root is now a source, so the contrast is the gate.
+      const granted: Wiring[] = []
+      const withGrant = base()
+        .settingSources({ project: { trustedBy: trusted } })
+        .onWired((x) => granted.push(x))
+        .build()
+      await toAgentFactory(withGrant as never, {
+        apiKey: 'k',
+        approvals: POSTURE,
+        overrides: { cwd },
+      })('s2b')
+      expect(granted[0]?.settingSources.project).toBe(true)
+      expect(withheld[0]?.settingSources.project).toBe(false)
+    } finally {
+      rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it('does not report again when the SDK hands back an agent it already holds', async () => {
+    const live = {
+      agentId: 'a1',
+      send: () => Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) }),
+      dispose: () => Promise.resolve(),
+    }
+    const sdk = await import('@theokit/sdk')
+    const spy = vi
+      .spyOn((sdk as unknown as { Agent: { getOrCreate: () => unknown } }).Agent, 'getOrCreate')
+      .mockResolvedValue(live)
     const seen: Wiring[] = []
-    // No project grant: only `user` is requested, so `project` is not a source and its skills are
-    // neither listed nor served.
     const def = base()
-      .skills([skill('inline-one') as never])
-      .settingSources({ user: true })
+      .tool(tool('lookup') as never)
       .onWired((w) => seen.push(w))
       .build()
-    await toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })('s2')
-    const w = seen[0]!
-    expect(w.settingSources.project).toBe(false)
-    expect(w.skills.listed).not.toContain('project-skill')
-    expect(w.skills.readable).not.toContain('project-skill')
-    expect(w.skills.readable).toEqual(['inline-one'])
-    const local = h.created[0]?.local as { settingSources?: string[] } | undefined
-    expect(local?.settingSources ?? []).not.toContain('project')
+    const make = toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })
+    await make('same')
+    await make('same')
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(seen).toHaveLength(1)
   })
 
   it('a builtin in withheldBuiltinTools is absent from tools', async () => {
