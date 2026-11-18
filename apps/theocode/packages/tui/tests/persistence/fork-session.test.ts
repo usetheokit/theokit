@@ -27,7 +27,7 @@ describe('forkCurrentSessionWith', () => {
       current: () => cur,
       commit,
     })
-    expect(out).toEqual({ newId: 'z', copied: false })
+    expect(out).toEqual({ newId: 'z', copied: false, stale: true })
     expect(commit).not.toHaveBeenCalled()
   })
 
@@ -40,5 +40,22 @@ describe('forkCurrentSessionWith', () => {
     await expect(
       forkCurrentSessionWith({ ...base, fork: () => Promise.reject(new Error('x')) }),
     ).rejects.toThrow('x')
+  })
+
+  it('does not adopt the copy when a new turn started on the same session meanwhile', async () => {
+    let epoch = 0
+    const commit = vi.fn()
+    const out = await forkCurrentSessionWith({
+      newId: () => 'b',
+      fork: () => {
+        epoch += 1
+        return Promise.resolve({ newId: 'b', copied: true })
+      },
+      current: () => 'a',
+      epoch: () => epoch,
+      commit,
+    })
+    expect(out).toEqual({ newId: 'a', copied: false, stale: true })
+    expect(commit).not.toHaveBeenCalled()
   })
 })

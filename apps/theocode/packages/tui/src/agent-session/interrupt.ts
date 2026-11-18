@@ -1,7 +1,10 @@
+import type { ForkResult } from '../persistence/fork-session.js'
+
 export interface InterruptDeps {
   abort: () => void
   forkSession: () =>
-    { newId: string; copied: boolean } | Promise<{ newId: string; copied: boolean }>
+    | { newId: string; copied: boolean }
+    | Promise<{ newId: string; copied: boolean }>
   hasActiveTurn: () => boolean
   hasPendingApproval: () => boolean
   onForkFailure: (error: unknown) => void
@@ -9,23 +12,28 @@ export interface InterruptDeps {
   onInterrupted: () => void
 }
 
-export function makeInterruptTurn(deps: InterruptDeps): () => void {
-  // One fork at a time: a second Esc while the copy is pending must not start another.
-  let forking = false
+/**
+ * `inFlight` is owned by the caller so it outlives this closure: the TUI rebuilds the handler on
+ * every render, and a per-closure flag would reset while a fork is still copying.
+ */
+export function makeInterruptTurn(
+  deps: InterruptDeps,
+  inFlight: { current: boolean } = { current: false },
+): () => void {
   return () => {
     if (deps.hasPendingApproval()) return
     if (!deps.hasActiveTurn()) return
     deps.abort()
     deps.onInterrupted()
-    if (forking) return
-    forking = true
+    if (inFlight.current) return
+    inFlight.current = true
     void (async () => {
       try {
         await deps.forkSession()
       } catch (e) {
         deps.onForkFailure(e)
       } finally {
-        forking = false
+        inFlight.current = false
       }
     })()
   }

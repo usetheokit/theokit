@@ -12,6 +12,7 @@ import { forkSession } from '@theocode/agent/session'
 import { createChatTransport } from './chat-transport.js'
 import { credential } from './credential-helpers.js'
 import { loadCustomCommands } from '../commands/index.js'
+import type { ForkResult } from '../persistence/fork-session.js'
 import { forkCurrentSessionWith } from '../persistence/index.js'
 import { createTuiSession, type TuiSession } from './tui-session.js'
 import { persistSessionId } from '../persistence/index.js'
@@ -27,7 +28,7 @@ export interface TuiRoot {
   readonly customCommands: ReturnType<typeof loadCustomCommands>
   readonly customCommandNames: ReadonlySet<string>
   readonly resetSession: () => void
-  readonly sessionFork: () => Promise<{ newId: string; copied: boolean }>
+  readonly sessionFork: () => Promise<ForkResult>
   readonly pointToSession: (id: string) => void
   /** B-055 — install the surface's veto renderer; queued vetoes are replayed into it. */
   readonly onHookVeto: (listen: (veto: { tool: string; reason: string }) => void) => void
@@ -93,10 +94,15 @@ function build(): TuiRoot {
 
   const vetoRelay = createVetoRelay()
 
+  let turnEpoch = 0
   const transport = createChatTransport({
     onHookVeto: vetoRelay.emit,
     getEffort: () => session.effort(),
-    getSessionId: () => session.session(),
+    getSessionId: () => {
+      // Read once per turn: a turn starting invalidates any fork still copying the transcript.
+      turnEpoch += 1
+      return session.session()
+    },
     getSessionPty: () => ptyOwner,
     takePendingImages: () => session.takeImages(),
     takePendingModel: () => session.takeModel(),
@@ -129,6 +135,7 @@ function build(): TuiRoot {
         newId: () => `tui-${randomUUID()}`,
         fork: (from, to) => forkSession(from, to),
         current: () => session.session(),
+        epoch: () => turnEpoch,
         commit: (id) => {
           session.setSession(id)
           void persistSessionId(sessionPointer, id)

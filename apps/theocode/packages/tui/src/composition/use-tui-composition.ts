@@ -65,7 +65,7 @@ function useConversationState(s: ReturnType<typeof useTuiSession>) {
   }
 }
 
-function turnInterrupt(d: {
+export function turnInterrupt(d: {
   agent: { abort: () => void; thread: Parameters<typeof lastMessageId>[0] }
   markInterrupted: (id: string | undefined) => void
   streaming: boolean
@@ -74,23 +74,28 @@ function turnInterrupt(d: {
   screen: { setToast: ReturnType<typeof useScreenState>['setToast'] }
 }) {
   const { agent, streaming, pendingApproval, forkCurrentSession, screen, markInterrupted } = d
-  const interruptTurn = makeInterruptTurn({
-    abort: () => {
-      agent.abort()
+  // A ref, not closure state: `makeInterruptTurn` runs again on every render.
+  const forkInFlight = useRef(false)
+  const interruptTurn = makeInterruptTurn(
+    {
+      abort: () => {
+        agent.abort()
+      },
+      forkSession: forkCurrentSession,
+      onInterrupted: () => {
+        markInterrupted(lastMessageId(agent.thread))
+      },
+      hasActiveTurn: () => streaming,
+      hasPendingApproval: () => pendingApproval !== undefined && pendingApproval !== null,
+      onForkFailure: (e) => {
+        screen.setToast({
+          message: `Interrupt: fork failed — ${(e as Error).message}`,
+          variant: 'error',
+        })
+      },
     },
-    forkSession: forkCurrentSession,
-    onInterrupted: () => {
-      markInterrupted(lastMessageId(agent.thread))
-    },
-    hasActiveTurn: () => streaming,
-    hasPendingApproval: () => pendingApproval !== undefined && pendingApproval !== null,
-    onForkFailure: (e) => {
-      screen.setToast({
-        message: `Interrupt: fork failed — ${(e as Error).message}`,
-        variant: 'error',
-      })
-    },
-  })
+    forkInFlight,
+  )
 
   return interruptTurn
 }

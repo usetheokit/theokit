@@ -231,6 +231,18 @@ describe('interpretCommand — the remaining groups claim their own', () => {
     )
   })
 
+  it('test_a_stale_fork_is_reported_as_not_forked', async () => {
+    const h = harness()
+    ;(h.cap as { forkCurrentSession: unknown }).forkCurrentSession = vi.fn(() =>
+      Promise.resolve({ newId: 'sess-1', copied: false, stale: true }),
+    )
+    await interpretCommand({ kind: 'fork' } as CommandAction, '', h.cap)
+    expect(h.setToast).toHaveBeenCalledOnce()
+    const toast = h.setToast.mock.calls[0]?.[0] as { message: string; variant: string }
+    expect(toast.message).toMatch(/cancelled/i)
+    expect(toast.message).not.toMatch(/Forked/)
+  })
+
   it('test_listSkills_reaches_the_transcript_group', () => {
     const h = run({ kind: 'listSkills' } as CommandAction)
     expect(h.setPanel).toHaveBeenCalled()
