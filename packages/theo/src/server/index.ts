@@ -227,7 +227,7 @@ export {
 } from '@theokit/agents/config'
 export type { ContextPressure, ContextPressureThresholds } from '@theokit/agents/config'
 
-export { loadEnv, _resetEnvCache } from '../config/load-env.js'
+export { loadEnv } from '../config/load-env.js'
 export type { LoadEnvOptions, LoadEnvResult } from '../config/load-env-types.js'
 
 // Wave 2 — Polyglot services orchestration types (types only — runtime in services/)
