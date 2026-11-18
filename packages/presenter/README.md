@@ -24,7 +24,13 @@ format — so no surface leaks into the contract.
 pnpm add @theokit/presenter
 ```
 
-Peers: `@theokit/sdk` and `zod`.
+Peers (`@theokit/sdk` and `zod`) are optional. What each entry needs:
+
+- `@theokit/presenter` (root): neither at runtime.
+- `@theokit/presenter/wire`: `zod`.
+- The `.d.ts` files reference types from both packages, so a TypeScript consumer without them needs `skipLibCheck` (or installs them as devDependencies).
+
+New root exports must stay free of runtime imports of either peer; `tests/root-entry-has-no-runtime-peers.test.ts` pins it.
 
 ## The canonical event
 
@@ -92,6 +98,10 @@ Lookup is exact by design. A name that is not in the table gives `undefined`, ne
 - The SDK runtime: an object `{stdout, stderr, exitCode}`.
 
 When both exit-code spellings are present and differ, `exitCode` wins. A missing exit code stays `undefined`, never 0. `{ok: false, error}` reads as `error` (`tool_failed` when absent, `stderr` as `detail`); `{ok: true, diff}` and a raw unified diff string read as `diff`; anything else is `text`.
+
+## Pending approvals
+
+`pendingApprovals(messages)` returns every outstanding approval across wire messages, in order, as `PendingApproval { approvalId, toolCallId, toolName, input, question?, timeoutMs? }`. With nothing outstanding it returns one shared empty array. `readPendingApproval(part)` reads a single part. A part in `approval-requested` without a string `approval.id` is skipped, never settled by its `toolCallId`, because `approve()` could not settle it.
 
 ## Subpaths
 

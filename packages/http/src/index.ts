@@ -3,6 +3,7 @@ export * from './decorators/index.js'
 export * from './metadata/index.js'
 export * from './bridge/index.js'
 export * from './exceptions/index.js'
+export { readCappedFormData, type ReadCappedFormDataOptions } from './body/read-capped-form-data.js'
 export { TheoApp, type TheoAppOptions, type ReadinessCheck } from './app.js'
 export {
   createTypedClient,

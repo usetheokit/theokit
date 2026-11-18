@@ -18,6 +18,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Changed
 - **`sessions gc` now plans with `planTranscriptGC` / `runTranscriptGC` from `@theokit/agents/session`.** The local planner (`gc/per-session.ts`) is gone. `--keep-last` or `--max-age-days` below 1 is refused with the framework's `GCFloorError` message instead of a `RangeError` (or, for `--keep-last 0`, accepted). The newest session, a session with a writer lease, the session `<cwd>/.theokit/tui-session` names and registered sessions are never collected. The report no longer prints `pointer=`/`most-recent=`/`registry|orphan`, and `--json` drops `pointer` and `mostRecent` and adds `keptReasons`. (#1918)
+- **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)
 
 ### Fixed
 - **`doctor` now reports the wiring `buildChatAgent` publishes.** The build was not awaited, so the MCP, skills, hooks and AGENTS.md rows could describe an empty placeholder, and a build failure became an unhandled rejection. It is awaited, and a failure is a failed `wiring` check. (#1894)
