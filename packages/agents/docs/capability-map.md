@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1233 export(s) across 25 entry point(s).
+1240 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -96,12 +96,14 @@ Measured against `@theokit/sdk@5.17.0`.
 | `encodeAcpMessage` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `estimateTokens` | value |
+| `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
 | `extractToolUses` | value |
 | `FieldCapability` | value |
 | `flushPendingToolResults` | value |
 | `foldLayers` | value |
 | `foldTurnLifecycle` | value |
+| `foreignSurfaceInventory` | value |
 | `formatGoalEvent` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
@@ -314,6 +316,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ErrorMetadata` | type |
 | `FileEditEvent` | type |
 | `FinalizedDraft` | type |
+| `ForeignSurfaceEntry` | type |
 | `GatedCompatSource` | type |
 | `GatedSettingSource` | type |
 | `GoalEvent` | type |
@@ -493,8 +496,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationError` | value |
 | `DelegationTimeoutError` | value |
 | `ERROR_CODE_DATA_PART` | value |
+| `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
 | `flushPendingToolResults` | value |
+| `foreignSurfaceInventory` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
 | `isAgentContext` | value |
@@ -574,6 +579,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `EphemeralAgent` | type |
 | `ErrorEvent` | type |
 | `FileEditEvent` | type |
+| `ForeignSurfaceEntry` | type |
 | `GatedCompatSource` | type |
 | `GatedSettingSource` | type |
 | `HookApprovalGate` | type |
@@ -838,6 +844,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `AgentMemoryError` | value |
+| `applyOutputStyle` | value |
 | `applySubagentMemory` | value |
 | `assertBootstrapped` | value |
 | `blockAppliesTo` | value |
