@@ -114,7 +114,33 @@ export const GET = route()
 | `./client/core` | The framework-agnostic client (no React) |
 | `./react-query` | The TanStack Query adapter over `theoFetch` |
 | `./vite-plugin` | The plugin that makes all of the above work |
+| `./testing` | `startTestServer`: boot the app as a real process from a test |
 | `./boot`, `./adapters/web-shim`, `./adapters/ws-shim` | Runtime shims |
+
+## Testing
+
+`theokit/testing` starts the app's own `theokit dev` (or `theokit start`) on a free port and resolves
+once `/__theo/ready` answers. No stdout parsing, no `npx`, no hand-rolled process-group kill.
+
+```ts
+import { afterAll, beforeAll, expect, it } from 'vitest'
+import { startTestServer, type TestServer } from 'theokit/testing'
+
+let server: TestServer
+beforeAll(async () => {
+  server = await startTestServer({ cwd: process.cwd() }) // mode: 'dev' by default
+})
+afterAll(async () => {
+  await server.close()
+})
+
+it('is healthy', async () => {
+  expect((await fetch(`${server.origin}/__theo/health`)).status).toBe(200)
+})
+```
+
+If the child exits or the deadline (`timeoutMs`, default 60 s) passes, `startTestServer` throws
+`TestServerBootError` with the child's output. `mode: 'start'` expects a prior `theokit build`.
 
 ## Storage
 

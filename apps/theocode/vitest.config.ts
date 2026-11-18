@@ -54,21 +54,10 @@ export default defineConfig({
      * here, failing every plan. The choice was never floor-vs-no-floor; it was our number vs a
      * library's.
      *
-     * So a floor now exists, in `.claude/rules/code-quality-thresholds.txt` as
-     * `coverage.min_percent`, set to EXACTLY the measured total with no slack. The slack is what
-     * B-063's sentence was about: it is what permits regression while reading as a standard. With
-     * none, a change taken through `/implement` that lowers total coverage fails. That is a
-     * ratchet, not a decoration.
-     *
-     * TWO LIMITS, because that path does not exist in a fresh clone. `.claude/` is gitignored, so
-     * the number above binds a checkout that installed the kit, and CI runs `pnpm test` without
-     * coverage. What DOES travel is `DECLARED_FLOOR` in `tools/check-coverage-floor.mjs`: the same
-     * number, tracked, checked against the gitignored one on every `pnpm lint`. Lowering the floor
-     * therefore means editing a versioned file, which is the point — before that constant existed,
-     * a downward edit appeared in no diff at all.
-     *
-     * It is deliberately NOT here. This file configures the reporter; the gate that reads the
-     * report is the kit's, and one number in one place is the whole point.
+     * So a floor now exists: `coverage.thresholds.lines` below, set to 62.03 — the minimum over the
+     * checkout space measured then. `npm run test:coverage` fails under it, and lowering it is an edit
+     * to this versioned file. It replaces the kit-backed `check-coverage-floor.mjs`, retired with the
+     * discontinued squad kit (#1919). Measured at that change: lines 77.88% (3719/4775), well above it.
      *
      * MEASURED 2026-09-09 at B-161's close, 1534 tests: lines 59.03% (2653/4494), IN A CLEAN CLONE
      * AND IN THIS WORKING TREE ALIKE. That equality is the result, and the qualifier below is the
@@ -141,10 +130,8 @@ export default defineConfig({
      * the next item, and 62.03% is a ratchet against the clean reading, never a target.
      *
      * WHAT `include` LEAVES OUT, AND WHY IT IS A DECISION RATHER THAN AN OVERSIGHT. The glob is
-     * `packages/*\/src`, so the twelve checkers under `tools/` — the `npm run lint` chain and two of
-     * the six required status checks — contribute nothing to this number. That includes
-     * `check-coverage-floor.mjs` itself: the gate guarding coverage sits outside the thing it
-     * guards.
+     * `packages/*\/src`, so the checkers under `tools/` — the `npm run lint` chain and two of
+     * the six required status checks — contribute nothing to this number.
      *
      * They ARE tested — eleven `.mjs` test files run in this suite and pass. What did not exist was
      * a number. Measured 2026-09-10 over `tools/**\/*.mjs` with the same provider: lines 43.72%
@@ -165,6 +152,7 @@ export default defineConfig({
       reporter: ['text-summary', 'json-summary'],
       include: ['packages/*/src/**/*.{ts,tsx}'],
       exclude: ['**/*.test.{ts,tsx}', '**/*.d.ts'],
+      thresholds: { lines: 62.03 },
     },
   },
 })
