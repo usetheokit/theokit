@@ -16,6 +16,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import type * as SdkModule from '@theokit/sdk'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
@@ -138,9 +139,9 @@ describe('read advertised — skill_read serves what the <skills> block lists', 
   }
 
   async function readThroughRealTool(name: string): Promise<string> {
-    const real = await vi.importActual<typeof import('@theokit/sdk')>('@theokit/sdk')
+    const real = await vi.importActual<typeof SdkModule>('@theokit/sdk')
     const tool = real.SkillReadTool.create(h.readSkills as never) as unknown as {
-      handler: (args: { name: string }, ctx?: unknown) => Promise<unknown> | unknown
+      handler: (args: { name: string }, ctx?: unknown) => unknown
     }
     return String(await tool.handler({ name }, {}))
   }

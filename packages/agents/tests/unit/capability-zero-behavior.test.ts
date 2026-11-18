@@ -18,6 +18,7 @@ import {
   ProjectContextCapability,
   RunContextCapability,
   SettingSourcesCapability,
+  SkillsReadCapability,
   SkillsResolverCapability,
   HookApprovalCapability,
   WithheldBuiltinToolsCapability,
@@ -92,6 +93,8 @@ const WAIST_FIELDS = [
   'subagents',
   // #1912 — `WithheldBuiltinToolsCapability`, from `AgentBuilder.withholdBuiltinTools()`.
   'withheldBuiltinTools',
+  // #1855 — `skillsRead`, from `AgentBuilder.skills(selection, { read })`.
+  'skillsRead',
 ] as const satisfies readonly WaistField[]
 
 /**
@@ -253,6 +256,7 @@ describe('capability path — waist coverage is complete', () => {
       new PluginsCapability([] as never),
       new RunContextCapability({} as never),
       new SkillsResolverCapability((() => []) as never),
+      new SkillsReadCapability('advertised'),
     ])
     const expressible = new Set(Object.keys(everything).filter((k) => k !== 'provenance'))
     const gap = WAIST_FIELDS.filter((f) => !expressible.has(f))
