@@ -226,3 +226,71 @@ describe('askUserVia — the adapter the question tool consumes', () => {
     )
   })
 })
+
+describe('ask / pending and onChange', () => {
+  const setup = () => {
+    const bridge = createAskBridge()
+    let seen: PendingQuestion | undefined
+    bridge.setListener('t', (q) => {
+      seen = q
+    })
+    return { bridge, question: () => seen }
+  }
+
+  it('pending returns the question while it is open and undefined after answer', async () => {
+    const { bridge, question } = setup()
+    expect(bridge.pending('t')).toBeUndefined()
+    const p = bridge.ask('t', 'why?')
+    expect(bridge.pending('t')).toEqual({ id: question()?.id, threadId: 't', question: 'why?' })
+    bridge.answer(question()?.id ?? '', 'because')
+    await p
+    expect(bridge.pending('t')).toBeUndefined()
+  })
+
+  it('pending is undefined after abandon', async () => {
+    const { bridge } = setup()
+    const p = bridge.ask('t', 'q').catch((e: unknown) => e)
+    bridge.abandon('t')
+    expect(await p).toBeInstanceOf(QuestionAbandonedError)
+    expect(bridge.pending('t')).toBeUndefined()
+  })
+
+  it('onChange fires after ask, answer and abandon with the thread id', async () => {
+    const { bridge, question } = setup()
+    const log: (string | undefined)[] = []
+    bridge.onChange((threadId) => log.push(`${threadId}:${bridge.pending(threadId)?.question}`))
+    const p = bridge.ask('t', 'a')
+    bridge.answer(question()?.id ?? '', 'x')
+    await p
+    const p2 = bridge.ask('t', 'b').catch(() => undefined)
+    bridge.abandon('t')
+    await p2
+    expect(log).toEqual(['t:a', 't:undefined', 't:b', 't:undefined'])
+  })
+
+  it('a rejected concurrent ask does not change pending', async () => {
+    const { bridge } = setup()
+    const first = bridge.ask('t', 'first')
+    const onChange = vi.fn()
+    bridge.onChange(onChange)
+    await expect(bridge.ask('t', 'second')).rejects.toBeInstanceOf(ConcurrentQuestionError)
+    expect(bridge.pending('t')?.question).toBe('first')
+    expect(onChange).not.toHaveBeenCalled()
+    bridge.abandon('t')
+    await first.catch(() => undefined)
+  })
+
+  it('an onChange disposer stops further calls', async () => {
+    const { bridge } = setup()
+    const a = vi.fn()
+    const b = vi.fn()
+    const disposeA = bridge.onChange(a)
+    bridge.onChange(b)
+    disposeA()
+    const p = bridge.ask('t', 'q').catch(() => undefined)
+    bridge.abandon('t')
+    await p
+    expect(a).not.toHaveBeenCalled()
+    expect(b).toHaveBeenCalledTimes(2)
+  })
+})

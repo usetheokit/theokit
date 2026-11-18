@@ -116,10 +116,19 @@ export interface AskBridge {
     listener: (question: PendingQuestion) => void,
     options?: ListenerOptions,
   ): DisposeListener
+  /** The question pending on this thread, or undefined. A read, never a second listener. */
+  pending(threadId: string): PendingQuestion | undefined
+  /**
+   * Called after any change to the pending set: a question asked, answered, abandoned or failed.
+   * Any number of observers; each call returns its own disposer. Observers run after the state
+   * changed, cannot settle anything, and a throwing observer does not affect the others.
+   */
+  onChange(listener: (threadId: string) => void): DisposeListener
 }
 
 interface Pending {
   readonly id: string
+  readonly question: string
   readonly settle: (answer: string) => void
   readonly fail: (error: Error) => void
 }
@@ -141,9 +150,22 @@ export function createAskBridge(): AskBridge {
   const pendingById = new Map<string, Pending & { threadId: string }>()
   const listeners = new Map<string, Listener>()
 
+  const observers = new Set<(threadId: string) => void>()
+
+  const emit = (threadId: string): void => {
+    for (const observer of [...observers]) {
+      try {
+        observer(threadId)
+      } catch {
+        // An observer is a read-side convenience; it must not break settlement or its siblings.
+      }
+    }
+  }
+
   const forget = (threadId: string, id: string): void => {
     pendingByThread.delete(threadId)
     pendingById.delete(id)
+    emit(threadId)
   }
 
   return {
@@ -164,6 +186,7 @@ export function createAskBridge(): AskBridge {
       const promise = new Promise<string>((resolve, reject) => {
         const entry: Pending = {
           id,
+          question,
           settle: (answer) => {
             forget(threadId, id)
             resolve(answer)
@@ -177,6 +200,7 @@ export function createAskBridge(): AskBridge {
         pendingById.set(id, { ...entry, threadId })
       })
 
+      emit(threadId)
       listener.notify({ id, threadId, question })
       return promise
     },
@@ -212,6 +236,20 @@ export function createAskBridge(): AskBridge {
         // Only remove OUR listener: a disposer called after another surface took the slot must not
         // detach that one. Calling it twice is a no-op by the same check.
         if (listeners.get(threadId) === entry) listeners.delete(threadId)
+      }
+    },
+
+    pending(threadId) {
+      const entry = pendingByThread.get(threadId)
+      return entry === undefined ? undefined : { id: entry.id, threadId, question: entry.question }
+    },
+
+    onChange(listener) {
+      // Wrap so registering the same function twice yields two independent disposers.
+      const observer = (threadId: string): void => listener(threadId)
+      observers.add(observer)
+      return () => {
+        observers.delete(observer)
       }
     },
   }
