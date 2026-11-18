@@ -14,6 +14,8 @@ export interface ForkGate {
   running: boolean
   /** An interrupt arrived while a fork was copying: run one more fork once it settles. */
   queued: boolean
+  /** Latest render's view of whether a turn is streaming; refreshed on every handler build. */
+  turnActive?: () => boolean
 }
 
 export const newForkGate = (): ForkGate => ({ running: false, queued: false })
@@ -24,10 +26,20 @@ export const newForkGate = (): ForkGate => ({ running: false, queued: false })
  * stale by the very turn being interrupted, and the later turn still deserves its own fork.
  */
 export function makeInterruptTurn(deps: InterruptDeps, gate: ForkGate = newForkGate()): () => void {
+  gate.turnActive = deps.hasActiveTurn
   const drain = async (): Promise<void> => {
     gate.running = true
+    let ran = false
     try {
       do {
+        // A queued fork follows an interrupt of an earlier turn. If a newer turn is live by now it
+        // would be written to the old session while the copy is adopted, so that turn's own
+        // interrupt is the one to fork.
+        if (ran && gate.turnActive?.() === true) {
+          gate.queued = false
+          break
+        }
+        ran = true
         gate.queued = false
         try {
           await deps.forkSession()

@@ -11,7 +11,7 @@ import { render } from 'ink-testing-library'
 import { describe, expect, it, vi } from 'vitest'
 
 import { useTurnInterrupt } from '../../src/composition/use-tui-composition.js'
-import { makeInterruptTurn } from '../../src/agent-session/interrupt.js'
+import { makeInterruptTurn, newForkGate } from '../../src/agent-session/interrupt.js'
 import { INTERRUPTED_TEXT, lastMessageId } from '../../src/rendering/interrupt-marks.js'
 import { useTimeline } from '../../src/rendering/use-timeline.js'
 import { waitFor } from '../helpers/wait-for.js'
@@ -110,7 +110,7 @@ describe('the interrupt records which message it cut', () => {
 
   it('test_the_in_flight_guard_survives_a_rebuilt_handler', () => {
     // The TUI rebuilds the handler on every render; the guard must be shared between the builds.
-    const inFlight = { current: false }
+    const inFlight = newForkGate()
     const d = deps({ forkSession: vi.fn(() => new Promise<never>(() => undefined)) })
     makeInterruptTurn(d, inFlight)()
     makeInterruptTurn(d, inFlight)()

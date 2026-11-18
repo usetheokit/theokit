@@ -20,13 +20,7 @@ export interface ComposerCommands {
   readonly handleSubmit: (text: string) => void
 }
 
-const TURN_STARTING: ReadonlySet<string> = new Set([
-  'send',
-  'retry',
-  'custom',
-  'initAgents',
-  'review',
-])
+const TURN_STARTING: ReadonlySet<string> = new Set(['send', 'retry', 'custom', 'initAgents'])
 
 export function useComposerCommands(deps: ComposerDeps): ComposerCommands {
   const startGoal: CommandCapabilities['startGoal'] = (objective, base) => {
