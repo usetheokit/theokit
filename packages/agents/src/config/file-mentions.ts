@@ -85,17 +85,19 @@ function locate(ref: string, opts: FileMentionOptions): { abs: string } | { reas
   }
 }
 
-type ReadOutcome = { text: string; reason?: undefined } | { text?: undefined; reason: SkipReason }
+type ReadOutcome = { ok: true; text: string } | { ok: false; reason: SkipReason }
 
 /** The file's text, or the reason it was not readable. Unexpected errors are rethrown. */
 function readMention(read: (abs: string) => string | undefined, abs: string): ReadOutcome {
   try {
     const text = read(abs)
-    return text === undefined ? { reason: 'not-found' } : { text }
+    return text === undefined ? { ok: false, reason: 'not-found' } : { ok: true, text }
   } catch (error) {
     const code = codeOf(error)
-    if (code === 'ENOENT' || code === 'ENOTDIR') return { reason: 'not-found' }
-    if (code === 'EACCES' || code === 'EPERM' || code === 'EISDIR') return { reason: 'unreadable' }
+    if (code === 'ENOENT' || code === 'ENOTDIR') return { ok: false, reason: 'not-found' }
+    if (code === 'EACCES' || code === 'EPERM' || code === 'EISDIR') {
+      return { ok: false, reason: 'unreadable' }
+    }
     throw error
   }
 }
@@ -124,7 +126,7 @@ export function resolveFileMentions(text: string, opts: FileMentionOptions): Res
       continue
     }
     const outcome = readMention(read, found.abs)
-    if (outcome.text === undefined) {
+    if (!outcome.ok) {
       skipped.push({ ref, reason: outcome.reason })
       continue
     }
