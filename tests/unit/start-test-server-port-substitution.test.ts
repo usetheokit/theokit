@@ -21,6 +21,7 @@ const h = vi.hoisted(() => ({
   connOwner: (_attempt: number, _call: number): number | undefined => 0,
   calls: 0,
   killed: [] as string[][],
+  taskkillFailures: 0,
   lsofFailure: undefined as { status: number; stderr: string } | undefined,
   /** HTTP status of the readiness probe, or undefined for a listener that does not speak HTTP. */
   status: (_port: number, _attempt: number): number | undefined => 200,
@@ -35,10 +36,13 @@ vi.mock('node:child_process', async () => {
       const rec = { pid, port: Number(args[args.indexOf('--port') + 1]), exited: false, emitter }
       h.children.push(rec)
       emitter.pid = pid
+      emitter.exitCode = null
+      emitter.signalCode = null
       emitter.stdout = new Emitter()
       emitter.stderr = new Emitter()
       emitter.kill = () => {
         rec.exited = true
+        emitter.exitCode = 1
         emitter.emit('exit', null, 'SIGTERM')
       }
       return emitter
@@ -47,8 +51,13 @@ vi.mock('node:child_process', async () => {
       if (cmd === 'taskkill') {
         h.killed.push(args)
         const rec = h.children.find((c) => String(c.pid) === args[1])
+        if (h.taskkillFailures > 0) {
+          h.taskkillFailures--
+          throw new Error('taskkill: access denied')
+        }
         if (rec !== undefined && !rec.exited) {
           rec.exited = true
+          ;(rec.emitter as { exitCode: number | null }).exitCode = 1
           ;(rec.emitter as EventEmitter).emit('exit', null, 'SIGKILL')
         }
         return ''
@@ -202,6 +211,7 @@ describe.each(['darwin', 'win32'] as const)('startTestServer substitution on %s'
     h.connOwner = () => 0
     h.lsofFailure = undefined
     h.killed = []
+    h.taskkillFailures = 0
   })
 
   afterEach(() => {
@@ -285,6 +295,32 @@ describe.each(['darwin', 'win32'] as const)('startTestServer substitution on %s'
     }
     expect(h.children[0]?.exited).toBe(true)
   })
+
+  it('does not accept a connection that outlives the listener the child gave up', async () => {
+    // The child answers, closes its listening socket, and a foreign process binds the port.
+    h.listeners = (_port, attempt) => (attempt === 1 && h.calls >= 1 ? [555] : [own(attempt)])
+    const server = await startTestServer({ cwd: app, timeoutMs: 20_000 })
+    expect(h.children).toHaveLength(2)
+    expect(h.children[0]?.exited).toBe(true)
+    await server.close()
+  }, 30_000)
+
+  it.runIf(platform === 'win32')(
+    'retries taskkill, and fails loudly when the tree cannot be ended',
+    async () => {
+      h.listeners = (_port, attempt) => [own(attempt)]
+      const server = await startTestServer({ cwd: app, timeoutMs: 5000 })
+      h.taskkillFailures = 1
+      await server.close()
+      expect(h.killed).toHaveLength(2) // the first call threw, the escalation ended the tree
+      expect(h.children[0]?.exited).toBe(true)
+
+      const second = await startTestServer({ cwd: app, timeoutMs: 5000 })
+      h.taskkillFailures = 99
+      await expect(second.close()).rejects.toThrow('could not end the process tree')
+    },
+    30_000,
+  )
 
   it('reports an lsof failure with status 1, not a readiness timeout', async () => {
     if (platform === 'win32') return

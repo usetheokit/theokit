@@ -343,7 +343,9 @@ const sleep = (ms: number): Promise<void> =>
   })
 
 function groupAlive(child: ChildProcess): boolean {
-  if (process.platform === 'win32' || child.pid === undefined) return false
+  if (child.pid === undefined) return false
+  // No process groups on Windows: the child's own liveness stands for its tree, which taskkill /T ends.
+  if (process.platform === 'win32') return child.exitCode === null && child.signalCode === null
   try {
     process.kill(-child.pid, 0)
     return true
@@ -365,15 +367,16 @@ async function groupGone(child: ChildProcess, ms: number): Promise<boolean> {
 function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
   try {
     if (process.platform === 'win32' && child.pid !== undefined) {
-      // No process groups: end the whole tree, synchronously, so no descendant outlives the child.
+      // End the whole tree, synchronously, so no descendant outlives the child. When taskkill fails
+      // the child is left alive (killing it alone would orphan the tree): close() retries it.
       try {
         runCommand('taskkill', ['/pid', String(child.pid), '/T', '/F'])
-        return
       } catch {
-        // taskkill failed: fall back to the child itself
+        // retried by close(); reported when it still fails
       }
+      return
     }
-    if (process.platform !== 'win32' && child.pid !== undefined) process.kill(-child.pid, signal)
+    if (child.pid !== undefined) process.kill(-child.pid, signal)
     else child.kill(signal)
   } catch {
     // already gone
@@ -437,7 +440,9 @@ async function bootOnce(
         // The leader can exit before its descendants: wait for the whole group, then escalate.
         if (!(await groupGone(child, GRACE_MS))) {
           signalGroup(child, 'SIGKILL')
-          await groupGone(child, GRACE_MS)
+          if (!(await groupGone(child, GRACE_MS))) {
+            throw new Error(`could not end the process tree of pid ${String(child.pid)}`)
+          }
         }
       }
       return ended
@@ -520,7 +525,8 @@ async function bootOnce(
               PortSubstitutedError,
             )
           }
-          accepted = conn.owner === 'own'
+          // The connection may outlive the listening socket: the listener must still be the child's.
+          accepted = conn.owner === 'own' && (await childListens())?.owner === 'own'
         }
       } finally {
         answer.release()
