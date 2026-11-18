@@ -26,6 +26,7 @@ import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk
 import { type SdkMessage } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
+import { BUILD_WIRED_SKILL_READERS, reportWiring } from './compiled-wiring.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
 import type { SdkRunUsage } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
@@ -477,7 +478,9 @@ function wireInlineSkillRead(
     rt.defineSkillReadTool !== undefined &&
     !compiledTools.some((t) => t.name === 'skill_read')
   ) {
-    sdkTools.push(rt.defineSkillReadTool(inlineSkills))
+    const reader = rt.defineSkillReadTool(inlineSkills)
+    if (typeof reader === 'object' && reader !== null) BUILD_WIRED_SKILL_READERS.add(reader)
+    sdkTools.push(reader)
   }
 }
 
@@ -744,13 +747,15 @@ async function* streamSdkAgent(
   const { m8, extra } = resolveCreateOptions(compiled, overrides, opts.usageMeter)
 
   // V4-N.1: declared before try so `finally` can dispose even when `run.wait()` rejects.
-  const agent = await Agent.getOrCreate(sessionId, {
+  const createOptions = {
     apiKey,
     model: buildModelSelection(model, reasoningEffort),
     tools: sdkTools,
     ...m8,
     ...extra,
-  })
+  }
+  reportWiring(compiled.onWired, createOptions)
+  const agent = await Agent.getOrCreate(sessionId, createOptions)
   try {
     // theokit#140 — ONE ordered source. The `onDelta` sink + merge queue are gone: the SDK's
     // `run.events()` appends messages and deltas as the loop reports them, so arrival order IS
@@ -927,14 +932,16 @@ export function toAgentFactory(
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
     applyPosture(extra, m8, opts.approvals, compiled.hitl)
-    const agent = await rt.Agent.getOrCreate(sessionId, {
+    const createOptions = {
       apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),
       tools: sdkTools,
       ...m8,
       ...extra,
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
-    })
+    }
+    reportWiring(compiled.onWired, createOptions)
+    const agent = await rt.Agent.getOrCreate(sessionId, createOptions)
     return withGuardrails(
       withStepCeiling(agent as unknown as SdkAgentHandle, compiled.maxIterations),
       compiled.guardrails,

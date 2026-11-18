@@ -32,6 +32,7 @@ import type {
 } from '../types.js'
 
 import type { CodePlugin } from './code-plugins.js'
+import type { CompiledWiring } from './compiled-wiring.js'
 import type { SubagentAgentDefinition } from './define-agent.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
 import type { GatedCompatSource, GatedSettingSource } from './setting-sources-gate.js'
@@ -397,4 +398,6 @@ export interface CompiledAgentOptions {
    * before the SDK runs. Not consumed by the SDK directly (it reads `skills`). Absent ⇒ no resolver.
    */
   skillsResolver?: SkillsSelection
+  /** Reports the compiled wiring once per `Agent.create`; never handed to the SDK. */
+  onWired?: (wiring: CompiledWiring) => void
 }

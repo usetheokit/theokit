@@ -181,6 +181,23 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
+## Reporting what an agent was built with
+
+`onWired(listener)` on `AgentBuilder` (and `onWired` in `defineAgent`) reports a `CompiledWiring` once per `Agent.create`, after the options are final. Every field is read from those options, not from a second copy of the inputs:
+
+```ts
+AgentBuilder.create()
+  .model('provider/model')
+  .onWired((w) => console.log(w.tools, w.skills.listed, w.skills.readable, w.mcpServers))
+```
+
+- `tools`: tool names handed to `Agent.create`, with `withheldBuiltinTools` removed. SDK default builtins are not enumerated.
+- `skills.listed` / `skills.readable`: enabled and inline skill names, and the inline skills a `skill_read` wired by this build serves. Skills the SDK finds on disk are not enumerated, and a `skill_read` you supply yourself reports none as readable.
+- `mcpServers`, `subagents`, `settingSources` (`project` / `user`), `withheldBuiltinTools`.
+- `hooks`: events registered through `.hooks()`. Hooks inside your own plugins are opaque and not listed.
+
+A listener that throws is reported with `console.warn` and does not fail the build. `recordWiring` is unchanged; feed it from `CompiledWiring` if you want trust suppression.
+
 ## Withholding SDK builtin tools
 
 `AgentBuilder.withholdBuiltinTools(['shell'])` keeps the named SDK builtin tools (`shell`,

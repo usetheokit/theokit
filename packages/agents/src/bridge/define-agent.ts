@@ -27,6 +27,7 @@ import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { CodePlugin } from './code-plugins.js'
+import { type CompiledWiring, WIRED_HOOKS } from './compiled-wiring.js'
 import type { HookHandlers } from './hook-handlers.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
 import {
@@ -201,6 +202,11 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * under this name — the plugin is the TRANSPORT, this is the contract callers write against.
    */
   hooks?: HookHandlers | Readonly<Record<string, unknown>>
+  /**
+   * Called once per `Agent.create`, after the options are final, with the wiring read from those
+   * options. A throwing listener is warned about and does not fail the build.
+   */
+  onWired?: (wiring: CompiledWiring) => void
   /**
    * MCP servers available to the agent — the builder-chain equivalent of the `@MCP` class
    * decorator. Each key is a server name; the value is the server configuration. Forwarded
@@ -381,6 +387,7 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // `defineAgent({ hooks })` cannot type-check and silently no-op. A lifecycle hook that is
     // declared but never registered is a security gate that does not gate.
     ...compileHooksAndPlugins(def),
+    ...(def.onWired !== undefined ? { onWired: def.onWired } : {}),
     // MCP — builder/`defineAgent` servers converge on the same `mcpServers` field the `@MCP`
     // decorator path populates; the SDK adapter forwards it to `Agent.create({ mcpServers })`.
     ...(def.mcpServers !== undefined ? { mcpServers: def.mcpServers } : {}),
@@ -414,6 +421,7 @@ function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly Code
     name: 'theokit-builder-hooks',
     version: '1.0.0',
     kind: 'general' as const,
+    [WIRED_HOOKS]: entries.map(([event]) => ({ event })),
     register(ctx: { on: (hook: string, handler: (c: never) => unknown) => void }): void {
       for (const [hookName, handler] of entries) {
         ctx.on(hookName, handler as (c: never) => unknown)
