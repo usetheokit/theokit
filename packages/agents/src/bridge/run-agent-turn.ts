@@ -212,6 +212,7 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
       return cancelled()
     }
     // an iterator that threw or was abandoned mid-stream must not keep its resources
+    ended = true
     if (!drained) closeIterator(iterator)
     return { ok: false, code: 'turn_failed', reason: failure ?? reasonOf(err) }
   } finally {

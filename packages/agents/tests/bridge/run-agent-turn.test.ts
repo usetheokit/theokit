@@ -202,6 +202,38 @@ describe('runAgentTurn', () => {
     }
   })
 
+  it('emits no delta when closing the iterator after a failure calls onDelta synchronously', async () => {
+    const events: AgentStreamEvent[] = []
+    let onDelta: ((d: { update: unknown }) => void) | undefined
+    const iterator = {
+      next: async () => {
+        throw new Error('boom')
+      },
+      return: async () => {
+        onDelta?.({ update: { type: 'text-delta', text: 'late' } })
+        return { done: true as const, value: undefined }
+      },
+    }
+    const agent = {
+      agentId: 'a',
+      send: async (_m: string, opts?: Record<string, unknown>) => {
+        onDelta = opts?.onDelta as typeof onDelta
+        return {
+          wait: async () => ({ status: 'finished' }),
+          stream: () => ({ [Symbol.asyncIterator]: () => iterator }),
+        }
+      },
+    } as unknown as SdkAgentHandle
+    const outcome = await runAgentTurn({
+      agent,
+      message: 'hi',
+      runId: 'r',
+      emit: (e) => events.push(e),
+    })
+    expect(outcome).toMatchObject({ ok: false, code: 'turn_failed' })
+    expect(events).toEqual([])
+  })
+
   it('an already aborted signal cancels without sending', async () => {
     const controller = new AbortController()
     controller.abort()
