@@ -1,5 +1,17 @@
 # theo
 
+## 0.81.0
+
+### Minor Changes
+
+- 0c9c6dc: `theokit db` gains `studio` (with `--host`/`--port`), `check`, and `reset --force`, which runs `<serverDir>/db/reset.ts` with the same storage preload as `seed`.
+
+### Patch Changes
+
+- Updated dependencies [27de3e9]
+  - @theokit/presenter@0.13.0
+  - @theokit/agents@16.8.1
+
 ## 0.80.2
 
 ### Patch Changes
@@ -479,8 +491,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                  [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                  were found and every /api/agents/* route will 404.
+                                                    [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                    were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
