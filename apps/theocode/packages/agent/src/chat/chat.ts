@@ -711,6 +711,9 @@ function baseAgent(ctx: {
       // config object without the key made the whole expression `undefined` — which reads as "off"
       // to the SDK and as a type error to nobody, because the field is optional upstream. It cost a
       // test that asserted `false` and got `undefined`.
+      // #1913 — the SDK builtin `shell` is withheld from the declared set, so its schema is not re-sent
+      // on every round and the model cannot pick it. `withBuiltinShellVeto` stays as the backstop.
+      .withholdBuiltinTools(['shell'])
       .memory({
         enabled: posture.allows.memory && cfg.memory === true && memoryEnabledForSession(),
       })
