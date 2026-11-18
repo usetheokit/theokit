@@ -1,8 +1,8 @@
 # picomatch 4.0.7 with the fix for GHSA-fc5q-39xc-vjpf
 
-This is [picomatch](https://github.com/micromatch/picomatch) at tag `4.0.7` with one change, the fix
+This is [picomatch](https://github.com/micromatch/picomatch) at tag `4.0.7` with two changes: the fix
 proposed upstream in [micromatch/picomatch#266](https://github.com/micromatch/picomatch/pull/266)
-(commit `cad55d0`). The root `package.json` points every `picomatch` from 4.0.0 to 4.0.7 in this
+(commit `cad55d0`) in `lib/parse.js`, and a linear `removeBackslashes` in `lib/utils.js`. The root `package.json` points every `picomatch` from 4.0.0 to 4.0.7 in this
 repository at this copy (`pnpm.overrides`).
 
 ## Why
@@ -22,6 +22,14 @@ literal when it cannot be. `isMatch` against 29-character inputs that do not mat
 | `+(*a)`  | 89 s   | 23 ms     |
 | `*(*a)`  | 83 s   | 7.7 ms    |
 | `+(*)`   | 285 s  | 0.8 ms    |
+
+Once the code was in this repository, CodeQL flagged `removeBackslashes` (`js/polynomial-redos`): its
+regular expression rescans to the end of the string from every `[` that never closes, so
+`picomatch.scan('*' + '['.repeat(60000), { unescape: true })` took 6.2 s. The copy replaces it with a
+scan that returns the same string in linear time (5 ms there). It was compared with the regular
+expression on 2,000,000 random strings and on every string of up to 8 characters over
+`[`, `]`, `\`, `a` and a newline (488,281), with no difference. `REGEX_REMOVE_BACKSLASH` is still
+exported.
 
 Upstream's own suite passes here: 1,988 tests, against 1,983 on 4.0.7 (the five new ones come with the
 patch, as `test/options.maxExtglobRecursion.js` upstream). `packages/theo/tests/route-rules-extglob.test.ts`
