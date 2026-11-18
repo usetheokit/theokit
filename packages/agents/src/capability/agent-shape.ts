@@ -88,12 +88,13 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
  * a Set, so a throw means "not a Zod schema".
  */
 function isLiveZodSchema(schema: object): boolean {
-  // A JSON-Schema object can forge the trait Set, so also require the internals every live Zod
-  // schema owns: a `def` object and the `run` function Zod parses with.
-  const internals = (schema as { _zod?: { def?: unknown; run?: unknown } })._zod
-  if (typeof internals?.run !== 'function' || typeof internals.def !== 'object') return false
+  // A JSON-Schema object can forge the trait Set, `def` and `run`, but not an instance of its own
+  // constructor: Zod stamps `_zod.constr` with the class that built the schema. A plain object
+  // literal has none, so it is never mistaken for a live schema.
+  const constr = (schema as { _zod?: { constr?: unknown } })._zod?.constr
+  if (typeof constr !== 'function' || constr === Object) return false
   try {
-    return schema instanceof z.core.$ZodType
+    return schema instanceof constr && schema instanceof z.core.$ZodType
   } catch {
     return false
   }
