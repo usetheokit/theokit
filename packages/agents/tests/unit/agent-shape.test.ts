@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import * as zm from 'zod/mini'
 
 import { AgentBuilder, ContextualTool } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
@@ -117,6 +118,8 @@ describe('shapeToolsAsCustomTools', () => {
       Object.create({ type: 'object' }),
       { type: 'object', parse: () => 1 },
       { type: 'object', parse: () => 1, _def: {}, _zod: {} },
+      { type: 'object', _zod: { traits: {} } },
+      { type: 'object', _zod: { traits: new Set(['other']) } },
     ]) {
       const out = shapeToolsAsCustomTools(shapeOf(schema))
       expect(out.map((t) => t.name)).toEqual(['j'])
@@ -126,6 +129,11 @@ describe('shapeToolsAsCustomTools', () => {
 
   it('lowers a live Zod schema to JSON Schema instead of throwing', () => {
     const [tool] = shapeToolsAsCustomTools(shapeOf(z.object({ q: z.string() })))
+    expect(tool?.inputSchema).toMatchObject({ type: 'object' })
+  })
+
+  it('lowers a live Zod Mini schema like a classic one', () => {
+    const [tool] = shapeToolsAsCustomTools(shapeOf(zm.object({ q: zm.string() })))
     expect(tool?.inputSchema).toMatchObject({ type: 'object' })
   })
 

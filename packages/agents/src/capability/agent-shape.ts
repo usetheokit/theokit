@@ -81,6 +81,21 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
 }
 
 /**
+ * True for a live Zod schema, classic or Zod Mini (both carry the core `$ZodType` trait).
+ *
+ * `instanceof` asks Zod itself rather than the property names a JSON Schema may also carry. Zod's
+ * check reads `_zod.traits.has(...)`, which throws on an arbitrary object whose `_zod.traits` is not
+ * a Set, so a throw means "not a Zod schema".
+ */
+function isLiveZodSchema(schema: object): boolean {
+  try {
+    return schema instanceof z.core.$ZodType
+  } catch {
+    return false
+  }
+}
+
+/**
  * The shape's tools as the SDK `CustomTool` an app holds, with no cast at the call site.
  *
  * A tool whose `inputSchema` is a live Zod schema (decorator `@Tool({ input })`) is lowered through
@@ -96,8 +111,7 @@ export function shapeToolsAsCustomTools(shape: AgentShape): readonly CustomTool[
         `shapeToolsAsCustomTools: tool "${tool.name}" has no object inputSchema (a Zod schema or a JSON-Schema object is required)`,
       )
     }
-    // `instanceof` asks Zod itself, not the property names a JSON Schema may also carry.
-    if (schema instanceof z.ZodType) {
+    if (isLiveZodSchema(schema)) {
       return Tool.create({
         name: tool.name,
         description: tool.description,
