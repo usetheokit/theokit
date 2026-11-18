@@ -153,6 +153,18 @@ describe('public surface gate', () => {
     expect(at('aubY9WIa')).toEqual(at('Zz09_-xY'))
   })
 
+  it('keeps `types.d.ts` and `types-internal.d.ts` distinct, since only a hash suffix is stripped', () => {
+    const index = `import { Shared as A } from './types'\nimport { Shared as B } from './types-internal'\nexport type Out = [A, B]\n`
+    const files = {
+      'types.d.ts': 'export interface Shared { a: string }\n',
+      'types-internal.d.ts': 'export interface Shared { b: string }\n',
+    }
+    expect(Object.keys(surface(index, files).entries['.']?.internals ?? {})).toEqual([
+      'dist/types-internal.d.ts#Shared',
+      'dist/types.d.ts#Shared',
+    ])
+  })
+
   it('fails a stable value export turned into a type-only export', () => {
     const prev = surface('declare class K {}\nexport { K }\n')
     const next = surface('declare class K {}\nexport type { K }\n')

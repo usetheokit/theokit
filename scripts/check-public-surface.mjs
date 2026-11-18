@@ -105,13 +105,17 @@ function collectInternals(roots, ctx, internals) {
   }
 }
 
+// Only a hash-looking suffix is stripped (8 chars with a digit or an upper-case letter), so
+// `types-internal.d.ts` and `types.d.ts` stay distinct source files.
+const CHUNK_HASH = /-(?=[\w-]{8}\.d\.[cm]?ts$)(?=[\w-]*[0-9A-Z])[\w-]{8}(?=\.d\.[cm]?ts$)/
+
 /** `<file relative to the package>#<name>`. Overloads and merged declarations in one file share a key. */
 function declKey(d, ctx) {
   // Bundler chunks carry a content hash (`agent-compiler-aubY9WIa.d.ts`) that changes on every build.
   const file = relative(ctx.pkgDir, d.getSourceFile().fileName)
     .split(sep)
     .join('/')
-    .replace(/-[\w-]{8}(?=\.d\.[cm]?ts$)/, '')
+    .replace(CHUNK_HASH, '')
   return `${file}#${d.name?.getText() ?? '(anonymous)'}`
 }
 
