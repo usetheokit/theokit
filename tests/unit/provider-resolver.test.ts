@@ -3,11 +3,12 @@
  *
  * Mandatory BDD coverage:
  *   - Happy path: each env var resolves to the correct provider
- *   - Priority order: OPENROUTER > OPENAI > ANTHROPIC
+ *   - Priority order: OPENROUTER > ANTHROPIC > OPENAI
  *   - Error path: zero env vars → actionable error message
  *   - Registry: registerProvider() idempotent + listProviders() snapshot
  *   - Escape hatch: tryResolveProvider() does not throw
  */
+import { resolveAgentCredential } from '../../packages/agents/src/auth/resolve-credential.js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -141,8 +142,8 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
       // The documented cloud order, stated as relative position so a new entry anywhere in the
       // table cannot break it.
       const names = list.map((p) => p.name)
-      expect(names.indexOf('openrouter')).toBeLessThan(names.indexOf('openai'))
-      expect(names.indexOf('openai')).toBeLessThan(names.indexOf('anthropic'))
+      expect(names.indexOf('openrouter')).toBeLessThan(names.indexOf('anthropic'))
+      expect(names.indexOf('anthropic')).toBeLessThan(names.indexOf('openai'))
     })
 
     it('registerProvider() adds new provider at specified priority', () => {
@@ -314,5 +315,19 @@ describe('resolution announces itself once', () => {
     resolveProvider('gpt-4o-mini', { announce })
 
     expect(lines).toHaveLength(1)
+  })
+})
+
+describe('fallback order shared with @theokit/agents (#1948)', () => {
+  it('test_fallback_order_matches_the_agents_resolver', () => {
+    const env = { ANTHROPIC_API_KEY: 'sk-ant-test', OPENAI_API_KEY: 'sk-test' }
+    process.env.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY
+    process.env.OPENAI_API_KEY = env.OPENAI_API_KEY
+
+    const theo = resolveProvider('gpt-4o-mini')
+    const agents = resolveAgentCredential({ env, model: 'gpt-4o-mini' })
+
+    expect(theo.name).toBe(agents.provider)
+    expect(theo.name).toBe('anthropic')
   })
 })

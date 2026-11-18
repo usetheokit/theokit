@@ -14,6 +14,8 @@ with an OpenRouter key present. Reaching another vendor's catalog THROUGH OpenRo
 the gateway first — `openrouter/openai/gpt-4o-mini`, which is what the scaffold declares, matching
 the key above. See <https://openrouter.ai/models> for the ids OpenRouter serves.
 
+For a bare model id (no provider prefix) with several keys set, the fallback order is `OPENROUTER_API_KEY`, then `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY` — the same order `@theokit/agents` uses.
+
 | Model id in `src/server/agents/chat.ts` | Key it needs         |
 | --------------------------------------- | -------------------- |
 | `openrouter/openai/gpt-4o-mini`         | `OPENROUTER_API_KEY` |
