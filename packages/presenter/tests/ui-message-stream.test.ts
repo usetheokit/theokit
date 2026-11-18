@@ -146,6 +146,22 @@ describe('UIMessageStreamPresenter — refusal', () => {
     expect(chunks[at + 1]?.type).toBe('tool-output-error')
   })
 
+  it('treats a refusal as an error even when isError is omitted', () => {
+    const chunks = run([
+      {
+        type: 'tool-result',
+        callId: 'c1',
+        name: 'Bash',
+        result: 'nope',
+        refusal: { by: 'hook' },
+      },
+    ])
+    expect(chunks.map((c) => c.type)).toEqual(
+      expect.arrayContaining(['data-tool-refusal', 'tool-output-error']),
+    )
+    expect(chunks.some((c) => c.type === 'tool-output-available')).toBe(false)
+  })
+
   it('emits no refusal part for an ordinary failure', () => {
     const chunks = run([
       { type: 'tool-result', callId: 'c1', name: 'Bash', result: 'x', isError: true },

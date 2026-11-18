@@ -98,7 +98,7 @@ export class UIMessageStreamPresenter implements Presenter<UIMessageChunk> {
             event.callId,
             event.name,
             event.result,
-            event.isError ?? false,
+            (event.isError ?? false) || event.refusal !== undefined,
             event.refusal,
           ),
         ]

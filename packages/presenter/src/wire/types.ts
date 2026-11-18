@@ -18,6 +18,8 @@ export type WireMessageRole = 'system' | 'user' | 'assistant'
 /** A reconstructed part. Open by design: the `data-*` family and future part kinds ride here. */
 export interface WireMessagePart {
   readonly type: string
+  /** Set on a tool part whose call was refused rather than run. */
+  readonly refusal?: WireToolRefusal
   readonly [key: string]: unknown
 }
 

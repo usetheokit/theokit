@@ -82,7 +82,7 @@ describe('theokit#132 — the RunEvent sink reaches the SDK', () => {
     expect(sink).toHaveBeenCalledWith(ev)
   })
 
-  it('test_without_a_sink_the_internal_listener_is_harmless', async () => {
+  it('test_without_a_caller_sink_the_adapters_own_listener_accepts_events', async () => {
     // The adapter always installs its own listener (typed refusals); with no caller sink it must
     // accept any event without throwing.
     h.sendOptions.length = 0
