@@ -3,7 +3,6 @@
 
 const {
   REGEX_BACKSLASH,
-  REGEX_REMOVE_BACKSLASH,
   REGEX_SPECIAL_CHARS,
   REGEX_SPECIAL_CHARS_GLOBAL
 } = require('./constants');
@@ -31,7 +30,7 @@ exports.isWindows = () => {
 // expression rescans to the end of the string from every `[` that never closes, which is quadratic
 // (CodeQL js/polynomial-redos). A bracket kept whole is `[`, then characters with no line terminator,
 // then one that is not a backslash, then `]`, the shortest such run; a backslash followed by a character
-// that is not a line terminator is removed. `REGEX_REMOVE_BACKSLASH` stays exported for compatibility.
+// that is not a line terminator is removed. `constants.REGEX_REMOVE_BACKSLASH` stays exported for compatibility.
 const isLineTerminator = c => c === '\n' || c === '\r' || c === '\u2028' || c === '\u2029';
 
 exports.removeBackslashes = str => {
