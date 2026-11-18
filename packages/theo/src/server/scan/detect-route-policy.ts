@@ -39,9 +39,9 @@
 
 import type * as TS from 'typescript'
 
-import { loadTypescript } from './load-typescript.js'
-
 import { HTTP_METHODS, type HttpMethod } from '../../core/contracts/http-methods.js'
+
+import { loadTypescript } from './load-typescript.js'
 
 /**
  * The compiler, loaded on first use and never at import time.

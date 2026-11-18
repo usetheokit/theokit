@@ -20,10 +20,10 @@ import { readFileSync } from 'node:fs'
 
 import type * as TS from 'typescript'
 
-import { loadTypescript } from './load-typescript.js'
-
 import { HTTP_METHODS, type HttpMethod } from '../../core/contracts/http-methods.js'
 import { compareByCodeUnit } from '../_internal/compare-by-code-unit.js'
+
+import { loadTypescript } from './load-typescript.js'
 
 /**
  * The compiler, loaded on first use and never at import time.
