@@ -106,31 +106,18 @@ function collectInternals(roots, ctx, internals) {
 }
 
 // Bundler chunks carry a content hash (`agent-compiler-aubY9WIa.d.ts`) that changes on every build.
-// Only a hash-looking suffix (8 chars with a digit or an upper-case letter) is a candidate, and it is
-// stripped only when no other file in the program maps to the same name, so a file that merely
-// resembles a hash (`types-internAl.d.ts` next to `types.d.ts`) keeps its own identity.
+// A hash-looking suffix (8 chars with a digit or an upper-case letter) is replaced by `-<hash>`, so
+// the identity depends on the declaration alone, never on which other files are in the program:
+// `types-internAl.d.ts` and `types.d.ts` stay distinct whether or not both exist.
 const CHUNK_HASH = /-(?=[\w-]{8}\.d\.[cm]?ts$)(?=[\w-]*[0-9A-Z])[\w-]{8}(?=\.d\.[cm]?ts$)/
 
 function relFile(file, ctx) {
   return relative(ctx.pkgDir, file).split(sep).join('/')
 }
 
-/** `<file relative to the package>#<name>`. Overloads and merged declarations in one file share a key. */
+/** `<file relative to the package, hash masked>#<name>`. Overloads and merged declarations in one file share a key. */
 function declKey(d, ctx) {
-  ctx.fileNames ??= new Map()
-  const full = relFile(d.getSourceFile().fileName, ctx)
-  let file = ctx.fileNames.get(full)
-  if (file === undefined) {
-    const stripped = full.replace(CHUNK_HASH, '')
-    const clash =
-      stripped !== full &&
-      ctx.program.getSourceFiles().some((sf) => {
-        const other = relFile(sf.fileName, ctx)
-        return other !== full && other.replace(CHUNK_HASH, '') === stripped
-      })
-    file = clash ? full : stripped
-    ctx.fileNames.set(full, file)
-  }
+  const file = relFile(d.getSourceFile().fileName, ctx).replace(CHUNK_HASH, '-<hash>')
   return `${file}#${d.name?.getText() ?? '(anonymous)'}`
 }
 

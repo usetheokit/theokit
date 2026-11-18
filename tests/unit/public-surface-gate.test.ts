@@ -149,7 +149,7 @@ describe('public surface gate', () => {
       surface(`import { C } from './chunk-${hash}'\nexport type Out = C\n`, {
         [`chunk-${hash}.d.ts`]: 'export interface C { a: string }\n',
       })
-    expect(Object.keys(at('aubY9WIa').entries['.']?.internals ?? {})).toEqual(['dist/chunk.d.ts#C'])
+    expect(Object.keys(at('aubY9WIa').entries['.']?.internals ?? {})).toEqual(['dist/chunk-<hash>.d.ts#C'])
     expect(at('aubY9WIa')).toEqual(at('Zz09_-xY'))
   })
 
@@ -173,12 +173,24 @@ describe('public surface gate', () => {
     })
     const prev = surface(index, files('b: string'))
     expect(Object.keys(prev.entries['.']?.internals ?? {})).toEqual([
-      'dist/types-internAl.d.ts#Shared',
+      'dist/types-<hash>.d.ts#Shared',
       'dist/types.d.ts#Shared',
     ])
     expect(run(prev, surface(index, files('b: number')))).toEqual([
-      expect.stringContaining('referenced type dist/types-internAl.d.ts#Shared changed'),
+      expect.stringContaining('referenced type dist/types-<hash>.d.ts#Shared changed'),
     ])
+  })
+
+  it('keeps a hash-like file identity when an unrelated plain file with the stripped name appears', () => {
+    const before = `import { Shared as B } from './types-internAl'\nexport type Out = B\n`
+    const after = `import { Shared as A } from './types'\nimport { Shared as B } from './types-internAl'\nexport type Out = B\nexport interface Opt { x?: A }\n`
+    const hashed = { 'types-internAl.d.ts': 'export interface Shared { b: string }\n' }
+    const prev = surface(before, hashed)
+    const next = surface(after, {
+      ...hashed,
+      'types.d.ts': 'export interface Shared { a: string }\n',
+    })
+    expect(run(prev, next)).toEqual([])
   })
 
   it('fails a stable value export turned into a type-only export', () => {
