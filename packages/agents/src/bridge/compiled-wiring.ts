@@ -113,44 +113,43 @@ async function resolvedSkillNames(agent: unknown): Promise<string[] | undefined>
 }
 
 interface AgentStatics {
-  /** The SDK's live-agent cache; `getOrCreate` answers from it before it resumes or creates. */
-  registry?: { get(id: string): unknown }
-  /** Looks a session up in the persisted registry; rejects `UnknownAgentError` for a new one. */
-  get?(id: string, options?: { cwd?: string }): Promise<unknown>
   getOrCreate(id: string, options: never): Promise<unknown>
+  create?(options: never): Promise<unknown>
 }
 
-const isUnknownAgent = (err: unknown): boolean =>
-  (err as Record<string, unknown> | null)?.name === 'UnknownAgentError'
+/** Carried on the options of one call; fired when THAT call's options reach a successful `Agent.create`. */
+const CREATED: unique symbol = Symbol.for('theokit.agents.onCreated')
 
-/** Whether the session already exists, live or persisted; only a definite "unknown" means new. */
-async function sessionExists(
-  statics: AgentStatics,
-  sessionId: string,
-  options: Record<string, unknown>,
-): Promise<boolean> {
-  if (statics.registry?.get(sessionId) !== undefined) return true
-  if (typeof statics.get !== 'function') return true
-  const cwd = (options.local as { cwd?: string } | undefined)?.cwd
-  try {
-    await statics.get(sessionId, cwd === undefined ? {} : { cwd })
-    return true
-  } catch (err) {
-    return !isUnknownAgent(err)
+const observed = new WeakSet()
+
+/**
+ * Make `create` report which call's options it was given, passing every other call straight
+ * through. The SDK's `getOrCreate` creates through `Agent.create`, so this is the one signal that
+ * says whose options built the agent, even when a direct SDK call won the creation.
+ */
+function observeCreate(statics: AgentStatics): void {
+  if (observed.has(statics) || typeof statics.create !== 'function') return
+  observed.add(statics)
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- re-invoked with the caller's `this` below
+  const original = statics.create
+  statics.create = async function (this: unknown, opts: never) {
+    const agent = await original.call(this, opts)
+    ;(opts as Record<symbol, (() => void) | undefined>)[CREATED]?.()
+    return agent
   }
 }
 
 const inFlight = new WeakMap<object, Map<string, Promise<unknown>>>()
 
 /**
- * `Agent.getOrCreate`, reporting the wiring only when the session did not exist before the call.
+ * `Agent.getOrCreate`, reporting the wiring only when THIS call's options created the agent.
  *
  * Creation, caching and disposal stay entirely inside the SDK's own `getOrCreate` (its in-flight
  * map, live registry and race handling), so a listener call and any direct SDK call for one
  * session converge on a single live, registered handle and nothing is disposed or replaced here.
- * The wiring is read from the final options and reported once per session for calls through this
- * wrapper; a resumed or live session reports nothing. If a direct SDK call creates the session
- * between the existence check and the SDK call, that creation is still reported once.
+ * The creator is identified by a marker on this call's options that `Agent.create` hands back, so
+ * a call that resumes, hits the live cache, or joins another caller's in-flight creation reports
+ * nothing, and the wiring reported is always that of the options that built the agent.
  */
 export function getOrCreateReporting(
   sdk: unknown,
@@ -165,10 +164,12 @@ export function getOrCreateReporting(
   inFlight.set(key, pending)
   const running = pending.get(sessionId)
   if (running) return running
+  observeCreate(statics)
   const p = (async () => {
-    const existed = await sessionExists(statics, sessionId, options)
-    const agent = await statics.getOrCreate(sessionId, options as never)
-    if (!existed) await reportWiring(listener, options, agent)
+    const state = { created: false }
+    const marked = { ...options, [CREATED]: () => (state.created = true) }
+    const agent = await statics.getOrCreate(sessionId, marked as never)
+    if (state.created) await reportWiring(listener, options, agent)
     return agent
   })().finally(() => pending.delete(sessionId))
   pending.set(sessionId, p)

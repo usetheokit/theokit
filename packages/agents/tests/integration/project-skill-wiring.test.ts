@@ -112,11 +112,16 @@ describe('onWired with the real SDK', () => {
       model: { id: 'openai/gpt-4o-mini' },
       local: { cwd },
     })
-    const check = async (session: string, calls: Promise<unknown>[], seen: CompiledWiring[]) => {
+    const check = async (
+      session: string,
+      calls: Promise<unknown>[],
+      seen: CompiledWiring[],
+      reports: number,
+    ) => {
       const [a, b] = (await Promise.all(calls)) as { dispose(): Promise<void> }[]
       expect(a).toBe(b)
       expect(Agent.registry.get(session)).toBe(a)
-      expect(seen).toHaveLength(1)
+      expect(seen).toHaveLength(reports)
       // The real registry still resolves to the one live handle after the race settled.
       await new Promise((r) => setTimeout(r, 20))
       expect(Agent.registry.get(session)).toBe(a)
@@ -133,6 +138,7 @@ describe('onWired with the real SDK', () => {
           Agent.getOrCreate(session, opts() as never),
         ],
         seen,
+        1,
       )
     })
 
@@ -146,7 +152,28 @@ describe('onWired with the real SDK', () => {
           getOrCreateReporting(Agent, session, opts(), (w) => seen.push(w)),
         ],
         seen,
+        0,
       )
+    })
+
+    it('reports the options of the call that created, not of one that joined the creation', async () => {
+      const mine: CompiledWiring[] = []
+      const session = id('race-c')
+      const direct = { ...opts(), withheldBuiltinTools: ['bash'] }
+      // Direct SDK call starts creating first; the listener call joins it with different options.
+      await Promise.all([
+        Agent.getOrCreate(session, direct as never),
+        getOrCreateReporting(Agent, session, opts(), (w) => mine.push(w)),
+      ])
+      expect(mine).toHaveLength(0)
+      // Listener call first, direct call joins: the listener's own options are what is reported.
+      const session2 = id('race-d')
+      const own = { ...opts(), withheldBuiltinTools: ['write'] }
+      await Promise.all([
+        getOrCreateReporting(Agent, session2, own, (w) => mine.push(w)),
+        Agent.getOrCreate(session2, direct as never),
+      ])
+      expect(mine.map((w) => w.withheldBuiltinTools)).toEqual([['write']])
     })
   })
 })
