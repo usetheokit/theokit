@@ -261,10 +261,10 @@ export function buildHookHandlers(
           ...(options.env !== undefined && { env: options.env }),
         })
         if (result.exitCode !== 0) {
-          const message = fenceHookOutput(
-            result.stdout || result.stderr || `hook exited ${String(result.exitCode)}`,
-          )
-          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: message })
+          const output = result.stdout || result.stderr || `hook exited ${String(result.exitCode)}`
+          const message = fenceHookOutput(output)
+          // The ledger carries the bare output; the fenced markup is for the model only.
+          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: output })
           options.onVeto?.({ tool: ctx.name, reason: message })
           return { block: true, message }
         }
