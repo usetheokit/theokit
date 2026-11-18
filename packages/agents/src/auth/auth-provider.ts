@@ -120,6 +120,11 @@ interface TransportState {
   transient: boolean
 }
 
+function isTransportFailure(err: unknown): boolean {
+  if (err instanceof SyntaxError) return false
+  return err instanceof TypeError || classifyRefreshFailure(err).transient
+}
+
 const BODY_READERS = new Set(['json', 'text', 'arrayBuffer', 'blob', 'formData'])
 
 /**
@@ -168,14 +173,14 @@ function observeFetch(
     } catch (err) {
       done()
       // `TypeError: fetch failed` is how Node reports a refused/reset connection.
-      if (err instanceof TypeError || classifyRefreshFailure(err).transient) state.transient = true
+      if (isTransportFailure(err)) state.transient = true
       throw err
     }
-    if (deadline === undefined || !res.ok) {
+    if (!res.ok) {
       done()
       return res
     }
-    // Keep the deadline running until the body is consumed.
+    // Keep the deadline running until the body is consumed, and observe a body that fails mid-read.
     return new Proxy(res, {
       get(target, prop) {
         const value: unknown = Reflect.get(target, prop, target)
@@ -183,7 +188,13 @@ function observeFetch(
         const fn = value as (...a: unknown[]) => unknown
         if (typeof prop === 'string' && BODY_READERS.has(prop)) {
           return (...args: unknown[]) =>
-            race(fn.apply(target, args) as Promise<unknown>).finally(done)
+            race(fn.apply(target, args) as Promise<unknown>)
+              .catch((err: unknown) => {
+                // A reset while reading is transport; malformed JSON (SyntaxError) is not.
+                if (isTransportFailure(err)) state.transient = true
+                throw err
+              })
+              .finally(done)
         }
         return fn.bind(target)
       },
