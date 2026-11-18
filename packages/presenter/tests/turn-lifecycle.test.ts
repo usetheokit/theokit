@@ -202,7 +202,13 @@ describe('foldTurnLifecycle — message boundary and failed tools', () => {
   })
 
   it('contentChunkFromEvent maps tool-result isError and returns null for status events', () => {
-    const failed = { type: 'tool-result', callId: 'c', name: 'n', result: 1, isError: true } as const
+    const failed = {
+      type: 'tool-result',
+      callId: 'c',
+      name: 'n',
+      result: 1,
+      isError: true,
+    } as const
     expect(contentChunkFromEvent(failed)).toEqual({
       kind: 'tool-result',
       id: 'c',
