@@ -310,3 +310,24 @@ describe('Release Workflow', () => {
     expect(buildIdx).toBeLessThan(changesetsIdx)
   })
 })
+
+describe('CI public-surface gate', () => {
+  const job = loadWorkflow('ci.yml').jobs['typecheck-build']
+  const steps: Array<Record<string, any>> = job.steps
+
+  it('checks out full history', () => {
+    const checkout = steps.find((s) => String(s.uses ?? '').startsWith('actions/checkout'))
+    expect(checkout?.with['fetch-depth']).toBe(0)
+  })
+
+  it('runs the gate right after build:packages with the PR base, failing the job', () => {
+    const build = steps.findIndex((s) => s.run === 'pnpm build:packages')
+    const gate = steps[build + 1]
+    expect(build).toBeGreaterThan(-1)
+    expect(gate.run).toContain('scripts/check-public-surface.mjs')
+    expect(gate.run).toContain('--base "$BASE_REF"')
+    expect(gate.env.BASE_REF).toBe('origin/${{ github.base_ref }}')
+    expect(gate.run).not.toContain('|| true')
+    expect(gate['continue-on-error']).toBeUndefined()
+  })
+})
