@@ -18,6 +18,8 @@ export type WireMessageRole = 'system' | 'user' | 'assistant'
 /** A reconstructed part. Open by design: the `data-*` family and future part kinds ride here. */
 export interface WireMessagePart {
   readonly type: string
+  /** Set on a tool part whose call was refused rather than run. */
+  readonly refusal?: WireToolRefusal
   readonly [key: string]: unknown
 }
 
@@ -40,6 +42,12 @@ export interface WireToolApproval {
   readonly question?: string
   /** How long the gate waits before it settles itself, in ms. Absent means the producer said nothing. */
   readonly timeoutMs?: number
+}
+
+/** Why a tool call was refused rather than run; mirrors `ToolRefusal` from the canonical event. */
+export interface WireToolRefusal {
+  readonly by: 'human' | 'timeout' | 'policy' | 'hook' | 'plugin'
+  readonly reason?: string
 }
 
 export interface WireMessage<METADATA = unknown> {

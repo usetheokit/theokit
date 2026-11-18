@@ -17,14 +17,19 @@ interface SdkMsg {
   [k: string]: unknown
 }
 
-const h = vi.hoisted(() => ({ messages: [] as SdkMsg[] }))
+const h = vi.hoisted(() => ({
+  messages: [] as SdkMsg[],
+  /** Called with the SendOptions before the timeline is read, to emit SDK run events. */
+  onSend: undefined as undefined | ((opts: { onRunEvent?: (e: unknown) => void }) => void),
+}))
 
 vi.mock('@theokit/sdk', () => ({
   Agent: {
     getOrCreate: () =>
       Promise.resolve({
-        send: () =>
-          Promise.resolve({
+        send: (_m: unknown, opts?: { onRunEvent?: (e: unknown) => void }) => {
+          h.onSend?.(opts ?? {})
+          return Promise.resolve({
             // theokit#140 — the fake's ONE ordered timeline. Delegates to this same fake's `stream()`
             // rather than restating its script: two hand-written copies of one fixture drift, and a fake
             // whose timeline disagreed with its stream would go green while production broke.
@@ -35,7 +40,8 @@ vi.mock('@theokit/sdk', () => ({
               for (const m of h.messages) yield m
             },
             wait: async () => ({}),
-          }),
+          })
+        },
         dispose: () => Promise.resolve(),
       }),
   },
@@ -59,6 +65,7 @@ async function drain(messages: SdkMsg[]) {
 
 afterEach(() => {
   h.messages = []
+  h.onSend = undefined
 })
 
 describe('createSdkAgentStream × real SDKMessage shapes (NF-1 end-to-end)', () => {
@@ -128,5 +135,68 @@ describe('createSdkAgentStream × real SDKMessage shapes (NF-1 end-to-end)', () 
     ])
     expect(out.filter((e) => e.type === 'done')).toHaveLength(1)
     expect(out.at(-1)).toMatchObject({ type: 'done' })
+  })
+})
+
+describe('permission_denied → typed refusal on the tool result', () => {
+  const toolDone = (id: string, result: unknown) => ({
+    type: 'tool_call',
+    agent_id: 'a',
+    run_id: 'r',
+    call_id: id,
+    name: 'Bash',
+    status: 'completed',
+    result,
+  })
+  const denied = (toolCallId: string, source: string, message: string) => ({
+    type: 'permission_denied',
+    toolName: 'Bash',
+    toolCallId,
+    source,
+    message,
+  })
+  const results = (out: { type: string; [k: string]: unknown }[]) =>
+    out.filter((e) => e.type === 'tool_result')
+
+  it('a permission_denied run event marks the matching tool result with a refusal', async () => {
+    h.onSend = (o) => {
+      o.onRunEvent?.(denied('c1', 'plugin', 'not allowed here'))
+    }
+    const out = await drain([
+      toolDone('c1', { stdout: '', stderr: 'denied', exitCode: 126 }),
+      toolDone('c2', { stdout: 'ok', stderr: '', exitCode: 0 }),
+    ])
+    const [r1, r2] = results(out)
+    expect(r1).toMatchObject({
+      callId: 'c1',
+      isError: true,
+      refusal: { by: 'plugin', reason: 'not allowed here' },
+    })
+    expect(r2).not.toHaveProperty('refusal')
+  })
+
+  it('a permission_denied from a file hook gives refusal by hook', async () => {
+    h.onSend = (o) => {
+      o.onRunEvent?.(denied('c1', 'file_hook', 'hook said no'))
+    }
+    const out = await drain([toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 })])
+    expect(results(out)[0]).toMatchObject({ refusal: { by: 'hook', reason: 'hook said no' } })
+  })
+
+  it('a fork_whitelist denial gives refusal by plugin', async () => {
+    h.onSend = (o) => {
+      o.onRunEvent?.(denied('c1', 'fork_whitelist', 'm'))
+    }
+    const out = await drain([toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 })])
+    expect(results(out)[0]).toMatchObject({ refusal: { by: 'plugin' } })
+  })
+
+  it('a tool whose shell exits 126 with no permission_denied is a failed result without refusal', async () => {
+    const out = await drain([
+      toolDone('c1', { stdout: '', stderr: 'cannot execute', exitCode: 126 }),
+    ])
+    const r = results(out)[0]!
+    expect(r.isError).toBe(true)
+    expect(r).not.toHaveProperty('refusal')
   })
 })
