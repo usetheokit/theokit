@@ -146,7 +146,6 @@ describe('getOrCreateReporting against the real SDK', () => {
     const served = leaseSharedAgent(await acquire(id))
     const stream = await acquire(id)
     await served.dispose()
-    await served.dispose() // idempotent: no second release
     expect(Agent.registry.get(id)).toBe(stream)
     await releaseSharedAgent(stream)
     expect(Agent.registry.get(id)).toBeUndefined()
@@ -160,5 +159,28 @@ describe('getOrCreateReporting against the real SDK', () => {
     await releasing
     expect(second).not.toBe(first)
     expect(Agent.registry.get(id)).toBe(second)
+  })
+
+  it('two served acquisitions of one live session share the registry handle', async () => {
+    const id = nextId()
+    const a = leaseSharedAgent(await acquire(id))
+    const b = leaseSharedAgent(await acquire(id))
+    expect(b).toBe(a)
+    expect(a).toBe(Agent.registry.get(id))
+    await a.dispose()
+    expect(Agent.registry.get(id)).toBe(b)
+    await b.dispose()
+    expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  it('overlapping served and stream callers: the stream finishing first keeps the served handle', async () => {
+    const id = nextId()
+    const served = leaseSharedAgent(await acquire(id))
+    const stream = await acquire(id)
+    expect(stream).toBe(served)
+    await releaseSharedAgent(stream)
+    expect(Agent.registry.get(id)).toBe(served)
+    await served.dispose()
+    expect(Agent.registry.get(id)).toBeUndefined()
   })
 })

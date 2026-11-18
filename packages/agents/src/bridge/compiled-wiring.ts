@@ -136,6 +136,7 @@ interface Hold {
   count: number
   sdk: object
   id: string
+  dispose: () => Promise<void>
 }
 
 const holders = new WeakMap<object, Hold>()
@@ -173,7 +174,18 @@ export function acquireSharedAgent(
     const agent = (await getOrCreateReporting(sdk, sessionId, options, listener)) as object
     const hold = holders.get(agent)
     if (hold !== undefined) hold.count++
-    else holders.set(agent, { count: 1, sdk: sdk as object, id: sessionId })
+    else {
+      const target = agent as { dispose(): Promise<void> }
+      const real = target.dispose.bind(target)
+      holders.set(agent, { count: 1, sdk: sdk as object, id: sessionId, dispose: real })
+      // One handle per id (the SDK's own cached one): `dispose()` on it releases a hold.
+      Object.defineProperty(agent, 'dispose', {
+        value: () => releaseSharedAgent(target),
+        configurable: true,
+        writable: true,
+        enumerable: false,
+      })
+    }
     return agent
   })
 }
@@ -185,21 +197,21 @@ export function releaseSharedAgent(agent: { dispose(): Promise<void> }): Promise
   return inLane(hold.sdk, hold.id, async () => {
     if (--hold.count > 0) return
     holders.delete(agent)
-    await agent.dispose()
+    // Back to the real disposal, so a later `dispose()` on this handle cannot loop through us.
+    Object.defineProperty(agent, 'dispose', {
+      value: hold.dispose,
+      configurable: true,
+      writable: true,
+      enumerable: false,
+    })
+    await hold.dispose()
   })
 }
 
 /**
- * A handle for a served owner: every member is the shared agent's, but `dispose()` releases this
- * owner's hold (once) instead of disposing the agent other callers may still use.
+ * The served owner's handle IS the shared agent (same identity as `Agent.registry.get(id)`): the
+ * acquisition already made `dispose()` release one hold instead of disposing for other callers.
  */
 export function leaseSharedAgent<T extends { dispose(): Promise<void> }>(agent: T): T {
-  let released: Promise<void> | undefined
-  return new Proxy(agent, {
-    get(target, key) {
-      if (key === 'dispose') return () => (released ??= releaseSharedAgent(target))
-      const value: unknown = Reflect.get(target, key, target)
-      return typeof value === 'function' ? (value as () => unknown).bind(target) : value
-    },
-  })
+  return agent
 }
