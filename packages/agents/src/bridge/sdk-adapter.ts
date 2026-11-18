@@ -22,7 +22,12 @@ import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
-import { BUILD_WIRED_SKILL_READERS, getOrCreateReporting } from './compiled-wiring.js'
+import {
+  BUILD_WIRED_SKILL_READERS,
+  getOrCreateReporting,
+  holdSharedAgent,
+  releaseSharedAgent,
+} from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
@@ -782,12 +787,11 @@ async function* streamSdkAgent(
     ...m8,
     ...extra,
   }
-  const agent = (await getOrCreateReporting(
-    Agent,
-    sessionId,
-    createOptions,
-    compiled.onWired,
-  )) as Awaited<ReturnType<typeof Agent.getOrCreate>>
+  const agent = holdSharedAgent(
+    (await getOrCreateReporting(Agent, sessionId, createOptions, compiled.onWired)) as Awaited<
+      ReturnType<typeof Agent.getOrCreate>
+    >,
+  )
   try {
     // theokit#140 — ONE ordered source. The `onDelta` sink + merge queue are gone: the SDK's
     // `run.events()` appends messages and deltas as the loop reports them, so arrival order IS
@@ -836,7 +840,7 @@ async function* streamSdkAgent(
       yield realUsageDone(await (await sendPromise).wait(), t0, modelIdOf(model))
     }
   } finally {
-    await agent.dispose()
+    await releaseSharedAgent(agent)
   }
 }
 
@@ -973,7 +977,10 @@ export function toAgentFactory(
       ...extra,
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     }
-    const agent = await getOrCreateReporting(rt.Agent, sessionId, createOptions, compiled.onWired)
+    // A served handle is disposed by its owner, never by a stream sharing it: the hold is not released here.
+    const agent = holdSharedAgent(
+      (await getOrCreateReporting(rt.Agent, sessionId, createOptions, compiled.onWired)) as object,
+    )
     return withGuardrails(
       withStepCeiling(agent as SdkAgentHandle, compiled.maxIterations),
       compiled.guardrails,

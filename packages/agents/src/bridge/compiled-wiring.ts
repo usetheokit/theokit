@@ -131,3 +131,25 @@ export async function getOrCreateReporting(
   if (state.created) reportWiring(listener, options)
   return agent
 }
+
+const holders = new WeakMap<object, number>()
+
+/**
+ * Concurrent streams for one session share the SDK's cached handle, and `dispose()` evicts it from
+ * the live cache. Each user takes a hold; only the last release disposes.
+ */
+export function holdSharedAgent<T extends object>(agent: T): T {
+  holders.set(agent, (holders.get(agent) ?? 0) + 1)
+  return agent
+}
+
+/** Drop one hold; dispose the agent only when no other caller still holds it. */
+export async function releaseSharedAgent(agent: { dispose(): Promise<void> }): Promise<void> {
+  const left = (holders.get(agent) ?? 1) - 1
+  if (left > 0) {
+    holders.set(agent, left)
+    return
+  }
+  holders.delete(agent)
+  await agent.dispose()
+}

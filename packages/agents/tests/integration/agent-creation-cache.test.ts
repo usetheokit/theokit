@@ -10,7 +10,12 @@ import { join } from 'node:path'
 import { Agent } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { getOrCreateReporting, type CompiledWiring } from '../../src/bridge/compiled-wiring.js'
+import {
+  getOrCreateReporting,
+  holdSharedAgent,
+  releaseSharedAgent,
+  type CompiledWiring,
+} from '../../src/bridge/compiled-wiring.js'
 
 let cwd: string
 let n = 0
@@ -118,5 +123,17 @@ describe('getOrCreateReporting against the real SDK', () => {
     expect(seen).toHaveLength(0)
     await get(id, (w) => seen.push(w))
     expect(seen).toHaveLength(1)
+  })
+
+  it('keeps the shared handle cached until the last overlapping user releases it', async () => {
+    const id = nextId()
+    const a = holdSharedAgent(await get(id))
+    const b = holdSharedAgent(await get(id))
+    expect(b).toBe(a)
+    await releaseSharedAgent(a)
+    expect(Agent.registry.get(id)).toBe(a)
+    expect(await get(id)).toBe(a)
+    await releaseSharedAgent(b)
+    expect(Agent.registry.get(id)).toBeUndefined()
   })
 })
