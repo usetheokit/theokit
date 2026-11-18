@@ -9,7 +9,12 @@
  * are opt-in through `forward`, because running a parent's result rewriter on a child's output is a
  * choice the caller makes explicitly.
  */
-import type { Plugin } from '@theokit/sdk'
+import type {
+  Plugin,
+  PostToolCallContext,
+  PreToolCallContext,
+  ToolResultTransformContext,
+} from '@theokit/sdk'
 
 import type { HookHandlers } from '../bridge/hook-handlers.js'
 
@@ -53,10 +58,19 @@ export function hooksForChild(
     // `kind: 'general'` is load-bearing: the SDK drops a plugin without it and no hook fires.
     kind: 'general',
     register(ctx) {
-      if (typeof pre === 'function') ctx.on('pre_tool_call', (c) => pre(labelled(c, label)))
-      if (typeof post === 'function') ctx.on('post_tool_call', (c) => post(labelled(c, label)))
+      // The SDK types every handler as `(ctx: unknown) => unknown`; the casts below restore the
+      // per-hook context types its dispatcher actually passes (the same exception `hooksPlugin`
+      // documents). `transform_tool_result` is dispatched as `(results, ctx)` despite that typing.
+      if (typeof pre === 'function') {
+        ctx.on('pre_tool_call', (c) => pre(labelled(c as PreToolCallContext, label)))
+      }
+      if (typeof post === 'function') {
+        ctx.on('post_tool_call', (c) => post(labelled(c as PostToolCallContext, label)))
+      }
       if (typeof transform === 'function') {
-        ctx.on('transform_tool_result', (results, c) => transform(results, labelled(c, label)))
+        ctx.on('transform_tool_result', (...args: unknown[]) =>
+          transform(args[0], labelled(args[1] as ToolResultTransformContext, label)),
+        )
       }
     },
   }

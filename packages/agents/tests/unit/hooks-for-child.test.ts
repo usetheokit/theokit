@@ -10,7 +10,9 @@ function fakeContext(): {
 } {
   const map = new Map<string, Handler>()
   return {
-    on: (h, f) => void map.set(h, f),
+    on: (h, f) => {
+      map.set(h, f)
+    },
     fire: (h, ...a) => (map.get(h) as (...x: unknown[]) => unknown)?.(...a),
   }
 }
@@ -34,7 +36,11 @@ describe('hooksForChild', () => {
   it("the parent hook receives the child's agentId and runId", async () => {
     const seen: unknown[] = []
     const ctx = install(
-      hooksForChild({ pre_tool_call: (c: unknown) => void seen.push(c) } as never),
+      hooksForChild({
+        pre_tool_call: (c: unknown) => {
+          seen.push(c)
+        },
+      } as never),
     )
     await ctx.fire('pre_tool_call', callCtx)
     expect(seen[0]).toMatchObject({ agentId: 'child-1', runId: 'run-9' })
@@ -44,9 +50,16 @@ describe('hooksForChild', () => {
   it('adds childLabel when requested', async () => {
     const seen: unknown[] = []
     const ctx = install(
-      hooksForChild({ pre_tool_call: (c: unknown) => void seen.push(c) } as never, {
-        childLabel: 'reviewer',
-      }),
+      hooksForChild(
+        {
+          pre_tool_call: (c: unknown) => {
+            seen.push(c)
+          },
+        } as never,
+        {
+          childLabel: 'reviewer',
+        },
+      ),
     )
     await ctx.fire('pre_tool_call', callCtx)
     expect(seen[0]).toMatchObject({ agentId: 'child-1', childLabel: 'reviewer' })
