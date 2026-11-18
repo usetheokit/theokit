@@ -1,5 +1,21 @@
 # @theokit/agents
 
+## 16.10.0
+
+### Minor Changes
+
+- 8f1f165: A tool result the SDK reported as `permission_denied` now carries a typed `refusal` (`ToolRefusal`: `by`, `reason?`). `@theokit/presenter` adds `ToolRefusal`, `AgentToolResultEvent.refusal` and the transient `WIRE_TOOL_REFUSAL_PART` (`data-tool-refusal`); `readMessageStream` sets `refusal` on the tool part. `@theokit/agents` maps the SDK `source` (`file_hook` → `hook`; `plugin`, `fork_whitelist` → `plugin`) onto `ToolResultEvent.refusal`. The message the model reads is unchanged.
+
+### Patch Changes
+
+- 5b6e883: Dropped the casts written for the old SDK `.d.ts` gap and the hand-copied hook-approval and hook-context types; they now come from `@theokit/sdk`, and a build-time check fails if the SDK adds a compat surface the gate does not know.
+- c46c058: `@theokit/presenter` now exports `pendingApprovals`, `readPendingApproval` and `PendingApproval`, the one projection of outstanding approvals off the wire thread. `@theokit/agents` imports it instead of keeping a private copy; `PendingApproval` is still exported from `@theokit/agents/client`.
+- Updated dependencies [5f102db]
+- Updated dependencies [c46c058]
+- Updated dependencies [8d53eb9]
+- Updated dependencies [8f1f165]
+  - @theokit/presenter@0.15.0
+
 ## 16.9.0
 
 ### Minor Changes
