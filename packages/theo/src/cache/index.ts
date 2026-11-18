@@ -37,7 +37,7 @@ export type {
   CacheStoreAdmin,
 } from './storage-adapter.js'
 
-export { _resetCacheEngine, getCacheEngine, initCacheEngine } from './engine-singleton.js'
+export { getCacheEngine, initCacheEngine } from './engine-singleton.js'
 export type { NormalizedCacheConfig } from './engine-singleton.js'
 
 export { compileRouteRules, resolveRouteRule } from './route-rules.js'
