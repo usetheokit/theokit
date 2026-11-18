@@ -439,3 +439,4 @@ export {
   DEFAULT_TURN_FAILURE_HINTS,
 } from './errors/turn-failure.js'
 export type { TurnFailure, TurnFailureHints } from './errors/turn-failure.js'
+export type { KnownAgentRunErrorCode } from '@theokit/sdk/errors'
