@@ -258,6 +258,15 @@ describe('read advertised — skill_read serves what the <skills> block lists', 
     expect(await read('shown')).toContain('SHOWN BODY')
   })
 
+  it('read advertised keeps the disclosure the agent was created with when a SKILL.md changes later', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    const root = join(cwd, '.theokit', 'skills')
+    writeSkill(root, 'later', 'LATER BODY', 'disable-model-invocation: true\n')
+    await run({ model: 'm', skills: ['later'], skillsRead: 'advertised', ...project }, cwd)
+    writeSkill(root, 'later', 'LATER BODY', 'disable-model-invocation: false\n')
+    expect(await read('later')).toContain('not found')
+  })
+
   it('read advertised does not read the compat root when only the project root is granted', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
     writeSkill(join(cwd, '.claude', 'skills'), 'foreign', 'FOREIGN BODY')

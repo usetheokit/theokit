@@ -21,19 +21,28 @@ interface WireRuntime {
   defineSkillReadTool?: (source: readonly InlineSkill[] | ReadSource) => unknown
 }
 
+/** Same extension set the SDK tries: bare name, plus `PATHEXT` on Windows. */
+function executableExtensions(): string[] {
+  return process.platform === 'win32'
+    ? ['', ...(process.env.PATHEXT ?? '.EXE;.CMD').split(';')]
+    : ['']
+}
+
+function isExecutable(file: string): boolean {
+  try {
+    accessSync(file, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function binaryOnPath(bin: string): boolean {
   if (bin.length === 0 || /[\\/]/.test(bin)) return false
   return (process.env.PATH ?? '')
     .split(delimiter)
     .filter((d) => d.length > 0)
-    .some((d) => {
-      try {
-        accessSync(join(d, bin), constants.X_OK)
-        return true
-      } catch {
-        return false
-      }
-    })
+    .some((d) => executableExtensions().some((ext) => isExecutable(join(d, bin + ext))))
 }
 
 /** The SDK's own disclosure rule for the `<skills>` block: hidden and unrunnable skills are not offered. */
@@ -96,15 +105,19 @@ export function wireInlineSkillRead<R extends WireRuntime>(
     if (inline !== undefined && inline.length > 0) sdkTools.push(define(inline))
     return rt
   }
-  const holder: { agent?: ListsSkills } = {}
-  sdkTools.push(define(() => advertisedSkills(holder.agent, compiled)))
+  // The set is resolved ONCE, right after the SDK builds the agent, so it is the snapshot the
+  // `<skills>` block was built from; a later edit to a SKILL.md cannot widen what is readable.
+  const holder: { snapshot?: Promise<(InlineSkill | Skill)[]> } = {}
+  sdkTools.push(define(async () => (await holder.snapshot) ?? []))
   return {
     ...rt,
     Agent: {
       ...rt.Agent,
       getOrCreate: async (id, opts) => {
         const agent = await rt.Agent.getOrCreate(id, opts)
-        holder.agent = agent as ListsSkills
+        holder.snapshot = advertisedSkills(agent as ListsSkills, compiled)
+        holder.snapshot.catch(() => undefined) // surfaced when read, not as an unhandled rejection
+        await holder.snapshot.catch(() => undefined) // settle before the agent is handed out
         return agent
       },
     },
