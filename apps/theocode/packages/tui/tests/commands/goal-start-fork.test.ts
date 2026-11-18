@@ -25,11 +25,34 @@ describe('goal start vs a pending fork', () => {
       reviewResult: null,
       goalFeed: null,
       goalActive: false,
+      agentRef: { current: { status: 'idle' } },
       customCommandNames: [],
     } as never)
     handleSubmit('/goal ship it')
     finish({ newId: 'b', copied: true })
     expect(await pending).toEqual({ newId: 'a', copied: false, stale: true })
     expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('a goal refused while a turn streams leaves the pending fork valid', async () => {
+    const commit = vi.fn()
+    let finish!: (v: { newId: string; copied: boolean }) => void
+    const pending = forkCurrentSessionWith({
+      newId: () => 'b',
+      fork: () => new Promise((r) => (finish = r)),
+      current: () => 'a',
+      commit,
+    })
+    const { handleSubmit } = useComposerCommands({
+      reviewResult: null,
+      goalFeed: null,
+      goalActive: false,
+      agentRef: { current: { status: 'streaming' } },
+      customCommandNames: [],
+    } as never)
+    handleSubmit('/goal ship it')
+    finish({ newId: 'b', copied: true })
+    expect(await pending).toEqual({ newId: 'b', copied: true })
+    expect(commit).toHaveBeenCalledWith('b')
   })
 })

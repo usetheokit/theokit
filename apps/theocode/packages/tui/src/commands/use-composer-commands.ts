@@ -25,7 +25,8 @@ const TURN_STARTING: ReadonlySet<string> = new Set(['send', 'retry', 'custom', '
 export function useComposerCommands(deps: ComposerDeps): ComposerCommands {
   const startGoal: CommandCapabilities['startGoal'] = (objective, base) => {
     // Goal turns skip handleSubmit and set up asynchronously: record the start before that begins.
-    noteTurnStart()
+    // A goal refused because a turn is streaming starts nothing, so it must not stale a fork.
+    if (deps.agentRef.current.status !== 'streaming') noteTurnStart()
     runGoalLoop(objective, base, {
       agentRef: deps.agentRef,
       goalAbort: deps.goalAbort,
