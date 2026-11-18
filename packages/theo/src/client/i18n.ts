@@ -101,9 +101,12 @@ export function negotiateLocale<L extends string>(
 ): L {
   const find = (tag: string): L | undefined => {
     const lower = tag.toLowerCase()
+    const primary = lower.split('-')[0]
     return (
       supported.find((s) => s.toLowerCase() === lower) ??
-      supported.find((s) => s.toLowerCase() === lower.split('-')[0])
+      supported.find((s) => s.toLowerCase() === primary) ??
+      // `pt` asks for Portuguese: a supported regional locale such as `pt-BR` serves it.
+      supported.find((s) => s.toLowerCase().split('-')[0] === primary)
     )
   }
   if (stored) {

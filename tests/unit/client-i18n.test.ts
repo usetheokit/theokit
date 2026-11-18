@@ -37,14 +37,23 @@ describe('client i18n', () => {
   it('falls back to the default locale, then the key', () => {
     const partial = defineI18n({
       defaultLocale: 'en',
-      dictionaries: { en: { a: 'A' }, pt: { a: 'A' } },
+      dictionaries: { en: { a: 'A', b: 'B' }, pt: { a: 'A', b: 'B' } },
     })
-    expect(partial.translate('pt', 'a')).toBe('A')
+    // Runtime-only partial dictionary (the types forbid this; JSON loaded at runtime may not).
+    const loose = defineI18n({
+      defaultLocale: 'en',
+      dictionaries: { en: { a: 'A', b: 'B' }, pt: { a: 'Á' } } as never,
+    })
+    expect(partial.translate('pt', 'b')).toBe('B')
+    expect(loose.translate('pt', 'a' as never)).toBe('Á')
+    expect(loose.translate('pt', 'b' as never)).toBe('B')
     expect(i18n.translate('en', 'missing' as never)).toBe('missing')
   })
   it('negotiates stored, then browser, then default', () => {
     expect(negotiateLocale('pt', ['en'], ['en', 'pt'], 'en')).toBe('pt')
     expect(negotiateLocale(null, ['pt-BR', 'en'], ['en', 'pt'], 'en')).toBe('pt')
+    expect(negotiateLocale(null, ['pt'], ['en', 'pt-BR'], 'en')).toBe('pt-BR')
+    expect(negotiateLocale('pt-PT', [], ['en', 'pt-BR'], 'en')).toBe('pt-BR')
     expect(negotiateLocale('xx', ['fr'], ['en', 'pt'], 'en')).toBe('en')
   })
   it('formats by locale', () => {
