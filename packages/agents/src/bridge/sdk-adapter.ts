@@ -24,8 +24,8 @@ import type { StreamEvent } from './agent-sse-handler.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import {
   BUILD_WIRED_SKILL_READERS,
-  getOrCreateReporting,
-  holdSharedAgent,
+  acquireSharedAgent,
+  leaseSharedAgent,
   releaseSharedAgent,
 } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
@@ -787,11 +787,12 @@ async function* streamSdkAgent(
     ...m8,
     ...extra,
   }
-  const agent = holdSharedAgent(
-    (await getOrCreateReporting(Agent, sessionId, createOptions, compiled.onWired)) as Awaited<
-      ReturnType<typeof Agent.getOrCreate>
-    >,
-  )
+  const agent = (await acquireSharedAgent(
+    Agent,
+    sessionId,
+    createOptions,
+    compiled.onWired,
+  )) as Awaited<ReturnType<typeof Agent.getOrCreate>>
   try {
     // theokit#140 — ONE ordered source. The `onDelta` sink + merge queue are gone: the SDK's
     // `run.events()` appends messages and deltas as the loop reports them, so arrival order IS
@@ -977,14 +978,16 @@ export function toAgentFactory(
       ...extra,
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     }
-    // A served handle is disposed by its owner, never by a stream sharing it: the hold is not released here.
-    const agent = holdSharedAgent(
-      (await getOrCreateReporting(rt.Agent, sessionId, createOptions, compiled.onWired)) as object,
+    // The owner's `dispose()` releases its hold; a stream sharing the handle keeps it alive.
+    const agent = leaseSharedAgent(
+      (await acquireSharedAgent(
+        rt.Agent,
+        sessionId,
+        createOptions,
+        compiled.onWired,
+      )) as SdkAgentHandle,
     )
-    return withGuardrails(
-      withStepCeiling(agent as SdkAgentHandle, compiled.maxIterations),
-      compiled.guardrails,
-    )
+    return withGuardrails(withStepCeiling(agent, compiled.maxIterations), compiled.guardrails)
   }
 }
 

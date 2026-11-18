@@ -12,7 +12,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   getOrCreateReporting,
-  holdSharedAgent,
+  acquireSharedAgent,
+  leaseSharedAgent,
   releaseSharedAgent,
   type CompiledWiring,
 } from '../../src/bridge/compiled-wiring.js'
@@ -125,15 +126,39 @@ describe('getOrCreateReporting against the real SDK', () => {
     expect(seen).toHaveLength(1)
   })
 
+  const acquire = (id: string) =>
+    acquireSharedAgent(Agent, id, opts(), undefined) as Promise<{ dispose(): Promise<void> }>
+
   it('keeps the shared handle cached until the last overlapping user releases it', async () => {
     const id = nextId()
-    const a = holdSharedAgent(await get(id))
-    const b = holdSharedAgent(await get(id))
+    const a = await acquire(id)
+    const b = await acquire(id)
     expect(b).toBe(a)
     await releaseSharedAgent(a)
     expect(Agent.registry.get(id)).toBe(a)
     expect(await get(id)).toBe(a)
     await releaseSharedAgent(b)
     expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  it('a served owner disposing does not dispose a handle a stream still holds', async () => {
+    const id = nextId()
+    const served = leaseSharedAgent(await acquire(id))
+    const stream = await acquire(id)
+    await served.dispose()
+    await served.dispose() // idempotent: no second release
+    expect(Agent.registry.get(id)).toBe(stream)
+    await releaseSharedAgent(stream)
+    expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  it('an acquire racing the last release never receives a disposed handle', async () => {
+    const id = nextId()
+    const first = await acquire(id)
+    const releasing = releaseSharedAgent(first)
+    const second = await acquire(id)
+    await releasing
+    expect(second).not.toBe(first)
+    expect(Agent.registry.get(id)).toBe(second)
   })
 })
