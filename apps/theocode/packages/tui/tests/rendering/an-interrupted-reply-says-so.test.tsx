@@ -62,7 +62,7 @@ describe('an interrupted reply says so in the transcript', () => {
 describe('the interrupt records which message it cut', () => {
   const deps = (over: Partial<Parameters<typeof makeInterruptTurn>[0]> = {}) => ({
     abort: vi.fn(),
-    forkSession: vi.fn(() => ({ newId: 'n', copied: true })),
+    forkSession: vi.fn(() => Promise.resolve({ newId: 'n', copied: true })),
     hasActiveTurn: () => true,
     hasPendingApproval: () => false,
     onForkFailure: vi.fn(),
