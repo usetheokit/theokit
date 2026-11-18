@@ -3,6 +3,7 @@ import {
   credentialError,
   credentialSource,
   makeInterruptTurn,
+  newForkGate,
   getTuiRoot,
 } from '../agent-session/index.js'
 import { composerDeps } from './composer-deps.js'
@@ -75,7 +76,7 @@ export function useTurnInterrupt(d: {
 }) {
   const { agent, streaming, pendingApproval, forkCurrentSession, screen, markInterrupted } = d
   // A ref, not closure state: `makeInterruptTurn` runs again on every render.
-  const forkInFlight = useRef(false)
+  const forkGate = useRef(newForkGate())
   const interruptTurn = makeInterruptTurn(
     {
       abort: () => {
@@ -94,7 +95,7 @@ export function useTurnInterrupt(d: {
         })
       },
     },
-    forkInFlight,
+    forkGate.current,
   )
 
   return interruptTurn

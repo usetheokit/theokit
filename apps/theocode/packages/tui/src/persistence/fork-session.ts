@@ -4,7 +4,7 @@ let submissions = 0
  * Called synchronously whenever the user submits input, before any async work a turn does. A fork
  * still copying the transcript then knows the session was used and must not be adopted.
  */
-export function noteSessionActivity(): void {
+export function noteTurnStart(): void {
   submissions += 1
 }
 

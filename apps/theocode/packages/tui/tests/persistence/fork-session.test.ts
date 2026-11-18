@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { forkCurrentSessionWith, noteSessionActivity } from '../../src/persistence/fork-session.js'
+import { forkCurrentSessionWith, noteTurnStart } from '../../src/persistence/fork-session.js'
 
 describe('forkCurrentSessionWith', () => {
   it('commits the copy once an async fork resolves', async () => {
@@ -47,7 +47,7 @@ describe('forkCurrentSessionWith', () => {
     const out = await forkCurrentSessionWith({
       newId: () => 'b',
       fork: () => {
-        noteSessionActivity()
+        noteTurnStart()
         return Promise.resolve({ newId: 'b', copied: true })
       },
       current: () => 'a',
@@ -55,5 +55,18 @@ describe('forkCurrentSessionWith', () => {
     })
     expect(out).toEqual({ newId: 'a', copied: false, stale: true })
     expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('a fork started after a turn began is not stale from earlier turns', async () => {
+    noteTurnStart()
+    const commit = vi.fn()
+    const out = await forkCurrentSessionWith({
+      newId: () => 'b',
+      fork: () => Promise.resolve({ newId: 'b', copied: true }),
+      current: () => 'a',
+      commit,
+    })
+    expect(out.copied).toBe(true)
+    expect(commit).toHaveBeenCalledWith('b')
   })
 })

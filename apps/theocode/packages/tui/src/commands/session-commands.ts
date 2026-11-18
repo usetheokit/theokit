@@ -116,7 +116,16 @@ export function handleLogin(
 export async function handleFork(
   forkCurrentSession: () => Promise<ForkResult>,
   setToast: SetToast,
+  streaming = false,
 ): Promise<void> {
+  // A copy taken mid-turn would miss what the turn writes next, yet the session would move to it.
+  if (streaming) {
+    setToast({
+      message: 'Fork refused — a turn is running. Wait for it, or interrupt it (Esc), then /fork.',
+      variant: 'info',
+    })
+    return
+  }
   let result: ForkResult
   try {
     result = await forkCurrentSession()

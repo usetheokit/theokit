@@ -2,7 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 
 import type { CommandCapabilities } from './command-capabilities.js'
 import { interpretCommand } from './interpret-command.js'
-import { noteSessionActivity } from '../persistence/index.js'
+import { noteTurnStart } from '../persistence/fork-session.js'
 import { routeCommand } from './registry.js'
 import { runGoalLoop, type GoalRunState } from './goal.js'
 
@@ -20,6 +20,14 @@ export interface ComposerCommands {
   readonly handleSubmit: (text: string) => void
 }
 
+const TURN_STARTING: ReadonlySet<string> = new Set([
+  'send',
+  'retry',
+  'custom',
+  'initAgents',
+  'review',
+])
+
 export function useComposerCommands(deps: ComposerDeps): ComposerCommands {
   const startGoal: CommandCapabilities['startGoal'] = (objective, base) => {
     runGoalLoop(objective, base, {
@@ -33,8 +41,6 @@ export function useComposerCommands(deps: ComposerDeps): ComposerCommands {
   }
 
   const handleSubmit = (text: string): void => {
-    // Before anything async: invalidates an interrupt fork that is still copying.
-    noteSessionActivity()
     if (deps.reviewResult !== null) deps.setReviewResult(null)
     if (deps.goalFeed !== null && !deps.goalActive) deps.setGoalFeed(null)
 
@@ -49,6 +55,9 @@ export function useComposerCommands(deps: ComposerDeps): ComposerCommands {
       })
       return
     }
+    // Only commands that actually start a turn invalidate a fork still copying; session changes
+    // (/new, /resume) are caught by the session id comparison.
+    if (TURN_STARTING.has(action.kind)) noteTurnStart()
     // `/fork` is async; handleFork reports its own failures, this only keeps a stray rejection
     // from becoming an unhandled one.
     void Promise.resolve(interpretCommand(action, text, { ...deps, startGoal })).catch(

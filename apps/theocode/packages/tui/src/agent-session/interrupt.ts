@@ -10,29 +10,44 @@ export interface InterruptDeps {
   onInterrupted: () => void
 }
 
+export interface ForkGate {
+  running: boolean
+  /** An interrupt arrived while a fork was copying: run one more fork once it settles. */
+  queued: boolean
+}
+
+export const newForkGate = (): ForkGate => ({ running: false, queued: false })
+
 /**
- * `inFlight` is owned by the caller so it outlives this closure: the TUI rebuilds the handler on
- * every render, and a per-closure flag would reset while a fork is still copying.
+ * `gate` is owned by the caller so it outlives this closure: the TUI rebuilds the handler on every
+ * render. An interrupt during a running fork is queued, not dropped: that fork may be rejected as
+ * stale by the very turn being interrupted, and the later turn still deserves its own fork.
  */
-export function makeInterruptTurn(
-  deps: InterruptDeps,
-  inFlight: { current: boolean } = { current: false },
-): () => void {
+export function makeInterruptTurn(deps: InterruptDeps, gate: ForkGate = newForkGate()): () => void {
+  const drain = async (): Promise<void> => {
+    gate.running = true
+    try {
+      do {
+        gate.queued = false
+        try {
+          await deps.forkSession()
+        } catch (e) {
+          deps.onForkFailure(e)
+        }
+      } while (gate.queued)
+    } finally {
+      gate.running = false
+    }
+  }
   return () => {
     if (deps.hasPendingApproval()) return
     if (!deps.hasActiveTurn()) return
     deps.abort()
     deps.onInterrupted()
-    if (inFlight.current) return
-    inFlight.current = true
-    void (async () => {
-      try {
-        await deps.forkSession()
-      } catch (e) {
-        deps.onForkFailure(e)
-      } finally {
-        inFlight.current = false
-      }
-    })()
+    if (gate.running) {
+      gate.queued = true
+      return
+    }
+    void drain()
   }
 }

@@ -148,7 +148,7 @@ const HANDLERS: CommandHandlers = {
     })
   },
   fork: (_action, _text, cap: IdentityCapabilities) => {
-    return handleFork(cap.forkCurrentSession, cap.setToast)
+    return handleFork(cap.forkCurrentSession, cap.setToast, cap.streaming)
   },
   listSessions: (_action, _text, cap: IdentityCapabilities) => {
     handleListSessions(cap.currentSessionId, cap.setToast)

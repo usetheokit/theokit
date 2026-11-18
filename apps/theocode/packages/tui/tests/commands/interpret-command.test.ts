@@ -220,6 +220,14 @@ describe('interpretCommand — the remaining groups claim their own', () => {
     expect(h.setToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }))
   })
 
+  it('test_fork_is_refused_while_a_turn_is_streaming', async () => {
+    const h = harness()
+    ;(h.cap as { streaming: boolean }).streaming = true
+    await interpretCommand({ kind: 'fork' } as CommandAction, '', h.cap)
+    expect(h.forkCurrentSession).not.toHaveBeenCalled()
+    expect(h.setToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'info' }))
+  })
+
   it('test_fork_rejection_is_reported_as_a_toast', async () => {
     const h = harness()
     ;(h.cap as { forkCurrentSession: unknown }).forkCurrentSession = vi.fn(() =>
