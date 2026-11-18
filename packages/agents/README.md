@@ -41,7 +41,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./interactive` | The interactive-shell backend contract |
 | `./pty` | The node-pty implementation of that contract |
 | `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes`, `RefreshFailure` |
-| `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`); `defineAppBootstrap` runs one setup from every entry |
+| `./config` | Agent configuration, trust posture, the instruction tree (`loadInstructionTree`), and `@file` mentions (`resolveFileMentions`); `defineAppBootstrap` runs one setup from every entry |
 | `./tools` | Built-in tool factories (read, list, grep, git, patch, edit, shell, …) |
 | `./client` | Transports for driving an agent from a client. `AgentClient.sendAndWait(input)` resolves when that turn settles (`done`/`error`/`aborted`, never rejects), and `asGoalLoopAgent(client)` adapts a client to the SDK `GoalLoopAgent` so `runGoalLoop` can drive it without polling. `AGENT_ACTION_HEADERS` and `agentRequestHeaders(...)` give a plain `fetch` the headers the route requires |
 | `./client/react` | `useAgent` and the React bindings |
@@ -492,3 +492,7 @@ See `LICENSE`.
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
+
+### `@file` mentions in a user message
+
+`resolveFileMentions(text, { cwd, perFileTokens?, totalTokens?, allowHome?, readFile? })` (from `@theokit/agents/config`) attaches the files a message names with `@path`, using the same `@` grammar as `expandCommandTemplate` (`findFileMentions` exposes it): the `@` must start a line or follow whitespace, and a trailing `.` or `,` is not part of the path. Paths are resolved with `safePathJoin`, `assertNoSymlinkEscape` and `isForbiddenPath`; `~/` is refused unless `allowHome` is set. Each file is capped at `perFileTokens` (default 2000) and the set at `totalTokens` (default 20000). The result is `{ message, attached, skipped }`; every mention that was not attached appears in `skipped` with a reason (`forbidden`, `outside-root`, `not-found`, `unreadable` or `budget`). Errors other than those and ENOENT are rethrown.

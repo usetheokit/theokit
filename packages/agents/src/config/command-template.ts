@@ -28,6 +28,7 @@
  */
 import { ConfigurationError } from '../errors.js'
 
+import { REFERENCE_REGEX } from './file-mentions.js'
 import { currentOperatorPolicy } from './operator-policy.js'
 
 /**
@@ -113,7 +114,7 @@ const PLACEHOLDER_REGEX = /(\\)?\$(ARGUMENTS\b|\d+)/g
  * cases alongside the negative one — a "fix" that stopped recognising inline commands entirely would
  * satisfy the negative and destroy the feature.
  */
-const REFERENCE_REGEX = /(?<!\S)!`(?<cmd>[^`]+)`|(?<!\S)@(?<file>[^\s`,]*[^\s`,.])/g
+// REFERENCE_REGEX (imported) is the shared grammar; `findFileMentions` scans with the same one.
 /** One argument = a quoted run or a bare run. `[Image N]` is one token, as the surfaces emit it. */
 /**
  * A ```` ```! ```` fence — the spec's multi-line command block.

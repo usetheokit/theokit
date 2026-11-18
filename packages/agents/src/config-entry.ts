@@ -99,6 +99,15 @@ export {
   type TemplateDeps,
 } from './config/command-template.js'
 
+// The `@file` half of that grammar for a plain user message: finds the references, resolves them
+// inside the working directory, caps what it inlines and reports what it skipped.
+export {
+  findFileMentions,
+  resolveFileMentions,
+  type FileMentionOptions,
+  type ResolvedFileMentions,
+} from './config/file-mentions.js'
+
 /**
  * B-067 — the settings precedence stack, named.
  *
