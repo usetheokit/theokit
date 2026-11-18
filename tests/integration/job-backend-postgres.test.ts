@@ -138,7 +138,7 @@ describe('PostgresJobBackend (T3.1)', () => {
 })
 
 describe('PostgresJobBackend defer, restore and reschedule', () => {
-  // pg-mem cannot parse 'infinity'; job-backend-postgres-real.test.ts covers `infinity` (defer and restore) when POSTGRES_URL is set.
+  // pg-mem cannot parse 'infinity', so `infinity` itself is not covered here; these tests use a far date.
   const FAR = new Date('2999-01-01T00:00:00Z')
   const availableAt = async (id: string): Promise<number> => {
     const r = await pool.query<{ available_at: Date | string }>(
@@ -252,6 +252,29 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
     // job could end up ahead of a time that then changes.
     expect(read).toMatch(/FOR UPDATE$/)
     expect(read).not.toMatch(/SKIP LOCKED/)
+  })
+
+  it('goes ahead of the time another transaction moved a selected job to while the read waited', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, delaySeconds: 100 })
+    const b = await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 50 })
+    const earlier = new Date(Date.now() + 10_000)
+    let moved = false
+    // The blocking read waits for the other transaction's move, then sees the committed time.
+    const racing: PoolLike = {
+      query: (async (sql: string, params?: unknown[]) => {
+        if (!moved && sql.includes('SELECT COALESCE(held_from')) {
+          moved = true
+          await backend.reschedule(pool, b.jobId, { availableAt: earlier })
+        }
+        return pool.query(sql, params)
+      }) as PoolLike['query'],
+    }
+    expect(
+      await backend.reschedule(racing, a.jobId, {
+        ahead: { name: 'run-task', where: { taskId: [2] } },
+      }),
+    ).toBe(true)
+    expect(await availableAt(a.jobId)).toBe(earlier.getTime() - 1000)
   })
 
   it('rejects reschedule with neither or both of availableAt and ahead', async () => {
