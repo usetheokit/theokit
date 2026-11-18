@@ -76,6 +76,34 @@ function printDecl(d, printer) {
   return printer.printNode(ts.EmitHint.Unspecified, d, d.getSourceFile()).trim()
 }
 
+/** One entry per masked name and real file, so chunks that mask alike never overwrite each other. */
+function record(internals, d, key, text, localName) {
+  const byFile = internals.get(key) ?? new Map()
+  const file = d.getSourceFile().fileName
+  // A declaration met again (or a root) only adds its local name to a record that exists.
+  if (text === null && !byFile.has(file)) return
+  const rec = byFile.get(file) ?? { texts: [], names: new Set() }
+  internals.set(key, byFile)
+  byFile.set(file, rec)
+  if (text !== null) rec.texts.push(text)
+  if (localName) rec.names.add(localName)
+}
+
+function visitReference(node, ctx, internals, seen, queue) {
+  const raw = ctx.checker.getSymbolAtLocation(node)
+  const sym = raw && resolveAlias(raw, ctx.checker)
+  for (const d of sym?.declarations ?? []) {
+    if (!isOwnDeclaration(d, ctx)) continue
+    // The local name an import gives the declaration ties a reference to its declaration.
+    const fresh = !seen.has(d)
+    const text = fresh ? printDecl(d, ctx.printer) : null
+    record(internals, d, declKey(d, ctx), text, raw !== sym ? node.text : null)
+    if (!fresh) continue
+    seen.add(d)
+    queue.push(d)
+  }
+}
+
 /**
  * Declarations of the package's own types that `roots` mention, transitively, other than the
  * root's own name. Exported names are tracked too: an experimental export has no policy record of
@@ -87,23 +115,7 @@ function collectInternals(roots, ctx, internals) {
   while (queue.length > 0) {
     const root = queue.pop()
     ts.forEachChild(root, function visit(node) {
-      if (ts.isIdentifier(node)) {
-        const raw = ctx.checker.getSymbolAtLocation(node)
-        const sym = raw && resolveAlias(raw, ctx.checker)
-        for (const d of sym?.declarations ?? []) {
-          if (seen.has(d) || !isOwnDeclaration(d, ctx)) continue
-          seen.add(d)
-          // Identity is the declaration, not its name: two files may declare the same name.
-          const key = declKey(d, ctx)
-          const text = printDecl(d, ctx.printer)
-          // One list per masked name and real file: chunks that mask alike must not overwrite each other.
-          const byFile = internals.get(key) ?? new Map()
-          internals.set(key, byFile)
-          const file = d.getSourceFile().fileName
-          byFile.set(file, [...(byFile.get(file) ?? []), text])
-          queue.push(d)
-        }
-      }
+      if (ts.isIdentifier(node)) visitReference(node, ctx, internals, seen, queue)
       ts.forEachChild(node, visit)
     })
   }
@@ -154,13 +166,18 @@ function describeSymbol(sym, ctx) {
   const decls = target.declarations ?? []
   const grouped = new Map()
   collectInternals(decls, ctx, grouped)
-  // Masking can map several real files to one name. Within one export they are told apart by the
-  // order the walk meets them (`#T`, `#T~2`, ...), which follows the declaration, not the hash, so
-  // each reference keeps its own text; overloads in one file stay together in source order.
+  // Masking can map several real files to one name. Those are told apart by the local names the
+  // references use for them (`#T@A`, `#T@B`), which belong to the referencing declaration and not to
+  // the hash or the walk order; overloads in one file stay together in source order.
   const refs = new Map()
   for (const [key, byFile] of grouped) {
-    let n = 0
-    for (const texts of byFile.values()) refs.set(n++ === 0 ? key : `${key}~${n}`, texts.join('\n'))
+    const recs = [...byFile.values()]
+    for (const [i, { texts, names }] of recs.entries()) {
+      let k = recs.length > 1 ? `${key}@${[...names].sort().join(',')}` : key
+      // Identical local names too: fall back to the order the walk met them.
+      if (refs.has(k)) k = `${k}~${i + 1}`
+      refs.set(k, texts.join('\n'))
+    }
   }
   return {
     tier: tags.some((t) => t.name === 'experimental') ? 'experimental' : 'stable',

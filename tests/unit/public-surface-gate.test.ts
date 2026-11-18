@@ -175,8 +175,8 @@ describe('public surface gate', () => {
   it('keeps both declarations when two chunks mask to the same name, and fails a break in either', () => {
     const prev = surface(tuple, chunks('a: string', 'b: string'))
     expect(Object.keys(refsOf(prev))).toEqual([
-      'dist/chunk-<hash>.d.ts#T',
-      'dist/chunk-<hash>.d.ts#T~2',
+      'dist/chunk-<hash>.d.ts#T@A',
+      'dist/chunk-<hash>.d.ts#T@B',
     ])
     for (const f of [chunks('a: number', 'b: string'), chunks('a: string', 'b: number')]) {
       expect(run(prev, surface(tuple, f))).toEqual([changed])
@@ -187,6 +187,15 @@ describe('public surface gate', () => {
   it('fails when two chunks that mask alike swap their shapes under one export', () => {
     const prev = surface(tuple, chunks('a: string', 'b: string'))
     expect(run(prev, surface(tuple, chunks('b: string', 'a: string')))).not.toEqual([])
+  })
+
+  it('ties each reference to its declaration, not to the order the walk meets them', () => {
+    const iface = (members: string) =>
+      `import { T as A } from './chunk-ABCDEFG1'\nimport { T as B } from './chunk-ABCDEFG2'\nexport interface Out { ${members} }\n`
+    const prev = surface(iface('a: A; b: B'), chunks('p: string', 'q: string'))
+    // `x?: B` comes first and the two shapes swap: both old members change incompatibly.
+    const next = surface(iface('x?: B; a: A; b: B'), chunks('q: string', 'p: string'))
+    expect(run(prev, next)).not.toEqual([])
   })
 
   it('keeps references of separate exports apart when their chunks mask alike', () => {
