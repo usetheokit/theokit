@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, readlinkSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 
@@ -57,7 +57,9 @@ const READY_TOKEN_HEADER = 'x-theokit-ready-token'
 /** `taskkill /T /F`: ends the pid and every descendant. Resolves its exit code (null when it could not run). */
 function taskkillTree(pid: number): Promise<number | null> {
   return new Promise((resolve) => {
-    const tk = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    // An absolute path, so a writable PATH entry cannot stand in for it.
+    const exe = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe')
+    const tk = spawn(exe, ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
     tk.once('error', () => {
       resolve(null)
     })
@@ -205,6 +207,31 @@ export async function startTestServer(options: StartTestServerOptions): Promise<
   }
 }
 
+/** Ends the child's whole tree and confirms the leader is gone; throws when that cannot be confirmed. */
+async function killWindowsTree(
+  child: ChildProcess,
+  mode: string,
+  hasExited: () => boolean,
+  kill: (pid: number) => Promise<number | null>,
+): Promise<void> {
+  // kill() reaches only the direct child: end the whole tree and confirm before returning.
+  if (child.pid === undefined || (hasExited() && !pidAlive(child.pid))) return
+  const code = await kill(child.pid)
+  // 128: no such process, i.e. already gone.
+  if (code !== 0 && code !== 128) {
+    throw new Error(
+      `could not terminate theokit ${mode} process tree (pid ${String(child.pid)}, taskkill exit ${String(code)})`,
+    )
+  }
+  const until = Date.now() + GRACE_MS
+  while (!hasExited() && Date.now() < until) await sleep(25)
+  if (!hasExited()) {
+    throw new Error(
+      `theokit ${mode} (pid ${String(child.pid)}) still running after its process tree was terminated`,
+    )
+  }
+}
+
 async function bootOnce(
   options: StartTestServerOptions,
   cwd: string,
@@ -245,23 +272,7 @@ async function bootOnce(
   const close: TestServer['close'] = () => {
     closing ??= (async () => {
       if (platform === 'win32') {
-        // kill() reaches only the direct child: end the whole tree and confirm before returning.
-        if (child.pid !== undefined && (!exited || pidAlive(child.pid))) {
-          const code = await (options.killTree ?? taskkillTree)(child.pid)
-          // 128: no such process, i.e. already gone.
-          if (code !== 0 && code !== 128) {
-            throw new Error(
-              `could not terminate theokit ${mode} process tree (pid ${String(child.pid)}, taskkill exit ${String(code)})`,
-            )
-          }
-          const until = Date.now() + GRACE_MS
-          while (!exited && Date.now() < until) await sleep(25)
-          if (!exited) {
-            throw new Error(
-              `theokit ${mode} (pid ${String(child.pid)}) still running after its process tree was terminated`,
-            )
-          }
-        }
+        await killWindowsTree(child, mode, hasExited, options.killTree ?? taskkillTree)
         return ended
       }
       if (!exited || groupAlive(child)) {
