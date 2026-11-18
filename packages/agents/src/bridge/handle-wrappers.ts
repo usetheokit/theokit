@@ -124,14 +124,12 @@ function guardTurn(
 ): SdkTurnHandle {
   let outcome: ReturnType<SdkTurnHandle['wait']> | undefined
   const guardedOutcome = (): ReturnType<SdkTurnHandle['wait']> =>
-    (outcome ??= turn
-      .wait()
-      .then(async (out) => {
-        if (out.result === undefined) return out
-        const result = await runOutputGuards(out.result, guardrails)
-        if (result !== '') onDelta?.({ update: { type: 'text-delta', text: result } })
-        return { ...out, result }
-      }))
+    (outcome ??= turn.wait().then(async (out) => {
+      if (out.result === undefined) return out
+      const result = await runOutputGuards(out.result, guardrails)
+      if (result !== '') onDelta?.({ update: { type: 'text-delta', text: result } })
+      return { ...out, result }
+    }))
   return {
     wait: guardedOutcome,
     ...(turn.cancel === undefined ? {} : { cancel: () => turn.cancel?.() }),
