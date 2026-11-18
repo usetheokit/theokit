@@ -261,10 +261,9 @@ export function buildHookHandlers(
           ...(options.env !== undefined && { env: options.env }),
         })
         if (result.exitCode !== 0) {
-          const message = fenceHookOutput(
-            result.stdout || result.stderr || `hook exited ${String(result.exitCode)}`,
-          )
-          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: message })
+          const bare = result.stdout || result.stderr || `hook exited ${String(result.exitCode)}`
+          const message = fenceHookOutput(bare)
+          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: bare })
           options.onVeto?.({ tool: ctx.name, reason: message })
           return { block: true, message }
         }

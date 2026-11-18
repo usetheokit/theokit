@@ -689,7 +689,12 @@ function buildSendOptions(
   const callerSink = overrides.onRunEvent
   sendOptions.onRunEvent = (ev) => {
     const found = refusalFromRunEvent(ev)
-    if (found !== undefined) refusals.set(found.callId, found)
+    if (found !== undefined) {
+      // Match the ledger in denial-event order, and keep the result by call id, so a later
+      // tool_result cannot take a different entry for the same tool.
+      if (found.runId !== undefined) resolveRefusal(found, undefined)
+      refusals.set(found.callId, found)
+    }
     return callerSink?.(ev)
   }
   return sendOptions
