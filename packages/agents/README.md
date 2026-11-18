@@ -76,6 +76,10 @@ await registry.dispatch('/exit', { exit: () => process.exit(0) })
 
 `AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
 
+`loginWithApiKey(key, store, { provider?, overwrite?, env? })` (from `./auth`) trims the key, infers the provider from its prefix when none is given, and writes the credential file, returning `{ provider, path }`. It throws `CredentialError` for an empty key or an unknown prefix without a provider, `ProviderPrefixMismatchError` when the declared provider contradicts the prefix, and `CredentialExistsError` (`code: 'credential_exists'`, names the path) when a file exists and `overwrite` is not set. `logout(store, env?)` removes the file and returns whether there was one; a concurrent removal returns `false`.
+
+`AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
+
 ## One bootstrap for every entry
 
 An app with several entries (CLI, ACP server) declares its setup once. Each step runs once, in order,
