@@ -4,6 +4,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
+import type { CompiledWiring } from '../../src/bridge/index.js'
+
 const h = vi.hoisted(() => ({ created: [] as Record<string, unknown>[] }))
 
 vi.mock('@theokit/sdk', async (importOriginal) => ({
@@ -26,7 +28,7 @@ const { AgentBuilder } = await import('../../src/bridge/agent-builder.js')
 const { toAgentFactory } = await import('../../src/bridge/sdk-adapter.js')
 const { streamAgentTurnInProcess } = await import('../../src/in-process-turn.js')
 
-type Wiring = import('../../src/bridge/index.js').CompiledWiring
+type Wiring = CompiledWiring
 
 const POSTURE = {
   kind: 'auto-approve' as const,

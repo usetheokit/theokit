@@ -387,7 +387,6 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // `defineAgent({ hooks })` cannot type-check and silently no-op. A lifecycle hook that is
     // declared but never registered is a security gate that does not gate.
     ...compileHooksAndPlugins(def),
-    ...(def.onWired !== undefined ? { onWired: def.onWired } : {}),
     // MCP — builder/`defineAgent` servers converge on the same `mcpServers` field the `@MCP`
     // decorator path populates; the SDK adapter forwards it to `Agent.create({ mcpServers })`.
     ...(def.mcpServers !== undefined ? { mcpServers: def.mcpServers } : {}),
@@ -406,7 +405,13 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
  * needs a transport. Doing the conversion HERE (not on the builder) means every entry point that
  * reaches `defineAgent` gets it, so `hooks` can never be declared-but-dropped.
  */
-function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[] } {
+function compileHooksAndPlugins(
+  def: AgentDefinition,
+): Pick<CompiledAgentOptions, 'plugins' | 'onWired'> {
+  return { ...compilePlugins(def), ...(def.onWired !== undefined ? { onWired: def.onWired } : {}) }
+}
+
+function compilePlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[] } {
   const map = (def as { hooks?: Readonly<Record<string, unknown>> }).hooks
   const entries = Object.entries(map ?? {}).filter(([, h]) => typeof h === 'function')
   const explicit = def.plugins ?? []
