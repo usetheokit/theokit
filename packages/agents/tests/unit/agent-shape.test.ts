@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { AgentBuilder, ContextualTool } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
 import { ModelCapability, ToolsCapability } from '../../src/capability/capabilities.js'
-import { declareAgentShape } from '../../src/capability/agent-shape.js'
+import { declareAgentShape, shapeToolsAsCustomTools } from '../../src/capability/agent-shape.js'
 
 /**
  * M69 — `declareAgentShape(name, members)`: what an agent is MADE OF, as a published value.
@@ -102,5 +102,21 @@ describe('declareAgentShape — the composed shape as a value', () => {
     expect(() =>
       declareAgentShape('assistant', [new ModelCapability('a'), new ModelCapability('b')]),
     ).toThrow()
+  })
+})
+
+describe('shapeToolsAsCustomTools', () => {
+  it('returns JSON-Schema tools and rejects a Zod-schema tool', () => {
+    const json = {
+      name: 'j',
+      description: 'd',
+      inputSchema: { type: 'object' },
+      handler: () => 'x',
+    }
+    const zod = { ...json, name: 'z', inputSchema: { parse: () => ({}) } }
+    const ok = declareAgentShape('a', [new ToolsCapability([json as never])])
+    expect(shapeToolsAsCustomTools(ok).map((t) => t.name)).toEqual(['j'])
+    const bad = declareAgentShape('a', [new ToolsCapability([zod as never])])
+    expect(() => shapeToolsAsCustomTools(bad)).toThrow(/"z"/)
   })
 })

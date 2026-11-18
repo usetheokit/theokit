@@ -15,25 +15,21 @@ export function toCompiledTool(tool: CustomTool): CompiledTool {
   // `CustomTool.handler` takes `Record<string, unknown>` as input; `CompiledTool.handler` takes the
   // wider `unknown`. Contravariance on the input parameter prevents direct assignment — `as unknown as`
   // is the SDK-boundary seam for this widening. Runtime-safe: SDK always passes a plain object for input.
-  const handler = tool.handler as unknown as (
-    input: unknown,
-    ctx?: { signal?: AbortSignal; context?: unknown },
-  ) => string | Promise<string>
-  const compiled: CompiledTool = {
-    name: tool.name,
-    description: tool.description,
-    inputSchema: tool.inputSchema,
-    handler: (input, ctx) => handler(input, ctx),
+  // Call `handler` as a METHOD of `tool` so a handler that reads `this` keeps its receiver.
+  const owner = tool as unknown as {
+    handler: (
+      input: unknown,
+      ctx?: { signal?: AbortSignal; context?: unknown },
+    ) => string | Promise<string>
   }
-  // Preserve SYMBOL-keyed metadata the SDK installs on a tool — notably the `@theokit/sdk/a2a` subagent
-  // credential-inheritance sink (`Symbol.for("theokit.subagent.inheritCredentials")`). Copying only the
-  // four known fields drops it, so the SDK runtime can't hand the parent's `apiKey` down to a delegated
-  // child → the child fails with `provider_unresolved` ("(no response)"). The wrapped handler still calls
-  // the original tool's handler, so the sink (which mutates that handler's closure) stays effective.
-  for (const sym of Object.getOwnPropertySymbols(tool)) {
-    ;(compiled as unknown as Record<symbol, unknown>)[sym] = (
-      tool as unknown as Record<symbol, unknown>
-    )[sym]
+  // Spread copies every own enumerable property, string- and symbol-keyed alike — notably the
+  // `@theokit/sdk/a2a` subagent credential-inheritance sink (`Symbol.for("theokit.subagent.inheritCredentials")`),
+  // without which the SDK runtime can't hand the parent's `apiKey` down to a delegated child
+  // (`provider_unresolved`). The wrapped handler still calls the original tool's handler, so the sink
+  // (which mutates that handler's closure) stays effective.
+  const compiled: CompiledTool = {
+    ...(tool as unknown as CompiledTool),
+    handler: (input, ctx) => owner.handler(input, ctx),
   }
   return compiled
 }

@@ -1,6 +1,7 @@
 import type { CustomTool } from '@theokit/sdk'
 
 import type { CompiledTool } from '../bridge/agent-compiler.js'
+import { ConfigurationError } from '../errors.js'
 import type { ReasoningEffort } from '../types.js'
 
 import { applyCapabilities, type Capability, type ProvenanceEntry } from './capability.js'
@@ -81,11 +82,20 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
 /**
  * The shape's tools as the SDK `CustomTool` an app holds, with no cast at the call site.
  *
- * Every tool in a shape is either converted from a `CustomTool` or built by the compiler, whose
- * `inputSchema` the SDK accepts as a JSON-schema object; `CompiledTool.inputSchema` stays `unknown`
- * because decorator tools may carry a live Zod schema until the SDK adapter lowers it. The one
- * cast here is that SDK-boundary narrowing; the handler is already assignable (it accepts wider input).
+ * A `CustomTool` carries a JSON-Schema `inputSchema`. A tool whose schema is a live Zod schema
+ * (decorator `@Tool({ input })`) is lowered only by the SDK's `Tool.create` inside the adapter, which
+ * also wraps the input parsing; this synchronous helper cannot do that, so it REJECTS such a tool
+ * with a typed error instead of handing back a `CustomTool` the SDK would misread. Tools with a
+ * JSON-Schema object are SDK-ready and are returned as they are, exactly as the adapter forwards them.
  */
 export function shapeToolsAsCustomTools(shape: AgentShape): readonly CustomTool[] {
-  return shape.tools as unknown as readonly CustomTool[]
+  return shape.tools.map((tool) => {
+    const schema = tool.inputSchema as { parse?: unknown } | null | undefined
+    if (typeof schema !== 'object' || schema === null || typeof schema.parse === 'function') {
+      throw new ConfigurationError(
+        `shapeToolsAsCustomTools: tool "${tool.name}" has no JSON-Schema inputSchema (a Zod or missing schema); build it with a JSON-Schema tool such as defineAgentTool`,
+      )
+    }
+    return tool as unknown as CustomTool
+  })
 }

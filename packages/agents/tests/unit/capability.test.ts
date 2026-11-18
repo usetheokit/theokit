@@ -262,4 +262,22 @@ describe('ToolsCapability with an SDK CustomTool', () => {
     await viaDefine?.handler({}, { context })
     expect(seen).toBe(context)
   })
+
+  it('mixed inputs keep a compiled tool\'s receiver and extra properties', async () => {
+    const compiled = {
+      name: 'c',
+      description: 'd',
+      inputSchema: {},
+      extra: 42,
+      tag: 'self',
+      handler(this: { tag: string }) {
+        return this.tag
+      },
+    }
+    const sdk = { ...compiled, name: 's', handler: () => 'sdk' } as never
+    const tools = applyCapabilities([new ToolsCapability([compiled as never, sdk])]).tools
+    expect(await tools[0]?.handler({})).toBe('self')
+    expect((tools[0] as unknown as { extra: number }).extra).toBe(42)
+    expect(await tools[1]?.handler({})).toBe('sdk')
+  })
 })
