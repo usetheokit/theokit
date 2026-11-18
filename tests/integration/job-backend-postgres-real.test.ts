@@ -570,10 +570,19 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       it('test_a_job_an_old_worker_leased_and_failed_after_the_migration_is_left_alone', async () => {
         await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-oldworker' })
         await backend.migrate()
-        // An old worker does not know `leased_at`: it leases, fails for good, and the job is replayed.
+        // An old worker does not know `leased_at`: it runs the pre-`leased_at` lease and final-failure
+        // statements, then the job is replayed.
         await pool.query(
-          `UPDATE theokit_jobs_ci SET attempts = 0, failed_at = NULL, locked_until = NULL,
-           leased_at = NULL, last_error = 'boom' WHERE idempotency_key = 'k-oldworker'`,
+          `UPDATE theokit_jobs_ci SET locked_until = NOW() + INTERVAL '30 seconds',
+           attempts = attempts + 1, lease_token = 'old-worker' WHERE idempotency_key = 'k-oldworker'`,
+        )
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NOW(), last_error = 'boom', locked_until = NULL,
+           lease_token = NULL WHERE idempotency_key = 'k-oldworker'`,
+        )
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NULL, attempts = 0, available_at = NOW()
+           WHERE idempotency_key = 'k-oldworker'`,
         )
         expect(await cancel('k-oldworker')).toBe(false)
         expect(await count('k-oldworker')).toBe(1)
