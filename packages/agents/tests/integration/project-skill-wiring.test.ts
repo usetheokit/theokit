@@ -13,6 +13,7 @@ import { z } from 'zod'
 
 import { AgentBuilder } from '../../src/bridge/agent-builder.js'
 import type { CompiledWiring } from '../../src/bridge/index.js'
+import { getOrCreateReporting } from '../../src/bridge/compiled-wiring.js'
 import { toAgentFactory } from '../../src/bridge/sdk-adapter.js'
 
 const POSTURE = {
@@ -103,5 +104,49 @@ describe('onWired with the real SDK', () => {
     expect(Agent.registry.get(session)).toBeDefined()
     expect(b).toBeDefined()
     expect(a).toBeDefined()
+  })
+
+  describe('listener and direct SDK creation racing on one session', () => {
+    const opts = () => ({
+      apiKey: API_KEY,
+      model: { id: 'openai/gpt-4o-mini' },
+      local: { cwd },
+    })
+    const check = async (session: string, calls: Promise<unknown>[], seen: CompiledWiring[]) => {
+      const [a, b] = (await Promise.all(calls)) as { dispose(): Promise<void> }[]
+      expect(a).toBe(b)
+      expect(Agent.registry.get(session)).toBe(a)
+      expect(seen).toHaveLength(1)
+      // The real registry still resolves to the one live handle after the race settled.
+      await new Promise((r) => setTimeout(r, 20))
+      expect(Agent.registry.get(session)).toBe(a)
+      expect(await Agent.getOrCreate(session, opts() as never)).toBe(a)
+    }
+
+    it('listener call first, direct SDK call second', async () => {
+      const seen: CompiledWiring[] = []
+      const session = id('race-a')
+      await check(
+        session,
+        [
+          getOrCreateReporting(Agent, session, opts(), (w) => seen.push(w)),
+          Agent.getOrCreate(session, opts() as never),
+        ],
+        seen,
+      )
+    })
+
+    it('direct SDK call first, listener call second', async () => {
+      const seen: CompiledWiring[] = []
+      const session = id('race-b')
+      await check(
+        session,
+        [
+          Agent.getOrCreate(session, opts() as never),
+          getOrCreateReporting(Agent, session, opts(), (w) => seen.push(w)),
+        ],
+        seen,
+      )
+    })
   })
 })

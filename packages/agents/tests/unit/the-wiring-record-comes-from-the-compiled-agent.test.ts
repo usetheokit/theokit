@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   // The SDK's live-agent cache (`Agent.registry`): a faithful stand-in, so a cached agent is reused.
   live: new Map<string, unknown>(),
   resumes: 0,
+  sdk: (): Record<string, (...a: never[]) => Promise<unknown>> => ({}),
 }))
 
 const fakeAgent = () => ({
@@ -32,9 +33,22 @@ vi.mock('@theokit/sdk', async (importOriginal) => ({
         h.live.set(id, agent)
       },
     },
-    getOrCreate: (_id: string, opts: Record<string, unknown>) => {
-      h.created.push(opts)
-      return Promise.resolve(fakeAgent())
+    get: (id: string, opts?: { cwd?: string }) =>
+      h.known.has(id) && h.known.get(id) === opts?.cwd
+        ? Promise.resolve({})
+        : Promise.reject(Object.assign(new Error('unknown'), { name: 'UnknownAgentError' })),
+    // Mirrors the SDK: live cache, then resume, then create; the result is cached.
+    getOrCreate: async (id: string, opts: Record<string, unknown>) => {
+      const hit = h.live.get(id)
+      if (hit !== undefined) return hit
+      let agent: unknown
+      try {
+        agent = await h.sdk().resume(id, opts)
+      } catch {
+        agent = await h.sdk().create({ ...opts, agentId: id })
+      }
+      h.live.set(id, agent)
+      return agent
     },
     resume: (id: string, opts: Record<string, unknown>) => {
       h.resumes++
@@ -57,6 +71,8 @@ vi.mock('@theokit/sdk', async (importOriginal) => ({
   SkillReadTool: { create: () => ({ name: 'skill_read' }) },
 }))
 
+const sdkMod = await import('@theokit/sdk')
+h.sdk = () => sdkMod.Agent as never
 const { AgentBuilder } = await import('../../src/bridge/agent-builder.js')
 const { getOrCreateReporting } = await import('../../src/bridge/compiled-wiring.js')
 const { toAgentFactory } = await import('../../src/bridge/sdk-adapter.js')
@@ -193,40 +209,6 @@ describe('onWired', () => {
     expect(second.map((w) => w.tools)).toEqual([['lookup', 'other']])
   })
 
-  it('does not replace or dispose a handle the SDK cached while the listener path resolved', async () => {
-    const live = new Map<string, { id: string; disposed: boolean }>()
-    const mk = (id: string) => ({
-      id,
-      disposed: false,
-      dispose() {
-        this.disposed = true
-      },
-    })
-    const sdk = {
-      registry: {
-        get: (id: string) => live.get(id),
-        set: (id: string, a: never) => live.set(id, a),
-      },
-      // A plain `Agent.getOrCreate` caches its own handle while our resume is still in flight.
-      resume: async () => {
-        await Promise.resolve()
-        live.set('raced', mk('sdk'))
-        return mk('ours')
-      },
-      create: () => Promise.reject(new Error('unused')),
-      getOrCreate: () => Promise.reject(new Error('unused')),
-    }
-    const seen: Wiring[] = []
-    const got = (await getOrCreateReporting(sdk, 'raced', {}, (w) => seen.push(w))) as {
-      id: string
-      disposed: boolean
-    }
-    expect(got.id).toBe('sdk')
-    expect(live.get('raced')).toBe(got)
-    expect(got.disposed).toBe(false)
-    expect(seen).toHaveLength(0)
-  })
-
   it('reports once when two calls race to create the same fresh session', async () => {
     const { Agent } = await import('@theokit/sdk')
     const seen: Wiring[] = []
@@ -237,53 +219,6 @@ describe('onWired', () => {
     ])
     expect(seen).toHaveLength(1)
     expect(h.created).toHaveLength(1)
-  })
-
-  it('a listener call and a plain call racing on one session share one live handle', async () => {
-    const live = new Map<string, { disposed: boolean }>()
-    let creations = 0
-    const sdk = {
-      registry: {
-        get: (id: string) => live.get(id),
-        set: (id: string, a: never) => live.set(id, a),
-      },
-      resume: () =>
-        Promise.reject(Object.assign(new Error('unknown'), { name: 'UnknownAgentError' })),
-      create: async () => {
-        await Promise.resolve()
-        creations++
-        return {
-          disposed: false,
-          dispose() {
-            this.disposed = true
-          },
-        }
-      },
-      // The SDK's own getOrCreate: answers from the registry, else creates and caches.
-      getOrCreate: async (id: string) => {
-        const hit = live.get(id)
-        if (hit) return hit
-        await Promise.resolve()
-        creations++
-        const a = {
-          disposed: false,
-          dispose() {
-            this.disposed = true
-          },
-        }
-        live.set(id, a)
-        return a
-      },
-    }
-    const seen: Wiring[] = []
-    const [a, b] = (await Promise.all([
-      getOrCreateReporting(sdk, 'mix', {}, (w) => seen.push(w)),
-      getOrCreateReporting(sdk, 'mix', {}, undefined),
-    ])) as { disposed: boolean }[]
-    expect(a).toBe(b)
-    expect(creations).toBe(1)
-    expect(a.disposed).toBe(false)
-    expect(live.get('mix')).toBe(a)
   })
 
   it('a builtin in withheldBuiltinTools is absent from tools', async () => {

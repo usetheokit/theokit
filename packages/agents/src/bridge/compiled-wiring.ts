@@ -114,50 +114,45 @@ async function resolvedSkillNames(agent: unknown): Promise<string[] | undefined>
 
 interface AgentStatics {
   /** The SDK's live-agent cache; `getOrCreate` answers from it before it resumes or creates. */
-  registry?: { get(id: string): unknown; set(id: string, agent: never): void }
+  registry?: { get(id: string): unknown }
+  /** Looks a session up in the persisted registry; rejects `UnknownAgentError` for a new one. */
+  get?(id: string, options?: { cwd?: string }): Promise<unknown>
   getOrCreate(id: string, options: never): Promise<unknown>
-  resume(id: string, options: never): Promise<unknown>
-  create(options: never): Promise<unknown>
 }
 
-const isErr = (err: unknown, key: 'name' | 'code', value: string): boolean =>
-  (err as Record<string, unknown> | null)?.[key] === value
+const isUnknownAgent = (err: unknown): boolean =>
+  (err as Record<string, unknown> | null)?.name === 'UnknownAgentError'
 
-/**
- * `Agent.getOrCreate`, reporting the wiring only when this call CREATED the agent.
- *
- * With a listener it follows the SDK's own resolution itself, because the creation event is the
- * only reliable signal: a live cached agent is returned untouched (a resume would rehydrate a
- * second handle and merge the new options into it); otherwise resume; on `UnknownAgentError`
- * create; if a concurrent creator won (`agent_id_already_exists`) resume the winner, which is not a
- * creation of ours. Whatever it resolves is put in the live cache, as `getOrCreate` does. Resume
- * gets the final options, so a non-default `cwd` is honoured. Without a listener it is plain
- * `getOrCreate`.
- */
-const inFlight = new WeakMap<object, Map<string, Promise<unknown>>>()
-
-/** Concurrent calls for one session share a single resolution, so the wiring is reported once. */
-export function getOrCreateReporting(
-  sdk: unknown,
+/** Whether the session already exists, live or persisted; only a definite "unknown" means new. */
+async function sessionExists(
+  statics: AgentStatics,
   sessionId: string,
   options: Record<string, unknown>,
-  listener: ((wiring: CompiledWiring) => void) | undefined,
-): Promise<unknown> {
-  // Listener-less calls share the same per-session slot, so a plain `getOrCreate` never runs
-  // beside a listener call's resume/create and cannot dispose or duplicate its live handle.
-  const key = sdk as object
-  const pending = inFlight.get(key) ?? new Map<string, Promise<unknown>>()
-  inFlight.set(key, pending)
-  const running = pending.get(sessionId)
-  if (running) return running
-  const p = resolveReporting(sdk, sessionId, options, listener).finally(() =>
-    pending.delete(sessionId),
-  )
-  pending.set(sessionId, p)
-  return p
+): Promise<boolean> {
+  if (statics.registry?.get(sessionId) !== undefined) return true
+  if (typeof statics.get !== 'function') return true
+  const cwd = (options.local as { cwd?: string } | undefined)?.cwd
+  try {
+    await statics.get(sessionId, cwd === undefined ? {} : { cwd })
+    return true
+  } catch (err) {
+    return !isUnknownAgent(err)
+  }
 }
 
-async function resolveReporting(
+const inFlight = new WeakMap<object, Map<string, Promise<unknown>>>()
+
+/**
+ * `Agent.getOrCreate`, reporting the wiring only when the session did not exist before the call.
+ *
+ * Creation, caching and disposal stay entirely inside the SDK's own `getOrCreate` (its in-flight
+ * map, live registry and race handling), so a listener call and any direct SDK call for one
+ * session converge on a single live, registered handle and nothing is disposed or replaced here.
+ * The wiring is read from the final options and reported once per session for calls through this
+ * wrapper; a resumed or live session reports nothing. If a direct SDK call creates the session
+ * between the existence check and the SDK call, that creation is still reported once.
+ */
+export function getOrCreateReporting(
   sdk: unknown,
   sessionId: string,
   options: Record<string, unknown>,
@@ -165,39 +160,17 @@ async function resolveReporting(
 ): Promise<unknown> {
   const statics = sdk as AgentStatics
   if (listener === undefined) return statics.getOrCreate(sessionId, options as never)
-  const cached = statics.registry?.get(sessionId)
-  if (cached !== undefined) return cached
-  // `registry.set` disposes whatever it replaces, so never overwrite: if the SDK's own
-  // `getOrCreate` cached a handle while this call was resolving, that handle wins and ours, which
-  // would be a second live copy of the same session, is released.
-  const remember = async (agent: unknown): Promise<unknown> => {
-    const winner = statics.registry?.get(sessionId)
-    if (winner === undefined) {
-      statics.registry?.set(sessionId, agent as never)
-      return agent
-    }
-    if (winner !== agent) {
-      try {
-        await (agent as { dispose?: () => Promise<void> | void } | null)?.dispose?.()
-      } catch (err) {
-        console.warn('[theokit] could not release a duplicate agent handle:', err)
-      }
-    }
-    return winner
-  }
-  try {
-    return await remember(await statics.resume(sessionId, options as never))
-  } catch (err) {
-    if (!isErr(err, 'name', 'UnknownAgentError')) throw err
-  }
-  let agent: unknown
-  try {
-    agent = await statics.create({ ...options, agentId: sessionId } as never)
-  } catch (err) {
-    if (!isErr(err, 'code', 'agent_id_already_exists')) throw err
-    return remember(await statics.resume(sessionId, options as never))
-  }
-  // The agent was created by this call, so its wiring is reported even if a racer's handle wins.
-  await reportWiring(listener, options, agent)
-  return remember(agent)
+  const key = sdk as object
+  const pending = inFlight.get(key) ?? new Map<string, Promise<unknown>>()
+  inFlight.set(key, pending)
+  const running = pending.get(sessionId)
+  if (running) return running
+  const p = (async () => {
+    const existed = await sessionExists(statics, sessionId, options)
+    const agent = await statics.getOrCreate(sessionId, options as never)
+    if (!existed) await reportWiring(listener, options, agent)
+    return agent
+  })().finally(() => pending.delete(sessionId))
+  pending.set(sessionId, p)
+  return p
 }
