@@ -124,12 +124,10 @@ function declKey(d, ctx) {
     const stripped = full.replace(CHUNK_HASH, '')
     const clash =
       stripped !== full &&
-      ctx.program
-        .getSourceFiles()
-        .some((sf) => {
-          const other = relFile(sf.fileName, ctx)
-          return other !== full && other.replace(CHUNK_HASH, '') === stripped
-        })
+      ctx.program.getSourceFiles().some((sf) => {
+        const other = relFile(sf.fileName, ctx)
+        return other !== full && other.replace(CHUNK_HASH, '') === stripped
+      })
     file = clash ? full : stripped
     ctx.fileNames.set(full, file)
   }
