@@ -109,10 +109,46 @@ export interface AuthProviderOptions {
    * Default `0`: the SDK's own skew decides, as before.
    */
   readonly refreshBeforeMs?: number
+  /** Abort each refresh request after this long. Default: no timeout (today's behaviour). */
+  readonly requestTimeoutMs?: number
+  /** 'use-stored': on a transient failure after the retries, return the stored credential. Default 'throw'. */
+  readonly onTransientFailure?: 'throw' | 'use-stored'
+}
+
+/** Wrap `fetch` so each request is aborted, and rejected, after `ms` even if fetch ignores the signal. */
+function withTimeout(base: typeof fetch, ms: number): typeof fetch {
+  return async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const controller = new AbortController()
+    const outer = init?.signal
+    const onOuter = (): void => {
+      controller.abort(outer?.reason)
+    }
+    if (outer) {
+      if (outer.aborted) controller.abort(outer.reason)
+      else outer.addEventListener('abort', onOuter, { once: true })
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        const err = new Error(`refresh request timed out after ${String(ms)}ms`)
+        err.name = 'AbortError'
+        controller.abort(err)
+        reject(err)
+      }, ms)
+    })
+    try {
+      return await Promise.race([base(input, { ...init, signal: controller.signal }), timeout])
+    } finally {
+      clearTimeout(timer)
+      outer?.removeEventListener('abort', onOuter)
+    }
+  }
 }
 
 export class AuthProvider {
   private readonly refreshBeforeMs: number
+  private readonly requestTimeoutMs: number | undefined
+  private readonly onTransientFailure: 'throw' | 'use-stored'
 
   constructor(
     private readonly config: OAuthProviderConfig,
@@ -126,6 +162,17 @@ export class AuthProvider {
       )
     }
     this.refreshBeforeMs = refreshBeforeMs
+    const requestTimeoutMs = options.requestTimeoutMs
+    if (
+      requestTimeoutMs !== undefined &&
+      (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0)
+    ) {
+      throw new RangeError(
+        `AuthProvider: requestTimeoutMs must be a finite number of milliseconds above 0, got ${String(requestTimeoutMs)}`,
+      )
+    }
+    this.requestTimeoutMs = requestTimeoutMs
+    this.onTransientFailure = options.onTransientFailure ?? 'throw'
   }
 
   /**
@@ -184,6 +231,10 @@ export class AuthProvider {
     deps: EnsureFreshHttpDeps,
     env?: Record<string, string | undefined>,
   ): Promise<ResolvedCredential> {
+    const timed: EnsureFreshHttpDeps =
+      this.requestTimeoutMs !== undefined
+        ? { ...deps, fetch: withTimeout(deps.fetch, this.requestTimeoutMs) }
+        : deps
     return withFileLock(filePath, async () => {
       // RE-READ after acquiring the lock: another process may have refreshed while we waited.
       const doDisco = readStoredOAuth(this.store, env)
@@ -211,12 +262,17 @@ export class AuthProvider {
           const fresh = await ensureFreshCredential(
             decidedOn,
             { config: this.config, store: this.store, env },
-            deps,
+            timed,
           )
           return fresh === decidedOn ? current : fresh
         } catch (err) {
           const failure = classifyRefreshFailure(err)
-          if (!failure.transient || attempt >= MAX_ATTEMPTS - 1) throw failure
+          if (!failure.transient) throw failure
+          if (attempt >= MAX_ATTEMPTS - 1) {
+            // 'use-stored': a token that is still stored beats failing the run on an unreachable endpoint.
+            if (this.onTransientFailure === 'use-stored') return current
+            throw failure
+          }
           await new Promise((resolve) => setTimeout(resolve, waitWithJitter(attempt)))
         }
       }
