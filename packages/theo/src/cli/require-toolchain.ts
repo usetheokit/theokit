@@ -2,8 +2,8 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-/** Build-time packages `theokit` loads for the CLI only; they are optional peers, not dependencies. */
-export const CLI_TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'tsx', 'typescript'] as const
+/** Build-time packages `theokit` loads for the CLI only; they are optional peers, not dependencies (`tsx` stays a dependency: `theokit start` loads TypeScript source). */
+export const CLI_TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'typescript'] as const
 
 /** Throw a clear error naming the first toolchain package the app does not have installed. */
 export function requireToolchain(
@@ -34,7 +34,7 @@ function isInstalled(req: NodeJS.Require, name: string): boolean {
   }
 }
 
-/** Check the toolchain, then register tsx's ESM hook (the CLI no longer loads it unconditionally). */
+/** Check the toolchain, then register tsx's ESM hook (loaded here, not at CLI start-up). */
 export async function loadToolchain(): Promise<void> {
   requireToolchain()
   // tsx ships no types for this side-effect entry.

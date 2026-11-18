@@ -31,7 +31,7 @@ beforeAll(() => {
   cpSync(join(ROOT, 'package.json'), join(theo, 'package.json'))
   // Everything theokit installs for itself except the optional toolchain peers.
   for (const name of readdirSync(join(ROOT, 'node_modules'))) {
-    if (name === '.bin' || name === '@vitejs' || ['vite', 'tsx', 'typescript'].includes(name))
+    if (name === '.bin' || name === '@vitejs' || ['vite', 'typescript'].includes(name))
       continue
     symlinkSync(
       realpathSync(join(ROOT, 'node_modules', name)),
@@ -59,7 +59,7 @@ describe('requireToolchain', () => {
   })
 
   it('passes when the packages resolve', () => {
-    expect(() => requireToolchain(['vite', 'tsx'], process.cwd())).not.toThrow()
+    expect(() => requireToolchain(['vite', 'typescript'], process.cwd())).not.toThrow()
   })
 })
 

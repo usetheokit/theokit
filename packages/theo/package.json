@@ -153,7 +153,8 @@
     "goober": "^2.1.19",
     "picomatch": "^4.0.4",
     "reflect-metadata": "^0.2.2",
-    "superjson": "^2.2.6"
+    "superjson": "^2.2.6",
+    "tsx": "^4.22.4"
   },
   "peerDependencies": {
     "@theokit/sdk": "^5.17.0",
@@ -163,7 +164,6 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "^7.0.0 || ^8.0.0",
-    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "unstorage": "^1.10.0",
     "vite": "^7.3.7",
@@ -181,9 +181,6 @@
       "optional": true
     },
     "db0": {
-      "optional": true
-    },
-    "tsx": {
       "optional": true
     },
     "typescript": {
@@ -207,7 +204,6 @@
     "@vitejs/plugin-react": "^4.7.0",
     "better-sqlite3": "^12.11.1",
     "db0": "^0.3.4",
-    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "unstorage": "^1.17.5",
     "vite": "^7.3.7"
