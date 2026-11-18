@@ -54,7 +54,7 @@ export interface SubagentAgentDefinition {
   /** Model for this subagent. 'inherit' or absent = the parent's model. */
   readonly model?: ModelSelection | 'inherit'
   /** MCP servers this subagent may use, by name or inline config, as the SDK takes them. */
-  readonly mcpServers?: ReadonlyArray<string | Record<string, McpServerConfig>>
+  readonly mcpServers?: readonly (string | Record<string, McpServerConfig>)[]
 }
 
 /**

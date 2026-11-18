@@ -18,4 +18,4 @@ const picked: SubagentAgentDefinition = {
 }
 
 expectTypeOf(inherit.model).toEqualTypeOf<SubagentAgentDefinition['model']>()
-void [selected, bad, picked]
+expectTypeOf([selected, bad, picked]).not.toBeAny()

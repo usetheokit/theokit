@@ -13,8 +13,11 @@ import {
 import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-options.js'
 
 const agentsOf = (subagents: Record<string, SubagentAgentDefinition>) =>
-  (assembleM8CreateOptions(compileAgentDefinition(defineAgent({ model: 'openai/gpt-5.4', subagents })))
-    .options as unknown as { agents: Record<string, Record<string, unknown>> }).agents
+  (
+    assembleM8CreateOptions(
+      compileAgentDefinition(defineAgent({ model: 'openai/gpt-5.4', subagents })),
+    ).options as unknown as { agents: Record<string, Record<string, unknown>> }
+  ).agents
 
 describe('registering a subagent keeps what its definition declares', () => {
   it('a registered subagent keeps the model its definition declares', () => {
