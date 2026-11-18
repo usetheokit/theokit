@@ -30,7 +30,6 @@ import type { HumanInTheLoopOptions } from '../types.js'
 import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
-import type { SkillsReadMode } from './agent-compiler.js'
 import type { CodePlugin } from './code-plugins.js'
 import type { SubagentAgentDefinition } from './define-agent.js'
 import { defineAgent, type AgentDefinition, type DefineAgentConfig } from './define-agent.js'
@@ -253,7 +252,7 @@ export interface AgentBuilder<
    */
   skills(
     selection: SkillsSelection,
-    options?: { readonly read?: SkillsReadMode },
+    options?: { readonly read?: 'inline' | 'advertised' },
   ): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
    * #825 — subagents this agent carries, by name, WITH whatever the caller applied to them.
@@ -412,7 +411,7 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
       makeBuilder({ ...config, approvals: { ...(config.approvals ?? {}), [toolName]: options } }),
     approvals: (map: Record<string, HumanInTheLoopOptions>) =>
       makeBuilder({ ...config, approvals: map }),
-    skills: (selection: SkillsSelection, options?: { readonly read?: SkillsReadMode }) =>
+    skills: (selection: SkillsSelection, options?: { readonly read?: 'inline' | 'advertised' }) =>
       makeBuilder({
         ...config,
         skills: selection,

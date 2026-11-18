@@ -260,9 +260,6 @@ export function compileTools(
  */
 export type CompiledSubAgent = SubagentDefinition
 
-/** Which skills `skill_read` serves: inline only (default) or everything the `<skills>` block lists. */
-export type SkillsReadMode = 'inline' | 'advertised'
-
 /** Compiled agent options ready for SDK Agent.create(). */
 export interface CompiledAgentOptions {
   model?: string
@@ -401,5 +398,5 @@ export interface CompiledAgentOptions {
    */
   skillsResolver?: SkillsSelection
   /** Which skills `skill_read` serves (`defineAgent({ skillsRead })`). Absent ⇒ `'inline'`. */
-  skillsRead?: SkillsReadMode
+  skillsRead?: 'inline' | 'advertised'
 }

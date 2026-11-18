@@ -25,7 +25,7 @@ import type { HumanInTheLoopOptions } from '../types.js'
 import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
-import type { CompiledAgentOptions, CompiledTool, SkillsReadMode } from './agent-compiler.js'
+import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { CodePlugin } from './code-plugins.js'
 import type { HookHandlers } from './hook-handlers.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
@@ -120,7 +120,7 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * skills enabled by name and discovered through `settingSources` / `compatSources`, after the trust
    * gate — exactly what the `<skills>` block lists.
    */
-  skillsRead?: SkillsReadMode
+  skillsRead?: 'inline' | 'advertised'
   /**
    * Subagents this agent carries, registered by name — `AgentOptions.agents` in the SDK.
    *
