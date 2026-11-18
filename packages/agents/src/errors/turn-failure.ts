@@ -49,6 +49,12 @@ const MESSAGE_PROBES: readonly (readonly [string[], KnownAgentRunErrorCode | 'to
   [['quota'], 'quota_exceeded'],
 ]
 
+/** Standalone HTTP status in the text, for a next step only (never for `transient`). */
+const STATUS_PROBES: readonly (readonly [RegExp, KnownAgentRunErrorCode])[] = [
+  [/\b401\b/, 'auth_failed'],
+  [/\b429\b/, 'rate_limit'],
+]
+
 function messageHint(message: string, hints: TurnFailureHints): string | undefined {
   const m = message.toLowerCase()
   if (m.includes('context') && m.includes('length')) {
@@ -57,6 +63,9 @@ function messageHint(message: string, hints: TurnFailureHints): string | undefin
   for (const [needles, key] of MESSAGE_PROBES) {
     if (!needles.some((n) => m.includes(n))) continue
     return key === 'tool_image' ? TOOL_IMAGE_HINT : (hints[key] ?? DEFAULT_TURN_FAILURE_HINTS[key])
+  }
+  for (const [re, key] of STATUS_PROBES) {
+    if (re.test(message)) return hints[key] ?? DEFAULT_TURN_FAILURE_HINTS[key]
   }
   return undefined
 }
