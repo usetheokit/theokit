@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { grantGate } from '../../src/auth/permission-gate.js'
 import { PermissionStore } from '../../src/auth/permission-store.js'
 import { createHitlPlugin } from '../../src/bridge/hitl-plugin.js'
-import { dropRunRefusals, recordRefusal, takeRefusal } from '../../src/bridge/refusal-ledger.js'
+import {
+  dropRunRefusals,
+  recordRefusal,
+  retainRun,
+  takeRefusal,
+} from '../../src/bridge/refusal-ledger.js'
 import { hookFingerprint } from '../../src/hooks/hook-fingerprint.js'
 import { buildHookHandlers } from '../../src/hooks/hook-spec.js'
 
@@ -121,6 +126,13 @@ describe('refusal ledger', () => {
     }
     expect(takeRefusal('r-big', 'Bash')).toEqual({ by: 'policy', reason: '344' })
     dropRunRefusals('r-big')
+  })
+
+  it('flooding with unmanaged runs does not evict a retained adapter run', () => {
+    const m = recordRefusal('r-live', 'Bash', { by: 'human', reason: 'live' }, 'm')
+    retainRun('r-live')
+    for (let r = 0; r < 600; r++) recordRefusal(`r-flood-${r}`, 'Bash', { by: 'policy' }, 'm')
+    expect(takeRefusal('r-live', 'Bash', m)).toEqual({ by: 'human', reason: 'live' })
   })
 
   it('a call refused by the permission gate yields refusal by policy', async () => {

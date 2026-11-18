@@ -23,6 +23,8 @@ const ledger = new Map<string, Map<string, Entry[]>>()
 const MAX_RUNS = 256
 const MAX_ENTRIES_PER_RUN = 256
 const entryCount = new Map<string, number>()
+/** Runs the adapter is actively streaming; their entries are evicted only when nothing else can be. */
+const liveRuns = new Set<string>()
 const MARKER = /\[veto:([0-9a-f]{24})\]/g
 
 /**
@@ -40,7 +42,7 @@ export function recordRefusal(
   const token = randomBytes(12).toString('hex')
   let tools = ledger.get(runId)
   if (tools === undefined) {
-    if (ledger.size >= MAX_RUNS) dropRunRefusals(ledger.keys().next().value!)
+    if (ledger.size >= MAX_RUNS) dropRunRefusals(oldestRun())
     tools = new Map()
     ledger.set(runId, tools)
   }
@@ -86,6 +88,17 @@ export function takeRefusal(
 export function dropRunRefusals(runId: string): void {
   ledger.delete(runId)
   entryCount.delete(runId)
+  liveRuns.delete(runId)
+}
+
+/** Mark a run as owned by an adapter stream: unmanaged (gate-only) runs are evicted before it. */
+export function retainRun(runId: string): void {
+  liveRuns.add(runId)
+}
+
+function oldestRun(): string {
+  for (const id of ledger.keys()) if (!liveRuns.has(id)) return id
+  return ledger.keys().next().value!
 }
 
 function evictOldest(tools: Map<string, Entry[]>, runId: string): void {

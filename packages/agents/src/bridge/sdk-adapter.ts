@@ -27,7 +27,7 @@ import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk
 import { type SdkMessage } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
-import { dropRunRefusals, takeRefusal } from './refusal-ledger.js'
+import { dropRunRefusals, retainRun, takeRefusal } from './refusal-ledger.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
 import type { SdkRunUsage } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
@@ -700,7 +700,10 @@ function buildSendOptions(
       // the SDK reports the denial, so a later external denial of the same tool cannot claim it.
       // The SDK event carries no runId, so the run handle's id is used; `streamTimeline` resolves
       // anything seen before the handle was known.
-      if (handle.id !== undefined) resolveRefusal(found, handle.id)
+      if (handle.id !== undefined) {
+        retainRun(handle.id)
+        resolveRefusal(found, handle.id)
+      }
       refusals.set(found.callId, found)
     }
     return callerSink?.(ev)
@@ -730,6 +733,7 @@ async function* streamTimeline(
     runId?: unknown
   }
   const handleId = [run.id, run.runId].find((v): v is string => typeof v === 'string')
+  if (handleId !== undefined) retainRun(handleId)
   try {
     yield* timelineBody()
   } finally {
