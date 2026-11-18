@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions } from '@theokit/sdk'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createChannelAgentFactory } from '../../src/control-plane/agent-factory.js'
 import { MemoryStore } from '../../src/memory/memory-store.js'
@@ -78,14 +78,10 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
       expect(lower(recalled)).toContain(lower(city))
 
       // A different surface (the control agent) asks session_search through a real model.
-      let searches = 0
-      const spied = Object.create(store) as MemoryStore
-      spied.search = (...args: Parameters<MemoryStore['search']>) => {
-        searches += 1
-        return store.search(...args)
-      }
+      // Spying on the real store keeps `this` intact (MemoryStore has private fields).
+      const searchSpy = vi.spyOn(store, 'search')
       const control = await createChannelAgentFactory(env, (options) =>
-        Agent.create({ ...options, tools: [sessionSearchTool(spied)] } as never),
+        Agent.create({ ...options, tools: [sessionSearchTool(store)] } as never),
       )()
       const run = await (control as unknown as { send(m: string): Promise<{ stream(): AsyncIterable<unknown>; wait(): Promise<{ result?: string }> }> }).send(
         'Use session_search to look up what my home city is called, and answer with just the name.',
@@ -93,7 +89,7 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
       for await (const message of run.stream()) void message
       expect(lower((await run.wait()).result ?? '')).toContain(lower(city))
       // The answer came through the tool, not a guess.
-      expect(searches).toBeGreaterThan(0)
+      expect(searchSpy).toHaveBeenCalled()
     },
     TURN_TIMEOUT_MS,
   )
