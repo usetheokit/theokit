@@ -64,9 +64,14 @@ export function readCompiledWiring(options: Record<string, unknown>): CompiledWi
     // Caller-supplied tools only: a custom tool may deliberately replace a withheld builtin.
     tools: names(tools),
     skills: {
-      // Enabled names resolve against the project root, which only a granted `project` source reads.
+      // Enabled names resolve from on-disk skill roots, which only a granted `project` or `user` source reads.
       listed: [
-        ...new Set([...(sources.includes('project') ? names(skills?.enabled) : []), ...inline]),
+        ...new Set([
+          ...(sources.includes('project') || sources.includes('user')
+            ? names(skills?.enabled)
+            : []),
+          ...inline,
+        ]),
       ],
       readable: reader !== undefined ? inline : [],
     },
@@ -108,7 +113,28 @@ const isErr = (err: unknown, key: 'name' | 'code', value: string): boolean =>
  * (`agent_id_already_exists`) resume the winner, which is not a creation of ours. Resume gets the
  * final options, so a non-default `cwd` is honoured. Without a listener it is plain `getOrCreate`.
  */
-export async function getOrCreateReporting(
+const inFlight = new WeakMap<object, Map<string, Promise<unknown>>>()
+
+/** Concurrent calls for one session share a single resolution, so the wiring is reported once. */
+export function getOrCreateReporting(
+  sdk: unknown,
+  sessionId: string,
+  options: Record<string, unknown>,
+  listener: ((wiring: CompiledWiring) => void) | undefined,
+): Promise<unknown> {
+  if (listener === undefined) return resolveReporting(sdk, sessionId, options, listener)
+  let pending = inFlight.get(sdk as object)
+  if (!pending) inFlight.set(sdk as object, (pending = new Map()))
+  const running = pending.get(sessionId)
+  if (running) return running
+  const p = resolveReporting(sdk, sessionId, options, listener).finally(() =>
+    pending.delete(sessionId),
+  )
+  pending.set(sessionId, p)
+  return p
+}
+
+async function resolveReporting(
   sdk: unknown,
   sessionId: string,
   options: Record<string, unknown>,
