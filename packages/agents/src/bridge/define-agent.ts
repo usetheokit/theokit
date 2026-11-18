@@ -27,6 +27,7 @@ import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { CodePlugin } from './code-plugins.js'
+import { type CompiledWiring, WIRED_HOOKS } from './compiled-wiring.js'
 import type { HookHandlers } from './hook-handlers.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
 import {
@@ -201,6 +202,11 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * under this name — the plugin is the TRANSPORT, this is the contract callers write against.
    */
   hooks?: HookHandlers | Readonly<Record<string, unknown>>
+  /**
+   * Called once per `Agent.create`, after the options are final, with the wiring read from those
+   * options. A throwing listener is warned about and does not fail the build.
+   */
+  onWired?: (wiring: CompiledWiring) => void
   /**
    * MCP servers available to the agent — the builder-chain equivalent of the `@MCP` class
    * decorator. Each key is a server name; the value is the server configuration. Forwarded
@@ -399,7 +405,13 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
  * needs a transport. Doing the conversion HERE (not on the builder) means every entry point that
  * reaches `defineAgent` gets it, so `hooks` can never be declared-but-dropped.
  */
-function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[] } {
+function compileHooksAndPlugins(
+  def: AgentDefinition,
+): Pick<CompiledAgentOptions, 'plugins' | 'onWired'> {
+  return { ...compilePlugins(def), ...(def.onWired !== undefined ? { onWired: def.onWired } : {}) }
+}
+
+function compilePlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[] } {
   const map = (def as { hooks?: Readonly<Record<string, unknown>> }).hooks
   const entries = Object.entries(map ?? {}).filter(([, h]) => typeof h === 'function')
   const explicit = def.plugins ?? []
@@ -414,6 +426,7 @@ function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly Code
     name: 'theokit-builder-hooks',
     version: '1.0.0',
     kind: 'general' as const,
+    [WIRED_HOOKS]: entries.map(([event]) => ({ event })),
     register(ctx: { on: (hook: string, handler: (c: never) => unknown) => void }): void {
       for (const [hookName, handler] of entries) {
         ctx.on(hookName, handler as (c: never) => unknown)

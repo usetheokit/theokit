@@ -31,6 +31,7 @@ import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CodePlugin } from './code-plugins.js'
+import type { CompiledWiring } from './compiled-wiring.js'
 import type { SubagentAgentDefinition } from './define-agent.js'
 import { defineAgent, type AgentDefinition, type DefineAgentConfig } from './define-agent.js'
 import type { HookHandlers } from './hook-handlers.js'
@@ -325,6 +326,13 @@ export interface AgentBuilder<
     map: HookHandlers | Readonly<Record<string, unknown>>,
   ): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
+   * Report the compiled wiring (tools, skills, MCP servers, hooks, subagents) once per `Agent.create`,
+   * read from the final options. A throwing listener is warned about and does not fail the build.
+   */
+  onWired(
+    listener: (wiring: CompiledWiring) => void,
+  ): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
    * Register code `Plugin` objects for this agent — the builder-chain equivalent of
    * `Agent.create({ plugins })`. A plugin is an EXTENSION UNIT: it can register tools and commands,
    * or supply a model provider / memory adapter (`kind: 'general' | 'model-provider' | 'memory'`).
@@ -409,6 +417,8 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     telemetry: (settings: TelemetrySettings) => makeBuilder({ ...config, telemetry: settings }),
     hooks: (map: HookHandlers | Readonly<Record<string, unknown>>) =>
       makeBuilder({ ...config, hooks: map }),
+    onWired: (listener: (wiring: CompiledWiring) => void) =>
+      makeBuilder({ ...config, onWired: listener }),
     plugins: (list: readonly CodePlugin[]) => makeBuilder({ ...config, plugins: list }),
     mcp: (servers: McpServersMap) => makeBuilder({ ...config, mcpServers: servers }),
     use: (preset: (b: unknown) => unknown) => preset(runtime),

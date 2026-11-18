@@ -22,6 +22,7 @@ import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
+import { BUILD_WIRED_SKILL_READERS, getOrCreateReporting } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
@@ -478,7 +479,9 @@ function wireInlineSkillRead(
     rt.defineSkillReadTool !== undefined &&
     !compiledTools.some((t) => t.name === 'skill_read')
   ) {
-    sdkTools.push(rt.defineSkillReadTool(inlineSkills))
+    const reader = rt.defineSkillReadTool(inlineSkills)
+    if (typeof reader === 'object' && reader !== null) BUILD_WIRED_SKILL_READERS.add(reader)
+    sdkTools.push(reader)
   }
 }
 
@@ -772,13 +775,19 @@ async function* streamSdkAgent(
   const { m8, extra } = resolveCreateOptions(compiled, overrides, opts.usageMeter)
 
   // V4-N.1: declared before try so `finally` can dispose even when `run.wait()` rejects.
-  const agent = await Agent.getOrCreate(sessionId, {
+  const createOptions = {
     apiKey,
     model: buildModelSelection(model, reasoningEffort),
     tools: sdkTools,
     ...m8,
     ...extra,
-  })
+  }
+  const agent = (await getOrCreateReporting(
+    Agent,
+    sessionId,
+    createOptions,
+    compiled.onWired,
+  )) as Awaited<ReturnType<typeof Agent.getOrCreate>>
   try {
     // theokit#140 — ONE ordered source. The `onDelta` sink + merge queue are gone: the SDK's
     // `run.events()` appends messages and deltas as the loop reports them, so arrival order IS
@@ -956,16 +965,17 @@ export function toAgentFactory(
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
     applyPosture(extra, m8, opts.approvals, compiled.hitl)
-    const agent = await rt.Agent.getOrCreate(sessionId, {
+    const createOptions = {
       apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),
       tools: sdkTools,
       ...m8,
       ...extra,
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
-    })
+    }
+    const agent = await getOrCreateReporting(rt.Agent, sessionId, createOptions, compiled.onWired)
     return withGuardrails(
-      withStepCeiling(agent as unknown as SdkAgentHandle, compiled.maxIterations),
+      withStepCeiling(agent as SdkAgentHandle, compiled.maxIterations),
       compiled.guardrails,
     )
   }
