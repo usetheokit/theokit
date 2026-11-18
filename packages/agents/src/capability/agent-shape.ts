@@ -101,7 +101,7 @@ export function shapeToolsAsCustomTools(shape: AgentShape): readonly CustomTool[
         description: tool.description,
         inputSchema: schema,
         handler: tool.handler as CustomTool['handler'],
-      } as never) as CustomTool
+      } as never)
     }
     return tool as unknown as CustomTool
   })
