@@ -24,11 +24,15 @@
  * @public
  */
 
+import type { AgentOutputEvent } from './agent-output-event.js'
+
 /** An item within a turn: a tool call, a message, whatever the product's dialect names. @public */
 export interface LifecycleItem {
   readonly id: string
   /** The product's word for what this item is — a tool name, `message`, an error kind. */
   readonly kind: string
+  /** Set when the item is a tool result that failed. */
+  readonly isError?: boolean
 }
 
 /** The product's dialect, as constructors. Nothing here is named by the framework. @public */
@@ -45,8 +49,51 @@ export interface LifecycleVocabulary<E> {
 export type ContentChunk =
   | { readonly kind: 'text'; readonly delta: string }
   | { readonly kind: 'tool-call'; readonly id?: string; readonly name: string }
-  | { readonly kind: 'tool-result'; readonly id?: string; readonly name: string }
+  | { readonly kind: 'tool-result'
+      readonly id?: string
+      readonly name: string
+      readonly isError?: boolean
+    }
   | { readonly kind: 'error'; readonly message: string }
+
+/**
+ * Maps one canonical event to the chunk the fold reads. Reasoning, partial tool calls, status and
+ * finish events return `null`: the fold has no use for them.
+ * @public
+ */
+export function contentChunkFromEvent(event: AgentOutputEvent): ContentChunk | null {
+  switch (event.type) {
+    case 'text':
+      return { kind: 'text', delta: event.text }
+    case 'tool-call':
+      return { kind: 'tool-call', id: event.callId, name: event.name }
+    case 'tool-result':
+      return {
+        kind: 'tool-result',
+        id: event.callId,
+        name: event.name,
+        ...(event.isError === undefined ? {} : { isError: event.isError }),
+      }
+    case 'error':
+      return { kind: 'error', message: event.message }
+    default:
+      return null
+  }
+}
+
+/**
+ * The trimmed text after the last tool call: the answer, without the preamble. A turn with no tool
+ * call returns all of its text.
+ * @public
+ */
+export function finalMessageOf(events: readonly AgentOutputEvent[]): string {
+  let text = ''
+  for (const event of events) {
+    if (event.type === 'tool-call') text = ''
+    else if (event.type === 'text') text += event.text
+  }
+  return text.trim()
+}
 
 /** How the stream ended, as the caller understands it. @public */
 export interface TurnOutcome {
@@ -75,7 +122,10 @@ export interface TurnLifecycle<E> {
 export function foldTurnLifecycle<E>(
   vocabulary: LifecycleVocabulary<E>,
   threadId: string,
+  options: { readonly messageBoundary?: 'tool-call' | 'none' } = {},
 ): TurnLifecycle<E> {
+  const splitAtToolCall = options.messageBoundary === 'tool-call'
+  let nextMessage = 0
   let open = true
   let text = ''
   let failure: string | undefined
@@ -98,10 +148,26 @@ export function foldTurnLifecycle<E>(
       case 'text':
         text += chunk.delta
         return []
-      case 'tool-call':
-        return [vocabulary.itemStarted({ id: idOf(chunk), kind: chunk.name })]
+      case 'tool-call': {
+        const events: E[] = []
+        if (splitAtToolCall) {
+          // Text before a tool call is a preamble: close it as its own message item.
+          const preamble = text.trim()
+          text = ''
+          if (preamble.length > 0) {
+            events.push(vocabulary.itemCompleted({ id: `message_${nextMessage}`, kind: preamble }))
+            nextMessage += 1
+          }
+        }
+        events.push(vocabulary.itemStarted({ id: idOf(chunk), kind: chunk.name }))
+        return events
+      }
       case 'tool-result': {
-        const closing = vocabulary.itemCompleted({ id: idOf(chunk), kind: chunk.name })
+        const closing = vocabulary.itemCompleted({
+          id: idOf(chunk),
+          kind: chunk.name,
+          ...(chunk.isError === true ? { isError: true } : {}),
+        })
         nextItem += 1
         return [closing]
       }
@@ -126,7 +192,12 @@ export function foldTurnLifecycle<E>(
     const message = text.trim()
     // Whitespace-only text is not an item: a surface renders a blank bubble for it.
     if (message.length > 0) {
-      events.push(vocabulary.itemCompleted({ id: 'message', kind: message }))
+      events.push(
+        vocabulary.itemCompleted({
+          id: splitAtToolCall ? `message_${nextMessage}` : 'message',
+          kind: message,
+        }),
+      )
     }
 
     const reason =
