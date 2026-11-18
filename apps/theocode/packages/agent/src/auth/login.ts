@@ -1,13 +1,18 @@
-import { existsSync, unlinkSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 
-import { CODEX_PROVIDER, loginWithDevice } from '@theokit/agents/auth'
+import {
+  CODEX_PROVIDER,
+  loginWithApiKey,
+  loginWithDevice,
+  logout as logoutStore,
+  providerFromApiKeyPrefix,
+} from '@theokit/agents/auth'
 import type { AuthMethod, DeviceAuthProvider } from '@theokit/agents/auth'
 
 import {
   CredentialError,
   authFilePath,
-  inferProvider,
-  writeCredential,
+  PROVIDER_NAMES,
   type Provider,
 } from './credentials.js'
 import { credentialStore } from './oauth-config.js'
@@ -27,17 +32,25 @@ export function login(
     throw new CredentialError('no API key was provided — the input was empty')
   }
 
-  const provider = opts.provider ?? inferProvider(key)
+  // The framework infers from every prefix it knows; this product supports three providers, so a
+  // key it files under another one is as unplaceable here as one it cannot place at all.
+  const inferred = providerFromApiKeyPrefix(key)
+  const provider = opts.provider ?? (isProvider(inferred) ? inferred : undefined)
   if (provider === undefined) {
     throw new CredentialError(
       'cannot tell which provider this key belongs to. Pass the provider explicitly.',
     )
   }
 
-  refuseIfExists(home, opts.env ?? {}, opts.overwrite)
+  return loginWithApiKey(key, credentialStore(home), {
+    provider,
+    overwrite: opts.overwrite,
+    env: opts.env ?? {},
+  }) as LoginResult
+}
 
-  const path = writeCredential({ provider, apiKey: key }, home, opts.env ?? {})
-  return { provider, path }
+function isProvider(name: string | undefined): name is Provider {
+  return name !== undefined && (PROVIDER_NAMES as readonly string[]).includes(name)
 }
 
 function refuseIfExists(
@@ -124,8 +137,5 @@ async function loginWithMethod(
 }
 
 export function logout(home: string, env: Record<string, string | undefined> = {}): boolean {
-  const path = authFilePath(home, env)
-  if (!existsSync(path)) return false
-  unlinkSync(path)
-  return true
+  return logoutStore(credentialStore(home), env)
 }

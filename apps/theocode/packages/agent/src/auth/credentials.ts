@@ -1,9 +1,7 @@
 // This module READS credentials; it contains none. The filename matches the repository's
 // secret-pattern gate (`credentials*`), so it is flagged on every diff that touches it — verified
 // on 2026-08-08: no key material, no tokens, no PEM blocks. Every `apiKey` here is a parameter name
-// or a type field, and the only long literal is a class name. Provider inference compares PREFIXES
-// (`apiKey.startsWith(prefix)`), which is the opposite of embedding one.
-//
+// or a type field, and the only long literal is a class name. //
 // Keep it that way: values belong in the store the SDK writes at 0600, never in source.
 import {
   authFilePath as storeAuthFilePath,
@@ -12,7 +10,6 @@ import {
   credentialHome as storeCredentialHome,
   writeCredential as writeStoreCredential,
 } from '@theokit/agents/auth'
-import { isTransientError } from '@theokit/agents'
 import {
   CredentialNotFoundError,
   DEFAULT_PROVIDERS,
@@ -26,6 +23,7 @@ import { OPENAI_OAUTH_CONFIG, credentialStore } from './oauth-config.js'
 
 const PROVIDERS = ['openrouter', 'anthropic', 'openai'] as const
 export type Provider = (typeof PROVIDERS)[number]
+export const PROVIDER_NAMES: readonly Provider[] = PROVIDERS
 
 /**
  * The provider table, DERIVED from the framework's defaults instead of hand-written.
@@ -128,21 +126,6 @@ export interface ResolvedCredential {
   source: string
   inferred: boolean
   expiresAt?: number
-}
-
-/**
- * Which provider issued this key.
- *
- * The longest-prefix scan lived here; `DESCRIPTORS` now carries the prefixes, so what remains is the
- * narrowing to this product's union. Ordering by length is still explicit rather than assumed —
- * every OpenRouter and Anthropic key also starts with `sk-`, and a shortest-match-first scan calls
- * them OpenAI.
- */
-export function inferProvider(apiKey: string): Provider | undefined {
-  const byLength = [...DESCRIPTORS].sort(
-    (a, b) => (b.keyPrefix ?? '').length - (a.keyPrefix ?? '').length,
-  )
-  return byLength.find((d) => apiKey.startsWith(d.keyPrefix ?? ''))?.name as Provider | undefined
 }
 
 /**
@@ -269,13 +252,6 @@ export function writeCredential(
   )
 }
 
-function classifyRefreshFailure(err: unknown): {
-  readonly transient: boolean
-  readonly cause: unknown
-} {
-  return { transient: isTransientError(err), cause: err }
-}
-
 export async function resolveFreshCredential(opts: {
   env: Record<string, string | undefined>
   home: string | undefined
@@ -286,25 +262,12 @@ export async function resolveFreshCredential(opts: {
   const resolved = resolveCredential({ env: opts.env, home: opts.home })
   if (resolved.kind !== 'oauth' || opts.home === undefined) return resolved
   if (resolved.provider !== 'openai') return resolved
-  const baseFetch = opts.fetch ?? fetch
-  const timeoutMs = opts.timeoutMs ?? 30_000
-  const boundedFetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
-    baseFetch(input, {
-      ...init,
-      signal: init?.signal ?? AbortSignal.timeout(timeoutMs),
-    })) as typeof fetch
-  let fresh: Awaited<ReturnType<AuthProvider['ensureFresh']>>
-  try {
-    fresh = await new AuthProvider(OPENAI_OAUTH_CONFIG, credentialStore(opts.home)).ensureFresh(
-      resolved,
-      { fetch: boundedFetch, now: opts.now ?? Date.now },
-      opts.env,
-    )
-  } catch (err) {
-    const { transient } = classifyRefreshFailure(err)
-    if (!transient) throw err
-    return resolved
-  }
+  // The framework owns the retry, the request deadline and the transient classification; a
+  // transient failure returns the stored credential, a permanent one (invalid_grant) throws.
+  const fresh = await new AuthProvider(OPENAI_OAUTH_CONFIG, credentialStore(opts.home), {
+    requestTimeoutMs: opts.timeoutMs ?? 30_000,
+    onTransientFailure: 'use-stored',
+  }).ensureFresh(resolved, { fetch: opts.fetch ?? fetch, now: opts.now ?? Date.now }, opts.env)
   return { ...fresh, provider: resolved.provider }
 }
 
