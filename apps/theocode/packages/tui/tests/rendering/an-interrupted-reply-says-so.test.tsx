@@ -89,7 +89,11 @@ describe('the interrupt records which message it cut', () => {
 
   it('test_a_second_interrupt_while_the_fork_is_pending_does_not_fork_again', async () => {
     let finish!: (v: { newId: string; copied: boolean }) => void
-    const d = deps({ forkSession: vi.fn(() => new Promise((r) => (finish = r))) })
+    const d = deps({
+      forkSession: vi.fn(
+        () => new Promise<{ newId: string; copied: boolean }>((r) => (finish = r)),
+      ),
+    })
     const interrupt = makeInterruptTurn(d)
     interrupt()
     interrupt()
