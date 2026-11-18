@@ -36,8 +36,6 @@ import { declaresAgentPolicy } from '../../packages/theo/src/server/scan/detect-
 
 const SCAN_DIR = join(import.meta.dirname, '../../packages/theo/src/server/scan')
 
-const SOURCE = readFileSync(join(SCAN_DIR, 'detect-agent-policy.ts'), 'utf8')
-
 /**
  * Every scanner in the directory, because this is a CLASS of defect rather than one file.
  *
@@ -114,6 +112,6 @@ describe('the agent-policy scanner loads TypeScript lazily', () => {
     const first = declaresAgentPolicy('a.ts', `export const policy = 'public'`)
     const second = declaresAgentPolicy('b.ts', `export const policy = 'public'`)
     expect([first, second]).toEqual([true, true])
-    expect(SOURCE).toMatch(/let\s+\w+:\s*typeof TS\s*\|\s*undefined|\w+\s*\?\?=/)
+    expect(readFileSync(join(SCAN_DIR, 'load-typescript.ts'), 'utf8')).toMatch(/let\s+\w+:\s*typeof TS\s*\|\s*undefined|\w+\s*\?\?=/)
   })
 })

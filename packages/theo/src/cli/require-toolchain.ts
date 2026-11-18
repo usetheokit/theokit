@@ -37,5 +37,6 @@ function isInstalled(req: NodeJS.Require, name: string): boolean {
 /** Check the toolchain, then register tsx's ESM hook (the CLI no longer loads it unconditionally). */
 export async function loadToolchain(): Promise<void> {
   requireToolchain()
-  await import('tsx/esm')
+  // tsx ships no types for this side-effect entry.
+  await import(/* @vite-ignore */ 'tsx/esm' as string)
 }
