@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { loadOutputStyle, OutputStyleError } from '../../src/config/output-styles.js'
+import { applyOutputStyle, loadOutputStyle, OutputStyleError } from '../../src/config/output-styles.js'
 
 /**
  * A configured output style was read by nobody.
@@ -141,5 +141,55 @@ describe('a style with no frontmatter is still a style', () => {
       style?.keepCodingInstructions,
       'the default REPLACES the coding instructions, so absence must not read as true',
     ).toBe(false)
+  })
+})
+
+describe('an output style is matched by frontmatter name and applied to a base prompt', () => {
+  it('a style is found by its frontmatter name when the file name differs', () => {
+    const { cwd, homeDir } = projectWith({ 'concise-v2.md': '---\nname: Concise\n---\nBe brief.' })
+    const style = loadOutputStyle({ name: 'Concise', cwd, homeDir })
+    expect(style?.content).toBe('Be brief.')
+    expect(style?.name).toBe('Concise')
+  })
+
+  it('a file name match wins over another file\'s frontmatter name in the same directory', () => {
+    const { cwd, homeDir } = projectWith({
+      'a-other.md': '---\nname: review\n---\nBY FRONTMATTER',
+      'review.md': 'BY FILE NAME',
+    })
+    expect(loadOutputStyle({ name: 'review', cwd, homeDir })?.content).toBe('BY FILE NAME')
+  })
+
+  it('two files in one directory with the same frontmatter name throw OutputStyleError naming both paths', () => {
+    const { cwd, homeDir } = projectWith({
+      'one.md': '---\nname: Dup\n---\nA',
+      'two.md': '---\nname: Dup\n---\nB',
+    })
+    let caught: unknown
+    try {
+      loadOutputStyle({ name: 'Dup', cwd, homeDir })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(OutputStyleError)
+    expect((caught as Error).message).toContain('one.md')
+    expect((caught as Error).message).toContain('two.md')
+  })
+
+  it('still throws OutputStyleError for a named style with no match', () => {
+    const { cwd, homeDir } = projectWith({ 'x.md': '---\nname: X\n---\nA' })
+    expect(() => loadOutputStyle({ name: 'missing', cwd, homeDir })).toThrow(OutputStyleError)
+  })
+
+  it('applyOutputStyle returns the base unchanged when no style is given', () => {
+    const base = '  base prompt\n'
+    expect(applyOutputStyle(base, undefined)).toBe(base)
+  })
+
+  it('applyOutputStyle appends when keepCodingInstructions is true and replaces otherwise', () => {
+    const keep = { name: 's', content: 'STYLE', keepCodingInstructions: true }
+    const replace = { ...keep, keepCodingInstructions: false }
+    expect(applyOutputStyle('BASE', keep)).toBe('BASE\n\nSTYLE')
+    expect(applyOutputStyle('BASE', replace)).toBe('STYLE')
   })
 })

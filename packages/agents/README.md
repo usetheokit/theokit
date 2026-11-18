@@ -231,6 +231,8 @@ configuration that had no effect.
 | `~/.claude.json` — OAuth state, UI toggles | **out of scope** — a CLI's own state |
 | `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers` |
 
+**Output styles.** `loadOutputStyle({ name, cwd, homeDir })` matches a style by its file name (without `.md`) or by its frontmatter `name`. The project directory is searched before the home directory; within one directory a file-name match wins over another file's frontmatter name, and two files claiming the same frontmatter name throw `OutputStyleError` naming both paths. A named style with no match throws `OutputStyleError`. `applyOutputStyle(base, style)` (from `@theokit/agents/config`) returns `base` unchanged when there is no style, `` `${base}\n\n${style.content}` `` when `keepCodingInstructions` is true, and `style.content` otherwise.
+
 
 ### Out of scope, and who owns it instead
 
