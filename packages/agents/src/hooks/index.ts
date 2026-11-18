@@ -40,6 +40,7 @@ export type { HookRunInput, HookRunResult } from './hook-runner.js'
  */
 export { inheritHooks, hooksPlugin, type CodePlugin } from '../bridge/delegation-hooks.js'
 export { hooksForChild, type HooksForChildOptions } from './hooks-for-child.js'
+export type { HookHandlers } from '../bridge/hook-handlers.js'
 
 /**
  * The producer for the `approved` set this module's gate REQUIRES.
