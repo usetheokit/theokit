@@ -1,0 +1,22 @@
+{
+  "name": "picomatch",
+  "version": "4.0.8-theokit.0",
+  "private": true,
+  "description": "Blazing fast and accurate glob matcher written in JavaScript, with no dependencies and full support for standard and extended Bash glob features, including braces, extglobs, POSIX brackets, and regular expressions. (theokit vendored copy with the fix for GHSA-fc5q-39xc-vjpf)",
+  "license": "MIT",
+  "homepage": "https://github.com/micromatch/picomatch",
+  "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
+  "repository": "micromatch/picomatch",
+  "bugs": {
+    "url": "https://github.com/micromatch/picomatch/issues"
+  },
+  "files": [
+    "index.js",
+    "posix.js",
+    "lib"
+  ],
+  "main": "index.js",
+  "engines": {
+    "node": ">=12"
+  }
+}
