@@ -436,7 +436,7 @@ function withShellTools(
   withWrites: ReturnType<typeof withWriteTools>,
   ctx: ShellAndProjectCtx,
 ) {
-  const { registry, interactiveBackend, modelId, writePolicy } = ctx
+  const { registry, interactiveBackend, modelId } = ctx
   return (
     withWrites
       // M2 — the write side: atomic multi-file edits, gated behind approval below. M18: now the Codex-faithful
