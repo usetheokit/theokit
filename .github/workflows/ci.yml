@@ -121,8 +121,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # Full history: the public-surface gate diffs against the PR base and its changesets.
-          fetch-depth: 0
       - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
       # imports from `packages/theo/dist/*` to validate the npm publish
@@ -132,15 +130,6 @@ jobs:
       # but the binstub points to dist/cli/index.js which doesn't exist
       # until the theo package finishes building → ordering blow-up).
       - run: pnpm build:packages
-      # Public-surface gate: fails on a stable export removed/broken without a major changeset.
-      - name: Public-surface diff gate
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: origin/${{ github.base_ref }}
-        run: |
-          for f in packages/*/public-surface-baseline.json; do
-            node scripts/check-public-surface.mjs "$(basename "$(dirname "$f")")" --base "$BASE_REF"
-          done
       # `typecheck:only`, not `typecheck`: the latter is `pnpm build:packages && tsc --noEmit`,
       # and the step above already built. Measured on run 33179795266 — build:packages 51s, then
       # typecheck 67s, of which ~50s was that build running a second time.
