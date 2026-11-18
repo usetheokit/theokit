@@ -21,7 +21,10 @@ export interface SettingsFileReport {
   readonly unsupportedPermissions?: readonly string[]
 }
 
-function credential(state: CredentialState, options: { name?: string; remedy?: string } = {}): Check {
+function credential(
+  state: CredentialState,
+  options: { name?: string; remedy?: string } = {},
+): Check {
   const name = options.name ?? 'credential'
   const remedy = options.remedy === undefined ? '' : `: ${options.remedy}`
   switch (state) {

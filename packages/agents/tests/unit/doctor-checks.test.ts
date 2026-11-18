@@ -12,7 +12,9 @@ describe('doctor checks', () => {
   })
 
   it('capability row warns when suppressed by trust and names the active entries when there are some', () => {
-    expect(checks.capability('mcp', { active: ['a', 'b'], suppressedByTrust: false })).toMatchObject({ status: 'ok', detail: 'a, b' })
+    expect(
+      checks.capability('mcp', { active: ['a', 'b'], suppressedByTrust: false }),
+    ).toMatchObject({ status: 'ok', detail: 'a, b' })
     expect(checks.capability('mcp', { active: [], suppressedByTrust: false }).detail).toBe('none')
     const none = checks.capability('mcp', { active: [], suppressedByTrust: true })
     const some = checks.capability('mcp', { active: ['mine'], suppressedByTrust: true })
@@ -28,7 +30,13 @@ describe('doctor checks', () => {
     const rows = checks.settingsReport([
       clean,
       { path: '/a.json', ignored: ['x'], unrecognised: ['y'], droppedHooks: ['h'] },
-      { path: '/b.json', ignored: [], unrecognised: [], droppedHooks: [], unsupportedPermissions: ['p'] },
+      {
+        path: '/b.json',
+        ignored: [],
+        unrecognised: [],
+        droppedHooks: [],
+        unsupportedPermissions: ['p'],
+      },
     ])
     expect(rows).toHaveLength(1)
     expect(rows[0]!.status).toBe('warn')
