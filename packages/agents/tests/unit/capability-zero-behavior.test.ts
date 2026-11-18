@@ -18,7 +18,6 @@ import {
   ProjectContextCapability,
   RunContextCapability,
   SettingSourcesCapability,
-  SkillsReadCapability,
   SkillsResolverCapability,
   HookApprovalCapability,
   WithheldBuiltinToolsCapability,
@@ -93,7 +92,7 @@ const WAIST_FIELDS = [
   'subagents',
   // #1912 — `WithheldBuiltinToolsCapability`, from `AgentBuilder.withholdBuiltinTools()`.
   'withheldBuiltinTools',
-  // #1855 — `skillsRead`, from `AgentBuilder.skills(selection, { read })`.
+  // #1855 — `skillsRead`, from `AgentBuilder.skills(selection, { read })`; no capability yet.
   'skillsRead',
 ] as const satisfies readonly WaistField[]
 
@@ -117,7 +116,7 @@ const WAIST_FIELDS_ARE_EXHAUSTIVE: _Exhaustive = true
  * ever stops producing its field the gap reappears and the test fails; `satisfies` makes a
  * fabricated name a compile error.
  */
-const NOT_EXPRESSIBLE_YET = [] as const satisfies readonly WaistField[]
+const NOT_EXPRESSIBLE_YET = ['skillsRead'] as const satisfies readonly WaistField[]
 
 /** A posture that grants — built here rather than mocked, so the gate runs its real refusal path. */
 const TRUSTING_POSTURE = {
@@ -256,7 +255,6 @@ describe('capability path — waist coverage is complete', () => {
       new PluginsCapability([] as never),
       new RunContextCapability({} as never),
       new SkillsResolverCapability((() => []) as never),
-      new SkillsReadCapability('advertised'),
     ])
     const expressible = new Set(Object.keys(everything).filter((k) => k !== 'provenance'))
     const gap = WAIST_FIELDS.filter((f) => !expressible.has(f))

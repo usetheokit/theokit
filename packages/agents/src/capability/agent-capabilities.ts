@@ -282,12 +282,6 @@ export class SkillsResolverCapability extends FieldCapability<'skillsResolver'> 
   protected readonly field = 'skillsResolver' as const
 }
 
-/** #1855 — which skills `skill_read` serves (`'inline'` default, or `'advertised'`). */
-export class SkillsReadCapability extends FieldCapability<'skillsRead'> {
-  readonly name = 'skills-read'
-  protected readonly field = 'skillsRead' as const
-}
-
 /** The scalar agent config (name/route are HTTP concerns, never agent config). */
 export interface AgentConfig {
   readonly systemPrompt?: CompiledAgentOptions['systemPrompt']
