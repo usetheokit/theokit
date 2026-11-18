@@ -23,6 +23,7 @@ import {
 import { resolveTrustPosture } from '@theocode/agent/config'
 import { logout, methodsFor, oauthDeviceLogin, knownProviders } from '@theocode/agent/auth'
 import type { AuthMethod } from '@theokit/agents/auth'
+import type { ForkResult } from '../persistence/fork-session.js'
 import type { ContentPanel, ToastPayload } from '../screen-types.js'
 import { workingDirectory } from '../working-directory.js'
 
@@ -113,17 +114,24 @@ export function handleLogin(
 }
 
 export async function handleFork(
-  forkCurrentSession: () => Promise<{ newId: string; copied: boolean }>,
+  forkCurrentSession: () => Promise<ForkResult>,
   setToast: SetToast,
 ): Promise<void> {
-  let result: { newId: string; copied: boolean }
+  let result: ForkResult
   try {
     result = await forkCurrentSession()
   } catch (e) {
     setToast({ message: `Fork failed: ${(e as Error).message}`, variant: 'error' })
     return
   }
-  const { newId, copied } = result
+  const { newId, copied, switched } = result
+  if (switched === false) {
+    setToast({
+      message: `Forked → ${newId} — the context was copied, but the session changed meanwhile, so it was not switched.`,
+      variant: 'success',
+    })
+    return
+  }
   setToast({
     message: copied
       ? `Forked → ${newId} — the context was copied; this session continues from it.`
