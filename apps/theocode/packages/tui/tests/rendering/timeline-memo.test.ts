@@ -7,10 +7,12 @@
  * that never calls it look identical from the unit's side — which is how the regression this file
  * exists to prevent got in, and it got in on a green suite.
  */
+import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
 import { messagesToAgentEvents } from '@theokit/tui'
 import { describe, expect, it } from 'vitest'
 
 import { formatToolHeader, formatToolResult } from '../../src/formatting/index.js'
+import { prepareThread } from '../../src/rendering/timeline-memo.js'
 
 const read = (i: number) => ({
   type: 'tool-read_file',
@@ -48,5 +50,20 @@ describe('explored grouping, through the real formatter', () => {
         },
       ]),
     ).toEqual(['tool'])
+  })
+})
+
+describe('prepareThread — goal continuation', () => {
+  it('test_a_goal_continuation_user_turn_is_collapsed', () => {
+    const out = prepareThread([
+      {
+        id: 'u1',
+        role: 'user',
+        parts: [{ type: 'text', text: `${GOAL_CONTINUATION_MARKER} keep going` }],
+      } as never,
+      { id: 'u2', role: 'user', parts: [{ type: 'text', text: 'hello' }] } as never,
+    ])
+    expect(out[0]?.parts).toEqual([{ type: 'text', text: '↻ continuing the goal…' }])
+    expect(out[1]?.parts).toEqual([{ type: 'text', text: 'hello' }])
   })
 })

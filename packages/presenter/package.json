@@ -50,6 +50,14 @@
     "@theokit/sdk": "^5.3.0",
     "zod": "^4.0.0"
   },
+  "peerDependenciesMeta": {
+    "@theokit/sdk": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@theokit/sdk": "^5.3.0",
     "ai": "7.0.14",
