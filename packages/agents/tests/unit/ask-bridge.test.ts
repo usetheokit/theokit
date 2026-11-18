@@ -293,4 +293,16 @@ describe('ask / pending and onChange', () => {
     expect(a).not.toHaveBeenCalled()
     expect(b).toHaveBeenCalledTimes(2)
   })
+
+  it('does not show the listener a question an observer already abandoned', async () => {
+    const bridge = createAskBridge()
+    const listener = vi.fn()
+    bridge.setListener('t', listener)
+    bridge.onChange((threadId) => {
+      bridge.abandon(threadId)
+    })
+    await expect(bridge.ask('t', 'q')).rejects.toBeInstanceOf(QuestionAbandonedError)
+    expect(listener).not.toHaveBeenCalled()
+    expect(bridge.pending('t')).toBeUndefined()
+  })
 })

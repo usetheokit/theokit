@@ -201,7 +201,9 @@ export function createAskBridge(): AskBridge {
       })
 
       emit(threadId)
-      listener.notify({ id, threadId, question })
+      // An observer may have answered or abandoned the question while reentering the bridge; the
+      // surface must not be shown a prompt that can no longer be answered.
+      if (pendingByThread.get(threadId)?.id === id) listener.notify({ id, threadId, question })
       return promise
     },
 
