@@ -508,6 +508,9 @@ plan is a separate step. Each candidate is `{ project, kind, target, sessionId?,
   `notes.txt.tmp` or `.foo.swp` is never a candidate. A registry entry with no `lastModified` is kept.
 - An entry whose `mtime` cannot be read is never collected. A failed pointer or registry read skips that project and
   adds to `errors`.
+- Several cwds can share one project directory (the encoding is lossy). Every cwd the transcripts record is consulted,
+  and `candidateCwds()` adds known workspaces that encode to the project, so a colliding cwd with no transcript of
+  its own is protected too. A live project holding a transcript whose header cannot be read is kept whole.
 - `keepLast` or `maxAgeDays` below 1 throws `GCFloorError`.
 
 The plan also reports `touchedProjects`, `liveCwds` and `countByKind`. `listRegistry` defaults to `Agent.list`.

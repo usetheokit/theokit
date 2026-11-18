@@ -317,6 +317,23 @@ describe('planProjectsGC protection edge cases', () => {
     })
     expect(result.candidates).toEqual([])
   })
+
+  it('a colliding cwd with no transcript of its own is protected through candidateCwds', async () => {
+    const other = '/work-app'
+    transcript('new', 1)
+    const registered = transcript('registered', 300)
+    const asked: string[] = []
+    const result = await plan({
+      candidateCwds: () => [other, '/elsewhere'],
+      listRegistry: (cwd) => {
+        asked.push(cwd)
+        return Promise.resolve(cwd === other ? [{ id: 'registered' }] : [])
+      },
+    })
+    expect(asked).toContain(other)
+    expect(asked).not.toContain('/elsewhere')
+    expect(result.candidates.map((c) => c.target)).not.toContain(registered)
+  })
 })
 
 function defaultFs(): ProjectsGCFs {

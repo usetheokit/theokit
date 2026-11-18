@@ -89,6 +89,13 @@ export interface PlanProjectsGCOptions {
     projects: readonly string[],
     fs: ProjectsGCFs,
   ) => ReadonlyMap<string, LivenessVerdict>
+  /**
+   * Extra real cwds that may share a project directory with others, e.g. every workspace the app
+   * knows. Those that encode to a project are consulted like the cwds its transcripts record, so a
+   * colliding cwd with no transcript of its own is still protected. The encoding is lossy and cannot
+   * be enumerated from the name alone; without this, only cwds the transcripts reveal are known.
+   */
+  readonly candidateCwds?: () => readonly string[]
   readonly fs?: ProjectsGCFs
 }
 
@@ -300,6 +307,9 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
     if (live && cwd !== undefined) {
       const cwds = new Set([cwd])
       // A transcript that cannot be stat-ed has a header nobody read; it may name a cwd not yet seen.
+      for (const extra of options.candidateCwds?.() ?? []) {
+        if (encodeProjectDir(extra) === project) cwds.add(extra)
+      }
       let unattributed = [...unreadableTranscripts][0] as string | undefined
       for (const entry of entries) {
         if (entry.kind !== 'transcript') continue
