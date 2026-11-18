@@ -1,6 +1,7 @@
 export interface InterruptDeps {
   abort: () => void
-  forkSession: () => { newId: string; copied: boolean }
+  forkSession: () =>
+    { newId: string; copied: boolean } | Promise<{ newId: string; copied: boolean }>
   hasActiveTurn: () => boolean
   hasPendingApproval: () => boolean
   onForkFailure: (error: unknown) => void
@@ -9,15 +10,23 @@ export interface InterruptDeps {
 }
 
 export function makeInterruptTurn(deps: InterruptDeps): () => void {
+  // One fork at a time: a second Esc while the copy is pending must not start another.
+  let forking = false
   return () => {
     if (deps.hasPendingApproval()) return
     if (!deps.hasActiveTurn()) return
     deps.abort()
     deps.onInterrupted()
-    try {
-      deps.forkSession()
-    } catch (e) {
-      deps.onForkFailure(e)
-    }
+    if (forking) return
+    forking = true
+    void (async () => {
+      try {
+        await deps.forkSession()
+      } catch (e) {
+        deps.onForkFailure(e)
+      } finally {
+        forking = false
+      }
+    })()
   }
 }

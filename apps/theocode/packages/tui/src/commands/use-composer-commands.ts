@@ -46,7 +46,13 @@ export function useComposerCommands(deps: ComposerDeps): ComposerCommands {
       })
       return
     }
-    interpretCommand(action, text, { ...deps, startGoal })
+    // `/fork` is async; handleFork reports its own failures, this only keeps a stray rejection
+    // from becoming an unhandled one.
+    void Promise.resolve(interpretCommand(action, text, { ...deps, startGoal })).catch(
+      (e: unknown) => {
+        deps.setToast({ message: `Command failed: ${(e as Error).message}`, variant: 'error' })
+      },
+    )
   }
 
   return { handleSubmit }

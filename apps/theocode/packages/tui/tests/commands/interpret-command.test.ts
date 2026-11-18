@@ -70,7 +70,7 @@ function stubSpies() {
     setLoginProvider: vi.fn(),
     setReviewResult: vi.fn(),
     currentSessionId: vi.fn(() => 'sess-1'),
-    forkCurrentSession: vi.fn(() => ({ newId: 'sess-2', copied: true })),
+    forkCurrentSession: vi.fn(() => Promise.resolve({ newId: 'sess-2', copied: true })),
     stdoutWrite: vi.fn(),
     // The OTHER stdout seam. Same file descriptor as `stdout`, opposite meaning: this one survives
     // the next repaint and that one does not, so the dispatch test has to be able to tell which
@@ -205,6 +205,30 @@ describe('interpretCommand — the remaining groups claim their own', () => {
     // asynchronously; a case that awaited that would be testing the filesystem, not the dispatch.
     const h = run({ kind: 'fork' } as CommandAction)
     expect(h.forkCurrentSession).toHaveBeenCalled()
+  })
+
+  it('test_fork_toasts_only_after_the_async_fork_settles', async () => {
+    let resolve!: (v: { newId: string; copied: boolean }) => void
+    const h = harness()
+    ;(h.cap as { forkCurrentSession: unknown }).forkCurrentSession = vi.fn(
+      () => new Promise((r) => (resolve = r)),
+    )
+    const done = interpretCommand({ kind: 'fork' } as CommandAction, '', h.cap)
+    expect(h.setToast).not.toHaveBeenCalled()
+    resolve({ newId: 'sess-9', copied: true })
+    await done
+    expect(h.setToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }))
+  })
+
+  it('test_fork_rejection_is_reported_as_a_toast', async () => {
+    const h = harness()
+    ;(h.cap as { forkCurrentSession: unknown }).forkCurrentSession = vi.fn(() =>
+      Promise.reject(new Error('disk full')),
+    )
+    await interpretCommand({ kind: 'fork' } as CommandAction, '', h.cap)
+    expect(h.setToast).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Fork failed: disk full', variant: 'error' }),
+    )
   })
 
   it('test_listSkills_reaches_the_transcript_group', () => {
@@ -345,7 +369,10 @@ describe('B-168 — a published record does not decide what the next test sees',
       rules: { count: 0, read: 0 },
     } as never)
 
-    expect(currentWiring(), 'the publisher stopped publishing, so the test below guards nothing').toBeDefined()
+    expect(
+      currentWiring(),
+      'the publisher stopped publishing, so the test below guards nothing',
+    ).toBeDefined()
   })
 
   it('test_the_record_is_cleared_between_tests_in_this_file', () => {

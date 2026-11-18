@@ -84,4 +84,25 @@ describe('the interrupt records which message it cut', () => {
 
     expect(d.onInterrupted).not.toHaveBeenCalled()
   })
+
+  it('test_a_second_interrupt_while_the_fork_is_pending_does_not_fork_again', async () => {
+    let finish!: (v: { newId: string; copied: boolean }) => void
+    const d = deps({ forkSession: vi.fn(() => new Promise((r) => (finish = r))) })
+    const interrupt = makeInterruptTurn(d)
+    interrupt()
+    interrupt()
+    expect(d.abort).toHaveBeenCalledTimes(2)
+    expect(d.forkSession).toHaveBeenCalledOnce()
+    finish({ newId: 'n', copied: true })
+    await new Promise((r) => setTimeout(r, 0))
+    interrupt()
+    expect(d.forkSession).toHaveBeenCalledTimes(2)
+  })
+
+  it('test_an_async_fork_failure_is_reported', async () => {
+    const d = deps({ forkSession: vi.fn(() => Promise.reject(new Error('boom'))) })
+    makeInterruptTurn(d)()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(d.onForkFailure).toHaveBeenCalledOnce()
+  })
 })

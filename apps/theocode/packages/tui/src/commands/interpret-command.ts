@@ -57,7 +57,7 @@ export function interpretCommand(
   action: CommandAction,
   text: string,
   cap: CommandCapabilities,
-): void {
+): void | Promise<void> {
   // The cast is the one seam the type system cannot close by itself: indexing `HANDLERS` with a
   // union key yields a union of handler signatures, and TypeScript intersects their parameters down
   // to `never` (TS#30581) rather than pairing each key with its own action. The pairing it cannot
@@ -69,8 +69,9 @@ export function interpretCommand(
   // replaced answered that by falling out of its loop without effect. Same answer here, so an
   // action added to the registry before its handler stays inert instead of throwing at the user.
   const handler = HANDLERS[action.kind] as
-    ((action: CommandAction, text: string, cap: CommandCapabilities) => void) | undefined
-  handler?.(action, text, cap)
+    | ((action: CommandAction, text: string, cap: CommandCapabilities) => void | Promise<void>)
+    | undefined
+  return handler?.(action, text, cap)
 }
 
 type CommandHandlers = {
@@ -78,7 +79,7 @@ type CommandHandlers = {
     action: Extract<CommandAction, { kind: K }>,
     text: string,
     cap: CommandCapabilities,
-  ) => void
+  ) => void | Promise<void>
 }
 
 /**
@@ -147,7 +148,7 @@ const HANDLERS: CommandHandlers = {
     })
   },
   fork: (_action, _text, cap: IdentityCapabilities) => {
-    handleFork(cap.forkCurrentSession, cap.setToast)
+    return handleFork(cap.forkCurrentSession, cap.setToast)
   },
   listSessions: (_action, _text, cap: IdentityCapabilities) => {
     handleListSessions(cap.currentSessionId, cap.setToast)

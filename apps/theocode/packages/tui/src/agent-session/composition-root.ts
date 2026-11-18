@@ -27,7 +27,7 @@ export interface TuiRoot {
   readonly customCommands: ReturnType<typeof loadCustomCommands>
   readonly customCommandNames: ReadonlySet<string>
   readonly resetSession: () => void
-  readonly sessionFork: () => { newId: string; copied: boolean }
+  readonly sessionFork: () => Promise<{ newId: string; copied: boolean }>
   readonly pointToSession: (id: string) => void
   /** B-055 — install the surface's veto renderer; queued vetoes are replayed into it. */
   readonly onHookVeto: (listen: (veto: { tool: string; reason: string }) => void) => void
