@@ -66,6 +66,37 @@ describe('refusal ledger', () => {
     expect(takeRefusal('r-k', 'Bash')).toMatchObject({ by: 'hook' })
   })
 
+  it('a hook command veto records the bare output as reason and keeps the fenced message', async () => {
+    const command = 'echo nope-from-hook; exit 1'
+    const approved = new Set([
+      hookFingerprint({ command, event: 'pre_tool_call', timeoutMs: 5000 }),
+    ])
+    const handlers = buildHookHandlers([{ event: 'pre_tool_call', command, timeout_ms: 5000 }], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved,
+    })
+    const veto = (await handlers.pre_tool_call?.({
+      name: 'Bash',
+      args: {},
+      agentId: 'a',
+      runId: 'r-kb',
+    } as never)) as { message: string }
+    const entry = takeRefusal('r-kb', 'Bash', veto.message)
+    expect(entry).toEqual({ by: 'hook', reason: 'nope-from-hook\n' })
+    expect(veto.message).not.toBe('nope-from-hook')
+    expect(veto.message).toContain('nope-from-hook')
+  })
+
+  it('a denial takes only the entry whose message it carries', () => {
+    recordRefusal('r-m', 'Bash', { by: 'human', reason: 'a' }, 'msg-a')
+    expect(takeRefusal('r-m', 'Bash', 'external says no')).toBeUndefined()
+    expect(takeRefusal('r-m', 'Bash', 'Plugin blocked: msg-a')).toEqual({
+      by: 'human',
+      reason: 'a',
+    })
+  })
+
   it('a call refused by the permission gate yields refusal by policy', async () => {
     const store = new PermissionStore({ home: process.env.TMPDIR ?? '/tmp' })
     const gate = grantGate(store, (c) => ({

@@ -211,13 +211,11 @@ function posturePlugins(
           // Refusing everything would break every agent with a free tool next to a gated one.
           beforeToolCallInRun: (ctx, runId) => {
             if (!gated.has(ctx.name)) return undefined
-            recordRefusal(runId, ctx.name, { by: 'policy', reason: posturePolicy.reason })
-            return {
-              block: true,
-              message:
-                `Tool '${ctx.name}' requires human approval, and this surface has no approver ` +
-                `(approval posture: auto-reject — ${posturePolicy.reason}). Refused (fail-closed).`,
-            }
+            const message =
+              `Tool '${ctx.name}' requires human approval, and this surface has no approver ` +
+              `(approval posture: auto-reject — ${posturePolicy.reason}). Refused (fail-closed).`
+            recordRefusal(runId, ctx.name, { by: 'policy', reason: posturePolicy.reason }, message)
+            return { block: true, message }
           },
         }),
       ]

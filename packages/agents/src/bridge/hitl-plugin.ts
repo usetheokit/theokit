@@ -175,10 +175,15 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
           message += ` (payload: ${JSON.stringify(decision.payload)})`
         }
         const bare = decision.reason
-        recordRefusal(c.runId, c.name, {
-          by: decision.settledBy === 'timeout' ? 'timeout' : 'human',
-          ...(bare ? { reason: bare } : {}),
-        })
+        recordRefusal(
+          c.runId,
+          c.name,
+          {
+            by: decision.settledBy === 'timeout' ? 'timeout' : 'human',
+            ...(bare ? { reason: bare } : {}),
+          },
+          message,
+        )
         return { block: true, message }
       })
     },

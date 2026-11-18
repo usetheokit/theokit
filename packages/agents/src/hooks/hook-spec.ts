@@ -248,7 +248,7 @@ export function buildHookHandlers(
           const message = 'hook chain exceeded its time budget'
           // The budget veto is a veto too. Omitting it here would make a surface report every block
           // except the one caused by slowness, which is the one an operator most needs named.
-          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: message })
+          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: message }, message)
           options.onVeto?.({ tool: ctx.name, reason: message })
           return { block: true, message }
         }
@@ -263,7 +263,7 @@ export function buildHookHandlers(
         if (result.exitCode !== 0) {
           const bare = result.stdout || result.stderr || `hook exited ${String(result.exitCode)}`
           const message = fenceHookOutput(bare)
-          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: bare })
+          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: bare }, message)
           options.onVeto?.({ tool: ctx.name, reason: message })
           return { block: true, message }
         }

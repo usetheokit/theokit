@@ -650,6 +650,7 @@ function refusalFromRunEvent(ev: unknown): PendingRefusal | undefined {
     callId: e.toolCallId,
     toolName: typeof e.toolName === 'string' ? e.toolName : '',
     ...(typeof e.runId === 'string' ? { runId: e.runId } : {}),
+    ...(typeof e.message === 'string' ? { message: e.message } : {}),
     fallback: { by, ...(typeof e.message === 'string' ? { reason: e.message } : {}) },
   }
 }
@@ -663,6 +664,7 @@ interface PendingRefusal {
   toolName: string
   runId?: string
   fallback: ToolRefusal
+  message?: string
   resolved?: ToolRefusal
 }
 
@@ -670,7 +672,8 @@ interface PendingRefusal {
 function resolveRefusal(p: PendingRefusal, handleRunId: string | undefined): ToolRefusal {
   if (p.resolved !== undefined) return p.resolved
   const runId = p.runId ?? handleRunId
-  p.resolved = (runId !== undefined ? takeRefusal(runId, p.toolName) : undefined) ?? p.fallback
+  p.resolved =
+    (runId !== undefined ? takeRefusal(runId, p.toolName, p.message) : undefined) ?? p.fallback
   return p.resolved
 }
 

@@ -197,11 +197,9 @@ export function grantGate(
         scope: classification.query.scope,
         because,
       })
-      recordRefusal(ctx.runId, ctx.name, { by: 'policy', reason: because })
-      return Promise.resolve({
-        block: true,
-        message: `"${ctx.name}" is not permitted in ${classification.query.scope}: ${because}`,
-      })
+      const message = `"${ctx.name}" is not permitted in ${classification.query.scope}: ${because}`
+      recordRefusal(ctx.runId, ctx.name, { by: 'policy', reason: because }, message)
+      return Promise.resolve({ block: true, message })
     } catch (cause) {
       // A classifier that cannot decide must not pass. Throwing would end the turn over a decision
       // the consumer's own code failed to make; denying leaves the run alive and the reason visible.
@@ -210,11 +208,9 @@ export function grantGate(
       // side — the run just denies. Logged separately from the ordinary veto so the two are not
       // read as the same event.
       debugLog('[theokit] permission gate could not classify', { tool: ctx.name, why })
-      recordRefusal(ctx.runId, ctx.name, { by: 'policy', reason: why })
-      return Promise.resolve({
-        block: true,
-        message: `permission gate could not classify "${ctx.name}": ${why}`,
-      })
+      const message = `permission gate could not classify "${ctx.name}": ${why}`
+      recordRefusal(ctx.runId, ctx.name, { by: 'policy', reason: why }, message)
+      return Promise.resolve({ block: true, message })
     }
   }
 }
