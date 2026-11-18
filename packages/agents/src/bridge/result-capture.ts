@@ -14,6 +14,7 @@ export interface ResultCapture<T> {
 }
 
 export class NoResultSubmittedError extends TheokitAgentError {
+  declare readonly code: 'no_result_submitted'
   constructor(toolName: string, rejected: number) {
     super(`No valid result: tool "${toolName}" got no valid submission (${rejected} rejected).`, {
       code: 'no_result_submitted',
@@ -34,7 +35,7 @@ export function createResultCapture<T>(
   opts: { name?: string; description?: string } = {},
 ): ResultCapture<T> {
   const name = opts.name ?? 'submit_result'
-  const inputSchema = z.toJSONSchema(schema) as Record<string, unknown>
+  const inputSchema = z.toJSONSchema(schema, { io: 'input' }) as Record<string, unknown>
   if (inputSchema.type !== 'object') {
     throw new ConfigurationError(
       `createResultCapture: the schema for "${name}" must be an object schema; wrap it in z.object().`,

@@ -24,6 +24,7 @@ describe('createResultCapture', () => {
   it('result() throws NoResultSubmittedError when the tool was never called', () => {
     const cap = createResultCapture(schema, { name: 'report' })
     expect(() => call(cap.tool, {})).toThrow()
+    expect(() => cap.result()).toThrow(NoResultSubmittedError)
     try {
       cap.result()
       expect.unreachable()
@@ -33,6 +34,20 @@ describe('createResultCapture', () => {
       expect((e as Error).message).toContain('1 rejected')
       expect((e as NoResultSubmittedError).code).toBe('no_result_submitted')
     }
+  })
+
+  it('a never-called capture reports zero rejections', () => {
+    const cap = createResultCapture(schema)
+    expect(cap.submitted()).toBe(false)
+    expect(() => cap.result()).toThrow(/"submit_result".*\(0 rejected\)/)
+  })
+
+  it('advertises the input representation the handler validates', () => {
+    const cap = createResultCapture(z.object({ n: z.string().pipe(z.coerce.number()) }))
+    const props = cap.tool.inputSchema.properties as Record<string, { type: string }>
+    expect(props.n?.type).toBe('string')
+    call(cap.tool, { n: '5' })
+    expect(cap.result()).toEqual({ n: 5 })
   })
 
   it('a later valid submission replaces an earlier one, and an invalid one keeps it', () => {
