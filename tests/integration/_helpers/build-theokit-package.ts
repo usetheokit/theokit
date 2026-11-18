@@ -359,11 +359,6 @@ export const buildTheokitPackageOnce = (): void => {
       cwd: ROOT,
       stdio: 'pipe',
       timeout: BUILD_TIMEOUT_MS,
-      // The dts build overruns Node's default heap; CI sets a larger one, a bare shell does not.
-      env: {
-        ...process.env,
-        NODE_OPTIONS: process.env.NODE_OPTIONS ?? '--max-old-space-size=3072',
-      },
     })
     distDecidedUsable = true
     markDistValidatedForThisRun()
