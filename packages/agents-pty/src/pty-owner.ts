@@ -60,8 +60,7 @@ export function createPtyOwner<M extends string>(options: PtyOwnerOptions<M>): P
 
   const createBackend =
     options.createBackend ??
-    ((o: PtyInteractiveBackendOptions): OwnedPtyBackend =>
-      new PtyInteractiveBackend(o) as unknown as OwnedPtyBackend)
+    ((o: PtyInteractiveBackendOptions): OwnedPtyBackend => new PtyInteractiveBackend(o))
 
   let currentMode = options.mode
 
