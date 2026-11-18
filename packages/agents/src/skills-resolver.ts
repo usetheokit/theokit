@@ -50,3 +50,6 @@ export async function resolveEnabledSkills(
   }
   return [...names]
 }
+
+/** Which skills `skill_read` serves: inline only (default) or everything the `<skills>` block lists. */
+export type SkillsReadMode = 'inline' | 'advertised'

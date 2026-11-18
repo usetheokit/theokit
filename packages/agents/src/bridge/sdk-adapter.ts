@@ -19,6 +19,7 @@ import { debugLog } from '../debug-log.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
+import { wireInlineSkillRead } from './advertised-skill-read.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
@@ -458,30 +459,6 @@ function createTurnUsageMeter(
   })
 }
 
-/**
- * Auto-wire `skill_read` for inline skills (`defineAgent({ skills: [inlineSkill] })`). An inline
- * skill lists in the `<skills>` block by name + description only — its body is unreachable to the
- * model without the `skill_read` tool, so registering an inline skill implies wanting it readable.
- * Dedup: skip when the app already declared a `skill_read` (an explicit `defineSkillReadTool` wins).
- * Graceful: skip when the loaded SDK predates `defineSkillReadTool`.
- */
-function wireInlineSkillRead(
-  sdkTools: unknown[],
-  rt: SdkRuntime,
-  compiled: CompiledAgentOptions,
-  compiledTools: CompiledTool[],
-): void {
-  const inlineSkills = compiled.skills?.inline
-  if (
-    inlineSkills !== undefined &&
-    inlineSkills.length > 0 &&
-    rt.defineSkillReadTool !== undefined &&
-    !compiledTools.some((t) => t.name === 'skill_read')
-  ) {
-    sdkTools.push(rt.defineSkillReadTool(inlineSkills))
-  }
-}
-
 /** Wiring triad pillar (c) — M7 run-context metric: where the injected run-context came from. */
 function runContextSource(overrides: RuntimeOverrides, compiled: CompiledAgentOptions): string {
   if (overrides.runContext !== undefined) return 'per-run'
@@ -548,7 +525,13 @@ export function createSdkAgentStream(
         usageMeter,
       )
 
-      wireInlineSkillRead(sdkTools, rt, compiled, compiledTools)
+      await wireInlineSkillRead(
+        sdkTools,
+        rt.defineSkillReadTool,
+        compiled,
+        compiledTools,
+        overrides.cwd,
+      )
       debugLog('[THEO_AGENT_M7_RUN_CONTEXT]', {
         source: runContextSource(overrides, compiled),
         keys: runContext !== undefined ? Object.keys(runContext) : [],
@@ -951,7 +934,13 @@ export function toAgentFactory(
     }
     const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
     // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream).
-    wireInlineSkillRead(sdkTools, rt, compiled, compiled.tools)
+    await wireInlineSkillRead(
+      sdkTools,
+      rt.defineSkillReadTool,
+      compiled,
+      compiled.tools,
+      overrides.cwd,
+    )
     const { options: m8 } = assembleM8CreateOptions(compiled)
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)

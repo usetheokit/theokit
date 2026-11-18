@@ -18,7 +18,7 @@ import type { AgentDefinition as SubagentDefinition } from '@theokit/sdk/subagen
 
 import { ConfigurationError } from '../errors.js'
 import type { Guardrail } from '../guardrails/index.js'
-import type { SkillsSelection } from '../skills-resolver.js'
+import type { SkillsReadMode, SkillsSelection } from '../skills-resolver.js'
 import type {
   ApprovalOptions,
   BudgetOptions,
@@ -397,4 +397,6 @@ export interface CompiledAgentOptions {
    * before the SDK runs. Not consumed by the SDK directly (it reads `skills`). Absent ⇒ no resolver.
    */
   skillsResolver?: SkillsSelection
+  /** Which skills `skill_read` serves (`defineAgent({ skillsRead })`). Absent ⇒ `'inline'`. */
+  skillsRead?: SkillsReadMode
 }

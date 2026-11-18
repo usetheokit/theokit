@@ -201,6 +201,16 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
+## Reading skills with `skill_read`
+
+By default only inline skills (`createSkill(...)`) get a `skill_read` tool; a skill enabled by name or found on disk is listed in the `<skills>` block but its body is not readable. Opt in with `read: 'advertised'`:
+
+```ts
+AgentBuilder.create().skills(['deploy'], { read: 'advertised' }) // or defineAgent({ skillsRead: 'advertised' })
+```
+
+`skill_read` then serves exactly what the `<skills>` block lists: inline skills, skills enabled by name, and skills discovered through the granted `settingSources` and `claudeCode` roots (project, user, `.claude`, plugin bundles). It runs after the trust gate, so a root the gate withheld is neither read nor named in a not-found answer. The project root wins a name clash. An app-declared `skill_read` tool still takes precedence.
+
 ## Withholding SDK builtin tools
 
 `AgentBuilder.withholdBuiltinTools(['shell'])` keeps the named SDK builtin tools (`shell`,
