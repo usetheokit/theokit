@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type * as SdkAuth from '@theokit/sdk/auth'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * M60 — `AuthProvider` unifies the SDK's free OAuth-lifecycle functions into one OO contract. Two
@@ -12,29 +16,50 @@ const h = vi.hoisted(() => ({
   ensure: [] as unknown[][],
   device: [] as unknown[][],
   persist: [] as unknown[][],
+  real: false,
+  impl: undefined as undefined | ((deps: { fetch: typeof fetch }) => Promise<unknown>),
 }))
 
-vi.mock('@theokit/sdk/auth', () => ({
-  ensureFreshCredential: vi.fn(async (resolved: unknown, opts: unknown, deps: unknown) => {
-    h.ensure.push([resolved, opts, deps])
-    return {
-      provider: 'openai',
-      accessToken: 'FRESH_SECRET_ACCESS',
-      refreshToken: 'SECRET_REFRESH',
-    }
-  }),
-  openaiDeviceLogin: vi.fn(async (config: unknown, deps: unknown, hooks: unknown) => {
-    h.device.push([config, deps, hooks])
-    return {
-      accessToken: 'LOGIN_SECRET_ACCESS',
-      refreshToken: 'LOGIN_SECRET_REFRESH',
-      accountId: 'acct_1',
-    }
-  }),
-  persistOAuthTokens: vi.fn((provider: string, tokens: unknown, store: unknown, env: unknown) => {
-    h.persist.push([provider, tokens, store, env])
-    return '/home/u/.agent-builder/auth.json'
-  }),
+vi.mock('@theokit/sdk/auth', async () => {
+  const actual = await vi.importActual<typeof SdkAuth>('@theokit/sdk/auth')
+  return {
+    ensureFreshCredential: vi.fn(async (resolved: never, opts: never, deps: never) => {
+      // `h.real` runs the SDK's own refresh, to pin how transport failures look after it re-wraps them.
+      if (h.real) return actual.ensureFreshCredential(resolved, opts, deps)
+      h.ensure.push([resolved, opts, deps])
+      if (h.impl) return h.impl(deps as { fetch: typeof fetch })
+      return {
+        provider: 'openai',
+        accessToken: 'FRESH_SECRET_ACCESS',
+        refreshToken: 'SECRET_REFRESH',
+      }
+    }),
+    authFilePath: vi.fn((store: never, env: never) =>
+      h.real
+        ? actual.authFilePath(store, env)
+        : `${tmpdir()}/theokit-auth-provider-test-${process.pid}.json`,
+    ),
+    readStoredOAuth: vi.fn((store: never, env: never) =>
+      h.real ? actual.readStoredOAuth(store, env) : undefined,
+    ),
+    openaiDeviceLogin: vi.fn(async (config: unknown, deps: unknown, hooks: unknown) => {
+      h.device.push([config, deps, hooks])
+      return {
+        accessToken: 'LOGIN_SECRET_ACCESS',
+        refreshToken: 'LOGIN_SECRET_REFRESH',
+        accountId: 'acct_1',
+      }
+    }),
+    persistOAuthTokens: vi.fn((provider: string, tokens: unknown, store: unknown, env: unknown) => {
+      h.persist.push([provider, tokens, store, env])
+      return '/home/u/.agent-builder/auth.json'
+    }),
+  }
+})
+
+// The file lock polls with timers; under fake timers it would never settle, and it is not what these tests cover.
+vi.mock('@theokit/sdk/persistence', () => ({
+  withFileLock: <T>(_path: string, fn: () => Promise<T>): Promise<T> => fn(),
 }))
 
 const { AuthProvider } = await import('../../src/auth/auth-provider.js')
@@ -122,5 +147,176 @@ describe('M60 — AuthProvider delegates the OAuth lifecycle to the SDK (Rung 9)
     } finally {
       spies.forEach((s) => s.mockRestore())
     }
+  })
+})
+
+describe('AuthProvider — requestTimeoutMs and onTransientFailure', () => {
+  const OAUTH = {
+    kind: 'oauth',
+    provider: 'openai',
+    apiKey: 'STORED_ACCESS',
+    expiresAt: 1,
+  } as never
+
+  afterEach(() => {
+    h.impl = undefined
+    vi.useRealTimers()
+  })
+
+  it('requestTimeoutMs aborts a hanging refresh', async () => {
+    vi.useFakeTimers()
+    let signal: AbortSignal | undefined
+    h.impl = (deps) => deps.fetch('https://auth.example/token', {}).then(() => ({ kind: 'oauth' }))
+    const hang = vi.fn((_u: unknown, init?: RequestInit) => {
+      signal = init?.signal ?? undefined
+      return new Promise<Response>(() => {})
+    })
+    const p = new AuthProvider(CONFIG, STORE, { requestTimeoutMs: 1000 }).ensureFresh(OAUTH, {
+      fetch: hang as never,
+      now: () => 0,
+    })
+    const settled = p.then(
+      () => 'ok',
+      (e: unknown) => e,
+    )
+    await vi.advanceTimersByTimeAsync(60_000)
+    const err = (await settled) as { name: string; transient: boolean }
+    expect(err.name).toBe('RefreshFailure')
+    expect(err.transient).toBe(true)
+    expect(hang).toHaveBeenCalledTimes(3)
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it('use-stored returns the stored credential on a transient failure and still throws on invalid_grant', async () => {
+    vi.useFakeTimers()
+    h.impl = () => Promise.reject(new Error('ECONNRESET'))
+    const keep = new AuthProvider(CONFIG, STORE, { onTransientFailure: 'use-stored' })
+    const p1 = keep.ensureFresh(OAUTH, { fetch, now: () => 0 })
+    await vi.advanceTimersByTimeAsync(60_000)
+    await expect(p1).resolves.toMatchObject({ apiKey: 'STORED_ACCESS', expiresAt: 1 })
+
+    h.impl = () => Promise.reject(new Error('invalid_grant'))
+    const p2 = keep.ensureFresh(OAUTH, { fetch, now: () => 0 }).catch((e: unknown) => e)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(await p2).toMatchObject({ name: 'RefreshFailure', transient: false })
+  })
+
+  it('throws after the retries by default on a transient failure', async () => {
+    vi.useFakeTimers()
+    h.impl = () => Promise.reject(new Error('ECONNRESET'))
+    const p = new AuthProvider(CONFIG, STORE)
+      .ensureFresh(OAUTH, { fetch, now: () => 0 })
+      .catch((e: unknown) => e)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(await p).toMatchObject({ name: 'RefreshFailure', transient: true })
+  })
+})
+
+describe('AuthProvider transport failures through the real SDK refresh', () => {
+  let home: string
+  const realStore = () => ({ home, dirName: '.app', fileName: 'auth.json' }) as never
+  const realConfig = { tokenEndpoint: 'https://auth.example/token', clientId: 'cid' } as never
+  const stale = () =>
+    ({
+      kind: 'oauth',
+      provider: 'openai',
+      apiKey: 'STORED',
+      source: 'file',
+      inferred: false,
+      expiresAt: 1,
+    }) as never
+
+  beforeEach(async () => {
+    home = mkdtempSync(join(tmpdir(), 'auth-transport-'))
+    const actual = await vi.importActual<typeof SdkAuth>('@theokit/sdk/auth')
+    actual.persistOAuthTokens(
+      'openai',
+      { access: 'STORED', refresh: 'R', expires: 1 },
+      realStore(),
+      {},
+    )
+    h.real = true
+  })
+  afterEach(() => {
+    h.real = false
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  const useStored = (extra = {}) =>
+    new AuthProvider(realConfig, realStore(), { onTransientFailure: 'use-stored', ...extra })
+
+  it('a hanging fetch times out and use-stored returns the stored credential', async () => {
+    const f = (() => new Promise<Response>(() => {})) as typeof fetch
+    const r = await useStored({ requestTimeoutMs: 20 }).ensureFresh(stale(), {
+      fetch: f,
+      now: () => 1_000_000,
+    })
+    expect(r.apiKey).toBe('STORED')
+  })
+
+  it('a stalled response body is cut off by the deadline', async () => {
+    let calls = 0
+    const f = (async () => {
+      calls++
+      return { ok: true, status: 200, json: () => new Promise(() => {}) } as unknown as Response
+    }) as typeof fetch
+    const r = await useStored({ requestTimeoutMs: 20 }).ensureFresh(stale(), {
+      fetch: f,
+      now: () => 1_000_000,
+    })
+    expect(r.apiKey).toBe('STORED')
+    expect(calls).toBe(3)
+  })
+
+  it('TypeError: fetch failed is transient: use-stored returns, default throws a transient RefreshFailure', async () => {
+    const f = (async () => {
+      throw new TypeError('fetch failed', { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } })
+    }) as typeof fetch
+    const deps = { fetch: f, now: () => 1_000_000 }
+    expect((await useStored().ensureFresh(stale(), deps)).apiKey).toBe('STORED')
+    await expect(
+      new AuthProvider(realConfig, realStore()).ensureFresh(stale(), deps),
+    ).rejects.toMatchObject({ name: 'RefreshFailure', transient: true })
+  })
+
+  it.each([{}, { requestTimeoutMs: 1000 }])(
+    'a connection reset while reading the body is transient (%j)',
+    async (extra) => {
+      const f = (async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: () => Promise.reject(new TypeError('terminated')),
+        }) as unknown as Response) as typeof fetch
+      const deps = { fetch: f, now: () => 1_000_000 }
+      expect((await useStored(extra).ensureFresh(stale(), deps)).apiKey).toBe('STORED')
+    },
+  )
+
+  it('malformed JSON in a successful response is not transient', async () => {
+    let calls = 0
+    const f = (async () => {
+      calls++
+      return {
+        ok: true,
+        status: 200,
+        json: () => Promise.reject(new SyntaxError('Unexpected token')),
+      } as unknown as Response
+    }) as typeof fetch
+    await expect(
+      useStored().ensureFresh(stale(), { fetch: f, now: () => 1_000_000 }),
+    ).rejects.toMatchObject({ name: 'RefreshFailure', transient: false })
+    expect(calls).toBe(1)
+  })
+
+  it('invalid_grant still throws with use-stored', async () => {
+    const f = (async () =>
+      ({ ok: false, status: 400, json: async () => ({}) }) as unknown as Response) as typeof fetch
+    await expect(
+      useStored({ requestTimeoutMs: 1000 }).ensureFresh(stale(), {
+        fetch: f,
+        now: () => 1_000_000,
+      }),
+    ).rejects.toMatchObject({ name: 'RefreshFailure' })
   })
 })

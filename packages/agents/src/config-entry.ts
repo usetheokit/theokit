@@ -49,6 +49,8 @@ export {
   type BootstrapStep,
 } from './config/app-bootstrap.js'
 
+export { parseDottedOverrides, DottedOverrideError } from './config/dotted-overrides.js'
+
 export { TrustStore, TrustStorePermissionsError, type TrustRecord } from './config/trust-store.js'
 
 /**
@@ -153,6 +155,7 @@ export type { DeclaredLayer, LayerValues } from '@theokit/sdk'
  * path as every other source.
  */
 export {
+  applyOutputStyle,
   loadOutputStyle,
   resolveOutputStyle,
   OutputStyleError,
