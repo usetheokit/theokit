@@ -829,7 +829,6 @@ export interface SdkTurnHandle {
     error?: { message: string }
   }>
   stream?: () => AsyncIterable<unknown>
-  /** Stops the run. Optional: not every handle can be cancelled. */
   cancel?: () => Promise<void> | void
 }
 

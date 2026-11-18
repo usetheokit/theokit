@@ -34,6 +34,10 @@ export interface RunAgentTurnOptions {
 
 const ABORTED = Symbol('aborted')
 
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true
+}
+
 function reasonOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
@@ -88,11 +92,17 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
     code: 'turn_cancelled',
     reason: 'the turn was cancelled',
   })
-  if (signal?.aborted === true) return cancelled()
+  if (isAborted(signal)) return cancelled()
 
   const abortion = new Promise<typeof ABORTED>((resolve) => {
     if (signal === undefined) return
-    signal.addEventListener('abort', () => resolve(ABORTED), { once: true })
+    signal.addEventListener(
+      'abort',
+      () => {
+        resolve(ABORTED)
+      },
+      { once: true },
+    )
   })
   const race = <T>(work: Promise<T>): Promise<T | typeof ABORTED> => {
     if (signal === undefined) return work
@@ -126,7 +136,11 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
     const sent = await race(sending)
     if (sent === ABORTED) {
       // a run that arrives after the abort is cancelled all the same
-      void sending.then((late) => cancelRun(late)).catch(() => undefined)
+      void sending
+        .then((late) => {
+          cancelRun(late)
+        })
+        .catch(() => undefined)
       return cancelled()
     }
     run = sent
@@ -179,7 +193,7 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
       },
     }
   } catch (err) {
-    if (signal?.aborted === true) {
+    if (isAborted(signal)) {
       cancelRun(run)
       closeIterator(iterator)
       return cancelled()
