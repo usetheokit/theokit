@@ -12,6 +12,7 @@ export {
   WIRE_CHUNK_TYPES,
   WIRE_DATA_PART_PREFIX,
   WIRE_ERROR_CODE_PART,
+  WIRE_TOOL_REFUSAL_PART,
   wireChunkSchema,
   type WireChunk,
   type WireDataPart,
@@ -36,5 +37,6 @@ export type {
   WireReconnectOptions,
   WireSendOptions,
   WireToolApproval,
+  WireToolRefusal,
   WireTransport,
 } from './types.js'
