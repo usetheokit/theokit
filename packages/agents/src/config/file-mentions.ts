@@ -54,7 +54,7 @@ const estimate = (s: string): number => Math.ceil(s.length / CHARS_PER_TOKEN)
 
 function codeOf(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error
-    ? String((error as { code: unknown }).code)
+    ? String(error.code)
     : undefined
 }
 
@@ -85,6 +85,21 @@ function locate(ref: string, opts: FileMentionOptions): { abs: string } | { reas
   }
 }
 
+/** The file's text, or the reason it was not readable. Unexpected errors are rethrown. */
+function readMention(
+  read: (abs: string) => string | undefined,
+  abs: string,
+): string | { reason: SkipReason } {
+  try {
+    return read(abs) ?? { reason: 'not-found' }
+  } catch (error) {
+    const code = codeOf(error)
+    if (code === 'ENOENT' || code === 'ENOTDIR') return { reason: 'not-found' }
+    if (code === 'EACCES' || code === 'EPERM' || code === 'EISDIR') return { reason: 'unreadable' }
+    throw error
+  }
+}
+
 /**
  * Attaches the files `@mentions` in `text` name, using the grammar `expandCommandTemplate` uses.
  * A mention that was not attached is reported in `skipped`; the text itself is never rewritten.
@@ -108,25 +123,12 @@ export function resolveFileMentions(text: string, opts: FileMentionOptions): Res
       skipped.push({ ref, reason: found.reason })
       continue
     }
-    let content: string | undefined
-    try {
-      content = read(found.abs)
-    } catch (error) {
-      const code = codeOf(error)
-      if (code === 'ENOENT' || code === 'ENOTDIR') {
-        skipped.push({ ref, reason: 'not-found' })
-        continue
-      }
-      if (code === 'EACCES' || code === 'EPERM' || code === 'EISDIR') {
-        skipped.push({ ref, reason: 'unreadable' })
-        continue
-      }
-      throw error
-    }
-    if (content === undefined) {
-      skipped.push({ ref, reason: 'not-found' })
+    const outcome = readMention(read, found.abs)
+    if (typeof outcome !== 'string') {
+      skipped.push({ ref, reason: outcome.reason })
       continue
     }
+    let content = outcome
     if (estimate(content) > perFile) {
       content = `${content.slice(0, perFile * CHARS_PER_TOKEN)}\n…(truncated)`
     }
