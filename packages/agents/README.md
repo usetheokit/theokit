@@ -52,7 +52,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics |
+| `./doctor` | Environment diagnostics. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
@@ -76,6 +76,10 @@ await registry.dispatch('/exit', { exit: () => process.exit(0) })
 
 `AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
 
+`loginWithApiKey(key, store, { provider?, overwrite?, env? })` (from `./auth`) trims the key, infers the provider from its prefix when none is given, and writes the credential file, returning `{ provider, path }`. It throws `CredentialError` for an empty key or an unknown prefix without a provider, `ProviderPrefixMismatchError` when the declared provider contradicts the prefix, and `CredentialExistsError` (`code: 'credential_exists'`, names the path) when a file exists and `overwrite` is not set. `logout(store, env?)` removes the file and returns whether there was one; a concurrent removal returns `false`.
+
+`AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
+
 ## One bootstrap for every entry
 
 An app with several entries (CLI, ACP server) declares its setup once. Each step runs once, in order,
@@ -98,6 +102,22 @@ await bootstrap.run({ env: process.env, cwd: process.cwd(), home: homedir() })
 // any module that resolves SDK paths
 import { assertBootstrapped } from '@theokit/agents/config'
 assertBootstrapped(bootstrap, 'openTranscriptStore')
+```
+
+### `-c a.b=value` overrides
+
+`parseDottedOverrides(pairs, { coerce? })` from `@theokit/agents/config` turns argv pairs into the
+`command-line` layer. Pairs split at the first `=`, keys at `.`; `a.b=1` and `a.c=2` build one nested object.
+`__proto__`, `constructor` and `prototype` (in any position), empty segments, a pair without `=`, and pairs that
+build incompatible shapes (`a=1` with `a.b=2`, in either order) throw `DottedOverrideError`
+(`dotted_override_invalid`, not retryable), naming the pair. Values stay strings unless `coerce(path, raw)` returns
+otherwise; `path` is the full dotted key, so `profiles.x.memory` is not coerced like `memory`. The flag name and argv
+parsing stay in your app.
+
+```ts
+const layer = parseDottedOverrides(['model=x', 'limits.turns=3'], {
+  coerce: (path, raw) => (path === 'limits.turns' ? Number(raw) : raw),
+})
 ```
 
 ## Calling an agent route without `HttpTransport`
@@ -230,6 +250,8 @@ configuration that had no effect.
 | `themes/*.json` | **out of scope HERE** — read by the consumer, like `keybindings.json`. `apps/theocode` resolves `~/.claude/themes/` in `apps/theocode/packages/tui/src/theme/custom-theme.ts`; this package and `@theokit/tui` read neither |
 | `~/.claude.json` — OAuth state, UI toggles | **out of scope** — a CLI's own state |
 | `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers` |
+
+**Output styles.** `loadOutputStyle({ name, cwd, homeDir })` matches a style by its file name (without `.md`) or by its frontmatter `name`. The project directory is searched before the home directory; within one directory a file-name match wins over another file's frontmatter name, and two files claiming the same frontmatter name throw `OutputStyleError` naming both paths. A named style with no match throws `OutputStyleError`. `applyOutputStyle(base, style)` (from `@theokit/agents/config`) returns `base` unchanged when there is no style, `` `${base}\n\n${style.content}` `` when `keepCodingInstructions` is true, and `style.content` otherwise.
 
 
 ### Out of scope, and who owns it instead
@@ -494,3 +516,7 @@ See `LICENSE`.
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
 
 **One streamed turn.** `runAgentTurn({ agent, message, runId, emit, signal?, sendOptions?, mapEvent? })` (from `@theokit/agents/bridge`) runs one `agent.send` on an agent you already hold and emits translated `AgentStreamEvent`s. It cancels the run when `signal` aborts (without waiting on a hung cancel), drops final assistant text that `onDelta` already streamed, counts a streamed `error` event as a failure even when `wait()` reports `finished`, and resolves (never rejects) with `{ ok: true, usage? }` or `{ ok: false, code: 'turn_failed' | 'turn_cancelled', reason }`. `completeFromTurn(withAgent)` adapts it to the `complete` port of `createOpenAICompatibleRoutes`; a failed turn throws, so the route answers 502.
+
+## Refused tool calls
+
+When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
