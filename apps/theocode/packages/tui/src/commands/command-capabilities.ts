@@ -4,7 +4,6 @@ import type { ReasoningEffort } from '@theocode/agent/config'
 import type { AttachedImage } from '@theocode/agent/context'
 import type { ApprovalMode } from '../consent/index.js'
 import type { Mode, ContentPanel, ToastPayload } from '../screen-types.js'
-import type { ForkResult } from '../persistence/fork-session.js'
 import type { CustomCommand } from './custom-commands.js'
 import type { GoalRunState } from './goal.js'
 
@@ -64,7 +63,7 @@ export interface CommandCapabilities {
    */
   readonly hasLastUsage: boolean
   readonly currentSessionId: () => string
-  readonly forkCurrentSession: () => Promise<ForkResult>
+  readonly forkCurrentSession: () => { newId: string; copied: boolean }
   readonly resetSession: () => void
   /** B-087 — repoints the live session, the same seam `backtrack` uses to move after a fork. */
   readonly setSessionAndPersist: (id: string) => void

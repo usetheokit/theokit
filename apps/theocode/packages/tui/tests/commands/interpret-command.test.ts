@@ -70,7 +70,7 @@ function stubSpies() {
     setLoginProvider: vi.fn(),
     setReviewResult: vi.fn(),
     currentSessionId: vi.fn(() => 'sess-1'),
-    forkCurrentSession: vi.fn(() => Promise.resolve({ newId: 'sess-2', copied: true })),
+    forkCurrentSession: vi.fn(() => ({ newId: 'sess-2', copied: true })),
     stdoutWrite: vi.fn(),
     // The OTHER stdout seam. Same file descriptor as `stdout`, opposite meaning: this one survives
     // the next repaint and that one does not, so the dispatch test has to be able to tell which

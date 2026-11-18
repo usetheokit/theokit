@@ -94,11 +94,7 @@ function build(): TuiRoot {
 
   const vetoRelay = createVetoRelay()
 
-  let turnsStarted = 0
   const transport = createChatTransport({
-    onTurnStart: () => {
-      turnsStarted += 1
-    },
     onHookVeto: vetoRelay.emit,
     getEffort: () => session.effort(),
     getSessionId: () => session.session(),
@@ -129,9 +125,8 @@ function build(): TuiRoot {
       // read that `/new` repeats, so the bare `void` cannot become an unhandled rejection.
       void fireSessionStart(session.session(), cwd)
     },
-    sessionFork: () => {
-      const turnsAtStart = turnsStarted
-      return forkCurrentSessionWith({
+    sessionFork: () =>
+      forkCurrentSessionWith({
         newId: () => `tui-${randomUUID()}`,
         fork: (from, to) => forkSession(from, to),
         current: () => session.session(),
@@ -139,10 +134,7 @@ function build(): TuiRoot {
           session.setSession(id)
           void persistSessionId(sessionPointer, id)
         },
-        // A turn that began while the copy ran would otherwise be cut off by the switch.
-        shouldCommit: () => turnsStarted === turnsAtStart,
-      })
-    },
+      }),
     pointToSession: (id) => {
       session.setSession(id)
       void persistSessionId(sessionPointer, id)

@@ -1,6 +1,6 @@
 export interface InterruptDeps {
   abort: () => void
-  forkSession: () => Promise<{ newId: string; copied: boolean }>
+  forkSession: () => { newId: string; copied: boolean }
   hasActiveTurn: () => boolean
   hasPendingApproval: () => boolean
   onForkFailure: (error: unknown) => void
@@ -14,12 +14,10 @@ export function makeInterruptTurn(deps: InterruptDeps): () => void {
     if (!deps.hasActiveTurn()) return
     deps.abort()
     deps.onInterrupted()
-    // Fork runs in the background: the abort and the interrupted mark above are already done, and
-    // a failure (sync or async) still reaches `onForkFailure`.
-    void Promise.resolve()
-      .then(() => deps.forkSession())
-      .catch((e: unknown) => {
-        deps.onForkFailure(e)
-      })
+    try {
+      deps.forkSession()
+    } catch (e) {
+      deps.onForkFailure(e)
+    }
   }
 }
