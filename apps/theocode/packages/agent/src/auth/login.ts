@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 
 import {
   CODEX_PROVIDER,
+  CredentialExistsError,
   loginWithApiKey,
   loginWithDevice,
   logout as logoutStore,
@@ -9,12 +10,7 @@ import {
 } from '@theokit/agents/auth'
 import type { AuthMethod, DeviceAuthProvider } from '@theokit/agents/auth'
 
-import {
-  CredentialError,
-  authFilePath,
-  PROVIDER_NAMES,
-  type Provider,
-} from './credentials.js'
+import { CredentialError, authFilePath, PROVIDER_NAMES, type Provider } from './credentials.js'
 import { credentialStore } from './oauth-config.js'
 
 export interface LoginResult {
@@ -42,11 +38,21 @@ export function login(
     )
   }
 
-  return loginWithApiKey(key, credentialStore(home), {
-    provider,
-    overwrite: opts.overwrite,
-    env: opts.env ?? {},
-  }) as LoginResult
+  try {
+    return loginWithApiKey(key, credentialStore(home), {
+      provider,
+      overwrite: opts.overwrite,
+      env: opts.env ?? {},
+    }) as LoginResult
+  } catch (err) {
+    // The framework says "pass overwrite"; the CLI has no such option, so keep this product's words.
+    if (err instanceof CredentialExistsError) throw new CredentialError(existsMessage(err.path))
+    throw err
+  }
+}
+
+function existsMessage(target: string): string {
+  return `a credential already exists at ${target}. Run logout first, or pass overwrite to replace it.`
 }
 
 function isProvider(name: string | undefined): name is Provider {
@@ -60,9 +66,7 @@ function refuseIfExists(
 ): void {
   const target = authFilePath(home, env)
   if (existsSync(target) && overwrite !== true) {
-    throw new CredentialError(
-      `a credential already exists at ${target}. Run logout first, or pass overwrite to replace it.`,
-    )
+    throw new CredentialError(existsMessage(target))
   }
 }
 

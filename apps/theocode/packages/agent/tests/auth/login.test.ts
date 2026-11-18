@@ -41,6 +41,7 @@ describe('signing in with an API key', () => {
     const before = readFileSync(authFilePath(home), 'utf8')
 
     expect(() => login('sk-ant-second', home)).toThrow(CredentialError)
+    expect(() => login('sk-ant-second', home)).toThrow(/Run logout first/)
     expect(readFileSync(authFilePath(home), 'utf8'), 'the stored credential was replaced').toBe(
       before,
     )
