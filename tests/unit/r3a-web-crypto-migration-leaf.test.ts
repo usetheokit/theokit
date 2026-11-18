@@ -298,6 +298,7 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // question, answered on the TS AST at scan time, never at request time.
       'packages/theo/src/server/scan/detect-agent-policy.ts',
       'packages/theo/src/server/scan/module-loader.ts',
+      'packages/theo/src/server/scan/load-typescript.ts',
       // The memo the scanners above share (usetheokit/theokit#417). Node-only by nature rather
       // than by implementation: its key IS a filesystem fact — `mtimeMs` and `size` — so there is
       // no Web-Standards version of it to migrate to. It runs where its callers run: `theokit
