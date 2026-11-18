@@ -457,6 +457,7 @@ change knows which of the two worlds they are in.
 | Variable | Security | What it changes | Read at |
 |---|---|---|---|
 | `PROGRAMDATA` | no | Where the machine-wide operator policy is looked for on Windows. Changing it moves which policy file governs the run. | `src/config/operator-policy.ts:119` |
+| `PATH` | no | Which executables count as installed when `skill_read` (`read: 'advertised'`) decides whether a skill with `requires-bins` is offered to the model, the same test the SDK applies to the `<skills>` block. | `src/bridge/advertised-skill-read.ts:26` |
 | `THEOKIT_CODEX_CLIENT_ID` | **yes** | Overrides the OAuth client id used for the Codex device flow. It selects which OAuth client the device authorisation is issued against, so it is a credential-path decision rather than a convenience one. | `src/auth/device-provider.ts:97`, via the constant at `:93` |
 | `THEOKIT_DEBUG` | no | Turns on debug logging. Log output can contain request shapes, so treat the logs as sensitive even though the switch is not. | `src/debug-log.ts:10` |
 

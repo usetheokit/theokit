@@ -18,7 +18,7 @@ import type { AgentDefinition as SubagentDefinition } from '@theokit/sdk/subagen
 
 import { ConfigurationError } from '../errors.js'
 import type { Guardrail } from '../guardrails/index.js'
-import type { SkillsReadMode, SkillsSelection } from '../skills-resolver.js'
+import type { SkillsSelection } from '../skills-resolver.js'
 import type {
   ApprovalOptions,
   BudgetOptions,
@@ -261,6 +261,9 @@ export function compileTools(
 export type CompiledSubAgent = SubagentDefinition
 
 /** Compiled agent options ready for SDK Agent.create(). */
+/** Which skills `skill_read` serves: inline only (default) or everything the `<skills>` block lists. */
+export type SkillsReadMode = 'inline' | 'advertised'
+
 export interface CompiledAgentOptions {
   model?: string
   /** Extended-thinking effort; mapped to SDK ModelSelection.params. */

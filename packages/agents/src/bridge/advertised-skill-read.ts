@@ -1,87 +1,112 @@
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { accessSync, constants } from 'node:fs'
+import { delimiter, dirname, join } from 'node:path'
 
 import type { InlineSkill } from '@theokit/sdk'
+import type { Skill } from '@theokit/sdk/skills'
 
-import { readdirSyncSafe } from './advertised-skill-roots.js'
-import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
+import type { CompiledAgentOptions } from './agent-compiler.js'
 
-/**
- * #1855 — the roots the `<skills>` block is drawn from, in the SDK's precedence order (first wins):
- * project `.theokit`, the `claude-code` compat root, the operator's `~/.theokit`, then plugin bundles.
- * Only roots the compiled definition was granted are returned: `settingSources` and `compatSources`
- * hold post-trust-gate values (branded, mintable only by `resolveSettingSources`), so a root the gate
- * withheld is simply absent and is never read.
- */
-export function advertisedSkillRoots(
-  compiled: CompiledAgentOptions,
-  cwd: string,
-  home: string = homedir(),
-): string[] {
-  const sources: readonly string[] = compiled.settingSources ?? []
-  const project = sources.includes('project')
-  const compat = (compiled.compatSources ?? []).some(
-    (s) => typeof s === 'string' || s.import.includes('skills'),
-  )
-  const roots: string[] = []
-  if (project) roots.push(join(cwd, '.theokit', 'skills'))
-  if (compat) roots.push(join(cwd, '.claude', 'skills'))
-  if (sources.includes('user')) roots.push(join(home, '.theokit', 'skills'))
-  if (project || compat) {
-    for (const base of project ? ['.theokit', '.claude'] : ['.claude']) {
-      for (const bundle of readdirSyncSafe(join(cwd, base, 'plugins'))) {
-        roots.push(join(cwd, base, 'plugins', bundle, 'skills'))
+/** What the SDK agent exposes of its own skill listing (`SDKAgent.skills`). */
+interface ListsSkills {
+  readonly skills?: {
+    readonly list: () => Promise<readonly { name: string; source?: string }[]>
+  }
+}
+
+type ReadSource = () => Promise<readonly (InlineSkill | Skill)[]>
+
+/** The runtime surface this wiring needs; `SdkRuntime` satisfies it structurally. */
+interface WireRuntime {
+  Agent: { getOrCreate: (id: string, opts: Record<string, unknown>) => Promise<unknown> }
+  defineSkillReadTool?: (source: readonly InlineSkill[] | ReadSource) => unknown
+}
+
+function binaryOnPath(bin: string): boolean {
+  if (bin.length === 0 || /[\\/]/.test(bin)) return false
+  return (process.env.PATH ?? '')
+    .split(delimiter)
+    .filter((d) => d.length > 0)
+    .some((d) => {
+      try {
+        accessSync(join(d, bin), constants.X_OK)
+        return true
+      } catch {
+        return false
       }
-    }
-  }
-  return roots
+    })
+}
+
+/** The SDK's own disclosure rule for the `<skills>` block: hidden and unrunnable skills are not offered. */
+function isDisclosed(skill: Skill | InlineSkill): boolean {
+  const s = skill as { disableModelInvocation?: boolean; requiresBins?: string[] }
+  return s.disableModelInvocation !== true && (s.requiresBins ?? []).every(binaryOnPath)
 }
 
 /**
- * The skills `skill_read` serves in `'advertised'` mode: the inline skills plus every skill found
- * under {@link advertisedSkillRoots}, narrowed by `skills.enabled` when one was set (the SDK lists
- * only those). Discovery and body loading are the SDK's own; the first root to define a name wins.
+ * #1855 — the skills `skill_read` serves in `'advertised'` mode, read from the SDK agent's OWN
+ * listing (`agent.skills.list()`), so the trust gate, `skills.enabled`, compat roots, plugin bundles
+ * and root precedence are the SDK's resolution, not a second one. The listing drops the disclosure
+ * flags, so each skill is re-read from its `SKILL.md` root with the SDK's `discoverSkills` and the
+ * `<skills>` block's disclosure rule is applied. Inline skills win a name clash, as in the SDK.
  */
-export async function resolveAdvertisedSkills(
+async function advertisedSkills(
+  agent: ListsSkills | undefined,
   compiled: CompiledAgentOptions,
-  cwd: string,
-): Promise<InlineSkill[]> {
-  const { discoverSkills, loadSkillInstructions } = await import('@theokit/sdk/skills')
-  const enabled = compiled.skills?.enabled
-  const byName = new Map<string, InlineSkill>()
-  for (const skill of compiled.skills?.inline ?? []) byName.set(skill.name, skill)
-  for (const root of advertisedSkillRoots(compiled, cwd)) {
-    // `discoverSkills` yields `[]` for a missing or unreadable root.
-    for (const skill of await discoverSkills(root)) {
-      if (byName.has(skill.name)) continue
-      if (enabled !== undefined && enabled.length > 0 && !enabled.includes(skill.name)) continue
-      byName.set(skill.name, { ...skill, instructions: await loadSkillInstructions(skill) })
+): Promise<(InlineSkill | Skill)[]> {
+  const listed = (await agent?.skills?.list()) ?? []
+  const { discoverSkills } = await import('@theokit/sdk/skills')
+  const inline = new Map((compiled.skills?.inline ?? []).map((s) => [s.name, s]))
+  const out: (InlineSkill | Skill)[] = []
+  for (const entry of listed) {
+    const own = inline.get(entry.name)
+    if (own !== undefined) {
+      if (isDisclosed(own)) out.push(own)
+      continue
     }
+    if (entry.source === undefined) continue
+    const full = (await discoverSkills(dirname(dirname(entry.source)))).find(
+      (s) => s.name === entry.name && s.source === entry.source,
+    )
+    if (full !== undefined && isDisclosed(full)) out.push(full)
   }
-  return [...byName.values()]
+  return out
 }
 
 /**
- * Auto-wire `skill_read` for inline skills (`defineAgent({ skills: [inlineSkill] })`). An inline
- * skill lists in the `<skills>` block by name + description only — its body is unreachable to the
- * model without the `skill_read` tool, so registering an inline skill implies wanting it readable.
- * Dedup: skip when the app already declared a `skill_read` (an explicit `defineSkillReadTool` wins).
- * Graceful: skip when the loaded SDK predates `defineSkillReadTool`.
+ * Auto-wire `skill_read`. Inline mode (default): an inline skill lists by name + description only,
+ * so registering one implies wanting it readable. `'advertised'` (#1855): everything the `<skills>`
+ * block lists, resolved lazily from the agent the SDK builds. Skipped when the effective tool list
+ * (compiled tools and per-run `sdkTools`) already carries a `skill_read`, or when the loaded SDK
+ * predates `defineSkillReadTool`. Returns the runtime to create the agent with.
  */
-export async function wireInlineSkillRead(
+export function wireInlineSkillRead<R extends WireRuntime>(
   sdkTools: unknown[],
-  defineSkillReadTool: ((skills: readonly InlineSkill[]) => unknown) | undefined,
+  rt: R,
   compiled: CompiledAgentOptions,
-  compiledTools: CompiledTool[],
-  cwd?: string,
-): Promise<void> {
-  if (defineSkillReadTool === undefined || compiledTools.some((t) => t.name === 'skill_read')) {
-    return
+): R {
+  const define = rt.defineSkillReadTool
+  if (
+    define === undefined ||
+    sdkTools.some((t) => (t as { name?: string }).name === 'skill_read')
+  ) {
+    return rt
   }
-  // #1855 — `'advertised'`: serve what the `<skills>` block lists, resolved over the post-gate roots.
-  const skills =
-    compiled.skillsRead === 'advertised'
-      ? await resolveAdvertisedSkills(compiled, cwd ?? process.cwd())
-      : compiled.skills?.inline
-  if (skills !== undefined && skills.length > 0) sdkTools.push(defineSkillReadTool(skills))
+  if (compiled.skillsRead !== 'advertised') {
+    const inline = compiled.skills?.inline
+    if (inline !== undefined && inline.length > 0) sdkTools.push(define(inline))
+    return rt
+  }
+  const holder: { agent?: ListsSkills } = {}
+  sdkTools.push(define(() => advertisedSkills(holder.agent, compiled)))
+  return {
+    ...rt,
+    Agent: {
+      ...rt.Agent,
+      getOrCreate: async (id, opts) => {
+        const agent = await rt.Agent.getOrCreate(id, opts)
+        holder.agent = agent as ListsSkills
+        return agent
+      },
+    },
+  }
 }

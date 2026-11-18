@@ -20,12 +20,12 @@ import type {
 import type { z } from 'zod'
 
 import type { Guardrail } from '../guardrails/index.js'
-import type { SkillsReadMode, SkillsSelection } from '../skills-resolver.js'
+import type { SkillsSelection } from '../skills-resolver.js'
 import type { HumanInTheLoopOptions } from '../types.js'
 import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
-import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
+import type { CompiledAgentOptions, CompiledTool, SkillsReadMode } from './agent-compiler.js'
 import type { CodePlugin } from './code-plugins.js'
 import type { HookHandlers } from './hook-handlers.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'

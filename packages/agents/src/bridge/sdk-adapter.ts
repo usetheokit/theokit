@@ -14,6 +14,7 @@ import type { ToolRefusal } from '@theokit/presenter'
 // prettier-ignore
 import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
+import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
 import type { ReasoningEffort } from '../types.js'
@@ -329,7 +330,9 @@ interface SdkRuntime {
    * at load so an older peer degrades gracefully (inline skills still list in the `<skills>` block, they
    * just aren't auto-readable). Used to auto-wire reading for `defineAgent({ skills: [inlineSkill] })`.
    */
-  defineSkillReadTool?: (skills: readonly InlineSkill[]) => unknown
+  defineSkillReadTool?: (
+    skills: readonly InlineSkill[] | (() => Promise<readonly (InlineSkill | Skill)[]>),
+  ) => unknown
 }
 
 /**
@@ -525,13 +528,7 @@ export function createSdkAgentStream(
         usageMeter,
       )
 
-      await wireInlineSkillRead(
-        sdkTools,
-        rt.defineSkillReadTool,
-        compiled,
-        compiledTools,
-        overrides.cwd,
-      )
+      const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
       debugLog('[THEO_AGENT_M7_RUN_CONTEXT]', {
         source: runContextSource(overrides, compiled),
         keys: runContext !== undefined ? Object.keys(runContext) : [],
@@ -558,7 +555,7 @@ export function createSdkAgentStream(
         yield* runTurnWithRetry(
           (outcome) =>
             streamSdkAgent(
-              rt,
+              skillRt,
               compiled,
               sdkTools,
               outcome === undefined ? turnOpts : { ...turnOpts, outcome },
@@ -934,18 +931,12 @@ export function toAgentFactory(
     }
     const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
     // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream).
-    await wireInlineSkillRead(
-      sdkTools,
-      rt.defineSkillReadTool,
-      compiled,
-      compiled.tools,
-      overrides.cwd,
-    )
+    const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
     const { options: m8 } = assembleM8CreateOptions(compiled)
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
     applyPosture(extra, m8, opts.approvals, compiled.hitl)
-    const agent = await rt.Agent.getOrCreate(sessionId, {
+    const agent = await skillRt.Agent.getOrCreate(sessionId, {
       apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),
       tools: sdkTools,

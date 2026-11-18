@@ -24,8 +24,10 @@ const h = vi.hoisted(() => ({
   toolNames: [] as string[],
   /** Toggle: when false, the mocked SDK omits `SkillReadTool` (older-peer simulation). */
   provideReadTool: true,
-  /** The skills the last `SkillReadTool.create` call was given. */
-  readSkills: [] as Array<{ name: string }>,
+  /** The source the last `SkillReadTool.create` call was given (a list, or a lazy function). */
+  readSource: [] as unknown,
+  /** When true, `getOrCreate` builds a REAL SDK agent so `agent.skills` is the SDK's own listing. */
+  realAgent: false,
 }))
 
 vi.mock('@theokit/sdk', () => ({
@@ -41,11 +43,11 @@ vi.mock('@theokit/sdk', () => ({
   get SkillReadTool() {
     return h.provideReadTool
       ? {
-          create: (skills: ReadonlyArray<{ name: string }>) => {
-            h.readSkills = [...skills]
+          create: (skills: ReadonlyArray<{ name: string }> | (() => unknown)) => {
+            h.readSource = skills
             return {
               name: 'skill_read',
-              covers: skills.length,
+              covers: typeof skills === 'function' ? -1 : skills.length,
             }
           },
         }
@@ -54,7 +56,16 @@ vi.mock('@theokit/sdk', () => ({
   Agent: {
     getOrCreate: vi.fn(async (_id: string, opts: { tools?: Array<{ name?: string }> }) => {
       h.toolNames = (opts.tools ?? []).map((t) => t?.name ?? '<anon>')
+      const real = h.realAgent
+        ? await (
+            await vi.importActual<typeof SdkModule>('@theokit/sdk')
+          ).Agent.create({
+            ...opts,
+            tools: [],
+          } as never)
+        : undefined
       return {
+        skills: real?.skills,
         send: async () => ({
           stream: async function* () {
             yield { type: 'status', status: 'FINISHED' }
@@ -129,89 +140,155 @@ describe('read advertised — skill_read serves what the <skills> block lists', 
     allows: { projectSettings: true },
   } as never
 
-  function writeSkill(root: string, name: string, body: string): void {
+  function writeSkill(root: string, name: string, body: string, extra = ''): string {
     const dir = join(root, name)
     mkdirSync(dir, { recursive: true })
     writeFileSync(
       join(dir, 'SKILL.md'),
-      `---\nname: ${name}\ndescription: d ${name}\n---\n${body}\n`,
+      `---\nname: ${name}\ndescription: d ${name}\n${extra}---\n${body}\n`,
     )
+    return join(dir, 'SKILL.md')
   }
 
-  async function readThroughRealTool(name: string): Promise<string> {
+  /** What the model gets back from `skill_read`, through the SDK's real tool over the wired source. */
+  async function read(name: string): Promise<string> {
     const real = await vi.importActual<typeof SdkModule>('@theokit/sdk')
-    const tool = real.SkillReadTool.create(h.readSkills as never) as unknown as {
+    const tool = real.SkillReadTool.create(h.readSource as never) as unknown as {
       handler: (args: { name: string }, ctx?: unknown) => unknown
     }
     return String(await tool.handler({ name }, {}))
   }
 
-  async function run(def: Parameters<typeof defineAgent>[0], cwd: string): Promise<void> {
-    h.readSkills = []
+  /** Runs one turn against a REAL SDK agent, so the listing is the SDK's own resolution. */
+  async function run(
+    def: Parameters<typeof defineAgent>[0],
+    cwd: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<void> {
+    h.readSource = []
+    h.realAgent = true
     const compiled = compileAgentDefinition(defineAgent(def))
-    await drain(createSdkAgentStream(compiled, compiled.tools, 'k', { cwd })('go', 's'))
+    await drain(
+      createSdkAgentStream(compiled, compiled.tools, 'test-key', { cwd, ...overrides })('go', 's'),
+    )
+  }
+
+  /** The names the SDK itself lists for the same agent: `read` must agree with this, never exceed it. */
+  async function listed(cwd: string, opts: Record<string, unknown>): Promise<string[]> {
+    const real = await vi.importActual<typeof SdkModule>('@theokit/sdk')
+    const agent = await real.Agent.create({
+      apiKey: 'test-key',
+      model: 'm',
+      local: { cwd, ...(opts.local as object) },
+      skills: opts.skills,
+    } as never)
+    return ((await agent.skills?.list()) ?? []).map((x) => x.name)
   }
 
   beforeEach(() => {
     h.toolNames = []
-    h.readSkills = []
+    h.readSource = []
+    h.realAgent = false
     h.provideReadTool = true
   })
+
+  const project = { settingSources: { project: { trustedBy: trusted } } }
 
   it('read advertised makes a skill enabled by name readable through skill_read', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
     writeSkill(join(cwd, '.theokit', 'skills'), 'fs-only', 'FS BODY')
-    await run(
-      {
-        model: 'm',
-        skills: ['fs-only'],
-        skillsRead: 'advertised',
-        settingSources: { project: { trustedBy: trusted } },
-      },
-      cwd,
-    )
+    await run({ model: 'm', skills: ['fs-only'], skillsRead: 'advertised', ...project }, cwd)
     expect(h.toolNames).toContain('skill_read')
-    expect(await readThroughRealTool('fs-only')).toContain('FS BODY')
+    expect(await read('fs-only')).toContain('FS BODY')
   })
 
   it('read advertised does not make a project skill readable when the project root is withheld by trust', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
     writeSkill(join(cwd, '.theokit', 'skills'), 'secret', 'SECRET BODY')
-    await run({ model: 'm', skills: [briefing], skillsRead: 'advertised' }, cwd)
-    const answer = await readThroughRealTool('secret')
-    expect(answer).toContain('not found')
-    expect(answer).toBe('Skill "secret" not found. Available skills: daily-briefing.')
-    expect(answer).not.toContain('SECRET BODY')
+    await run({ model: 'm', skills: ['secret'], skillsRead: 'advertised' }, cwd)
+    const answer = await read('secret')
+    expect(answer).toBe('Skill "secret" not found. Available skills: (none).')
   })
 
   it('read advertised serves the same body the listing describes when two roots define one name', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
-    writeSkill(join(cwd, '.theokit', 'skills'), 'dup', 'PROJECT BODY')
+    const winner = writeSkill(join(cwd, '.theokit', 'skills'), 'dup', 'PROJECT BODY')
     writeSkill(join(cwd, '.claude', 'skills'), 'dup', 'COMPAT BODY')
+    const settingSources = { project: { trustedBy: trusted }, claudeCode: { trustedBy: trusted } }
+    await run({ model: 'm', skills: ['dup'], skillsRead: 'advertised', settingSources }, cwd)
+    // The listing's own winner, by path, from the SDK agent the bridge built.
+    const real = await vi.importActual<typeof SdkModule>('@theokit/sdk')
+    const probe = await real.Agent.create({
+      apiKey: 'test-key',
+      model: 'm',
+      local: { cwd, settingSources: ['project'], compatSources: ['claude-code'] },
+      skills: { enabled: ['dup'] },
+    } as never)
+    const sources = ((await probe.skills?.list()) ?? []).map((x) => x.source)
+    expect(sources).toEqual([winner])
+    const answer = await read('dup')
+    expect(answer).toContain('PROJECT BODY')
+    expect(answer).not.toContain('COMPAT BODY')
+  })
+
+  it('read advertised serves nothing the selection did not enable (an empty selection lists none)', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    writeSkill(join(cwd, '.theokit', 'skills'), 'other', 'OTHER BODY')
+    await run({ model: 'm', skills: [], skillsRead: 'advertised', ...project }, cwd)
+    expect(await read('other')).toContain('not found')
+  })
+
+  it('read advertised does not serve a skill the listing hides from the model', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    const root = join(cwd, '.theokit', 'skills')
+    writeSkill(root, 'hidden', 'HIDDEN BODY', 'disable-model-invocation: true\n')
+    writeSkill(root, 'needs-bin', 'BIN BODY', 'requires-bins: definitely-not-a-binary-xyz\n')
+    writeSkill(root, 'shown', 'SHOWN BODY')
     await run(
       {
         model: 'm',
-        skills: ['dup'],
+        skills: ['hidden', 'needs-bin', 'shown'],
         skillsRead: 'advertised',
-        settingSources: {
-          project: { trustedBy: trusted },
-          claudeCode: { trustedBy: trusted },
-        },
+        ...project,
       },
       cwd,
     )
-    const answer = await readThroughRealTool('dup')
-    expect(answer).toContain('PROJECT BODY')
-    expect(answer).not.toContain('COMPAT BODY')
+    expect(await read('hidden')).toContain('not found')
+    expect(await read('needs-bin')).toContain('not found')
+    expect(await read('shown')).toContain('SHOWN BODY')
+  })
+
+  it('read advertised does not read the compat root when only the project root is granted', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    writeSkill(join(cwd, '.claude', 'skills'), 'foreign', 'FOREIGN BODY')
+    await run({ model: 'm', skills: ['foreign'], skillsRead: 'advertised', ...project }, cwd)
+    expect(await read('foreign')).toContain('not found')
+    expect(
+      await listed(cwd, {
+        local: { settingSources: ['project'] },
+        skills: { enabled: ['foreign'] },
+      }),
+    ).toEqual([])
+  })
+
+  it('does not add a second skill_read when a per-run sdkTool already carries one', async () => {
+    const compiled = compileAgentDefinition(
+      defineAgent({ model: 'm', skills: [briefing], skillsRead: 'advertised' }),
+    )
+    const mine = { name: 'skill_read', description: 'x', inputSchema: {}, handler: () => 'ok' }
+    await drain(
+      createSdkAgentStream(compiled, compiled.tools, 'test-key', { sdkTools: [mine] } as never)(
+        'go',
+        's',
+      ),
+    )
+    expect(h.toolNames.filter((n) => n === 'skill_read')).toHaveLength(1)
   })
 
   it('keeps the default mode inline-only even when a root holds the skill', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
     writeSkill(join(cwd, '.theokit', 'skills'), 'fs-only', 'FS BODY')
-    await run(
-      { model: 'm', skills: ['fs-only'], settingSources: { project: { trustedBy: trusted } } },
-      cwd,
-    )
+    await run({ model: 'm', skills: ['fs-only'], ...project }, cwd)
     expect(h.toolNames).not.toContain('skill_read')
   })
 })
