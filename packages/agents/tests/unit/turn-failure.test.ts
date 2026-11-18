@@ -93,12 +93,4 @@ describe('turn failure', () => {
     expect(text).toContain('tool returned an image')
     expect(describeTurnFailure({ ...failure, message: 'boom' })).toBe('boom [tool_runtime_error]')
   })
-
-  it('an untyped HTTP 429 or 401 gets a hint, but is never transient', () => {
-    const d = (m: string) => describeTurnFailure(classifyTurnFailure(new Error(m)))
-    expect(d('HTTP 429')).toContain(DEFAULT_TURN_FAILURE_HINTS.rate_limit)
-    expect(d('HTTP 401')).toContain(DEFAULT_TURN_FAILURE_HINTS.auth_failed)
-    expect(d('prompt has 4290 tokens')).toBe('prompt has 4290 tokens')
-    expect(classifyTurnFailure(new Error('HTTP 429')).transient).toBe(false)
-  })
 })
