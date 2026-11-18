@@ -192,10 +192,7 @@ describe('foldTurnLifecycle — message boundary and failed tools', () => {
 
   it('a failed tool result closes its item with isError true', () => {
     const seen: unknown[] = []
-    const turn = foldTurnLifecycle(
-      { ...DIALECT, itemCompleted: (item) => (seen.push(item), 'x') },
-      't',
-    )
+    const turn = foldTurnLifecycle({ ...DIALECT, itemCompleted: (i) => (seen.push(i), 'x') }, 't')
     turn.observe({ kind: 'tool-result', id: 'c', name: 'n', isError: true })
     turn.observe({ kind: 'tool-result', id: 'd', name: 'n' })
     expect(seen).toEqual([
@@ -205,10 +202,15 @@ describe('foldTurnLifecycle — message boundary and failed tools', () => {
   })
 
   it('contentChunkFromEvent maps tool-result isError and returns null for status events', () => {
-    expect(
-      contentChunkFromEvent({ type: 'tool-result', callId: 'c', name: 'n', result: 1, isError: true }),
-    ).toEqual({ kind: 'tool-result', id: 'c', name: 'n', isError: true })
-    expect(contentChunkFromEvent({ type: 'text', text: 'hi' })).toEqual({ kind: 'text', delta: 'hi' })
+    const failed = { type: 'tool-result', callId: 'c', name: 'n', result: 1, isError: true } as const
+    expect(contentChunkFromEvent(failed)).toEqual({
+      kind: 'tool-result',
+      id: 'c',
+      name: 'n',
+      isError: true,
+    })
+    const text = { type: 'text', text: 'hi' } as const
+    expect(contentChunkFromEvent(text)).toEqual({ kind: 'text', delta: 'hi' })
     expect(contentChunkFromEvent({ type: 'status', status: 'active' })).toBeNull()
   })
 

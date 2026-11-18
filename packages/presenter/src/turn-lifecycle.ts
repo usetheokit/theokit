@@ -49,7 +49,8 @@ export interface LifecycleVocabulary<E> {
 export type ContentChunk =
   | { readonly kind: 'text'; readonly delta: string }
   | { readonly kind: 'tool-call'; readonly id?: string; readonly name: string }
-  | { readonly kind: 'tool-result'
+  | {
+      readonly kind: 'tool-result'
       readonly id?: string
       readonly name: string
       readonly isError?: boolean
