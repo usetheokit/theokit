@@ -82,7 +82,7 @@ export interface JobRescheduleInput {
   availableAt?: Date
   /**
    * Places the job one second before the earliest time the other pending jobs matching this
-   * selector had (a deferred job counts at the time `restore` gives back), in the same statement.
+   * selector had (a deferred job counts at the time `restore` gives back).
    * Never moves the job later. With no other match the time is left unchanged.
    */
   ahead?: JobSelector

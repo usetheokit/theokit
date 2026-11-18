@@ -349,16 +349,26 @@ export class PostgresJobBackend implements JobBackend {
       )
     }
     // `ahead`: one second before the earliest time the other selected jobs had (a held job counts
-    // at the time it will be restored to), read in the same statement as the write.
-    let target: string
+    // at the time it will be restored to), read in the caller's transaction just before the write.
+    let target = '$2::timestamptz'
     const params: unknown[] = [jobId]
     if (input.ahead) {
       const sel = this.#select(input.ahead, 2, 'AND id <> $1', false)
       const times = sel.sql.replace('SELECT id', 'SELECT COALESCE(held_from, available_at) AS at')
-      target = `LEAST(available_at, (SELECT MIN(w.at) - INTERVAL '1 second' FROM (${times}) w))`
-      params.push(...sel.params)
+      const earliest = await client.query<{ at: Date | string }>(
+        `${times} ORDER BY at ASC LIMIT 1`,
+        [jobId, ...sel.params],
+      )
+      const at = earliest.rows.length > 0 ? new Date(earliest.rows[0].at).getTime() : Number.NaN
+      if (Number.isNaN(at)) {
+        // Nothing to be ahead of: leave the time as it is.
+        target = 'available_at'
+      } else {
+        params.push(new Date(at - 1000).toISOString())
+        target =
+          'CASE WHEN available_at > $2::timestamptz THEN $2::timestamptz ELSE available_at END'
+      }
     } else {
-      target = '$2::timestamptz'
       params.push(input.availableAt?.toISOString())
     }
     // A job moved here is no longer leased: clear an expired lease so a stale nack cannot overwrite it.

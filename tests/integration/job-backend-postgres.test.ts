@@ -214,7 +214,7 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
     expect((await backend.dequeue({})).map((l) => l.jobId)).toEqual([a.jobId])
   })
 
-  it('places a job ahead of the selected pending jobs in one statement', async () => {
+  it('places a job ahead of the selected pending jobs', async () => {
     const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, delaySeconds: 100 })
     const b = await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 50 })
     const c = await backend.enqueue({ name: 'run-task', input: { taskId: 3 }, delaySeconds: 200 })
