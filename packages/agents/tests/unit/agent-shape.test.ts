@@ -112,7 +112,11 @@ describe('shapeToolsAsCustomTools', () => {
     declareAgentShape('a', [new ToolsCapability([{ ...base, inputSchema } as never])])
 
   it('returns JSON-Schema tools and non-plain object schemas unchanged', () => {
-    for (const schema of [{ type: 'object' }, Object.create({ type: 'object' })]) {
+    for (const schema of [
+      { type: 'object' },
+      Object.create({ type: 'object' }),
+      { type: 'object', parse: () => 1 },
+    ]) {
       const out = shapeToolsAsCustomTools(shapeOf(schema))
       expect(out.map((t) => t.name)).toEqual(['j'])
       expect(out[0]?.inputSchema).toBe(schema)

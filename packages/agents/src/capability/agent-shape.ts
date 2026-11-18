@@ -79,6 +79,14 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
   return Object.freeze(shape)
 }
 
+/** A live Zod schema: a `parse` method plus Zod's internals (`_zod` in v4, `_def` in v3). */
+function isZodSchema(schema: object): boolean {
+  return (
+    typeof (schema as { parse?: unknown }).parse === 'function' &&
+    ('_zod' in schema || '_def' in schema)
+  )
+}
+
 /**
  * The shape's tools as the SDK `CustomTool` an app holds, with no cast at the call site.
  *
@@ -95,7 +103,7 @@ export function shapeToolsAsCustomTools(shape: AgentShape): readonly CustomTool[
         `shapeToolsAsCustomTools: tool "${tool.name}" has no object inputSchema (a Zod schema or a JSON-Schema object is required)`,
       )
     }
-    if (typeof (schema as { parse?: unknown }).parse === 'function') {
+    if (isZodSchema(schema)) {
       return Tool.create({
         name: tool.name,
         description: tool.description,
