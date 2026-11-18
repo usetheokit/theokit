@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync, type Stats } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync, statSync, type Stats } from 'node:fs'
 import { join } from 'node:path'
 
 import { splitFrontmatter } from '../config/frontmatter.js'
@@ -24,7 +24,7 @@ export interface ForeignSurfaceEntry {
   readonly unreadable: readonly string[]
   /** For `refused`, why. */
   readonly reason?: string
-  /** Sorted names counted for `workflows`; used to rebuild the existing warning. */
+  /** Sorted `.js`/`.mjs`/`.cjs` names in `workflows`, broader than `count`; rebuilds the existing warning. */
   readonly names?: readonly string[]
 }
 
@@ -80,11 +80,22 @@ function readRegularFile(p: string): string | undefined {
   return readFileSync(p, 'utf8')
 }
 
+/** The SDK's `hasFrontmatter`: an opening fence line, then a newline. */
+const OPENS_WITH_FENCE = /^---\s*\n/
+
 /** Each counter says whether the entry counts; it throws when the entry cannot be read. */
 function countsAgentMd(abs: string, name: string): boolean {
   if (!name.endsWith('.md')) return false
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+  if (!lstatSync(join(abs, name)).isFile()) return false // `discoverSubagents` skips symlinks
   const raw = readRegularFile(join(abs, name))
-  return raw?.replace(/^\uFEFF/, '').startsWith('---') === true
+  return raw !== undefined && OPENS_WITH_FENCE.test(raw)
+}
+
+function countsCommandMd(abs: string, name: string): boolean {
+  if (!name.endsWith('.md')) return false
+  const raw = readRegularFile(join(abs, name))
+  return raw !== undefined && OPENS_WITH_FENCE.test(raw) && splitFrontmatter(raw) !== undefined
 }
 
 function countsAgentMemory(abs: string, name: string): boolean {
@@ -92,8 +103,8 @@ function countsAgentMemory(abs: string, name: string): boolean {
   return readRegularFile(join(abs, name, 'MEMORY.md')) !== undefined
 }
 
-function countsScript(_abs: string, name: string): boolean {
-  return SCRIPT_SUFFIXES.some((s) => name.endsWith(s))
+function countsScript(abs: string, name: string): boolean {
+  return name.endsWith('.js') && statIfPresent(join(abs, name))?.isFile() === true
 }
 
 function countsPluginBundle(abs: string, name: string): boolean {
@@ -105,51 +116,16 @@ function countsPluginBundle(abs: string, name: string): boolean {
   return true
 }
 
-const COUNTERS: Record<Exclude<Kind, 'command-md'>, (abs: string, name: string) => boolean> = {
+const COUNTERS: Record<Kind, (abs: string, name: string) => boolean> = {
   'agent-md': countsAgentMd,
+  'command-md': countsCommandMd,
   'agent-memory': countsAgentMemory,
   scripts: countsScript,
   'plugin-bundles': countsPluginBundle,
 }
 
-/** Walk a directory the way `readCommandsDir` does: nested folders, `.md` files, closed frontmatter. */
-function countCommands(abs: string, rel: string, out: Count): void {
-  let entries: string[]
-  try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-    entries = readdirSync(abs).sort((a, b) => a.localeCompare(b))
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') out.unreadable.push(rel)
-    return
-  }
-  for (const name of entries) {
-    const path = join(abs, name)
-    const entryRel = `${rel}/${name}`
-    try {
-      const stats = statIfPresent(path)
-      if (stats === undefined) continue
-      if (stats.isDirectory()) {
-        countCommands(path, entryRel, out)
-      } else if (
-        stats.isFile() &&
-        name.endsWith('.md') &&
-        // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-        splitFrontmatter(readFileSync(path, 'utf8')) !== undefined
-      ) {
-        out.count++
-      }
-    } catch {
-      out.unreadable.push(entryRel)
-    }
-  }
-}
-
 function count(root: string, { dir, kind }: Folder): Count {
   const out: Count = { count: 0, unreadable: [], names: [] }
-  if (kind === 'command-md') {
-    countCommands(join(root, dir), dir, out)
-    return out
-  }
   const abs = join(root, dir)
   let entries: string[]
   try {
@@ -160,10 +136,12 @@ function count(root: string, { dir, kind }: Folder): Count {
     return out
   }
   for (const name of entries) {
+    // The warning names every script-looking entry (.js/.mjs/.cjs), as it always has; only `.js` files count.
+    if (kind === 'scripts' && SCRIPT_SUFFIXES.some((suffix) => name.endsWith(suffix))) {
+      out.names.push(name)
+    }
     try {
-      if (!COUNTERS[kind](abs, name)) continue
-      out.count++
-      if (kind === 'scripts') out.names.push(name)
+      if (COUNTERS[kind](abs, name)) out.count++
     } catch {
       out.unreadable.push(`${dir}/${name}`)
     }

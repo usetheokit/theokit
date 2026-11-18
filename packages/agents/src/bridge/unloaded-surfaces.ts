@@ -50,10 +50,11 @@ export function reportUnloadedSurfaces(input: ReportUnloadedSurfacesInput): void
     (e) => e.dir === 'workflows',
   )
   // An unreadable directory is not a workflow anybody wrote; stay quiet rather than fail.
-  if (entry?.state !== 'refused' || entry.count === 0) return
+  const names = entry?.names ?? []
+  if (entry?.state !== 'refused' || names.length === 0) return
 
   input.onWarn(
-    `${WORKFLOWS_DIR}: found ${String(entry.count)} workflow script(s) — ` +
-      `${(entry.names ?? []).join(', ')} — ${WORKFLOWS_REFUSAL_REASON}`,
+    `${WORKFLOWS_DIR}: found ${String(names.length)} workflow script(s) — ` +
+      `${names.join(', ')} — ${WORKFLOWS_REFUSAL_REASON}`,
   )
 }

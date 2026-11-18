@@ -36,9 +36,11 @@ describe('foreign surface inventory', () => {
 
   it('workflows is reported refused with its reason and a count of scripts', () => {
     const cwd = project({ 'workflows/a.js': '', 'workflows/b.mjs': '', 'workflows/c.txt': '' })
+    mkdirSync(join(cwd, '.claude', 'workflows', 'd.js'))
     const e = get(cwd, 'workflows')
     expect(e.state).toBe('refused')
-    expect(e.count).toBe(2)
+    expect(e.count).toBe(1)
+    expect(e.names).toEqual(['a.js', 'b.mjs', 'd.js'])
     expect(e.reason).toContain('does NOT')
   })
 
@@ -48,7 +50,7 @@ describe('foreign surface inventory', () => {
   })
 
   it('an unreadable definition is listed in unreadable and does not throw', () => {
-    const cwd = project({ 'commands/ok.md': 'body' })
+    const cwd = project({ 'commands/ok.md': '---\nname: o\n---\nbody' })
     // A self-referencing symlink fails to stat (ELOOP) for every user, root included.
     symlinkSync('x.md', join(cwd, '.claude', 'commands', 'x.md'))
     let e: ReturnType<typeof get> | undefined
@@ -66,14 +68,26 @@ describe('foreign surface inventory', () => {
     expect(e.unreadable).toEqual(['plugins/p2'])
   })
 
-  it('commands counts what the command loader takes: nested, no frontmatter, closed fences', () => {
+  it('commands counts top-level .md files that open with a closed frontmatter block', () => {
     const cwd = project({
       'commands/plain.md': 'just a prompt',
       'commands/ns/deep.md': '---\ndescription: d\n---\nbody',
       'commands/broken.md': '---\nnever closes',
       'commands/notes.txt': 'x',
     })
-    expect(get(cwd, 'commands').count).toBe(2)
+    expect(get(cwd, 'commands').count).toBe(0)
+    const ok = project({ 'commands/a.md': '---\ndescription: d\n---\nbody' })
+    expect(get(ok, 'commands').count).toBe(1)
+  })
+
+  it('agents applies the SDK filter: no symlinks, a fence line followed by a newline', () => {
+    const cwd = project({
+      'agents/a.md': '---\nname: a\n---\n',
+      'agents/bad.md': '---not-frontmatter\nname: b\n---\n',
+      'agents/real.md': '---\nname: r\n---\n',
+    })
+    symlinkSync('real.md', join(cwd, '.claude', 'agents', 'link.md'))
+    expect(get(cwd, 'agents').count).toBe(2)
   })
 
   it('a FIFO named like a definition is never read', () => {
