@@ -265,6 +265,43 @@ describe('runAgentTurn cancellation, tools and guards', () => {
   })
 })
 
+describe('withGuardrails and a direct onDelta caller', () => {
+  function inner(seen: { opts?: Record<string, unknown> }): SdkAgentHandle {
+    return {
+      agentId: 'a',
+      dispose: () => Promise.resolve(),
+      send: async (_m: string, opts?: Record<string, unknown>) => {
+        seen.opts = opts
+        return { wait: async () => ({ status: 'finished', result: 'BANANA' }) }
+      },
+    } as unknown as SdkAgentHandle
+  }
+
+  it('keeps onDelta for input-only guards', async () => {
+    const seen: { opts?: Record<string, unknown> } = {}
+    const onDelta = vi.fn()
+    const guarded = withGuardrails(inner(seen), [
+      { name: 'in', checkInput: () => ({ action: 'allow' }) },
+    ])
+    await guarded.send('x', { onDelta })
+    expect(seen.opts?.onDelta).toBe(onDelta)
+  })
+
+  it('gives the caller onDelta the guarded text once when an output guard is present', async () => {
+    const seen: { opts?: Record<string, unknown> } = {}
+    const onDelta = vi.fn()
+    const guarded = withGuardrails(inner(seen), [
+      { name: 'out', checkOutput: () => ({ action: 'redact', text: '[REDACTED]' }) },
+    ])
+    const turn = await guarded.send('x', { onDelta })
+    await turn.wait()
+    await turn.wait()
+    expect(seen.opts?.onDelta).toBeUndefined()
+    expect(onDelta).toHaveBeenCalledTimes(1)
+    expect(onDelta).toHaveBeenCalledWith({ update: { type: 'text-delta', text: '[REDACTED]' } })
+  })
+})
+
 describe('completeFromTurn', () => {
   const body = JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })
   const request = () =>

@@ -61,11 +61,16 @@ export function withGuardrails(
       // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
       // not merely annotate it afterwards.
       const guarded = await runInputGuards(msg, guardrails)
-      // Raw token deltas would reach the caller before the output guards see the finished text, so a
-      // guarded turn does not stream them: the guarded text arrives through `stream()` instead.
+      // Raw token deltas would reach the caller before the output guards see the finished text. With
+      // an output guard present they are withheld, and the caller's `onDelta` instead receives the
+      // guarded text once, when the turn finishes. Input-only guards leave `onDelta` untouched.
+      if (!guardrails.some((guard) => guard.checkOutput !== undefined)) {
+        return guardTurn(await handle.send(guarded, sendOpts), guardrails)
+      }
       const guardedOpts: SdkSendOptions = { ...sendOpts }
       delete guardedOpts.onDelta
-      return guardTurn(await handle.send(guarded, guardedOpts), guardrails)
+      const callerDelta = sendOpts?.onDelta as ((d: { update: unknown }) => void) | undefined
+      return guardTurn(await handle.send(guarded, guardedOpts), guardrails, callerDelta)
     },
   }
 }
@@ -112,16 +117,21 @@ function forwardedMembers(
  * includes a guard defect such as `MalformedGuardrailResultError` (a `redact` with no text): a guard
  * written wrong is not a guard refusing (B-457).
  */
-function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTurnHandle {
+function guardTurn(
+  turn: SdkTurnHandle,
+  guardrails: readonly Guardrail[],
+  onDelta?: (d: { update: unknown }) => void,
+): SdkTurnHandle {
   let outcome: ReturnType<SdkTurnHandle['wait']> | undefined
   const guardedOutcome = (): ReturnType<SdkTurnHandle['wait']> =>
     (outcome ??= turn
       .wait()
-      .then(async (out) =>
-        out.result === undefined
-          ? out
-          : { ...out, result: await runOutputGuards(out.result, guardrails) },
-      ))
+      .then(async (out) => {
+        if (out.result === undefined) return out
+        const result = await runOutputGuards(out.result, guardrails)
+        if (result !== '') onDelta?.({ update: { type: 'text-delta', text: result } })
+        return { ...out, result }
+      }))
   return {
     wait: guardedOutcome,
     ...(turn.cancel === undefined ? {} : { cancel: () => turn.cancel?.() }),
