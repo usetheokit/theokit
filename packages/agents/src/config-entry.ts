@@ -144,6 +144,7 @@ export type { DeclaredLayer, LayerValues } from '@theokit/sdk'
  * path as every other source.
  */
 export {
+  applyOutputStyle,
   loadOutputStyle,
   resolveOutputStyle,
   OutputStyleError,
