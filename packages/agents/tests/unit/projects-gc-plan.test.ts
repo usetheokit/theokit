@@ -62,6 +62,7 @@ function plan(extra: Partial<Parameters<typeof planProjectsGC>[0]> = {}) {
     maxAgeDays: 7,
     now: NOW,
     classify: alive(),
+    candidateCwds: () => [CWD],
     listRegistry: () => Promise.resolve([]),
     ...extra,
   })
@@ -286,6 +287,7 @@ describe('planProjectsGC protection edge cases', () => {
       keepLast: 1,
       maxAgeDays: 7,
       now: NOW,
+      candidateCwds: () => [CWD],
       fs: {
         ...real,
         stat: (p) => {
@@ -319,6 +321,37 @@ describe('planProjectsGC protection edge cases', () => {
     })
     expect(asked).toContain(other)
     expect(result.candidates.map((c) => c.target)).not.toContain(registered)
+  })
+
+  it('a live project is kept whole when a colliding cwd known only to its registry cannot be ruled out', async () => {
+    const other = '/work-app'
+    transcript('new', 1)
+    const registered = transcript('registered', 300)
+    const asked: string[] = []
+    const result = await plan({
+      candidateCwds: undefined,
+      listRegistry: (cwd) => {
+        asked.push(cwd)
+        return Promise.resolve(cwd === other ? [{ id: 'registered' }] : [])
+      },
+    })
+    expect(result.candidates.map((c) => c.target)).not.toContain(registered)
+    expect(result.candidates).toEqual([])
+    expect(result.touchedProjects).toEqual([])
+  })
+
+  it('a dead project with a malformed transcript header is kept whole', async () => {
+    transcript('new', 1)
+    transcript('old', 100)
+    const bad = transcriptPath(root, CWD, 'bad')
+    writeFileSync(bad, 'not json\n')
+    const t = (NOW - 300 * DAY) / 1000
+    utimesSync(bad, t, t)
+    const result = await plan({
+      classify: () => new Map([[NAME, { liveness: 'dead', reason: 'gone', cwd: CWD }]]),
+    })
+    expect(result.candidates).toEqual([])
+    expect(result.touchedProjects).toEqual([])
   })
 
   it('a transcript that cannot be stat-ed keeps a live project whole', async () => {

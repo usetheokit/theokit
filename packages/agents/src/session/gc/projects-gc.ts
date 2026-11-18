@@ -93,7 +93,8 @@ export interface PlanProjectsGCOptions {
    * Extra real cwds that may share a project directory with others, e.g. every workspace the app
    * knows. Those that encode to a project are consulted like the cwds its transcripts record, so a
    * colliding cwd with no transcript of its own is still protected. The encoding is lossy and cannot
-   * be enumerated from the name alone; without this, only cwds the transcripts reveal are known.
+   * be enumerated from the name alone. Required to plan a live project: without it a live project is
+   * kept whole, because a colliding cwd known only to its own registry cannot be discovered.
    */
   readonly candidateCwds?: () => readonly string[]
   readonly fs?: ProjectsGCFs
@@ -304,36 +305,48 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       protectedBy.set(transcriptPath(root, cwdOf, id), reason)
       protectedBy.set(legacyTranscriptPath(root, cwdOf, id), reason)
     }
-    if (live && cwd !== undefined) {
-      const cwds = new Set([cwd])
-      // A transcript that cannot be stat-ed has a header nobody read; it may name a cwd not yet seen.
-      for (const extra of options.candidateCwds?.() ?? []) {
-        if (encodeProjectDir(extra) === project) cwds.add(extra)
-      }
-      let unattributed = [...unreadableTranscripts][0] as string | undefined
-      for (const entry of entries) {
-        if (entry.kind !== 'transcript') continue
-        try {
-          const recorded = (
-            JSON.parse(fs.readFile(entry.path).split('\n', 1)[0] ?? '') as { cwd?: unknown } | null
-          )?.cwd
-          if (typeof recorded === 'string' && encodeProjectDir(recorded) === project) {
-            cwds.add(recorded)
-          } else {
-            unattributed ??= entry.name
-          }
-        } catch {
+    // Ownership: every transcript's header must name a cwd of this project. One that cannot be read,
+    // parsed or attributed may belong to a cwd nobody has seen, whatever the verdict says (a dead
+    // verdict can rest on the headers that DID read), so the project is kept whole.
+    const headerCwds = new Set<string>()
+    let unattributed = [...unreadableTranscripts][0] as string | undefined
+    for (const entry of entries) {
+      if (entry.kind !== 'transcript') continue
+      try {
+        const recorded = (
+          JSON.parse(fs.readFile(entry.path).split('\n', 1)[0] ?? '') as { cwd?: unknown } | null
+        )?.cwd
+        if (typeof recorded === 'string' && encodeProjectDir(recorded) === project) {
+          headerCwds.add(recorded)
+        } else {
           unattributed ??= entry.name
         }
+      } catch {
+        unattributed ??= entry.name
       }
-      // The directory is shared by every cwd that encodes to its name. A transcript that names no
-      // such cwd may belong to one this sweep cannot see, and that cwd's registry was never read.
-      if (unattributed !== undefined) {
+    }
+    if (unattributed !== undefined) {
+      kept.push({
+        project,
+        reason: `${unattributed}: records no cwd of this project, so its owner cannot be established; project kept whole`,
+      })
+      continue
+    }
+    if (live && cwd !== undefined) {
+      // The encoding is many-to-one and registries cannot be enumerated: a colliding live cwd may
+      // appear in no header and no verdict, only in its own registry. Registry coverage is complete
+      // only when the caller declares the cwds it knows; otherwise the project is kept whole.
+      if (options.candidateCwds === undefined) {
         kept.push({
           project,
-          reason: `${unattributed}: records no cwd of this project, so its owner cannot be established; project kept whole`,
+          reason:
+            'live project: registry coverage of every cwd sharing this directory cannot be established without candidateCwds; project kept whole',
         })
         continue
+      }
+      const cwds = new Set([cwd, ...headerCwds])
+      for (const extra of options.candidateCwds()) {
+        if (encodeProjectDir(extra) === project) cwds.add(extra)
       }
       try {
         for (const member of cwds) {
