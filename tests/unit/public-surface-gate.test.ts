@@ -14,8 +14,15 @@ interface Baseline {
   entries: Record<
     string,
     {
-      internals: Record<string, string>
-      names: Record<string, { tier: string; declaration: string; deprecatedSince: string | null }>
+      names: Record<
+        string,
+        {
+          tier: string
+          declaration: string
+          deprecatedSince: string | null
+          internals: Record<string, string>
+        }
+      >
     }
   >
 }
@@ -52,6 +59,10 @@ function surface(dts: string, extra: Record<string, string> = {}): Baseline {
   }
   return gate.extractSurface(dir)
 }
+
+/** Every referenced declaration of an entry, keyed by identity (merged over its exports). */
+const refsOf = (b: Baseline, entry = '.'): Record<string, string> =>
+  Object.assign({}, ...Object.values(b.entries[entry]?.names ?? {}).map((n) => n.internals))
 
 const NOW = Date.parse('2026-11-17')
 const run = (a: Baseline, b: Baseline, major = false) =>
@@ -109,7 +120,7 @@ describe('public surface gate', () => {
     const src = (inner: string) =>
       `interface Inner { ${inner} }\nexport type Outer = Inner\nexport {}\n`
     const prev = surface(src('a: string'))
-    expect(prev.entries['.']?.internals['dist/index.d.ts#Inner']).toContain('a: string')
+    expect(refsOf(prev)['dist/index.d.ts#Inner']).toContain('a: string')
     expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
     expect(run(prev, surface(src('a: number')))).toEqual([
       expect.stringContaining('referenced type dist/index.d.ts#Inner changed'),
@@ -121,7 +132,7 @@ describe('public surface gate', () => {
     const src = (inner: string) =>
       `/** @experimental */\nexport interface Exp { ${inner} }\nexport type Outer = Exp\n`
     const prev = surface(src('a: string'))
-    expect(prev.entries['.']?.internals['dist/index.d.ts#Exp']).toContain('a: string')
+    expect(refsOf(prev)['dist/index.d.ts#Exp']).toContain('a: string')
     expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
     expect(run(prev, surface(src('a: number')))).toEqual([
       expect.stringContaining('referenced type dist/index.d.ts#Exp changed'),
@@ -135,7 +146,7 @@ describe('public surface gate', () => {
     })
     const index = `import { Shared as A } from './one'\nimport { Shared as B } from './two'\nexport type Out = [A, B]\n`
     const prev = surface(index, src('b: string'))
-    const keys = Object.keys(prev.entries['.']?.internals ?? {})
+    const keys = Object.keys(refsOf(prev))
     expect(keys).toEqual(['dist/one.d.ts#Shared', 'dist/two.d.ts#Shared'])
     // A change to the second one is not hidden by the first one with the same name.
     expect(run(prev, surface(index, src('b: number')))).toEqual([
@@ -149,30 +160,41 @@ describe('public surface gate', () => {
       surface(`import { C } from './chunk-${hash}'\nexport type Out = C\n`, {
         [`chunk-${hash}.d.ts`]: 'export interface C { a: string }\n',
       })
-    expect(Object.keys(at('aubY9WIa').entries['.']?.internals ?? {})).toEqual([
-      'dist/chunk-<hash>.d.ts#C',
-    ])
+    expect(Object.keys(refsOf(at('aubY9WIa')))).toEqual(['dist/chunk-<hash>.d.ts#C'])
     expect(at('aubY9WIa')).toEqual(at('Zz09_-xY'))
   })
 
+  const chunks = (one: string, two: string) => ({
+    'chunk-ABCDEFG1.d.ts': `export interface T { ${one} }\n`,
+    'chunk-ABCDEFG2.d.ts': `export interface T { ${two} }\n`,
+  })
+  const tuple = `import { T as A } from './chunk-ABCDEFG1'\nimport { T as B } from './chunk-ABCDEFG2'\nexport type Out = [A, B]\n`
+  const split = `import { T as A } from './chunk-ABCDEFG1'\nimport { T as B } from './chunk-ABCDEFG2'\nexport type Out1 = A\nexport type Out2 = B\n`
+  const changed = expect.stringContaining('referenced type dist/chunk-<hash>.d.ts#T')
+
   it('keeps both declarations when two chunks mask to the same name, and fails a break in either', () => {
-    const index = `import { T as A } from './chunk-ABCDEFG1'\nimport { T as B } from './chunk-ABCDEFG2'\nexport type Out = [A, B]\n`
-    const files = (one: string, two: string) => ({
-      'chunk-ABCDEFG1.d.ts': `export interface T { ${one} }\n`,
-      'chunk-ABCDEFG2.d.ts': `export interface T { ${two} }\n`,
-    })
-    const prev = surface(index, files('a: string', 'b: string'))
-    const internals = prev.entries['.']?.internals ?? {}
-    expect(Object.keys(internals)).toEqual(['dist/chunk-<hash>.d.ts#T'])
-    expect(internals['dist/chunk-<hash>.d.ts#T']).toContain('a: string')
-    expect(internals['dist/chunk-<hash>.d.ts#T']).toContain('b: string')
-    const broken = [files('a: number', 'b: string'), files('a: string', 'b: number')]
-    for (const f of broken) {
-      expect(run(prev, surface(index, f))).toEqual([
-        expect.stringContaining('referenced type dist/chunk-<hash>.d.ts#T changed'),
-      ])
+    const prev = surface(tuple, chunks('a: string', 'b: string'))
+    expect(Object.keys(refsOf(prev))).toEqual([
+      'dist/chunk-<hash>.d.ts#T',
+      'dist/chunk-<hash>.d.ts#T~2',
+    ])
+    for (const f of [chunks('a: number', 'b: string'), chunks('a: string', 'b: number')]) {
+      expect(run(prev, surface(tuple, f))).toEqual([changed])
     }
-    expect(run(prev, surface(index, files('a: string; c?: number', 'b: string')))).toEqual([])
+    expect(run(prev, surface(tuple, chunks('a: string; c?: number', 'b: string')))).toEqual([])
+  })
+
+  it('fails when two chunks that mask alike swap their shapes under one export', () => {
+    const prev = surface(tuple, chunks('a: string', 'b: string'))
+    expect(run(prev, surface(tuple, chunks('b: string', 'a: string')))).not.toEqual([])
+  })
+
+  it('keeps references of separate exports apart when their chunks mask alike', () => {
+    const prev = surface(split, chunks('a: string', 'b: string'))
+    for (const f of [chunks('a: number', 'b: string'), chunks('a: string', 'b: number')]) {
+      expect(run(prev, surface(split, f))).toEqual([changed])
+    }
+    expect(run(prev, surface(split, chunks('b: string', 'a: string')))).toHaveLength(2)
   })
 
   it('keeps `types.d.ts` and `types-internal.d.ts` distinct, since only a hash suffix is stripped', () => {
@@ -181,7 +203,7 @@ describe('public surface gate', () => {
       'types.d.ts': 'export interface Shared { a: string }\n',
       'types-internal.d.ts': 'export interface Shared { b: string }\n',
     }
-    expect(Object.keys(surface(index, files).entries['.']?.internals ?? {})).toEqual([
+    expect(Object.keys(refsOf(surface(index, files)))).toEqual([
       'dist/types-internal.d.ts#Shared',
       'dist/types.d.ts#Shared',
     ])
@@ -194,7 +216,7 @@ describe('public surface gate', () => {
       'types-internAl.d.ts': `export interface Shared { ${inner} }\n`,
     })
     const prev = surface(index, files('b: string'))
-    expect(Object.keys(prev.entries['.']?.internals ?? {})).toEqual([
+    expect(Object.keys(refsOf(prev))).toEqual([
       'dist/types-<hash>.d.ts#Shared',
       'dist/types.d.ts#Shared',
     ])

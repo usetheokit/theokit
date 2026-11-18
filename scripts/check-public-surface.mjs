@@ -154,17 +154,14 @@ function describeSymbol(sym, ctx) {
   const decls = target.declarations ?? []
   const grouped = new Map()
   collectInternals(decls, ctx, grouped)
-  // Per masked name: each file's declarations in source order (overload order matters), the files
-  // compared as a sorted set of texts, so the discovery order never shows up in the baseline.
-  const refs = new Map(
-    [...grouped].map(([key, byFile]) => [
-      key,
-      [...byFile.values()]
-        .map((texts) => texts.join('\n'))
-        .sort()
-        .join('\n'),
-    ]),
-  )
+  // Masking can map several real files to one name. Within one export they are told apart by the
+  // order the walk meets them (`#T`, `#T~2`, ...), which follows the declaration, not the hash, so
+  // each reference keeps its own text; overloads in one file stay together in source order.
+  const refs = new Map()
+  for (const [key, byFile] of grouped) {
+    let n = 0
+    for (const texts of byFile.values()) refs.set(n++ === 0 ? key : `${key}~${n}`, texts.join('\n'))
+  }
   return {
     tier: tags.some((t) => t.name === 'experimental') ? 'experimental' : 'stable',
     // Source order, not sorted: overload order decides which signature TypeScript picks.
@@ -172,7 +169,7 @@ function describeSymbol(sym, ctx) {
     runtime: hasRuntimeValue(sym, target, ctx.checker),
     deprecatedSince: since ? since[1] : null,
     references: [...refs.keys()].sort(),
-    refTexts: refs,
+    internals: Object.fromEntries([...refs].sort(byName)),
   }
 }
 
@@ -205,16 +202,10 @@ export function extractSurface(pkgDir) {
     const syms = modSym ? checker.getExportsOfModule(modSym) : []
     const ctx = { program, checker, printer, pkgDir }
     const names = {}
-    const internals = {}
     for (const [name, rec] of syms.map((x) => [x.name, describeSymbol(x, ctx)]).sort(byName)) {
-      const { refTexts, ...plain } = rec
-      names[name] = plain
-      for (const [k, v] of refTexts) internals[k] = v
+      names[name] = rec
     }
-    entries[entry] = {
-      names,
-      internals: Object.fromEntries(Object.entries(internals).sort(byName)),
-    }
+    entries[entry] = { names }
   }
   return { package: manifest.name, entries }
 }
@@ -275,10 +266,10 @@ export function addsOnlyOptionalMembers(prev, next) {
   return i === a.list.length
 }
 
-function referenceBreakage(old, oldInternals, curInternals) {
+function referenceBreakage(old, cur) {
   for (const ref of old.references ?? []) {
-    const before = oldInternals[ref]
-    const after = curInternals[ref]
+    const before = old.internals[ref]
+    const after = cur.internals?.[ref]
     if (before === after) continue
     if (after === undefined || !addsOnlyOptionalMembers(before, after)) {
       return `referenced type ${ref} changed`
@@ -287,7 +278,7 @@ function referenceBreakage(old, oldInternals, curInternals) {
   return null
 }
 
-function breakage(old, cur, oldInternals, curInternals) {
+function breakage(old, cur) {
   if (!cur) return 'removed or renamed'
   if (cur.tier !== 'stable') return 'demoted to experimental'
   if (old.runtime && !cur.runtime) return 'runtime export became type-only'
@@ -297,7 +288,7 @@ function breakage(old, cur, oldInternals, curInternals) {
   ) {
     return 'declaration changed'
   }
-  return referenceBreakage(old, oldInternals, curInternals)
+  return referenceBreakage(old, cur)
 }
 
 function windowProblem(id, old, cur, now) {
@@ -310,12 +301,12 @@ function windowProblem(id, old, cur, now) {
 /** Breaking changes (and window violations) from `prev` to `next`. `now` is epoch ms. */
 export function comparePolicy(prev, next, { major, now }) {
   const out = []
-  for (const [entry, { names, internals }] of Object.entries(prev.entries)) {
+  for (const [entry, { names }] of Object.entries(prev.entries)) {
     for (const [name, old] of Object.entries(names)) {
       if (old.tier !== 'stable') continue
       const cur = next.entries[entry]?.names[name]
       const id = `${entry}:${name}`
-      const what = breakage(old, cur, internals, next.entries[entry]?.internals ?? {})
+      const what = breakage(old, cur)
       if (!what) continue
       if (!major)
         out.push(`${id} ${what} and no changeset in the range declares "${prev.package}": major`)
