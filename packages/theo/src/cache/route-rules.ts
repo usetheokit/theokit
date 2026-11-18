@@ -1,4 +1,4 @@
-import { compileGlob } from './glob-match.js'
+import picomatch from 'picomatch'
 
 export interface RouteRule {
   maxAge?: number
@@ -19,12 +19,11 @@ export interface CompiledRouteRule {
  * Compile route-rule glob patterns into matcher functions.
  * First-match-wins semantics (preserves insertion order).
  *
- * Patterns are matched by `compileGlob`, not picomatch: picomatch through 4.0.7 has an unpatched
- * ReDoS (GHSA-fc5q-39xc-vjpf) and no fixed release exists.
+ * EC-5: picomatch is a direct production dependency (see plan T7.2).
  */
 export function compileRouteRules(rules: RouteRules): CompiledRouteRule[] {
   return Object.entries(rules).map(([pattern, rule]) => ({
-    matcher: compileGlob(pattern),
+    matcher: picomatch(pattern, { dot: true }),
     rule,
     pattern,
   }))

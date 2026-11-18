@@ -797,6 +797,9 @@ importers:
       goober:
         specifier: ^2.1.19
         version: 2.1.19(csstype@3.2.3)
+      picomatch:
+        specifier: file:../../vendor/picomatch
+        version: file:vendor/picomatch
       react:
         specifier: ^19.0.0
         version: 19.2.7
@@ -837,6 +840,9 @@ importers:
       '@types/busboy':
         specifier: ^1.5.4
         version: 1.5.4
+      '@types/picomatch':
+        specifier: ^4.0.3
+        version: 4.0.3
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
@@ -3846,6 +3852,9 @@ packages:
 
   '@types/pg@8.21.0':
     resolution: {integrity: sha512-AYdtudzabjLZgVgRZmAnU8bAnVUXzuJX2IYHeSIiIHm68olD+LgQYCGWdtcNYnP0uq9c4S4NibVG3Ni7VbKW7Q==}
+
+  '@types/picomatch@4.0.3':
+    resolution: {integrity: sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==}
 
   '@types/qs@6.15.1':
     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
@@ -11513,6 +11522,8 @@ snapshots:
       '@types/node': 25.9.5
       pg-protocol: 1.16.0
       pg-types: 2.2.0
+
+  '@types/picomatch@4.0.3': {}
 
   '@types/qs@6.15.1': {}
 

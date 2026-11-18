@@ -156,6 +156,7 @@
     "dotenv": "^16.6.1",
     "dotenv-expand": "^11.0.7",
     "goober": "^2.1.19",
+    "picomatch": "^4.0.4",
     "reflect-metadata": "^0.2.2",
     "superjson": "^2.2.6",
     "tsx": "^4.22.4",
@@ -194,6 +195,7 @@
     "@agentclientprotocol/sdk": "1.9.0",
     "@theokit/sdk": "^5.17.0",
     "@types/busboy": "^1.5.4",
+    "@types/picomatch": "^4.0.3",
     "better-sqlite3": "^12.11.1",
     "db0": "^0.3.4",
     "unstorage": "^1.17.5"
