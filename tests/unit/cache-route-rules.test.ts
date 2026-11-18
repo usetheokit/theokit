@@ -100,6 +100,18 @@ describe('compileRouteRules + resolveRouteRule', () => {
     expect(m('/api/*/', '/api/a/')).toBe(true)
   })
 
+  it('keeps picomatch semantics for a literal pattern and a leading !() lookahead', () => {
+    const m = (glob: string, path: string): boolean =>
+      resolveRouteRule(path, compileRouteRules({ [glob]: { maxAge: 1 } })) !== undefined
+    expect(m('/foo', '/foo')).toBe(true)
+    expect(m('/foo', '/foo/')).toBe(false)
+    expect(m('/x/{a,b}', '/x/a/')).toBe(false)
+    expect(m('/img/!(a).png', '/img/aa.png')).toBe(false)
+    expect(m('/img/!(a).png', '/img/a.png')).toBe(false)
+    expect(m('/img/!(a).png', '/img/b.png')).toBe(true)
+    expect(m('/img/!(a).png', '/img/ba.png')).toBe(true)
+  })
+
   it('does not backtrack excessively on overlapping wildcards', () => {
     const compiled = compileRouteRules({ '/a/*a*a*a*a*a*a*a*b': { maxAge: 1 } })
     const start = Date.now()

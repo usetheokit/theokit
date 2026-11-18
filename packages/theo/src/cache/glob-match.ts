@@ -191,7 +191,11 @@ function parseSeq(cur: Cursor, stop: string): Node[] {
   while (cur.i < cur.p.length && !stop.includes(cur.p[cur.i] ?? '')) {
     out.push(...parseAtom(cur))
   }
-  return out
+  // picomatch compiles `!(x)` followed by more pattern to a lookahead at the group's start only
+  // (`!(a).png` rejects `aa.png`); only a group that ends the pattern must not match what is left.
+  return out.map((n, k) =>
+    n.t === 'group' && n.k === '!' && k < out.length - 1 ? { ...n, k: '!>' } : n,
+  )
 }
 
 function inSet(node: Extract<Node, { t: 'set' }>, ch: string): boolean {
@@ -269,8 +273,20 @@ function negate(g: Extract<Node, { t: 'group' }>, ctx: Ctx, from: Set<number>): 
   return out
 }
 
+/** `!(x)` with more pattern after it: no alternative may match at the start, then any run in the segment. */
+function negateAhead(g: Extract<Node, { t: 'group' }>, ctx: Ctx, from: Set<number>): Set<number> {
+  const out = new Set<number>()
+  for (const i of from) {
+    if (alts(g, ctx, new Set([i])).size > 0) continue
+    for (const j of reach(ctx.s, new Set([i]), false)) out.add(j)
+  }
+  return out
+}
+
 function stepGroup(g: Extract<Node, { t: 'group' }>, ctx: Ctx, from: Set<number>): Set<number> {
   switch (g.k) {
+    case '!>':
+      return negateAhead(g, ctx, from)
     case '!':
       return negate(g, ctx, from)
     case '?':
@@ -338,12 +354,15 @@ function step(node: Node, ctx: Ctx, from: Set<number>): Set<number> {
 }
 
 export function compileGlob(pattern: string): (path: string) => boolean {
+  // picomatch allows one trailing slash on the path only after a final `*` / `**` / `[...]`
+  // (`/api/*` matches `/api/a/`); `/foo` does not match `/foo/`.
+  const slashOk = /[*\]]$/.test(pattern) && !/\\[*\]]$/.test(pattern)
   const nodes = parseSeq({ p: pattern, i: 0 }, '')
   return (path) => {
     const ends = run(nodes, { s: path, memo: new Map() }, new Set([0]))
-    // picomatch ignores one trailing slash on the path (`/api/*` matches `/api/a/`).
     return (
-      ends.has(path.length) || (path.length > 1 && path.endsWith('/') && ends.has(path.length - 1))
+      ends.has(path.length) ||
+      (slashOk && path.length > 1 && path.endsWith('/') && ends.has(path.length - 1))
     )
   }
 }
