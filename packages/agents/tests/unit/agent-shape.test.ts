@@ -116,6 +116,7 @@ describe('shapeToolsAsCustomTools', () => {
       { type: 'object' },
       Object.create({ type: 'object' }),
       { type: 'object', parse: () => 1 },
+      { type: 'object', parse: () => 1, _def: {}, _zod: {} },
     ]) {
       const out = shapeToolsAsCustomTools(shapeOf(schema))
       expect(out.map((t) => t.name)).toEqual(['j'])
