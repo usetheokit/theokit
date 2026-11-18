@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1234 export(s) across 25 entry point(s).
+1237 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -839,6 +839,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `AgentMemoryError` | value |
+| `applyOutputStyle` | value |
 | `applySubagentMemory` | value |
 | `assertBootstrapped` | value |
 | `blockAppliesTo` | value |
@@ -851,6 +852,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `currentOperatorPolicy` | value |
 | `DEFAULT_CONTEXT_PRESSURE_THRESHOLDS` | value |
 | `defineAppBootstrap` | value |
+| `DottedOverrideError` | value |
 | `effectiveContextWindow` | value |
 | `expandCommandTemplate` | value |
 | `expandInstructionImports` | value |
@@ -871,6 +873,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `MEMORY_LINE_CAP` | value |
 | `OperatorRootUnreadableError` | value |
 | `OutputStyleError` | value |
+| `parseDottedOverrides` | value |
 | `permissionRulesFromSettings` | value |
 | `projectEnvStep` | value |
 | `readSettingsFile` | value |

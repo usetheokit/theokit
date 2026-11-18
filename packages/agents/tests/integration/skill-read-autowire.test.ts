@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type * as SdkModule from '@theokit/sdk'
+import { z } from 'zod'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
@@ -28,6 +29,8 @@ const h = vi.hoisted(() => ({
   readSource: [] as unknown,
   /** When true, `getOrCreate` builds a REAL SDK agent so `agent.skills` is the SDK's own listing. */
   realAgent: false,
+  /** The last real SDK agent `getOrCreate` built (its `skillsManager` is what a refresh re-reads). */
+  lastAgent: undefined as undefined | { skillsManager?: { refresh: () => Promise<void> } },
 }))
 
 vi.mock('@theokit/sdk', () => ({
@@ -64,8 +67,10 @@ vi.mock('@theokit/sdk', () => ({
             tools: [],
           } as never)
         : undefined
+      h.lastAgent = real as never
       return {
         skills: real?.skills,
+        skillsManager: (real as { skillsManager?: unknown } | undefined)?.skillsManager,
         send: async () => ({
           stream: async function* () {
             yield { type: 'status', status: 'FINISHED' }
@@ -78,8 +83,9 @@ vi.mock('@theokit/sdk', () => ({
   },
 }))
 
-const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
+const { createSdkAgentStream, toAgentFactory } = await import('../../src/bridge/sdk-adapter.js')
 const { compileAgentDefinition, defineAgent } = await import('../../src/bridge/define-agent.js')
+const { AgentBuilder } = await import('../../src/bridge/agent-builder.js')
 const { Skill } = await import('@theokit/sdk')
 
 const briefing = Skill.create({
@@ -258,13 +264,86 @@ describe('read advertised — skill_read serves what the <skills> block lists', 
     expect(await read('shown')).toContain('SHOWN BODY')
   })
 
-  it('read advertised keeps the disclosure the agent was created with when a SKILL.md changes later', async () => {
+  it('read advertised keeps a skill hidden when its SKILL.md is edited after the SDK built its snapshot', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
     const root = join(cwd, '.theokit', 'skills')
     writeSkill(root, 'later', 'LATER BODY', 'disable-model-invocation: true\n')
     await run({ model: 'm', skills: ['later'], skillsRead: 'advertised', ...project }, cwd)
     writeSkill(root, 'later', 'LATER BODY', 'disable-model-invocation: false\n')
     expect(await read('later')).toContain('not found')
+  })
+
+  it('read advertised follows the SDK manager when it refreshes: new skills readable, hidden ones not', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    const root = join(cwd, '.theokit', 'skills')
+    writeSkill(root, 'old', 'OLD BODY')
+    writeSkill(root, 'fresh', 'FRESH BODY', 'disable-model-invocation: true\n')
+    await run({ model: 'm', skills: ['old', 'fresh'], skillsRead: 'advertised', ...project }, cwd)
+    expect(await read('old')).toContain('OLD BODY')
+    expect(await read('fresh')).toContain('not found')
+    writeSkill(root, 'old', 'OLD BODY', 'disable-model-invocation: true\n')
+    writeSkill(root, 'fresh', 'FRESH BODY 2')
+    // Still the snapshot until the SDK itself refreshes.
+    expect(await read('old')).toContain('OLD BODY')
+    await h.lastAgent?.skillsManager?.refresh()
+    expect(await read('old')).toContain('not found')
+    expect(await read('fresh')).toContain('FRESH BODY 2')
+  })
+
+  it('read advertised carries through AgentBuilder.skills(..., { read }) and toAgentFactory', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    writeSkill(join(cwd, '.theokit', 'skills'), 'viabuilder', 'BUILDER BODY')
+    const def = AgentBuilder.create()
+      .input(z.object({ m: z.string() }))
+      .model('m')
+      .settingSources(project.settingSources as never)
+      .skills(['viabuilder'], { read: 'advertised' })
+      .build()
+    h.readSource = []
+    h.realAgent = true
+    await toAgentFactory(def as never, {
+      apiKey: 'test-key',
+      approvals: {
+        kind: 'auto-approve',
+        confinedBy: { mode: 'workspace-write', enforced: true, detail: 't' },
+        reason: 't',
+      } as never,
+      overrides: { cwd } as never,
+    })('s-builder')
+    expect(h.toolNames).toContain('skill_read')
+    expect(await read('viabuilder')).toContain('BUILDER BODY')
+  })
+
+  it('AgentBuilder.skills without read stays inline-only on the factory path', async () => {
+    const def = AgentBuilder.create()
+      .input(z.object({ m: z.string() }))
+      .model('m')
+      .skills(['x'])
+      .build()
+    h.realAgent = false
+    await toAgentFactory(def as never, {
+      apiKey: 'test-key',
+      approvals: {
+        kind: 'auto-approve',
+        confinedBy: { mode: 'workspace-write', enforced: true, detail: 't' },
+        reason: 't',
+      } as never,
+    })('s-inline')
+    expect(h.toolNames).not.toContain('skill_read')
+  })
+
+  it('keeps an app-declared skill_read on the factory path in advertised mode', async () => {
+    const mine = { name: 'skill_read', description: 'mine', inputSchema: {}, handler: () => 'ok' }
+    const def = defineAgent({ model: 'm', skills: ['x'], skillsRead: 'advertised', tools: [mine] })
+    await toAgentFactory(def as never, {
+      apiKey: 'test-key',
+      approvals: {
+        kind: 'auto-approve',
+        confinedBy: { mode: 'workspace-write', enforced: true, detail: 't' },
+        reason: 't',
+      } as never,
+    })('s-explicit')
+    expect(h.toolNames.filter((n) => n === 'skill_read')).toHaveLength(1)
   })
 
   it('read advertised does not read the compat root when only the project root is granted', async () => {
