@@ -254,6 +254,21 @@ describe('planProjectsGC protection edge cases', () => {
     expect(result.candidates.map((c) => c.target)).not.toContain(theirs)
     expect(result.liveCwds).toContain(other)
   })
+
+  it('a failed registry read for another cwd of the same encoded project skips the project', async () => {
+    const other = '/work-app'
+    transcript('new', 1)
+    const theirs = transcriptPath(root, other, 'theirs')
+    writeFileSync(theirs, JSON.stringify({ sessionId: 'theirs', cwd: other }) + '\n')
+    const t = (NOW - 300 * DAY) / 1000
+    utimesSync(theirs, t, t)
+    const result = await plan({
+      listRegistry: (cwd) =>
+        cwd === other ? Promise.reject(new Error('boom')) : Promise.resolve([]),
+    })
+    expect(result.candidates).toEqual([])
+    expect(result.errors).toHaveLength(1)
+  })
 })
 
 function defaultFs(): ProjectsGCFs {
