@@ -35,7 +35,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
-| `./testing` | Test seams: compiled-agent inspection, mock streams |
+| `./testing` | Test seams: compiled-agent inspection, mock streams, the live-suite provider-key guard |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
 | `./interactive` | The interactive-shell backend contract |
@@ -75,6 +75,17 @@ await registry.dispatch('/exit', { exit: () => process.exit(0) })
 `parseClaudeHooks(raw, { aliases? })` (from `./hooks`) turns the `hooks` object of a Claude Code `.claude/settings.json` (`{ "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "...", "timeout": 5 }] }] }`) into `{ specs, dropped }`. Each group is flattened to one spec per command, `timeout` seconds become `timeout_ms`, and a `"*"` matcher becomes no matcher. Every spec is validated with `hookSpecSchema`, so a command with control characters is refused. Anything skipped (unknown event, non-command hook, non-object group or entry, invalid spec) gets one line in `dropped`. Events map through `CLAUDE_HOOK_EVENT_ALIASES` (`PreToolUse` to `pre_tool_call`, `PostToolUse` to `transform_tool_result`, `Stop` to `post_assistant_reply`, `SessionStart` to `on_session_start`); pass `aliases` to override, and map a name to `null` for an event this engine does not deliver. Fingerprints are computed on the translated spec, so `HookApprovalStore` works unchanged. `buildHookHandlers({ projectDirEnv: 'CLAUDE_PROJECT_DIR' })` sets that variable to `cwd` in each hook process.
 
 `AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
+
+## Testing: the live-suite guard
+
+A live (real-model) suite must not skip green in CI when the provider key is missing. `@theokit/agents/testing` exports `assertProviderKeyWhenRequired`, `requireProviderKeySetup`, `LIVE_KEY_NAMES` and `MissingProviderKeyError`: when `THEOKIT_LIVE_REQUIRED=1` and none of the key variables is set (whitespace-only counts as unset), the run fails with an error that names the variables, never a value. Without the flag it returns, so a local run keeps its skip.
+
+```ts
+// tests/live/setup.ts — register it as vitest `globalSetup`
+import { requireProviderKeySetup } from '@theokit/agents/testing'
+
+export default requireProviderKeySetup({ requiredFlag: 'MYAPP_LIVE' }) // names and requiredFlag are optional
+```
 
 ## One bootstrap for every entry
 
