@@ -45,8 +45,8 @@ fails on 4.0.7 and passes on this copy.
 
 ## When it goes
 
-When picomatch publishes a release with the fix: delete this directory, the override and the two
-ignore entries (`eslint.config.js`, `.prettierignore`), and require that version instead. Tracked in
-usetheokit/theokit#2165.
+When picomatch publishes a release with both fixes: delete this directory, the override and the
+ignore entries (`eslint.config.js`, `.prettierignore`, `knip.json`), and require that version instead.
+Tracked in usetheokit/theokit#2165.
 
 The code is MIT, Copyright (c) 2017-present, Jon Schlinkert. See `LICENSE`.
