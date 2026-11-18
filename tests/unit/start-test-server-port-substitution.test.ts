@@ -12,7 +12,7 @@ const h = vi.hoisted(() => ({
   parents: {} as Record<number, number>,
   toolFails: false,
   /** Descriptor number the listener of the n-th child holds (lsof only). */
-  fd: (_attempt: number) => 7,
+  fd: (_attempt: number) => 7 as number,
   /** HTTP status of the readiness probe, or undefined for a listener that does not speak HTTP. */
   status: (_port: number, _attempt: number): number | undefined => 200,
 }))
