@@ -146,6 +146,7 @@ describe('startTestServer on platforms without /proc (simulated)', () => {
   })
   afterAll(async () => {
     await Promise.all(open.map((s) => new Promise((r) => s.close(r))))
+    rmSync(ROOT, { recursive: true, force: true })
   })
   function occupy200(): Promise<number> {
     const srv = createHttp((_req, res) => {
