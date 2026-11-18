@@ -135,7 +135,10 @@ describe('theokit#132 — the RunEvent sink reaches the SDK', () => {
     expect(h.sendOptions).toHaveLength(1)
     const sent = h.sendOptions[0]!.onRunEvent as (e: unknown) => void
     sent({ type: 'rate_limit' })
-    expect(sink, 'the public entry point accepts the sink but never forwards it').toHaveBeenCalledWith({
+    expect(
+      sink,
+      'the public entry point accepts the sink but never forwards it',
+    ).toHaveBeenCalledWith({
       type: 'rate_limit',
     })
   })

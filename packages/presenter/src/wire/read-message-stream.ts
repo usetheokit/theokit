@@ -1,4 +1,8 @@
-import { WIRE_APPROVAL_DETAIL_PART, WIRE_TOOL_REFUSAL_PART, type WireChunk } from './chunk-schema.js'
+import {
+  WIRE_APPROVAL_DETAIL_PART,
+  WIRE_TOOL_REFUSAL_PART,
+  type WireChunk,
+} from './chunk-schema.js'
 import { WireStreamError } from './parse-wire-stream.js'
 import type { WireMessage, WireToolApproval, WireToolRefusal } from './types.js'
 

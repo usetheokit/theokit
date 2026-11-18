@@ -6,6 +6,7 @@
  *
  * Flow: @Agent decorator → compileAgent() → createSdkAgentStream() → SDK Agent.create() → Run.stream()
  */
+import type { ToolRefusal } from '@theokit/presenter'
 // M96 — the rationale below, and the `prettier-ignore`, exist for lint budget: this file sits at the
 // `max-lines` ceiling (500 lines of code) and the break prettier would make in this import costs
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
@@ -22,8 +23,6 @@ import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
-import type { ToolRefusal } from '@theokit/presenter'
-
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
@@ -692,8 +691,12 @@ async function* streamTimeline(
       // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
       if (event.type === 'done') continue
       state.lastEventType = event.type
-      const refusal = event.type === 'tool_result' ? refusals.get(event.callId) : undefined
-      yield refusal !== undefined && event.type === 'tool_result' ? { ...event, refusal } : event
+      const callId = (event as { callId?: unknown }).callId
+      const refusal =
+        event.type === 'tool_result' && typeof callId === 'string'
+          ? refusals.get(callId)
+          : undefined
+      yield refusal !== undefined ? { ...event, refusal } : event
     }
   }
   for await (const ev of run.events()) {

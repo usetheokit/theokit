@@ -94,7 +94,13 @@ export class UIMessageStreamPresenter implements Presenter<UIMessageChunk> {
       case 'tool-result':
         return [
           ...this.#closeOpenBlock(),
-          ...this.#emitToolResult(event.callId, event.name, event.result, event.isError ?? false, event.refusal),
+          ...this.#emitToolResult(
+            event.callId,
+            event.name,
+            event.result,
+            event.isError ?? false,
+            event.refusal,
+          ),
         ]
       case 'error':
         // Surface the failure as an ai-sdk error chunk (fail-clear); the host stops and calls finish().

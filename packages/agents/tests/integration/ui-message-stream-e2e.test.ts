@@ -189,7 +189,10 @@ describe('tool refusal over the wire', () => {
       for (const e of events) yield e
     }
     const chunks: WireChunk[] = []
-    for await (const c of presentUIMessageStream(gen(), { textId: 't0', onError: (e) => e.message })) {
+    for await (const c of presentUIMessageStream(gen(), {
+      textId: 't0',
+      onError: (e) => e.message,
+    })) {
       chunks.push(c)
     }
     const stream = new ReadableStream<WireChunk>({
