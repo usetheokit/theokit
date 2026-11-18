@@ -4,7 +4,11 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { applyOutputStyle, loadOutputStyle, OutputStyleError } from '../../src/config/output-styles.js'
+import {
+  applyOutputStyle,
+  loadOutputStyle,
+  OutputStyleError,
+} from '../../src/config/output-styles.js'
 
 /**
  * A configured output style was read by nobody.
@@ -152,7 +156,7 @@ describe('an output style is matched by frontmatter name and applied to a base p
     expect(style?.name).toBe('Concise')
   })
 
-  it('a file name match wins over another file\'s frontmatter name in the same directory', () => {
+  it("a file name match wins over another file's frontmatter name in the same directory", () => {
     const { cwd, homeDir } = projectWith({
       'a-other.md': '---\nname: review\n---\nBY FRONTMATTER',
       'review.md': 'BY FILE NAME',
