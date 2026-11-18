@@ -369,6 +369,34 @@ export interface DeleteSessionOptions {
   readonly isListedInRegistry?: (sessionId: string) => Promise<boolean>
 }
 
+interface ListingRead {
+  readonly listed?: boolean
+  readonly error?: unknown
+}
+
+/** One verifier read that reports its failure instead of throwing; absent verifier reads nothing. */
+async function tryRead(
+  verify: ((sessionId: string) => Promise<boolean>) | undefined,
+  sessionId: string,
+  timeoutMs: number | undefined,
+): Promise<ListingRead> {
+  if (verify === undefined) return {}
+  try {
+    return { listed: await readListed(verify, sessionId, timeoutMs) }
+  } catch (error) {
+    return { error }
+  }
+}
+
+function classifyListings(
+  before: boolean | undefined,
+  after: boolean | undefined,
+): RegistryOutcome {
+  if (before === undefined || after === undefined) return 'unconfirmed'
+  if (after) return 'still-present'
+  return before ? 'removed' : 'nothing-to-remove'
+}
+
 /** Run one verifier read under the registry timeout; a timeout rejects with a verifier-specific error. */
 async function readListed(
   verify: (sessionId: string) => Promise<boolean>,
@@ -444,15 +472,7 @@ export async function deleteSession(
   let registryError: unknown
   if (options.removeFromRegistry !== undefined) {
     const verify = options.isListedInRegistry
-    let listedBefore: boolean | undefined
-    let verifyError: unknown
-    if (verify !== undefined) {
-      try {
-        listedBefore = await readListed(verify, sessionId, options.registryTimeoutMs)
-      } catch (error) {
-        verifyError = error
-      }
-    }
+    const before = await tryRead(verify, sessionId, options.registryTimeoutMs)
     try {
       // Awaiting is what the old refusal was reaching for. It rejected a thenable because the code
       // before it checked TRUTHINESS and reported a removal that had not happened; completion is
@@ -472,19 +492,12 @@ export async function deleteSession(
       if (verify !== undefined) {
         // The remover's own return value is replaced by the measured answer. A failed read on
         // either side leaves nothing to measure, so it is `unconfirmed` with the error kept.
-        let listedAfter: boolean | undefined
-        if (verifyError === undefined) {
-          try {
-            listedAfter = await readListed(verify, sessionId, options.registryTimeoutMs)
-          } catch (error) {
-            verifyError = error
-          }
-        }
-        if (verifyError !== undefined || listedBefore === undefined || listedAfter === undefined) {
-          registryOutcome = 'unconfirmed'
-          registryError = verifyError
-        } else if (listedAfter) registryOutcome = 'still-present'
-        else registryOutcome = listedBefore ? 'removed' : 'nothing-to-remove'
+        const after =
+          before.error === undefined
+            ? await tryRead(verify, sessionId, options.registryTimeoutMs)
+            : before
+        registryError = after.error
+        registryOutcome = classifyListings(before.listed, after.listed)
       }
     } catch (error) {
       // The transcript is untouched, so the caller can retry after fixing the registry. Deleting it

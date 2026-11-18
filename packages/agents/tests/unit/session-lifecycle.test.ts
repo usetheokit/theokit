@@ -457,6 +457,8 @@ describe('deleteSession with a verifier', () => {
 
   it('deleteSession with a verifier reports removed when the id leaves the listing', async () => {
     writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('keeper', 0)
+    await persistSessionId(CWD, 'keeper', root)
     const v = verifierFrom([true, false])
     const result = await deleteSession('doomed', {
       cwd: CWD,
@@ -471,6 +473,8 @@ describe('deleteSession with a verifier', () => {
 
   it('deleteSession with a verifier reports still-present when the remover removes nothing', async () => {
     writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('keeper', 0)
+    await persistSessionId(CWD, 'keeper', root)
     const v = verifierFrom([true])
     const result = await deleteSession('doomed', {
       cwd: CWD,
@@ -494,6 +498,8 @@ describe('deleteSession with a verifier', () => {
 
   it('a verifier that throws gives unconfirmed and keeps the error in registryError', async () => {
     writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('keeper', 0)
+    await persistSessionId(CWD, 'keeper', root)
     const boom = new Error('list failed')
     const result = await deleteSession('doomed', {
       cwd: CWD,
@@ -522,7 +528,11 @@ describe('deleteSession with a verifier', () => {
 
   it('does not call the verifier without a remover', async () => {
     const v = verifierFrom([true])
-    const result = await deleteSession('ghost', { cwd: CWD, root, isListedInRegistry: v.isListedInRegistry })
+    const result = await deleteSession('ghost', {
+      cwd: CWD,
+      root,
+      isListedInRegistry: v.isListedInRegistry,
+    })
     expect(result.registryOutcome).toBe('not-attempted')
     expect(v.calls).toEqual([])
   })
