@@ -80,6 +80,14 @@ describe('foreign surface inventory', () => {
     expect(get(ok, 'commands').count).toBe(1)
   })
 
+  it('a failing nested command is listed by its own path and readable siblings still count', () => {
+    const cwd = project({ 'commands/ns/ok.md': '---\ndescription: d\n---\nb' })
+    symlinkSync('bad.md', join(cwd, '.claude', 'commands', 'ns', 'bad.md'))
+    const e = get(cwd, 'commands')
+    expect(e.count).toBe(1)
+    expect(e.unreadable).toEqual(['commands/ns/bad.md'])
+  })
+
   it('agents applies the SDK filter: no symlinks, a fence line followed by a newline', () => {
     const cwd = project({
       'agents/a.md': '---\nname: a\n---\n',

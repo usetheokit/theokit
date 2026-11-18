@@ -92,17 +92,33 @@ function countsAgentMd(abs: string, name: string): boolean {
   return raw !== undefined && OPENS_WITH_FENCE.test(raw)
 }
 
-/** The command loader walks subfolders and takes every `.md` whose frontmatter, if any, closes. */
-function countsCommandMd(abs: string, name: string): number {
-  const path = join(abs, name)
-  const stats = statIfPresent(path)
-  if (stats?.isDirectory()) {
+/**
+ * The command loader walks subfolders and takes every `.md` whose frontmatter, if any, closes. A
+ * failure is recorded against the failing entry's own path, so readable siblings still count.
+ */
+function walkCommands(abs: string, rel: string, out: Count): void {
+  let entries: string[]
+  try {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-    return readdirSync(path).reduce((n, child) => n + countsCommandMd(path, child), 0)
+    entries = readdirSync(abs).sort((a, b) => a.localeCompare(b))
+  } catch {
+    out.unreadable.push(rel)
+    return
   }
-  if (!stats?.isFile() || !name.endsWith('.md')) return 0
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-  return splitFrontmatter(readFileSync(path, 'utf8')) === undefined ? 0 : 1
+  for (const name of entries) {
+    const path = join(abs, name)
+    try {
+      const stats = statIfPresent(path)
+      if (stats?.isDirectory()) {
+        walkCommands(path, `${rel}/${name}`, out)
+      } else if (stats?.isFile() && name.endsWith('.md')) {
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+        if (splitFrontmatter(readFileSync(path, 'utf8')) !== undefined) out.count++
+      }
+    } catch {
+      out.unreadable.push(`${rel}/${name}`)
+    }
+  }
 }
 
 function countsAgentMemory(abs: string, name: string): boolean {
@@ -123,9 +139,8 @@ function countsPluginBundle(abs: string, name: string): boolean {
   return true
 }
 
-const COUNTERS: Record<Kind, (abs: string, name: string) => boolean | number> = {
+const COUNTERS: Record<Exclude<Kind, 'command-md'>, (abs: string, name: string) => boolean> = {
   'agent-md': countsAgentMd,
-  'command-md': countsCommandMd,
   'agent-memory': countsAgentMemory,
   scripts: countsScript,
   'plugin-bundles': countsPluginBundle,
@@ -142,13 +157,17 @@ function count(root: string, { dir, kind }: Folder): Count {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') out.unreadable.push(dir)
     return out
   }
+  if (kind === 'command-md') {
+    walkCommands(abs, dir, out)
+    return out
+  }
   for (const name of entries) {
     // The warning names every script-looking entry (.js/.mjs/.cjs), as it always has; only `.js` files count.
     if (kind === 'scripts' && SCRIPT_SUFFIXES.some((suffix) => name.endsWith(suffix))) {
       out.names.push(name)
     }
     try {
-      out.count += Number(COUNTERS[kind](abs, name))
+      if (COUNTERS[kind](abs, name)) out.count++
     } catch {
       out.unreadable.push(`${dir}/${name}`)
     }
