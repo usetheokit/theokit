@@ -10,6 +10,7 @@ import { sandboxModeForSession } from '../sandbox-switch.js'
 import { withSandboxMode } from '../config/effective-config.js'
 import {
   createGenericHttpSearchAdapter,
+  createInteractiveShellTool,
   createQuestionTool,
   createUpdatePlanTool,
   createWebFetchTool,
@@ -41,7 +42,6 @@ import { resolveTrustPosture, type TrustPosture } from '../config/index.js'
 import { baseInstructionsFor } from '../output-style-wiring.js'
 import { createAnalystSubagent, createDelegateToTeamTool } from '../delegation/index.js'
 import { abandonQuestion, ask } from '../ask/index.js'
-import { createInteractiveShellTool } from '../ask/index.js'
 import { MAX_PTY_SESSIONS } from '../pty/index.js'
 import type { SessionPtyOwner } from '../pty/index.js'
 import { ToolRegistry, resolveToolScope } from '../tools/index.js'
