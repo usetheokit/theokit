@@ -178,6 +178,27 @@ export class AgentsController {
 The request is delegated straight to the one agent runtime. Guards run on that route; interceptors
 do not.
 
+## Accepting an upload
+
+`request.formData()` buffers the whole body before any size check can run. `readCappedFormData`
+refuses the body as soon as more than `maxBytes` have arrived (413), and refuses a declared
+`Content-Length` over the cap before the first read. A non-form content type or an unparseable body
+is a 400.
+
+```typescript
+import { Controller, Post, Req, readCappedFormData } from '@theokit/http'
+
+@Controller('api/upload')
+export class UploadController {
+  @Post()
+  async upload(@Req() request: Request) {
+    const form = await readCappedFormData(request, { maxBytes: 25 * 1024 * 1024 })
+    const file = form.get('file') as File
+    return { name: file.name, size: file.size }
+  }
+}
+```
+
 ## `module` and `container`
 
 `TheoApp.create({ module })` resolves providers and controllers through an `@theokit/di`

@@ -23,6 +23,7 @@ import {
 import { resolveTrustPosture } from '@theocode/agent/config'
 import { logout, methodsFor, oauthDeviceLogin, knownProviders } from '@theocode/agent/auth'
 import type { AuthMethod } from '@theokit/agents/auth'
+import type { ForkResult } from '../persistence/fork-session.js'
 import type { ContentPanel, ToastPayload } from '../screen-types.js'
 import { workingDirectory } from '../working-directory.js'
 
@@ -112,15 +113,31 @@ export function handleLogin(
     )
 }
 
-export function handleFork(
-  forkCurrentSession: () => { newId: string; copied: boolean },
+export async function handleFork(
+  forkCurrentSession: () => Promise<ForkResult>,
   setToast: SetToast,
-): void {
-  let result: { newId: string; copied: boolean }
+  streaming = false,
+): Promise<void> {
+  // A copy taken mid-turn would miss what the turn writes next, yet the session would move to it.
+  if (streaming) {
+    setToast({
+      message: 'Fork refused — a turn is running. Wait for it, or interrupt it (Esc), then /fork.',
+      variant: 'info',
+    })
+    return
+  }
+  let result: ForkResult
   try {
-    result = forkCurrentSession()
+    result = await forkCurrentSession()
   } catch (e) {
     setToast({ message: `Fork failed: ${(e as Error).message}`, variant: 'error' })
+    return
+  }
+  if (result.stale === true) {
+    setToast({
+      message: 'Fork cancelled — the session changed while it was being copied.',
+      variant: 'info',
+    })
     return
   }
   const { newId, copied } = result

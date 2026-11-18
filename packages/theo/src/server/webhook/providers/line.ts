@@ -23,30 +23,9 @@
  */
 import type { VerifyFn } from '../webhook-types.js'
 
-import { verifyHmacSha256, type DecodeResult } from './hmac-sha256.js'
+import { decodeBase64Signature, verifyHmacSha256 } from './hmac-sha256.js'
 
 const HEADER = 'x-line-signature'
-
-/** Standard base64: the alphabet plus `=` padding. LINE does not use the URL-safe variant. */
-const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
-
-/** Decode base64 to bytes, or say why the header value could not be one. */
-function fromBase64(value: string): DecodeResult {
-  // `atob` accepts some inputs a strict decoder would not, so the shape is checked first: an
-  // unchecked `atob` turns a typo into a length mismatch and then into "signature mismatch",
-  // which sends the reader looking at their channel secret instead of at their header.
-  if (value.length === 0 || value.length % 4 !== 0 || !BASE64.test(value)) {
-    return { ok: false, reason: 'malformed signature base64' }
-  }
-  try {
-    const binary = atob(value)
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-    return { ok: true, bytes }
-  } catch {
-    return { ok: false, reason: 'malformed signature base64' }
-  }
-}
 
 export interface LineWebhookOptions {
   /**
@@ -73,6 +52,6 @@ export function line(options: LineWebhookOptions): VerifyFn {
     header: HEADER,
     secrets: options.channelSecret,
     option: 'channelSecret',
-    decode: fromBase64,
+    decode: decodeBase64Signature,
   })
 }

@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 import { JsonlParseError, transcriptPath } from '@theokit/agents/persistence'
+import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { readUserTurnPreviewsAsync } from '../../src/session/backtrack.js'
@@ -75,5 +76,16 @@ describe('B-012 — transcript reading uses the SDK reader', () => {
     const previews = await readUserTurnPreviewsAsync('s3', { cwd, baseDir: base })
 
     expect(previews.length).toBe(2)
+  })
+})
+
+describe('goal continuation turns', () => {
+  it('test_a_goal_continuation_turn_is_not_offered', async () => {
+    writeTranscript('s2', [
+      userTurn('real question'),
+      userTurn(`${GOAL_CONTINUATION_MARKER} keep going`),
+    ])
+    const previews = await readUserTurnPreviewsAsync('s2', { cwd, baseDir: base })
+    expect(previews).toEqual(['real question'])
   })
 })

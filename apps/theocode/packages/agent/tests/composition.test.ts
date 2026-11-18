@@ -234,6 +234,16 @@ describe('path 1 — buildChatAgent composes the coding agent', () => {
     }
   })
 
+  it('test_danger_full_access_grants_the_write_tools', async () => {
+    resolveEffectiveConfig.mockReturnValue(config('danger-full-access'))
+    const agent = await compile({ surface: 'headless', cwd: '/p' })
+    const names = namesOf(agent)
+
+    for (const write of ['ApplyPatch', 'Edit', 'delegate_to_team']) {
+      expect(names, `danger-full-access did not grant "${write}"`).toContain(write)
+    }
+  })
+
   it('test_every_command_executing_tool_is_gated', async () => {
     // The narrowest statement of the product's core promise: nothing runs on the user's machine
     // without them saying yes.

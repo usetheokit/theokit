@@ -31,8 +31,9 @@ import {
  *     KEPT as failed: `failed_at` is set, `last_error` holds the message, and
  *     `dequeue` never returns it again. Query them with
  *     `SELECT * FROM theokit_jobs WHERE failed_at IS NOT NULL`, replay one with
- *     `UPDATE ... SET failed_at = NULL, attempts = 0, available_at = NOW()`,
- *     and purge old ones yourself: nothing deletes them. A failed job keeps its
+ *     `UPDATE ... SET failed_at = NULL, attempts = 0, available_at = NOW()`
+ *     (leave `leased_at` as it is: it marks the job as once leased, so
+ *     `cancelInTransaction` keeps leaving it alone), and purge old ones yourself: nothing deletes them. A failed job keeps its
  *     idempotency key, so enqueueing that key again returns the failed job's id.
  *   - A retried job waits `retryDelaySeconds(attempts)` before it is
  *     available again (default `min(2^attempts, 3600)` seconds), and its
@@ -212,7 +213,8 @@ export class PostgresJobBackend implements JobBackend {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         lease_token TEXT,
         last_error TEXT,
-        failed_at TIMESTAMPTZ
+        failed_at TIMESTAMPTZ,
+        leased_at TIMESTAMPTZ
       )
     `)
     // Columns added after the first release. `CREATE TABLE IF NOT EXISTS` leaves a table created by
@@ -220,6 +222,16 @@ export class PostgresJobBackend implements JobBackend {
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS lease_token TEXT`)
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS last_error TEXT`)
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ`)
+    // Set the first time a worker leases the job and never cleared, not even by a replay that
+    // resets `attempts`, so `cancelInTransaction` can tell a job that was ever leased.
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS leased_at TIMESTAMPTZ`)
+    // A row leased before this column existed has it NULL: backfill every row that was ever leased,
+    // including one already replayed (`last_error` survives a nack and a replay).
+    await this.#pool.query(
+      `UPDATE ${t} SET leased_at = NOW()
+       WHERE leased_at IS NULL AND (attempts > 0 OR failed_at IS NOT NULL OR locked_until IS NOT NULL
+              OR last_error IS NOT NULL)`,
+    )
     await this.#pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ${t}_idempotency_key_idx
       ON ${t} (name, idempotency_key)
@@ -263,6 +275,26 @@ export class PostgresJobBackend implements JobBackend {
    */
   async enqueueInTransaction(client: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }> {
     return this.#insertJob(client, input)
+  }
+
+  /**
+   * Remove a job no worker ever leased, through the caller's transaction (usetheokit/theokit#2118).
+   * A leased job (even with an expired lease) or a failed one is kept: a run may be going on.
+   * Returns whether a job was removed.
+   */
+  async cancelInTransaction(
+    client: PoolLike,
+    input: { name: string; idempotencyKey: string },
+  ): Promise<boolean> {
+    const res = await client.query<{ id: string }>(
+      `DELETE FROM ${this.#table}
+       WHERE name = $1 AND idempotency_key = $2
+         AND leased_at IS NULL AND locked_until IS NULL AND failed_at IS NULL AND attempts = 0
+         AND last_error IS NULL
+       RETURNING id`,
+      [input.name, input.idempotencyKey],
+    )
+    return res.rows.length > 0
   }
 
   async #insertJob(db: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }> {
@@ -332,6 +364,7 @@ export class PostgresJobBackend implements JobBackend {
       `UPDATE ${t}
        SET locked_until = NOW() + ($2 || ' seconds')::interval,
            attempts = attempts + 1,
+           leased_at = COALESCE(leased_at, NOW()),
            lease_token = $3
        WHERE id IN (
          SELECT id FROM ${t}
