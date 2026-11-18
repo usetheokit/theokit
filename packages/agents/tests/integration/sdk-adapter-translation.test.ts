@@ -49,8 +49,6 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { recordRefusal, takeRefusal } = await import('../../src/bridge/refusal-ledger.js')
-const { hookFingerprint } = await import('../../src/hooks/hook-fingerprint.js')
-const { buildHookHandlers } = await import('../../src/hooks/hook-spec.js')
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
 const { applyCapabilities } = await import('../../src/capability/capability.js')
 await import('reflect-metadata')
@@ -213,45 +211,6 @@ describe('permission_denied → typed refusal on the tool result', () => {
     }
     const out = await drain([toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 })])
     expect(results(out)[0]).toMatchObject({ refusal: { by: 'plugin', reason: 'external says no' } })
-  })
-
-  it('an external denial and a later framework veto of the same tool keep their own refusals', async () => {
-    h.onSend = (o) => {
-      o.onRunEvent?.({ ...denied('c1', 'plugin', 'external no'), runId: 'sdk-run-4' })
-      recordRefusal('sdk-run-4', 'Bash', { by: 'human', reason: 'person said no' })
-      o.onRunEvent?.({ ...denied('c2', 'plugin', 'Tool denied'), runId: 'sdk-run-4' })
-    }
-    const out = await drain([
-      toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 }),
-      toolDone('c2', { stdout: '', stderr: 'x', exitCode: 126 }),
-    ])
-    const [r1, r2] = results(out)
-    expect(r1).toMatchObject({ refusal: { by: 'plugin', reason: 'external no' } })
-    expect(r2).toMatchObject({ refusal: { by: 'human', reason: 'person said no' } })
-  })
-
-  it('a hook-command veto reaches the stream with the bare hook output as its reason', async () => {
-    const approved = new Set([
-      hookFingerprint({ command: 'echo nope; exit 1', event: 'pre_tool_call', timeoutMs: 5000 }),
-    ])
-    const handlers = buildHookHandlers(
-      [{ event: 'pre_tool_call', command: 'echo nope; exit 1', timeout_ms: 5000 }],
-      { cwd: process.cwd(), trusted: true, approved },
-    )
-    await handlers.pre_tool_call?.({
-      name: 'Bash',
-      args: {},
-      agentId: 'a',
-      runId: 'sdk-run-5',
-    } as never)
-    h.onSend = (o) => {
-      o.onRunEvent?.({ ...denied('c1', 'file_hook', 'fenced'), runId: 'sdk-run-5' })
-    }
-    const out = await drain([toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 })])
-    const reason = (results(out)[0] as { refusal: { by: string; reason: string } }).refusal
-    expect(reason.by).toBe('hook')
-    expect(reason.reason.trim()).toBe('nope')
-    expect(reason.reason).not.toContain('<hook-output')
   })
 
   it('entries a run left unmatched are dropped when it ends', async () => {

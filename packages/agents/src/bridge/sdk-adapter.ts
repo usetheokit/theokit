@@ -666,33 +666,11 @@ interface PendingRefusal {
   resolved?: ToolRefusal
 }
 
-/** Every denial a run reported (insertion order = event order) and the SDK run id once known. */
-interface DenialBook {
-  readonly byCall: Map<string, PendingRefusal>
-  sdkRunId?: string
-}
-
-/**
- * Claim the ledger entry for a denial NOW, in denial-event order. Doing it when the tool result is
- * emitted instead would let an external denial of a tool consume a later framework veto's entry.
- * With no run id known yet the denial stays unresolved until `setSdkRunId` supplies one.
- */
-function claimDenial(book: DenialBook, p: PendingRefusal): void {
-  book.byCall.set(p.callId, p)
-  resolveRefusal(p, book.sdkRunId)
-}
-
-function setSdkRunId(book: DenialBook, id: string): void {
-  book.sdkRunId = id
-  for (const p of book.byCall.values()) resolveRefusal(p, id)
-}
-
 /** Ledger entry for this denial when the framework made the veto, else the source-derived guess. */
 function resolveRefusal(p: PendingRefusal, handleRunId: string | undefined): ToolRefusal {
   if (p.resolved !== undefined) return p.resolved
   const runId = p.runId ?? handleRunId
-  if (runId === undefined) return p.fallback
-  p.resolved = takeRefusal(runId, p.toolName) ?? p.fallback
+  p.resolved = (runId !== undefined ? takeRefusal(runId, p.toolName) : undefined) ?? p.fallback
   return p.resolved
 }
 
@@ -700,7 +678,7 @@ function buildSendOptions(
   overrides: RuntimeOverrides,
   factoryOpts: { disableTools?: boolean } | undefined,
   compiled: CompiledAgentOptions,
-  book: DenialBook,
+  refusals: Map<string, PendingRefusal>,
 ): SendOptions {
   const sendOptions: SendOptions = {}
   if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
@@ -711,7 +689,7 @@ function buildSendOptions(
   const callerSink = overrides.onRunEvent
   sendOptions.onRunEvent = (ev) => {
     const found = refusalFromRunEvent(ev)
-    if (found !== undefined) claimDenial(book, found)
+    if (found !== undefined) refusals.set(found.callId, found)
     return callerSink?.(ev)
   }
   return sendOptions
@@ -731,7 +709,7 @@ async function* streamTimeline(
   runId: string,
   state: { sawError: boolean; lastEventType: string },
   outcome: TurnOutcome | undefined,
-  book: DenialBook,
+  refusals: ReadonlyMap<string, PendingRefusal>,
 ): AsyncGenerator<StreamEvent> {
   const run = (await sendPromise) as {
     events: () => AsyncGenerator<SdkTimelineEvent>
@@ -739,13 +717,12 @@ async function* streamTimeline(
     runId?: unknown
   }
   const handleId = [run.id, run.runId].find((v): v is string => typeof v === 'string')
-  if (handleId !== undefined) setSdkRunId(book, handleId)
   try {
     yield* timelineBody()
   } finally {
     // Entries a run left unmatched must not outlive it.
     if (handleId !== undefined) dropRunRefusals(handleId)
-    for (const p of book.byCall.values()) if (p.runId !== undefined) dropRunRefusals(p.runId)
+    for (const p of refusals.values()) if (p.runId !== undefined) dropRunRefusals(p.runId)
   }
 
   async function* timelineBody(): AsyncGenerator<StreamEvent> {
@@ -759,9 +736,9 @@ async function* streamTimeline(
         const callId = (event as { callId?: unknown }).callId
         const pending =
           event.type === 'tool_result' && typeof callId === 'string'
-            ? book.byCall.get(callId)
+            ? refusals.get(callId)
             : undefined
-        const refusal = pending !== undefined ? resolveRefusal(pending, book.sdkRunId) : undefined
+        const refusal = pending !== undefined ? resolveRefusal(pending, handleId) : undefined
         yield refusal !== undefined ? { ...event, refusal } : event
       }
     }
@@ -852,7 +829,7 @@ async function* streamSdkAgent(
     // model order, and `textAlreadyStreamed` tells us which text is a repeat instead of leaving us
     // to compare content. `state` survives only to carry the two facts the tail block below needs.
     const state = { sawError: false, lastEventType: '' }
-    const refusals: DenialBook = { byCall: new Map() }
+    const refusals = new Map<string, PendingRefusal>()
     const sendOptions = buildSendOptions(overrides, factoryOpts, compiled, refusals)
     const sendPromise = agent.send(buildSendInput(message, overrides), sendOptions)
     // The generator is opened lazily so consumption starts only when the caller pulls — the loop is
