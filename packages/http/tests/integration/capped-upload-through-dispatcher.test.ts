@@ -63,6 +63,33 @@ describe.skipIf(!isVitest)('an upload controller behind the dispatcher', () => {
     },
   )
 
+  it('parses a valid streamed multipart upload within the cap', async () => {
+    const boundary = 'xyz'
+    const payload = new TextEncoder().encode(
+      `--${boundary}\r\nContent-Disposition: form-data; name="title"\r\n\r\nhello\r\n` +
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.txt"\r\n` +
+        `Content-Type: text/plain\r\n\r\ncontents\r\n--${boundary}--\r\n`,
+    )
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(payload.slice(0, 40))
+        controller.enqueue(payload.slice(40))
+        controller.close()
+      },
+    })
+    const handle = createDecoratorHandler([UploadCtrl])
+    const res = await handle(
+      new Request('http://x/api/upload', {
+        method: 'POST',
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+        body: stream,
+        duplex: 'half',
+      } as RequestInit),
+    )
+    expect(res?.status).toBe(201)
+    expect(await res?.json()).toEqual({ keys: ['title', 'file'] })
+  })
+
   it('hands a urlencoded body to the handler unread', async () => {
     const handle = createDecoratorHandler([UploadCtrl])
     const res = await handle(
