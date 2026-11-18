@@ -10,7 +10,13 @@ import {
 } from '@theokit/agents/auth'
 import type { AuthMethod, DeviceAuthProvider } from '@theokit/agents/auth'
 
-import { CredentialError, authFilePath, PROVIDER_NAMES, type Provider } from './credentials.js'
+import {
+  CredentialError,
+  assertPairMatches,
+  authFilePath,
+  PROVIDER_NAMES,
+  type Provider,
+} from './credentials.js'
 import { credentialStore } from './oauth-config.js'
 
 export interface LoginResult {
@@ -37,6 +43,9 @@ export function login(
       'cannot tell which provider this key belongs to. Pass the provider explicitly.',
     )
   }
+
+  // Refuse a key that contradicts the chosen provider before anything reaches the store.
+  assertPairMatches(provider, key, 'the credential being written')
 
   try {
     return loginWithApiKey(key, credentialStore(home), {

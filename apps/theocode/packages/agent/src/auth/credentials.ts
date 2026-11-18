@@ -10,6 +10,7 @@ import {
   credentialHome as storeCredentialHome,
   writeCredential as writeStoreCredential,
 } from '@theokit/agents/auth'
+import { isTransientError } from '@theokit/agents'
 import {
   CredentialNotFoundError,
   DEFAULT_PROVIDERS,
@@ -165,7 +166,7 @@ export interface StoredOAuthCredential {
  * mistake originates — `theocode auth login --provider anthropic` with an OpenAI key — and catching
  * it here means the bad pair never reaches disk.
  */
-function assertPairMatches(provider: Provider, apiKey: string, where: string): void {
+export function assertPairMatches(provider: Provider, apiKey: string, where: string): void {
   const expected = PREFIXES[provider]
   if (expected !== undefined && expected !== '' && !apiKey.startsWith(expected)) {
     throw new CredentialError(
@@ -252,6 +253,13 @@ export function writeCredential(
   )
 }
 
+function classifyRefreshFailure(err: unknown): {
+  readonly transient: boolean
+  readonly cause: unknown
+} {
+  return { transient: isTransientError(err), cause: err }
+}
+
 export async function resolveFreshCredential(opts: {
   env: Record<string, string | undefined>
   home: string | undefined
@@ -262,12 +270,25 @@ export async function resolveFreshCredential(opts: {
   const resolved = resolveCredential({ env: opts.env, home: opts.home })
   if (resolved.kind !== 'oauth' || opts.home === undefined) return resolved
   if (resolved.provider !== 'openai') return resolved
-  // The framework owns the retry, the request deadline and the transient classification; a
-  // transient failure returns the stored credential, a permanent one (invalid_grant) throws.
-  const fresh = await new AuthProvider(OPENAI_OAUTH_CONFIG, credentialStore(opts.home), {
-    requestTimeoutMs: opts.timeoutMs ?? 30_000,
-    onTransientFailure: 'use-stored',
-  }).ensureFresh(resolved, { fetch: opts.fetch ?? fetch, now: opts.now ?? Date.now }, opts.env)
+  const baseFetch = opts.fetch ?? fetch
+  const timeoutMs = opts.timeoutMs ?? 30_000
+  const boundedFetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+    baseFetch(input, {
+      ...init,
+      signal: init?.signal ?? AbortSignal.timeout(timeoutMs),
+    })) as typeof fetch
+  let fresh: Awaited<ReturnType<AuthProvider['ensureFresh']>>
+  try {
+    fresh = await new AuthProvider(OPENAI_OAUTH_CONFIG, credentialStore(opts.home)).ensureFresh(
+      resolved,
+      { fetch: boundedFetch, now: opts.now ?? Date.now },
+      opts.env,
+    )
+  } catch (err) {
+    const { transient } = classifyRefreshFailure(err)
+    if (!transient) throw err
+    return resolved
+  }
   return { ...fresh, provider: resolved.provider }
 }
 
