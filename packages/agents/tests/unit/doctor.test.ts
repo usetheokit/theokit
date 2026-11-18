@@ -190,4 +190,39 @@ describe('installDiagnosticSink — the seam ships with its only use', () => {
     expect(warnings).toEqual([])
     expect(readFileSync(path, 'utf8')).toContain('a diagnostic')
   })
+
+  it('envVar THEOCODE_DIAGNOSTICS=stderr routes to stderr', async () => {
+    const { installDiagnosticSink } = await import('../../src/doctor/diagnostic-sink.js')
+    expect(
+      installDiagnosticSink({
+        envVar: 'THEOCODE_DIAGNOSTICS',
+        env: { THEOCODE_DIAGNOSTICS: 'stderr', THEOKIT_DIAGNOSTICS: '/tmp/ignored.log' },
+        install: () => {},
+      }),
+    ).toEqual({ kind: 'stderr' })
+    expect(
+      installDiagnosticSink({
+        envVar: 'THEOCODE_DIAGNOSTICS',
+        env: { THEOKIT_DIAGNOSTICS: '1' },
+        install: () => {},
+      }),
+    ).toEqual({ kind: 'off' })
+  })
+
+  it('without envVar the default THEOKIT_DIAGNOSTICS is still read', async () => {
+    const { installDiagnosticSink } = await import('../../src/doctor/diagnostic-sink.js')
+    expect(
+      installDiagnosticSink({
+        env: { THEOKIT_DIAGNOSTICS: 'stderr', THEOCODE_DIAGNOSTICS: '/tmp/x.log' },
+        install: () => {},
+      }),
+    ).toEqual({ kind: 'stderr' })
+  })
+
+  it('an empty envVar throws', async () => {
+    const { installDiagnosticSink } = await import('../../src/doctor/diagnostic-sink.js')
+    const { ConfigurationError } = await import('../../src/errors.js')
+    expect(() => installDiagnosticSink({ envVar: '', env: {} })).toThrow(ConfigurationError)
+    expect(() => installDiagnosticSink({ envVar: '', env: {} })).toThrow(/envVar/)
+  })
 })
