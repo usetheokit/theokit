@@ -1,5 +1,12 @@
 # @theokit/agents
 
+## 16.8.1
+
+### Patch Changes
+
+- Updated dependencies [27de3e9]
+  - @theokit/presenter@0.13.0
+
 ## 16.8.0
 
 ### Minor Changes
