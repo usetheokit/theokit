@@ -201,7 +201,7 @@ export type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skil
 // and this gate does not know fails the build instead of being dropped.
 const _covers: readonly CompatSurface[] = [] as readonly SdkCompatSurface[]
 
-const EVERY_SURFACE: readonly CompatSurface[] = [
+export const EVERY_SURFACE: readonly CompatSurface[] = [
   'commands',
   'context',
   'hooks',

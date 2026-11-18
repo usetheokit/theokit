@@ -254,3 +254,5 @@ export type { McpScopesResult } from './mcp-scopes.js'
 
 // M68 — the `settingSources` trust gate (ADR 0063/0064/0065).
 export * from './setting-sources-gate.js'
+
+export { foreignSurfaceInventory, type ForeignSurfaceEntry } from './foreign-surfaces.js'

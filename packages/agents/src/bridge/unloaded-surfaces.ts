@@ -27,14 +27,10 @@
  * in `mcp-file.ts`, the output style nothing read in B-022, and a `workflows/` directory whose
  * author sees no complaint and concludes it took effect. The cost of the report is one line.
  */
-import { existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { foreignSurfaceInventory, WORKFLOWS_REFUSAL_REASON } from './foreign-surfaces.js'
 
 /** Where the reference keeps workflow scripts, relative to a project root. */
-const WORKFLOWS_DIR = join('.claude', 'workflows')
-
-/** What a workflow script is named. `.mjs` and `.cjs` count — the refusal is about execution. */
-const SCRIPT_SUFFIXES = ['.js', '.mjs', '.cjs'] as const
+const WORKFLOWS_DIR = '.claude/workflows'
 
 export interface ReportUnloadedSurfacesInput {
   /** Project root whose `.claude/` is inspected. */
@@ -50,28 +46,12 @@ export interface ReportUnloadedSurfacesInput {
  * and noise is how a real report stops being read.
  */
 export function reportUnloadedSurfaces(input: ReportUnloadedSurfacesInput): void {
-  const dir = join(input.cwd, WORKFLOWS_DIR)
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- the path is the caller's own project root joined with a fixed convention; no component comes from untrusted input
-  if (!existsSync(dir)) return
-
-  let scripts: readonly string[]
-  try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path, existence-checked above
-    scripts = readdirSync(dir).filter((f) => SCRIPT_SUFFIXES.some((s) => f.endsWith(s)))
-  } catch {
-    // An unreadable directory is not a workflow anybody wrote, and refusing to start over a
-    // permission error on a surface we do not load would be a worse outcome than staying quiet.
-    return
-  }
-  if (scripts.length === 0) return
+  const entry = foreignSurfaceInventory({ cwd: input.cwd }).find((e) => e.dir === 'workflows')
+  // An unreadable directory is not a workflow anybody wrote; stay quiet rather than fail.
+  if (!entry || entry.state !== 'refused' || entry.count === 0) return
 
   input.onWarn(
-    `${WORKFLOWS_DIR}: found ${String(scripts.length)} workflow script(s) — ` +
-      `${[...scripts].sort((a, b) => a.localeCompare(b)).join(', ')} — which this runtime does NOT ` +
-      `execute. Every configuration surface it loads is data (commands, hooks, plugins, skills, ` +
-      `subagents); a workflow file is code, and executing JavaScript found under a caller-supplied ` +
-      `directory is a trust decision that belongs to you rather than to this library. The ` +
-      `orchestration itself is supported: build the same pipeline with Workflow / agentStep / ` +
-      `createSquad from @theokit/sdk, which you import explicitly.`,
+    `${WORKFLOWS_DIR}: found ${String(entry.count)} workflow script(s) — ` +
+      `${(entry.names ?? []).join(', ')} — ${WORKFLOWS_REFUSAL_REASON}`,
   )
 }

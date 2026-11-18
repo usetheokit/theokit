@@ -1,0 +1,65 @@
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { describe, expect, it } from 'vitest'
+
+import { foreignSurfaceInventory } from '../../src/bridge/foreign-surfaces.js'
+
+function project(files: Record<string, string>): string {
+  const cwd = mkdtempSync(join(tmpdir(), 'foreign-inv-'))
+  for (const [rel, body] of Object.entries(files)) {
+    const p = join(cwd, '.claude', rel)
+    mkdirSync(join(p, '..'), { recursive: true })
+    writeFileSync(p, body)
+  }
+  return cwd
+}
+const get = (cwd: string, dir: string, enabled?: Parameters<typeof foreignSurfaceInventory>[0]['enabled']) =>
+  foreignSurfaceInventory({ cwd, ...(enabled ? { enabled } : {}) }).find((e) => e.dir === dir)!
+
+describe('foreign surface inventory', () => {
+  it('agents counts only top-level .md files with frontmatter', () => {
+    const cwd = project({
+      'agents/a.md': '---\nname: a\n---\nhi',
+      'agents/README.md': 'no frontmatter',
+      'agents/review-1/b.md': '---\nname: b\n---\n',
+    })
+    const e = get(cwd, 'agents')
+    expect(e.count).toBe(1)
+    expect(e.state).toBe('read')
+  })
+
+  it('workflows is reported refused with its reason and a count of scripts', () => {
+    const cwd = project({ 'workflows/a.js': '', 'workflows/b.mjs': '', 'workflows/c.txt': '' })
+    const e = get(cwd, 'workflows')
+    expect(e.state).toBe('refused')
+    expect(e.count).toBe(2)
+    expect(e.reason).toContain('does NOT')
+  })
+
+  it('plugins counts bundles that ship a skills folder', () => {
+    const cwd = project({ 'plugins/p1/skills/s.md': 'x', 'plugins/p2/readme.md': 'x' })
+    expect(get(cwd, 'plugins').count).toBe(1)
+  })
+
+  it('an unreadable definition is listed in unreadable and does not throw', () => {
+    const cwd = project({ 'agents/a.md': '---\n---\n' })
+    // A directory named like a file cannot be read as one, whatever the user running the test.
+    mkdirSync(join(cwd, '.claude', 'commands'))
+    const bad = join(cwd, '.claude', 'commands', 'x.md')
+    writeFileSync(bad, '---\n---\n')
+    chmodSync(bad, 0o000)
+    let e
+    expect(() => (e = get(cwd, 'commands'))).not.toThrow()
+    if (process.getuid?.() !== 0) expect(e!.unreadable).toEqual(['commands/x.md'])
+  })
+
+  it('a surface left out of enabled is reported refused', () => {
+    const cwd = project({ 'agents/a.md': '---\n---\n' })
+    const e = get(cwd, 'agents', ['commands'])
+    expect(e.state).toBe('refused')
+    expect(e.reason).toBeDefined()
+    expect(e.count).toBe(1)
+  })
+})

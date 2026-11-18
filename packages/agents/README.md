@@ -492,3 +492,7 @@ See `LICENSE`.
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
+
+## Foreign surface inventory
+
+`foreignSurfaceInventory({ cwd, root?, enabled? })` (from `@theokit/agents/bridge`) returns one entry per foreign folder (`agents`, `commands`, `agent-memory`, `workflows`, `plugins`): `{ dir, state: 'read' | 'refused', count, unreadable, reason? }`. `state` comes from the gate's surface list: a folder whose surface is not in `enabled` (default: every surface) is `refused`; `workflows` is always refused, with the reason `reportUnloadedSurfaces` uses. `agents` and `commands` count top-level `.md` files that open with frontmatter; `agent-memory` counts `<agent>/MEMORY.md`; `workflows` counts `.js`/`.mjs`/`.cjs` entries; `plugins` counts bundles with a `skills/` folder. An entry that exists but cannot be read is listed in `unreadable` (relative to the root) instead of throwing. `read` means the surface is enabled, not that the host applied it (agent memory in particular is host-wired).
