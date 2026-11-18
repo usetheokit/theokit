@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { encodeProjectDir, transcriptPath } from '@theokit/sdk/persistence'
+import { encodeProjectDir, legacyTranscriptPath, transcriptPath } from '@theokit/sdk/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { GCFloorError, planProjectsGC, type ProjectsGCFs } from '../../src/session/index.js'
@@ -85,7 +85,7 @@ describe('planProjectsGC', () => {
     transcript('mid', 50)
     const pointed = transcript('pointed', 300)
     transcript('gone', 400)
-    writeFileSync(join(projects, NAME, 'session.json'), 'pointed')
+    writeFileSync(join(projects, NAME, 'last-session'), 'pointed')
     const result = await plan({
       keepLast: 2,
       protectedIds: () => new Map([['pointed', 'app pointer']]),
@@ -185,6 +185,64 @@ describe('planProjectsGC', () => {
     expect(asked).toBe(false)
     expect(result.candidates.map((c) => c.kind)).toEqual(['transcript'])
     expect(result.liveCwds).toEqual([])
+  })
+})
+
+describe('planProjectsGC protection edge cases', () => {
+  function legacy(id: string, ageDays: number): string {
+    const path = legacyTranscriptPath(root, CWD, id)
+    writeFileSync(path, JSON.stringify({ sessionId: id, cwd: CWD }) + '\n')
+    const t = (NOW - ageDays * DAY) / 1000
+    utimesSync(path, t, t)
+    return path
+  }
+
+  it('an old legacy transcript of an active registry entry is protected', async () => {
+    transcript('new', 1)
+    const old = legacy('active', 300)
+    const result = await plan({ listRegistry: () => Promise.resolve([{ id: 'active' }]) })
+    expect(result.candidates.map((c) => c.target)).not.toContain(old)
+  })
+
+  it('an old legacy transcript named by protectedIds is protected', async () => {
+    transcript('new', 1)
+    const old = legacy('named', 300)
+    const result = await plan({ protectedIds: () => new Map([['named', 'app']]) })
+    expect(result.candidates.map((c) => c.target)).not.toContain(old)
+  })
+
+  it('a transcript that cannot be stat-ed still counts as present for locks and registry', async () => {
+    transcript('new', 1)
+    const hidden = transcript('hidden', 100)
+    const lock = put(NAME, `${hidden.split('/').pop()}.writer.lock`, 100)
+    const real = defaultFs()
+    const result = await plan({
+      fs: {
+        ...real,
+        stat: (p) => {
+          if (p === hidden) throw new Error('EACCES')
+          return real.stat(p)
+        },
+      },
+      listRegistry: () => Promise.resolve([{ id: 'hidden', lastModified: NOW - 100 * DAY }]),
+    })
+    expect(result.candidates.map((c) => c.target)).not.toContain(lock)
+    expect(result.countByKind.registry).toBe(0)
+  })
+
+  it('a transcript registered by another cwd of the same encoded project is protected', async () => {
+    const other = '/work-app'
+    expect(encodeProjectDir(other)).toBe(NAME)
+    transcript('new', 1)
+    const theirs = transcriptPath(root, other, 'theirs')
+    writeFileSync(theirs, JSON.stringify({ sessionId: 'theirs', cwd: other }) + '\n')
+    const t = (NOW - 300 * DAY) / 1000
+    utimesSync(theirs, t, t)
+    const result = await plan({
+      listRegistry: (cwd) => Promise.resolve(cwd === other ? [{ id: 'theirs' }] : []),
+    })
+    expect(result.candidates.map((c) => c.target)).not.toContain(theirs)
+    expect(result.liveCwds).toContain(other)
   })
 })
 

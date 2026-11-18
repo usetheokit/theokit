@@ -4,13 +4,14 @@ import { basename, dirname, join } from 'node:path'
 import { Agent } from '@theokit/sdk'
 import {
   classifySessionArtifact,
+  encodeProjectDir,
   legacyTranscriptPath,
   sessionHasWriter,
   transcriptPath,
 } from '@theokit/sdk/persistence'
 
 import { classifyProjects, type FsSeam, type LivenessVerdict } from '../liveness-oracle.js'
-import { protectedTranscriptPaths, transcriptOf } from '../session-lifecycle.js'
+import { protectedTranscriptPaths } from '../session-lifecycle.js'
 import { sessionPointerPath } from '../session-pointer.js'
 
 import { GCFloorError } from './transcript-gc.js'
@@ -248,6 +249,7 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
 
     // 1. List and classify the entries.
     const entries: Entry[] = []
+    const unreadableTranscripts = new Set<string>()
     try {
       for (const name of fs.readdir(dir)) {
         const path = join(dir, name)
@@ -258,6 +260,8 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
           // Unreadable: it cannot be shown old, so it is not collected. It also cannot be listed as
           // a transcript, which is why a lock beside it is judged against the names that DID read.
           kept.push({ project, reason: `${name}: cannot be read, never collected` })
+          // It exists, even if it cannot be stat-ed: orphan decisions must still see it.
+          if (classifySessionArtifact(name, false) === 'transcript') unreadableTranscripts.add(name)
           continue
         }
         const kind = classifySessionArtifact(name, stat.isDirectory)
@@ -269,54 +273,78 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       continue
     }
 
-    // 2. Protection, which for a live project needs a pointer and a registry read that did not fail.
+    // 2. Protection. The encoding is many-to-one, so the verdict's cwd is only ONE member of the
+    //    project's collision class: every cwd the transcripts record is consulted too, and a pointer
+    //    or registry read that fails for any of them skips the project.
     const protectedBy = new Map<string, string>()
-    let registry: readonly ProjectsGCRegistryEntry[] = []
+    const registry: { readonly cwd: string; readonly entry: ProjectsGCRegistryEntry }[] = []
+    const protect = (id: string, cwdOf: string, reason: string): void => {
+      protectedBy.set(transcriptPath(root, cwdOf, id), reason)
+      protectedBy.set(legacyTranscriptPath(root, cwdOf, id), reason)
+    }
     if (live && cwd !== undefined) {
-      try {
+      const cwds = new Set([cwd])
+      for (const entry of entries) {
+        if (entry.kind !== 'transcript') continue
         try {
-          fs.readFile(sessionPointerPath(cwd, root))
-        } catch (error) {
-          if (!isNotFound(error)) throw new Error(`pointer read failed: ${messageOf(error)}`)
+          const recorded = (
+            JSON.parse(fs.readFile(entry.path).split('\n', 1)[0] ?? '') as {
+              cwd?: unknown
+            } | null
+          )?.cwd
+          if (typeof recorded === 'string' && encodeProjectDir(recorded) === project) {
+            cwds.add(recorded)
+          }
+        } catch {
+          // A transcript that names no cwd adds no member to the class.
+        }
+      }
+      try {
+        for (const member of cwds) {
+          try {
+            const id = fs.readFile(sessionPointerPath(member, root)).trim()
+            if (id.length > 0) protect(id, member, 'resumable session pointer')
+          } catch (error) {
+            if (!isNotFound(error)) throw new Error(`pointer read failed: ${messageOf(error)}`)
+          }
+          let listed: readonly ProjectsGCRegistryEntry[]
+          try {
+            listed = await listRegistry(member)
+          } catch (error) {
+            throw new Error(`registry read failed: ${messageOf(error)}`)
+          }
+          for (const entry of listed) {
+            registry.push({ cwd: member, entry })
+            if (entry.archived !== true) protect(entry.id, member, 'active registry entry')
+          }
+          try {
+            for (const [id, reason] of options.protectedIds?.(member) ?? []) {
+              protect(id, member, reason)
+            }
+            for (const [path, reason] of protectedTranscriptPaths(member, root)) {
+              if (!protectedBy.has(path)) protectedBy.set(path, reason)
+            }
+          } catch (error) {
+            throw new Error(`protection unavailable: ${messageOf(error)}`)
+          }
         }
       } catch (error) {
         fail(messageOf(error))
         continue
       }
-      try {
-        registry = await listRegistry(cwd)
-      } catch (error) {
-        fail(`registry read failed: ${messageOf(error)}`)
-        continue
-      }
-      try {
-        const extra = options.protectedIds?.(cwd)
-        for (const [id, reason] of extra ?? []) protectedBy.set(transcriptOf(id, cwd, root), reason)
-        for (const entry of registry) {
-          if (entry.archived !== true) {
-            protectedBy.set(transcriptOf(entry.id, cwd, root), 'active registry entry')
-          }
-        }
-        for (const [path, reason] of protectedTranscriptPaths(cwd, root)) {
-          protectedBy.set(path, reason)
-        }
-      } catch (error) {
-        fail(`protection unavailable: ${messageOf(error)}`)
-        continue
-      }
-      liveCwds.add(cwd)
+      for (const member of cwds) liveCwds.add(member)
     }
 
-    const ownedNames = new Set(entries.filter((e) => e.kind === 'transcript').map((e) => e.name))
     const idByName = new Map<string, string>()
-    for (const entry of registry) {
-      for (const path of live && cwd !== undefined
-        ? [transcriptPath(root, cwd, entry.id), legacyTranscriptPath(root, cwd, entry.id)]
-        : []) {
-        idByName.set(basename(path), entry.id)
-      }
+    for (const { cwd: member, entry } of registry) {
+      idByName.set(basename(transcriptPath(root, member, entry.id)), entry.id)
+      idByName.set(basename(legacyTranscriptPath(root, member, entry.id)), entry.id)
     }
 
+    const ownedNames = new Set([
+      ...entries.filter((e) => e.kind === 'transcript').map((e) => e.name),
+      ...unreadableTranscripts,
+    ])
     const add = (c: Omit<ProjectsGCCandidate, 'project'>): void => {
       candidates.push({ project, ...c })
       touched.add(project)
@@ -378,10 +406,12 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
 
     // 5. Registry entries (live projects only) older than the window whose transcript is gone. An
     //    entry with no usable age cannot be shown old, so it stays.
-    for (const entry of registry) {
+    for (const { cwd: member, entry } of registry) {
       if (!usable(entry.lastModified) || entry.lastModified >= cutoff) continue
-      if (cwd === undefined) continue
-      const names = [transcriptPath(root, cwd, entry.id), legacyTranscriptPath(root, cwd, entry.id)]
+      const names = [
+        transcriptPath(root, member, entry.id),
+        legacyTranscriptPath(root, member, entry.id),
+      ]
       if (names.some((p) => ownedNames.has(basename(p)))) continue
       add({
         kind: 'registry',
