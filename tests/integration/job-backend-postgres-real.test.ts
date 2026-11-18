@@ -491,5 +491,55 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         await wide.end()
       }
     })
+
+    // reschedule `ahead` reads the selected jobs with FOR UPDATE SKIP LOCKED in the caller's
+    // transaction: a dequeue running before the commit cannot lease a selected job, so the
+    // rescheduled job really is ahead of every pending job it was placed ahead of.
+    it('reschedule ahead: a concurrent dequeue cannot lease a selected job before commit', async () => {
+      const target = await backend.enqueue({
+        name: 'hold-test',
+        input: { taskId: 1 },
+        delaySeconds: 100,
+      })
+      const other = await backend.enqueue({ name: 'hold-test', input: { taskId: 2 } })
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        expect(
+          await backend.reschedule(client, target.jobId, {
+            ahead: { name: 'hold-test', where: { taskId: [2] } },
+          }),
+        ).toBe(true)
+        expect(await backend.dequeue({ batchSize: 10 })).toEqual([])
+        await client.query('COMMIT')
+      } finally {
+        client.release()
+      }
+      // Postgres promises no order for a batch dequeue, so lease one job at a time.
+      const first = await backend.dequeue({ batchSize: 1 })
+      expect(first.map((l) => l.jobId)).toEqual([target.jobId])
+      const second = await backend.dequeue({ batchSize: 1 })
+      expect(second.map((l) => l.jobId)).toEqual([other.jobId])
+    })
+
+    it('defer to infinity holds a job and restore gives back the time it had', async () => {
+      const a = await backend.enqueue({ name: 'hold-test', input: { taskId: 1 }, delaySeconds: 30 })
+      const at = async (): Promise<number> => {
+        const r = await pool.query<{ t: Date | string }>(
+          'SELECT available_at AS t FROM theokit_jobs_ci WHERE id = $1',
+          [a.jobId],
+        )
+        return new Date(r.rows[0].t).getTime()
+      }
+      // An immediately available job: if defer failed to hold `a`, dequeue would lease it too.
+      const ready = await backend.enqueue({ name: 'hold-test', input: { taskId: 2 } })
+      const before = await at()
+      expect(
+        await backend.defer(pool, { name: 'hold-test', where: { taskId: [1] }, until: 'infinity' }),
+      ).toEqual([a.jobId])
+      expect((await backend.dequeue({ batchSize: 10 })).map((l) => l.jobId)).toEqual([ready.jobId])
+      await backend.restore(pool, { name: 'hold-test', where: { taskId: [1] } })
+      expect(await at()).toBe(before)
+    })
   },
 )

@@ -201,6 +201,12 @@ The job commits or rolls back with the row, and workers cannot see it before the
 backend with `enqueueInTransaction` (`PostgresJobBackend` has it); any other backend rejects with
 `TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction.
 
+`PostgresJobBackend` also moves pending jobs in the caller's transaction, skipping jobs a worker has
+leased: `defer(client, { name, where, until })` moves the jobs whose input matches `where` (top-level
+keys, compared as text) to `until` (a `Date` or `'infinity'`) and remembers the time each had;
+`restore(client, { name, where })` gives that time back; `reschedule(client, jobId, { availableAt })`
+sets one job's time, to bring it ahead of others.
+
 `theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
 and a backend is set: it polls the backend, runs each job and backs off while the backend is
 unreachable. On `SIGTERM`, `start` stops polling and waits for the job in progress before closing

@@ -66,6 +66,28 @@ export interface JobNackOptions extends JobLeaseFence {
 }
 
 /** Fences `ack`/`nack` to the lease that is finishing the job. */
+/** Selects pending jobs by name and top-level input keys; every key must match one of its values. */
+export interface JobSelector {
+  name: string
+  where?: Record<string, readonly (string | number | boolean)[]>
+}
+
+export interface JobDeferInput extends JobSelector {
+  /** The time the selected jobs become available again; `'infinity'` holds them until `restore`. */
+  until: Date | 'infinity'
+}
+
+/** Exactly one of `availableAt` and `ahead`. */
+export interface JobRescheduleInput {
+  availableAt?: Date
+  /**
+   * Places the job one second before the earliest time the other pending jobs matching this
+   * selector had (a deferred job counts at the time `restore` gives back).
+   * Never moves the job later. With no other match the time is left unchanged.
+   */
+  ahead?: JobSelector
+}
+
 export interface JobLeaseFence {
   /** The `leaseToken` of the `JobLease` being finished. Omitted, the call is not fenced. */
   leaseToken?: string
@@ -116,6 +138,18 @@ export interface JobBackend {
    * calls it under `theokit start` and `theokit dev`, so an unreachable job store answers 503
    * (usetheokit/theokit#1071). A backend with nothing remote to reach leaves it out.
    */
+  /**
+   * Moves the pending jobs matching `input` to `until`, remembering the time each had, inside the
+   * caller's transaction. Jobs a worker has leased, and failed jobs, are skipped. Returns the ids moved.
+   */
+  defer?(client: PoolLike, input: JobDeferInput): Promise<string[]>
+
+  /** Gives each deferred job matching `input` the time it had before `defer`. Returns the ids moved. */
+  restore?(client: PoolLike, input: JobSelector): Promise<string[]>
+
+  /** Sets `available_at` of one pending job that no worker has leased. Returns whether it changed. */
+  reschedule?(client: PoolLike, jobId: string, input: JobRescheduleInput): Promise<boolean>
+
   ping?(): Promise<void>
 
   /**
