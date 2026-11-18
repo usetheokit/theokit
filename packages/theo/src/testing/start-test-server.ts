@@ -20,6 +20,10 @@ export interface StartTestServerOptions {
   platform?: NodeJS.Platform
   /** @internal Test hook: terminates a Windows process tree; resolves the exit code. Default taskkill. */
   killTree?: (pid: number) => Promise<number | null>
+  /** @internal Test hook: pids of the descendants of a live pid, for the Windows tree tracking. Default: a process-table snapshot. */
+  listDescendants?: (pid: number) => Promise<number[]>
+  /** @internal Test hook: the port the child is told to bind, given the one the helper checks. Default: the same. */
+  childPort?: (picked: number) => number
 }
 
 export interface TestServer {
@@ -149,6 +153,62 @@ function freePort(): Promise<number> {
   })
 }
 
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Descendants of `root` from a process-table snapshot (PowerShell; Windows only). Once the leader
+ * exits its children are no longer reachable from it, so they are recorded while it is alive.
+ * Best effort: a snapshot that cannot run yields nothing new.
+ */
+function snapshotDescendants(root: number): Promise<number[]> {
+  return new Promise((resolve) => {
+    const exe = join(
+      process.env.SystemRoot ?? 'C:\\Windows',
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe',
+    )
+    const cmd =
+      'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId)" }'
+    const ps = spawn(exe, ['-NoProfile', '-NonInteractive', '-Command', cmd], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    let out = ''
+    ps.stdout.on('data', (d: Buffer) => (out += d.toString()))
+    ps.once('error', () => {
+      resolve([])
+    })
+    ps.once('close', () => {
+      const children = new Map<number, number[]>()
+      for (const line of out.split(/\r?\n/)) {
+        const m = /^(\d+)\s+(\d+)$/.exec(line.trim())
+        if (m === null) continue
+        const pid = Number(m[1])
+        const ppid = Number(m[2])
+        children.set(ppid, [...(children.get(ppid) ?? []), pid])
+      }
+      const found: number[] = []
+      for (const queue = [root]; queue.length > 0; ) {
+        for (const c of children.get(queue.pop() ?? 0) ?? []) {
+          if (c !== root && !found.includes(c)) {
+            found.push(c)
+            queue.push(c)
+          }
+        }
+      }
+      resolve(found)
+    })
+  })
+}
+
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -198,28 +258,33 @@ export async function startTestServer(options: StartTestServerOptions): Promise<
   }
 }
 
-/** Ends the child's whole tree and confirms the leader is gone; throws when that cannot be confirmed. */
+/**
+ * Ends the leader and every descendant recorded while it lived (taskkill cannot walk the tree of a
+ * leader that already exited), then confirms none of them is still running.
+ */
 async function killWindowsTree(
-  child: ChildProcess,
+  rootPid: number | undefined,
+  tracked: ReadonlySet<number>,
   mode: string,
-  hasExited: () => boolean,
   kill: (pid: number) => Promise<number | null>,
 ): Promise<void> {
-  // kill() reaches only the direct child: end the whole tree and confirm before returning.
-  // Descendants can outlive the direct child: terminate the tree even when the child already exited.
-  if (child.pid === undefined) return
-  const code = await kill(child.pid)
-  // 128: no such process, i.e. already gone.
-  if (code !== 0 && code !== 128) {
-    throw new Error(
-      `could not terminate theokit ${mode} process tree (pid ${String(child.pid)}, taskkill exit ${String(code)})`,
-    )
+  if (rootPid === undefined) return
+  const pids = [rootPid, ...[...tracked].filter((p) => p !== rootPid)]
+  for (const pid of pids) {
+    const code = await kill(pid)
+    // 128: no such process, i.e. already gone.
+    if (code !== 0 && code !== 128) {
+      throw new Error(
+        `could not terminate theokit ${mode} process tree (pid ${String(pid)}, taskkill exit ${String(code)})`,
+      )
+    }
   }
   const until = Date.now() + GRACE_MS
-  while (!hasExited() && Date.now() < until) await sleep(25)
-  if (!hasExited()) {
+  while (pids.some(pidAlive) && Date.now() < until) await sleep(25)
+  const left = pids.filter(pidAlive)
+  if (left.length > 0) {
     throw new Error(
-      `theokit ${mode} (pid ${String(child.pid)}) still running after its process tree was terminated`,
+      `theokit ${mode} process(es) ${left.join(', ')} still running after the process tree was terminated`,
     )
   }
 }
@@ -238,12 +303,16 @@ async function bootOnce(
   const platform = options.platform ?? process.platform
   let output = ''
   let spawnError: Error | undefined
-  const child = spawn(process.execPath, [bin, mode, '--port', String(port)], {
-    cwd,
-    env: { ...process.env, ...options.env, THEOKIT_TEST_READY_TOKEN: token },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: process.platform !== 'win32',
-  })
+  const child = spawn(
+    process.execPath,
+    [bin, mode, '--port', String((options.childPort ?? ((p) => p))(port))],
+    {
+      cwd,
+      env: { ...process.env, ...options.env, THEOKIT_TEST_READY_TOKEN: token },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
+    },
+  )
   child.stdout.on('data', (d: Buffer) => (output += d.toString()))
   child.stderr.on('data', (d: Buffer) => (output += d.toString()))
   let exited = false
@@ -260,11 +329,19 @@ async function bootOnce(
       resolve({ code, signal })
     })
   })
+  const tracked = new Set<number>()
+  const track = async (): Promise<void> => {
+    if (platform !== 'win32' || child.pid === undefined || hasExited()) return
+    for (const pid of await (options.listDescendants ?? snapshotDescendants)(child.pid)) {
+      tracked.add(pid)
+    }
+  }
   let closing: ReturnType<TestServer['close']> | undefined
   const close: TestServer['close'] = () => {
     closing ??= (async () => {
       if (platform === 'win32') {
-        await killWindowsTree(child, mode, hasExited, options.killTree ?? taskkillTree)
+        await track()
+        await killWindowsTree(child.pid, tracked, mode, options.killTree ?? taskkillTree)
         return ended
       }
       if (!exited || groupAlive(child)) {
@@ -314,14 +391,22 @@ async function bootOnce(
         PortSubstitutedError,
       )
     }
+    await track()
     let ready = false
     try {
       const res = await fetch(`${origin}/__theo/ready`, { signal: AbortSignal.timeout(1000) })
       // Only this attempt's child knows the token: a 200 without it is another server's.
       ready = res.status === 200 && res.headers.get(READY_TOKEN_HEADER) === token
+      // Our child always sends the token: a 200 without it is a foreign server, retry elsewhere.
       if (res.status === 200 && !ready) foreignAnswer = true
     } catch {
       // not listening yet: only fetch errors are swallowed here
+    }
+    if (foreignAnswer) {
+      return await fail(
+        `port ${String(port)} was answered by another server, not theokit ${mode}`,
+        PortSubstitutedError,
+      )
     }
     if (ready) {
       if (hasExited()) return await exitedFailure()
@@ -339,12 +424,6 @@ async function bootOnce(
       return { origin, pid: child.pid, output: () => output, close }
     }
     await sleep(250)
-  }
-  if (foreignAnswer) {
-    return await fail(
-      `port ${String(port)} was answered by another server, not theokit ${mode}`,
-      PortSubstitutedError,
-    )
   }
   return await fail(`theokit ${mode} was not ready within ${String(timeoutMs)}ms`)
 }
