@@ -102,11 +102,14 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
     }
     signal.addEventListener('abort', onAbort, { once: true })
   })
-  const race = <T>(work: Promise<T>): Promise<T | typeof ABORTED> => {
+  const race = async <T>(work: Promise<T>): Promise<T | typeof ABORTED> => {
     if (signal === undefined) return work
     // the losing branch must never surface as an unhandled rejection
     work.catch(() => undefined)
-    return Promise.race([work, abortion])
+    if (signal.aborted) return ABORTED
+    const result = await Promise.race([work, abortion])
+    // an abort that landed while `work` was already settled must still win
+    return signal.aborted ? ABORTED : result
   }
 
   let failure: string | undefined
@@ -116,7 +119,8 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
     if (ended || isAborted(signal)) return
     if (event.type === 'error') failure ??= `${event.code}: ${event.message}`
     const mapped = options.mapEvent === undefined ? event : options.mapEvent(event)
-    if (mapped !== undefined) options.emit(mapped)
+    // mapEvent may itself abort the signal
+    if (mapped !== undefined && !ended && !isAborted(signal)) options.emit(mapped)
   }
 
   let run: Awaited<ReturnType<SdkAgentHandle['send']>> | undefined

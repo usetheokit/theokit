@@ -127,6 +127,48 @@ describe('runAgentTurn', () => {
     expect(events).toEqual([{ type: 'text_delta', content: 'early' }])
   })
 
+  it('an abort during send is honoured even when send resolves immediately', async () => {
+    const controller = new AbortController()
+    const cancel = vi.fn()
+    const agent = {
+      agentId: 'a',
+      send: (): Promise<unknown> => {
+        controller.abort()
+        return Promise.resolve({
+          wait: async () => ({ status: 'finished' }),
+          cancel,
+          async *stream() {},
+        })
+      },
+    } as unknown as SdkAgentHandle
+    const outcome = await runAgentTurn({
+      agent,
+      message: 'hi',
+      runId: 'r',
+      emit: () => undefined,
+      signal: controller.signal,
+    })
+    expect(outcome).toMatchObject({ ok: false, code: 'turn_cancelled' })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('mapEvent that aborts the signal prevents the emit', async () => {
+    const controller = new AbortController()
+    const { outcome, events } = await run(
+      { deltas: ['Hi'] },
+      {
+        signal: controller.signal,
+        mapEvent: (e: AgentStreamEvent) => {
+          controller.abort()
+          return e
+        },
+      },
+    )
+    expect(events).toEqual([])
+    expect(outcome).toMatchObject({ ok: false, code: 'turn_cancelled' })
+  })
+
   it('an already aborted signal cancels without sending', async () => {
     const controller = new AbortController()
     controller.abort()
