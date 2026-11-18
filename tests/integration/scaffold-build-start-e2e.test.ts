@@ -12,16 +12,8 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  symlinkSync,
-} from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { scaffold } from '../../packages/create-theokit/src/index.js'
@@ -46,15 +38,6 @@ beforeAll(() => {
   const nodeModulesDir = join(projectDir, 'node_modules')
   mkdirSync(nodeModulesDir, { recursive: true })
   symlinkSync(resolve(REPO, 'packages/theo'), join(nodeModulesDir, 'theokit'), 'dir')
-
-  // The CLI needs the build toolchain (optional peers of theokit) in the app; link the ones
-  // theokit itself installs for development.
-  const theoNodeModules = resolve(REPO, 'packages/theo/node_modules')
-  for (const name of ['vite', '@vitejs/plugin-react', 'tsx', 'typescript']) {
-    const target = join(nodeModulesDir, name)
-    mkdirSync(dirname(target), { recursive: true })
-    symlinkSync(realpathSync(join(theoNodeModules, name)), target, 'dir')
-  }
 }, 30_000)
 
 afterAll(() => {

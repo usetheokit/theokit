@@ -56,7 +56,7 @@ describe('version helpers', () => {
 })
 
 describe('theokit requires a vite past the launch-editor advisory', () => {
-  it('the vite floor theokit declares as a peer is the first release past the launch-editor advisory', () => {
+  it('the vite floor theokit declares is the first release past the launch-editor advisory', () => {
     const manifest = JSON.parse(readFileSync(THEO_MANIFEST, 'utf-8')) as {
       peerDependencies?: Record<string, string>
     }

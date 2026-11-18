@@ -105,6 +105,7 @@ cli
   )
   .action(async (name: string, message: string | undefined) => {
     try {
+      await loadToolchain()
       const { agentCommand } = await import('./commands/agent.js')
       const { sawError } = await agentCommand(name, message)
       // The run ended with an error chunk (already rendered) — exit non-zero so `$?` / CI reflects it.
