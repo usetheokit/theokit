@@ -30,7 +30,7 @@ describe('createResultCapture', () => {
     } catch (e) {
       expect(e).toBeInstanceOf(NoResultSubmittedError)
       expect((e as Error).message).toContain('"report"')
-      expect((e as Error).message).toContain('1 invalid')
+      expect((e as Error).message).toContain('1 rejected')
       expect((e as NoResultSubmittedError).code).toBe('no_result_submitted')
     }
   })
