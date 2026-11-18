@@ -26,7 +26,7 @@ export interface CompiledWiring {
 export const WIRED_HOOKS: unique symbol = Symbol.for('theokit.agents.wiredHooks')
 
 /** `skill_read` tools this build created, so `readable` is reported only for a reader whose set is known. */
-// eslint-disable-next-line sonarjs/no-empty-collection -- populated by sdk-adapter.ts
+
 export const BUILD_WIRED_SKILL_READERS = new WeakSet()
 
 type Loose = Record<string, unknown> | undefined
