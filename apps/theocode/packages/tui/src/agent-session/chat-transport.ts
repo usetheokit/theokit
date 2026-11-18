@@ -35,6 +35,8 @@ export interface ChatTransportDeps {
    * site instead.
    */
   onHookVeto?: (veto: { tool: string; reason: string }) => void
+  /** Told when a turn begins, so a fork that is still copying can tell the session moved on. */
+  onTurnStart?: () => void
 }
 
 export function createChatTransport(deps: ChatTransportDeps): InProcessTransport {
@@ -43,6 +45,7 @@ export function createChatTransport(deps: ChatTransportDeps): InProcessTransport
       (async function* () {
         // B-088 — a failure belongs to the turn that hit it. Clearing here, at the start of the
         // run, is what stops `/mcp` reporting a server that has since recovered.
+        deps.onTurnStart?.()
         startMcpFailureTurn()
         // A count carried over from the previous turn would be a number that is wrong, not missing.
         startRetryTurn()
