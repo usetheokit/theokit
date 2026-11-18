@@ -2,6 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 
 import type { CommandCapabilities } from './command-capabilities.js'
 import { interpretCommand } from './interpret-command.js'
+import { noteSessionActivity } from '../persistence/index.js'
 import { routeCommand } from './registry.js'
 import { runGoalLoop, type GoalRunState } from './goal.js'
 
@@ -32,6 +33,8 @@ export function useComposerCommands(deps: ComposerDeps): ComposerCommands {
   }
 
   const handleSubmit = (text: string): void => {
+    // Before anything async: invalidates an interrupt fork that is still copying.
+    noteSessionActivity()
     if (deps.reviewResult !== null) deps.setReviewResult(null)
     if (deps.goalFeed !== null && !deps.goalActive) deps.setGoalFeed(null)
 

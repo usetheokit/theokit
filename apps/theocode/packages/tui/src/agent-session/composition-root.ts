@@ -94,15 +94,10 @@ function build(): TuiRoot {
 
   const vetoRelay = createVetoRelay()
 
-  let turnEpoch = 0
   const transport = createChatTransport({
     onHookVeto: vetoRelay.emit,
     getEffort: () => session.effort(),
     getSessionId: () => session.session(),
-    // A turn starting invalidates any fork still copying the transcript.
-    onTurnStart: () => {
-      turnEpoch += 1
-    },
     getSessionPty: () => ptyOwner,
     takePendingImages: () => session.takeImages(),
     takePendingModel: () => session.takeModel(),
@@ -135,7 +130,6 @@ function build(): TuiRoot {
         newId: () => `tui-${randomUUID()}`,
         fork: (from, to) => forkSession(from, to),
         current: () => session.session(),
-        epoch: () => turnEpoch,
         commit: (id) => {
           session.setSession(id)
           void persistSessionId(sessionPointer, id)

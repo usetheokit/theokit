@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { forkCurrentSessionWith } from '../../src/persistence/fork-session.js'
+import { forkCurrentSessionWith, noteSessionActivity } from '../../src/persistence/fork-session.js'
 
 describe('forkCurrentSessionWith', () => {
   it('commits the copy once an async fork resolves', async () => {
@@ -43,16 +43,14 @@ describe('forkCurrentSessionWith', () => {
   })
 
   it('does not adopt the copy when a new turn started on the same session meanwhile', async () => {
-    let epoch = 0
     const commit = vi.fn()
     const out = await forkCurrentSessionWith({
       newId: () => 'b',
       fork: () => {
-        epoch += 1
+        noteSessionActivity()
         return Promise.resolve({ newId: 'b', copied: true })
       },
       current: () => 'a',
-      epoch: () => epoch,
       commit,
     })
     expect(out).toEqual({ newId: 'a', copied: false, stale: true })
