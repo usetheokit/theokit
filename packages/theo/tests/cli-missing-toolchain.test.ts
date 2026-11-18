@@ -31,8 +31,7 @@ beforeAll(() => {
   cpSync(join(ROOT, 'package.json'), join(theo, 'package.json'))
   // Everything theokit installs for itself except the optional toolchain peers.
   for (const name of readdirSync(join(ROOT, 'node_modules'))) {
-    if (name === '.bin' || name === '@vitejs' || ['vite', 'typescript'].includes(name))
-      continue
+    if (name === '.bin' || name === '@vitejs' || ['vite', 'typescript'].includes(name)) continue
     symlinkSync(
       realpathSync(join(ROOT, 'node_modules', name)),
       join(theo, 'node_modules', name),
