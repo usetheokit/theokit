@@ -113,7 +113,7 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
   const ledger = createDeltaLedger()
   let ended = false
   const emitEvent = (event: AgentStreamEvent): void => {
-    if (ended) return
+    if (ended || isAborted(signal)) return
     if (event.type === 'error') failure ??= `${event.code}: ${event.message}`
     const mapped = options.mapEvent === undefined ? event : options.mapEvent(event)
     if (mapped !== undefined) options.emit(mapped)
@@ -126,7 +126,7 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
       ...options.sendOptions,
       signal,
       onDelta: (delta: { update: Parameters<typeof translateInteractionUpdate>[0] }) => {
-        if (ended) return
+        if (ended || isAborted(signal)) return
         const events = translateInteractionUpdate(delta.update) as unknown as AgentStreamEvent[]
         for (const event of events) {
           // tool lifecycle arrives once, through `run.stream()`; deltas carry only text and thinking
@@ -173,6 +173,7 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
     const done = await race(run.wait())
     if (done === ABORTED) {
       cancelRun(run)
+      closeIterator(iterator)
       return cancelled()
     }
     if (failure !== undefined) return { ok: false, code: 'turn_failed', reason: failure }

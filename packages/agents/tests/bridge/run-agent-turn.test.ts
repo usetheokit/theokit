@@ -83,6 +83,50 @@ describe('runAgentTurn', () => {
     expect(cancel).toHaveBeenCalledTimes(1)
   })
 
+  it('closes the iterator and emits no delta after the signal aborts or the turn returns', async () => {
+    const controller = new AbortController()
+    const events: AgentStreamEvent[] = []
+    const returned = vi.fn()
+    let onDelta: ((d: { update: unknown }) => void) | undefined
+    const agent = {
+      agentId: 'a',
+      send: async (_m: string, opts?: Record<string, unknown>) => {
+        onDelta = opts?.onDelta as typeof onDelta
+        return {
+          wait: async () => ({ status: 'finished' }),
+          cancel: () => new Promise<void>(() => undefined),
+          stream: () => ({
+            [Symbol.asyncIterator]: () => ({
+              next: () => new Promise<never>(() => undefined),
+              return: async () => {
+                returned()
+                return { done: true, value: undefined }
+              },
+            }),
+          }),
+        }
+      },
+    } as unknown as SdkAgentHandle
+    const pending = runAgentTurn({
+      agent,
+      message: 'hi',
+      runId: 'r',
+      emit: (e) => events.push(e),
+      signal: controller.signal,
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    onDelta?.({ update: { type: 'text-delta', text: 'early' } })
+    controller.abort()
+    // synchronous emission after abort, before the outcome settles
+    onDelta?.({ update: { type: 'text-delta', text: 'sync-late' } })
+    const outcome = await pending
+    onDelta?.({ update: { type: 'text-delta', text: 'late' } })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(outcome).toMatchObject({ ok: false, code: 'turn_cancelled' })
+    expect(returned).toHaveBeenCalledTimes(1)
+    expect(events).toEqual([{ type: 'text_delta', content: 'early' }])
+  })
+
   it('an already aborted signal cancels without sending', async () => {
     const controller = new AbortController()
     controller.abort()
