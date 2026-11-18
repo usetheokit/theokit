@@ -29,12 +29,12 @@ import type { CompiledAgentOptions } from './agent-compiler.js'
 import type { CodePlugin } from './code-plugins.js'
 import type { HookHandlers } from './hook-handlers.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
-import { toCompiledTool } from './tool-conversion.js'
 import {
   resolveCompatSources,
   resolveSettingSources,
   type SettingSourcesSelection,
 } from './setting-sources-gate.js'
+import { toCompiledTool } from './tool-conversion.js'
 
 /**
  * One subagent, as `AgentOptions.agents` in the SDK takes it.

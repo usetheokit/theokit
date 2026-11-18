@@ -254,9 +254,7 @@ describe('ToolsCapability with an SDK CustomTool', () => {
       },
     } as never
     const viaCapability = applyCapabilities([new ToolsCapability([custom])]).tools[0]
-    const viaDefine = compileAgentDefinition(
-      defineAgent({ model: 'a/b', tools: [custom] }),
-    ).tools[0]
+    const viaDefine = compileAgentDefinition(defineAgent({ model: 'a/b', tools: [custom] })).tools[0]
     await viaCapability?.handler({}, { context })
     expect(seen).toBe(context)
     seen = undefined
