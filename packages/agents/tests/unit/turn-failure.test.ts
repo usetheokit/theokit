@@ -65,4 +65,19 @@ describe('turn failure', () => {
     const auth = describeTurnFailure(classifyTurnFailure(provider('auth_failed')), { hints })
     expect(auth).toContain(DEFAULT_TURN_FAILURE_HINTS.auth_failed)
   })
+
+  it('an untyped message still gets a next step, and the tool-image case is named', () => {
+    const d = (m: string, hints = {}) =>
+      describeTurnFailure(classifyTurnFailure(new Error(m)), { hints })
+    expect(d('provider "x" does not support image content in tool results')).toContain(
+      'tool returned an image',
+    )
+    expect(d('Unauthorized')).toContain(DEFAULT_TURN_FAILURE_HINTS.auth_failed)
+    expect(d('quota exhausted')).toContain(DEFAULT_TURN_FAILURE_HINTS.quota_exceeded)
+    expect(d('connect ECONNREFUSED')).toContain(DEFAULT_TURN_FAILURE_HINTS.provider_unreachable)
+    expect(d('context length exceeded')).toContain(DEFAULT_TURN_FAILURE_HINTS.context_too_long)
+    expect(d('quota exhausted', { quota_exceeded: 'top up' })).toContain(': top up')
+    expect(d('prompt has 500 tokens')).toBe('prompt has 500 tokens')
+    expect(classifyTurnFailure(new Error('rate limit')).transient).toBe(false)
+  })
 })

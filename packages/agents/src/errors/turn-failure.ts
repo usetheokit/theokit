@@ -37,6 +37,30 @@ export const DEFAULT_TURN_FAILURE_HINTS: Readonly<TurnFailureHints> = Object.fre
     'the provider rejected the request as malformed; check the request and its tool results',
 })
 
+const TOOL_IMAGE_HINT =
+  'a tool returned an image and this provider carries tool results as text only; make the tool return text, or choose a provider that accepts image tool results'
+
+/** Message probes, used for a next step only when no code gave one. Never used for `transient`. */
+const MESSAGE_PROBES: readonly (readonly [string[], KnownAgentRunErrorCode | 'tool_image'])[] = [
+  [['image content in tool results'], 'tool_image'],
+  [['ratelimit', 'rate_limit', 'rate limit'], 'rate_limit'],
+  [['unauthor', 'invalid_api_key', 'authenticationerror'], 'auth_failed'],
+  [['econnrefused', 'enotfound', 'etimedout'], 'provider_unreachable'],
+  [['quota'], 'quota_exceeded'],
+]
+
+function messageHint(message: string, hints: TurnFailureHints): string | undefined {
+  const m = message.toLowerCase()
+  if (m.includes('context') && m.includes('length')) {
+    return hints.context_too_long ?? DEFAULT_TURN_FAILURE_HINTS.context_too_long
+  }
+  for (const [needles, key] of MESSAGE_PROBES) {
+    if (!needles.some((n) => m.includes(n))) continue
+    return key === 'tool_image' ? TOOL_IMAGE_HINT : (hints[key] ?? DEFAULT_TURN_FAILURE_HINTS[key])
+  }
+  return undefined
+}
+
 function field(value: unknown, key: string): unknown {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)[key]
@@ -81,8 +105,12 @@ export function describeTurnFailure(
   failure: TurnFailure,
   opts: { attempts?: number; hints?: TurnFailureHints } = {},
 ): string {
-  const hint = opts.hints?.[failure.code] ?? DEFAULT_TURN_FAILURE_HINTS[failure.code]
+  const hints = opts.hints ?? {}
   let text = failure.message || BLANK_MESSAGE
+  const hint =
+    hints[failure.code] ??
+    DEFAULT_TURN_FAILURE_HINTS[failure.code] ??
+    (failure.code === 'unknown' ? messageHint(text, hints) : undefined)
   if (failure.code !== 'unknown') text += ` [${failure.code}]`
   if (hint) text += `: ${hint}`
   if (opts.attempts !== undefined && opts.attempts > 1) text += ` (after ${opts.attempts} attempts)`
