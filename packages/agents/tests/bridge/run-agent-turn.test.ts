@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { withGuardrails } from '../../src/bridge/handle-wrappers.js'
 import {
   completeFromTurn,
   createOpenAICompatibleRoutes,
@@ -153,6 +154,114 @@ describe('runAgentTurn', () => {
     expect(sent[0]?.signal).toBe(controller.signal)
     expect(typeof sent[0]?.onDelta).toBe('function')
     expect(events).toContainEqual({ type: 'text_delta', content: 'ABC' })
+  })
+})
+
+describe('runAgentTurn cancellation, tools and guards', () => {
+  it('closes the iterator, settles within one macrotask and drops late deltas', async () => {
+    let onDelta: ((d: { update: unknown }) => void) | undefined
+    const returned = vi.fn(async () => ({ done: true as const, value: undefined }))
+    const agent = {
+      agentId: 'a',
+      send: async (_m: string, opts?: Record<string, unknown>) => {
+        onDelta = opts?.onDelta as typeof onDelta
+        return {
+          wait: async () => ({ status: 'finished' }),
+          cancel: () => new Promise<void>(() => undefined),
+          stream: () => ({
+            [Symbol.asyncIterator]: () => ({
+              next: () => new Promise<never>(() => undefined),
+              return: returned,
+            }),
+          }),
+        }
+      },
+    } as unknown as SdkAgentHandle
+    const controller = new AbortController()
+    const events: AgentStreamEvent[] = []
+    const pending = runAgentTurn({
+      agent,
+      message: 'x',
+      runId: 'r',
+      emit: (e) => events.push(e),
+      signal: controller.signal,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    controller.abort()
+    let settled = false
+    void pending.then(() => {
+      settled = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(settled).toBe(true)
+    expect(await pending).toMatchObject({ code: 'turn_cancelled' })
+    expect(returned).toHaveBeenCalled()
+    onDelta?.({ update: { type: 'text-delta', text: 'late' } })
+    expect(events).toEqual([])
+  })
+
+  it('does not emit tool lifecycle from onDelta, which run.stream() already carries', async () => {
+    const agent = {
+      agentId: 'a',
+      send: async (_m: string, opts?: Record<string, unknown>) => {
+        const onDelta = opts?.onDelta as (d: { update: unknown }) => void
+        onDelta({
+          update: {
+            type: 'tool-call-started',
+            callId: 'c1',
+            toolCall: { name: 'ls', args: {} },
+          },
+        })
+        return {
+          wait: async () => ({ status: 'finished' }),
+          async *stream() {
+            yield {
+              type: 'tool_call',
+              call_id: 'c1',
+              name: 'ls',
+              status: 'running',
+            }
+          },
+        }
+      },
+    } as unknown as SdkAgentHandle
+    const events: AgentStreamEvent[] = []
+    await runAgentTurn({ agent, message: 'x', runId: 'r', emit: (e) => events.push(e) })
+    expect(events.filter((e) => e.type === 'tool_call')).toHaveLength(1)
+  })
+
+  it('a guarded turn streams no raw deltas: only the guarded text is emitted', async () => {
+    let received: Record<string, unknown> | undefined
+    const inner = {
+      agentId: 'a',
+      dispose: () => Promise.resolve(),
+      send: async (_m: string, opts?: Record<string, unknown>) => {
+        received = opts
+        const onDelta = opts?.onDelta as ((d: { update: unknown }) => void) | undefined
+        onDelta?.({ update: { type: 'text-delta', text: 'BANANA' } })
+        return { wait: async () => ({ status: 'finished', result: 'BANANA' }) }
+      },
+    } as unknown as SdkAgentHandle
+    const guarded = withGuardrails(inner, [
+      {
+        name: 'redact',
+        checkOutput: (text: string) => ({
+          action: 'redact' as const,
+          text: text.replaceAll('BANANA', '[REDACTED]'),
+        }),
+      },
+    ])
+    const events: AgentStreamEvent[] = []
+    const outcome = await runAgentTurn({
+      agent: guarded,
+      message: 'x',
+      runId: 'r',
+      emit: (e) => events.push(e),
+    })
+    expect(outcome.ok).toBe(true)
+    expect(received?.onDelta).toBeUndefined()
+    const text = events.flatMap((e) => (e.type === 'text_delta' ? [e.content] : []))
+    expect(text.join('')).toBe('[REDACTED]')
   })
 })
 

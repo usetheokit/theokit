@@ -94,15 +94,13 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
   })
   if (isAborted(signal)) return cancelled()
 
+  let onAbort: (() => void) | undefined
   const abortion = new Promise<typeof ABORTED>((resolve) => {
     if (signal === undefined) return
-    signal.addEventListener(
-      'abort',
-      () => {
-        resolve(ABORTED)
-      },
-      { once: true },
-    )
+    onAbort = () => {
+      resolve(ABORTED)
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
   })
   const race = <T>(work: Promise<T>): Promise<T | typeof ABORTED> => {
     if (signal === undefined) return work
@@ -113,7 +111,9 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
 
   let failure: string | undefined
   const ledger = createDeltaLedger()
+  let ended = false
   const emitEvent = (event: AgentStreamEvent): void => {
+    if (ended) return
     if (event.type === 'error') failure ??= `${event.code}: ${event.message}`
     const mapped = options.mapEvent === undefined ? event : options.mapEvent(event)
     if (mapped !== undefined) options.emit(mapped)
@@ -126,8 +126,11 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
       ...options.sendOptions,
       signal,
       onDelta: (delta: { update: Parameters<typeof translateInteractionUpdate>[0] }) => {
+        if (ended) return
         const events = translateInteractionUpdate(delta.update) as unknown as AgentStreamEvent[]
         for (const event of events) {
+          // tool lifecycle arrives once, through `run.stream()`; deltas carry only text and thinking
+          if (event.type !== 'text_delta' && event.type !== 'thinking') continue
           if (event.type === 'text_delta') ledger.streamed(event.content)
           emitEvent(event)
         }
@@ -199,6 +202,10 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
       return cancelled()
     }
     return { ok: false, code: 'turn_failed', reason: failure ?? reasonOf(err) }
+  } finally {
+    // a late delta from a run whose cancel is slow must not reach a caller that has moved on
+    ended = true
+    if (onAbort !== undefined) signal?.removeEventListener('abort', onAbort)
   }
 }
 

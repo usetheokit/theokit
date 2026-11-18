@@ -61,7 +61,11 @@ export function withGuardrails(
       // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
       // not merely annotate it afterwards.
       const guarded = await runInputGuards(msg, guardrails)
-      return guardTurn(await handle.send(guarded, sendOpts), guardrails)
+      // Raw token deltas would reach the caller before the output guards see the finished text, so a
+      // guarded turn does not stream them: the guarded text arrives through `stream()` instead.
+      const guardedOpts: SdkSendOptions = { ...sendOpts }
+      delete guardedOpts.onDelta
+      return guardTurn(await handle.send(guarded, guardedOpts), guardrails)
     },
   }
 }
