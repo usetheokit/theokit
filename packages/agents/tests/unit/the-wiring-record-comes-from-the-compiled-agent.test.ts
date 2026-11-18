@@ -14,7 +14,7 @@ const h = vi.hoisted(() => ({
   // The SDK's live-agent cache (`Agent.registry`): a faithful stand-in, so a cached agent is reused.
   live: new Map<string, unknown>(),
   resumes: 0,
-  sdk: (): Record<string, (...a: never[]) => Promise<unknown>> => ({}),
+  sdk: (): Record<string, (...a: any[]) => Promise<unknown>> => ({}),
 }))
 
 const fakeAgent = () => ({
