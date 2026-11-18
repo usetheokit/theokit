@@ -45,8 +45,9 @@ keeps them. A new command is always wrapped with the current mode.
 ```ts
 import { createPtyOwner } from '@theokit/agents-pty'
 import { interactiveWrapCommand } from '@theokit/agents/sandbox'
+import type { SandboxMode } from '@theokit/agents/sandbox'
 
-const owner = createPtyOwner({
+const owner = createPtyOwner<SandboxMode>({
   mode: 'workspace-write',
   maxSessions: 16,
   wrapFor: (mode) => interactiveWrapCommand({ mode }),
