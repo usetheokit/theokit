@@ -109,18 +109,19 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
     if (signal.aborted) return ABORTED
     const result = await Promise.race([work, abortion])
     // an abort that landed while `work` was already settled must still win
-    return signal.aborted ? ABORTED : result
+    return isAborted(signal) ? ABORTED : result
   }
 
   let failure: string | undefined
   const ledger = createDeltaLedger()
   let ended = false
+  const stopped = (): boolean => ended || isAborted(signal)
   const emitEvent = (event: AgentStreamEvent): void => {
-    if (ended || isAborted(signal)) return
+    if (stopped()) return
     if (event.type === 'error') failure ??= `${event.code}: ${event.message}`
     const mapped = options.mapEvent === undefined ? event : options.mapEvent(event)
     // mapEvent may itself abort the signal
-    if (mapped !== undefined && !ended && !isAborted(signal)) options.emit(mapped)
+    if (mapped !== undefined && !stopped()) options.emit(mapped)
   }
 
   let run: Awaited<ReturnType<SdkAgentHandle['send']>> | undefined
@@ -130,7 +131,7 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
       ...options.sendOptions,
       signal,
       onDelta: (delta: { update: Parameters<typeof translateInteractionUpdate>[0] }) => {
-        if (ended || isAborted(signal)) return
+        if (stopped()) return
         const events = translateInteractionUpdate(delta.update) as unknown as AgentStreamEvent[]
         for (const event of events) {
           // tool lifecycle arrives once, through `run.stream()`; deltas carry only text and thinking
