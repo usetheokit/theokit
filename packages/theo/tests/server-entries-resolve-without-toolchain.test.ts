@@ -4,14 +4,12 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
-  symlinkSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -23,6 +21,40 @@ const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
   dependencies: Record<string, string>
   peerDependencies: Record<string, string>
   peerDependenciesMeta: Record<string, { optional?: boolean }>
+}
+
+/** Find an installed package's real directory, walking up from `from` like Node does. */
+function findPackage(name: string, from: string): string | undefined {
+  for (let dir = from; ; dir = dirname(dir)) {
+    const candidate = join(dir, 'node_modules', name)
+    if (existsSync(candidate)) return realpathSync(candidate)
+    if (dirname(dir) === dir) return undefined
+  }
+}
+
+/** Copy `roots` and everything they depend on into `dest` as real directories, minus the toolchain. */
+function copyClosure(roots: string[], dest: string): void {
+  const done = new Set<string>()
+  const visit = (name: string, from: string): void => {
+    if (done.has(name) || TOOLCHAIN.includes(name)) return
+    const src = findPackage(name, from)
+    if (!src) return // an optional peer that is not installed
+    done.add(name)
+    const target = join(dest, name)
+    mkdirSync(dirname(target), { recursive: true })
+    cpSync(src, target, {
+      recursive: true,
+      filter: (f) => !relative(src, f).split(sep).includes('node_modules'),
+    })
+    const manifest = JSON.parse(readFileSync(join(src, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+    }
+    for (const dep of Object.keys({ ...manifest.peerDependencies, ...manifest.dependencies })) {
+      visit(dep, src)
+    }
+  }
+  for (const root of roots) visit(root, ROOT)
 }
 
 let sandbox = ''
@@ -39,15 +71,9 @@ beforeAll(() => {
   mkdirSync(join(theoDir, 'node_modules'), { recursive: true })
   cpSync(join(ROOT, 'dist'), join(theoDir, 'dist'), { recursive: true })
   cpSync(join(ROOT, 'package.json'), join(theoDir, 'package.json'))
-  // Everything theokit has installed for itself except the toolchain (and the `@vitejs` scope).
-  for (const name of readdirSync(join(ROOT, 'node_modules'))) {
-    if (name === '.bin' || name === '@vitejs' || TOOLCHAIN.includes(name)) continue
-    symlinkSync(
-      realpathSync(join(ROOT, 'node_modules', name)),
-      join(theoDir, 'node_modules', name),
-      'dir',
-    )
-  }
+  // A flat copy (no symlinks) of the entries' dependency closure, so resolution cannot escape
+  // into the workspace or the pnpm store, where the toolchain is installed.
+  copyClosure(['@theokit/agents', 'zod'], join(theoDir, 'node_modules'))
 })
 
 afterAll(() => {
