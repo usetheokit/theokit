@@ -600,32 +600,6 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       })
     })
 
-    // #2117 — a reschedule going ahead of other jobs must wait for a job another transaction is
-    // moving, not skip it: skipping left the target where it was and still returned true.
-    it('reschedule ahead waits for a concurrent reschedule of the job it goes ahead of', async () => {
-      const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, delaySeconds: 100 })
-      const b = await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 50 })
-      const earlier = new Date(Date.now() + 10_000)
-      const holder = await pool.connect()
-      try {
-        await holder.query('BEGIN')
-        await backend.reschedule(holder, b.jobId, { availableAt: earlier })
-        const ahead = backend.reschedule(pool, a.jobId, {
-          ahead: { name: 'run-task', where: { taskId: [2] } },
-        })
-        await new Promise((r) => setTimeout(r, 300))
-        await holder.query('COMMIT')
-        expect(await ahead).toBe(true)
-      } finally {
-        holder.release()
-      }
-      const r = await pool.query<{ at: Date }>(
-        `SELECT available_at AS at FROM theokit_jobs_ci WHERE id = $1`,
-        [a.jobId],
-      )
-      expect(new Date(r.rows[0]!.at).getTime()).toBe(earlier.getTime() - 1000)
-    })
-
     // usetheokit/theokit#1072 — `theokit start` now runs migrate() at boot, so every replica runs it
     // at the same moment. Concurrent `CREATE TABLE IF NOT EXISTS` on a fresh table fails in Postgres
     // with a unique violation on pg_type: 36 of 80 calls (8 at a time, 10 fresh tables) failed

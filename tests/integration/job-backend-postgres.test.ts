@@ -277,6 +277,61 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
     expect(await availableAt(a.jobId)).toBe(earlier.getTime() - 1000)
   })
 
+  it('holds the comparison locks until the caller transaction ends, blocking a competing reschedule', async () => {
+    // pg-mem has no row locks, so model them coarsely: a statement with FOR UPDATE takes the lock for
+    // its client until COMMIT; a FOR UPDATE without SKIP LOCKED from another client waits for it.
+    let holder: string | undefined
+    let release: (() => void) | undefined
+    let released = Promise.resolve()
+    const client = (name: string): PoolLike => ({
+      query: (async (sql: string, params?: unknown[]) => {
+        if (sql === 'BEGIN') return { rows: [], rowCount: 0 }
+        if (sql === 'COMMIT') {
+          if (holder === name) {
+            holder = undefined
+            release?.()
+          }
+          return { rows: [], rowCount: 0 }
+        }
+        if (/FOR UPDATE/.test(sql)) {
+          if (holder !== undefined && holder !== name && !/SKIP LOCKED/.test(sql)) await released
+          if (holder === undefined && /SELECT COALESCE\(held_from/.test(sql)) {
+            holder = name
+            released = new Promise<void>((r) => (release = r))
+          }
+        }
+        return pool.query(sql, params)
+      }) as PoolLike['query'],
+    })
+    const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, delaySeconds: 100 })
+    const b = await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 50 })
+    const c = await backend.enqueue({ name: 'run-task', input: { taskId: 3 }, delaySeconds: 80 })
+    const tx = client('tx')
+    const other = client('other')
+    await tx.query('BEGIN')
+    expect(
+      await backend.reschedule(tx, a.jobId, {
+        ahead: { name: 'run-task', where: { taskId: [2] } },
+      }),
+    ).toBe(true)
+    const earlier = new Date(Date.now() + 10_000)
+    let done = false
+    const competing = backend
+      .reschedule(other, c.jobId, { ahead: { name: 'run-task', where: { taskId: [1] } } })
+      .then((ok) => {
+        done = true
+        return ok
+      })
+    await new Promise((r) => setTimeout(r, 50))
+    // Still waiting: the transaction has not ended.
+    expect(done).toBe(false)
+    await backend.reschedule(tx, b.jobId, { availableAt: earlier })
+    await tx.query('COMMIT')
+    expect(await competing).toBe(true)
+    // The competing job went ahead of the time the first transaction left job a at.
+    expect(await availableAt(c.jobId)).toBe((await availableAt(a.jobId)) - 1000)
+  })
+
   it('rejects reschedule with neither or both of availableAt and ahead', async () => {
     const a = await backend.enqueue({ name: 'run-task', input: {} })
     await expect(backend.reschedule(pool, a.jobId, {})).rejects.toThrow(/exactly one/)
