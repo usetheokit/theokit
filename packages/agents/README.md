@@ -492,3 +492,13 @@ See `LICENSE`.
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
+
+`streamTurnForkingIfBusy(sessionId, open, { onFork?, forkId?, isBusy? })` is for one-shot surfaces (an `exec`
+command, a cron job, a CI step) that resume a session another process may be writing. `open(id)` returns the
+turn's chunk stream. If the session is busy, the turn re-runs once under `${id}-fork-<8 hex>` and `onFork(from, to)`
+is called. Busy is detected up front with `isBusy` (default: `sessionHasWriter` on the transcript under
+`transcriptRoot()` and `process.cwd()`; pass `isBusy` for another cwd) or from the `data-error-code`
+`session_busy` part and the `error` chunk after it. Both are swallowed, and the structural chunks held before the
+first content chunk are dropped, so the contended attempt emits nothing. The fork starts a fresh session; no history
+is copied. A second contention throws `ForkedSessionBusyError` (`code: 'session_busy_after_fork'`). The returned
+`sessionId` promise resolves to the id that ran once `chunks` has been consumed. Other errors pass through.
