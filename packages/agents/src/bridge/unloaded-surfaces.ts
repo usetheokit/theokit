@@ -48,7 +48,7 @@ export interface ReportUnloadedSurfacesInput {
 export function reportUnloadedSurfaces(input: ReportUnloadedSurfacesInput): void {
   const entry = foreignSurfaceInventory({ cwd: input.cwd }).find((e) => e.dir === 'workflows')
   // An unreadable directory is not a workflow anybody wrote; stay quiet rather than fail.
-  if (!entry || entry.state !== 'refused' || entry.count === 0) return
+  if (entry?.state !== 'refused' || entry.count === 0) return
 
   input.onWarn(
     `${WORKFLOWS_DIR}: found ${String(entry.count)} workflow script(s) — ` +

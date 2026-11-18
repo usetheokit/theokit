@@ -54,6 +54,44 @@ function isDir(p: string): boolean {
   }
 }
 
+/** Each counter returns whether the entry counts; it may throw when the entry cannot be read. */
+function countsFrontmatterMd(abs: string, name: string): boolean {
+  const p = join(abs, name)
+  if (!name.endsWith('.md') || isDir(p)) return false
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+  return readFileSync(p, 'utf8').replace(/^\uFEFF/, '').startsWith('---')
+}
+
+function countsAgentMemory(abs: string, name: string): boolean {
+  const p = join(abs, name)
+  if (!isDir(p)) return false
+  const file = join(p, 'MEMORY.md')
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+  if (!existsSync(file)) return false
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+  readFileSync(file, 'utf8')
+  return true
+}
+
+function countsScript(_abs: string, name: string): boolean {
+  return SCRIPT_SUFFIXES.some((s) => name.endsWith(s))
+}
+
+function countsPluginBundle(abs: string, name: string): boolean {
+  const skills = join(abs, name, 'skills')
+  if (!isDir(skills)) return false
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+  readdirSync(skills)
+  return true
+}
+
+const COUNTERS: Record<Kind, (abs: string, name: string) => boolean> = {
+  'frontmatter-md': countsFrontmatterMd,
+  'agent-memory': countsAgentMemory,
+  scripts: countsScript,
+  'plugin-bundles': countsPluginBundle,
+}
+
 function count(root: string, dir: string, kind: Kind): Count {
   const out: Count = { count: 0, unreadable: [], names: [] }
   const abs = join(root, dir)
@@ -68,33 +106,12 @@ function count(root: string, dir: string, kind: Kind): Count {
     return out
   }
   for (const name of entries) {
-    const rel = `${dir}/${name}`
-    const p = join(abs, name)
     try {
-      if (kind === 'frontmatter-md') {
-        if (!name.endsWith('.md') || isDir(p)) continue
-        // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-        if (readFileSync(p, 'utf8').replace(/^﻿/, '').startsWith('---')) out.count++
-      } else if (kind === 'agent-memory') {
-        if (!isDir(p)) continue
-        // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-        if (existsSync(join(p, 'MEMORY.md'))) {
-          // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-          readFileSync(join(p, 'MEMORY.md'), 'utf8')
-          out.count++
-        }
-      } else if (kind === 'scripts') {
-        if (SCRIPT_SUFFIXES.some((s) => name.endsWith(s))) {
-          out.count++
-          out.names.push(name)
-        }
-      } else if (isDir(join(p, 'skills'))) {
-        // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-        readdirSync(join(p, 'skills'))
-        out.count++
-      }
+      if (!COUNTERS[kind](abs, name)) continue
+      out.count++
+      if (kind === 'scripts') out.names.push(name)
     } catch {
-      out.unreadable.push(rel)
+      out.unreadable.push(`${dir}/${name}`)
     }
   }
   return out
