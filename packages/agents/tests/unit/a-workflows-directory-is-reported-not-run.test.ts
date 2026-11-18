@@ -58,6 +58,22 @@ describe('a workflows directory is reported rather than run', () => {
     expect(said).toContain('sweep.js')
   })
 
+  it('emits exactly one warning with the count, the sorted names and every supported suffix', () => {
+    const warnings: string[] = []
+    const cwd = projectWith({ 'b.mjs': '', 'a.js': '', 'c.cjs': '', 'd.txt': '' })
+
+    reportUnloadedSurfaces({ cwd, onWarn: (w) => warnings.push(w) })
+
+    expect(warnings).toEqual([
+      '.claude/workflows: found 3 workflow script(s) — a.js, b.mjs, c.cjs — ' +
+        'which this runtime does NOT execute. Every configuration surface it loads is data ' +
+        '(commands, hooks, plugins, skills, subagents); a workflow file is code, and executing ' +
+        'JavaScript found under a caller-supplied directory is a trust decision that belongs to ' +
+        'you rather than to this library. The orchestration itself is supported: build the same ' +
+        'pipeline with Workflow / agentStep / createSquad from @theokit/sdk, which you import explicitly.',
+    ])
+  })
+
   it('says WHY, in terms of this product rather than of effort', () => {
     const warnings: string[] = []
     const cwd = projectWith({ 'a.js': '' })

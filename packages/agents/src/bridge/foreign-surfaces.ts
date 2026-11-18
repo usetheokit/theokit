@@ -92,10 +92,17 @@ function countsAgentMd(abs: string, name: string): boolean {
   return raw !== undefined && OPENS_WITH_FENCE.test(raw)
 }
 
-function countsCommandMd(abs: string, name: string): boolean {
-  if (!name.endsWith('.md')) return false
-  const raw = readRegularFile(join(abs, name))
-  return raw !== undefined && OPENS_WITH_FENCE.test(raw) && splitFrontmatter(raw) !== undefined
+/** The command loader walks subfolders and takes every `.md` whose frontmatter, if any, closes. */
+function countsCommandMd(abs: string, name: string): number {
+  const path = join(abs, name)
+  const stats = statIfPresent(path)
+  if (stats?.isDirectory()) {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+    return readdirSync(path).reduce((n, child) => n + countsCommandMd(path, child), 0)
+  }
+  if (!stats?.isFile() || !name.endsWith('.md')) return 0
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+  return splitFrontmatter(readFileSync(path, 'utf8')) === undefined ? 0 : 1
 }
 
 function countsAgentMemory(abs: string, name: string): boolean {
@@ -116,7 +123,7 @@ function countsPluginBundle(abs: string, name: string): boolean {
   return true
 }
 
-const COUNTERS: Record<Kind, (abs: string, name: string) => boolean> = {
+const COUNTERS: Record<Kind, (abs: string, name: string) => boolean | number> = {
   'agent-md': countsAgentMd,
   'command-md': countsCommandMd,
   'agent-memory': countsAgentMemory,
@@ -141,7 +148,7 @@ function count(root: string, { dir, kind }: Folder): Count {
       out.names.push(name)
     }
     try {
-      if (COUNTERS[kind](abs, name)) out.count++
+      out.count += Number(COUNTERS[kind](abs, name))
     } catch {
       out.unreadable.push(`${dir}/${name}`)
     }

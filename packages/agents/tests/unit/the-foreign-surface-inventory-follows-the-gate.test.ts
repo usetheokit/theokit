@@ -68,14 +68,14 @@ describe('foreign surface inventory', () => {
     expect(e.unreadable).toEqual(['plugins/p2'])
   })
 
-  it('commands counts top-level .md files that open with a closed frontmatter block', () => {
+  it('commands counts what the loader takes: nested and frontmatter-free .md, not an unclosed fence', () => {
     const cwd = project({
       'commands/plain.md': 'just a prompt',
       'commands/ns/deep.md': '---\ndescription: d\n---\nbody',
       'commands/broken.md': '---\nnever closes',
       'commands/notes.txt': 'x',
     })
-    expect(get(cwd, 'commands').count).toBe(0)
+    expect(get(cwd, 'commands').count).toBe(2)
     const ok = project({ 'commands/a.md': '---\ndescription: d\n---\nbody' })
     expect(get(ok, 'commands').count).toBe(1)
   })
