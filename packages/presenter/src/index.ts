@@ -29,3 +29,8 @@ export {
 export * from './source/wire-reader.js'
 export * from './tool-kinds/tool-kinds.js'
 export * from './tool-result/read-tool-result.js'
+export {
+  pendingApprovals,
+  readPendingApproval,
+  type PendingApproval,
+} from './approvals/pending-approvals.js'

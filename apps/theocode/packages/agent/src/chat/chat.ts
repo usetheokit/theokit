@@ -10,6 +10,7 @@ import { sandboxModeForSession } from '../sandbox-switch.js'
 import { withSandboxMode } from '../config/effective-config.js'
 import {
   createGenericHttpSearchAdapter,
+  createInteractiveShellTool,
   createQuestionTool,
   createUpdatePlanTool,
   createWebFetchTool,
@@ -36,12 +37,11 @@ import {
 import { interactiveWrapCommand } from '@theokit/agents/sandbox'
 import { loadApprovedHooks } from '../hooks/index.js'
 import { buildHookHandlers, withBuiltinShellVeto, parseHooks } from '../hooks/index.js'
-import { sandboxWritePolicy } from '../config/index.js'
+import { sandboxWritePolicy } from '@theokit/agents/tool-scope'
 import { resolveTrustPosture, type TrustPosture } from '../config/index.js'
 import { baseInstructionsFor } from '../output-style-wiring.js'
 import { createAnalystSubagent, createDelegateToTeamTool } from '../delegation/index.js'
 import { abandonQuestion, ask } from '../ask/index.js'
-import { createInteractiveShellTool } from '../ask/index.js'
 import { MAX_PTY_SESSIONS } from '../pty/index.js'
 import type { SessionPtyOwner } from '../pty/index.js'
 import { ToolRegistry, resolveToolScope } from '../tools/index.js'
@@ -243,7 +243,7 @@ function chatContext(overrides: {
   return {
     posture,
     cfg,
-    writePolicy: sandboxWritePolicy(cfg.sandbox_mode),
+    writePolicy: sandboxWritePolicy(cfg.sandbox_mode, cwd),
     registry: new ToolRegistry(resolveToolScope(cfg, cwd)),
     modelId: overrides?.model ?? cfg.model,
     cwd,
@@ -711,6 +711,9 @@ function baseAgent(ctx: {
       // config object without the key made the whole expression `undefined` — which reads as "off"
       // to the SDK and as a type error to nobody, because the field is optional upstream. It cost a
       // test that asserted `false` and got `undefined`.
+      // #1913 — the SDK builtin `shell` is withheld from the declared set, so its schema is not re-sent
+      // on every round and the model cannot pick it. `withBuiltinShellVeto` stays as the backstop.
+      .withholdBuiltinTools(['shell'])
       .memory({
         enabled: posture.allows.memory && cfg.memory === true && memoryEnabledForSession(),
       })

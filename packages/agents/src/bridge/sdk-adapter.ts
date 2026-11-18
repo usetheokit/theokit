@@ -111,8 +111,7 @@ export interface RuntimeOverrides {
    * SDK's native transcript, not a swappable adapter.
    *
    * Forwarded to the SDK as `local.baseDir`, which that package deprecated in its own #301 in favour
-   * of `sessionDir`. It stays `baseDir` on purpose: `sessionDir` does not exist at `^4.52.1`, the
-   * floor this package declares, so switching would type-error on the floor and — worse — silently
+   * of `sessionDir`. It stays `baseDir` on purpose: `sessionDir` is not what this package forwards today, so switching would change behaviour and — worse — silently
    * send the transcript to the SDK default `~/.theokit` for any consumer resolving there, losing
    * per-app persistence. Migrating the name is a floor bump, not a rename, and the deprecated field
    * is still honoured. Attempted and reverted rather than assumed: the typecheck gate caught it.
