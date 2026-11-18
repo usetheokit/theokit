@@ -26,10 +26,15 @@ export async function resolveBody(
   jsonResponse: (status: number, body: unknown) => Response,
 ): Promise<unknown> {
   if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
-  // A multipart body is never JSON (it starts with `--boundary`), so the read below could only
-  // yield `undefined` after buffering the whole upload. Skipping it is behaviour-neutral and lets
-  // a handler cap the stream itself (`readCappedFormData`).
-  if (/^\s*multipart\/form-data\b/i.test(request.headers.get('content-type') ?? ''))
+  // A route that binds no `@Body` has no use for the parsed value, and a form body is never JSON,
+  // so buffering it here only defeats a handler's own cap (`readCappedFormData`). Routes that use
+  // `@Body` keep the existing read and validation.
+  if (
+    !walk.paramEntries.some((p) => p.source === 'body') &&
+    /^\s*(multipart\/form-data|application\/x-www-form-urlencoded)\b/i.test(
+      request.headers.get('content-type') ?? '',
+    )
+  )
     return undefined
 
   let body: unknown

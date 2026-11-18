@@ -59,4 +59,16 @@ describe.skipIf(!isVitest)('an upload controller behind the dispatcher', () => {
     expect(state.cancelled).toBe(true)
     expect(state.pulls).toBeLessThan(10)
   })
+
+  it('hands a urlencoded body to the handler unread', async () => {
+    const handle = createDecoratorHandler([UploadCtrl])
+    const res = await handle(
+      new Request('http://x/api/upload', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'a=1&b=2',
+      }),
+    )
+    expect(await res?.json()).toEqual({ keys: ['a', 'b'] })
+  })
 })
