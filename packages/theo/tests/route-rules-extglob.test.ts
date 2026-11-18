@@ -1,4 +1,5 @@
-import picomatch from 'picomatch'
+import { createRequire } from 'node:module'
+
 import { describe, expect, it } from 'vitest'
 
 import { compileRouteRules, resolveRouteRule } from '../src/cache/route-rules.js'
@@ -9,6 +10,11 @@ import { compileRouteRules, resolveRouteRule } from '../src/cache/route-rules.js
  * unpatched matcher took 68 s and 102 s; the vendored copy in `vendor/picomatch` answers in
  * milliseconds. The bound below is far above the patched time and far below the unpatched one.
  */
+// theo no longer depends on picomatch; these tests pin the vendored copy at the repo root.
+const picomatch = createRequire(import.meta.url)('../../../vendor/picomatch') as {
+  scan: (pattern: string, options: { unescape: boolean }) => { base: string; glob: string }
+}
+
 const HOSTILE = [
   ['/+(*a)', `/${'a'.repeat(28)}b`],
   ['/*(*a)', `/${'a'.repeat(28)}b`],
