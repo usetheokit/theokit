@@ -87,4 +87,10 @@ describe('the committed capability map is what the package implies', () => {
         'hand-kept copy of an export list is the copy that goes stale.',
     ).toBe(true)
   })
+
+  it('test_the_map_lists_the_config_exports', () => {
+    for (const name of ['parseDottedOverrides', 'DottedOverrideError', 'applyOutputStyle']) {
+      expect(rendered, `${name} is missing from the generated map`).toContain(`\`${name}\``)
+    }
+  })
 })
