@@ -239,3 +239,28 @@ describe('Second-review regressions (M52)', () => {
     expect(() => setOnce(d, 'model', 'openai/gpt-5.4', 'later')).not.toThrow()
   })
 })
+
+describe('ToolsCapability with an SDK CustomTool', () => {
+  it('a CustomTool given to ToolsCapability keeps its handler context', async () => {
+    const context = { projectRoot: '/p' }
+    let seen: unknown
+    const custom = {
+      name: 'probe',
+      description: 'd',
+      inputSchema: { type: 'object' },
+      handler: (_input: Record<string, unknown>, ctx?: { context?: unknown }) => {
+        seen = ctx?.context
+        return 'ok'
+      },
+    } as never
+    const viaCapability = applyCapabilities([new ToolsCapability([custom])]).tools[0]
+    const viaDefine = compileAgentDefinition(
+      defineAgent({ model: 'a/b', tools: [custom] }),
+    ).tools[0]
+    await viaCapability?.handler({}, { context })
+    expect(seen).toBe(context)
+    seen = undefined
+    await viaDefine?.handler({}, { context })
+    expect(seen).toBe(context)
+  })
+})

@@ -1,3 +1,5 @@
+import type { CustomTool } from '@theokit/sdk'
+
 import type { CompiledTool } from '../bridge/agent-compiler.js'
 import type { ReasoningEffort } from '../types.js'
 
@@ -74,4 +76,16 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
     ...(draft.reasoningEffort !== undefined && { reasoningEffort: draft.reasoningEffort }),
   }
   return Object.freeze(shape)
+}
+
+/**
+ * The shape's tools as the SDK `CustomTool` an app holds, with no cast at the call site.
+ *
+ * Every tool in a shape is either converted from a `CustomTool` or built by the compiler, whose
+ * `inputSchema` the SDK accepts as a JSON-schema object; `CompiledTool.inputSchema` stays `unknown`
+ * because decorator tools may carry a live Zod schema until the SDK adapter lowers it. The one
+ * cast here is that SDK-boundary narrowing; the handler is already assignable (it accepts wider input).
+ */
+export function shapeToolsAsCustomTools(shape: AgentShape): readonly CustomTool[] {
+  return shape.tools as unknown as readonly CustomTool[]
 }
