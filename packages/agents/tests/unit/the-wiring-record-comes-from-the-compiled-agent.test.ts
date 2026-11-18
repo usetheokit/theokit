@@ -12,23 +12,39 @@ import type { CompiledWiring } from '../../src/bridge/index.js'
 
 const h = vi.hoisted(() => ({
   created: [] as Record<string, unknown>[],
-  live: new Set<string>(),
-  persisted: new Set<string>(),
+  // session id -> the cwd it is persisted under; a resume only finds it from that cwd.
+  known: new Map<string, string | undefined>(),
+  resumeCwds: [] as (string | undefined)[],
 }))
+
+const fakeAgent = () => ({
+  agentId: 'a1',
+  send: () => Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) }),
+  dispose: () => Promise.resolve(),
+})
+const cwdOf = (o: Record<string, unknown>) => (o.local as { cwd?: string } | undefined)?.cwd
 
 vi.mock('@theokit/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   Agent: {
-    registry: { get: (id: string) => (h.live.has(id) ? {} : undefined) },
-    get: (id: string) =>
-      h.persisted.has(id) ? Promise.resolve({}) : Promise.reject(new Error('nf')),
     getOrCreate: (_id: string, opts: Record<string, unknown>) => {
       h.created.push(opts)
-      return Promise.resolve({
-        agentId: 'a1',
-        send: () => Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) }),
-        dispose: () => Promise.resolve(),
-      })
+      return Promise.resolve(fakeAgent())
+    },
+    resume: (id: string, opts: Record<string, unknown>) => {
+      h.resumeCwds.push(cwdOf(opts))
+      if (h.known.has(id) && h.known.get(id) === cwdOf(opts)) return Promise.resolve(fakeAgent())
+      return Promise.reject(Object.assign(new Error('unknown'), { name: 'UnknownAgentError' }))
+    },
+    create: async (opts: Record<string, unknown>) => {
+      await Promise.resolve()
+      const id = opts.agentId as string
+      if (h.known.has(id)) {
+        throw Object.assign(new Error('exists'), { code: 'agent_id_already_exists' })
+      }
+      h.known.set(id, cwdOf(opts))
+      h.created.push(opts)
+      return fakeAgent()
     },
   },
   Tool: { create: (spec: unknown) => spec },
@@ -36,6 +52,7 @@ vi.mock('@theokit/sdk', async (importOriginal) => ({
 }))
 
 const { AgentBuilder } = await import('../../src/bridge/agent-builder.js')
+const { getOrCreateReporting } = await import('../../src/bridge/compiled-wiring.js')
 const { toAgentFactory } = await import('../../src/bridge/sdk-adapter.js')
 const { streamAgentTurnInProcess } = await import('../../src/in-process-turn.js')
 
@@ -46,6 +63,12 @@ const POSTURE = {
   confinedBy: { mode: 'workspace-write' as const, enforced: true, detail: 'test double' },
   reason: 'test surface',
 }
+
+const TRUSTED = {
+  level: 'trusted',
+  source: 'default',
+  allows: { projectSettings: true },
+} as never
 
 const tool = (name: string) => ({
   name,
@@ -68,8 +91,8 @@ function base() {
 
 afterEach(() => {
   h.created.length = 0
-  h.live.clear()
-  h.persisted.clear()
+  h.known.clear()
+  h.resumeCwds.length = 0
   vi.restoreAllMocks()
 })
 
@@ -79,7 +102,7 @@ describe('onWired', () => {
     const def = base()
       .tool(tool('lookup') as never)
       .skills(['disk-skill', skill('inline-one') as never])
-      .settingSources({ user: true })
+      .settingSources({ project: { trustedBy: TRUSTED } })
       .mcp({ docs: { command: 'x' } } as never)
       .hooks({ pre_tool_call: () => undefined })
       .subagents({ helper: { description: 'h', prompt: 'p' } } as never)
@@ -125,67 +148,73 @@ describe('onWired', () => {
         join(dir, 'SKILL.md'),
         '---\nname: project-skill\ndescription: from the repo\n---\nbody\n',
       )
-      const trusted = {
-        level: 'trusted',
-        source: 'default',
-        allows: { projectSettings: true },
-      } as never
-
-      const withheld: Wiring[] = []
-      const noGrant = base()
-        .skills(['project-skill', skill('inline-one') as never])
-        .settingSources({})
-        .onWired((w) => withheld.push(w))
-        .build()
-      await toAgentFactory(noGrant as never, {
-        apiKey: 'k',
-        approvals: POSTURE,
-        overrides: { cwd },
-      })('s2')
-      const w = withheld[0]!
-      expect(w.settingSources).toEqual({ project: false, user: false })
-      expect(w.skills.listed).toEqual(['inline-one'])
-      expect(w.skills.listed).not.toContain('project-skill')
-      expect(w.skills.readable).toEqual(['inline-one'])
+      const run = async (selection: never, id: string) => {
+        const seen: Wiring[] = []
+        const def = base()
+          .skills(['project-skill', skill('inline-one') as never])
+          .settingSources(selection)
+          .onWired((w) => seen.push(w))
+          .build()
+        await toAgentFactory(def as never, {
+          apiKey: 'k',
+          approvals: POSTURE,
+          overrides: { cwd },
+        })(id)
+        return seen[0]!
+      }
+      // Both no source and user-only leave the project root unread.
+      for (const [selection, id] of [
+        [{}, 's2'],
+        [{ user: true }, 's2u'],
+      ] as const) {
+        const w = await run(selection as never, id)
+        expect(w.settingSources.project).toBe(false)
+        expect(w.skills.listed).toEqual(['inline-one'])
+        expect(w.skills.readable).toEqual(['inline-one'])
+      }
       const local = h.created[0]?.local as { settingSources?: string[]; cwd?: string }
       expect(local.cwd).toBe(cwd)
       expect(local.settingSources ?? []).not.toContain('project')
 
-      // Same disk, with the grant: the project root is now a source, so the contrast is the gate.
-      const granted: Wiring[] = []
-      const withGrant = base()
-        .skills(['project-skill', skill('inline-one') as never])
-        .settingSources({ project: { trustedBy: trusted } })
-        .onWired((x) => granted.push(x))
-        .build()
-      await toAgentFactory(withGrant as never, {
-        apiKey: 'k',
-        approvals: POSTURE,
-        overrides: { cwd },
-      })('s2b')
-      expect(granted[0]?.settingSources.project).toBe(true)
-      expect(granted[0]?.skills.listed).toEqual(['project-skill', 'inline-one'])
-      expect(withheld[0]?.settingSources.project).toBe(false)
+      // Same disk, with the grant: the project root is a source, so the contrast is the gate.
+      const w = await run({ user: true, project: { trustedBy: TRUSTED } } as never, 's2b')
+      expect(w.settingSources).toEqual({ project: true, user: true })
+      expect(w.skills.listed).toEqual(['project-skill', 'inline-one'])
+      expect(w.skills.readable).toEqual(['inline-one'])
     } finally {
       rmSync(cwd, { recursive: true, force: true })
     }
   })
 
-  it.each([
-    ['a live cached agent', 'live'],
-    ['a persisted session being resumed', 'persisted'],
-  ] as const)('reports nothing when getOrCreate returns %s', async (_n, where) => {
-    h[where].add('known')
+  it('reports nothing for a resumed session, found from a non-default cwd', async () => {
+    const cwd = '/somewhere/else'
+    h.known.set('known', cwd)
     const seen: Wiring[] = []
     const def = base()
-      .tool(tool('lookup') as never)
       .onWired((w) => seen.push(w))
       .build()
-    const make = toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })
+    const make = toAgentFactory(def as never, {
+      apiKey: 'k',
+      approvals: POSTURE,
+      overrides: { cwd },
+    })
     await make('known')
+    expect(h.resumeCwds).toEqual([cwd])
     expect(seen).toHaveLength(0)
     await make('fresh')
     expect(seen).toHaveLength(1)
+  })
+
+  it('reports once when two calls race to create the same fresh session', async () => {
+    const { Agent } = await import('@theokit/sdk')
+    const seen: Wiring[] = []
+    const options = { tools: [{ name: 'lookup' }] }
+    await Promise.all([
+      getOrCreateReporting(Agent, 'same', options, (w) => seen.push(w)),
+      getOrCreateReporting(Agent, 'same', options, (w) => seen.push(w)),
+    ])
+    expect(seen).toHaveLength(1)
+    expect(h.created).toHaveLength(1)
   })
 
   it('a builtin in withheldBuiltinTools is absent from tools', async () => {

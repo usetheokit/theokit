@@ -64,8 +64,10 @@ export function readCompiledWiring(options: Record<string, unknown>): CompiledWi
     // Caller-supplied tools only: a custom tool may deliberately replace a withheld builtin.
     tools: names(tools),
     skills: {
-      // Enabled names resolve against disk roots; with no source granted none is read, so none is listed.
-      listed: [...new Set([...(sources.length > 0 ? names(skills?.enabled) : []), ...inline])],
+      // Enabled names resolve against the project root, which only a granted `project` source reads.
+      listed: [
+        ...new Set([...(sources.includes('project') ? names(skills?.enabled) : []), ...inline]),
+      ],
       readable: reader !== undefined ? inline : [],
     },
     mcpServers: Object.keys((options.mcpServers as object | undefined) ?? {}),
@@ -91,26 +93,20 @@ export function reportWiring(
 
 interface AgentStatics {
   getOrCreate(id: string, options: never): Promise<unknown>
-  get?: (id: string) => Promise<unknown>
-  registry?: { get(id: string): unknown }
+  resume(id: string, options: never): Promise<unknown>
+  create(options: never): Promise<unknown>
 }
 
-/** Did the SDK already hold this session: live in its cache, or persisted for a resume? */
-async function sessionExists(sdk: AgentStatics, id: string): Promise<boolean> {
-  if (sdk.registry?.get(id) !== undefined) return true
-  if (typeof sdk.get !== 'function') return false
-  try {
-    await sdk.get(id)
-    return true
-  } catch {
-    return false
-  }
-}
+const isErr = (err: unknown, key: 'name' | 'code', value: string): boolean =>
+  (err as Record<string, unknown> | null)?.[key] === value
 
 /**
- * `Agent.getOrCreate`, reporting the wiring only when it CREATED the agent. A session the SDK
- * already holds (cached live, or resumed from persistence) is not a creation, so nothing is
- * reported. The check runs only when a listener is installed.
+ * `Agent.getOrCreate`, reporting the wiring only when this call CREATED the agent.
+ *
+ * With a listener it follows the SDK's documented resolution itself, because the creation event is
+ * the only reliable signal: resume; on `UnknownAgentError` create; if a concurrent creator won
+ * (`agent_id_already_exists`) resume the winner, which is not a creation of ours. Resume gets the
+ * final options, so a non-default `cwd` is honoured. Without a listener it is plain `getOrCreate`.
  */
 export async function getOrCreateReporting(
   sdk: unknown,
@@ -119,8 +115,19 @@ export async function getOrCreateReporting(
   listener: ((wiring: CompiledWiring) => void) | undefined,
 ): Promise<unknown> {
   const statics = sdk as AgentStatics
-  const existed = listener !== undefined && (await sessionExists(statics, sessionId))
-  const agent = await statics.getOrCreate(sessionId, options as never)
-  if (!existed) reportWiring(listener, options)
+  if (listener === undefined) return statics.getOrCreate(sessionId, options as never)
+  try {
+    return await statics.resume(sessionId, options as never)
+  } catch (err) {
+    if (!isErr(err, 'name', 'UnknownAgentError')) throw err
+  }
+  let agent: unknown
+  try {
+    agent = await statics.create({ ...options, agentId: sessionId } as never)
+  } catch (err) {
+    if (!isErr(err, 'code', 'agent_id_already_exists')) throw err
+    return statics.resume(sessionId, options as never)
+  }
+  reportWiring(listener, options)
   return agent
 }
