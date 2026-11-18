@@ -80,4 +80,17 @@ describe('turn failure', () => {
     expect(d('prompt has 500 tokens')).toBe('prompt has 500 tokens')
     expect(classifyTurnFailure(new Error('rate limit')).transient).toBe(false)
   })
+
+  it('a recognized code without a default hint falls back to message probes', () => {
+    const failure = {
+      code: 'tool_runtime_error',
+      transient: false,
+      message: 'image content in tool results is unsupported',
+    } as const
+    expect(DEFAULT_TURN_FAILURE_HINTS.tool_runtime_error).toBeUndefined()
+    const text = describeTurnFailure(failure)
+    expect(text).toContain('[tool_runtime_error]')
+    expect(text).toContain('tool returned an image')
+    expect(describeTurnFailure({ ...failure, message: 'boom' })).toBe('boom [tool_runtime_error]')
+  })
 })
