@@ -77,6 +77,17 @@ key is unknown — never a silent fallback.
 `foldTurnLifecycle` collapses a turn's events into a `TurnLifecycle` when a surface wants the
 outcome rather than the stream.
 
+Pass `{ messageBoundary: 'tool-call' }` as the third argument to split a preamble from the answer:
+text seen before a tool call is emitted as its own completed message item (`message_0`,
+`message_1`, ...) when the call arrives, and only the remainder is emitted at `finish`. The default,
+`'none'`, keeps one concatenated `message` item. A `tool-result` chunk with `isError: true` reaches
+`itemCompleted` with `isError: true`.
+
+`contentChunkFromEvent(event)` turns an `AgentOutputEvent` into the `ContentChunk` the fold reads,
+or `null` for events it does not model (reasoning, partial tool calls, status, finish).
+`finalMessageOf(events)` returns the trimmed text after the last tool call, or all the text when
+the turn made no tool call.
+
 ## Tool kinds
 
 `TOOL_KINDS` is one table of known tool names. Each entry has a `kind` (`shell`, `diff`, `read`, `write`, `list`, `search`, `fetch`, `plan`, `memory`, `other`) and the input `targetKeys` that name the call's target, in preference order. `toolKindOf(name)` looks a name up.
