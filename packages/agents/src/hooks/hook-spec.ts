@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import type { ToolResultTransformContext } from '@theokit/sdk'
 
 import type { HookHandlers } from '../bridge/hook-handlers.js'
+import { recordRefusal } from '../bridge/refusal-ledger.js'
 
 import {
   DEFAULT_CONTINUATION_BUDGET,
@@ -247,6 +248,7 @@ export function buildHookHandlers(
           const message = 'hook chain exceeded its time budget'
           // The budget veto is a veto too. Omitting it here would make a surface report every block
           // except the one caused by slowness, which is the one an operator most needs named.
+          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: message })
           options.onVeto?.({ tool: ctx.name, reason: message })
           return { block: true, message }
         }
@@ -262,6 +264,7 @@ export function buildHookHandlers(
           const message = fenceHookOutput(
             result.stdout || result.stderr || `hook exited ${String(result.exitCode)}`,
           )
+          recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: message })
           options.onVeto?.({ tool: ctx.name, reason: message })
           return { block: true, message }
         }

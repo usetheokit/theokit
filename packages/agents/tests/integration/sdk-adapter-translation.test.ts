@@ -48,6 +48,7 @@ vi.mock('@theokit/sdk', () => ({
   Tool: { create: (spec: unknown) => spec },
 }))
 
+const { recordRefusal, takeRefusal } = await import('../../src/bridge/refusal-ledger.js')
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
 const { applyCapabilities } = await import('../../src/capability/capability.js')
 await import('reflect-metadata')
@@ -189,6 +190,36 @@ describe('permission_denied → typed refusal on the tool result', () => {
     }
     const out = await drain([toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 })])
     expect(results(out)[0]).toMatchObject({ refusal: { by: 'plugin' } })
+  })
+
+  it('a ledger entry for the run and tool replaces the source-derived refusal and is consumed', async () => {
+    recordRefusal('sdk-run-1', 'Bash', { by: 'human', reason: 'no thanks' })
+    h.onSend = (o) => {
+      o.onRunEvent?.({
+        ...denied('c1', 'plugin', 'Tool denied by human approver'),
+        runId: 'sdk-run-1',
+      })
+    }
+    const out = await drain([toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 })])
+    expect(results(out)[0]).toMatchObject({ refusal: { by: 'human', reason: 'no thanks' } })
+    expect(takeRefusal('sdk-run-1', 'Bash')).toBeUndefined()
+  })
+
+  it('a veto from a plugin the framework did not build keeps by plugin', async () => {
+    h.onSend = (o) => {
+      o.onRunEvent?.({ ...denied('c1', 'plugin', 'external says no'), runId: 'sdk-run-2' })
+    }
+    const out = await drain([toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 })])
+    expect(results(out)[0]).toMatchObject({ refusal: { by: 'plugin', reason: 'external says no' } })
+  })
+
+  it('entries a run left unmatched are dropped when it ends', async () => {
+    recordRefusal('sdk-run-3', 'Bash', { by: 'policy' })
+    h.onSend = (o) => {
+      o.onRunEvent?.({ ...denied('c9', 'plugin', 'm'), runId: 'sdk-run-3' })
+    }
+    await drain([toolDone('c1', { stdout: 'ok', stderr: '', exitCode: 0 })])
+    expect(takeRefusal('sdk-run-3', 'Bash')).toBeUndefined()
   })
 
   it('a tool whose shell exits 126 with no permission_denied is a failed result without refusal', async () => {

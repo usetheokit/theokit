@@ -46,6 +46,7 @@
  */
 import type { PermissionMode } from '@theokit/sdk'
 
+import { recordRefusal } from '../bridge/refusal-ledger.js'
 import { debugLog } from '../debug-log.js'
 
 import type { PermissionQuery, PermissionStore } from './permission-store.js'
@@ -196,6 +197,7 @@ export function grantGate(
         scope: classification.query.scope,
         because,
       })
+      recordRefusal(ctx.runId, ctx.name, { by: 'policy', reason: because })
       return Promise.resolve({
         block: true,
         message: `"${ctx.name}" is not permitted in ${classification.query.scope}: ${because}`,
@@ -208,6 +210,7 @@ export function grantGate(
       // side — the run just denies. Logged separately from the ordinary veto so the two are not
       // read as the same event.
       debugLog('[theokit] permission gate could not classify', { tool: ctx.name, why })
+      recordRefusal(ctx.runId, ctx.name, { by: 'policy', reason: why })
       return Promise.resolve({
         block: true,
         message: `permission gate could not classify "${ctx.name}": ${why}`,
