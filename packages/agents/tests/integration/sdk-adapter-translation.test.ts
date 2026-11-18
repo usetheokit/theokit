@@ -20,6 +20,7 @@ interface SdkMsg {
 const h = vi.hoisted(() => ({
   messages: [] as SdkMsg[],
   /** Called with the SendOptions before the timeline is read, to emit SDK run events. */
+  gate: undefined as undefined | Promise<void>,
   handleId: undefined as undefined | string,
   onSend: undefined as undefined | ((opts: { onRunEvent?: (e: unknown) => void }) => void),
 }))
@@ -36,6 +37,7 @@ vi.mock('@theokit/sdk', () => ({
             // rather than restating its script: two hand-written copies of one fixture drift, and a fake
             // whose timeline disagreed with its stream would go green while production broke.
             events: async function* (this: { stream: () => AsyncGenerator }) {
+              await h.gate
               for await (const m of this.stream()) yield { kind: 'message', message: m }
             },
             stream: async function* () {
@@ -70,6 +72,7 @@ afterEach(() => {
   h.messages = []
   h.onSend = undefined
   h.handleId = undefined
+  h.gate = undefined
 })
 
 describe('createSdkAgentStream × real SDKMessage shapes (NF-1 end-to-end)', () => {
@@ -231,6 +234,27 @@ describe('permission_denied → typed refusal on the tool result', () => {
     const byCall = Object.fromEntries(results(out).map((r) => [r.callId, r.refusal]))
     expect(byCall.c1).toMatchObject({ by: 'human', reason: 'first' })
     expect(byCall.c2).toMatchObject({ by: 'policy', reason: 'second' })
+  })
+
+  it('an external denial before a framework veto of the same tool does not claim the entry', async () => {
+    h.handleId = 'sdk-run-5'
+    h.gate = new Promise<void>((done) => {
+      h.onSend = (o) => {
+        setTimeout(() => {
+          o.onRunEvent?.(denied('c1', 'plugin', 'external says no'))
+          recordRefusal('sdk-run-5', 'Bash', { by: 'human', reason: 'person said no' })
+          o.onRunEvent?.(denied('c2', 'plugin', 'm2'))
+          done()
+        }, 5)
+      }
+    })
+    const out = await drain([
+      toolDone('c1', { stdout: '', stderr: 'x', exitCode: 126 }),
+      toolDone('c2', { stdout: '', stderr: 'x', exitCode: 126 }),
+    ])
+    const byCall = Object.fromEntries(results(out).map((r) => [r.callId, r.refusal]))
+    expect(byCall.c1).toMatchObject({ by: 'plugin', reason: 'external says no' })
+    expect(byCall.c2).toMatchObject({ by: 'human', reason: 'person said no' })
   })
 
   it('entries a run left unmatched are dropped when it ends', async () => {

@@ -679,6 +679,7 @@ function buildSendOptions(
   factoryOpts: { disableTools?: boolean } | undefined,
   compiled: CompiledAgentOptions,
   refusals: Map<string, PendingRefusal>,
+  handle: { id?: string },
 ): SendOptions {
   const sendOptions: SendOptions = {}
   if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
@@ -690,8 +691,11 @@ function buildSendOptions(
   sendOptions.onRunEvent = (ev) => {
     const found = refusalFromRunEvent(ev)
     if (found !== undefined) {
-      // Resolved in denial-event order by `streamTimeline` (which knows the run handle's id; the
-      // SDK event itself carries none) and kept by call id.
+      // Take the ledger entry now, at the denial event: a framework veto records its entry before
+      // the SDK reports the denial, so a later external denial of the same tool cannot claim it.
+      // The SDK event carries no runId, so the run handle's id is used; `streamTimeline` resolves
+      // anything seen before the handle was known.
+      if (handle.id !== undefined) resolveRefusal(found, handle.id)
       refusals.set(found.callId, found)
     }
     return callerSink?.(ev)
@@ -837,8 +841,16 @@ async function* streamSdkAgent(
     // to compare content. `state` survives only to carry the two facts the tail block below needs.
     const state = { sawError: false, lastEventType: '' }
     const refusals = new Map<string, PendingRefusal>()
-    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled, refusals)
+    const handle: { id?: string } = {}
+    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled, refusals, handle)
     const sendPromise = agent.send(buildSendInput(message, overrides), sendOptions)
+    void Promise.resolve(sendPromise).then(
+      (run) => {
+        const r = run as { id?: unknown; runId?: unknown }
+        handle.id = [r.id, r.runId].find((v): v is string => typeof v === 'string')
+      },
+      () => undefined,
+    )
     // The generator is opened lazily so consumption starts only when the caller pulls — the loop is
     // detached inside the SDK (`setTimeout(() => void driveLoop())`), so the run handle is available
     // long before the turn finishes and the timeline streams live.
