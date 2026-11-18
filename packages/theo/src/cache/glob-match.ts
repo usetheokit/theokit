@@ -193,8 +193,25 @@ function parseSeq(cur: Cursor, stop: string): Node[] {
   }
   // picomatch compiles `!(x)` followed by more pattern to a lookahead at the group's start only
   // (`!(a).png` rejects `aa.png`); only a group that ends the pattern must not match what is left.
-  return out.map((n, k) =>
-    n.t === 'group' && n.k === '!' && k < out.length - 1 ? { ...n, k: '!>' } : n,
+  // When the group has a `*` inside and the rest is a bare `.ext`, the lookahead includes that rest
+  // (`!(*.js).js` accepts `a.js`).
+  return out.map((n, k) => {
+    if (n.t !== 'group' || n.k !== '!' || k >= out.length - 1) return n
+    const rest = out.slice(k + 1)
+    const withRest = hasStar(n) && isBareExt(rest)
+    return { ...n, k: '!>', alts: withRest ? n.alts.map((alt) => [...alt, ...rest]) : n.alts }
+  })
+}
+
+function hasStar(g: Extract<Node, { t: 'group' }>): boolean {
+  return g.alts.some((alt) => alt.some((n) => n.t === 'star' || n.t === 'star1' || n.t === 'any'))
+}
+
+/** `.ext`: a dot, then literal characters that are not `.`, `/` or `\`. */
+function isBareExt(rest: Node[]): boolean {
+  return (
+    rest.length > 1 &&
+    rest.every((n, k) => n.t === 'lit' && (k === 0 ? n.c === '.' : !'./\\'.includes(n.c)))
   )
 }
 
@@ -353,10 +370,18 @@ function step(node: Node, ctx: Ctx, from: Set<number>): Set<number> {
   }
 }
 
+/** The pattern ends in `*` or `]` that no backslash escapes (an even run of backslashes before it). */
+function endsWithLiveStar(pattern: string): boolean {
+  if (!pattern.endsWith('*') && !pattern.endsWith(']')) return false
+  let run = 0
+  while (pattern.charAt(pattern.length - 2 - run) === '\\' && run < pattern.length - 1) run++
+  return run % 2 === 0
+}
+
 export function compileGlob(pattern: string): (path: string) => boolean {
   // picomatch allows one trailing slash on the path only after a final `*` / `**` / `[...]`
   // (`/api/*` matches `/api/a/`); `/foo` does not match `/foo/`.
-  const slashOk = /[*\]]$/.test(pattern) && !/\\[*\]]$/.test(pattern)
+  const slashOk = endsWithLiveStar(pattern)
   const nodes = parseSeq({ p: pattern, i: 0 }, '')
   return (path) => {
     const ends = run(nodes, { s: path, memo: new Map() }, new Set([0]))

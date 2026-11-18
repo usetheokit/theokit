@@ -110,6 +110,17 @@ describe('compileRouteRules + resolveRouteRule', () => {
     expect(m('/img/!(a).png', '/img/a.png')).toBe(false)
     expect(m('/img/!(a).png', '/img/b.png')).toBe(true)
     expect(m('/img/!(a).png', '/img/ba.png')).toBe(true)
+    expect(m('/x/!(*.js).js', '/x/a.js')).toBe(true)
+    expect(m('/x/!(*.js).js', '/x/a.js.js')).toBe(false)
+    expect(m('/x/!(a*).png', '/x/ab.png')).toBe(false)
+  })
+
+  it('treats a star after an escaped backslash as a live final star', () => {
+    const m = (glob: string, path: string): boolean =>
+      resolveRouteRule(path, compileRouteRules({ [glob]: { maxAge: 1 } })) !== undefined
+    expect(m('/x/\\\\*', '/x/\\z/')).toBe(true)
+    expect(m('/x/\\*', '/x/*/')).toBe(false)
+    expect(m('/x/\\*', '/x/*')).toBe(true)
   })
 
   it('does not backtrack excessively on overlapping wildcards', () => {
