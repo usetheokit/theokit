@@ -24,10 +24,10 @@ export interface ForkIfBusyOptions {
 export class ForkedSessionBusyError extends TheokitAgentError {
   override readonly name = 'ForkedSessionBusyError'
   constructor(
-    readonly from: string,
-    readonly to: string,
+    readonly fromId: string,
+    readonly toId: string,
   ) {
-    super(`Session "${from}" is busy and its fork "${to}" is busy too; not retrying again.`, {
+    super(`Session "${fromId}" is busy and its fork "${toId}" is busy too; not retrying again.`, {
       code: 'session_busy_after_fork',
       isRetryable: false,
     })
@@ -59,9 +59,9 @@ export function streamTurnForkingIfBusy(
 
   let resolveId!: (id: string) => void
   let rejectId!: (e: unknown) => void
-  const idPromise = new Promise<string>((res, rej) => {
-    resolveId = res
-    rejectId = rej
+  const idPromise = new Promise<string>((resolve, reject) => {
+    resolveId = resolve
+    rejectId = reject
   })
   idPromise.catch(() => undefined)
 
@@ -99,21 +99,19 @@ export function streamTurnForkingIfBusy(
   async function* run(): AsyncGenerator<UIMessageChunk> {
     try {
       let id = sessionId
-      let forked = false
       const fork = (): void => {
         const to = forkId(id)
         options.onFork?.(id, to)
-        forked = true
         id = to
       }
-      if (isBusy(id)) fork()
+      const preflight = isBusy(id)
+      if (preflight) fork()
       let busy = yield* attempt(id)
-      if (busy) {
-        if (forked) throw new ForkedSessionBusyError(sessionId, id)
+      if (busy && !preflight) {
         fork()
         busy = yield* attempt(id)
-        if (busy) throw new ForkedSessionBusyError(sessionId, id)
       }
+      if (busy) throw new ForkedSessionBusyError(sessionId, id)
       resolveId(id)
     } catch (e) {
       rejectId(e)
