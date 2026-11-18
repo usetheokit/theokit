@@ -56,6 +56,7 @@ export function readCompiledWiring(options: Record<string, unknown>): CompiledWi
   const skills = options.skills as Loose
   const inline = names(skills?.inline)
   const reader = tools.find(
+    // eslint-disable-next-line sonarjs/no-empty-collection -- populated by sdk-adapter.ts
     (t) => (t as { name?: unknown }).name === 'skill_read' && BUILD_WIRED_SKILL_READERS.has(t),
   )
   const sources = ((options.local as Loose)?.settingSources as string[] | undefined) ?? []
