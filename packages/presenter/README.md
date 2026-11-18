@@ -71,6 +71,19 @@ key is unknown — never a silent fallback.
 `foldTurnLifecycle` collapses a turn's events into a `TurnLifecycle` when a surface wants the
 outcome rather than the stream.
 
+## Tool kinds
+
+`TOOL_KINDS` is one table of known tool names. Each entry has a `kind` (`shell`, `diff`, `read`, `write`, `list`, `search`, `fetch`, `plan`, `memory`, `other`) and the input `targetKeys` that name the call's target, in preference order. `toolKindOf(name)` looks a name up.
+
+```ts
+import { toolKindOf } from '@theokit/presenter'
+
+toolKindOf('shell') // { kind: 'shell', targetKeys: ['command', 'cmd'] }
+toolKindOf('execute_sql') // undefined
+```
+
+Lookup is exact by design. A name that is not in the table gives `undefined`, never a substring guess, so `thread_summary` is not a read tool and `execute_sql` is not a shell tool. The table includes the SDK's builtin tools, pinned to the SDK type at compile time.
+
 ## Reading a tool result
 
 `readToolResult(raw)` turns any tool result into one `ToolResultView` (`shell`, `diff`, `error` or `text`) and never throws. It accepts both shell dialects:

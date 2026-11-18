@@ -44,3 +44,7 @@ apps/
 
 # Acceptance records are kept exactly as they were written on the day of the run.
 docs/acceptance/
+
+# A third-party package kept byte for byte as its upstream tag plus one patch, so the diff against that
+# tag is the whole audit. vendor/picomatch/README.md says why it exists and when it goes.
+vendor
