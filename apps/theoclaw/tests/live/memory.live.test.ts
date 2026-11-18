@@ -22,9 +22,15 @@ import type { SessionAgent } from '../../src/sessions/session-agents.js'
 const LIVE = process.env.THEOCLAW_LIVE === '1'
 const TURN_TIMEOUT_MS = 180_000
 
-// A real, recognizable city: a model "corrects" a random letter string, so a nonsense word cannot be recalled verbatim.
-const CITIES = ['Lisbon', 'Nairobi', 'Reykjavik', 'Osaka', 'Tallinn', 'Dunedin', 'Bergen', 'Oslo', 'Perth', 'Denver']
-const pickCity = (): string => CITIES[randomInt(CITIES.length)] as string
+// A pronounceable made-up name plus digits: unpredictable (about 1e10 values), and a model copies it
+// verbatim because it reads as a name, where a random letter string gets "corrected".
+const CONSONANTS = 'bdfghklmnprstvz'
+const VOWELS = 'aeiou'
+const pickCity = (): string => {
+  const syllable = (): string => `${CONSONANTS[randomInt(CONSONANTS.length)]}${VOWELS[randomInt(VOWELS.length)]}`
+  const name = `${syllable()}${syllable()}${syllable()}${syllable()}`
+  return `${name[0]?.toUpperCase()}${name.slice(1)}-${randomInt(1000, 10000)}`
+}
 const lower = (text: string): string => text.toLowerCase()
 
 describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', () => {
@@ -41,7 +47,7 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
       })
       const telegram = { platform: 'telegram', sender: { id: 'u' }, channel: { type: 'dm', id: 'u' } } as never
       await withAgent(telegram, async (lease) => {
-        const run = await lease.agent.send(`Please remember: my home city is called ${city}. Reply "ok".`)
+        const run = await lease.agent.send(`Please remember: my home city is called ${city} (a made-up name, keep it exactly). Reply "ok".`)
         for await (const message of run.stream()) void message
         await run.wait()
         lease.release()
@@ -72,14 +78,22 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
       expect(lower(recalled)).toContain(lower(city))
 
       // A different surface (the control agent) asks session_search through a real model.
+      let searches = 0
+      const spied = Object.create(store) as MemoryStore
+      spied.search = (...args: Parameters<MemoryStore['search']>) => {
+        searches += 1
+        return store.search(...args)
+      }
       const control = await createChannelAgentFactory(env, (options) =>
-        Agent.create({ ...options, tools: [sessionSearchTool(store)] } as never),
+        Agent.create({ ...options, tools: [sessionSearchTool(spied)] } as never),
       )()
       const run = await (control as unknown as { send(m: string): Promise<{ stream(): AsyncIterable<unknown>; wait(): Promise<{ result?: string }> }> }).send(
         'Use session_search to look up what my home city is called, and answer with just the name.',
       )
       for await (const message of run.stream()) void message
       expect(lower((await run.wait()).result ?? '')).toContain(lower(city))
+      // The answer came through the tool, not a guess.
+      expect(searches).toBeGreaterThan(0)
     },
     TURN_TIMEOUT_MS,
   )
