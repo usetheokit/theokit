@@ -137,6 +137,18 @@ function livenessFs(fs: ProjectsGCFs): FsSeam {
   }
 }
 
+function countEntries(root: string, projects: readonly string[], fs: ProjectsGCFs): number {
+  let total = 0
+  for (const project of projects) {
+    try {
+      total += fs.readdir(join(root, project)).length
+    } catch {
+      // an unreadable project is classified undetermined by the oracle
+    }
+  }
+  return total
+}
+
 function defaultClassify(
   root: string,
   projects: readonly string[],
@@ -147,7 +159,10 @@ function defaultClassify(
     // The cwd is read from the transcripts themselves; no guessed pool, so a project whose
     // transcripts name no cwd stays `undetermined` instead of being searched for.
     candidatePaths: () => [],
-    budget: 8 * projects.length + 8,
+    // Every transcript is sampled, so a live colliding cwd past the first few is never missed; the
+    // budget covers one listing, one header read and one existence probe per transcript.
+    transcriptSamples: Number.MAX_SAFE_INTEGER,
+    budget: 8 * projects.length + 8 + 4 * countEntries(root, projects, fs),
     fs: livenessFs(fs),
   })
 }
@@ -284,7 +299,8 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
     }
     if (live && cwd !== undefined) {
       const cwds = new Set([cwd])
-      let unattributed: string | undefined
+      // A transcript that cannot be stat-ed has a header nobody read; it may name a cwd not yet seen.
+      let unattributed: string | undefined = [...unreadableTranscripts][0]
       for (const entry of entries) {
         if (entry.kind !== 'transcript') continue
         try {

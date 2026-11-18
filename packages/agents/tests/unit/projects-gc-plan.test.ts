@@ -269,6 +269,54 @@ describe('planProjectsGC protection edge cases', () => {
     expect(result.candidates).toEqual([])
     expect(result.errors).toHaveLength(1)
   })
+
+  it('the default classifier sees a live colliding cwd beyond its first three transcripts', async () => {
+    const other = '/work-app'
+    const old = (NOW - 300 * DAY) / 1000
+    for (const id of ['a', 'b', 'c', 'z-theirs']) {
+      const owner = id === 'z-theirs' ? other : CWD
+      const path = transcriptPath(root, owner, id)
+      writeFileSync(path, JSON.stringify({ sessionId: id, cwd: owner }) + '\n')
+      utimesSync(path, old, old)
+    }
+    transcript('new', 1)
+    const real = defaultFs()
+    const result = await planProjectsGC({
+      projectsRoot: projects,
+      keepLast: 1,
+      maxAgeDays: 7,
+      now: NOW,
+      fs: {
+        ...real,
+        stat: (p) => {
+          if (p === other) return { isDirectory: true, mtimeMs: NOW }
+          if (p === CWD) throw Object.assign(new Error('gone'), { code: 'ENOENT' })
+          return real.stat(p)
+        },
+      },
+      listRegistry: (cwd) => Promise.resolve(cwd === other ? [{ id: 'z-theirs' }] : []),
+    })
+    expect(result.liveCwds).toContain(other)
+    expect(result.candidates.map((c) => c.target)).not.toContain(
+      transcriptPath(root, other, 'z-theirs'),
+    )
+  })
+
+  it('a transcript that cannot be stat-ed keeps a live project whole', async () => {
+    transcript('new', 1)
+    const hidden = transcript('hidden', 100)
+    const real = defaultFs()
+    const result = await plan({
+      fs: {
+        ...real,
+        stat: (p) => {
+          if (p === hidden) throw new Error('EACCES')
+          return real.stat(p)
+        },
+      },
+    })
+    expect(result.candidates).toEqual([])
+  })
 })
 
 function defaultFs(): ProjectsGCFs {
