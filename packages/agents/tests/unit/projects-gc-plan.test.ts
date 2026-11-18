@@ -302,6 +302,25 @@ describe('planProjectsGC protection edge cases', () => {
     )
   })
 
+  it('a registry cwd discovered only through a newest-kept transcript header still protects an old session', async () => {
+    const other = '/work-app'
+    const old = (NOW - 300 * DAY) / 1000
+    const registered = transcript('registered', 300)
+    const mine = transcriptPath(root, other, 'mine')
+    writeFileSync(mine, JSON.stringify({ sessionId: 'mine', cwd: other }) + '\n')
+    utimesSync(mine, (NOW - DAY) / 1000, (NOW - DAY) / 1000)
+    utimesSync(registered, old, old)
+    const asked: string[] = []
+    const result = await plan({
+      listRegistry: (cwd) => {
+        asked.push(cwd)
+        return Promise.resolve(cwd === other ? [{ id: 'registered' }] : [])
+      },
+    })
+    expect(asked).toContain(other)
+    expect(result.candidates.map((c) => c.target)).not.toContain(registered)
+  })
+
   it('a transcript that cannot be stat-ed keeps a live project whole', async () => {
     transcript('new', 1)
     const hidden = transcript('hidden', 100)
