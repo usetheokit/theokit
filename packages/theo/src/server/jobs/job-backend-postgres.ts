@@ -290,6 +290,7 @@ export class PostgresJobBackend implements JobBackend {
       `DELETE FROM ${this.#table}
        WHERE name = $1 AND idempotency_key = $2
          AND leased_at IS NULL AND locked_until IS NULL AND failed_at IS NULL AND attempts = 0
+         AND last_error IS NULL
        RETURNING id`,
       [input.name, input.idempotencyKey],
     )

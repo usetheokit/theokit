@@ -567,6 +567,19 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-prereplay'`)
       })
 
+      it('test_a_job_an_old_worker_leased_and_failed_after_the_migration_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-oldworker' })
+        await backend.migrate()
+        // An old worker does not know `leased_at`: it leases, fails for good, and the job is replayed.
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET attempts = 0, failed_at = NULL, locked_until = NULL,
+           leased_at = NULL, last_error = 'boom' WHERE idempotency_key = 'k-oldworker'`,
+        )
+        expect(await cancel('k-oldworker')).toBe(false)
+        expect(await count('k-oldworker')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-oldworker'`)
+      })
+
       it('test_a_failed_job_is_left_alone', async () => {
         await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-failed' })
         await pool.query(
