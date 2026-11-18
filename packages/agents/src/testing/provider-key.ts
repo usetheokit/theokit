@@ -47,5 +47,7 @@ export function assertProviderKeyWhenRequired(
 
 /** A vitest `globalSetup` function an app can re-export from a one-line setup file. */
 export function requireProviderKeySetup(opts: ProviderKeyGuardOptions = {}): () => void {
-  return () => assertProviderKeyWhenRequired(process.env, opts)
+  return () => {
+    assertProviderKeyWhenRequired(process.env, opts)
+  }
 }
