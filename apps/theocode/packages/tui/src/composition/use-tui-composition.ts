@@ -65,7 +65,7 @@ function useConversationState(s: ReturnType<typeof useTuiSession>) {
   }
 }
 
-export function turnInterrupt(d: {
+export function useTurnInterrupt(d: {
   agent: { abort: () => void; thread: Parameters<typeof lastMessageId>[0] }
   markInterrupted: (id: string | undefined) => void
   streaming: boolean
@@ -102,7 +102,8 @@ export function turnInterrupt(d: {
 
 interface InterruptAndBacktrackDeps {
   screen: ReturnType<typeof useScreenState>
-  agent: Parameters<typeof useBacktrack>[0]['agent'] & Parameters<typeof turnInterrupt>[0]['agent']
+  agent: Parameters<typeof useBacktrack>[0]['agent'] &
+    Parameters<typeof useTurnInterrupt>[0]['agent']
   markInterrupted: (id: string | undefined) => void
   stdout: Parameters<typeof useBacktrack>[0]['stdout']
   streaming: boolean
@@ -136,7 +137,7 @@ function useInterruptAndBacktrack(d: InterruptAndBacktrackDeps) {
     setPendingQuestion,
     exit,
   } = d
-  const interruptTurn = turnInterrupt(d)
+  const interruptTurn = useTurnInterrupt(d)
   const backtrack = useBacktrack({
     agent,
     stdout,

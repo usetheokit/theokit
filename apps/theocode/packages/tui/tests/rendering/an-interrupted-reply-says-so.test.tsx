@@ -10,7 +10,7 @@ import { Text } from 'ink'
 import { render } from 'ink-testing-library'
 import { describe, expect, it, vi } from 'vitest'
 
-import { turnInterrupt } from '../../src/composition/use-tui-composition.js'
+import { useTurnInterrupt } from '../../src/composition/use-tui-composition.js'
 import { makeInterruptTurn } from '../../src/agent-session/interrupt.js'
 import { INTERRUPTED_TEXT, lastMessageId } from '../../src/rendering/interrupt-marks.js'
 import { useTimeline } from '../../src/rendering/use-timeline.js'
@@ -118,12 +118,12 @@ describe('the interrupt records which message it cut', () => {
   })
 })
 
-describe('turnInterrupt keeps its fork guard across renders', () => {
+describe('useTurnInterrupt keeps its fork guard across renders', () => {
   it('test_a_rerender_while_a_fork_is_pending_does_not_allow_a_second_fork', () => {
     const fork = vi.fn(() => new Promise<never>(() => undefined))
     let interrupt: (() => void) | undefined
     const Probe = ({ n }: { n: number }) => {
-      interrupt = turnInterrupt({
+      interrupt = useTurnInterrupt({
         agent: { abort: vi.fn(), thread: [] as never },
         markInterrupted: vi.fn(),
         streaming: true,

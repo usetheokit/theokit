@@ -98,10 +98,10 @@ function build(): TuiRoot {
   const transport = createChatTransport({
     onHookVeto: vetoRelay.emit,
     getEffort: () => session.effort(),
-    getSessionId: () => {
-      // Read once per turn: a turn starting invalidates any fork still copying the transcript.
+    getSessionId: () => session.session(),
+    // A turn starting invalidates any fork still copying the transcript.
+    onTurnStart: () => {
       turnEpoch += 1
-      return session.session()
     },
     getSessionPty: () => ptyOwner,
     takePendingImages: () => session.takeImages(),

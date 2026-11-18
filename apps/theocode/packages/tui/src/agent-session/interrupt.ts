@@ -1,5 +1,3 @@
-import type { ForkResult } from '../persistence/fork-session.js'
-
 export interface InterruptDeps {
   abort: () => void
   forkSession: () =>

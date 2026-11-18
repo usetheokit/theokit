@@ -22,6 +22,11 @@ import { workingDirectory } from '../working-directory.js'
 export interface ChatTransportDeps {
   getEffort: () => ReasoningEffort
   getSessionId: () => string
+  /**
+   * Called synchronously as a turn starts, before any await, so a session fork still copying can
+   * tell a turn began on its session and refuse to be adopted.
+   */
+  onTurnStart?: () => void
   takePendingImages: () => AttachedImage[] | undefined
   takePendingModel: () => string | undefined
   credential: () => ResolvedCredential | { error: Error }
@@ -41,6 +46,7 @@ export function createChatTransport(deps: ChatTransportDeps): InProcessTransport
   return new InProcessTransport({
     run: (input) =>
       (async function* () {
+        deps.onTurnStart?.()
         // B-088 — a failure belongs to the turn that hit it. Clearing here, at the start of the
         // run, is what stops `/mcp` reporting a server that has since recovered.
         startMcpFailureTurn()
