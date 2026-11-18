@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 
 import { AgentBuilder, ContextualTool } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
@@ -106,23 +107,26 @@ describe('declareAgentShape — the composed shape as a value', () => {
 })
 
 describe('shapeToolsAsCustomTools', () => {
-  it('returns JSON-Schema tools and rejects a Zod-schema tool', () => {
-    const json = {
-      name: 'j',
-      description: 'd',
-      inputSchema: { type: 'object' },
-      handler: () => 'x',
+  const base = { name: 'j', description: 'd', handler: () => 'x' }
+  const shapeOf = (inputSchema: unknown) =>
+    declareAgentShape('a', [new ToolsCapability([{ ...base, inputSchema } as never])])
+
+  it('returns JSON-Schema tools and non-plain object schemas unchanged', () => {
+    for (const schema of [{ type: 'object' }, Object.create({ type: 'object' })]) {
+      const out = shapeToolsAsCustomTools(shapeOf(schema))
+      expect(out.map((t) => t.name)).toEqual(['j'])
+      expect(out[0]?.inputSchema).toBe(schema)
     }
-    const zod = { ...json, name: 'z', inputSchema: { parse: () => ({}) } }
-    const ok = declareAgentShape('a', [new ToolsCapability([json as never])])
-    expect(shapeToolsAsCustomTools(ok).map((t) => t.name)).toEqual(['j'])
-    const bad = declareAgentShape('a', [new ToolsCapability([zod as never])])
-    expect(() => shapeToolsAsCustomTools(bad)).toThrow(/"z"/)
-    for (const odd of [[], new Date(), 'x', undefined]) {
-      const shape = declareAgentShape('a', [
-        new ToolsCapability([{ ...json, name: 'o', inputSchema: odd } as never]),
-      ])
-      expect(() => shapeToolsAsCustomTools(shape)).toThrow(/"o"/)
+  })
+
+  it('lowers a live Zod schema to JSON Schema instead of throwing', () => {
+    const [tool] = shapeToolsAsCustomTools(shapeOf(z.object({ q: z.string() })))
+    expect(tool?.inputSchema).toMatchObject({ type: 'object' })
+  })
+
+  it('rejects a non-object schema', () => {
+    for (const odd of [[], 'x', undefined, null]) {
+      expect(() => shapeToolsAsCustomTools(shapeOf(odd))).toThrow(/"j"/)
     }
   })
 })

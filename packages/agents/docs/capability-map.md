@@ -10,9 +10,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1231 export(s) across 25 entry point(s).
+1169 export(s) across 25 entry point(s).
 
-Measured against `@theokit/sdk@5.17.0`.
+Measured against `@theokit/sdk@5.11.0`.
 
 ## `@theokit/agents`
 
@@ -94,7 +94,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `deriveConversationId` | value |
 | `discoverSubagents` | value |
 | `encodeAcpMessage` | value |
-| `ERROR_CODE_DATA_PART` | value |
 | `estimateTokens` | value |
 | `extractThinkTagStream` | value |
 | `extractToolUses` | value |
@@ -133,7 +132,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `LayerOrderError` | value |
 | `listSubagentNames` | value |
 | `loadMcpJson` | value |
-| `loadMcpScopes` | value |
 | `loadPersonalMcpServers` | value |
 | `loadSubagentDefinition` | value |
 | `loopStrategyConfigSchema` | value |
@@ -220,7 +218,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolsCapability` | value |
 | `Toolset` | value |
 | `ToolsetError` | value |
-| `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
 | `UngatedCapabilityError` | value |
@@ -237,7 +234,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `WindowBudgetExceededError` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
-| `WithheldBuiltinToolsCapability` | value |
 | `withPreCompaction` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `A2ACapabilities` | type |
@@ -356,7 +352,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `McpOAuthConfig` | type |
 | `McpRegistryConfig` | type |
 | `McpRequestContext` | type |
-| `McpScopesResult` | type |
 | `McpSelection` | type |
 | `McpServerConfig` | type |
 | `McpServerInfo` | type |
@@ -371,7 +366,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `OpenAIChatMessage` | type |
 | `OpenAIChatRequest` | type |
 | `OpenAICompatibleRoutesOptions` | type |
-| `OpenAICompletion` | type |
 | `OpenAITextPart` | type |
 | `OutputModerationOptions` | type |
 | `ParsedModelId` | type |
@@ -493,7 +487,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
 | `DelegationTimeoutError` | value |
-| `ERROR_CODE_DATA_PART` | value |
 | `extractThinkTagStream` | value |
 | `flushPendingToolResults` | value |
 | `generateAgentManifest` | value |
@@ -508,7 +501,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `isToolCall` | value |
 | `isToolResult` | value |
 | `loadMcpJson` | value |
-| `loadMcpScopes` | value |
 | `loadPersonalMcpServers` | value |
 | `MAX_REQUEST_BODY_BYTES` | value |
 | `McpFileError` | value |
@@ -527,7 +519,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `streamAgentResponse` | value |
 | `streamAgentUIMessages` | value |
 | `toAgentFactory` | value |
-| `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
 | `UntrustedSettingSourceError` | value |
@@ -586,12 +577,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `McpApprovalSpec` | type |
 | `McpRegistryConfig` | type |
 | `McpRequestContext` | type |
-| `McpScopesResult` | type |
 | `McpSelection` | type |
 | `OpenAIChatMessage` | type |
 | `OpenAIChatRequest` | type |
 | `OpenAICompatibleRoutesOptions` | type |
-| `OpenAICompletion` | type |
 | `OpenAITextPart` | type |
 | `PartialToolCallEvent` | type |
 | `PermissionsPluginOptions` | type |
@@ -651,9 +640,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createSandboxBackend` | value |
 | `detectBwrap` | value |
 | `detectBwrapMemoized` | value |
-| `DockerSandbox` | value |
-| `E2B_CA_BUNDLE` | value |
-| `E2BSandbox` | value |
 | `interactiveWrapCommand` | value |
 | `LinuxSandbox` | value |
 | `LocalSandbox` | value |
@@ -671,24 +657,17 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SandboxNotAvailableError` | value |
 | `SandboxSecurityError` | value |
 | `seccompPathForArch` | value |
-| `shellEscapePosix` | value |
 | `wrapCommandForSandbox` | value |
 | `writableRootsFor` | value |
 | `BwrapArgvOptions` | type |
 | `BwrapDetection` | type |
 | `BwrapProbes` | type |
 | `CreateSandboxBackendOptions` | type |
-| `DockerRunner` | type |
-| `DockerRunResult` | type |
-| `DockerSandboxConfig` | type |
-| `E2BSandboxConfig` | type |
-| `E2BSandboxHandle` | type |
 | `ExecuteResult` | type |
 | `InteractiveWrapOptions` | type |
 | `ProvisionRepoOptions` | type |
 | `SandboxConfig` | type |
 | `SandboxMode` | type |
-| `SandboxNetworkPolicy` | type |
 | `SandboxPosture` | type |
 | `SandboxProvider` | type |
 | `SeccompOptions` | type |
@@ -722,7 +701,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SessionBusyError` | value |
 | `sessionHasWriter` | value |
 | `sessionUuidFor` | value |
-| `SqliteSessionStore` | value |
 | `transcriptPath` | value |
 | `transcriptRoot` | value |
 | `withCwdMutex` | value |
@@ -738,7 +716,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SessionIdSource` | type |
 | `SessionListing` | type |
 | `SessionWriterLease` | type |
-| `SqliteSessionStoreOptions` | type |
 | `TranscriptBlock` | type |
 | `TranscriptMessage` | type |
 | `WalApplyResult` | type |
@@ -788,7 +765,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProviderPrefixMismatchError` | value |
 | `readAuthFile` | value |
 | `readStoredOAuth` | value |
-| `RefreshFailure` | value |
 | `refreshOAuthTokens` | value |
 | `requestDeviceCode` | value |
 | `requireCredential` | value |
@@ -798,7 +774,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `writeCredential` | value |
 | `AgentCredentialInput` | type |
 | `AuthMethod` | type |
-| `AuthProviderOptions` | type |
 | `Classification` | type |
 | `CredentialProviderDescriptor` | type |
 | `CredentialResolution` | type |
@@ -837,23 +812,16 @@ Measured against `@theokit/sdk@5.17.0`.
 |---|---|
 | `AgentMemoryError` | value |
 | `applySubagentMemory` | value |
-| `assertBootstrapped` | value |
 | `blockAppliesTo` | value |
-| `BootstrapNotRunError` | value |
-| `BootstrapStepError` | value |
-| `CLAUDE_SETTINGS_KEYS` | value |
 | `composeInstructions` | value |
 | `contextPressure` | value |
 | `ContextPressureThresholdError` | value |
 | `currentOperatorPolicy` | value |
 | `DEFAULT_CONTEXT_PRESSURE_THRESHOLDS` | value |
-| `defineAppBootstrap` | value |
 | `effectiveContextWindow` | value |
 | `expandCommandTemplate` | value |
 | `expandInstructionImports` | value |
 | `FILE_INLINE_CAP` | value |
-| `firstSettingsFile` | value |
-| `FOREIGN_KEY_DECISIONS` | value |
 | `frontmatterValue` | value |
 | `LayeredConfig` | value |
 | `LayerOutOfOrderError` | value |
@@ -869,13 +837,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `OperatorRootUnreadableError` | value |
 | `OutputStyleError` | value |
 | `permissionRulesFromSettings` | value |
-| `projectEnvStep` | value |
-| `readSettingsFile` | value |
 | `resolveAgentMemory` | value |
 | `resolveOperatorRoots` | value |
 | `resolveOutputStyle` | value |
 | `SETTINGS_LAYERS` | value |
-| `settingsCandidates` | value |
 | `settingsLayerChain` | value |
 | `splitFrontmatter` | value |
 | `templateHints` | value |
@@ -883,9 +848,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `TrustStorePermissionsError` | value |
 | `AgentMemory` | type |
 | `AgentMemoryScope` | type |
-| `AppBootstrap` | type |
-| `BootstrapContext` | type |
-| `BootstrapStep` | type |
 | `ComposedInstructions` | type |
 | `ComposeInstructionsOptions` | type |
 | `ConfigLayer` | type |
@@ -920,12 +882,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PermissionTranslation` | type |
 | `PrecedenceReport` | type |
 | `ProvenancePerKey` | type |
-| `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
 | `Settings` | type |
-| `SettingsCandidate` | type |
-| `SettingsCandidates` | type |
-| `SettingsFileRead` | type |
 | `SettingsLayer` | type |
 | `ShellResult` | type |
 | `SkippedDefinition` | type |
@@ -968,7 +926,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createShellTool` | value |
 | `createTaskCompleteTool` | value |
 | `createTaskDeclareTool` | value |
-| `createTextToSpeechTool` | value |
 | `createTodolistTool` | value |
 | `createUpdatePlanTool` | value |
 | `createViewImageTool` | value |
@@ -976,9 +933,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createWebSearchTool` | value |
 | `createWriteFileTool` | value |
 | `createWriteStdinTool` | value |
-| `DEFAULT_MAX_AUDIO_BYTES` | value |
 | `DEFAULT_MAX_IMAGE_BYTES` | value |
-| `DEFAULT_MAX_TEXT_CHARS` | value |
 | `DEFAULT_TOOL_GUIDANCE` | value |
 | `DelegateToolConfigError` | value |
 | `denyCatastrophicCommands` | value |
@@ -1025,7 +980,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CreateScheduleToolsOptions` | type |
 | `CreateSearchTextToolOptions` | type |
 | `CreateShellToolOptions` | type |
-| `CreateTextToSpeechToolOptions` | type |
 | `CreateViewImageToolOptions` | type |
 | `CreateWebFetchToolOptions` | type |
 | `CreateWebSearchToolOptions` | type |
@@ -1052,11 +1006,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ScreenedFetchOptions` | type |
 | `SessionArtifactStore` | type |
 | `SessionArtifactStoreOptions` | type |
-| `SynthesizedAudio` | type |
 | `TaskRegistry` | type |
 | `TaskToolOptions` | type |
-| `TextToSpeechCallback` | type |
-| `TextToSpeechResult` | type |
 | `TodoItem` | type |
 | `TodolistTool` | type |
 | `ToolGuidanceMap` | type |
@@ -1096,18 +1047,14 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
-| `AGENT_ACTION_HEADERS` | value |
 | `AgentClient` | value |
 | `agentHandle` | value |
-| `agentRequestHeaders` | value |
 | `AgentStreamInterruptedError` | value |
 | `ApprovalAbortedError` | value |
-| `asGoalLoopAgent` | value |
 | `ChannelTransport` | value |
 | `consumeChunkStream` | value |
 | `consumeUIMessageStream` | value |
 | `extractLastUserText` | value |
-| `GoalTurnFailedError` | value |
 | `HttpTransport` | value |
 | `InProcessTransport` | value |
 | `isAgentHandle` | value |
@@ -1130,7 +1077,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `InProcessTransportOptions` | type |
 | `PendingApproval` | type |
 | `RequestContext` | type |
-| `TurnSettled` | type |
 | `UseAgentStatus` | type |
 | `WireTransport` | type |
 
@@ -1155,7 +1101,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `GCFloorError` | value |
 | `GCProtectionUnavailableError` | value |
 | `listSessions` | value |
-| `listUserTurns` | value |
 | `LivenessBudgetError` | value |
 | `loadOrCreateSessionId` | value |
 | `persistSessionId` | value |
@@ -1190,7 +1135,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ThreadHistoryState` | type |
 | `TranscriptGCOptions` | type |
 | `TranscriptGCPlan` | type |
-| `UserTurnPreview` | type |
 
 ## `@theokit/agents/hooks`
 
@@ -1198,7 +1142,6 @@ Measured against `@theokit/sdk@5.17.0`.
 |---|---|
 | `buildHookHandlers` | value |
 | `CHAIN_BUDGET_MULTIPLIER` | value |
-| `CLAUDE_HOOK_EVENT_ALIASES` | value |
 | `DEFAULT_CONTINUATION_BUDGET` | value |
 | `DEFAULT_HOOK_TIMEOUT_MS` | value |
 | `DRAIN_BUDGET_MS` | value |
@@ -1211,10 +1154,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `hooksPlugin` | value |
 | `inheritHooks` | value |
 | `MAX_OUTPUT_BYTES` | value |
-| `parseClaudeHooks` | value |
 | `parseHookSpecs` | value |
 | `runHookCommand` | value |
-| `runHostHooks` | value |
 | `ApprovalRecord` | type |
 | `ApprovalState` | type |
 | `BuildHookHandlersOptions` | type |
@@ -1225,8 +1166,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `HookRunInput` | type |
 | `HookRunResult` | type |
 | `HookSpec` | type |
-| `HostHookOutcome` | type |
-| `ParsedClaudeHooks` | type |
 
 ## `@theokit/agents/ask`
 
@@ -1313,19 +1252,14 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
-| `CommandRegistryError` | value |
-| `createCommandRegistry` | value |
 | `createShutdown` | value |
 | `DEFAULT_WATCHDOG_MS` | value |
 | `defineCommand` | value |
-| `exitAfterDrain` | value |
 | `routeCommand` | value |
 | `SHUTDOWN_EXIT_CODES` | value |
 | `CleanupTask` | type |
 | `CommandArgument` | type |
 | `CommandDefinition` | type |
-| `CommandRegistry` | type |
-| `ExitAfterDrainDeps` | type |
 | `RoutedInput` | type |
 | `RouteFailure` | type |
 | `Shutdown` | type |

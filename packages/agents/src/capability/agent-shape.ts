@@ -1,4 +1,4 @@
-import type { CustomTool } from '@theokit/sdk'
+import { Tool, type CustomTool } from '@theokit/sdk'
 
 import type { CompiledTool } from '../bridge/agent-compiler.js'
 import { ConfigurationError } from '../errors.js'
@@ -79,29 +79,29 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
   return Object.freeze(shape)
 }
 
-/** A plain `{}` object that is not a Zod schema: the only value the SDK reads as a JSON Schema. */
-function isJsonSchemaObject(schema: unknown): schema is Record<string, unknown> {
-  if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) return false
-  const proto: unknown = Object.getPrototypeOf(schema)
-  if (proto !== Object.prototype && proto !== null) return false
-  return typeof (schema as { parse?: unknown }).parse !== 'function'
-}
-
 /**
  * The shape's tools as the SDK `CustomTool` an app holds, with no cast at the call site.
  *
- * A `CustomTool` carries a JSON-Schema `inputSchema`. A tool whose schema is a live Zod schema
- * (decorator `@Tool({ input })`) is lowered only by the SDK's `Tool.create` inside the adapter, which
- * also wraps the input parsing; this synchronous helper cannot do that, so it REJECTS such a tool
- * with a typed error instead of handing back a `CustomTool` the SDK would misread. Tools with a
- * JSON-Schema object are SDK-ready and are returned as they are, exactly as the adapter forwards them.
+ * A tool whose `inputSchema` is a live Zod schema (decorator `@Tool({ input })`) is lowered through
+ * the SDK's `Tool.create`, the same path the SDK adapter uses. Any other object `inputSchema` is
+ * already SDK-ready and the tool is returned as it is. Only a non-object schema (string, `null`,
+ * `undefined`, array) cannot be a `CustomTool` and is rejected with a typed error.
  */
 export function shapeToolsAsCustomTools(shape: AgentShape): readonly CustomTool[] {
   return shape.tools.map((tool) => {
-    if (!isJsonSchemaObject(tool.inputSchema)) {
+    const schema: unknown = tool.inputSchema
+    if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
       throw new ConfigurationError(
-        `shapeToolsAsCustomTools: tool "${tool.name}" has no JSON-Schema inputSchema (a Zod, array or non-plain-object schema); build it with a JSON-Schema tool such as defineAgentTool`,
+        `shapeToolsAsCustomTools: tool "${tool.name}" has no object inputSchema (a Zod schema or a JSON-Schema object is required)`,
       )
+    }
+    if (typeof (schema as { parse?: unknown }).parse === 'function') {
+      return Tool.create({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: schema,
+        handler: tool.handler as CustomTool['handler'],
+      } as never) as CustomTool
     }
     return tool as unknown as CustomTool
   })
