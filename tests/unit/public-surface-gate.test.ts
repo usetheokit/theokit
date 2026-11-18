@@ -165,6 +165,22 @@ describe('public surface gate', () => {
     ])
   })
 
+  it('does not merge a hash-like file name with the plain one, so a change to either is seen', () => {
+    const index = `import { Shared as A } from './types'\nimport { Shared as B } from './types-internAl'\nexport type Out = [A, B]\n`
+    const files = (inner: string) => ({
+      'types.d.ts': 'export interface Shared { a: string }\n',
+      'types-internAl.d.ts': `export interface Shared { ${inner} }\n`,
+    })
+    const prev = surface(index, files('b: string'))
+    expect(Object.keys(prev.entries['.']?.internals ?? {})).toEqual([
+      'dist/types-internAl.d.ts#Shared',
+      'dist/types.d.ts#Shared',
+    ])
+    expect(run(prev, surface(index, files('b: number')))).toEqual([
+      expect.stringContaining('referenced type dist/types-internAl.d.ts#Shared changed'),
+    ])
+  })
+
   it('fails a stable value export turned into a type-only export', () => {
     const prev = surface('declare class K {}\nexport { K }\n')
     const next = surface('declare class K {}\nexport type { K }\n')
