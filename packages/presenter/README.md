@@ -103,6 +103,10 @@ When both exit-code spellings are present and differ, `exitCode` wins. A missing
 
 `pendingApprovals(messages)` returns every outstanding approval across wire messages, in order, as `PendingApproval { approvalId, toolCallId, toolName, input, question?, timeoutMs? }`. With nothing outstanding it returns one shared empty array. `readPendingApproval(part)` reads a single part. A part in `approval-requested` without a string `approval.id` is skipped, never settled by its `toolCallId`, because `approve()` could not settle it.
 
+## Turn metadata
+
+`readTurnMetadata(chunk)` (from `@theokit/presenter/wire`) reads a `finish` chunk's `messageMetadata` as a `WireTurnMetadata { usage?, cost?, durationMs?, stopReason?, model? }`. Fields of the wrong type are dropped rather than thrown on, and an unknown `stopReason` is dropped. It returns `undefined` for any other chunk or a finish without object metadata. A `stopReason` of `'step_limit'` or `'no_progress'` means the turn was cut, not finished.
+
 ## Subpaths
 
 | Subpath | What lives there |
