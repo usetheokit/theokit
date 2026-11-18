@@ -38,6 +38,6 @@ function isInstalled(req: NodeJS.Require, name: string): boolean {
 export async function loadToolchain(): Promise<void> {
   requireToolchain()
   // tsx ships no types for this side-effect entry.
-  const spec: string = 'tsx/esm'
+  const spec = 'tsx/esm'
   await import(/* @vite-ignore */ spec)
 }
