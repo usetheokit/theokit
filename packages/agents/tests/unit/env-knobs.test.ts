@@ -34,7 +34,14 @@ describe('env knobs', () => {
       knobs: { a: envKnob('A', 'string') },
       optOuts: [],
     })
-    expect(JSON.stringify(audit)).toContain('b')
-    expect(JSON.stringify(audit)).not.toMatch(/"unreachable":\[[^\]]*"a"/)
+    expect(audit.unreachable).toEqual(['b'])
+  })
+
+  it('the config entry exports the env knob helpers', async () => {
+    const entry = await import('../../src/config-entry.js')
+    expect(entry.envKnob).toBe(envKnob)
+    expect(entry.envLayerFrom).toBe(envLayerFrom)
+    expect(entry.coerceEnvValue).toBe(coerceEnvValue)
+    expect(entry.auditEnvKnobs).toBe(auditEnvKnobs)
   })
 })
