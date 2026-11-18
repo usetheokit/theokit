@@ -116,7 +116,10 @@ export async function planAndRunCurrentProjectGC(
   const result = await runTranscriptGC(plan, {
     apply: opts.apply,
     protectedIds,
-    removeFromRegistry: (id) => (own.has(id) ? remove(id) : undefined),
+    // The remover is handed only an id, so re-check that id against live protection at the moment
+    // of removal: a source that became protected after planning must not lose its registry entry
+    // because a fork's first row names it.
+    removeFromRegistry: (id) => (own.has(id) && !protectedIds().has(id) ? remove(id) : undefined),
   })
   return { plan, result }
 }

@@ -32,7 +32,7 @@ interface Fixture {
   cwd: string
 }
 
-function useFixture(): Fixture {
+function withFixture(): Fixture {
   const fx: Fixture = { root: '', cwd: '' }
   beforeEach(() => {
     fx.root = mkdtempSync(join(tmpdir(), 'theocode-gc-root-'))
@@ -69,7 +69,7 @@ function writePointer(fx: Fixture, sessionId: string): void {
   writeFileSync(pointerPath(fx.cwd), `${sessionId}\n`)
 }
 
-const fx = useFixture()
+const fx = withFixture()
 const run = (apply: boolean, extra: Record<string, unknown> = {}) =>
   planAndRunCurrentProjectGC({
     cwd: fx.cwd,
@@ -180,6 +180,29 @@ describe('a fork of a registered session', () => {
     expect(existsSync(fork)).toBe(false)
     expect(existsSync(source)).toBe(true)
     expect(removed, 'the protected source lost its registry entry').toEqual([])
+  })
+})
+
+describe('a source that becomes protected between plan and apply', () => {
+  it('test_a_fork_does_not_remove_a_source_the_pointer_claimed_after_planning', async () => {
+    writeTranscript(fx, 'newest', 1)
+    const source = writeTranscript(fx, 'source-old', 80)
+    writeTranscript(fx, 'the-fork', 90, {
+      content: `${JSON.stringify({ type: 'user', sessionId: 'source-old' })}\n`,
+    })
+    writeTranscript(fx, 'other', 100)
+    const removed: string[] = []
+
+    await run(true, {
+      removeFromRegistry: (id: string) => {
+        removed.push(id)
+        // The TUI starts using the source while the sweep is already applying.
+        writePointer(fx, 'source-old')
+      },
+    })
+
+    expect(existsSync(source)).toBe(true)
+    expect(removed).not.toContain('source-old')
   })
 })
 
