@@ -492,3 +492,5 @@ See `LICENSE`.
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
+
+**One streamed turn.** `runAgentTurn({ agent, message, runId, emit, signal?, sendOptions?, mapEvent? })` (from `@theokit/agents/bridge`) runs one `agent.send` on an agent you already hold and emits translated `AgentStreamEvent`s. It cancels the run when `signal` aborts (without waiting on a hung cancel), drops final assistant text that `onDelta` already streamed, counts a streamed `error` event as a failure even when `wait()` reports `finished`, and resolves (never rejects) with `{ ok: true, usage? }` or `{ ok: false, code: 'turn_failed' | 'turn_cancelled', reason }`. `completeFromTurn(withAgent)` adapts it to the `complete` port of `createOpenAICompatibleRoutes`; a failed turn throws, so the route answers 502.

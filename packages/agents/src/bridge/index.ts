@@ -57,6 +57,13 @@ export {
 } from './agent-route-generator.js'
 
 export {
+  runAgentTurn,
+  completeFromTurn,
+  type AgentTurnOutcome,
+  type RunAgentTurnOptions,
+} from './run-agent-turn.js'
+
+export {
   createSdkAgentStream,
   toAgentFactory,
   type SdkAgentHandle,

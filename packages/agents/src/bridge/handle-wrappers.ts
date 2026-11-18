@@ -120,6 +120,7 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
       ))
   return {
     wait: guardedOutcome,
+    ...(turn.cancel === undefined ? {} : { cancel: () => turn.cancel?.() }),
     async *stream() {
       let out: Awaited<ReturnType<SdkTurnHandle['wait']>>
       try {
