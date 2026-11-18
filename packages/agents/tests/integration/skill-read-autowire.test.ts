@@ -30,6 +30,10 @@ const h = vi.hoisted(() => ({
   /** When true, `getOrCreate` builds a REAL SDK agent so `agent.skills` is the SDK's own listing. */
   realAgent: false,
   /** The last real SDK agent `getOrCreate` built (its `skillsManager` is what a refresh re-reads). */
+  /** The options the last `getOrCreate` received. */
+  lastOpts: undefined as unknown,
+  /** When true, the fake agent hides the SDK's skills manager (an older/newer peer). */
+  hideManager: false,
   lastAgent: undefined as undefined | { skillsManager?: { refresh: () => Promise<void> } },
 }))
 
@@ -68,9 +72,12 @@ vi.mock('@theokit/sdk', () => ({
           } as never)
         : undefined
       h.lastAgent = real as never
+      h.lastOpts = opts
       return {
         skills: real?.skills,
-        skillsManager: (real as { skillsManager?: unknown } | undefined)?.skillsManager,
+        skillsManager: h.hideManager
+          ? undefined
+          : (real as { skillsManager?: unknown } | undefined)?.skillsManager,
         send: async () => ({
           stream: async function* () {
             yield { type: 'status', status: 'FINISHED' }
@@ -195,6 +202,7 @@ describe('read advertised — skill_read serves what the <skills> block lists', 
     h.toolNames = []
     h.readSource = []
     h.realAgent = false
+    h.hideManager = false
     h.provideReadTool = true
   })
 
@@ -344,6 +352,28 @@ describe('read advertised — skill_read serves what the <skills> block lists', 
       } as never,
     })('s-explicit')
     expect(h.toolNames.filter((n) => n === 'skill_read')).toHaveLength(1)
+  })
+
+  it('read advertised serves nothing when the SDK does not expose its skills manager (fails closed)', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    const root = join(cwd, '.theokit', 'skills')
+    writeSkill(root, 'hidden', 'HIDDEN BODY', 'disable-model-invocation: true\n')
+    writeSkill(root, 'shown', 'SHOWN BODY')
+    h.hideManager = true
+    await run(
+      { model: 'm', skills: ['hidden', 'shown'], skillsRead: 'advertised', ...project },
+      cwd,
+    )
+    expect(await read('hidden')).toContain('not found')
+    expect(await read('hidden')).not.toContain('HIDDEN BODY')
+    expect(await read('shown')).toContain('not found')
+  })
+
+  it('read advertised never hands the SDK a function-valued skills setting (reader and listing share one manager)', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    writeSkill(join(cwd, '.theokit', 'skills'), 'dyn', 'DYN BODY')
+    await run({ model: 'm', skills: () => ['dyn'], skillsRead: 'advertised', ...project }, cwd)
+    expect(typeof (h.lastOpts as { skills?: unknown }).skills).not.toBe('function')
   })
 
   it('read advertised does not read the compat root when only the project root is granted', async () => {

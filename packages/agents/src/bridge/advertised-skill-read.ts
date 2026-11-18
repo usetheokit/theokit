@@ -8,9 +8,6 @@ import type { CompiledAgentOptions } from './agent-compiler.js'
 
 /** What the SDK agent exposes of its own skills: the public listing, and the manager behind it. */
 interface ListsSkills {
-  readonly skills?: {
-    readonly list: () => Promise<readonly { name: string; description?: string; source?: string }[]>
-  }
   /** The `SkillsManager` the SDK builds every `<skills>` listing from; `refresh()` re-reads it. */
   readonly skillsManager?: { readonly list: () => Promise<readonly (Skill | InlineSkill)[]> }
 }
@@ -58,26 +55,18 @@ function isDisclosed(skill: Skill | InlineSkill): boolean {
  * agent's own skills manager: the same live snapshot the `<skills>` block is built from, so the trust
  * gate, `skills.enabled`, compat roots, plugin bundles, root precedence AND a later refresh are the
  * SDK's resolution, not a second one. Nothing is re-discovered from disk here; the disclosure flags
- * come from the manager's own skills. Without the manager (a peer that hides it) the public listing is
- * used, which still names exactly the listed skills.
+ * come from the manager's own skills. Without the manager (a peer that hides it) nothing is served: the public
+ * listing lacks the disclosure flags, so it cannot tell a hidden skill from a listed one.
+ *
+ * A function-valued `skills` never reaches the SDK from this bridge: the request path resolves it to a
+ * static `enabled` list first, so the agent's manager is the one every listing is built from.
  */
-async function advertisedSkills(
-  agent: ListsSkills | undefined,
-  compiled: CompiledAgentOptions,
-): Promise<(InlineSkill | Skill)[]> {
+async function advertisedSkills(agent: ListsSkills | undefined): Promise<(InlineSkill | Skill)[]> {
   if (agent?.skillsManager !== undefined) {
     return (await agent.skillsManager.list()).filter(isDisclosed)
   }
-  const inline = new Map((compiled.skills?.inline ?? []).map((s) => [s.name, s]))
-  const out: (InlineSkill | Skill)[] = []
-  for (const entry of (await agent?.skills?.list()) ?? []) {
-    const own = inline.get(entry.name)
-    if (own !== undefined) out.push(own)
-    else if (entry.source !== undefined) {
-      out.push({ name: entry.name, description: entry.description ?? '', source: entry.source })
-    }
-  }
-  return out
+  // Fail closed: the public listing carries no disclosure flags, so without the manager nothing is served.
+  return []
 }
 
 /**
@@ -106,7 +95,7 @@ export function wireInlineSkillRead<R extends WireRuntime>(
   }
   // Resolved on each read from the agent the SDK built, so it follows the manager's current snapshot.
   const holder: { agent?: ListsSkills } = {}
-  sdkTools.push(define(() => advertisedSkills(holder.agent, compiled)))
+  sdkTools.push(define(() => advertisedSkills(holder.agent)))
   return {
     ...rt,
     Agent: {
