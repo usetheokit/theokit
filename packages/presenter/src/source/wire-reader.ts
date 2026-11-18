@@ -1,5 +1,6 @@
 import type { AgentOutputEvent } from '../agent-output-event.js'
-import { WIRE_ERROR_CODE_PART, type WireChunk } from '../wire/chunk-schema.js'
+import type { WireChunk } from '../wire/chunk-schema.js'
+import { WIRE_ERROR_CODE_PART } from '../wire/constants.js'
 
 import { fromWireChunk } from './from-wire-chunk.js'
 

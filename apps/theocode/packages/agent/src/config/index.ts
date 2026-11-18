@@ -17,7 +17,6 @@ export { homeStateDir } from './home-dir.js'
 
 export { resolveTrustPosture, type TrustPosture } from './trust-posture.js'
 
-export { sandboxWritePolicy } from './sandbox-policy.js'
 
 export { headlessApprovalPosture, resolveHeadlessApproval } from './approval-policy.js'
 
