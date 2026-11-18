@@ -1,4 +1,5 @@
 import { z } from 'zod'
+
 import type { WireChunk } from './chunk-schema.js'
 
 /** Why a turn was cut short. Mirrors the agents runtime's `AgentStopReason`. */
@@ -20,7 +21,7 @@ export interface WireTurnMetadata {
   readonly model?: string
 }
 
-const num = z.number().finite()
+const num = z.number()
 const USAGE_KEYS = [
   'inputTokens',
   'outputTokens',
