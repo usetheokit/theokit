@@ -61,9 +61,11 @@ export function readCompiledWiring(options: Record<string, unknown>): CompiledWi
   )
   const sources = ((options.local as Loose)?.settingSources as string[] | undefined) ?? []
   return {
-    tools: names(tools).filter((n) => !withheld.includes(n)),
+    // Caller-supplied tools only: a custom tool may deliberately replace a withheld builtin.
+    tools: names(tools),
     skills: {
-      listed: [...new Set([...names(skills?.enabled), ...inline])],
+      // Enabled names resolve against disk roots; with no source granted none is read, so none is listed.
+      listed: [...new Set([...(sources.length > 0 ? names(skills?.enabled) : []), ...inline])],
       readable: reader !== undefined ? inline : [],
     },
     mcpServers: Object.keys((options.mcpServers as object | undefined) ?? {}),
@@ -87,24 +89,38 @@ export function reportWiring(
   }
 }
 
-/** Agents already reported: `Agent.getOrCreate` hands back the live agent for a known session. */
-const REPORTED_AGENTS = new WeakSet()
+interface AgentStatics {
+  getOrCreate(id: string, options: never): Promise<unknown>
+  get?: (id: string) => Promise<unknown>
+  registry?: { get(id: string): unknown }
+}
+
+/** Did the SDK already hold this session: live in its cache, or persisted for a resume? */
+async function sessionExists(sdk: AgentStatics, id: string): Promise<boolean> {
+  if (sdk.registry?.get(id) !== undefined) return true
+  if (typeof sdk.get !== 'function') return false
+  try {
+    await sdk.get(id)
+    return true
+  } catch {
+    return false
+  }
+}
 
 /**
- * Report the wiring only when `getOrCreate` actually created the agent. A reused agent (resumed
- * session) keeps the wiring it was built with, which was already reported, so the options of this
- * call, which the SDK ignored, are not reported again.
+ * `Agent.getOrCreate`, reporting the wiring only when it CREATED the agent. A session the SDK
+ * already holds (cached live, or resumed from persistence) is not a creation, so nothing is
+ * reported. The check runs only when a listener is installed.
  */
-export function reportWiringIfCreated(
-  listener: ((wiring: CompiledWiring) => void) | undefined,
+export async function getOrCreateReporting(
+  sdk: unknown,
+  sessionId: string,
   options: Record<string, unknown>,
-  agent: unknown,
-): void {
-  if (typeof agent !== 'object' || agent === null) {
-    reportWiring(listener, options)
-    return
-  }
-  if (REPORTED_AGENTS.has(agent)) return
-  REPORTED_AGENTS.add(agent)
-  reportWiring(listener, options)
+  listener: ((wiring: CompiledWiring) => void) | undefined,
+): Promise<unknown> {
+  const statics = sdk as AgentStatics
+  const existed = listener !== undefined && (await sessionExists(statics, sessionId))
+  const agent = await statics.getOrCreate(sessionId, options as never)
+  if (!existed) reportWiring(listener, options)
+  return agent
 }

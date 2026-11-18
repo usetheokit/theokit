@@ -10,11 +10,18 @@ import { z } from 'zod'
 
 import type { CompiledWiring } from '../../src/bridge/index.js'
 
-const h = vi.hoisted(() => ({ created: [] as Record<string, unknown>[] }))
+const h = vi.hoisted(() => ({
+  created: [] as Record<string, unknown>[],
+  live: new Set<string>(),
+  persisted: new Set<string>(),
+}))
 
 vi.mock('@theokit/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   Agent: {
+    registry: { get: (id: string) => (h.live.has(id) ? {} : undefined) },
+    get: (id: string) =>
+      h.persisted.has(id) ? Promise.resolve({}) : Promise.reject(new Error('nf')),
     getOrCreate: (_id: string, opts: Record<string, unknown>) => {
       h.created.push(opts)
       return Promise.resolve({
@@ -61,6 +68,8 @@ function base() {
 
 afterEach(() => {
   h.created.length = 0
+  h.live.clear()
+  h.persisted.clear()
   vi.restoreAllMocks()
 })
 
@@ -70,6 +79,7 @@ describe('onWired', () => {
     const def = base()
       .tool(tool('lookup') as never)
       .skills(['disk-skill', skill('inline-one') as never])
+      .settingSources({ user: true })
       .mcp({ docs: { command: 'x' } } as never)
       .hooks({ pre_tool_call: () => undefined })
       .subagents({ helper: { description: 'h', prompt: 'p' } } as never)
@@ -124,7 +134,7 @@ describe('onWired', () => {
       const withheld: Wiring[] = []
       const noGrant = base()
         .skills(['project-skill', skill('inline-one') as never])
-        .settingSources({ user: true })
+        .settingSources({})
         .onWired((w) => withheld.push(w))
         .build()
       await toAgentFactory(noGrant as never, {
@@ -133,7 +143,9 @@ describe('onWired', () => {
         overrides: { cwd },
       })('s2')
       const w = withheld[0]!
-      expect(w.settingSources).toEqual({ project: false, user: true })
+      expect(w.settingSources).toEqual({ project: false, user: false })
+      expect(w.skills.listed).toEqual(['inline-one'])
+      expect(w.skills.listed).not.toContain('project-skill')
       expect(w.skills.readable).toEqual(['inline-one'])
       const local = h.created[0]?.local as { settingSources?: string[]; cwd?: string }
       expect(local.cwd).toBe(cwd)
@@ -142,6 +154,7 @@ describe('onWired', () => {
       // Same disk, with the grant: the project root is now a source, so the contrast is the gate.
       const granted: Wiring[] = []
       const withGrant = base()
+        .skills(['project-skill', skill('inline-one') as never])
         .settingSources({ project: { trustedBy: trusted } })
         .onWired((x) => granted.push(x))
         .build()
@@ -151,38 +164,33 @@ describe('onWired', () => {
         overrides: { cwd },
       })('s2b')
       expect(granted[0]?.settingSources.project).toBe(true)
+      expect(granted[0]?.skills.listed).toEqual(['project-skill', 'inline-one'])
       expect(withheld[0]?.settingSources.project).toBe(false)
     } finally {
       rmSync(cwd, { recursive: true, force: true })
     }
   })
 
-  it('does not report again when the SDK hands back an agent it already holds', async () => {
-    const live = {
-      agentId: 'a1',
-      send: () => Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) }),
-      dispose: () => Promise.resolve(),
-    }
-    const sdk = await import('@theokit/sdk')
-    const spy = vi
-      .spyOn((sdk as unknown as { Agent: { getOrCreate: () => unknown } }).Agent, 'getOrCreate')
-      .mockResolvedValue(live)
+  it.each([
+    ['a live cached agent', 'live'],
+    ['a persisted session being resumed', 'persisted'],
+  ] as const)('reports nothing when getOrCreate returns %s', async (_n, where) => {
+    h[where].add('known')
     const seen: Wiring[] = []
     const def = base()
       .tool(tool('lookup') as never)
       .onWired((w) => seen.push(w))
       .build()
     const make = toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })
-    await make('same')
-    await make('same')
-    expect(spy).toHaveBeenCalledTimes(2)
+    await make('known')
+    expect(seen).toHaveLength(0)
+    await make('fresh')
     expect(seen).toHaveLength(1)
   })
 
   it('a builtin in withheldBuiltinTools is absent from tools', async () => {
     const seen: Wiring[] = []
     const def = base()
-      .tool(tool('shell') as never)
       .tool(tool('lookup') as never)
       .withholdBuiltinTools(['shell'])
       .onWired((w) => seen.push(w))
@@ -190,6 +198,19 @@ describe('onWired', () => {
     await toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })('s3')
     expect(seen[0]?.withheldBuiltinTools).toEqual(['shell'])
     expect(seen[0]?.tools).toEqual(['lookup'])
+    expect(seen[0]?.tools).not.toContain('shell')
+  })
+
+  it('a caller tool that replaces a withheld builtin stays in tools', async () => {
+    const seen: Wiring[] = []
+    const def = base()
+      .tool(tool('shell') as never)
+      .withholdBuiltinTools(['shell'])
+      .onWired((w) => seen.push(w))
+      .build()
+    await toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })('s3b')
+    expect(seen[0]?.withheldBuiltinTools).toEqual(['shell'])
+    expect(seen[0]?.tools).toEqual(['shell'])
   })
 
   it('a throwing onWired listener is reported and the agent still builds', async () => {
