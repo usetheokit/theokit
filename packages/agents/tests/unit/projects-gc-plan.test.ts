@@ -327,13 +327,9 @@ describe('planProjectsGC protection edge cases', () => {
     const other = '/work-app'
     transcript('new', 1)
     const registered = transcript('registered', 300)
-    const asked: string[] = []
     const result = await plan({
       candidateCwds: undefined,
-      listRegistry: (cwd) => {
-        asked.push(cwd)
-        return Promise.resolve(cwd === other ? [{ id: 'registered' }] : [])
-      },
+      listRegistry: (cwd) => Promise.resolve(cwd === other ? [{ id: 'registered' }] : []),
     })
     expect(result.candidates.map((c) => c.target)).not.toContain(registered)
     expect(result.candidates).toEqual([])
