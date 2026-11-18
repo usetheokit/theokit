@@ -82,11 +82,12 @@ const schema = z.object({ title: z.string(), avatar: z.instanceof(File) })
 
 await fetch('/api/__actions/profile/uploadAvatar', {
   method: 'POST',
+  headers: { 'X-Theo-Action': '1' }, // required by the default strict CSRF check
   body: objectToFormData({ title: 'Me', avatar: input.files![0] }, schema),
 })
 ```
 
-An array of objects throws `FormDataEncodingError`, because the server cannot read it back.
+An array of objects, or an array of arrays, throws `FormDataEncodingError`, because the server cannot read it back.
 
 ## Authoring surfaces
 

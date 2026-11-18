@@ -86,10 +86,11 @@ function appendValue(fd: FormData, key: string, schema: unknown, value: unknown)
 
   if (name === 'ZodArray') {
     const element = defOf(inner).element
-    if (element && ctorName(unwrap(element)) === 'ZodObject') {
+    const elementName = element ? ctorName(unwrap(element)) : ''
+    if (elementName === 'ZodObject' || elementName === 'ZodArray') {
       throw new FormDataEncodingError(
         key,
-        `Field '${key}' is an array of objects; formDataToObject cannot read that back.`,
+        `Field '${key}' is an array of ${elementName === 'ZodObject' ? 'objects' : 'arrays'}; formDataToObject cannot read that back.`,
       )
     }
     const list = Array.isArray(value)

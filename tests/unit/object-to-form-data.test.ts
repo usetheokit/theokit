@@ -64,6 +64,17 @@ describe('objectToFormData', () => {
     }
   })
 
+  it('refuses an array of arrays, naming the field', () => {
+    const s = z.object({ rows: z.array(z.array(z.string())) })
+    try {
+      objectToFormData({ rows: [['a', 'b']] }, s)
+      expect.unreachable()
+    } catch (e) {
+      expect(e).toBeInstanceOf(FormDataEncodingError)
+      expect((e as FormDataEncodingError).path).toBe('rows')
+    }
+  })
+
   it('refuses a nested object that emits no entries, naming the path', () => {
     const s = z.object({ group: z.object({ items: z.array(z.string()) }) })
     try {
