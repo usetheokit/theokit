@@ -15,8 +15,11 @@ function project(files: Record<string, string>): string {
   }
   return cwd
 }
-const get = (cwd: string, dir: string, enabled?: Parameters<typeof foreignSurfaceInventory>[0]['enabled']) =>
-  foreignSurfaceInventory({ cwd, ...(enabled ? { enabled } : {}) }).find((e) => e.dir === dir)!
+const get = (
+  cwd: string,
+  dir: string,
+  enabled?: Parameters<typeof foreignSurfaceInventory>[0]['enabled'],
+) => foreignSurfaceInventory({ cwd, ...(enabled ? { enabled } : {}) }).find((e) => e.dir === dir)!
 
 describe('foreign surface inventory', () => {
   it('agents counts only top-level .md files with frontmatter', () => {

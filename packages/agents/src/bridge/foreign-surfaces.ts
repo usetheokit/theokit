@@ -59,7 +59,9 @@ function countsFrontmatterMd(abs: string, name: string): boolean {
   const p = join(abs, name)
   if (!name.endsWith('.md') || isDir(p)) return false
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
-  return readFileSync(p, 'utf8').replace(/^\uFEFF/, '').startsWith('---')
+  return readFileSync(p, 'utf8')
+    .replace(/^\uFEFF/, '')
+    .startsWith('---')
 }
 
 function countsAgentMemory(abs: string, name: string): boolean {
@@ -132,9 +134,7 @@ export function foreignSurfaceInventory(input: {
     const c = count(root, dir, kind)
     const read = surface !== null && enabled.has(surface)
     const reason =
-      surface === null
-        ? WORKFLOWS_REFUSAL_REASON
-        : `the '${surface}' surface is not enabled`
+      surface === null ? WORKFLOWS_REFUSAL_REASON : `the '${surface}' surface is not enabled`
     return {
       dir,
       state: read ? 'read' : 'refused',
