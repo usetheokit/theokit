@@ -342,10 +342,50 @@ const sleep = (ms: number): Promise<void> =>
     setTimeout(resolve, ms)
   })
 
+/** Windows has no process groups: the descendants seen when the child was signalled stand for its tree. */
+const winTree = new WeakMap<ChildProcess, Set<number>>()
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return (err as { code?: string }).code === 'EPERM'
+  }
+}
+
+/** Descendants of `root` (not `root`), from one process-table listing. */
+function windowsDescendants(root: number): number[] {
+  const table = runCommand('powershell', [
+    '-NoProfile',
+    '-Command',
+    'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId)" }',
+  ])
+  const children = new Map<number, number[]>()
+  for (const line of table.split('\n')) {
+    const [pid, ppid] = line.trim().split(/\s+/).map(Number) as [number, number]
+    if (Number.isInteger(pid) && Number.isInteger(ppid)) {
+      children.set(ppid, [...(children.get(ppid) ?? []), pid])
+    }
+  }
+  const found: number[] = []
+  for (const queue = [root]; queue.length > 0 && found.length < 1000; ) {
+    for (const c of children.get(queue.shift() ?? 0) ?? []) {
+      if (!found.includes(c) && c !== root) {
+        found.push(c)
+        queue.push(c)
+      }
+    }
+  }
+  return found
+}
+
 function groupAlive(child: ChildProcess): boolean {
   if (child.pid === undefined) return false
-  // No process groups on Windows: the child's own liveness stands for its tree, which taskkill /T ends.
-  if (process.platform === 'win32') return child.exitCode === null && child.signalCode === null
+  if (process.platform === 'win32') {
+    if (child.exitCode === null && child.signalCode === null) return true
+    return [...(winTree.get(child) ?? [])].some(pidAlive)
+  }
   try {
     process.kill(-child.pid, 0)
     return true
@@ -369,10 +409,26 @@ function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
     if (process.platform === 'win32' && child.pid !== undefined) {
       // End the whole tree, synchronously, so no descendant outlives the child. When taskkill fails
       // the child is left alive (killing it alone would orphan the tree): close() retries it.
+      const tree = winTree.get(child) ?? new Set<number>()
+      winTree.set(child, tree)
+      try {
+        for (const d of windowsDescendants(child.pid)) tree.add(d)
+      } catch {
+        // no process listing: rely on taskkill /T alone
+      }
       try {
         runCommand('taskkill', ['/pid', String(child.pid), '/T', '/F'])
       } catch {
         // retried by close(); reported when it still fails
+      }
+      // taskkill /T walks parent links: end by pid any descendant it missed (close() verifies).
+      for (const d of tree) {
+        if (!pidAlive(d)) continue
+        try {
+          runCommand('taskkill', ['/pid', String(d), '/T', '/F'])
+        } catch {
+          // still alive: close() reports it
+        }
       }
       return
     }

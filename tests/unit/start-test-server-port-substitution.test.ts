@@ -22,6 +22,10 @@ const h = vi.hoisted(() => ({
   calls: 0,
   killed: [] as string[][],
   taskkillFailures: 0,
+  /** Descendants of the first child: pid -> still running. */
+  tree: new Map<number, boolean>(),
+  /** A tree kill that misses the descendants (they were reparented). */
+  spareTree: false,
   lsofFailure: undefined as { status: number; stderr: string } | undefined,
   /** HTTP status of the readiness probe, or undefined for a listener that does not speak HTTP. */
   status: (_port: number, _attempt: number): number | undefined => 200,
@@ -51,6 +55,8 @@ vi.mock('node:child_process', async () => {
       if (cmd === 'taskkill') {
         h.killed.push(args)
         const rec = h.children.find((c) => String(c.pid) === args[1])
+        const desc = Number(args[1])
+        if (h.tree.has(desc)) h.tree.set(desc, false)
         if (h.taskkillFailures > 0) {
           h.taskkillFailures--
           throw new Error('taskkill: access denied')
@@ -59,8 +65,13 @@ vi.mock('node:child_process', async () => {
           rec.exited = true
           ;(rec.emitter as { exitCode: number | null }).exitCode = 1
           ;(rec.emitter as EventEmitter).emit('exit', null, 'SIGKILL')
+          if (!h.spareTree) for (const d of h.tree.keys()) h.tree.set(d, false)
         }
         return ''
+      }
+      if (cmd === 'powershell' && args.at(-1)?.includes('ForEach-Object')) {
+        const root = h.children[0]?.pid ?? 0
+        return [...h.tree.keys()].map((d) => `${String(d)} ${String(root)}`).join('\n')
       }
       if (h.lsofFailure !== undefined && cmd === 'lsof') {
         throw Object.assign(new Error('lsof failed'), h.lsofFailure)
@@ -197,6 +208,7 @@ describe.each(['darwin', 'win32'] as const)('startTestServer substitution on %s'
     h.status = () => 200
     Object.defineProperty(process, 'platform', { value: platform })
     vi.spyOn(process, 'kill').mockImplementation(((pid: number, signal?: string | number) => {
+      if (h.tree.get(pid) === true) return true
       const rec = h.children.find((c) => c.pid === Math.abs(pid))
       if (rec === undefined || rec.exited) {
         throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' })
@@ -212,6 +224,8 @@ describe.each(['darwin', 'win32'] as const)('startTestServer substitution on %s'
     h.lsofFailure = undefined
     h.killed = []
     h.taskkillFailures = 0
+    h.tree = new Map()
+    h.spareTree = false
   })
 
   afterEach(() => {
@@ -295,6 +309,25 @@ describe.each(['darwin', 'win32'] as const)('startTestServer substitution on %s'
     }
     expect(h.children[0]?.exited).toBe(true)
   })
+
+  it.runIf(platform === 'win32')(
+    'ends descendants of the child, and fails when one survives',
+    async () => {
+      h.listeners = (_port, attempt) => [own(attempt)]
+      const server = await startTestServer({ cwd: app, timeoutMs: 5000 })
+      h.tree = new Map([[8001, true]])
+      h.spareTree = true // taskkill /T misses the descendant: it is ended by its own pid
+      await server.close()
+      expect(h.tree.get(8001)).toBe(false)
+      expect(h.killed.some((a) => a[1] === '8001')).toBe(true)
+
+      const second = await startTestServer({ cwd: app, timeoutMs: 5000 })
+      h.tree = new Map([[8002, true]])
+      h.taskkillFailures = 99
+      await expect(second.close()).rejects.toThrow('could not end the process tree')
+    },
+    30_000,
+  )
 
   it('does not accept a connection that outlives the listener the child gave up', async () => {
     // The child answers, closes its listening socket, and a foreign process binds the port.
