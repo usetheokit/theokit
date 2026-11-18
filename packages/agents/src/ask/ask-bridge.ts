@@ -246,7 +246,9 @@ export function createAskBridge(): AskBridge {
 
     onChange(listener) {
       // Wrap so registering the same function twice yields two independent disposers.
-      const observer = (threadId: string): void => listener(threadId)
+      const observer = (threadId: string): void => {
+        listener(threadId)
+      }
       observers.add(observer)
       return () => {
         observers.delete(observer)
