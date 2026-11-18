@@ -1,0 +1,201 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { encodeProjectDir, transcriptPath } from '@theokit/sdk/persistence'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import { GCFloorError, planProjectsGC, type ProjectsGCFs } from '../../src/session/index.js'
+import type { LivenessVerdict } from '../../src/session/liveness-oracle.js'
+
+const DAY = 86_400_000
+const NOW = Date.UTC(2026, 10, 18)
+
+let root: string
+let projects: string
+const CWD = '/work/app'
+const NAME = encodeProjectDir(CWD)
+
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'projects-gc-'))
+  projects = join(root, 'projects')
+  mkdirSync(join(projects, NAME), { recursive: true })
+})
+afterEach(() => rmSync(root, { recursive: true, force: true }))
+
+function put(project: string, name: string, ageDays: number, dir = false): string {
+  const path = join(projects, project, name)
+  mkdirSync(join(projects, project), { recursive: true })
+  if (dir) mkdirSync(path)
+  else writeFileSync(path, '{}\n')
+  const t = (NOW - ageDays * DAY) / 1000
+  utimesSync(path, t, t)
+  return path
+}
+
+function transcript(id: string, ageDays: number): string {
+  const path = transcriptPath(root, CWD, id)
+  writeFileSync(path, JSON.stringify({ sessionId: id }) + '\n')
+  const t = (NOW - ageDays * DAY) / 1000
+  utimesSync(path, t, t)
+  return path
+}
+
+const alive =
+  (cwd = CWD) =>
+  (): Map<string, LivenessVerdict> =>
+    new Map([[NAME, { liveness: 'alive', reason: 'test', cwd }]])
+
+function plan(extra: Partial<Parameters<typeof planProjectsGC>[0]> = {}) {
+  return planProjectsGC({
+    projectsRoot: projects,
+    keepLast: 1,
+    maxAgeDays: 7,
+    now: NOW,
+    classify: alive(),
+    listRegistry: () => Promise.resolve([]),
+    ...extra,
+  })
+}
+
+describe('planProjectsGC', () => {
+  it('an undetermined project is kept whole', async () => {
+    transcript('old', 100)
+    transcript('older', 200)
+    put(NAME, 'x.jsonl.writer.lock', 100)
+    const result = await plan({
+      classify: () => new Map([[NAME, { liveness: 'undetermined', reason: 'no' }]]),
+    })
+    expect(result.candidates).toEqual([])
+    expect(result.kept.some((k) => k.project === NAME)).toBe(true)
+    expect(result.touchedProjects).toEqual([])
+  })
+
+  it('the newest keepLast transcripts and the pointer session are never candidates', async () => {
+    transcript('new', 1)
+    transcript('mid', 50)
+    const pointed = transcript('pointed', 300)
+    transcript('gone', 400)
+    writeFileSync(join(projects, NAME, 'session.json'), 'pointed')
+    const result = await plan({
+      keepLast: 2,
+      protectedIds: () => new Map([['pointed', 'app pointer']]),
+    })
+    const targets = result.candidates.map((c) => c.target)
+    expect(targets).toEqual([transcriptPath(root, CWD, 'gone')])
+    expect(targets).not.toContain(pointed)
+    expect(result.countByKind.transcript).toBe(1)
+    expect(result.liveCwds).toEqual([CWD])
+    expect(result.touchedProjects).toEqual([NAME])
+  })
+
+  it('a transcript with a live writer is not a candidate', async () => {
+    transcript('new', 1)
+    const busy = transcript('busy', 100)
+    transcript('idle', 120)
+    const fs: ProjectsGCFs = { ...defaultFs(), hasLiveWriter: (p) => p === busy }
+    const result = await plan({ fs })
+    expect(result.candidates.map((c) => c.target)).toEqual([transcriptPath(root, CWD, 'idle')])
+  })
+
+  it('a lock whose transcript is gone and an atomic-write temp file are candidates, an editor swap file is not', async () => {
+    transcript('new', 1)
+    const kept = transcript('kept', 2)
+    put(NAME, `${kept.split('/').pop()}.writer.lock`, 100)
+    const lock = put(NAME, 'gone.jsonl.writer.lock', 100)
+    const lockDir = put(NAME, 'gone.jsonl.lock', 100, true)
+    const temp = put(NAME, 'state.json.1234.0123456789abcdef.tmp', 100)
+    put(NAME, 'notes.txt.tmp', 100)
+    put(NAME, '.foo.swp', 100)
+    const result = await plan()
+    expect(result.candidates.map((c) => c.target).sort((a, b) => a.localeCompare(b))).toEqual(
+      [lock, lockDir, temp].sort((a, b) => a.localeCompare(b)),
+    )
+    expect(result.countByKind).toMatchObject({ 'writer-lock': 1, 'lock-directory': 1, temp: 1 })
+  })
+
+  it('a failed registry read skips the project and records an error', async () => {
+    transcript('new', 1)
+    transcript('old', 100)
+    const result = await plan({ listRegistry: () => Promise.reject(new Error('registry down')) })
+    expect(result.candidates).toEqual([])
+    expect(result.errors).toEqual([
+      { project: NAME, message: expect.stringContaining('registry down') },
+    ])
+  })
+
+  it('an entry with no mtime is never collected', async () => {
+    transcript('new', 1)
+    const old = transcript('old', 100)
+    const real = defaultFs()
+    const result = await plan({
+      fs: { ...real, stat: (p) => (p === old ? { isDirectory: false } : real.stat(p)) },
+    })
+    expect(result.candidates).toEqual([])
+  })
+
+  it.each([0, -1, Number.NaN])('maxAgeDays %s throws GCFloorError', async (maxAgeDays) => {
+    await expect(plan({ maxAgeDays })).rejects.toBeInstanceOf(GCFloorError)
+  })
+
+  it('keepLast 0 throws GCFloorError', async () => {
+    await expect(plan({ keepLast: 0 })).rejects.toBeInstanceOf(GCFloorError)
+  })
+
+  it('plans an old registry entry whose transcript is gone, keeps one with no age or a transcript', async () => {
+    transcript('new', 1)
+    transcript('has', 100)
+    const result = await plan({
+      keepLast: 1,
+      listRegistry: () =>
+        Promise.resolve([
+          { id: 'orphan', lastModified: NOW - 30 * DAY, archived: true },
+          { id: 'ageless' },
+          { id: 'fresh', lastModified: NOW - DAY },
+          { id: 'has', archived: true, lastModified: NOW - 100 * DAY },
+        ]),
+    })
+    const registry = result.candidates.filter((c) => c.kind === 'registry')
+    expect(registry.map((c) => c.target)).toEqual(['orphan'])
+    // the archived 'has' transcript is old and unprotected, so it is a transcript candidate with its id
+    expect(result.candidates.find((c) => c.kind === 'transcript')?.sessionId).toBe('has')
+    expect(result.countByKind.registry).toBe(1)
+  })
+
+  it('a dead project plans transcripts and temps but no registry entries', async () => {
+    transcript('new', 1)
+    transcript('old', 100)
+    let asked = false
+    const result = await plan({
+      classify: () => new Map([[NAME, { liveness: 'dead', reason: 'gone', cwd: CWD }]]),
+      listRegistry: () => {
+        asked = true
+        return Promise.resolve([{ id: 'orphan', lastModified: 0 }])
+      },
+    })
+    expect(asked).toBe(false)
+    expect(result.candidates.map((c) => c.kind)).toEqual(['transcript'])
+    expect(result.liveCwds).toEqual([])
+  })
+})
+
+function defaultFs(): ProjectsGCFs {
+  return {
+    readdir: (d) => readdirSync(d),
+    stat: (p) => {
+      const s = statSync(p)
+      return { isDirectory: s.isDirectory(), mtimeMs: s.mtimeMs }
+    },
+    readFile: (p) => readFileSync(p, 'utf8'),
+    hasLiveWriter: () => false,
+  }
+}

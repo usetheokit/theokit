@@ -492,3 +492,22 @@ See `LICENSE`.
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
+
+### Planning a GC across every project
+
+`planProjectsGC({ projectsRoot, keepLast, maxAgeDays })` is the read-only plan for reclaiming disk across every
+project under `projectsRoot(root)`, where `planTranscriptGC` covers one `cwd`. It never deletes anything; applying a
+plan is a separate step. Each candidate is `{ project, kind, target, sessionId?, ageDays }`, with `kind` one of
+`transcript`, `writer-lock`, `lock-directory`, `temp` or `registry`.
+
+- A project whose liveness is `undetermined` is kept whole.
+- The newest `keepLast` transcripts survive, and in a live project so do the newest one, the session the pointer
+  names, every non-archived registry entry, anything `protectedIds(cwd)` names and anything with a live writer.
+- Locks whose transcript is gone, atomic-write temp files and registry entries whose transcript is gone are planned
+  once they are older than `maxAgeDays`. Temp files are recognised by `classifySessionArtifact`, so an editor's
+  `notes.txt.tmp` or `.foo.swp` is never a candidate. A registry entry with no `lastModified` is kept.
+- An entry whose `mtime` cannot be read is never collected. A failed pointer or registry read skips that project and
+  adds to `errors`.
+- `keepLast` or `maxAgeDays` below 1 throws `GCFloorError`.
+
+The plan also reports `touchedProjects`, `liveCwds` and `countByKind`. `listRegistry` defaults to `Agent.list`.
