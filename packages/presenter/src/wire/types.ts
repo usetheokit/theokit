@@ -42,6 +42,12 @@ export interface WireToolApproval {
   readonly timeoutMs?: number
 }
 
+/** Why a tool call was refused rather than run; mirrors `ToolRefusal` from the canonical event. */
+export interface WireToolRefusal {
+  readonly by: 'human' | 'timeout' | 'policy' | 'hook' | 'plugin'
+  readonly reason?: string
+}
+
 export interface WireMessage<METADATA = unknown> {
   id: string
   role: WireMessageRole

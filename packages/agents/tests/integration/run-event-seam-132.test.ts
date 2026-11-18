@@ -73,22 +73,26 @@ describe('theokit#132 — the RunEvent sink reaches the SDK', () => {
     await drain(createSdkAgentStream(COMPILED, [], 'key', { onRunEvent: sink })('hi', 's1'))
 
     expect(h.sendOptions, 'the SDK was never sent anything').toHaveLength(1)
-    expect(
-      h.sendOptions[0]!.onRunEvent,
-      'the sink stopped short of `agent.send` — a seam that does not reach the SDK is not a seam',
-    ).toBe(sink)
+    // The adapter wraps the sink (it also listens for `permission_denied`), so assert delivery,
+    // not identity.
+    const sent = h.sendOptions[0]!.onRunEvent as (e: unknown) => void
+    expect(sent, 'the sink stopped short of `agent.send`').toBeTypeOf('function')
+    const ev = { type: 'tool_progress', runId: 'r', toolName: 'read', progress: 1 }
+    sent(ev)
+    expect(sink).toHaveBeenCalledWith(ev)
   })
 
-  it('test_without_a_sink_send_options_carry_no_on_run_event', async () => {
-    // Back-compat floor: the chat path must stay byte-identical for consumers that do not opt in.
-    // An `onRunEvent: undefined` key riding along would still be a change to what the SDK receives.
+  it('test_without_a_sink_the_internal_listener_is_harmless', async () => {
+    // The adapter always installs its own listener (typed refusals); with no caller sink it must
+    // accept any event without throwing.
     h.sendOptions.length = 0
     h.messages = [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' }]
 
     await drain(createSdkAgentStream(COMPILED, [], 'key', {})('hi', 's1'))
 
     expect(h.sendOptions).toHaveLength(1)
-    expect(Object.keys(h.sendOptions[0]!)).not.toContain('onRunEvent')
+    const sent = h.sendOptions[0]!.onRunEvent as (e: unknown) => void
+    expect(() => sent({ type: 'tool_progress' })).not.toThrow()
   })
 
   it('test_the_sink_receives_what_the_sdk_emits', async () => {
@@ -129,9 +133,10 @@ describe('theokit#132 — the RunEvent sink reaches the SDK', () => {
     )
 
     expect(h.sendOptions).toHaveLength(1)
-    expect(
-      h.sendOptions[0]!.onRunEvent,
-      'the public entry point accepts the sink but never forwards it',
-    ).toBe(sink)
+    const sent = h.sendOptions[0]!.onRunEvent as (e: unknown) => void
+    sent({ type: 'rate_limit' })
+    expect(sink, 'the public entry point accepts the sink but never forwards it').toHaveBeenCalledWith({
+      type: 'rate_limit',
+    })
   })
 })

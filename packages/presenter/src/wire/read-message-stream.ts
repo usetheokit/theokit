@@ -1,6 +1,6 @@
-import { WIRE_APPROVAL_DETAIL_PART, type WireChunk } from './chunk-schema.js'
+import { WIRE_APPROVAL_DETAIL_PART, WIRE_TOOL_REFUSAL_PART, type WireChunk } from './chunk-schema.js'
 import { WireStreamError } from './parse-wire-stream.js'
-import type { WireMessage, WireToolApproval } from './types.js'
+import type { WireMessage, WireToolApproval, WireToolRefusal } from './types.js'
 
 /**
  * Chunks → reconstructed assistant messages. Replaces `ai`'s `readUIMessageStream`.
@@ -33,6 +33,8 @@ interface OpenState {
    * frame that resolves it, so the map holds at most the gates of one round.
    */
   readonly approvalDetails: Map<string, Omit<WireToolApproval, 'id'>>
+  /** Tool call id → the refusal announced just before that call's `tool-output-error`. */
+  readonly refusals: Map<string, WireToolRefusal>
 }
 
 function snapshot(message: WireMessage): WireMessage {
@@ -48,6 +50,7 @@ function open(messageId: string | undefined): OpenState {
     blocks: new Map(),
     tools: new Map(),
     approvalDetails: new Map(),
+    refusals: new Map(),
   }
 }
 
@@ -151,6 +154,11 @@ function applyChunk(state: OpenState, chunk: WireChunk): boolean {
       // Never a snapshot of its own: this part exists to be merged into the approval that follows.
       return false
 
+    case WIRE_TOOL_REFUSAL_PART:
+      rememberRefusal(state, chunk)
+      // Merged into the tool part by the `tool-output-error` that follows; never a part of its own.
+      return false
+
     default:
       return applyDataPart(parts, chunk)
   }
@@ -171,6 +179,18 @@ function rememberApprovalDetail(state: OpenState, chunk: WireChunk): void {
   state.approvalDetails.set(approvalId, {
     ...(typeof data?.question === 'string' ? { question: data.question } : {}),
     ...(typeof data?.timeoutMs === 'number' ? { timeoutMs: data.timeoutMs } : {}),
+  })
+}
+
+/** Stash a `data-tool-refusal` part for the `tool-output-error` that follows it. Malformed ones are dropped. */
+function rememberRefusal(state: OpenState, chunk: WireChunk): void {
+  const data = (chunk as { data?: Record<string, unknown> }).data
+  const by = data?.by
+  if (typeof data?.toolCallId !== 'string' || typeof by !== 'string') return
+  if (!['human', 'timeout', 'policy', 'hook', 'plugin'].includes(by)) return
+  state.refusals.set(data.toolCallId, {
+    by: by as WireToolRefusal['by'],
+    ...(typeof data.reason === 'string' ? { reason: data.reason } : {}),
   })
 }
 
@@ -250,7 +270,13 @@ function applyTool(state: OpenState, parts: MutablePart[], chunk: WireChunk): bo
     return true
   }
   if (chunk.type === 'tool-output-error') {
-    Object.assign(parts[at], { state: 'output-error', errorText: c.errorText })
+    const refusal = state.refusals.get(c.toolCallId)
+    state.refusals.delete(c.toolCallId)
+    Object.assign(parts[at], {
+      state: 'output-error',
+      errorText: c.errorText,
+      ...(refusal !== undefined ? { refusal } : {}),
+    })
     return true
   }
   Object.assign(parts[at], { state: 'output-available', output: c.output })

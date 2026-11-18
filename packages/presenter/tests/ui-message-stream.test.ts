@@ -123,3 +123,33 @@ describe('UIMessageStreamPresenter (M49 — web surface, zero-behavior port)', (
     expect(run([{ type: 'text', text: 'x' }]).at(-1)).toEqual({ type: 'finish' })
   })
 })
+
+describe('UIMessageStreamPresenter — refusal', () => {
+  it('emits a transient refusal part before the tool-output-error', () => {
+    const chunks = run([
+      { type: 'tool-call', callId: 'c1', name: 'Bash', input: {} },
+      {
+        type: 'tool-result',
+        callId: 'c1',
+        name: 'Bash',
+        result: 'nope',
+        isError: true,
+        refusal: { by: 'plugin', reason: 'blocked' },
+      },
+    ])
+    const at = chunks.findIndex((c) => c.type === 'data-tool-refusal')
+    expect(chunks[at]).toEqual({
+      type: 'data-tool-refusal',
+      data: { toolCallId: 'c1', by: 'plugin', reason: 'blocked' },
+      transient: true,
+    })
+    expect(chunks[at + 1]?.type).toBe('tool-output-error')
+  })
+
+  it('emits no refusal part for an ordinary failure', () => {
+    const chunks = run([
+      { type: 'tool-result', callId: 'c1', name: 'Bash', result: 'x', isError: true },
+    ])
+    expect(chunks.some((c) => c.type === 'data-tool-refusal')).toBe(false)
+  })
+})
