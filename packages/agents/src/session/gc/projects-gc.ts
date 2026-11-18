@@ -300,7 +300,7 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
     if (live && cwd !== undefined) {
       const cwds = new Set([cwd])
       // A transcript that cannot be stat-ed has a header nobody read; it may name a cwd not yet seen.
-      let unattributed: string | undefined = [...unreadableTranscripts][0]
+      let unattributed = [...unreadableTranscripts][0] as string | undefined
       for (const entry of entries) {
         if (entry.kind !== 'transcript') continue
         try {
