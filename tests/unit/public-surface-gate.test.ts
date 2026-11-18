@@ -149,7 +149,9 @@ describe('public surface gate', () => {
       surface(`import { C } from './chunk-${hash}'\nexport type Out = C\n`, {
         [`chunk-${hash}.d.ts`]: 'export interface C { a: string }\n',
       })
-    expect(Object.keys(at('aubY9WIa').entries['.']?.internals ?? {})).toEqual(['dist/chunk-<hash>.d.ts#C'])
+    expect(Object.keys(at('aubY9WIa').entries['.']?.internals ?? {})).toEqual([
+      'dist/chunk-<hash>.d.ts#C',
+    ])
     expect(at('aubY9WIa')).toEqual(at('Zz09_-xY'))
   })
 
