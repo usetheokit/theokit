@@ -64,14 +64,9 @@ export function readCompiledWiring(options: Record<string, unknown>): CompiledWi
     // Caller-supplied tools only: a custom tool may deliberately replace a withheld builtin.
     tools: names(tools),
     skills: {
-      // Enabled names resolve from on-disk skill roots, which only a granted `project` or `user` source reads.
+      // Enabled names resolve against the project root, which only a granted `project` source reads.
       listed: [
-        ...new Set([
-          ...(sources.includes('project') || sources.includes('user')
-            ? names(skills?.enabled)
-            : []),
-          ...inline,
-        ]),
+        ...new Set([...(sources.includes('project') ? names(skills?.enabled) : []), ...inline]),
       ],
       readable: reader !== undefined ? inline : [],
     },
@@ -123,8 +118,9 @@ export function getOrCreateReporting(
   listener: ((wiring: CompiledWiring) => void) | undefined,
 ): Promise<unknown> {
   if (listener === undefined) return resolveReporting(sdk, sessionId, options, listener)
-  let pending = inFlight.get(sdk as object)
-  if (!pending) inFlight.set(sdk as object, (pending = new Map()))
+  const key = sdk as object
+  const pending = inFlight.get(key) ?? new Map<string, Promise<unknown>>()
+  inFlight.set(key, pending)
   const running = pending.get(sessionId)
   if (running) return running
   const p = resolveReporting(sdk, sessionId, options, listener).finally(() =>
