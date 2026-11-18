@@ -26,11 +26,7 @@ export {
 
 export { readMessageStream } from './read-message-stream.js'
 
-export {
-  readTurnMetadata,
-  type WireStopReason,
-  type WireTurnMetadata,
-} from './turn-metadata.js'
+export { readTurnMetadata, type WireStopReason, type WireTurnMetadata } from './turn-metadata.js'
 
 export type {
   WireHeaders,
