@@ -192,7 +192,10 @@ describe('a fork is collected under its own identity', () => {
     const removed: string[] = []
 
     const { plan, result } = await run(true, {
-      listRegistry: async () => [{ agentId: 'source-live' }, { agentId: 'the-fork', archived: true }],
+      listRegistry: async () => [
+        { agentId: 'source-live' },
+        { agentId: 'the-fork', archived: true },
+      ],
       removeFromRegistry: (id: string) => void removed.push(id),
     })
 
@@ -216,6 +219,26 @@ describe('a fork is collected under its own identity', () => {
     expect(result.orphaned).toEqual([fork])
     expect(result.errors).toEqual([])
     expect(humanReport(plan, result).join('\n')).not.toContain('source-live')
+  })
+
+  it('test_a_legacy_name_shared_by_two_registered_ids_is_withheld_not_guessed', async () => {
+    writeTranscript(fx, 'newest', 1)
+    // `a.b` and `a-b` are filed under the same legacy name; the fork names `a.b` as its source.
+    const shared = writeTranscript(fx, 'a-b', 90, { legacy: true, content: forkOf('a.b') })
+    const removed: string[] = []
+
+    const { plan, result } = await run(true, {
+      listRegistry: async () => [
+        { agentId: 'a.b', archived: true },
+        { agentId: 'a-b', archived: true },
+      ],
+      removeFromRegistry: (id: string) => void removed.push(id),
+    })
+
+    expect(existsSync(shared)).toBe(true)
+    expect(removed).toEqual([])
+    expect(plan.candidates).toEqual([])
+    expect(result.errors).toEqual([])
   })
 
   it('test_a_pointer_moving_onto_a_later_legacy_named_candidate_mid_apply_keeps_it', async () => {

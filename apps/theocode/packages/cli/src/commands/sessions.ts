@@ -104,22 +104,40 @@ export async function planAndRunCurrentProjectGC(
   // not) whose transcript file this is, under either naming convention. A fork with no registry
   // entry has no identity, and is reported by its transcript path rather than as its source.
   const everyRegistryId = everyone.map((a) => a.agentId)
-  const identityOf = (c: TranscriptGCPlan['candidates'][number]): string | undefined =>
-    [...(c.id === undefined ? [] : [c.id]), ...everyRegistryId].find(
-      (id) =>
-        c.transcript === transcriptPath(planned2.root, planned2.cwd, id) ||
-        c.transcript === legacyTranscriptPath(planned2.root, planned2.cwd, id),
-    )
+  // Legacy names sanitise ids (`a.b` and `a-b` share a file), so one transcript can match several
+  // identities. Which entry it belongs to is then unknowable: the candidate is withheld.
+  const identitiesOf = (c: TranscriptGCPlan['candidates'][number]): string[] => [
+    ...new Set(
+      [...(c.id === undefined ? [] : [c.id]), ...everyRegistryId].filter(
+        (id) =>
+          c.transcript === transcriptPath(planned2.root, planned2.cwd, id) ||
+          c.transcript === legacyTranscriptPath(planned2.root, planned2.cwd, id),
+      ),
+    ),
+  ]
   const remove = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
   const removed: string[] = []
   const orphaned: string[] = []
   const errors: RunTranscriptGCResult['errors'][number][] = []
+  const ambiguous = new Set<TranscriptGCPlan['candidates'][number]>()
+  const identified = planned2.candidates.flatMap((c) => {
+    const ids = identitiesOf(c)
+    if (ids.length > 1) {
+      ambiguous.add(c)
+      return []
+    }
+    return [{ ...c, id: ids[0] }]
+  })
   const plan: TranscriptGCPlan = {
     ...planned2,
-    candidates: planned2.candidates.map((c) => {
-      const identity = identityOf(c)
-      return { ...c, id: identity }
-    }),
+    candidates: identified,
+    kept: [
+      ...planned2.kept,
+      ...[...ambiguous].map((c) => ({
+        id: c.id,
+        reason: 'transcript name matches more than one registered session — owner unknown',
+      })),
+    ],
   }
   // Protection is re-read before every candidate: the plan is a snapshot, the framework's own
   // re-check knows only the hashed names, and an earlier removal can take long enough for the pointer
