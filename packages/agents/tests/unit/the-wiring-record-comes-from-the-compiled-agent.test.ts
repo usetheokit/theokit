@@ -193,6 +193,40 @@ describe('onWired', () => {
     expect(second.map((w) => w.tools)).toEqual([['lookup', 'other']])
   })
 
+  it('does not replace or dispose a handle the SDK cached while the listener path resolved', async () => {
+    const live = new Map<string, { id: string; disposed: boolean }>()
+    const mk = (id: string) => ({
+      id,
+      disposed: false,
+      dispose() {
+        this.disposed = true
+      },
+    })
+    const sdk = {
+      registry: {
+        get: (id: string) => live.get(id),
+        set: (id: string, a: never) => live.set(id, a),
+      },
+      // A plain `Agent.getOrCreate` caches its own handle while our resume is still in flight.
+      resume: async () => {
+        await Promise.resolve()
+        live.set('raced', mk('sdk'))
+        return mk('ours')
+      },
+      create: () => Promise.reject(new Error('unused')),
+      getOrCreate: () => Promise.reject(new Error('unused')),
+    }
+    const seen: Wiring[] = []
+    const got = (await getOrCreateReporting(sdk, 'raced', {}, (w) => seen.push(w))) as {
+      id: string
+      disposed: boolean
+    }
+    expect(got.id).toBe('sdk')
+    expect(live.get('raced')).toBe(got)
+    expect(got.disposed).toBe(false)
+    expect(seen).toHaveLength(0)
+  })
+
   it('reports once when two calls race to create the same fresh session', async () => {
     const { Agent } = await import('@theokit/sdk')
     const seen: Wiring[] = []

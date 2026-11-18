@@ -166,12 +166,26 @@ async function resolveReporting(
   if (listener === undefined) return statics.getOrCreate(sessionId, options as never)
   const cached = statics.registry?.get(sessionId)
   if (cached !== undefined) return cached
-  const remember = (agent: unknown): unknown => {
-    statics.registry?.set(sessionId, agent as never)
-    return agent
+  // `registry.set` disposes whatever it replaces, so never overwrite: if the SDK's own
+  // `getOrCreate` cached a handle while this call was resolving, that handle wins and ours, which
+  // would be a second live copy of the same session, is released.
+  const remember = async (agent: unknown): Promise<unknown> => {
+    const winner = statics.registry?.get(sessionId)
+    if (winner === undefined) {
+      statics.registry?.set(sessionId, agent as never)
+      return agent
+    }
+    if (winner !== agent) {
+      try {
+        await (agent as { dispose?: () => Promise<void> | void } | null)?.dispose?.()
+      } catch (err) {
+        console.warn('[theokit] could not release a duplicate agent handle:', err)
+      }
+    }
+    return winner
   }
   try {
-    return remember(await statics.resume(sessionId, options as never))
+    return await remember(await statics.resume(sessionId, options as never))
   } catch (err) {
     if (!isErr(err, 'name', 'UnknownAgentError')) throw err
   }
@@ -182,7 +196,7 @@ async function resolveReporting(
     if (!isErr(err, 'code', 'agent_id_already_exists')) throw err
     return remember(await statics.resume(sessionId, options as never))
   }
-  remember(agent)
+  // The agent was created by this call, so its wiring is reported even if a racer's handle wins.
   await reportWiring(listener, options, agent)
-  return agent
+  return remember(agent)
 }
