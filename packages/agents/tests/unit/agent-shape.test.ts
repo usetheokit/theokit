@@ -118,5 +118,11 @@ describe('shapeToolsAsCustomTools', () => {
     expect(shapeToolsAsCustomTools(ok).map((t) => t.name)).toEqual(['j'])
     const bad = declareAgentShape('a', [new ToolsCapability([zod as never])])
     expect(() => shapeToolsAsCustomTools(bad)).toThrow(/"z"/)
+    for (const odd of [[], new Date(), 'x', undefined]) {
+      const shape = declareAgentShape('a', [
+        new ToolsCapability([{ ...json, name: 'o', inputSchema: odd } as never]),
+      ])
+      expect(() => shapeToolsAsCustomTools(shape)).toThrow(/"o"/)
+    }
   })
 })

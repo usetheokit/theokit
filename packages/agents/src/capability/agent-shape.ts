@@ -79,6 +79,14 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
   return Object.freeze(shape)
 }
 
+/** A plain `{}` object that is not a Zod schema: the only value the SDK reads as a JSON Schema. */
+function isJsonSchemaObject(schema: unknown): schema is Record<string, unknown> {
+  if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) return false
+  const proto: unknown = Object.getPrototypeOf(schema)
+  if (proto !== Object.prototype && proto !== null) return false
+  return typeof (schema as { parse?: unknown }).parse !== 'function'
+}
+
 /**
  * The shape's tools as the SDK `CustomTool` an app holds, with no cast at the call site.
  *
@@ -90,10 +98,9 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
  */
 export function shapeToolsAsCustomTools(shape: AgentShape): readonly CustomTool[] {
   return shape.tools.map((tool) => {
-    const schema = tool.inputSchema as { parse?: unknown } | null | undefined
-    if (typeof schema !== 'object' || schema === null || typeof schema.parse === 'function') {
+    if (!isJsonSchemaObject(tool.inputSchema)) {
       throw new ConfigurationError(
-        `shapeToolsAsCustomTools: tool "${tool.name}" has no JSON-Schema inputSchema (a Zod or missing schema); build it with a JSON-Schema tool such as defineAgentTool`,
+        `shapeToolsAsCustomTools: tool "${tool.name}" has no JSON-Schema inputSchema (a Zod, array or non-plain-object schema); build it with a JSON-Schema tool such as defineAgentTool`,
       )
     }
     return tool as unknown as CustomTool

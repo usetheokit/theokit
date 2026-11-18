@@ -22,14 +22,24 @@ export function toCompiledTool(tool: CustomTool): CompiledTool {
       ctx?: { signal?: AbortSignal; context?: unknown },
     ) => string | Promise<string>
   }
-  // Spread copies every own enumerable property, string- and symbol-keyed alike — notably the
-  // `@theokit/sdk/a2a` subagent credential-inheritance sink (`Symbol.for("theokit.subagent.inheritCredentials")`),
-  // without which the SDK runtime can't hand the parent's `apiKey` down to a delegated child
-  // (`provider_unresolved`). The wrapped handler still calls the original tool's handler, so the sink
-  // (which mutates that handler's closure) stays effective.
+  // Copy EVERY own property other than the four known fields — string- and symbol-keyed, enumerable
+  // or not. Notably the `@theokit/sdk/a2a` subagent credential-inheritance sink
+  // (`Symbol.for("theokit.subagent.inheritCredentials")`), without which the SDK runtime can't hand the
+  // parent's `apiKey` down to a delegated child (`provider_unresolved`). The wrapped handler still calls
+  // the original tool's handler, so the sink (which mutates that handler's closure) stays effective.
   const compiled: CompiledTool = {
-    ...(tool as unknown as CompiledTool),
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
     handler: (input, ctx) => owner.handler(input, ctx),
+  }
+  const target = compiled as unknown as Record<PropertyKey, unknown>
+  const source = tool as unknown as Record<PropertyKey, unknown>
+  for (const key of Reflect.ownKeys(tool)) {
+    if (key === 'name' || key === 'description' || key === 'inputSchema' || key === 'handler') {
+      continue
+    }
+    target[key] = source[key]
   }
   return compiled
 }

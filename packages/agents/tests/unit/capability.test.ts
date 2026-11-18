@@ -280,4 +280,15 @@ describe('ToolsCapability with an SDK CustomTool', () => {
     expect((tools[0] as unknown as { extra: number }).extra).toBe(42)
     expect(await tools[1]?.handler({})).toBe('sdk')
   })
+
+  it('keeps non-enumerable symbol metadata and inherited fields of a CustomTool', () => {
+    const SINK = Symbol.for('theokit.subagent.inheritCredentials')
+    const sink = () => undefined
+    const proto = { name: 'inh', description: 'd', inputSchema: {}, handler: () => 'ok' }
+    const tool = Object.create(proto) as Record<symbol, unknown>
+    Object.defineProperty(tool, SINK, { value: sink, enumerable: false })
+    const out = applyCapabilities([new ToolsCapability([tool as never])]).tools[0]
+    expect(out?.name).toBe('inh')
+    expect((out as unknown as Record<symbol, unknown>)[SINK]).toBe(sink)
+  })
 })
