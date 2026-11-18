@@ -33,3 +33,9 @@ function isInstalled(req: NodeJS.Require, name: string): boolean {
     return (err as NodeJS.ErrnoException).code === 'ERR_PACKAGE_PATH_NOT_EXPORTED'
   }
 }
+
+/** Check the toolchain, then register tsx's ESM hook (the CLI no longer loads it unconditionally). */
+export async function loadToolchain(): Promise<void> {
+  requireToolchain()
+  await import('tsx/esm')
+}
