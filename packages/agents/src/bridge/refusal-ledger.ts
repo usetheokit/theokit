@@ -12,20 +12,22 @@ import type { ToolRefusal } from '@theokit/presenter'
  */
 interface Entry {
   refusal: ToolRefusal
-  /** Unique marker appended to this veto's message; a denial carrying it is this veto's denial. */
+  /** Unique marker appended to this veto's message. */
   token: string
+  /** The complete veto message (text + marker): a denial is this veto's only if it ends with it. */
+  tagged: string
 }
 const ledger = new Map<string, Map<string, Entry[]>>()
 /**
  * Bounds for runs that never reach the adapter's cleanup (a gate used directly as an SDK hook): the
- * oldest run, or the oldest entries of one run, are evicted rather than kept forever.
+ * oldest such run, or the oldest entries of one such run, are evicted rather than kept forever.
+ * Runs retained by an adapter stream are never evicted; the stream's cleanup drops them.
  */
 const MAX_RUNS = 256
 const MAX_ENTRIES_PER_RUN = 256
 const entryCount = new Map<string, number>()
 /** Runs the adapter is actively streaming; their entries are evicted only when nothing else can be. */
 const liveRuns = new Set<string>()
-const MARKER = /\[veto:([0-9a-f]{24})\]/g
 
 /**
  * Record a veto and return the message to veto with. The returned message is `message` plus a
@@ -42,18 +44,22 @@ export function recordRefusal(
   const token = randomBytes(12).toString('hex')
   let tools = ledger.get(runId)
   if (tools === undefined) {
-    if (ledger.size >= MAX_RUNS) dropRunRefusals(oldestRun())
+    if (ledger.size >= MAX_RUNS) {
+      const victim = oldestUnmanagedRun()
+      if (victim !== undefined) dropRunRefusals(victim)
+    }
     tools = new Map()
     ledger.set(runId, tools)
   }
   const count = (entryCount.get(runId) ?? 0) + 1
   entryCount.set(runId, count)
-  if (count > MAX_ENTRIES_PER_RUN) evictOldest(tools, runId)
+  if (count > MAX_ENTRIES_PER_RUN && !liveRuns.has(runId)) evictOldest(tools, runId)
   const queue = tools.get(toolName)
-  const entry = { refusal, token }
+  const tagged = `${message} [veto:${token}]`
+  const entry = { refusal, token, tagged }
   if (queue === undefined) tools.set(toolName, [entry])
   else queue.push(entry)
-  return `${message} [veto:${token}]`
+  return tagged
 }
 
 /**
@@ -71,16 +77,16 @@ export function takeRefusal(
   if (tools === undefined || queue === undefined) return undefined
   let at = 0
   if (denialMessage !== undefined) {
-    // The LAST marker is the one the framework appended; earlier ones are quoted text (hook output,
-    // an earlier denial) and must not select an entry.
-    const marker = [...denialMessage.matchAll(MARKER)].at(-1)?.[1]
-    at = marker === undefined ? -1 : queue.findIndex((e) => e.token === marker)
+    // The framework appends the whole tagged message last; a marker quoted or copied anywhere else
+    // (hook output, an earlier denial, an external denial's text) must not select an entry.
+    const text = denialMessage.trimEnd()
+    at = queue.findIndex((e) => text.endsWith(e.tagged))
   }
   if (at < 0) return undefined
   const [taken] = queue.splice(at, 1)
   entryCount.set(runId, (entryCount.get(runId) ?? 1) - 1)
   if (queue.length === 0) tools.delete(toolName)
-  if (tools.size === 0) dropRunRefusals(runId)
+  if (tools.size === 0 && !liveRuns.has(runId)) dropRunRefusals(runId)
   return taken.refusal
 }
 
@@ -96,9 +102,9 @@ export function retainRun(runId: string): void {
   liveRuns.add(runId)
 }
 
-function oldestRun(): string {
+function oldestUnmanagedRun(): string | undefined {
   for (const id of ledger.keys()) if (!liveRuns.has(id)) return id
-  return ledger.keys().next().value!
+  return undefined
 }
 
 function evictOldest(tools: Map<string, Entry[]>, runId: string): void {

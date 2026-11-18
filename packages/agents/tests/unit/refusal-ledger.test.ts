@@ -135,6 +135,46 @@ describe('refusal ledger', () => {
     expect(takeRefusal('r-live', 'Bash', m)).toEqual({ by: 'human', reason: 'live' })
   })
 
+  it('an external denial that quotes or copies a veto marker does not consume the veto', () => {
+    const veto = recordRefusal('r-ext', 'Bash', { by: 'human', reason: 'real' }, 'blocked')
+    expect(takeRefusal('r-ext', 'Bash', `external: ${veto} (and more text)`)).toBeUndefined()
+    expect(takeRefusal('r-ext', 'Bash', veto.slice(veto.indexOf('[veto:')))).toBeUndefined()
+    expect(takeRefusal('r-ext', 'Bash', `Plugin blocked: ${veto}`)).toEqual({
+      by: 'human',
+      reason: 'real',
+    })
+  })
+
+  it('a retained run keeps every entry past the per-run bound', () => {
+    retainRun('r-many')
+    const first = recordRefusal('r-many', 'Bash', { by: 'human', reason: 'first' }, 'm')
+    for (let i = 0; i < 300; i++) recordRefusal('r-many', 'Bash', { by: 'policy' }, 'm')
+    expect(takeRefusal('r-many', 'Bash', first)).toEqual({ by: 'human', reason: 'first' })
+    dropRunRefusals('r-many')
+  })
+
+  it('retained runs are never evicted by the run bound', () => {
+    const ids = Array.from({ length: 300 }, (_, i) => `r-ret-${i}`)
+    const tags = ids.map((id) => {
+      retainRun(id)
+      return recordRefusal(id, 'Bash', { by: 'human', reason: id }, 'm')
+    })
+    expect(takeRefusal(ids[0], 'Bash', tags[0])).toEqual({ by: 'human', reason: ids[0] })
+    for (const id of ids) dropRunRefusals(id)
+  })
+
+  it('draining a retained run keeps it retained until dropped', () => {
+    retainRun('r-drain')
+    const a = recordRefusal('r-drain', 'Bash', { by: 'human' }, 'm')
+    expect(takeRefusal('r-drain', 'Bash', a)).toEqual({ by: 'human' })
+    for (let r = 0; r < 600; r++) recordRefusal(`r-dflood-${r}`, 'Bash', { by: 'policy' }, 'm')
+    for (let i = 0; i < 300; i++) recordRefusal('r-drain', 'Bash', { by: 'policy' }, 'm')
+    const b = recordRefusal('r-drain', 'Bash', { by: 'human', reason: 'late' }, 'm')
+    // 300 earlier entries remain: the retained run was not capped after draining.
+    expect(takeRefusal('r-drain', 'Bash', b)).toEqual({ by: 'human', reason: 'late' })
+    dropRunRefusals('r-drain')
+  })
+
   it('a call refused by the permission gate yields refusal by policy', async () => {
     const store = new PermissionStore({ home: process.env.TMPDIR ?? '/tmp' })
     const gate = grantGate(store, (c) => ({
