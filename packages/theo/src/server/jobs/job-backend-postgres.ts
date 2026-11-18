@@ -319,7 +319,8 @@ export class PostgresJobBackend implements JobBackend {
     const until = input.until === 'infinity' ? 'infinity' : input.until.toISOString()
     const r = await client.query<{ id: string }>(
       `UPDATE ${t}
-       SET held_from = COALESCE(held_from, available_at), available_at = $1::timestamptz
+       SET held_from = COALESCE(held_from, available_at), available_at = $1::timestamptz,
+           locked_until = NULL, lease_token = NULL
        WHERE id IN (${sel.sql})
        RETURNING id`,
       [until, ...sel.params],
@@ -342,28 +343,45 @@ export class PostgresJobBackend implements JobBackend {
 
   async reschedule(client: PoolLike, jobId: string, input: JobRescheduleInput): Promise<boolean> {
     const t = this.#table
+    if ((input.availableAt === undefined) === (input.ahead === undefined)) {
+      throw new Error('PostgresJobBackend.reschedule: pass exactly one of `availableAt` and `ahead`.')
+    }
+    // `ahead`: one second before the earliest time the other selected jobs had (a held job counts
+    // at the time it will be restored to), read in the same statement as the write.
+    let target: string
+    const params: unknown[] = [jobId]
+    if (input.ahead) {
+      const sel = this.#select(input.ahead, 2, 'AND id <> $1', false)
+      const times = sel.sql.replace('SELECT id', 'SELECT COALESCE(held_from, available_at) AS at')
+      target = `LEAST(available_at, (SELECT MIN(w.at) - INTERVAL '1 second' FROM (${times}) w))`
+      params.push(...sel.params)
+    } else {
+      target = '$2::timestamptz'
+      params.push(input.availableAt?.toISOString())
+    }
+    // A job moved here is no longer leased: clear an expired lease so a stale nack cannot overwrite it.
     const r = await client.query<{ id: string }>(
-      `UPDATE ${t} SET available_at = $2::timestamptz
+      `UPDATE ${t} SET available_at = ${target}, locked_until = NULL, lease_token = NULL
        WHERE id IN (
          SELECT id FROM ${t}
          WHERE id = $1 AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW())
          FOR UPDATE SKIP LOCKED
        )
        RETURNING id`,
-      [jobId, input.availableAt.toISOString()],
+      params,
     )
     return r.rows.length > 0
   }
 
   /** Subquery picking the unleased, unfailed jobs of `sel`, locked with SKIP LOCKED. Params start at `$first`. */
-  #select(sel: JobSelector, first: number, extra = ''): { sql: string; params: unknown[] } {
+  #select(sel: JobSelector, first: number, extra = '', lock = true): { sql: string; params: unknown[] } {
     const params: unknown[] = [sel.name]
     let sql = `SELECT id FROM ${this.#table} WHERE name = $${String(first)}`
     for (const [key, values] of Object.entries(sel.where ?? {})) {
       params.push(key, values.map(String))
       sql += ` AND (input ->> $${String(first + params.length - 2)}) = ANY($${String(first + params.length - 1)}::text[])`
     }
-    sql += ` AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW()) ${extra} FOR UPDATE SKIP LOCKED`
+    sql += ` AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW()) ${extra}${lock ? ' FOR UPDATE SKIP LOCKED' : ''}`
     return { sql, params }
   }
 

@@ -77,8 +77,15 @@ export interface JobDeferInput extends JobSelector {
   until: Date | 'infinity'
 }
 
+/** Exactly one of `availableAt` and `ahead`. */
 export interface JobRescheduleInput {
-  availableAt: Date
+  availableAt?: Date
+  /**
+   * Places the job one second before the earliest time the other pending jobs matching this
+   * selector had (a deferred job counts at the time `restore` gives back), in the same statement.
+   * Never moves the job later. With no other match the time is left unchanged.
+   */
+  ahead?: JobSelector
 }
 
 export interface JobLeaseFence {

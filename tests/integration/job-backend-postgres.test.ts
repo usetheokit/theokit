@@ -213,6 +213,53 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
     expect(await availableAt(a.jobId)).toBe(when.getTime())
     expect((await backend.dequeue({})).map((l) => l.jobId)).toEqual([a.jobId])
   })
+
+  it('places a job ahead of the selected pending jobs in one statement', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, delaySeconds: 100 })
+    const b = await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 50 })
+    const c = await backend.enqueue({ name: 'run-task', input: { taskId: 3 }, delaySeconds: 200 })
+    const earliest = await availableAt(b.jobId)
+    expect(
+      await backend.reschedule(pool, a.jobId, {
+        ahead: { name: 'run-task', where: { taskId: [2, 3] } },
+      }),
+    ).toBe(true)
+    expect(await availableAt(a.jobId)).toBe(earliest - 1_000)
+    expect(await availableAt(c.jobId)).toBeGreaterThan(earliest)
+    // Never later than it already is, and nothing to be ahead of leaves it alone.
+    const at = await availableAt(a.jobId)
+    await backend.reschedule(pool, a.jobId, { ahead: { name: 'run-task', where: { taskId: [3] } } })
+    expect(await availableAt(a.jobId)).toBe(at)
+    await backend.reschedule(pool, a.jobId, { ahead: { name: 'none' } })
+    expect(await availableAt(a.jobId)).toBe(at)
+  })
+
+  it('rejects reschedule with neither or both of availableAt and ahead', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: {} })
+    await expect(backend.reschedule(pool, a.jobId, {})).rejects.toThrow(/exactly one/)
+  })
+
+  it('a stale nack cannot overwrite a deferred time after the lease expired', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, maxAttempts: 3 })
+    const [lease] = await backend.dequeue({ lockSeconds: 1 })
+    await pool.query("UPDATE theokit_jobs SET locked_until = NOW() - INTERVAL '1 second'")
+    const until = new Date(Date.now() + 3_600_000)
+    expect(await backend.defer(pool, { name: 'run-task', until })).toEqual([a.jobId])
+    await backend.nack(a.jobId, { error: 'late', leaseToken: lease.leaseToken }).catch(() => {})
+    expect(await availableAt(a.jobId)).toBe(until.getTime())
+  })
+
+  it('a stale ack cannot delete a job rescheduled after the lease expired', async () => {
+    const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 } })
+    const [lease] = await backend.dequeue({ lockSeconds: 1 })
+    await pool.query("UPDATE theokit_jobs SET locked_until = NOW() - INTERVAL '1 second'")
+    const moved = await backend.reschedule(pool, a.jobId, {
+      availableAt: new Date(Date.now() + 60_000),
+    })
+    expect(moved).toBe(true)
+    await backend.ack(a.jobId, { leaseToken: lease.leaseToken }).catch(() => {})
+    expect(await availableAt(a.jobId)).toBeGreaterThan(Date.now())
+  })
 })
 
 describe('PostgresJobBackend migrate on an older table', () => {
