@@ -57,7 +57,10 @@ export function humanReport(plan: TranscriptGCPlan, result: RunTranscriptGCResul
     }),
   ]
   if (result.dryRun && plan.candidates.length > 0) lines.push('  → re-run with --apply to delete')
-  return [...lines, ...result.errors.map((e) => `  ! ${e.id ?? 'unnamed transcript'}: ${e.message}`)]
+  return [
+    ...lines,
+    ...result.errors.map((e) => `  ! ${e.id ?? 'unnamed transcript'}: ${e.message}`),
+  ]
 }
 
 export interface CurrentProjectGCOptions {
@@ -100,27 +103,33 @@ export async function planAndRunCurrentProjectGC(
   // re-check only knows the hashed names.
   const plan = withholdLegacyNamed(planned, liveSessionIds(cwd, registryIds))
   // A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
-  // first row and hands it to the remover. Registry removal is therefore tied to the candidate's own
-  // identity: an id may be removed only when a candidate IS that session's transcript, under either
-  // naming convention. A fork's file is collected, but never speaks for its source.
-  const own = new Set(
-    plan.candidates.flatMap((c) =>
-      c.id !== undefined &&
-      (c.transcript === transcriptPath(plan.root, plan.cwd, c.id) ||
-        c.transcript === legacyTranscriptPath(plan.root, plan.cwd, c.id))
-        ? [c.id]
-        : [],
-    ),
-  )
+  // first row and hands only that id to the remover. The remover cannot tell the fork from the
+  // source, so each candidate runs on its own: registry removal is tied to THAT candidate's identity
+  // (its file is the session's own transcript, under either naming convention), and protection is
+  // re-read before every candidate, so a source that became live mid-apply is skipped.
+  const isOwn = (c: TranscriptGCPlan['candidates'][number]): boolean =>
+    c.id !== undefined &&
+    (c.transcript === transcriptPath(plan.root, plan.cwd, c.id) ||
+      c.transcript === legacyTranscriptPath(plan.root, plan.cwd, c.id))
   const remove = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
-  const result = await runTranscriptGC(plan, {
-    apply: opts.apply,
-    protectedIds,
-    // The remover is handed only an id, so re-check that id against live protection at the moment
-    // of removal: a source that became protected after planning must not lose its registry entry
-    // because a fork's first row names it.
-    removeFromRegistry: (id) => (own.has(id) && !protectedIds().has(id) ? remove(id) : undefined),
-  })
+  const removed: string[] = []
+  const orphaned: string[] = []
+  const errors: RunTranscriptGCResult['errors'][number][] = []
+  for (const candidate of plan.candidates) {
+    const own = isOwn(candidate)
+    const one = await runTranscriptGC(
+      { ...plan, candidates: [candidate] },
+      {
+        apply: opts.apply,
+        protectedIds,
+        removeFromRegistry: (id) => (own && !protectedIds().has(id) ? remove(id) : undefined),
+      },
+    )
+    removed.push(...one.removed)
+    orphaned.push(...one.orphaned)
+    errors.push(...one.errors)
+  }
+  const result: RunTranscriptGCResult = { dryRun: !opts.apply, removed, orphaned, errors }
   return { plan, result }
 }
 

@@ -142,7 +142,6 @@ describe('the report', () => {
   })
 })
 
-
 describe('a fork of a registered session', () => {
   it('test_an_old_fork_is_collected_without_removing_its_registered_source', async () => {
     // A fork copies its source's rows, so its first row names the SOURCE session.
@@ -184,25 +183,45 @@ describe('a fork of a registered session', () => {
 })
 
 describe('a source that becomes protected between plan and apply', () => {
-  it('test_a_fork_does_not_remove_a_source_the_pointer_claimed_after_planning', async () => {
+  // Candidates are processed newest first: `trigger` (70d) runs before `source-old` (80d) and
+  // `the-fork` (90d), so what its removal does happens mid-apply, before either is reached.
+  async function applyWith(claim: (source: string) => Promise<void> | void): Promise<string[]> {
     writeTranscript(fx, 'newest', 1)
     const source = writeTranscript(fx, 'source-old', 80)
+    writeTranscript(fx, 'trigger', 70)
     writeTranscript(fx, 'the-fork', 90, {
       content: `${JSON.stringify({ type: 'user', sessionId: 'source-old' })}\n`,
     })
-    writeTranscript(fx, 'other', 100)
     const removed: string[] = []
+    const dry = await run(false)
+    expect(dry.plan.candidates.map((c) => c.id)).toEqual(['trigger', 'source-old', 'source-old'])
 
     await run(true, {
-      removeFromRegistry: (id: string) => {
+      removeFromRegistry: async (id: string) => {
         removed.push(id)
-        // The TUI starts using the source while the sweep is already applying.
-        writePointer(fx, 'source-old')
+        if (id === 'trigger') await claim(source)
       },
     })
-
     expect(existsSync(source)).toBe(true)
-    expect(removed).not.toContain('source-old')
+    expect(existsSync(transcriptPath(fx.root, fx.cwd, 'the-fork'))).toBe(false)
+    return removed
+  }
+
+  it('test_a_fork_does_not_remove_a_source_the_pointer_claimed_after_planning', async () => {
+    const removed = await applyWith(() => writePointer(fx, 'source-old'))
+    expect(removed).toEqual(['trigger'])
+  })
+
+  it('test_a_fork_does_not_remove_a_source_leased_after_planning', async () => {
+    let lease: unknown
+    try {
+      const removed = await applyWith(async (source) => {
+        lease = await acquireSessionWriter(source)
+      })
+      expect(removed).toEqual(['trigger'])
+    } finally {
+      await (lease as { release?: () => Promise<void> } | undefined)?.release?.()
+    }
   })
 })
 
