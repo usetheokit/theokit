@@ -37,7 +37,9 @@ export class ForkedSessionBusyError extends TheokitAgentError {
 function isBusyCodePart(chunk: UIMessageChunk): boolean {
   if (chunk.type !== WIRE_ERROR_CODE_PART) return false
   const data = (chunk as { data?: unknown }).data
-  return typeof data === 'object' && data !== null && (data as { code?: unknown }).code === SESSION_BUSY
+  return (
+    typeof data === 'object' && data !== null && (data as { code?: unknown }).code === SESSION_BUSY
+  )
 }
 
 /**
