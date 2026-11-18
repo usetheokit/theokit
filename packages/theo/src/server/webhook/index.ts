@@ -30,11 +30,16 @@ export {
   telegram,
   whatsapp,
   whatsappSubscribe,
+  verifyHmacSha256,
+  decodeBase64Signature,
+  decodeHexSignature,
 } from './providers/index.js'
 export type {
   DiscordWebhookOptions,
   GitHubWebhookOptions,
   LineWebhookOptions,
+  DecodeSignature,
+  DecodeResult,
   SlackWebhookOptions,
   StripeWebhookOptions,
   TelegramWebhookOptions,
