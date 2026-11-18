@@ -100,6 +100,22 @@ import { assertBootstrapped } from '@theokit/agents/config'
 assertBootstrapped(bootstrap, 'openTranscriptStore')
 ```
 
+### `-c a.b=value` overrides
+
+`parseDottedOverrides(pairs, { coerce? })` from `@theokit/agents/config` turns argv pairs into the
+`command-line` layer. Pairs split at the first `=`, keys at `.`; `a.b=1` and `a.c=2` build one nested object.
+`__proto__`, `constructor` and `prototype` (in any position), empty segments, a pair without `=`, and pairs that
+build incompatible shapes (`a=1` with `a.b=2`, in either order) throw `DottedOverrideError`
+(`dotted_override_invalid`, not retryable), naming the pair. Values stay strings unless `coerce(path, raw)` returns
+otherwise; `path` is the full dotted key, so `profiles.x.memory` is not coerced like `memory`. The flag name and argv
+parsing stay in your app.
+
+```ts
+const layer = parseDottedOverrides(['model=x', 'limits.turns=3'], {
+  coerce: (path, raw) => (path === 'limits.turns' ? Number(raw) : raw),
+})
+```
+
 ## Calling an agent route without `HttpTransport`
 
 An agent route's CSRF gate answers `403 CSRF_FAILED` unless the request carries `X-Theo-Action: 1`.
