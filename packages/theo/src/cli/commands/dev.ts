@@ -42,7 +42,8 @@ export function buildDevServerOptions(config: TheoConfig, port: number): ServerO
     port,
     host: config.host,
     open: config.open,
-    strictPort: config.strictPort,
+    // The test helper needs the port it asked for: a substituted one would be a different server.
+    strictPort: config.strictPort || process.env.THEOKIT_TEST_READY_TOKEN !== undefined,
     ...(config.allowedHosts !== undefined ? { allowedHosts: config.allowedHosts } : {}),
     warmup: config.warmup ?? {
       clientFiles: ['./app/**/*.tsx', './app/**/*.ts'],

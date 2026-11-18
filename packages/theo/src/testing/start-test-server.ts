@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, readlinkSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 
@@ -15,6 +16,10 @@ export interface StartTestServerOptions {
   timeoutMs?: number
   /** @internal Test hook: picks the port for each boot attempt. */
   pickPort?: () => Promise<number>
+  /** @internal Test hook: the platform whose process-tree handling to use. Default process.platform. */
+  platform?: NodeJS.Platform
+  /** @internal Test hook: terminates a Windows process tree; resolves the exit code. Default taskkill. */
+  killTree?: (pid: number) => Promise<number | null>
 }
 
 export interface TestServer {
@@ -43,6 +48,33 @@ const PORT_ATTEMPTS = 3
 
 /** The port was taken by another process between picking it and the child binding it. */
 class PortSubstitutedError extends TestServerBootError {}
+
+/** The child's output says its own bind failed because the port was already in use. */
+const BIND_CONFLICT = /EADDRINUSE|address already in use|Port \d+ is already in use/i
+
+const READY_TOKEN_HEADER = 'x-theokit-ready-token'
+
+/** `taskkill /T /F`: ends the pid and every descendant. Resolves its exit code (null when it could not run). */
+function taskkillTree(pid: number): Promise<number | null> {
+  return new Promise((resolve) => {
+    const tk = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    tk.once('error', () => {
+      resolve(null)
+    })
+    tk.once('exit', (code) => {
+      resolve(code)
+    })
+  })
+}
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
 
 /** Inodes of the sockets listening on `port`, from /proc/net/tcp and tcp6 (state 0A is LISTEN). */
 function listeningInodes(port: number): Set<string> {
@@ -183,11 +215,13 @@ async function bootOnce(
   const mode = options.mode ?? 'dev'
   const port = await (options.pickPort ?? freePort)()
   const origin = `http://localhost:${String(port)}`
+  const token = randomUUID()
+  const platform = options.platform ?? process.platform
   let output = ''
   let spawnError: Error | undefined
   const child = spawn(process.execPath, [bin, mode, '--port', String(port)], {
     cwd,
-    env: { ...process.env, ...options.env },
+    env: { ...process.env, ...options.env, THEOKIT_TEST_READY_TOKEN: token },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
   })
@@ -210,6 +244,26 @@ async function bootOnce(
   let closing: ReturnType<TestServer['close']> | undefined
   const close: TestServer['close'] = () => {
     closing ??= (async () => {
+      if (platform === 'win32') {
+        // kill() reaches only the direct child: end the whole tree and confirm before returning.
+        if (child.pid !== undefined && (!exited || pidAlive(child.pid))) {
+          const code = await (options.killTree ?? taskkillTree)(child.pid)
+          // 128: no such process, i.e. already gone.
+          if (code !== 0 && code !== 128) {
+            throw new Error(
+              `could not terminate theokit ${mode} process tree (pid ${String(child.pid)}, taskkill exit ${String(code)})`,
+            )
+          }
+          const until = Date.now() + GRACE_MS
+          while (!exited && Date.now() < until) await sleep(25)
+          if (!exited) {
+            throw new Error(
+              `theokit ${mode} (pid ${String(child.pid)}) still running after its process tree was terminated`,
+            )
+          }
+        }
+        return ended
+      }
       if (!exited || groupAlive(child)) {
         signalGroup(child, 'SIGTERM')
         // The leader can exit before its descendants: wait for the whole group, then escalate.
@@ -227,12 +281,29 @@ async function bootOnce(
     message: string,
     Err: typeof TestServerBootError = TestServerBootError,
   ): Promise<never> => {
-    await close()
+    let cleanup = ''
+    try {
+      await close()
+    } catch (err) {
+      // Not retryable: descendants may still run. Say so rather than hide it behind the boot error.
+      cleanup = `; cleanup failed: ${err instanceof Error ? err.message : String(err)}`
+      throw new TestServerBootError(`${message}${cleanup}`, output)
+    }
     throw new Err(spawnError === undefined ? message : `${message}: ${spawnError.message}`, output)
   }
 
+  // The child's own bind failure (strict port) means another process holds the port.
+  const exitedFailure = async (): Promise<never> =>
+    BIND_CONFLICT.test(output)
+      ? fail(
+          `port ${String(port)} was taken by another process before theokit ${mode} bound it`,
+          PortSubstitutedError,
+        )
+      : fail(`theokit ${mode} exited before it was ready`)
+  let foreignAnswer = false
+
   while (Date.now() < deadline) {
-    if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+    if (hasExited()) return await exitedFailure()
     // Independent of the readiness answer: a foreign listener may reply 404, refuse, or not speak HTTP.
     if (child.pid !== undefined && foreignListener(port, child.pid)) {
       return await fail(
@@ -243,12 +314,14 @@ async function bootOnce(
     let ready = false
     try {
       const res = await fetch(`${origin}/__theo/ready`, { signal: AbortSignal.timeout(1000) })
-      ready = res.status === 200
+      // Only this attempt's child knows the token: a 200 without it is another server's.
+      ready = res.status === 200 && res.headers.get(READY_TOKEN_HEADER) === token
+      if (res.status === 200 && !ready) foreignAnswer = true
     } catch {
       // not listening yet: only fetch errors are swallowed here
     }
     if (ready) {
-      if (hasExited()) return await fail(`theokit ${mode} exited before it was ready`)
+      if (hasExited()) return await exitedFailure()
       // Any server on the port can answer: only a listener held by the child's own group counts.
       if (child.pid !== undefined && groupListensOn(port, child.pid) === false) {
         return await fail(
@@ -259,6 +332,12 @@ async function bootOnce(
       return { origin, pid: child.pid, output: () => output, close }
     }
     await sleep(250)
+  }
+  if (foreignAnswer) {
+    return await fail(
+      `port ${String(port)} was answered by another server, not theokit ${mode}`,
+      PortSubstitutedError,
+    )
   }
   return await fail(`theokit ${mode} was not ready within ${String(timeoutMs)}ms`)
 }

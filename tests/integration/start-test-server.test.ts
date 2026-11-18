@@ -137,3 +137,70 @@ describe('startTestServer', () => {
     }, 120_000)
   })
 })
+
+describe('startTestServer on platforms without /proc (simulated)', () => {
+  let app: string
+  const open: Server[] = []
+  beforeAll(() => {
+    app = writeApp('subst', 'export default {}\n')
+  })
+  afterAll(async () => {
+    await Promise.all(open.map((s) => new Promise((r) => s.close(r))))
+  })
+  function occupy200(): Promise<number> {
+    const srv = createHttp((_req, res) => {
+      res.statusCode = 200
+      res.end('{"status":"ready"}')
+    })
+    open.push(srv as Server)
+    return new Promise((r) => {
+      srv.listen(0, () => r((srv.address() as { port: number }).port))
+    })
+  }
+
+  it.each(['darwin', 'win32'] as const)(
+    'rejects a foreign 200 listener on %s instead of accepting it',
+    async (platform) => {
+      const taken = await occupy200()
+      const err = await startTestServer({
+        cwd: app,
+        platform,
+        timeoutMs: 60_000,
+        pickPort: async () => taken,
+        killTree: async (pid) => {
+          try {
+            process.kill(-pid, 'SIGKILL')
+          } catch {
+            // gone
+          }
+          return 0
+        },
+      }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(TestServerBootError)
+      expect((err as Error).message).toMatch(/taken by another process|answered by another server/)
+    },
+    120_000,
+  )
+
+  it('terminates the Windows process tree on close() and surfaces a failed termination', async () => {
+    const killed: number[] = []
+    const server = await startTestServer({
+      cwd: app,
+      platform: 'win32',
+      killTree: async (pid) => {
+        killed.push(pid)
+        process.kill(-pid, 'SIGKILL')
+        return 0
+      },
+    })
+    const pid = server.pid ?? 0
+    await server.close()
+    await server.close()
+    expect(killed).toEqual([pid])
+    expect(alive(pid)).toBe(false)
+
+    const stuck = await startTestServer({ cwd: app, platform: 'win32', killTree: async () => 1 })
+    await expect(stuck.close()).rejects.toThrow(/could not terminate/)
+    process.kill(-(stuck.pid ?? 0), 'SIGKILL')
+  }, 120_000)
+})
