@@ -40,7 +40,7 @@ export function recordRefusal(
   const token = randomBytes(12).toString('hex')
   let tools = ledger.get(runId)
   if (tools === undefined) {
-    if (ledger.size >= MAX_RUNS) dropRunRefusals(ledger.keys().next().value as string)
+    if (ledger.size >= MAX_RUNS) dropRunRefusals(ledger.keys().next().value!)
     tools = new Map()
     ledger.set(runId, tools)
   }
