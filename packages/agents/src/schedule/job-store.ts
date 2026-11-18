@@ -2,12 +2,13 @@
 // `Map`, so a job created there is gone on the next start; this file is what survives it.
 /* eslint-disable security/detect-non-literal-fs-filename --
    every path here is the one store file the caller chose (the app passes `<workspace>/.theoclaw/schedules.json`)
-   or its temporary sibling; nothing in a path comes from a job, a prompt or a model answer */
+   or the temporary sibling the SDK writes; nothing in a path comes from a job, a prompt or a model answer */
 import { readFileSync } from 'node:fs'
-import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
+import { atomicWriteJson } from '@theokit/sdk/persistence'
 
 /** Where a scheduled job's answer is sent: one platform and one channel on it. */
 export interface ScheduleTarget {
@@ -58,8 +59,6 @@ export class ScheduleStoreError extends TheokitAgentError {
 const STORE_VERSION = 1
 const FILE_MODE = 0o600
 const DIRECTORY_MODE = 0o700
-
-let tempCounter = 0
 
 /**
  * Open the store at `filePath`, reading it synchronously so a host can refuse its start on a bad
@@ -153,19 +152,7 @@ function readJob(filePath: string, raw: unknown, index: number): ScheduledJob {
 
 async function saveJobs(filePath: string, jobs: ScheduledJob[]): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true, mode: DIRECTORY_MODE })
-  tempCounter += 1
-  const temp = `${filePath}.${String(process.pid)}.${String(tempCounter)}.tmp`
-  try {
-    await writeFile(temp, `${JSON.stringify({ version: STORE_VERSION, jobs }, null, 2)}\n`, {
-      mode: FILE_MODE,
-    })
-    // `mode` on writeFile is masked by the umask; the store holds prompts and outputs, so 0600 is set.
-    await chmod(temp, FILE_MODE)
-    await rename(temp, filePath)
-  } catch (error) {
-    await rm(temp, { force: true })
-    throw error
-  }
+  await atomicWriteJson(filePath, { version: STORE_VERSION, jobs }, { mode: FILE_MODE })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

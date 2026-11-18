@@ -107,6 +107,8 @@ export async function decrypt<T>(token: string, secret: string): Promise<T | nul
  * Reset the derived-key cache. Test helper — never call from production code.
  * Used by Vitest to guarantee isolation between tests that use distinct
  * secrets and want to confirm the derivation path runs.
+ *
+ * @public Knip: kept for tests that import it from this module.
  */
 export function _resetKeyCacheForTests(): void {
   keyCache.clear()

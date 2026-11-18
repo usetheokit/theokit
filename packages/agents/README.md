@@ -43,7 +43,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes`, `RefreshFailure` |
 | `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`); `defineAppBootstrap` runs one setup from every entry |
 | `./tools` | Built-in tool factories (read, list, grep, git, patch, edit, shell, …) |
-| `./client` | Transports for driving an agent from a client. `AgentClient.sendAndWait(input)` resolves when that turn settles (`done`/`error`/`aborted`, never rejects), and `asGoalLoopAgent(client)` adapts a client to the SDK `GoalLoopAgent` so `runGoalLoop` can drive it without polling |
+| `./client` | Transports for driving an agent from a client. `AgentClient.sendAndWait(input)` resolves when that turn settles (`done`/`error`/`aborted`, never rejects), and `asGoalLoopAgent(client)` adapts a client to the SDK `GoalLoopAgent` so `runGoalLoop` can drive it without polling. `AGENT_ACTION_HEADERS` and `agentRequestHeaders(...)` give a plain `fetch` the headers the route requires |
 | `./client/react` | `useAgent` and the React bindings |
 | `./session` | Session lifecycle, listing, fork/rewind, transcript GC with a retention floor |
 | `./hooks` | The lifecycle-hook engine and its fingerprint gate; `parseClaudeHooks` reads the Claude Code hook dialect (see below) |
@@ -98,6 +98,23 @@ await bootstrap.run({ env: process.env, cwd: process.cwd(), home: homedir() })
 // any module that resolves SDK paths
 import { assertBootstrapped } from '@theokit/agents/config'
 assertBootstrapped(bootstrap, 'openTranscriptStore')
+```
+
+## Calling an agent route without `HttpTransport`
+
+An agent route's CSRF gate answers `403 CSRF_FAILED` unless the request carries `X-Theo-Action: 1`.
+`@theokit/agents/client` exports the headers, so a script, a test or a plain `fetch` need not spell them:
+
+```ts
+import { AGENT_ACTION_HEADERS, agentRequestHeaders } from '@theokit/agents/client'
+
+const res = await fetch('http://localhost:3000/agents/support', {
+  method: 'POST',
+  headers: AGENT_ACTION_HEADERS,
+  body: JSON.stringify({ messages }),
+})
+// Add your own headers; names merge case-insensitively, the later spelling wins.
+const headers = agentRequestHeaders(AGENT_ACTION_HEADERS, { authorization: `Bearer ${token}` })
 ```
 
 ## The shapes worth knowing before you start
