@@ -344,7 +344,9 @@ export class PostgresJobBackend implements JobBackend {
   async reschedule(client: PoolLike, jobId: string, input: JobRescheduleInput): Promise<boolean> {
     const t = this.#table
     if ((input.availableAt === undefined) === (input.ahead === undefined)) {
-      throw new Error('PostgresJobBackend.reschedule: pass exactly one of `availableAt` and `ahead`.')
+      throw new Error(
+        'PostgresJobBackend.reschedule: pass exactly one of `availableAt` and `ahead`.',
+      )
     }
     // `ahead`: one second before the earliest time the other selected jobs had (a held job counts
     // at the time it will be restored to), read in the same statement as the write.
@@ -374,7 +376,12 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   /** Subquery picking the unleased, unfailed jobs of `sel`, locked with SKIP LOCKED. Params start at `$first`. */
-  #select(sel: JobSelector, first: number, extra = '', lock = true): { sql: string; params: unknown[] } {
+  #select(
+    sel: JobSelector,
+    first: number,
+    extra = '',
+    lock = true,
+  ): { sql: string; params: unknown[] } {
     const params: unknown[] = [sel.name]
     let sql = `SELECT id FROM ${this.#table} WHERE name = $${String(first)}`
     for (const [key, values] of Object.entries(sel.where ?? {})) {
