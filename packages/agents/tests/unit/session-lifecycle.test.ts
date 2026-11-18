@@ -526,6 +526,48 @@ describe('deleteSession with a verifier', () => {
     expect(result.registryError).toBeInstanceOf(Error)
   })
 
+  it('reads before the remover and after it, in that order', async () => {
+    writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('keeper', 0)
+    await persistSessionId(CWD, 'keeper', root)
+    const log: string[] = []
+    let listed = true
+    await deleteSession('doomed', {
+      cwd: CWD,
+      root,
+      removeFromRegistry: async () => {
+        log.push('remove')
+        listed = false
+      },
+      isListedInRegistry: async () => {
+        log.push(`read:${String(listed)}`)
+        return listed
+      },
+    })
+    expect(log).toEqual(['read:true', 'remove', 'read:false'])
+  })
+
+  it('a session protected during the after-read is not deleted', async () => {
+    const path = writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('other', 0)
+    let lease: { release: () => void } | undefined
+    let reads = 0
+    await expect(
+      deleteSession('doomed', {
+        cwd: CWD,
+        root,
+        removeFromRegistry: async () => undefined,
+        isListedInRegistry: async () => {
+          reads += 1
+          if (reads === 2) lease = await acquireSessionWriter(path)
+          return false
+        },
+      }),
+    ).rejects.toBeInstanceOf(SessionInUseError)
+    expect(existsSync(path)).toBe(true)
+    lease?.release()
+  })
+
   it('does not call the verifier without a remover', async () => {
     const v = verifierFrom([true])
     const result = await deleteSession('ghost', {
