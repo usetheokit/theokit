@@ -388,10 +388,8 @@ export class PostgresJobBackend implements JobBackend {
     let target = '$2::timestamptz'
     const params: unknown[] = [jobId]
     if (input.ahead) {
-      const sel = this.#select(input.ahead, 2, 'AND id <> $1')
-      const times = sel.sql
-        .replace('SELECT id', 'SELECT COALESCE(held_from, available_at) AS at')
-        .replace(/ SKIP LOCKED$/, '')
+      const sel = this.#select(input.ahead, 2, 'AND id <> $1', false)
+      const times = sel.sql.replace('SELECT id', 'SELECT COALESCE(held_from, available_at) AS at')
       const others = await client.query<{ at: Date | string }>(times, [jobId, ...sel.params])
       const at = Math.min(...others.rows.map((row) => new Date(row.at).getTime()))
       if (!Number.isFinite(at)) {
@@ -419,15 +417,20 @@ export class PostgresJobBackend implements JobBackend {
     return r.rows.length > 0
   }
 
-  /** Subquery picking the unleased, unfailed jobs of `sel`, locked with SKIP LOCKED. Params start at `$first`. */
-  #select(sel: JobSelector, first: number, extra = ''): { sql: string; params: unknown[] } {
+  /** Subquery picking the unleased, unfailed jobs of `sel`, locked with SKIP LOCKED unless `skipLocked` is false (wait for the lock). Params start at `$first`. */
+  #select(
+    sel: JobSelector,
+    first: number,
+    extra = '',
+    skipLocked = true,
+  ): { sql: string; params: unknown[] } {
     const params: unknown[] = [sel.name]
     let sql = `SELECT id FROM ${this.#table} WHERE name = $${String(first)}`
     for (const [key, values] of Object.entries(sel.where ?? {})) {
       params.push(key, values.map(String))
       sql += ` AND (input ->> $${String(first + params.length - 2)}) = ANY($${String(first + params.length - 1)}::text[])`
     }
-    sql += ` AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW()) ${extra} FOR UPDATE SKIP LOCKED`
+    sql += ` AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW()) ${extra} FOR UPDATE${skipLocked ? ' SKIP LOCKED' : ''}`
     return { sql, params }
   }
 
