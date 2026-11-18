@@ -23,13 +23,10 @@ export { DuplicateContextKeyError } from './duplicate-context-key-error.js'
 // Backend contract
 export type {
   JobBackend,
-  JobDeferInput,
   JobEnqueueInput,
   JobLease,
   JobLeaseFence,
   JobNackOptions,
-  JobRescheduleInput,
-  JobSelector,
 } from './job-backend.js'
 
 // Backends
