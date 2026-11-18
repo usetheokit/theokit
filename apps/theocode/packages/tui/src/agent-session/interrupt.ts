@@ -18,6 +18,8 @@ export interface ForkGate {
   queued: boolean
   /** Turn-start count when the queued interrupt arrived; a newer count means a newer turn is live. */
   queuedAt?: number
+  /** Turn-start count when the running fork began; an interrupt of that same turn needs no second fork. */
+  forkedAt?: number
 }
 
 export const newForkGate = (): ForkGate => ({ running: false, queued: false })
@@ -41,6 +43,7 @@ export function makeInterruptTurn(deps: InterruptDeps, gate: ForkGate = newForkG
           break
         }
         ran = true
+        gate.forkedAt = turnStartCount()
         gate.queued = false
         try {
           await deps.forkSession()
@@ -58,6 +61,8 @@ export function makeInterruptTurn(deps: InterruptDeps, gate: ForkGate = newForkG
     deps.abort()
     deps.onInterrupted()
     if (gate.running) {
+      // Same turn as the running fork: its result is not stale, a repeat Escape must not fork again.
+      if (turnStartCount() === gate.forkedAt) return
       gate.queued = true
       gate.queuedAt = turnStartCount()
       return

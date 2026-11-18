@@ -32,6 +32,7 @@ describe('interrupt fork queue', () => {
     const { releases, forkSession, interrupt } = setup(active)
     interrupt() // turn A
     active.v = true // turn B starts and is interrupted while A's fork copies
+    noteTurnStart()
     interrupt()
     interrupt()
     expect(forkSession).toHaveBeenCalledTimes(1)
@@ -48,9 +49,21 @@ describe('interrupt fork queue', () => {
     const active = { v: true }
     const { releases, forkSession, interrupt } = setup(active)
     interrupt() // A
+    noteTurnStart() // B
     interrupt() // B, queued
     active.v = false
     noteTurnStart() // C submitted; streaming not yet published
+    releases[0]!()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(forkSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fork again for repeated Escape on the same turn', async () => {
+    const active = { v: true }
+    const { releases, forkSession, interrupt } = setup(active)
+    interrupt()
+    interrupt()
+    interrupt()
     releases[0]!()
     await new Promise((r) => setTimeout(r, 0))
     expect(forkSession).toHaveBeenCalledTimes(1)
