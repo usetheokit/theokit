@@ -64,6 +64,19 @@ describe('objectToFormData', () => {
     }
   })
 
+  it('refuses an absent optional array, naming the field', () => {
+    const s = z.object({ tags: z.array(z.string()).optional() })
+    for (const v of [{}, { tags: undefined }, { tags: null }]) {
+      try {
+        objectToFormData(v, s)
+        expect.unreachable()
+      } catch (e) {
+        expect(e).toBeInstanceOf(FormDataEncodingError)
+        expect((e as FormDataEncodingError).path).toBe('tags')
+      }
+    }
+  })
+
   it('refuses an array of arrays, naming the field', () => {
     const s = z.object({ rows: z.array(z.array(z.string())) })
     try {

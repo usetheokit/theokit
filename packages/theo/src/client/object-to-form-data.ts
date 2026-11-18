@@ -65,10 +65,35 @@ function appendScalar(fd: FormData, key: string, v: unknown): void {
   else fd.append(key, String(v))
 }
 
+function appendArray(fd: FormData, key: string, schema: unknown, value: unknown): void {
+  const element = defOf(schema).element
+  const elementName = element ? ctorName(unwrap(element)) : ''
+  if (elementName === 'ZodObject' || elementName === 'ZodArray') {
+    throw new FormDataEncodingError(
+      key,
+      `Field '${key}' is an array of ${elementName === 'ZodObject' ? 'objects' : 'arrays'}; formDataToObject cannot read that back.`,
+    )
+  }
+  const list = Array.isArray(value)
+    ? value
+    : (asBlobList(value) ?? Array.from(value as ArrayLike<unknown>))
+  for (const item of list) {
+    if (item !== null && item !== undefined) appendScalar(fd, key, item)
+  }
+}
+
 function appendValue(fd: FormData, key: string, schema: unknown, value: unknown): void {
-  if (value === null || value === undefined) return
   const inner = unwrap(schema)
   const name = ctorName(inner)
+  if (value === null || value === undefined) {
+    if (name === 'ZodArray') {
+      throw new FormDataEncodingError(
+        key,
+        `Field '${key}' is an array with no value; formDataToObject decodes an absent array as [], so pass [] instead.`,
+      )
+    }
+    return
+  }
 
   if (name === 'ZodObject') {
     if (typeof value !== 'object') return
@@ -85,20 +110,7 @@ function appendValue(fd: FormData, key: string, schema: unknown, value: unknown)
   }
 
   if (name === 'ZodArray') {
-    const element = defOf(inner).element
-    const elementName = element ? ctorName(unwrap(element)) : ''
-    if (elementName === 'ZodObject' || elementName === 'ZodArray') {
-      throw new FormDataEncodingError(
-        key,
-        `Field '${key}' is an array of ${elementName === 'ZodObject' ? 'objects' : 'arrays'}; formDataToObject cannot read that back.`,
-      )
-    }
-    const list = Array.isArray(value)
-      ? value
-      : (asBlobList(value) ?? Array.from(value as ArrayLike<unknown>))
-    for (const item of list) {
-      if (item !== null && item !== undefined) appendScalar(fd, key, item)
-    }
+    appendArray(fd, key, inner, value)
     return
   }
 
