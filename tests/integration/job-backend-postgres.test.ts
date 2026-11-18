@@ -138,7 +138,7 @@ describe('PostgresJobBackend (T3.1)', () => {
 })
 
 describe('PostgresJobBackend defer, restore and reschedule', () => {
-  // pg-mem cannot parse 'infinity'; the real-Postgres suite covers it.
+  // pg-mem cannot parse 'infinity'; job-backend-postgres-real.test.ts covers `infinity` (defer and restore) when POSTGRES_URL is set.
   const FAR = new Date('2999-01-01T00:00:00Z')
   const availableAt = async (id: string): Promise<number> => {
     const r = await pool.query<{ available_at: Date | string }>(

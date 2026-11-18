@@ -491,5 +491,48 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         await wide.end()
       }
     })
+
+    // reschedule `ahead` reads the selected jobs with FOR UPDATE SKIP LOCKED in the caller's
+    // transaction: a dequeue running before the commit cannot lease a selected job, so the
+    // rescheduled job really is ahead of every pending job it was placed ahead of.
+    it('reschedule ahead: a concurrent dequeue cannot lease a selected job before commit', async () => {
+      const target = await backend.enqueue({
+        name: 'hold-test',
+        input: { taskId: 1 },
+        delaySeconds: 100,
+      })
+      const other = await backend.enqueue({ name: 'hold-test', input: { taskId: 2 } })
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        expect(
+          await backend.reschedule(client, target.jobId, {
+            ahead: { name: 'hold-test', where: { taskId: [2] } },
+          }),
+        ).toBe(true)
+        expect(await backend.dequeue({ batchSize: 10 })).toEqual([])
+        await client.query('COMMIT')
+      } finally {
+        client.release()
+      }
+      const leases = await backend.dequeue({ batchSize: 10 })
+      expect(leases.map((l) => l.jobId)).toEqual([target.jobId, other.jobId])
+    })
+
+    it('defer to infinity holds a job and restore gives back the time it had', async () => {
+      const a = await backend.enqueue({ name: 'hold-test', input: { taskId: 1 }, delaySeconds: 30 })
+      const at = async (): Promise<number> => {
+        const r = await pool.query<{ t: Date | string }>(
+          'SELECT available_at AS t FROM theokit_jobs_ci WHERE id = $1',
+          [a.jobId],
+        )
+        return new Date(r.rows[0].t).getTime()
+      }
+      const before = await at()
+      expect(await backend.defer(pool, { name: 'hold-test', until: 'infinity' })).toEqual([a.jobId])
+      expect(await backend.dequeue({})).toEqual([])
+      await backend.restore(pool, { name: 'hold-test' })
+      expect(await at()).toBe(before)
+    })
   },
 )
