@@ -100,12 +100,11 @@ export interface CredentialResolution {
 /** Raised when the model's prefix names a provider that has no credential. */
 export class ProviderPrefixMismatchError extends TheokitAgentError {
   override readonly name = 'ProviderPrefixMismatchError'
-  constructor(provider: string, envKey: string, model: string, message?: string) {
+  constructor(provider: string, envKey: string, model: string) {
     super(
-      message ??
-        `model "${model}" names provider "${provider}", but no credential for it was found. Set ` +
-          `${envKey}, or drop the prefix to let the resolver pick by precedence. Falling back to ` +
-          `another provider would send the request to a model you did not ask for — and bill you for it.`,
+      `model "${model}" names provider "${provider}", but no credential for it was found. Set ` +
+        `${envKey}, or drop the prefix to let the resolver pick by precedence. Falling back to ` +
+        `another provider would send the request to a model you did not ask for — and bill you for it.`,
     )
   }
 }

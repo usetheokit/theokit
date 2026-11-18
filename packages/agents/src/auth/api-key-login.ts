@@ -19,6 +19,14 @@ export class CredentialExistsError extends CredentialError {
   }
 }
 
+/** A {@link ProviderPrefixMismatchError} whose message names the two providers, never the key. */
+class KeyPrefixMismatchError extends ProviderPrefixMismatchError {
+  constructor(declared: string, inferred: string) {
+    super(declared, '', '')
+    this.message = `the key declared for provider "${declared}" has the prefix of provider "${inferred}"`
+  }
+}
+
 /**
  * Store an API key. Trims it, infers the provider from its prefix when none is given, refuses a key
  * whose prefix contradicts the declared provider, and refuses to replace an existing file unless
@@ -43,12 +51,7 @@ export function loginWithApiKey(
     )
   }
   if (inferred !== undefined && inferred !== provider) {
-    throw new ProviderPrefixMismatchError(
-      provider,
-      '',
-      '',
-      `the key declared for provider "${provider}" has the prefix of provider "${inferred}"`,
-    )
+    throw new KeyPrefixMismatchError(provider, inferred)
   }
   const env = options.env ?? {}
   const existing = authFilePath(store, env)
