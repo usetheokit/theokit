@@ -301,6 +301,10 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
             released = new Promise<void>((r) => (release = r))
           }
         }
+        // A SKIP LOCKED statement (defer, restore, the final move) sees the held rows as locked.
+        if (holder !== undefined && holder !== name && /SKIP LOCKED/.test(sql)) {
+          return { rows: [], rowCount: 0 }
+        }
         return pool.query(sql, params)
       }) as PoolLike['query'],
     })
@@ -326,6 +330,8 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
     await new Promise((r) => setTimeout(r, 50))
     // Still waiting: the transaction has not ended.
     expect(done).toBe(false)
+    // A defer from another client skips the rows the transaction holds instead of moving them.
+    expect(await backend.defer(other, { name: 'run-task', until: FAR })).toEqual([])
     await backend.reschedule(tx, b.jobId, { availableAt: earlier })
     await tx.query('COMMIT')
     expect(await competing).toBe(true)
