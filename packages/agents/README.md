@@ -193,6 +193,14 @@ agent you call answers the caller, and the caller keeps the turn.
 refused with a `ConfigurationError`. `toAgentFactory({ withholdBuiltinShell: true })` still works;
 when both are set, the union is passed.
 
+## Reading a tool-using run's final answer as an object
+
+`createResultCapture(zodSchema)` returns a `submit_result` tool whose input schema is yours. Add it
+with `AgentBuilder.create().tool(cap.tool)`, tell the model in the prompt to finish by calling it, then
+read `cap.result()` after `run.wait()`. An invalid submission is returned to the model as a tool error
+naming the zod issue paths, so it can correct itself; `result()` throws `NoResultSubmittedError` when no
+valid submission was made. The schema must be an object schema (a `ConfigurationError` otherwise).
+
 ## Hooks the host owns
 
 `buildHookHandlers` wires hooks into one agent loop. Some events belong to the host instead:

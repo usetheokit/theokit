@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1233 export(s) across 25 entry point(s).
+1237 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -74,6 +74,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createDraft` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -153,6 +154,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `moderateOutputStream` | value |
 | `NetworkError` | value |
 | `noopReflectionStrategy` | value |
+| `NoResultSubmittedError` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
 | `parseModelId` | value |
@@ -394,6 +396,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `RefreshModelCatalogOptions` | type |
 | `RefreshModelCatalogResult` | type |
 | `ResolvedCompatSource` | type |
+| `ResultCapture` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
 | `RunEvent` | type |
@@ -838,6 +841,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `AgentMemoryError` | value |
+| `applyOutputStyle` | value |
 | `applySubagentMemory` | value |
 | `assertBootstrapped` | value |
 | `blockAppliesTo` | value |
