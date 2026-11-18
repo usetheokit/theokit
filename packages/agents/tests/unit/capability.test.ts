@@ -263,7 +263,7 @@ describe('ToolsCapability with an SDK CustomTool', () => {
     expect(seen).toBe(context)
   })
 
-  it('mixed inputs keep a compiled tool\'s receiver and extra properties', async () => {
+  it("mixed inputs keep a compiled tool's receiver and extra properties", async () => {
     const compiled = {
       name: 'c',
       description: 'd',
