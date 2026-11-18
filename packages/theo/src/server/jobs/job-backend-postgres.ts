@@ -381,14 +381,17 @@ export class PostgresJobBackend implements JobBackend {
       )
     }
     // `ahead`: one second before the earliest time the other selected jobs had (a held job counts
-    // at the time it will be restored to). The selected jobs are read with FOR UPDATE SKIP LOCKED,
-    // so inside the caller's transaction no worker can lease them and no other transaction can move
-    // them until it ends; a job already leased or locked is not pending and is skipped.
+    // at the time it will be restored to). The selected jobs are read with a blocking FOR UPDATE:
+    // inside the caller's transaction no worker can lease them and no other transaction can move
+    // them until it ends, and a job another transaction is moving is waited for, not skipped, so
+    // its new time is what we go ahead of. A job already leased is not pending and is left out.
     let target = '$2::timestamptz'
     const params: unknown[] = [jobId]
     if (input.ahead) {
       const sel = this.#select(input.ahead, 2, 'AND id <> $1')
-      const times = sel.sql.replace('SELECT id', 'SELECT COALESCE(held_from, available_at) AS at')
+      const times = sel.sql
+        .replace('SELECT id', 'SELECT COALESCE(held_from, available_at) AS at')
+        .replace(/ SKIP LOCKED$/, '')
       const others = await client.query<{ at: Date | string }>(times, [jobId, ...sel.params])
       const at = Math.min(...others.rows.map((row) => new Date(row.at).getTime()))
       if (!Number.isFinite(at)) {

@@ -248,7 +248,10 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
       ahead: { name: 'run-task', where: { taskId: [2] } },
     })
     const read = statements.find((q) => q.includes('SELECT COALESCE(held_from'))
-    expect(read).toMatch(/FOR UPDATE SKIP LOCKED/)
+    // Blocking, not SKIP LOCKED: a job another transaction is moving must be waited for, or the
+    // job could end up ahead of a time that then changes.
+    expect(read).toMatch(/FOR UPDATE$/)
+    expect(read).not.toMatch(/SKIP LOCKED/)
   })
 
   it('rejects reschedule with neither or both of availableAt and ahead', async () => {
