@@ -1,7 +1,7 @@
 /**
  * #1866 — `onWired` reports what was handed to `Agent.create`, read from those options.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -17,34 +17,70 @@ const h = vi.hoisted(() => ({
   resumeCwds: [] as (string | undefined)[],
 }))
 
-const fakeAgent = () => ({
+const cwdOf = (o: Record<string, unknown>) => (o.local as { cwd?: string } | undefined)?.cwd
+const USER_ROOT = join(tmpdir(), 'wired-user-skills')
+
+// Resolves like the SDK: an enabled name is found only under a root a granted source reads and
+// whose SKILL.md exists (and has a name); inline skills always resolve.
+const fakeAgent = (opts: Record<string, unknown>) => ({
   agentId: 'a1',
   send: () => Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) }),
   dispose: () => Promise.resolve(),
+  skills: {
+    list: () => {
+      const sources = ((opts.local as { settingSources?: string[] } | undefined)?.settingSources ??
+        []) as string[]
+      const sk = (opts.skills ?? {}) as { enabled?: string[]; inline?: { name: string }[] }
+      const roots = [
+        ...(sources.includes('project') ? [join(cwdOf(opts) ?? '', '.theokit', 'skills')] : []),
+        ...(sources.includes('user') ? [USER_ROOT] : []),
+      ]
+      const found = (sk.enabled ?? []).filter((n) =>
+        roots.some((r) => {
+          try {
+            return /^name: /m.test(readFileSync(join(r, n, 'SKILL.md'), 'utf8'))
+          } catch {
+            return false
+          }
+        }),
+      )
+      return Promise.resolve(
+        [...found, ...(sk.inline ?? []).map((i) => i.name)].map((name) => ({ name })),
+      )
+    },
+  },
 })
-const cwdOf = (o: Record<string, unknown>) => (o.local as { cwd?: string } | undefined)?.cwd
+
+const live = new Map<string, unknown>()
+const building = new Map<string, Promise<unknown>>()
 
 vi.mock('@theokit/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   Agent: {
-    getOrCreate: (_id: string, opts: Record<string, unknown>) => {
-      h.created.push(opts)
-      return Promise.resolve(fakeAgent())
-    },
-    resume: (id: string, opts: Record<string, unknown>) => {
-      h.resumeCwds.push(cwdOf(opts))
-      if (h.known.has(id) && h.known.get(id) === cwdOf(opts)) return Promise.resolve(fakeAgent())
-      return Promise.reject(Object.assign(new Error('unknown'), { name: 'UnknownAgentError' }))
-    },
-    create: async (opts: Record<string, unknown>) => {
-      await Promise.resolve()
-      const id = opts.agentId as string
-      if (h.known.has(id)) {
-        throw Object.assign(new Error('exists'), { code: 'agent_id_already_exists' })
-      }
-      h.known.set(id, cwdOf(opts))
-      h.created.push(opts)
-      return fakeAgent()
+    registry: { get: (id: string) => live.get(id) },
+    get: (id: string, opts: { cwd?: string } = {}) =>
+      h.known.has(id) && h.known.get(id) === opts.cwd
+        ? Promise.resolve({})
+        : Promise.reject(Object.assign(new Error('unknown'), { name: 'UnknownAgentError' })),
+    // The SDK's own shape: cache, then in-flight, then resume, then create.
+    getOrCreate: (id: string, opts: Record<string, unknown>) => {
+      if (live.has(id)) return Promise.resolve(live.get(id))
+      const running = building.get(id)
+      if (running) return running
+      const p = (async () => {
+        await Promise.resolve()
+        if (h.known.has(id) && h.known.get(id) === cwdOf(opts)) {
+          h.resumeCwds.push(cwdOf(opts))
+        } else {
+          h.known.set(id, cwdOf(opts))
+          h.created.push(opts)
+        }
+        const agent = fakeAgent(opts)
+        live.set(id, agent)
+        return agent
+      })().finally(() => building.delete(id))
+      building.set(id, p)
+      return p
     },
   },
   Tool: { create: (spec: unknown) => spec },
@@ -93,6 +129,9 @@ afterEach(() => {
   h.created.length = 0
   h.known.clear()
   h.resumeCwds.length = 0
+  live.clear()
+  building.clear()
+  rmSync(USER_ROOT, { recursive: true, force: true })
   vi.restoreAllMocks()
 })
 
@@ -115,7 +154,8 @@ describe('onWired', () => {
     const created = h.created[0]!
     expect(w.tools).toEqual((created.tools as { name: string }[]).map((t) => t.name))
     expect(w.tools).toEqual(expect.arrayContaining(['lookup', 'skill_read']))
-    expect(w.skills.listed).toEqual(['disk-skill', 'inline-one'])
+    // `disk-skill` exists nowhere, so the agent never resolved it and it is not reported.
+    expect(w.skills.listed).toEqual(['inline-one'])
     expect(w.skills.readable).toEqual(['inline-one'])
     expect(w.mcpServers).toEqual(['docs'])
     expect(w.hooks).toEqual([{ event: 'pre_tool_call' }])
@@ -139,19 +179,27 @@ describe('onWired', () => {
   })
 
   it('a project skill withheld by settingSources is absent from skills.listed and skills.readable', async () => {
-    // A real project skill on disk, under the cwd the agent runs in.
+    // Real skills on disk: one under the project root, one under the user root, one invalid.
     const cwd = mkdtempSync(join(tmpdir(), 'wired-'))
+    const put = (root: string, name: string, body: string) => {
+      mkdirSync(join(root, name), { recursive: true })
+      writeFileSync(join(root, name, 'SKILL.md'), body)
+    }
     try {
-      const dir = join(cwd, '.theokit', 'skills', 'project-skill')
-      mkdirSync(dir, { recursive: true })
-      writeFileSync(
-        join(dir, 'SKILL.md'),
-        '---\nname: project-skill\ndescription: from the repo\n---\nbody\n',
-      )
-      const run = async (selection: never, id: string) => {
+      put(join(cwd, '.theokit', 'skills'), 'project-skill', '---\nname: project-skill\n---\nb\n')
+      put(USER_ROOT, 'user-skill', '---\nname: user-skill\n---\nb\n')
+      put(join(cwd, '.theokit', 'skills'), 'broken', 'no front matter')
+      let n = 0
+      const run = async (selection: never) => {
         const seen: Wiring[] = []
         const def = base()
-          .skills(['project-skill', skill('inline-one') as never])
+          .skills([
+            'project-skill',
+            'user-skill',
+            'broken',
+            'missing',
+            skill('inline-one') as never,
+          ])
           .settingSources(selection)
           .onWired((w) => seen.push(w))
           .build()
@@ -159,27 +207,28 @@ describe('onWired', () => {
           apiKey: 'k',
           approvals: POSTURE,
           overrides: { cwd },
-        })(id)
+        })(`sk${n++}`)
         return seen[0]!
       }
-      // Both no source and user-only leave the project root unread.
-      for (const [selection, id] of [
-        [{}, 's2'],
-        [{ user: true }, 's2u'],
-      ] as const) {
-        const w = await run(selection as never, id)
-        expect(w.settingSources.project).toBe(false)
-        expect(w.skills.listed).toEqual(['inline-one'])
-        expect(w.skills.readable).toEqual(['inline-one'])
-      }
+      // No source: only the inline skill resolves; the disk skills are withheld.
+      let w = await run({} as never)
+      expect(w.skills.listed).toEqual(['inline-one'])
+      expect(w.skills.readable).toEqual(['inline-one'])
       const local = h.created[0]?.local as { settingSources?: string[]; cwd?: string }
       expect(local.cwd).toBe(cwd)
       expect(local.settingSources ?? []).not.toContain('project')
 
-      // Same disk, with the grant: the project root is a source, so the contrast is the gate.
-      const w = await run({ user: true, project: { trustedBy: TRUSTED } } as never, 's2b')
-      expect(w.settingSources).toEqual({ project: true, user: true })
+      // User only: the user skill resolves, the project one stays unread.
+      w = await run({ user: true } as never)
+      expect(w.skills.listed).toEqual(['user-skill', 'inline-one'])
+
+      // Project only: the project skill resolves; the invalid and missing names never appear.
+      w = await run({ project: { trustedBy: TRUSTED } } as never)
       expect(w.skills.listed).toEqual(['project-skill', 'inline-one'])
+
+      w = await run({ user: true, project: { trustedBy: TRUSTED } } as never)
+      expect(w.settingSources).toEqual({ project: true, user: true })
+      expect(w.skills.listed).toEqual(['project-skill', 'user-skill', 'inline-one'])
       expect(w.skills.readable).toEqual(['inline-one'])
     } finally {
       rmSync(cwd, { recursive: true, force: true })
@@ -205,16 +254,20 @@ describe('onWired', () => {
     expect(seen).toHaveLength(1)
   })
 
-  it('reports once when two calls race to create the same fresh session', async () => {
+  it('reports once when two calls race to create the same fresh session, and not for a cached one', async () => {
     const { Agent } = await import('@theokit/sdk')
     const seen: Wiring[] = []
     const options = { tools: [{ name: 'lookup' }] }
-    await Promise.all([
+    const [a, b] = await Promise.all([
       getOrCreateReporting(Agent, 'same', options, (w) => seen.push(w)),
       getOrCreateReporting(Agent, 'same', options, (w) => seen.push(w)),
     ])
+    expect(a).toBe(b)
     expect(seen).toHaveLength(1)
     expect(h.created).toHaveLength(1)
+    // A later call is served from the SDK's live cache: same handle, nothing reported.
+    expect(await getOrCreateReporting(Agent, 'same', options, (w) => seen.push(w))).toBe(a)
+    expect(seen).toHaveLength(1)
   })
 
   it('a builtin in withheldBuiltinTools is absent from tools', async () => {
