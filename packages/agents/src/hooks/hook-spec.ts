@@ -248,7 +248,12 @@ export function buildHookHandlers(
           const message = 'hook chain exceeded its time budget'
           // The budget veto is a veto too. Omitting it here would make a surface report every block
           // except the one caused by slowness, which is the one an operator most needs named.
-          const tagged = recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason: message }, message)
+          const tagged = recordRefusal(
+            ctx.runId,
+            ctx.name,
+            { by: 'hook', reason: message },
+            message,
+          )
           options.onVeto?.({ tool: ctx.name, reason: message })
           return { block: true, message: tagged }
         }
