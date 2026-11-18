@@ -21,10 +21,8 @@ import { processSingleton } from '../../core/process-singleton.js'
  *
  * Resolution by priority (FIRST match wins):
  *   1. OPENROUTER_API_KEY → baseUrl=openrouter.ai (multi-model gateway)
- *   2. ANTHROPIC_API_KEY  → direct Anthropic (Messages API, not OpenAI-compat)
- *   3. OPENAI_API_KEY     → baseUrl=api.openai.com
- *
- * This is the order `@theokit/agents` uses too (see `CLOUD_PROVIDERS`).
+ *   2. OPENAI_API_KEY     → baseUrl=api.openai.com
+ *   3. ANTHROPIC_API_KEY  → direct Anthropic (Messages API, not OpenAI-compat)
  *
  * Escape hatch: an explicit `options.apiKey` OVERRIDES auto-resolution
  * (the consumer can force a specific provider if it wants to).
@@ -106,34 +104,26 @@ export interface ResolvedProvider {
  *   3. Set `baseUrl` to the OpenAI-compat endpoint (or native if not compat).
  *   4. Provider name used in telemetry/logs only — never wire-exposed.
  */
-/**
- * The cloud providers, in the fallback order `@theokit/agents`' `DEFAULT_PROVIDERS` uses
- * (`openrouter > anthropic > openai`), so the same environment picks the same provider in both
- * layers (usetheokit/theokit#1948).
- *
- * Why this is data here and not an import: `@theokit/sdk` is an optional peer, and the only SDK
- * entries that expose provider facts (`@theokit/sdk/providers`, `/auth`) pull `node:*` through
- * their chunks, which `server/` must not do. The SDK also publishes no priority. Env var names
- * follow the SDK's `<NAME>_API_KEY` convention, derived rather than written out, so there is one
- * rule and no per-provider literal to drift. `tests/unit/provider-resolver.test.ts` pins the order
- * against `resolveAgentCredential`.
- */
-const CLOUD_PROVIDERS: readonly { name: string; baseUrl: string; gateway?: true }[] = [
-  { name: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', gateway: true },
-  { name: 'anthropic', baseUrl: 'https://api.anthropic.com' },
-  { name: 'openai', baseUrl: 'https://api.openai.com/v1' },
-]
-
 const DEFAULT_REGISTRY: ProviderDescriptor[] = [
-  ...CLOUD_PROVIDERS.map(
-    ({ name, baseUrl, gateway }, index): ProviderDescriptor => ({
-      name,
-      envKey: `${name.toUpperCase()}_API_KEY`,
-      baseUrl,
-      ...(gateway === true ? { gateway } : {}),
-      priority: index + 1,
-    }),
-  ),
+  {
+    name: 'openrouter',
+    envKey: 'OPENROUTER_API_KEY',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    gateway: true,
+    priority: 1,
+  },
+  {
+    name: 'openai',
+    envKey: 'OPENAI_API_KEY',
+    baseUrl: 'https://api.openai.com/v1',
+    priority: 2,
+  },
+  {
+    name: 'anthropic',
+    envKey: 'ANTHROPIC_API_KEY',
+    baseUrl: 'https://api.anthropic.com',
+    priority: 3,
+  },
   {
     // Mirrors the profile `@theokit/sdk` already ships for this provider — same default host, same
     // override variable — so the two cannot disagree about where ollama is listening. The SDK is
