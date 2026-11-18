@@ -13,4 +13,3 @@ export { abandonQuestion, answerQuestion, ask, currentQuestion, setListener } fr
  * needs it, with the test that proves it.
  */
 export { ConcurrentQuestionError } from '@theokit/agents/ask'
-export { createInteractiveShellTool } from './interactive-shell-tool.js'

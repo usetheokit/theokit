@@ -146,14 +146,7 @@ export function listSessions(cwd: string, root: string = transcriptRoot()): Sess
     // classification is the SDK's and only the trailing `.jsonl` strip is ours — a much smaller
     // thing to get wrong than re-deriving the four artifact kinds, which is what the consumer that
     // motivated this module had done.
-    // The cast is the upstream `.d.ts` gap, named rather than hidden: `@theokit/sdk`'s
-    // `atomic-write.d.ts` re-exports four symbols and declares only one, so several persistence
-    // functions arrive typed as unresolved. They exist and work at runtime (measured). Filed
-    // separately; typing the call site keeps this module honest in the meantime.
-    const kind = (classifySessionArtifact as (n: string, d: boolean) => string | undefined)(
-      entry,
-      isDirectory,
-    )
+    const kind = classifySessionArtifact(entry, isDirectory)
     if (kind !== 'transcript') continue
     const id = sessionIdOf(path)
     found.push({
@@ -252,8 +245,7 @@ export function protectedTranscriptPaths(
   }
 
   for (const session of sessions) {
-    // Third instance of the same upstream `.d.ts` gap (see `listSessions`). The predicate is real
-    // and the negative test proves it fires — a live lease does refuse the delete.
+    // A live lease does refuse the delete; the negative test proves the predicate fires.
     const hasWriter = sessionHasWriter(session.transcript)
     if (hasWriter) protectedBy.set(session.transcript, 'active writer lease')
   }

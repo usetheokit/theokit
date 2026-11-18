@@ -819,7 +819,7 @@ bought is real and smaller than a verdict: glue lines fall from 62 to **42**, co
 | The store's snapshot | four keys — `messages`, `thread`, `status`, `error` — none of them the id `approve()` requires | a fifth, `pendingApprovals`, **derived** from the current turn's parts on every emit (`packages/agents/src/client/agent-client.ts:133`, applied at `:298`) |
 | What the client can name | nothing: an out-of-band `GET /api/agents/<name>/approvals` was the only path to the id | `approvalId`, `toolCallId`, `toolName`, the resolved `input`, the declared `question` and the window, on one object (`packages/agents/src/client/agent-client.ts:88`) |
 | `useAgent`'s return | `approve` with no id source | `pendingApprovals` next to it (`packages/agents/src/client/use-agent.ts:61`), and the type is public on the entry point the scaffold imports (`packages/theo/src/client/index.ts:36`) |
-| The question and the window on the wire | emitted by the producer, dropped at the wire schema | a transient `data-approval` part emitted immediately before the gate (`packages/agents/src/bridge/present-ui-message-stream.ts:227`, named once at `packages/presenter/src/wire/chunk-schema.ts:198`) |
+| The question and the window on the wire | emitted by the producer, dropped at the wire schema | a transient `data-approval` part emitted immediately before the gate (`packages/agents/src/bridge/present-ui-message-stream.ts:227`, named once at `packages/presenter/src/wire/constants.ts:55`) |
 | `approve(approvalId, decision)` | unchanged | unchanged — the signature was never what was missing |
 
 **#394 was not closed the way it was filed, and the difference is load-bearing for criterion 1.** The
@@ -1253,7 +1253,7 @@ TheoKit builds more of that thing and still costs more to do it.
   2's *the answer carries the output* is graded on an answer rather than a canned string. Counted on
   neither side.
 - **Whether an ai-sdk client still parses the widened stream.** The `data-approval` part is claimed
-  to validate and then be discarded by `ai`'s reader (`packages/presenter/src/wire/chunk-schema.ts:198`
+  to validate and then be discarded by `ai`'s reader (`packages/presenter/src/wire/constants.ts:55`
   records that measurement); this section did not re-run it, and no criterion here grades it.
 - **`docs/program/evidence/j2-hitl/` still does not exist.** § Evidence's clause is open for this
   journey for the second time. The new diff and the new counts are published above instead, which

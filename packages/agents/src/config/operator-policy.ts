@@ -11,7 +11,7 @@
  *
  * One FORMAT, two readers, and the reason is a release boundary rather than an oversight. The two
  * packages ship from separate repositories on separate versions — this one depends on a PUBLISHED
- * `@theokit/sdk` (`^4.52.1 || ^5.0.0`), so a symbol added to that package's source is not importable
+ * `@theokit/sdk` (`^5.17.0`), so a symbol added to that package's source is not importable
  * here until it is released. A reader that could only work after somebody else cut a release would
  * be a control nobody can reach, which is the failure this whole tier exists to remove.
  *

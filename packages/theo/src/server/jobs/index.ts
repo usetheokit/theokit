@@ -42,6 +42,7 @@ export {
   createQueueClient,
   createOutboxDispatcher,
   TransactionalEnqueueUnsupportedError,
+  TransactionalCancelUnsupportedError,
 } from './queue-client.js'
 export type { QueueClient, EnqueueOptions } from './queue-client.js'
 

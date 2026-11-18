@@ -97,3 +97,28 @@ Adapters whose transport is a long-lived connection — Discord, Slack, Mattermo
 and WhatsApp's `web` and `baileys` backends — do **not** go through this seam. They own their
 transport, and running one alongside a TheoKit server needs a process lifecycle this scaffold does
 not set up.
+
+## A platform the package does not ship
+
+For a source that signs the raw body with HMAC-SHA256, build the verifier from the framework's own
+primitive instead of writing a second HMAC check. It uses Web Crypto, compares bytes in constant
+time, and accepts a list of secrets so a rotation is not an outage.
+
+```ts
+import { decodeBase64Signature, verifyHmacSha256 } from 'theokit/server/webhook'
+
+// Only the keys that are set: during a rotation both, otherwise just the current one. An empty
+// list makes the verifier refuse every delivery, naming `signatureKey`.
+const secrets = [process.env.MY_KEY_OLD, process.env.MY_KEY].filter(
+  (key): key is string => typeof key === 'string' && key.length > 0,
+)
+
+const myPlatform = verifyHmacSha256({
+  header: 'x-webhook-signature',
+  secrets,
+  option: 'signatureKey',
+  decode: decodeBase64Signature, // or decodeHexSignature('sha256=') for hex
+})
+
+handleChannelWebhook(request, path, { validators: { myPlatform }, onMessage })
+```

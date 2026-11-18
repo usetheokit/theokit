@@ -10,13 +10,16 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
+import type { HookApprovalRequest } from '@theokit/agents'
 import { describe, expect, it } from 'vitest'
 
 import { refusalNotice, refuseForeignHook } from '../../src/hooks/foreign-hook-gate.js'
 
-const request = (over = {}) => ({
+const request = (over: Partial<HookApprovalRequest> = {}): HookApprovalRequest => ({
   command: '/repo/mark.sh',
   event: 'preToolUse',
+  sourceEvent: 'PreToolUse',
+  timeoutMs: 30_000,
   sourcePath: '/repo/.claude/settings.json',
   ...over,
 })
