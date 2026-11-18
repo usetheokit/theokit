@@ -293,9 +293,10 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
           }
           return { rows: [], rowCount: 0 }
         }
-        if (/FOR UPDATE/.test(sql)) {
-          if (holder !== undefined && holder !== name && !/SKIP LOCKED/.test(sql)) await released
-          if (holder === undefined && /SELECT COALESCE\(held_from/.test(sql)) {
+        if (sql.includes('FOR UPDATE')) {
+          if (holder !== undefined && holder !== name && !sql.includes('SKIP LOCKED'))
+            await released
+          if (holder === undefined && sql.includes('SELECT COALESCE(held_from')) {
             holder = name
             released = new Promise<void>((r) => (release = r))
           }
