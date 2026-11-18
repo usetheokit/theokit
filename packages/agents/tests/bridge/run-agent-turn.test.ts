@@ -169,6 +169,39 @@ describe('runAgentTurn', () => {
     expect(outcome).toMatchObject({ ok: false, code: 'turn_cancelled' })
   })
 
+  it('closes an unfinished iterator when emit throws or next rejects', async () => {
+    for (const mode of ['emit', 'next'] as const) {
+      const returned = vi.fn(async () => ({ done: true as const, value: undefined }))
+      let n = 0
+      const iterator = {
+        next: async () => {
+          if (mode === 'next') throw new Error('boom')
+          return n++ === 0
+            ? { done: false as const, value: assistant('x') }
+            : { done: true as const, value: undefined }
+        },
+        return: returned,
+      }
+      const agent = {
+        agentId: 'a',
+        send: async () => ({
+          wait: async () => ({ status: 'finished' }),
+          stream: () => ({ [Symbol.asyncIterator]: () => iterator }),
+        }),
+      } as unknown as SdkAgentHandle
+      const outcome = await runAgentTurn({
+        agent,
+        message: 'hi',
+        runId: 'r',
+        emit: () => {
+          throw new Error('emit failed')
+        },
+      })
+      expect(outcome).toMatchObject({ ok: false, code: 'turn_failed' })
+      expect(returned).toHaveBeenCalledTimes(1)
+    }
+  })
+
   it('an already aborted signal cancels without sending', async () => {
     const controller = new AbortController()
     controller.abort()

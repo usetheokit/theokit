@@ -126,6 +126,7 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
 
   let run: Awaited<ReturnType<SdkAgentHandle['send']>> | undefined
   let iterator: AsyncIterator<unknown> | undefined
+  let drained = false
   try {
     const sending = options.agent.send(options.message, {
       ...options.sendOptions,
@@ -163,7 +164,10 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
         closeIterator(iterator)
         return cancelled()
       }
-      if (step.done === true) break
+      if (step.done === true) {
+        drained = true
+        break
+      }
       const msg = step.value as SdkMessage
       const raw = rawErrorReason(msg)
       if (raw !== undefined) failure ??= raw
@@ -207,6 +211,8 @@ async function execute(options: RunAgentTurnOptions): Promise<AgentTurnOutcome> 
       closeIterator(iterator)
       return cancelled()
     }
+    // an iterator that threw or was abandoned mid-stream must not keep its resources
+    if (!drained) closeIterator(iterator)
     return { ok: false, code: 'turn_failed', reason: failure ?? reasonOf(err) }
   } finally {
     // a late delta from a run whose cancel is slow must not reach a caller that has moved on
