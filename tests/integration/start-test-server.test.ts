@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { startTestServer, TestServerBootError } from '../../packages/theo/src/testing/index.js'
+import type { ProcTable } from '../../packages/theo/src/testing/start-test-server.js'
 
 /**
  * `startTestServer` runs the app's own theokit CLI, so the fixtures link `node_modules/theokit` to the
@@ -147,6 +148,11 @@ function killNow(pid: number): void {
   }
 }
 
+/** A fake process table holding just the live root, for simulated Windows runs on a POSIX host. */
+async function liveTable(root: number): Promise<ProcTable> {
+  return new Map(alive(root) ? [[root, { ppid: 1, started: `s${String(root)}` }]] : [])
+}
+
 function freePort(): Promise<number> {
   return new Promise((resolvePort) => {
     const srv = createTcp()
@@ -197,6 +203,7 @@ describe('startTestServer on platforms without /proc (simulated)', () => {
         pickPort: async () => taken,
         childPort: () => taken + 1,
         killTree,
+        processTable: liveTable,
       }).catch((e: unknown) => e)
       expect(err).toBeInstanceOf(TestServerBootError)
       expect((err as Error).message).toMatch(/answered by another server/)
@@ -216,6 +223,7 @@ describe('startTestServer on platforms without /proc (simulated)', () => {
         pickPort: async () => ports.shift() ?? good,
         childPort: (p) => (p === taken ? good : p),
         killTree,
+        processTable: liveTable,
       })
       expect(server.origin).toBe(`http://localhost:${String(good)}`)
       await server.close()
@@ -239,25 +247,37 @@ export default {}
       while (alive(pid) && Date.now() < until) await new Promise((r) => setTimeout(r, 50))
     }
 
+    /** A fake process table of the live server and its descendant, stamped by pid unless `stamp` says otherwise. */
+    const tableOf =
+      (pidFile: string, stamp: (pid: number) => string = (pid) => `s${String(pid)}`) =>
+      async (root: number): Promise<ProcTable> => {
+        const t: ProcTable = new Map()
+        if (alive(root)) t.set(root, { ppid: 1, started: stamp(root) })
+        if (existsSync(pidFile)) {
+          const d = Number(readFileSync(pidFile, 'utf8'))
+          if (alive(d)) t.set(d, { ppid: root, started: stamp(d) })
+        }
+        return t
+      }
+    const singleKill = (killed: number[]) => async (pid: number) => {
+      killed.push(pid)
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // already gone
+      }
+      return 0
+    }
+
     it('kills a descendant recorded while the leader lived, even after the leader exited', async () => {
       const pidFile = join(ROOT, 'descendant.pid')
-      const tree = treeApp('tree', pidFile)
       const killed: number[] = []
       const server = await startTestServer({
-        cwd: tree,
+        cwd: treeApp('tree', pidFile),
         platform: 'win32',
-        listDescendants: async () =>
-          existsSync(pidFile) ? [Number(readFileSync(pidFile, 'utf8'))] : [],
+        processTable: tableOf(pidFile),
         // Single-pid kill only: the descendant dies only if it was tracked.
-        killTree: async (pid) => {
-          killed.push(pid)
-          try {
-            process.kill(pid, 'SIGKILL')
-          } catch {
-            // already gone
-          }
-          return 0
-        },
+        killTree: singleKill(killed),
       })
       const descendant = Number(readFileSync(pidFile, 'utf8'))
       expect(alive(descendant)).toBe(true)
@@ -269,14 +289,32 @@ export default {}
       expect(alive(descendant)).toBe(false)
     }, 120_000)
 
+    it('never targets a pid that now belongs to another process', async () => {
+      const pidFile = join(ROOT, 'descendant3.pid')
+      let reused = false
+      const killed: number[] = []
+      const server = await startTestServer({
+        cwd: treeApp('tree3', pidFile),
+        platform: 'win32',
+        processTable: tableOf(pidFile, (pid) =>
+          reused && pid === Number(readFileSync(pidFile, 'utf8')) ? 'other' : `s${String(pid)}`,
+        ),
+        killTree: singleKill(killed),
+      })
+      const descendant = Number(readFileSync(pidFile, 'utf8'))
+      reused = true // the descendant's pid is now an unrelated process with another start stamp
+      await server.close()
+      expect(killed).not.toContain(descendant)
+      expect(alive(descendant)).toBe(true) // untouched: it stands for the unrelated process
+      process.kill(descendant, 'SIGKILL')
+    }, 120_000)
+
     it('fails close() when a tracked process survives termination', async () => {
       const pidFile = join(ROOT, 'descendant2.pid')
-      const tree = treeApp('tree2', pidFile)
       const server = await startTestServer({
-        cwd: tree,
+        cwd: treeApp('tree2', pidFile),
         platform: 'win32',
-        listDescendants: async () =>
-          existsSync(pidFile) ? [Number(readFileSync(pidFile, 'utf8'))] : [],
+        processTable: tableOf(pidFile),
         killTree: async () => 0, // claims success, kills nothing
       })
       const descendant = Number(readFileSync(pidFile, 'utf8'))
@@ -285,8 +323,29 @@ export default {}
       process.kill(descendant, 'SIGKILL')
     }, 120_000)
 
+    it('bounds a stalled process snapshot and reports cleanup as unconfirmed', async () => {
+      const err = await startTestServer({
+        cwd: app,
+        platform: 'win32',
+        snapshotTimeoutMs: 200,
+        processTable: () => new Promise<ProcTable>(() => {}), // never settles
+        killTree: async (pid) => {
+          killNow(pid)
+          return 0
+        },
+      }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(TestServerBootError)
+      expect((err as Error).message).toMatch(/timed out after 200ms/)
+      expect((err as Error).message).toMatch(/could not confirm/)
+    }, 60_000)
+
     it('surfaces a failed termination', async () => {
-      const stuck = await startTestServer({ cwd: app, platform: 'win32', killTree: async () => 1 })
+      const stuck = await startTestServer({
+        cwd: app,
+        platform: 'win32',
+        processTable: liveTable,
+        killTree: async () => 1,
+      })
       await expect(stuck.close()).rejects.toThrow(/could not terminate/)
       killNow(stuck.pid ?? 0)
     }, 120_000)

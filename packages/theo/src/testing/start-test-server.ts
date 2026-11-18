@@ -5,6 +5,9 @@ import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 
+/** pid -> parent pid and a start stamp: a pid with another stamp is a different, reused, process. */
+export type ProcTable = Map<number, { ppid: number; started: string }>
+
 export interface StartTestServerOptions {
   /** The app's root (where theo.config.ts and node_modules/theokit live). */
   cwd: string
@@ -20,8 +23,10 @@ export interface StartTestServerOptions {
   platform?: NodeJS.Platform
   /** @internal Test hook: terminates a Windows process tree; resolves the exit code. Default taskkill. */
   killTree?: (pid: number) => Promise<number | null>
-  /** @internal Test hook: pids of the descendants of a live pid, for the Windows tree tracking. Default: a process-table snapshot. */
-  listDescendants?: (pid: number) => Promise<number[]>
+  /** @internal Test hook: the process table (pid -> parent, start stamp) for the Windows tree tracking; `root` is the child's pid. Default: a PowerShell snapshot. */
+  processTable?: (root: number) => Promise<ProcTable>
+  /** @internal Test hook: bound on one process-table snapshot. Default 10_000. */
+  snapshotTimeoutMs?: number
   /** @internal Test hook: the port the child is told to bind, given the one the helper checks. Default: the same. */
   childPort?: (picked: number) => number
 }
@@ -153,22 +158,9 @@ function freePort(): Promise<number> {
   })
 }
 
-function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * Descendants of `root` from a process-table snapshot (PowerShell; Windows only). Once the leader
- * exits its children are no longer reachable from it, so they are recorded while it is alive.
- * Best effort: a snapshot that cannot run yields nothing new.
- */
-function snapshotDescendants(root: number): Promise<number[]> {
-  return new Promise((resolve) => {
+/** The process table from PowerShell (Windows only); rejects when it fails or runs past `timeoutMs`. */
+function snapshotProcesses(timeoutMs: number): Promise<ProcTable> {
+  return new Promise((resolve, reject) => {
     const exe = join(
       process.env.SystemRoot ?? 'C:\\Windows',
       'System32',
@@ -177,36 +169,41 @@ function snapshotDescendants(root: number): Promise<number[]> {
       'powershell.exe',
     )
     const cmd =
-      'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId)" }'
+      'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.CreationDate.ToFileTimeUtc())" }'
     const ps = spawn(exe, ['-NoProfile', '-NonInteractive', '-Command', cmd], {
       stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: timeoutMs,
     })
     let out = ''
     ps.stdout.on('data', (d: Buffer) => (out += d.toString()))
-    ps.once('error', () => {
-      resolve([])
-    })
-    ps.once('close', () => {
-      const children = new Map<number, number[]>()
+    ps.once('error', reject)
+    ps.once('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`process snapshot failed (exit ${String(code)})`))
+        return
+      }
+      const table: ProcTable = new Map()
       for (const line of out.split(/\r?\n/)) {
-        const m = /^(\d+)\s+(\d+)$/.exec(line.trim())
-        if (m === null) continue
-        const pid = Number(m[1])
-        const ppid = Number(m[2])
-        children.set(ppid, [...(children.get(ppid) ?? []), pid])
+        const m = /^(\d+)\s+(\d+)\s+(-?\d+)$/.exec(line.trim())
+        if (m !== null) table.set(Number(m[1]), { ppid: Number(m[2]), started: m[3] })
       }
-      const found: number[] = []
-      for (const queue = [root]; queue.length > 0; ) {
-        for (const c of children.get(queue.pop() ?? 0) ?? []) {
-          if (c !== root && !found.includes(c)) {
-            found.push(c)
-            queue.push(c)
-          }
-        }
-      }
-      resolve(found)
+      resolve(table)
     })
   })
+}
+
+async function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${what} timed out after ${String(ms)}ms`))
+    }, ms)
+  })
+  try {
+    return await Promise.race([work, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 const sleep = (ms: number): Promise<void> =>
@@ -259,33 +256,74 @@ export async function startTestServer(options: StartTestServerOptions): Promise<
 }
 
 /**
- * Ends the leader and every descendant recorded while it lived (taskkill cannot walk the tree of a
- * leader that already exited), then confirms none of them is still running.
+ * Tracks the child's tree by process identity (pid + start stamp) while the leader lives, because
+ * taskkill cannot walk the tree of a leader that already exited and a bare pid may be reused.
+ * `terminate` ends only processes still matching their recorded identity and confirms they are gone.
  */
-async function killWindowsTree(
-  rootPid: number | undefined,
-  tracked: ReadonlySet<number>,
-  mode: string,
+function createTreeTracker(
+  rootPid: number,
+  table: () => Promise<ProcTable>,
   kill: (pid: number) => Promise<number | null>,
-): Promise<void> {
-  if (rootPid === undefined) return
-  const pids = [rootPid, ...[...tracked].filter((p) => p !== rootPid)]
-  for (const pid of pids) {
-    const code = await kill(pid)
-    // 128: no such process, i.e. already gone.
-    if (code !== 0 && code !== 128) {
-      throw new Error(
-        `could not terminate theokit ${mode} process tree (pid ${String(pid)}, taskkill exit ${String(code)})`,
-      )
+  mode: string,
+) {
+  const tracked = new Map<number, string>()
+  const observe = (t: ProcTable): void => {
+    const root = t.get(rootPid)
+    if (root !== undefined && !tracked.has(rootPid)) tracked.set(rootPid, root.started)
+    const queue = [rootPid]
+    for (let pid = queue.pop(); pid !== undefined; pid = queue.pop()) {
+      for (const [cpid, c] of t) {
+        if (c.ppid === pid && cpid !== rootPid && !tracked.has(cpid)) {
+          tracked.set(cpid, c.started)
+          queue.push(cpid)
+        }
+      }
     }
+    // Gone, or the pid now belongs to another process: never target it.
+    for (const [pid, started] of tracked) if (t.get(pid)?.started !== started) tracked.delete(pid)
   }
-  const until = Date.now() + GRACE_MS
-  while (pids.some(pidAlive) && Date.now() < until) await sleep(25)
-  const left = pids.filter(pidAlive)
-  if (left.length > 0) {
-    throw new Error(
-      `theokit ${mode} process(es) ${left.join(', ')} still running after the process tree was terminated`,
-    )
+  const live = (t: ProcTable): number[] =>
+    [...tracked].filter(([pid, started]) => t.get(pid)?.started === started).map(([pid]) => pid)
+  return {
+    async track(): Promise<void> {
+      observe(await table())
+    },
+    /** `leaderRunning`: the child handle itself proves the leader's identity when no snapshot works. */
+    async terminate(leaderRunning: boolean): Promise<void> {
+      let t: ProcTable
+      try {
+        t = await table()
+      } catch (err) {
+        if (leaderRunning) await kill(rootPid)
+        throw new Error(
+          `could not confirm theokit ${mode} process tree is gone: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+      observe(t)
+      const targets = live(t)
+      const failed: string[] = []
+      for (const pid of targets) {
+        const code = await kill(pid)
+        // 128: no such process, i.e. already gone.
+        if (code !== 0 && code !== 128)
+          failed.push(`${String(pid)} (taskkill exit ${String(code)})`)
+      }
+      if (failed.length > 0) {
+        throw new Error(`could not terminate theokit ${mode} process tree: ${failed.join(', ')}`)
+      }
+      const until = Date.now() + GRACE_MS
+      let left = targets
+      while (left.length > 0) {
+        left = live(await table()).filter((p) => targets.includes(p))
+        if (left.length === 0 || Date.now() > until) break
+        await sleep(100)
+      }
+      if (left.length > 0) {
+        throw new Error(
+          `theokit ${mode} process(es) ${left.join(', ')} still running after the process tree was terminated`,
+        )
+      }
+    },
   }
 }
 
@@ -329,19 +367,26 @@ async function bootOnce(
       resolve({ code, signal })
     })
   })
-  const tracked = new Set<number>()
-  const track = async (): Promise<void> => {
-    if (platform !== 'win32' || child.pid === undefined || hasExited()) return
-    for (const pid of await (options.listDescendants ?? snapshotDescendants)(child.pid)) {
-      tracked.add(pid)
-    }
-  }
+  const snapMs = options.snapshotTimeoutMs ?? 10_000
+  const tree =
+    platform === 'win32' && child.pid !== undefined
+      ? createTreeTracker(
+          child.pid,
+          () =>
+            withTimeout(
+              (options.processTable ?? (() => snapshotProcesses(snapMs)))(child.pid ?? 0),
+              snapMs,
+              'process snapshot',
+            ),
+          options.killTree ?? taskkillTree,
+          mode,
+        )
+      : undefined
   let closing: ReturnType<TestServer['close']> | undefined
   const close: TestServer['close'] = () => {
     closing ??= (async () => {
       if (platform === 'win32') {
-        await track()
-        await killWindowsTree(child.pid, tracked, mode, options.killTree ?? taskkillTree)
+        await tree?.terminate(!hasExited())
         return ended
       }
       if (!exited || groupAlive(child)) {
@@ -391,7 +436,15 @@ async function bootOnce(
         PortSubstitutedError,
       )
     }
-    await track()
+    if (tree !== undefined && !hasExited()) {
+      try {
+        await tree.track()
+      } catch (err) {
+        return await fail(
+          `could not enumerate theokit ${mode} processes: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+    }
     let ready = false
     try {
       const res = await fetch(`${origin}/__theo/ready`, { signal: AbortSignal.timeout(1000) })
