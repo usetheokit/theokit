@@ -112,12 +112,13 @@ function findByFrontmatterName(dir: string, name: string): string | undefined {
   try {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed convention under the caller's root
     entries = readdirSync(dir).filter((f) => f.endsWith('.md'))
+    entries.sort((a, b) => a.localeCompare(b))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
     throw error
   }
   const matches: string[] = []
-  for (const file of entries.sort()) {
+  for (const file of entries) {
     const path = join(dir, file)
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- entry of the directory just listed
     const parsed = splitFrontmatter(readFileSync(path, 'utf8'))
