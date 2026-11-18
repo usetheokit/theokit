@@ -108,9 +108,7 @@ export function describeTurnFailure(
   const hints = opts.hints ?? {}
   let text = failure.message || BLANK_MESSAGE
   const hint =
-    hints[failure.code] ??
-    DEFAULT_TURN_FAILURE_HINTS[failure.code] ??
-    messageHint(text, hints)
+    hints[failure.code] ?? DEFAULT_TURN_FAILURE_HINTS[failure.code] ?? messageHint(text, hints)
   if (failure.code !== 'unknown') text += ` [${failure.code}]`
   if (hint) text += `: ${hint}`
   if (opts.attempts !== undefined && opts.attempts > 1) text += ` (after ${opts.attempts} attempts)`
