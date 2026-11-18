@@ -82,6 +82,40 @@ describe('file mentions', () => {
     expect(r.skipped[0]?.reason).toBe('not-found')
   })
 
+  it('a forbidden name hidden by .. or ~ or a symlink is skipped as forbidden', () => {
+    const cwd = project()
+    mkdirSync(join(cwd, 'sub'))
+    writeFileSync(join(cwd, '.env'), 'SECRET=1')
+    symlinkSync(join(cwd, '.env'), join(cwd, 'innocent.txt'))
+    const readFile = () => 'content'
+    const r = resolveFileMentions('@sub/../.env @~/.ssh/config @innocent.txt', {
+      cwd,
+      allowHome: true,
+      readFile,
+    })
+    expect(r.attached).toEqual([])
+    expect(r.skipped).toEqual([
+      { ref: 'sub/../.env', reason: 'forbidden' },
+      { ref: '~/.ssh/config', reason: 'forbidden' },
+      { ref: 'innocent.txt', reason: 'forbidden' },
+    ])
+  })
+
+  it('rethrows an empty cwd and non-ENOENT read errors', () => {
+    expect(() => resolveFileMentions('@a.ts', { cwd: '' })).toThrow()
+    const cwd = project()
+    for (const code of ['EACCES', 'EISDIR', 'ENOTDIR']) {
+      expect(() =>
+        resolveFileMentions('@src/a.ts', {
+          cwd,
+          readFile: () => {
+            throw Object.assign(new Error(code), { code })
+          },
+        }),
+      ).toThrow(code)
+    }
+  })
+
   it('rethrows an unexpected read error', () => {
     const cwd = project()
     expect(() =>

@@ -2,10 +2,17 @@
  * Resolving a path the user typed is the feature. Containment is `safePathJoin` plus
  * `assertNoSymlinkEscape`, and `isForbiddenPath` runs first.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
+import { relative } from 'node:path'
 
-import { assertNoSymlinkEscape, isForbiddenPath, safePathJoin } from '@theokit/sdk/path-safety'
+import {
+  assertNoSymlinkEscape,
+  ForbiddenPathError,
+  isForbiddenPath,
+  PathTraversalError,
+  safePathJoin,
+} from '@theokit/sdk/path-safety'
 
 /**
  * Shell segments and file references in ONE alternation, matched left to right in a single scan.
@@ -62,6 +69,21 @@ function defaultRead(abs: string): string | undefined {
   return readFileSync(abs, 'utf8')
 }
 
+/** Forbidden-ness of a path relative to its root, after `..` and symlinks are resolved. */
+function forbiddenUnder(root: string, abs: string): boolean {
+  const rel = relative(root, abs)
+  return rel.length > 0 && isForbiddenPath(rel)
+}
+
+function realOrUndefined(path: string): string | undefined {
+  try {
+    return realpathSync(path)
+  } catch (error) {
+    if (codeOf(error) === 'ENOENT') return undefined
+    throw error
+  }
+}
+
 /** The absolute path a reference names, or why it cannot be read. */
 function locate(ref: string, opts: FileMentionOptions): { abs: string } | { reason: SkipReason } {
   if (isForbiddenPath(ref)) return { reason: 'forbidden' }
@@ -75,29 +97,34 @@ function locate(ref: string, opts: FileMentionOptions): { abs: string } | { reas
   if (rel.length === 0) return { reason: 'not-found' }
   try {
     const abs = safePathJoin(base, rel)
-    if (isForbiddenPath(abs)) return { reason: 'forbidden' }
+    // Check the normalized path against the root: `sub/../.env` and `~/.ssh/x` hide the name
+    // from a first-segment check on the raw reference.
+    if (isForbiddenPath(rel) || forbiddenUnder(base, abs)) return { reason: 'forbidden' }
     assertNoSymlinkEscape(abs, base)
+    // A symlink inside the root may point at a forbidden file inside the root.
+    const realAbs = realOrUndefined(abs)
+    const realBase = realOrUndefined(base)
+    if (realAbs !== undefined && realBase !== undefined && forbiddenUnder(realBase, realAbs)) {
+      return { reason: 'forbidden' }
+    }
     return { abs }
   } catch (error) {
-    // A missing target is not an escape; every other failure here is the containment check.
+    if (error instanceof ForbiddenPathError) return { reason: 'forbidden' }
+    if (error instanceof PathTraversalError) return { reason: 'outside-root' }
     if (codeOf(error) === 'ENOENT') return { reason: 'not-found' }
-    return { reason: 'outside-root' }
+    throw error
   }
 }
 
 type ReadOutcome = { ok: true; text: string } | { ok: false; reason: SkipReason }
 
-/** The file's text, or the reason it was not readable. Unexpected errors are rethrown. */
+/** The file's text, or `not-found` for ENOENT. Every other error is rethrown. */
 function readMention(read: (abs: string) => string | undefined, abs: string): ReadOutcome {
   try {
     const text = read(abs)
     return text === undefined ? { ok: false, reason: 'not-found' } : { ok: true, text }
   } catch (error) {
-    const code = codeOf(error)
-    if (code === 'ENOENT' || code === 'ENOTDIR') return { ok: false, reason: 'not-found' }
-    if (code === 'EACCES' || code === 'EPERM' || code === 'EISDIR') {
-      return { ok: false, reason: 'unreadable' }
-    }
+    if (codeOf(error) === 'ENOENT') return { ok: false, reason: 'not-found' }
     throw error
   }
 }
