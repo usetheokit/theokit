@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { hooksForChild } from '../../src/hooks/index.js'
 
@@ -30,7 +30,18 @@ describe('hooksForChild', () => {
     const ctx = install(
       hooksForChild({ pre_tool_call: () => ({ block: true, message: 'no' }) } as never),
     )
-    expect(await ctx.fire('pre_tool_call', callCtx)).toEqual({ block: true, message: 'no' })
+    const tool = vi.fn()
+    const decision = (await ctx.fire('pre_tool_call', callCtx)) as { block?: boolean } | undefined
+    // The fake child dispatches the hook and only runs its tool when nothing vetoed.
+    if (decision?.block !== true) tool()
+    expect(decision).toEqual({ block: true, message: 'no' })
+    expect(tool).not.toHaveBeenCalled()
+  })
+
+  it('two instances in one plugins array have distinct names so neither replaces the other', () => {
+    const a = hooksForChild({ pre_tool_call: () => undefined })
+    const b = hooksForChild({ pre_tool_call: () => undefined })
+    expect(a?.name).not.toBe(b?.name)
   })
 
   it("the parent hook receives the child's agentId and runId", async () => {

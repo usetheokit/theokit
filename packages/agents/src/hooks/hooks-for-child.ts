@@ -30,6 +30,9 @@ export interface HooksForChildOptions {
   childLabel?: string
 }
 
+/** The SDK keys plugins by name and a later one replaces an earlier one, so each instance needs its own. */
+let instanceCount = 0
+
 const DEFAULT_FORWARD: readonly ForwardedHook[] = ['pre_tool_call']
 
 /** Add `childLabel` to a context only when one was requested; the original fields are untouched. */
@@ -53,7 +56,7 @@ export function hooksForChild(
     return undefined
   }
   return {
-    name: 'theokit-hooks-for-child',
+    name: `theokit-hooks-for-child-${++instanceCount}`,
     version: '1.0.0',
     // `kind: 'general'` is load-bearing: the SDK drops a plugin without it and no hook fires.
     kind: 'general',
