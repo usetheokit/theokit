@@ -148,6 +148,8 @@ the builder, the *posture* decides whether auto-approval is even permissible (it
 posture as evidence, so "auto-approve without confinement" cannot be expressed), and the *resolver*
 settles an individual request. `./ask` is the inverse channel — the agent asking you.
 
+A refused tool result carries `refusal.by`, saying who refused: `human` (a person denied it; `reason` is the approver's text), `timeout` (the approval window expired with no decision), `policy` (the approval posture or the permission gate), `hook` (a hook spec or delegation hook, or an SDK file hook), or `plugin` (a veto from a plugin this framework did not build). `reason` is the bare reason, not the sentence around it. Each framework veto message ends with a unique ` [veto:N]` marker: tool calls dispatch concurrently and the SDK's denial event carries no call id, so the marker is what binds a denial to its own veto (an external denial has no marker and stays `plugin`).
+
 **Sessions are deleted carefully or not at all.** `./session` refuses to collect a transcript that a
 live writer holds, floors both `keepLast` and `maxAgeDays`, and plans before it applies. When your
 app knows about live sessions this package cannot see, inject them — protection is additive and
