@@ -302,7 +302,7 @@ describe('PostgresJobBackend defer, restore and reschedule', () => {
           }
         }
         // A SKIP LOCKED statement (defer, restore, the final move) sees the held rows as locked.
-        if (holder !== undefined && holder !== name && /SKIP LOCKED/.test(sql)) {
+        if (holder !== undefined && holder !== name && sql.includes('SKIP LOCKED')) {
           return { rows: [], rowCount: 0 }
         }
         return pool.query(sql, params)
