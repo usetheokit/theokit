@@ -33,11 +33,3 @@ function isInstalled(req: NodeJS.Require, name: string): boolean {
     return (err as NodeJS.ErrnoException).code === 'ERR_PACKAGE_PATH_NOT_EXPORTED'
   }
 }
-
-/** Check the toolchain, then register tsx's ESM hook (loaded here, not at CLI start-up). */
-export async function loadToolchain(): Promise<void> {
-  requireToolchain()
-  // tsx ships no types for this side-effect entry.
-  const spec = 'tsx/esm'
-  await import(/* @vite-ignore */ spec)
-}

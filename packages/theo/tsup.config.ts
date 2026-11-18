@@ -115,7 +115,7 @@ export default defineConfig([
     clean: false,
     target: 'node20',
     banner: {
-      js: '#!/usr/bin/env node',
+      js: '#!/usr/bin/env node\nimport "tsx/esm";',
     },
     external: [
       // Optional and never installed here, so esbuild cannot resolve it — and must not try.
@@ -138,7 +138,6 @@ export default defineConfig([
       // HTTP method detection. CJS package with dynamic require('fs'); cannot be
       // bundled into ESM output. Reachable via vite/@vitejs/plugin-react transitive.
       'typescript',
-      'tsx',
     ],
   },
 ])
