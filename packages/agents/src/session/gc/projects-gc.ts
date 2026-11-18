@@ -95,6 +95,8 @@ export interface PlanProjectsGCOptions {
    * colliding cwd with no transcript of its own is still protected. The encoding is lossy and cannot
    * be enumerated from the name alone. Required to plan a live project: without it a live project is
    * kept whole, because a colliding cwd known only to its own registry cannot be discovered.
+   * The caller vouches that the list names EVERY cwd of the app that could share a project directory; the
+   * registries are per cwd and cannot be enumerated from disk, so completeness is the caller's declaration.
    */
   readonly candidateCwds?: () => readonly string[]
   readonly fs?: ProjectsGCFs
