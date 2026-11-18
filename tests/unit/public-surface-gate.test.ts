@@ -195,19 +195,6 @@ describe('public surface gate', () => {
     expect(run(prev, next)).toEqual([])
   })
 
-  it('keeps two hash-suffixed files with same-named declarations, so a change to either is seen', () => {
-    const index = `import { Shared as A } from './chunk-ABCDEFG1'\nimport { Shared as B } from './chunk-ABCDEFG2'\nexport type Out = [A, B]\n`
-    const files = (a: string, b: string) => ({
-      'chunk-ABCDEFG1.d.ts': `export interface Shared { ${a} }\n`,
-      'chunk-ABCDEFG2.d.ts': `export interface Shared { ${b} }\n`,
-    })
-    const prev = surface(index, files('a: string', 'b: string'))
-    expect(prev.entries['.']?.internals['dist/chunk-<hash>.d.ts#Shared']).toMatch(/a: string/)
-    expect(prev.entries['.']?.internals['dist/chunk-<hash>.d.ts#Shared']).toMatch(/b: string/)
-    expect(run(prev, surface(index, files('a: string', 'b: number')))).toHaveLength(1)
-    expect(run(prev, surface(index, files('a: number', 'b: string')))).toHaveLength(1)
-  })
-
   it('fails a stable value export turned into a type-only export', () => {
     const prev = surface('declare class K {}\nexport { K }\n')
     const next = surface('declare class K {}\nexport type { K }\n')

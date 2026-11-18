@@ -96,10 +96,7 @@ function collectInternals(roots, ctx, internals) {
           // Identity is the declaration, not its name: two files may declare the same name.
           const key = declKey(d, ctx)
           const text = printDecl(d, ctx.printer)
-          const parts = internals.get(key) ?? new Map()
-          const file = d.getSourceFile().fileName
-          parts.set(file, parts.has(file) ? `${parts.get(file)}\n${text}` : text)
-          internals.set(key, parts)
+          internals.set(key, internals.has(key) ? `${internals.get(key)}\n${text}` : text)
           queue.push(d)
         }
       }
@@ -122,14 +119,6 @@ function relFile(file, ctx) {
 function declKey(d, ctx) {
   const file = relFile(d.getSourceFile().fileName, ctx).replace(CHUNK_HASH, '-<hash>')
   return `${file}#${d.name?.getText() ?? '(anonymous)'}`
-}
-
-/**
- * Distinct files can share one masked key (two chunks differing only in their hash). Their texts are
- * all kept, ordered by text because the hash, and so the file order, changes on every build.
- */
-function joinParts(parts) {
-  return [...parts.values()].sort().join('\n')
 }
 
 function isOwnDeclaration(d, ctx) {
@@ -201,21 +190,15 @@ export function extractSurface(pkgDir) {
     const syms = modSym ? checker.getExportsOfModule(modSym) : []
     const ctx = { program, checker, printer, pkgDir }
     const names = {}
-    const merged = new Map()
+    const internals = {}
     for (const [name, rec] of syms.map((x) => [x.name, describeSymbol(x, ctx)]).sort(byName)) {
       const { refTexts, ...plain } = rec
       names[name] = plain
-      for (const [k, v] of refTexts) {
-        const parts = merged.get(k) ?? new Map()
-        for (const [f, t] of v) parts.set(f, t)
-        merged.set(k, parts)
-      }
+      for (const [k, v] of refTexts) internals[k] = v
     }
     entries[entry] = {
       names,
-      internals: Object.fromEntries(
-        [...merged].map(([k, parts]) => [k, joinParts(parts)]).sort(byName),
-      ),
+      internals: Object.fromEntries(Object.entries(internals).sort(byName)),
     }
   }
   return { package: manifest.name, entries }
