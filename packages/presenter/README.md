@@ -93,6 +93,10 @@ Lookup is exact by design. A name that is not in the table gives `undefined`, ne
 
 When both exit-code spellings are present and differ, `exitCode` wins. A missing exit code stays `undefined`, never 0. `{ok: false, error}` reads as `error` (`tool_failed` when absent, `stderr` as `detail`); `{ok: true, diff}` and a raw unified diff string read as `diff`; anything else is `text`.
 
+## Pending approvals
+
+`pendingApprovals(messages)` returns every outstanding approval across wire messages, in order, as `PendingApproval { approvalId, toolCallId, toolName, input, question?, timeoutMs? }`. With nothing outstanding it returns one shared empty array. `readPendingApproval(part)` reads a single part. A part in `approval-requested` without a string `approval.id` is skipped, never settled by its `toolCallId`, because `approve()` could not settle it.
+
 ## Subpaths
 
 | Subpath | What lives there |
