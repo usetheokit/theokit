@@ -41,12 +41,12 @@ const TOOL_IMAGE_HINT =
   'a tool returned an image and this provider carries tool results as text only; make the tool return text, or choose a provider that accepts image tool results'
 
 /** Message probes, used for a next step only when no code gave one. Never used for `transient`. */
-const MESSAGE_PROBES: readonly (readonly [string[], KnownAgentRunErrorCode | 'tool_image'])[] = [
-  [['image content in tool results'], 'tool_image'],
-  [['ratelimit', 'rate_limit', 'rate limit'], 'rate_limit'],
-  [['unauthor', 'invalid_api_key', 'authenticationerror'], 'auth_failed'],
-  [['econnrefused', 'enotfound', 'etimedout'], 'provider_unreachable'],
-  [['quota'], 'quota_exceeded'],
+const MESSAGE_PROBES: readonly (readonly [RegExp, KnownAgentRunErrorCode | 'tool_image'])[] = [
+  [/image content in tool results/, 'tool_image'],
+  [/rate.?limit|\b429\b/, 'rate_limit'],
+  [/unauthor|invalid_api_key|authenticationerror|\b401\b/, 'auth_failed'],
+  [/econnrefused|enotfound|etimedout/, 'provider_unreachable'],
+  [/quota/, 'quota_exceeded'],
 ]
 
 function messageHint(message: string, hints: TurnFailureHints): string | undefined {
@@ -54,8 +54,8 @@ function messageHint(message: string, hints: TurnFailureHints): string | undefin
   if (m.includes('context') && m.includes('length')) {
     return hints.context_too_long ?? DEFAULT_TURN_FAILURE_HINTS.context_too_long
   }
-  for (const [needles, key] of MESSAGE_PROBES) {
-    if (!needles.some((n) => m.includes(n))) continue
+  for (const [probe, key] of MESSAGE_PROBES) {
+    if (!probe.test(m)) continue
     return key === 'tool_image' ? TOOL_IMAGE_HINT : (hints[key] ?? DEFAULT_TURN_FAILURE_HINTS[key])
   }
   return undefined

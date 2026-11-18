@@ -192,13 +192,6 @@ describe('Bundle size regression', () => {
    * the separate `@theokit/sdk/errors` import the bundler writes per module. Paulo decided this
    * raise on 2026-10-09, after the two fixes were measured.
    *
-   * ## Raised to 45 000 for #1845: `classifyTurnFailure` and `describeTurnFailure` in the root
-   *
-   * The issue requires the two functions and `DEFAULT_TURN_FAILURE_HINTS` in the root entry, so a
-   * subpath was not an option. Measured 44 925 bytes with them, message-probe fallback included. This raise was made by an
-   * implementation run because the issue fixes the export site; the owner should confirm it.
-   * Headroom is 75 bytes.
-   *
    * ## NOT raised for F-arch-5 — `createA2ATool` moved to `./a2a` (B-407)
    *
    * The root bundle then stood at 41 992 bytes, 8 under this cap. B-024's answer applied this time:
@@ -208,7 +201,7 @@ describe('Bundle size regression', () => {
    * the move: `dist/index.js` 39 332 bytes, `dist/a2a.js` 2 750. The cap stays at 42 000.
    * `the-a2a-tool-ships-on-its-own-subpath.test.ts` keeps the module out of the root bundle.
    */
-  it('agents main bundle under its 45 000-byte cap', (ctx) => {
+  it('agents main bundle under 42KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -218,7 +211,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(45_000)
+    expect(size).toBeLessThan(42_000)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 
