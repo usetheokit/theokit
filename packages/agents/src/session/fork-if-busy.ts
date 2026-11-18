@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto'
-
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 import { WIRE_ERROR_CODE_PART } from '@theokit/presenter/wire'
 import { TheokitAgentError } from '@theokit/sdk/errors'
@@ -11,7 +9,7 @@ const STRUCTURAL = new Set(['start', 'start-step', 'finish', 'finish-step'])
 export interface ForkIfBusyOptions {
   /** Called once when the first attempt hit session_busy. */
   readonly onFork?: (from: string, to: string) => void
-  /** Default: `${id}-fork-${randomUUID().slice(0, 8)}`. */
+  /** Default: `${id}-fork-${globalThis.crypto.randomUUID().slice(0, 8)}`. */
   readonly forkId?: (id: string) => string
   /**
    * Checked before the first attempt; default:
@@ -57,7 +55,8 @@ export function streamTurnForkingIfBusy(
   const isBusy =
     options.isBusy ??
     ((id: string) => sessionHasWriter(transcriptPath(transcriptRoot(), process.cwd(), id)))
-  const forkId = options.forkId ?? ((id: string) => `${id}-fork-${randomUUID().slice(0, 8)}`)
+  const forkId =
+    options.forkId ?? ((id: string) => `${id}-fork-${globalThis.crypto.randomUUID().slice(0, 8)}`)
 
   let resolveId!: (id: string) => void
   let rejectId!: (e: unknown) => void
