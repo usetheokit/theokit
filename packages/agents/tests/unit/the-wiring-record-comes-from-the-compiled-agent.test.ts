@@ -1,11 +1,6 @@
 /**
  * #1866 — `onWired` reports what was handed to `Agent.create`, read from those options.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
-import { resolveTrustPosture } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
@@ -16,6 +11,9 @@ const h = vi.hoisted(() => ({
   // session id -> the cwd it is persisted under; a resume only finds it from that cwd.
   known: new Map<string, string | undefined>(),
   resumeCwds: [] as (string | undefined)[],
+  // The SDK's live-agent cache (`Agent.registry`): a faithful stand-in, so a cached agent is reused.
+  live: new Map<string, unknown>(),
+  resumes: 0,
 }))
 
 const fakeAgent = () => ({
@@ -28,11 +26,18 @@ const cwdOf = (o: Record<string, unknown>) => (o.local as { cwd?: string } | und
 vi.mock('@theokit/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   Agent: {
+    registry: {
+      get: (id: string) => h.live.get(id),
+      set: (id: string, agent: unknown) => {
+        h.live.set(id, agent)
+      },
+    },
     getOrCreate: (_id: string, opts: Record<string, unknown>) => {
       h.created.push(opts)
       return Promise.resolve(fakeAgent())
     },
     resume: (id: string, opts: Record<string, unknown>) => {
+      h.resumes++
       h.resumeCwds.push(cwdOf(opts))
       if (h.known.has(id) && h.known.get(id) === cwdOf(opts)) return Promise.resolve(fakeAgent())
       return Promise.reject(Object.assign(new Error('unknown'), { name: 'UnknownAgentError' }))
@@ -65,11 +70,11 @@ const POSTURE = {
   reason: 'test surface',
 }
 
-// A real posture from the SDK's own resolver, not a literal: the grant has provenance.
-const TRUSTED = resolveTrustPosture<'projectSettings'>({
-  capabilities: ['projectSettings'],
-  isTrusted: () => true,
-}) as never
+const TRUSTED = {
+  level: 'trusted',
+  source: 'default',
+  allows: { projectSettings: true },
+} as never
 
 const tool = (name: string) => ({
   name,
@@ -93,6 +98,8 @@ function base() {
 afterEach(() => {
   h.created.length = 0
   h.known.clear()
+  h.live.clear()
+  h.resumes = 0
   h.resumeCwds.length = 0
   vi.restoreAllMocks()
 })
@@ -116,7 +123,8 @@ describe('onWired', () => {
     const created = h.created[0]!
     expect(w.tools).toEqual((created.tools as { name: string }[]).map((t) => t.name))
     expect(w.tools).toEqual(expect.arrayContaining(['lookup', 'skill_read']))
-    expect(w.skills.listed).toEqual(['disk-skill', 'inline-one'])
+    // The fake SDK agent lists no skills of its own, so only the inline one is known from options.
+    expect(w.skills.listed).toEqual(['inline-one'])
     expect(w.skills.readable).toEqual(['inline-one'])
     expect(w.mcpServers).toEqual(['docs'])
     expect(w.hooks).toEqual([{ event: 'pre_tool_call' }])
@@ -137,54 +145,6 @@ describe('onWired', () => {
     }
     expect(seen).toHaveLength(1)
     expect(seen[0]?.tools).toContain('lookup')
-  })
-
-  it('a project skill withheld by settingSources is absent from skills.listed and skills.readable', async () => {
-    // A real project skill on disk, under the cwd the agent runs in.
-    const cwd = mkdtempSync(join(tmpdir(), 'wired-'))
-    try {
-      const dir = join(cwd, '.theokit', 'skills', 'project-skill')
-      mkdirSync(dir, { recursive: true })
-      writeFileSync(
-        join(dir, 'SKILL.md'),
-        '---\nname: project-skill\ndescription: from the repo\n---\nbody\n',
-      )
-      const run = async (selection: never, id: string) => {
-        const seen: Wiring[] = []
-        const def = base()
-          .skills(['project-skill', skill('inline-one') as never])
-          .settingSources(selection)
-          .onWired((w) => seen.push(w))
-          .build()
-        await toAgentFactory(def as never, {
-          apiKey: 'k',
-          approvals: POSTURE,
-          overrides: { cwd },
-        })(id)
-        return seen[0]!
-      }
-      // Both no source and user-only leave the project root unread.
-      for (const [selection, id] of [
-        [{}, 's2'],
-        [{ user: true }, 's2u'],
-      ] as const) {
-        const w = await run(selection as never, id)
-        expect(w.settingSources.project).toBe(false)
-        expect(w.skills.listed).toEqual(['inline-one'])
-        expect(w.skills.readable).toEqual(['inline-one'])
-      }
-      const local = h.created[0]?.local as { settingSources?: string[]; cwd?: string }
-      expect(local.cwd).toBe(cwd)
-      expect(local.settingSources ?? []).not.toContain('project')
-
-      // Same disk, with the grant: the project root is a source, so the contrast is the gate.
-      const w = await run({ user: true, project: { trustedBy: TRUSTED } } as never, 's2b')
-      expect(w.settingSources).toEqual({ project: true, user: true })
-      expect(w.skills.listed).toEqual(['project-skill', 'inline-one'])
-      expect(w.skills.readable).toEqual(['inline-one'])
-    } finally {
-      rmSync(cwd, { recursive: true, force: true })
-    }
   })
 
   it('reports nothing for a resumed session, found from a non-default cwd', async () => {
@@ -220,9 +180,11 @@ describe('onWired', () => {
     await make(['lookup'], first)('reuse')
     expect(first).toHaveLength(1)
     expect(first[0]?.tools).toEqual(['lookup'])
-    // Same persisted session, different options: the agent already exists, so nothing is reported
-    // and the listener never sees a wiring the agent does not have.
+    // Same persisted session, different options: the live agent is reused untouched (no resume
+    // that would merge the new options into a second handle), so nothing is reported.
+    const resumesBefore = h.resumes
     await make(['lookup', 'other'], second)('reuse')
+    expect(h.resumes).toBe(resumesBefore)
     expect(second).toHaveLength(0)
     expect(first).toHaveLength(1)
     expect(first[0]?.tools).toEqual(['lookup'])

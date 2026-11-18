@@ -10,7 +10,7 @@ export interface CompiledWiring {
   /** Tool names handed to `Agent.create`, with withheld builtins removed. SDK defaults are not enumerated. */
   readonly tools: readonly string[]
   readonly skills: {
-    /** Skills named in the options: enabled names plus inline skills. Skills the SDK discovers on disk are not enumerated. */
+    /** Skills the created agent resolved (`agent.skills.list()`), discovered on disk or inline; the inline names alone when the SDK exposes no list. */
     readonly listed: readonly string[]
     /** Inline skills a `skill_read` tool wired by this build serves. A caller-supplied `skill_read` is opaque, so it reports none. */
     readonly readable: readonly string[]
@@ -47,8 +47,17 @@ function hooksOf(plugins: unknown): CompiledWiring['hooks'] {
   })
 }
 
-/** Read the wiring from the options exactly as they reach `Agent.create`. */
-export function readCompiledWiring(options: Record<string, unknown>): CompiledWiring {
+/**
+ * Read the wiring from the options exactly as they reach `Agent.create`.
+ *
+ * `resolvedSkills` is what the created agent itself lists (`agent.skills.list()`): the SDK decides
+ * which skills exist after discovery, the settings gate and `skills.enabled`, so the options alone
+ * cannot say. Without it only the inline skills named in the options are known.
+ */
+export function readCompiledWiring(
+  options: Record<string, unknown>,
+  resolvedSkills?: readonly string[],
+): CompiledWiring {
   const tools = Array.isArray(options.tools) ? (options.tools as object[]) : []
   const withheld = Array.isArray(options.withheldBuiltinTools)
     ? (options.withheldBuiltinTools as string[])
@@ -64,10 +73,7 @@ export function readCompiledWiring(options: Record<string, unknown>): CompiledWi
     // Caller-supplied tools only: a custom tool may deliberately replace a withheld builtin.
     tools: names(tools),
     skills: {
-      // Enabled names resolve against the project root, which only a granted `project` source reads.
-      listed: [
-        ...new Set([...(sources.includes('project') ? names(skills?.enabled) : []), ...inline]),
-      ],
+      listed: [...new Set(resolvedSkills ?? inline)],
       readable: reader !== undefined ? inline : [],
     },
     mcpServers: Object.keys((options.mcpServers as object | undefined) ?? {}),
@@ -79,19 +85,36 @@ export function readCompiledWiring(options: Record<string, unknown>): CompiledWi
 }
 
 /** Report the wiring; a throwing listener is warned about and never fails the build. */
-export function reportWiring(
+export async function reportWiring(
   listener: ((wiring: CompiledWiring) => void) | undefined,
   options: Record<string, unknown>,
-): void {
+  agent?: unknown,
+): Promise<void> {
   if (listener === undefined) return
   try {
-    listener(readCompiledWiring(options))
+    listener(readCompiledWiring(options, await resolvedSkillNames(agent)))
   } catch (err) {
     console.warn('[theokit] onWired listener threw; the agent was still built:', err)
   }
 }
 
+/** The skills the SDK resolved for this agent, or `undefined` when it exposes none to ask. */
+async function resolvedSkillNames(agent: unknown): Promise<string[] | undefined> {
+  const handle = (
+    agent as { skills?: { list?: () => Promise<readonly { name: string }[]> } } | null
+  )?.skills
+  if (typeof handle?.list !== 'function') return undefined
+  try {
+    return (await handle.list()).map((s) => s.name)
+  } catch (err) {
+    console.warn('[theokit] could not list the agent skills for onWired:', err)
+    return undefined
+  }
+}
+
 interface AgentStatics {
+  /** The SDK's live-agent cache; `getOrCreate` answers from it before it resumes or creates. */
+  registry?: { get(id: string): unknown; set(id: string, agent: never): void }
   getOrCreate(id: string, options: never): Promise<unknown>
   resume(id: string, options: never): Promise<unknown>
   create(options: never): Promise<unknown>
@@ -103,10 +126,13 @@ const isErr = (err: unknown, key: 'name' | 'code', value: string): boolean =>
 /**
  * `Agent.getOrCreate`, reporting the wiring only when this call CREATED the agent.
  *
- * With a listener it follows the SDK's documented resolution itself, because the creation event is
- * the only reliable signal: resume; on `UnknownAgentError` create; if a concurrent creator won
- * (`agent_id_already_exists`) resume the winner, which is not a creation of ours. Resume gets the
- * final options, so a non-default `cwd` is honoured. Without a listener it is plain `getOrCreate`.
+ * With a listener it follows the SDK's own resolution itself, because the creation event is the
+ * only reliable signal: a live cached agent is returned untouched (a resume would rehydrate a
+ * second handle and merge the new options into it); otherwise resume; on `UnknownAgentError`
+ * create; if a concurrent creator won (`agent_id_already_exists`) resume the winner, which is not a
+ * creation of ours. Whatever it resolves is put in the live cache, as `getOrCreate` does. Resume
+ * gets the final options, so a non-default `cwd` is honoured. Without a listener it is plain
+ * `getOrCreate`.
  */
 const inFlight = new WeakMap<object, Map<string, Promise<unknown>>>()
 
@@ -138,8 +164,14 @@ async function resolveReporting(
 ): Promise<unknown> {
   const statics = sdk as AgentStatics
   if (listener === undefined) return statics.getOrCreate(sessionId, options as never)
+  const cached = statics.registry?.get(sessionId)
+  if (cached !== undefined) return cached
+  const remember = (agent: unknown): unknown => {
+    statics.registry?.set(sessionId, agent as never)
+    return agent
+  }
   try {
-    return await statics.resume(sessionId, options as never)
+    return remember(await statics.resume(sessionId, options as never))
   } catch (err) {
     if (!isErr(err, 'name', 'UnknownAgentError')) throw err
   }
@@ -148,8 +180,9 @@ async function resolveReporting(
     agent = await statics.create({ ...options, agentId: sessionId } as never)
   } catch (err) {
     if (!isErr(err, 'code', 'agent_id_already_exists')) throw err
-    return statics.resume(sessionId, options as never)
+    return remember(await statics.resume(sessionId, options as never))
   }
-  reportWiring(listener, options)
+  remember(agent)
+  await reportWiring(listener, options, agent)
   return agent
 }
