@@ -811,13 +811,17 @@ Measured against `@theokit/sdk@5.11.0`.
 |---|---|
 | `AgentMemoryError` | value |
 | `applySubagentMemory` | value |
+| `auditEnvKnobs` | value |
 | `blockAppliesTo` | value |
+| `coerceEnvValue` | value |
 | `composeInstructions` | value |
 | `contextPressure` | value |
 | `ContextPressureThresholdError` | value |
 | `currentOperatorPolicy` | value |
 | `DEFAULT_CONTEXT_PRESSURE_THRESHOLDS` | value |
 | `effectiveContextWindow` | value |
+| `envKnob` | value |
+| `envLayerFrom` | value |
 | `expandCommandTemplate` | value |
 | `expandInstructionImports` | value |
 | `FILE_INLINE_CAP` | value |
@@ -855,6 +859,10 @@ Measured against `@theokit/sdk@5.11.0`.
 | `CustomCommand` | type |
 | `CustomCommandsResult` | type |
 | `DeclaredLayer` | type |
+| `EnvKnob` | type |
+| `EnvKnobKind` | type |
+| `EnvOptOut` | type |
+| `EnvReachabilityAudit` | type |
 | `ExpandImportsInput` | type |
 | `InstructionBlock` | type |
 | `InstructionSource` | type |

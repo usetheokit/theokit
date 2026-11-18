@@ -100,6 +100,22 @@ import { assertBootstrapped } from '@theokit/agents/config'
 assertBootstrapped(bootstrap, 'openTranscriptStore')
 ```
 
+## Config keys set from the environment
+
+Declare which keys the environment may set, then build a layer for `LayeredConfig` from the variables that are set:
+
+```ts
+import { envKnob, envLayerFrom, auditEnvKnobs } from '@theokit/agents/config'
+
+const KNOBS = { model: envKnob('MYAPP_MODEL', 'string'), memory: envKnob('MYAPP_MEMORY', 'boolean') }
+const layer = envLayerFrom(process.env, KNOBS) // { memory: true } when MYAPP_MEMORY=on
+auditEnvKnobs({ keys: ['model', 'memory', 'cwd'], knobs: KNOBS, optOuts: [{ key: 'cwd', reason: 'set per run' }] })
+```
+
+Booleans accept `1/true/yes/on` and `0/false/no/off` (trimmed, case-insensitive); numbers must be finite and non-blank.
+Any other value is passed through unchanged, so the schema rejects `MYAPP_MEMORY=maybe` by key name instead of reading it as `false`.
+`auditEnvKnobs` reports keys with neither a knob nor an opt-out as unreachable.
+
 ## Calling an agent route without `HttpTransport`
 
 An agent route's CSRF gate answers `403 CSRF_FAILED` unless the request carries `X-Theo-Action: 1`.
