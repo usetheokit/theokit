@@ -182,6 +182,57 @@ describe('a fork of a registered session', () => {
   })
 })
 
+describe('a fork is collected under its own identity', () => {
+  const forkOf = (src: string): string => `${JSON.stringify({ type: 'user', sessionId: src })}\n`
+
+  it('test_a_registered_archived_fork_loses_its_own_entry_and_the_source_keeps_its_own', async () => {
+    writeTranscript(fx, 'newest', 1)
+    const source = writeTranscript(fx, 'source-live', 2)
+    const fork = writeTranscript(fx, 'the-fork', 90, { content: forkOf('source-live') })
+    const removed: string[] = []
+
+    const { plan, result } = await run(true, {
+      listRegistry: async () => [{ agentId: 'source-live' }, { agentId: 'the-fork', archived: true }],
+      removeFromRegistry: (id: string) => void removed.push(id),
+    })
+
+    expect(existsSync(fork)).toBe(false)
+    expect(existsSync(source)).toBe(true)
+    expect(removed).toEqual(['the-fork'])
+    expect(result.removed).toEqual(['the-fork'])
+    expect(plan.candidates.map((c) => c.id)).toEqual(['the-fork'])
+  })
+
+  it('test_an_unregistered_fork_is_reported_by_path_not_as_its_source', async () => {
+    writeTranscript(fx, 'newest', 1)
+    writeTranscript(fx, 'source-live', 2)
+    const fork = writeTranscript(fx, 'the-fork', 90, { content: forkOf('source-live') })
+
+    const { plan, result } = await run(true, {
+      listRegistry: async () => [{ agentId: 'source-live' }],
+    })
+
+    expect(result.removed).toEqual([])
+    expect(result.orphaned).toEqual([fork])
+    expect(result.errors).toEqual([])
+    expect(humanReport(plan, result).join('\n')).not.toContain('source-live')
+  })
+
+  it('test_a_pointer_moving_onto_a_later_legacy_named_candidate_mid_apply_keeps_it', async () => {
+    writeTranscript(fx, 'newest', 1)
+    writeTranscript(fx, 'trigger', 70)
+    const legacy = writeTranscript(fx, 'late-legacy', 90, { legacy: true })
+
+    await run(true, {
+      removeFromRegistry: (id: string) => {
+        if (id === 'trigger') writePointer(fx, 'late-legacy')
+      },
+    })
+
+    expect(existsSync(legacy)).toBe(true)
+  })
+})
+
 describe('a source that becomes protected between plan and apply', () => {
   // Candidates are processed newest first: `trigger` (70d) runs before `source-old` (80d) and
   // `the-fork` (90d), so what its removal does happens mid-apply, before either is reached.
@@ -194,7 +245,7 @@ describe('a source that becomes protected between plan and apply', () => {
     })
     const removed: string[] = []
     const dry = await run(false)
-    expect(dry.plan.candidates.map((c) => c.id)).toEqual(['trigger', 'source-old', 'source-old'])
+    expect(dry.plan.candidates.map((c) => c.id)).toEqual(['trigger', 'source-old', undefined])
 
     await run(true, {
       removeFromRegistry: async (id: string) => {
