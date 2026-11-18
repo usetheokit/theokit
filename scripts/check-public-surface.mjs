@@ -96,7 +96,11 @@ function collectInternals(roots, ctx, internals) {
           // Identity is the declaration, not its name: two files may declare the same name.
           const key = declKey(d, ctx)
           const text = printDecl(d, ctx.printer)
-          internals.set(key, internals.has(key) ? `${internals.get(key)}\n${text}` : text)
+          // One list per masked name and real file: chunks that mask alike must not overwrite each other.
+          const byFile = internals.get(key) ?? new Map()
+          internals.set(key, byFile)
+          const file = d.getSourceFile().fileName
+          byFile.set(file, [...(byFile.get(file) ?? []), text])
           queue.push(d)
         }
       }
@@ -148,8 +152,19 @@ function describeSymbol(sym, ctx) {
   const deprecated = tags.find((t) => t.name === 'deprecated')
   const since = deprecated ? /since\s+(\d{4}-\d{2}-\d{2})/.exec(tagText(deprecated)) : null
   const decls = target.declarations ?? []
-  const refs = new Map()
-  collectInternals(decls, ctx, refs)
+  const grouped = new Map()
+  collectInternals(decls, ctx, grouped)
+  // Per masked name: each file's declarations in source order (overload order matters), the files
+  // compared as a sorted set of texts, so the discovery order never shows up in the baseline.
+  const refs = new Map(
+    [...grouped].map(([key, byFile]) => [
+      key,
+      [...byFile.values()]
+        .map((texts) => texts.join('\n'))
+        .sort()
+        .join('\n'),
+    ]),
+  )
   return {
     tier: tags.some((t) => t.name === 'experimental') ? 'experimental' : 'stable',
     // Source order, not sorted: overload order decides which signature TypeScript picks.

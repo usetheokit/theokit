@@ -155,6 +155,26 @@ describe('public surface gate', () => {
     expect(at('aubY9WIa')).toEqual(at('Zz09_-xY'))
   })
 
+  it('keeps both declarations when two chunks mask to the same name, and fails a break in either', () => {
+    const index = `import { T as A } from './chunk-ABCDEFG1'\nimport { T as B } from './chunk-ABCDEFG2'\nexport type Out = [A, B]\n`
+    const files = (one: string, two: string) => ({
+      'chunk-ABCDEFG1.d.ts': `export interface T { ${one} }\n`,
+      'chunk-ABCDEFG2.d.ts': `export interface T { ${two} }\n`,
+    })
+    const prev = surface(index, files('a: string', 'b: string'))
+    const internals = prev.entries['.']?.internals ?? {}
+    expect(Object.keys(internals)).toEqual(['dist/chunk-<hash>.d.ts#T'])
+    expect(internals['dist/chunk-<hash>.d.ts#T']).toContain('a: string')
+    expect(internals['dist/chunk-<hash>.d.ts#T']).toContain('b: string')
+    const broken = [files('a: number', 'b: string'), files('a: string', 'b: number')]
+    for (const f of broken) {
+      expect(run(prev, surface(index, f))).toEqual([
+        expect.stringContaining('referenced type dist/chunk-<hash>.d.ts#T changed'),
+      ])
+    }
+    expect(run(prev, surface(index, files('a: string; c?: number', 'b: string')))).toEqual([])
+  })
+
   it('keeps `types.d.ts` and `types-internal.d.ts` distinct, since only a hash suffix is stripped', () => {
     const index = `import { Shared as A } from './types'\nimport { Shared as B } from './types-internal'\nexport type Out = [A, B]\n`
     const files = {
