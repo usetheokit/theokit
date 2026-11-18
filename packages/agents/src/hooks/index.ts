@@ -39,6 +39,7 @@ export type { HookRunInput, HookRunResult } from './hook-runner.js'
  * a caller composing its own sub-agent surface needs the same rule and should not re-derive it.
  */
 export { inheritHooks, hooksPlugin, type CodePlugin } from '../bridge/delegation-hooks.js'
+export { hooksForChild, type HooksForChildOptions } from './hooks-for-child.js'
 
 /**
  * The producer for the `approved` set this module's gate REQUIRES.

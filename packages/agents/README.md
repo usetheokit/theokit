@@ -200,6 +200,16 @@ fingerprint gate as `buildHookHandlers`, ignores specs of other events, and retu
 without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
 is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
 
+## Hooks for a child agent
+
+`hooksForChild(handlers, { forward?, childLabel? })` (from `@theokit/agents/hooks`) turns a parent's
+`HookHandlers` into an SDK `Plugin` for a child agent, so the parent's `pre_tool_call` veto reaches
+the child's tool calls: `Agent.create({ plugins: [hooksForChild(h)!] })`, no cast. The handler gets
+the child's real `agentId` and `runId`. By default only `pre_tool_call` is forwarded; pass
+`forward: ['pre_tool_call', 'post_tool_call', 'transform_tool_result']` to opt in to the others.
+`childLabel` is added to the context as `childLabel`. It returns `undefined` when no forwarded
+handler exists, so spread it conditionally.
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
