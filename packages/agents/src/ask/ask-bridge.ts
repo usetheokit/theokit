@@ -130,7 +130,7 @@ interface Pending {
   readonly id: string
   readonly question: string
   readonly settle: (answer: string) => void
-  readonly fail: (error: Error) => void
+  readonly fail: (error: Error, silent?: boolean) => void
 }
 
 interface Listener {
@@ -162,10 +162,10 @@ export function createAskBridge(): AskBridge {
     }
   }
 
-  const forget = (threadId: string, id: string): void => {
+  const forget = (threadId: string, id: string, silent = false): void => {
     pendingByThread.delete(threadId)
     pendingById.delete(id)
-    emit(threadId)
+    if (!silent) emit(threadId)
   }
 
   const entryFail = (threadId: string, error: Error): void => {
@@ -195,8 +195,8 @@ export function createAskBridge(): AskBridge {
             forget(threadId, id)
             resolve(answer)
           },
-          fail: (error) => {
-            forget(threadId, id)
+          fail: (error, silent) => {
+            forget(threadId, id, silent)
             reject(error)
           },
         }
@@ -230,12 +230,18 @@ export function createAskBridge(): AskBridge {
       const entry = pendingByThread.get(threadId)
       // Cleanup runs at the end of every turn, and most turns asked nothing.
       if (entry === undefined) return false
-      // Surface cleanup runs before the change is emitted: an observer may start a replacement
-      // question on this thread, and the old question's cleanup must not clear it.
-      listeners.get(threadId)?.onAbandon?.(threadId)
+      // Settle first, so a throwing cleanup cannot leave the turn waiting or the thread occupied.
+      // Observers hear about it only after the surface cleanup: one may start a replacement
+      // question, and the old question's cleanup must not clear it.
       entry.fail(
         new QuestionAbandonedError(threadId, 'the run was cancelled or the surface detached'),
+        true,
       )
+      try {
+        listeners.get(threadId)?.onAbandon?.(threadId)
+      } finally {
+        emit(threadId)
+      }
       return true
     },
 

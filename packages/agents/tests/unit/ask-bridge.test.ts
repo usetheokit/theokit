@@ -343,4 +343,43 @@ describe('ask / pending and onChange', () => {
     expect(bridge.pending('t')?.question).toBe('two')
     expect(shown).toBe('two')
   })
+
+  it('abandon settles and notifies even when onAbandon throws', async () => {
+    const bridge = createAskBridge()
+    bridge.setListener('t', () => undefined, {
+      onAbandon: () => {
+        throw new Error('boom')
+      },
+    })
+    const changed = vi.fn()
+    bridge.onChange(changed)
+    const p = bridge.ask('t', 'q')
+    changed.mockClear()
+    expect(() => bridge.abandon('t')).toThrow('boom')
+    await expect(p).rejects.toBeInstanceOf(QuestionAbandonedError)
+    expect(bridge.pending('t')).toBeUndefined()
+    expect(changed).toHaveBeenCalledWith('t')
+  })
+
+  it('onAbandon answering the old question cannot disturb a replacement', async () => {
+    const bridge = createAskBridge()
+    let oldId = ''
+    bridge.setListener('t', (q) => (oldId ||= q.id), {
+      onAbandon: () => {
+        expect(bridge.answer(oldId, 'late')).toBe(false)
+      },
+    })
+    const first = bridge.ask('t', 'one').catch(() => undefined)
+    let restarted = false
+    bridge.onChange((threadId) => {
+      if (restarted || bridge.pending(threadId) !== undefined) return
+      restarted = true
+      void bridge.ask(threadId, 'two')
+    })
+    bridge.abandon('t')
+    await first
+    const next = bridge.pending('t')
+    expect(next?.question).toBe('two')
+    expect(bridge.answer(next!.id, 'ok')).toBe(true)
+  })
 })
