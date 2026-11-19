@@ -97,6 +97,28 @@ describe('resolveSecretRefs', () => {
     expect((error as SecretReferenceError).cause).toBeUndefined()
   })
 
+  it('omits the cause when a custom store error carries a secret unknown to the resolver', async () => {
+    const leaked = 'unknown-secret-xyz'
+    const failures: Error[] = [
+      new Error(`denied ${leaked}`),
+      Object.assign(new Error('denied'), { response: { headers: { authorization: leaked } } }),
+      new Error('denied', { cause: new Error(leaked) }),
+    ]
+    for (const failure of failures) {
+      const store: SecretStore = {
+        kind: 'stub',
+        matches: (r) => r.startsWith('stub:'),
+        read: () => Promise.reject(failure),
+      }
+      const error = (await resolveSecretRefs({ T: 'stub:x' }, [store]).catch(
+        (e: unknown) => e,
+      )) as SecretReferenceError
+      expect(error).toBeInstanceOf(SecretReferenceError)
+      expect(error.cause).toBeUndefined()
+      expect(error.message).not.toContain(leaked)
+    }
+  })
+
   it('a builtin failure keeps the underlying error as the cause', async () => {
     const error = (await resolveSecretRefs({ K: 'secretref:file:/nonexistent/zzz' }).catch(
       (e: unknown) => e,
