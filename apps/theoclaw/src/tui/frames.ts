@@ -51,6 +51,8 @@ export function nextSessionId(base: string, n: number): string {
  * the stream ends at `done`, `interrupted` or `error` (the last two also raise a notice), and a failed
  * connection ends it with the reason as a notice. The framework has no interrupted state, so an
  * interrupted turn ends like a finished one (its unfinished tools fold as failed) and the notice says why.
+ * That is the local fallback for interruption, the only part of the fold TheoClaw keeps; the gap is to be
+ * filed in usetheokit/theokit-tui (an interrupted state for `agentStreamReducer`).
  * `onEnd` runs once when the stream is finished or closed.
  *
  * A notice is placed by how many events the framework reducer holds at that moment, which this adapter
