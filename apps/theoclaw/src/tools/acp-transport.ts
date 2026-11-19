@@ -21,11 +21,7 @@ import {
  * environment from `/proc/<pid>/environ`, as the README says.
  */
 export function acpAgentEnv(source: Readonly<Record<string, string | undefined>> = process.env): Record<string, string> {
-  const env: Record<string, string> = { ...allowlistedEnv(source) }
-  for (const name of EXTRA_VARIABLES) {
-    const value = source[name]
-    if (value !== undefined) env[name] = value
-  }
+  const env = keptEnv(source)
   // An empty `PATH=` is itself one empty entry, so no absolute entry means no `PATH` at all.
   const searched = absolutePathEntries(source)
   if (searched.length === 0) delete env.PATH
@@ -33,7 +29,17 @@ export function acpAgentEnv(source: Readonly<Record<string, string | undefined>>
   return env
 }
 
-const EXTRA_VARIABLES: readonly string[] = ['LC_MESSAGES', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME']
+/** The framework allowlist plus the variables TheoClaw has always kept: `LOGNAME`, `TZ`, `LC_MESSAGES` and the XDG directories. */
+export function keptEnv(source: Readonly<Record<string, string | undefined>>): Record<string, string> {
+  const env: Record<string, string> = { ...allowlistedEnv(source) }
+  for (const name of EXTRA_VARIABLES) {
+    const value = source[name]
+    if (value !== undefined) env[name] = value
+  }
+  return env
+}
+
+const EXTRA_VARIABLES: readonly string[] = ['LOGNAME', 'TZ', 'LC_MESSAGES', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME']
 
 /**
  * The transport of one ACP call: the agent's own command, spawned directly with `config.env` (default
@@ -46,7 +52,22 @@ export function agentTransport(config: AcpToolConfig): AcpToolTransport {
   const env = config.env ?? acpAgentEnv()
   const resolved = resolveCommand(config.command, absolutePathEntries())
   if (resolved === undefined) return closedTransport(new AcpTransportClosedError(config.command, COULD_NOT_RUN))
-  return new NodeAcpTransport(resolved, [...(config.args ?? [])], config.cwd, env)
+  const inner = new NodeAcpTransport(resolved, [...(config.args ?? [])], config.cwd, env)
+  return {
+    send: (line) => {
+      inner.send(line)
+    },
+    subscribe: (onData) => {
+      inner.subscribe(onData)
+    },
+    onClose: (listener) => {
+      // The process that ended is the agent's, found at `resolved`: name it as the owner configured it.
+      inner.onClose((error) => {
+        listener(new AcpTransportClosedError(config.command, error.reason, { cause: error }))
+      })
+    },
+    close: () => inner.close(),
+  }
 }
 
 const COULD_NOT_RUN = 'could not be found or run (a command is an absolute path or a bare name found on PATH)'
@@ -59,7 +80,7 @@ function resolveCommand(command: string, searched: readonly string[]): string | 
   if (command.includes('/')) return isAbsolute(command) && executableFile(command) ? command : undefined
   return searched
     .map((dir) => join(dir, command))
-    .find((candidate) => executableFile(candidate))
+    .find((candidate) => !candidate.includes('=') && executableFile(candidate))
 }
 
 /** The absolute entries of TheoClaw's `PATH`; an empty entry, `.` or `bin` would resolve in the tool root. */

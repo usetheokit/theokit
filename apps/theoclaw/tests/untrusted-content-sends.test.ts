@@ -14,6 +14,7 @@ const SRC = join(import.meta.dirname, '..', 'src')
 const NOT_AGENTS: ReadonlySet<string> = new Set([
   'control-plane/control-socket.ts:ws',
   'control-client/control-client.ts:socket',
+  'tools/acp-transport.ts:inner',
   'scheduler/scheduler-wiring.ts:router',
 ])
 

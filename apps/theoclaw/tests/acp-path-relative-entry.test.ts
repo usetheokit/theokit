@@ -141,6 +141,30 @@ describe('an ACP agent named by a bare command (B-706)', () => {
     expect(ran.planted).toBe(false)
   })
 
+  it('negative: skips an absolute entry whose path contains =', async () => {
+    const space = workspace(AGENT)
+    const withEquals = join(tempCwd(cleanups), 'a=b')
+    mkdirSync(withEquals)
+    const legit = tempCwd(cleanups)
+    const equalsMarker = join(space.cwd, 'equals-ran')
+    const legitMarker = join(space.cwd, 'legit-ran')
+    plant(join(withEquals, AGENT), equalsMarker)
+    plant(join(legit, AGENT), legitMarker)
+    await callAgent(space, `${withEquals}:${legit}`)
+    expect(existsSync(legitMarker)).toBe(true)
+    expect(existsSync(equalsMarker)).toBe(false)
+  })
+
+  it('edge: a bare command that exits after spawning is reported against the command as configured', async () => {
+    const space = workspace(AGENT)
+    const legit = tempCwd(cleanups)
+    writeFileSync(join(legit, AGENT), '#!/bin/sh\nexit 3\n')
+    chmodSync(join(legit, AGENT), 0o755)
+    const error = await callAgent(space, legit)
+    expect(error).toBeInstanceOf(AcpTransportClosedError)
+    expect((error as AcpTransportClosedError).command).toBe(AGENT)
+  })
+
   it('edge: refuses a bare command when PATH is unset', async () => {
     const space = workspace(AGENT)
     const plantedMarker = join(space.cwd, 'planted-ran')
