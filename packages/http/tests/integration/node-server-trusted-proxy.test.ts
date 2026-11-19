@@ -17,7 +17,7 @@ afterEach(async () => {
 
 async function probe(
   trustedProxy: TrustedProxyOptions | undefined,
-  headers: Record<string, string>,
+  headers: Record<string, string | string[]>,
 ): Promise<{
   identity?: string
   peer?: string
@@ -62,6 +62,14 @@ describe('createNodeServer trustedProxy', () => {
     expect(r.identity).toBe('alice')
     expect(r.peer).toBe('127.0.0.1')
     expect(r.protocol).toBe('https:')
+  })
+
+  it('reads an array-valued identity header such as set-cookie', async () => {
+    const r = await probe(
+      { identityHeader: 'set-cookie', addresses: ['127.0.0.1'] },
+      { 'set-cookie': ['alice', 'bob'] },
+    )
+    expect(r.identity).toBe('alice')
   })
 
   it('ignores the identity from another peer and strips spoofed headers', async () => {

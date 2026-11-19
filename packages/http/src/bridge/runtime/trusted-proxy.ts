@@ -74,7 +74,9 @@ export function stampTrustedIdentity(
   const trusted = proxy !== undefined && peer !== undefined && proxy.addresses.has(peer)
   if (!trusted) Reflect.deleteProperty(headers, 'x-forwarded-proto')
   if (proxy) {
-    const identity = headers[proxy.identityHeader]
+    const raw = headers[proxy.identityHeader]
+    // Node keeps `set-cookie` as an array; take its first value.
+    const identity = Array.isArray(raw) ? raw[0] : raw
     Reflect.deleteProperty(headers, proxy.identityHeader)
     if (trusted && typeof identity === 'string' && identity.trim() !== '') {
       headers[TRUSTED_IDENTITY_HEADER] = identity.trim()
