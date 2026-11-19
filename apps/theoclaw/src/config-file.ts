@@ -1,8 +1,11 @@
-import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parseEnv } from 'node:util'
 
+import { replaceFileAtomic } from '@theokit/sdk/persistence'
+
 import { TheoClawConfigError } from './control-plane/errors.js'
+import { serializedPerFile } from './serial-queue.js'
 
 /**
  * Where TheoClaw's configuration lives and how it reaches the environment (B-374, plan D2). The
@@ -86,11 +89,21 @@ export function assertWritable(entries: Readonly<Record<string, string>>): void 
  * `ownsDirectory`: the directory is TheoClaw's own (the default `<config>/theoclaw`), so it is
  * narrowed to 0700 even when it already exists. Otherwise only a directory this call creates is.
  */
-export function writeConfiguration(
+export async function writeConfiguration(
   path: string,
   entries: Readonly<Record<string, string>>,
   options: { readonly force: boolean; readonly ownsDirectory?: boolean },
-): void {
+): Promise<void> {
+  // The write is asynchronous, so two calls in one process are queued per path: the second one
+  // checks for the file only after the first has finished, and is refused without `force`.
+  await serializedPerFile(path, () => writeNow(path, entries, options))
+}
+
+async function writeNow(
+  path: string,
+  entries: Readonly<Record<string, string>>,
+  options: { readonly force: boolean; readonly ownsDirectory?: boolean },
+): Promise<void> {
   assertWritable(entries)
   if (existsSync(path) && !options.force) {
     throw new TheoClawConfigError(`${path} exists; pass --force to replace it`, { variable: 'THEOCLAW_CONFIG' })
@@ -101,18 +114,5 @@ export function writeConfiguration(
   const created = mkdirSync(directory, { recursive: true, mode: 0o700 }) !== undefined
   if (created || options.ownsDirectory === true) chmodSync(directory, 0o700)
   const text = Object.entries(entries).map(([key, value]) => `${key}="${value}"\n`).join('')
-  const temporary = `${path}.${process.pid}.tmp`
-  const fd = openSync(temporary, 'wx', 0o600)
-  try {
-    writeSync(fd, text)
-    fsyncSync(fd)
-  } finally {
-    closeSync(fd)
-  }
-  try {
-    renameSync(temporary, path)
-  } catch (error) {
-    rmSync(temporary, { force: true })
-    throw error
-  }
+  await replaceFileAtomic(path, text, { mode: 0o600 })
 }

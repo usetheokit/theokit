@@ -66,3 +66,34 @@ describe('the root record names every version that was cut (#656)', () => {
     ).toBeNull()
   })
 })
+
+describe('the 2026-11-18 release is on the root record (#2194)', () => {
+  it('names all five versions that were cut', async () => {
+    const { readFileSync } = await import('node:fs')
+    const text = readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')
+    const heading = text.split('\n').find((l) => l.startsWith('## [@theokit/agents 16.10.0'))
+
+    expect(heading).toBeDefined()
+    for (const v of [
+      '@theokit/agents 16.10.0',
+      'create-theokit 3.1.4',
+      '@theokit/http 2.6.0',
+      '@theokit/presenter 0.15.0',
+      'theokit 0.83.0',
+    ]) {
+      expect(heading).toContain(v)
+    }
+  })
+})
+
+describe('the 2026-11-19 release is on the root record (#2273)', () => {
+  it('names both versions that were cut', async () => {
+    const { readFileSync } = await import('node:fs')
+    const text = readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')
+    const heading = text.split('\n').find((l) => l.startsWith('## [@theokit/agents 16.11.0'))
+
+    expect(heading).toBeDefined()
+    expect(heading).toContain('create-theokit 3.1.5')
+    expect(heading).toContain('2026-11-19')
+  })
+})
