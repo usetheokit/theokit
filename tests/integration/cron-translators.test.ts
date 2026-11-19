@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { tmpdir } from 'node:os'
+import * as jobsEntry from '../../packages/theo/src/server/jobs/index.js'
 import { createHandlerQueue } from '../../packages/theo/src/server/jobs/queue-client.js'
 
 import {
@@ -464,5 +465,14 @@ describe('generated Deno cron entry, executed', () => {
     expect(order).toEqual(['migrate'])
     await crons.get('probe')!()
     expect(order).toEqual(['migrate', 'handler'])
+  })
+
+  it('resolves the generated theokit import to a public export that exists', () => {
+    const pkg = JSON.parse(readFileSync(resolve('packages/theo/package.json'), 'utf8')) as {
+      exports: Record<string, unknown>
+    }
+    expect(pkg.exports['./server/jobs']).toBeDefined()
+    expect(generate()).toContain('import { createHandlerQueue } from "npm:theokit/server/jobs"')
+    expect(jobsEntry.createHandlerQueue).toBe(createHandlerQueue)
   })
 })
