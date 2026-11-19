@@ -9,7 +9,7 @@
  *
  * - `--write` rewrites `packages/<dir>/public-surface-baseline.json`.
  * - Without it, the regenerated baseline must equal the committed one (exit 1 otherwise).
- * - It then compares with the baseline at `<base>` (default `origin/main`): a stable name removed,
+ * - It then compares with the baseline at `<base>` (only when `--base` is given; without it just the drift check runs): a stable name removed,
  *   renamed, demoted, or whose declaration changed other than by an added optional member needs a
  *   changeset added in `<base>...HEAD` that declares the package `major`; and a stable name removed
  *   less than DEPRECATION_WINDOW_DAYS after its `deprecatedSince` fails whatever the changesets say.
@@ -377,7 +377,7 @@ function findPackage(arg) {
 function main(argv) {
   const write = argv.includes('--write')
   const bi = argv.indexOf('--base')
-  const base = bi >= 0 ? argv[bi + 1] : 'origin/main'
+  const base = bi >= 0 ? argv[bi + 1] : null
   const arg = argv.find((a, i) => !a.startsWith('--') && argv[i - 1] !== '--base')
   if (!arg) return fail('usage: check-public-surface.mjs <package> [--write] [--base <ref>]')
   const pkgDir = findPackage(arg)
@@ -395,6 +395,8 @@ function main(argv) {
     )
     code = 1
   }
+  // Without --base there is nothing to compare with: only the drift check runs.
+  if (!base) return code
   git(['rev-parse', '--verify', `${base}^{commit}`])
   const rel = `${pkgDir.slice(ROOT.length + 1)}/${BASELINE_FILE}`
   const exists = git(['ls-tree', '--name-only', base, rel]).trim() !== ''

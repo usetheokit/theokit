@@ -363,6 +363,16 @@ describe('public surface gate CLI', () => {
     expect(gate(root, 'pkg', '--base', 'main').status).toBe(1)
   })
 
+  it('runs the drift check without --base, in a checkout that has no origin/main', () => {
+    const root = repo()
+    setDts(root, 'export declare function f(): void\n')
+    gate(root, 'pkg', '--write')
+    commit(root, 'base')
+    expect(gate(root, 'pkg').status).toBe(0)
+    setDts(root, 'export declare function h(): void\n')
+    expect(gate(root, 'pkg').status).toBe(1)
+  })
+
   it('fails a removal without a major changeset in the range', () => {
     const r = gate(removal(), 'pkg', '--base', 'main')
     expect(r.status).toBe(1)
