@@ -1,8 +1,8 @@
-import { TheokitAgentError } from '@theokit/sdk/errors'
 import { createWireReader, finalMessageOf } from '@theokit/presenter'
 import type { AgentOutputEvent } from '@theokit/presenter'
 import { readTurnMetadata } from '@theokit/presenter/wire'
 import type { WireChunk, WireTurnMetadata } from '@theokit/presenter/wire'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /** Where a one-shot turn writes: the answer on `out`, progress and diagnostics on `err`. */
 export interface HeadlessIo {
