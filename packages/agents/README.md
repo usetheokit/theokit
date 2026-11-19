@@ -294,6 +294,10 @@ fingerprint gate as `buildHookHandlers`, ignores specs of other events, and retu
 without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
 is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
 
+## Validating direct tool calls
+
+`createToolInvokeRoute` (from `@theokit/agents/bridge`) checks `args` against the tool's own `inputSchema` by default (`validateAgainstInputSchema`, compiled once per tool): a violation answers 400 `invalid_args` with `<path>: <message>`, and a schema that does not compile answers 500 `tool_error`. Pass `validate: myValidator` to replace the default, or `validate: false` to turn validation off.
+
 ## Ending a goal loop with a tool
 
 `createGoalSignal()` returns an `update_goal` tool and a judge that read the same state. Add `signal.tool`
