@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   symlinkSync,
   writeFileSync,
@@ -145,14 +146,15 @@ describe('worktreeProvider', () => {
     const err = await delegate({ name: 'w', compiled: { tools: [] } as never }, 'hi', {
       apiKey: 'k',
       isolation: provider,
-      streamFactory: () => {
+      onDelegationStart: () => {
         // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw 'plain string'
       },
     }).catch((e: unknown) => e)
-    // `delegate` wraps what the stream throws, so the primitive is the wrapper's cause.
-    expect(String(err)).toContain('plain string')
-    expect((err as { cleanupError: unknown }).cleanupError).toBeInstanceOf(WorkspaceProviderError)
+    expect(err).toBeInstanceOf(AggregateError)
+    const [first, second] = (err as AggregateError).errors as unknown[]
+    expect(first).toBe('plain string')
+    expect(second).toBeInstanceOf(WorkspaceProviderError)
   })
 
   it('a frozen task error and a failing cleanup are both reachable', async () => {
@@ -174,12 +176,43 @@ describe('worktreeProvider', () => {
     const err = await delegate({ name: 'w', compiled: { tools: [] } as never }, 'hi', {
       apiKey: 'k',
       isolation: provider,
-      streamFactory: () => {
-        throw frozen as Error
+      onDelegationStart: () => {
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
+        throw frozen
       },
     }).catch((e: unknown) => e)
-    expect(String(err)).toContain('frozen')
-    expect((err as { cleanupError: unknown }).cleanupError).toBeInstanceOf(Error)
+    expect(err).toBeInstanceOf(AggregateError)
+    const [first, second] = (err as AggregateError).errors as unknown[]
+    expect(first).toBe(frozen)
+    expect((second as Error).message).toBe('cleanup boom')
+  })
+
+  it('SubAgentSpec.isolation is acquired, forwarded as cwd and released; the per-call provider wins', async () => {
+    const { repo, root, git } = setup()
+    const p = worktreeProvider(repo, root)
+    const used: string[] = []
+    const tracking = (tag: string) => ({
+      async acquire(id: string) {
+        const ws = await p.acquire(`${tag}-${id}`)
+        used.push(`${tag}:${ws.path}`)
+        return ws
+      },
+    })
+    const spec = { name: 'w', compiled: { tools: [] } as never, isolation: tracking('spec') }
+    h.sdkCalls.length = 0
+    await delegate(spec, 'hi', { apiKey: 'k' })
+    expect(used).toHaveLength(1)
+    expect(used[0]).toMatch(/^spec:/)
+    expect(h.sdkCalls[0]?.cwd).toBe(used[0]!.slice('spec:'.length))
+    expect(existsSync(used[0]!.slice('spec:'.length))).toBe(false)
+
+    used.length = 0
+    h.sdkCalls.length = 0
+    await delegate(spec, 'hi', { apiKey: 'k', isolation: tracking('call') })
+    expect(used).toHaveLength(1)
+    expect(used[0]).toMatch(/^call:/)
+    expect(h.sdkCalls[0]?.cwd).toBe(used[0]!.slice('call:'.length))
+    expect(git('branch', '--list', 'task/*').trim()).toBe('')
   })
 
   describe('.worktreeinclude copier', () => {
@@ -204,6 +237,38 @@ describe('worktreeProvider', () => {
         WorkspaceProviderError,
       )
       expect(existsSync(join(root, 's'))).toBe(false)
+    })
+
+    it('refuses a listed path that goes through a symlinked directory leaving the repository', async () => {
+      const outside = mkdtempSync(join(tmpdir(), 'outside-'))
+      writeFileSync(join(outside, 'secret'), 'x')
+      const { repo, root } = withInclude('ignored-link/secret\n', (r) => {
+        symlinkSync(outside, join(r, 'ignored-link'))
+        // untracked, so the new worktree has no `ignored-link` of its own
+        writeFileSync(join(r, '.git', 'info', 'exclude'), 'ignored-link\n')
+      })
+      await expect(worktreeProvider(repo, root).acquire('sl')).rejects.toBeInstanceOf(
+        WorkspaceProviderError,
+      )
+      expect(existsSync(join(root, 'sl'))).toBe(false)
+    })
+
+    it('does not create directories through a destination symlink', async () => {
+      const outside = mkdtempSync(join(tmpdir(), 'outside-'))
+      const { repo, root } = withInclude('a/b/f\n', (r) => {
+        mkdirSync(join(r, 'a', 'b'), { recursive: true })
+        writeFileSync(join(r, 'a', 'b', 'f'), 'x')
+      })
+      // The new worktree gets `a` as a symlink out of the workspace (post-checkout hook).
+      writeFileSync(
+        join(repo, '.git', 'hooks', 'post-checkout'),
+        `#!/bin/sh\nrm -rf a\nln -s ${outside} a\n`,
+        { mode: 0o755 },
+      )
+      await expect(worktreeProvider(repo, root).acquire('dd')).rejects.toBeInstanceOf(
+        WorkspaceProviderError,
+      )
+      expect(readdirSync(outside)).toEqual([])
     })
 
     it('copies a nested directory of plain files', async () => {

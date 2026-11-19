@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { copyFile, lstat, mkdir, readFile, readdir, realpath, stat } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
@@ -49,6 +49,20 @@ function inside(root: string, target: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
+/** Creates `dir` one component at a time, refusing any existing symlink on the way. */
+async function ensureDirInside(workspace: string, dir: string, label: string): Promise<void> {
+  const parts = relative(workspace, dir).split(sep).filter(Boolean)
+  let current = workspace
+  for (const part of parts) {
+    current = join(current, part)
+    const info = await lstat(current).catch(() => undefined)
+    if (!info) await mkdir(current)
+    else if (info.isSymbolicLink() || !info.isDirectory()) {
+      throw new WorkspaceProviderError(`${label} would be written through a symlink`)
+    }
+  }
+}
+
 /**
  * Copies `src` to `dest`, entry by entry. A symlink (the listed path or one nested in a directory)
  * is followed only when its target stays inside the repository; the destination's parent must
@@ -60,28 +74,23 @@ async function copyEntry(
   roots: { repo: string; workspace: string },
   label: string,
 ): Promise<void> {
-  const info = await lstat(src)
-  let source = src
-  if (info.isSymbolicLink()) {
-    try {
-      source = await realpath(src)
-    } catch {
-      return // dangling link: nothing to copy
-    }
-    if (!inside(roots.repo, source)) {
-      throw new WorkspaceProviderError(`${label} resolves outside the repository`)
-    }
+  let source: string
+  try {
+    // realpath resolves every component, so `ignored-link/secret` is checked as well as a final link.
+    source = await realpath(src)
+  } catch {
+    return // dangling link: nothing to copy
   }
-  await mkdir(dirname(dest), { recursive: true })
-  if (!inside(roots.workspace, await realpath(dirname(dest)))) {
-    throw new WorkspaceProviderError(`${label} would be written outside the workspace`)
+  if (!inside(roots.repo, source)) {
+    throw new WorkspaceProviderError(`${label} resolves outside the repository`)
   }
+  await ensureDirInside(roots.workspace, dirname(dest), label)
   const existing = await lstat(dest).catch(() => undefined)
   if (existing?.isSymbolicLink()) {
     throw new WorkspaceProviderError(`${label} would be written through a symlink`)
   }
   if ((await stat(source)).isDirectory()) {
-    await mkdir(dest, { recursive: true })
+    await ensureDirInside(roots.workspace, dest, label)
     for (const name of await readdir(source)) {
       await copyEntry(join(source, name), join(dest, name), roots, `${label}/${name}`)
     }
