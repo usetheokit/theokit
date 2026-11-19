@@ -81,8 +81,10 @@ export function hooksForChild(
         })
       }
       if (typeof transform === 'function') {
-        ctx.on('transform_tool_result', (results: unknown, raw: unknown) =>
-          transform(results, { ...(raw as ToolResultTransformContext), ...label }),
+        // The SDK's `on` signature takes one argument, but this seam calls the handler with
+        // `(results, ctx)`, so the handler reads its arguments from a rest list.
+        ctx.on('transform_tool_result', (...args: unknown[]) =>
+          transform(args[0], { ...(args[1] as ToolResultTransformContext), ...label }),
         )
       }
     },
