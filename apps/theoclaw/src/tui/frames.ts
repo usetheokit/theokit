@@ -135,25 +135,44 @@ export async function* controlStream(
   const raise = (n: TuiNotice): void => notice({ ...n, after: mirror.events.length })
   const iterator = client.chat(text, session)[Symbol.asyncIterator]()
   try {
-    // Each frame is stamped when it arrives, so a notice posted after it is placed after it however late the stream resumes.
-    const pull = (): Promise<{ result: IteratorResult<ControlFrame>; seq: number }> => {
-      const pulled = iterator.next().then((result) => ({ result, seq: inbox.stamp() }))
-      pulled.catch(() => undefined)
-      return pulled
+    // Frames are pulled as soon as they come and stamped then, not when the consumer next asks for one, so a
+    // notice posted later is placed after every frame that had arrived by then, however late the stream resumes.
+    type Arrival =
+      | { readonly seq: number; readonly result: IteratorResult<ControlFrame> }
+      | { readonly seq: number; readonly error: unknown }
+    const arrivals: Arrival[] = []
+    let wakeFrames: (() => void) | undefined
+    const arrive = (arrival: Arrival): void => {
+      arrivals.push(arrival)
+      wakeFrames?.()
+      wakeFrames = undefined
     }
-    let next = pull()
+    void (async () => {
+      try {
+        for (;;) {
+          const result = await iterator.next()
+          arrive({ seq: inbox.stamp(), result })
+          if (result.done === true) return
+        }
+      } catch (error) {
+        arrive({ seq: inbox.stamp(), error })
+      }
+    })()
     for (;;) {
-      const woke = inbox.wait().then(() => 'notice' as const)
-      const got = await Promise.race([next, woke])
-      for (const n of inbox.take(got === 'notice' ? undefined : got.seq)) {
+      if (arrivals.length === 0)
+        await Promise.race([new Promise<void>((resolve) => (wakeFrames = resolve)), inbox.wait()])
+      const arrival = arrivals[0]
+      for (const n of inbox.take(arrival?.seq)) {
         local = addNotice(local, n.variant, n.text)
         raise(n)
         // An empty assistant message closes the open one, so later text starts a new message below the notice.
         yield emit({ type: 'assistant', message: '' })
       }
-      if (got === 'notice') continue
-      if (got.result.done === true) return
-      const frame = got.result.value
+      if (arrival === undefined) continue
+      arrivals.shift()
+      if ('error' in arrival) throw arrival.error
+      if (arrival.result.done === true) return
+      const frame = arrival.result.value
       local = applyFrame(local, frame)
       if (frame.type === 'event') {
         const { event } = frame
@@ -191,7 +210,6 @@ export async function* controlStream(
         raise({ variant: 'error', text: `the turn ended: ${frame.code}` })
         return
       }
-      next = pull()
     }
   } catch (error) {
     raise({ variant: 'error', text: error instanceof Error ? error.message : String(error) })

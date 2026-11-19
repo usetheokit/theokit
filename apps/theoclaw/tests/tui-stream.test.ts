@@ -298,50 +298,42 @@ describe('controlStream: interruption fallback and notices from the app', () => 
     ])
   })
 
-  it('a notice posted after a frame arrived is placed after it, for text and for tool events', async () => {
-    for (const first of [
-      event({ type: 'text_delta', content: 'early' }),
-      event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
+  it('a notice posted after frames arrived is placed after all of them, however late the stream resumes', async () => {
+    for (const frames of [
+      [event({ type: 'text_delta', content: 'a' }), event({ type: 'text_delta', content: 'b' })],
+      [
+        event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
+        event({ type: 'tool_call', callId: 'c2', toolName: 'Grep' }),
+      ],
     ]) {
-      // A source whose pull settles when the test says: the frame arrives, then the warning, before the stream resumes.
-      const pulls: ((r: IteratorResult<ControlFrame>) => void)[] = []
+      // Both frames reach the client at once; the consumer is busy with the first when the warning is posted.
       const client = {
-        chat: () => ({
-          [Symbol.asyncIterator]: () => ({
-            next: () => new Promise<IteratorResult<ControlFrame>>((resolve) => pulls.push(resolve)),
-            return: async () => ({ done: true, value: undefined }),
-          }),
-        }),
+        chat: async function* () {
+          yield* frames
+          yield DONE
+        },
       } as unknown as ControlClient
       const inbox = createTurnInbox()
       const notices: TurnNotice[] = []
-      const events: AgentStreamEvent[] = []
-      const consume = (async () => {
-        for await (const e of controlStream(
-          client,
-          'hi',
-          SESSION,
-          (n) => notices.push(n),
-          () => undefined,
-          inbox,
-        ))
-          events.push(e)
-      })()
-      await waitFor(() => pulls.length === 1, 2000, 'the first pull')
-      pulls[0]!({ done: false, value: first })
-      await Promise.resolve()
+      const stream = controlStream(
+        client,
+        'hi',
+        SESSION,
+        (n) => notices.push(n),
+        () => undefined,
+        inbox,
+      )
+      const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
+      await new Promise((resolve) => setTimeout(resolve, 20))
       inbox.post({ variant: 'warning', text: 'late' })
-      await waitFor(() => pulls.length === 2, 2000, 'the second pull')
-      pulls[1]!({ done: false, value: DONE })
-      await consume
+      for await (const e of stream) events.push(e)
       const state = [...events, { type: 'done' } as AgentStreamEvent].reduce(
         agentStreamReducer,
         initialAgentStreamState,
       )
-      expect(turnEntries(state.events, notices)).toMatchObject([
-        { kind: 'event' },
-        { kind: 'notice', text: 'late' },
-      ])
+      const entries = turnEntries(state.events, notices)
+      expect(entries.at(-1)).toMatchObject({ kind: 'notice', text: 'late' })
+      expect(entries.filter((entry) => entry.kind === 'event')).toHaveLength(state.events.length)
     }
   })
 })
