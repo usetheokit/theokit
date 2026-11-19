@@ -37,12 +37,21 @@ describe('objectToFormData', () => {
     expect(roundTrip(s, v)).toEqual(v)
   })
 
-  it('round-trips a File field', () => {
+  it('round-trips a File field with its bytes and metadata', async () => {
     const s = z.object({ file: z.instanceof(File) })
-    const file = new File(['x'], 'x.txt')
+    const bytes = new Uint8Array([0, 1, 2, 250, 255, 128])
+    const file = new File([bytes], 'x.bin', {
+      type: 'application/octet-stream',
+      lastModified: 1700000000000,
+    })
     const out = roundTrip(s, { file })
-    expect(out.file).toBeInstanceOf(File)
-    expect((out.file as File).name).toBe('x.txt')
+    const got = out.file as File
+    expect(got).toBeInstanceOf(File)
+    expect(got.name).toBe('x.bin')
+    expect(got.type).toBe('application/octet-stream')
+    expect(got.size).toBe(bytes.length)
+    expect(got.lastModified).toBe(1700000000000)
+    expect(new Uint8Array(await got.arrayBuffer())).toEqual(bytes)
   })
 
   it('encodes a FileList-like as one entry per file', () => {
