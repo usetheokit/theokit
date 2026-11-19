@@ -92,6 +92,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
+| `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
 | `discoverSubagents` | value |
@@ -305,6 +306,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
 | `DelegationPort` | type |
+| `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
 | `DelegationTarget` | type |
 | `DiagnosticsSink` | type |
@@ -499,6 +501,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
+| `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `extractThinkTagStream` | value |
@@ -577,6 +580,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
 | `DelegationPort` | type |
+| `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
 | `DelegationTarget` | type |
 | `DoneEvent` | type |

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `theokit`: the route manifest gives each page, layout, error, loading and not-found component a unique identifier, so `tasks/[id]/page.tsx` and `plans/[id]/page.tsx` build together.
+
+## [@theokit/agents 16.12.0, create-theokit 3.1.6] - 2026-11-19
+
 ### Added
 
 - `@theokit/agents`: `createProvenanceGuard()` in `@theokit/agents/bridge` blocks a tool call whose argument was copied from untrusted tool output (`web_fetch`, `web_search`, `mcp_*`) and never typed by the person.
