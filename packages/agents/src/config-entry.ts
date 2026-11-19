@@ -80,6 +80,8 @@ export {
   composeInstructions,
   type ComposeInstructionsOptions,
   type ComposedInstructions,
+  type InstructionCut,
+  type InstructionTrim,
   type InstructionSource,
 } from './config/compose-instructions.js'
 

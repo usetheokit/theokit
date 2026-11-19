@@ -909,9 +909,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `EnvReachabilityAudit` | type |
 | `ExpandImportsInput` | type |
 | `InstructionBlock` | type |
+| `InstructionCut` | type |
 | `InstructionSource` | type |
 | `InstructionTree` | type |
 | `InstructionTreeBudget` | type |
+| `InstructionTrim` | type |
 | `LayeredConfigInput` | type |
 | `LayeredConfigResult` | type |
 | `LayerValues` | type |
