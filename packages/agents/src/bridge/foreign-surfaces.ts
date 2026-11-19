@@ -21,8 +21,8 @@ import { splitFrontmatter } from '../config/frontmatter.js'
 
 import {
   EVERY_SURFACE,
-  REFUSED_FOLDERS,
-  SURFACE_FOLDERS,
+  FOREIGN_FOLDERS,
+  surfaceOfFolder,
   type CompatSurface,
 } from './setting-sources-gate.js'
 
@@ -73,14 +73,9 @@ const SCANNERS: Readonly<Record<string, ((path: string, dir: string) => Scan) | 
   plugins: scanPlugins,
 }
 
-/** Every folder the gate declares, with the surface that admits it (`undefined`: none does). */
+/** Every folder the gate knows, with the surface that admits it (`undefined`: none does). */
 function declaredFolders(): readonly { dir: string; surface: CompatSurface | undefined }[] {
-  return [
-    ...EVERY_SURFACE.flatMap((surface) =>
-      SURFACE_FOLDERS[surface].map((dir) => ({ dir, surface }) as const),
-    ),
-    ...REFUSED_FOLDERS.map((dir) => ({ dir, surface: undefined })),
-  ]
+  return FOREIGN_FOLDERS.map((dir) => ({ dir, surface: surfaceOfFolder(dir) }))
 }
 
 export function foreignSurfaceInventory(

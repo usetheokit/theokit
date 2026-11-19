@@ -27,10 +27,12 @@
  * in `mcp-file.ts`, the output style nothing read in B-022, and a `workflows/` directory whose
  * author sees no complaint and concludes it took effect. The cost of the report is one line.
  */
+import { join } from 'node:path'
+
 import { workflowScripts, WORKFLOW_REFUSAL_REASON } from './foreign-surfaces.js'
 
 /** Where the reference keeps workflow scripts, relative to a project root. */
-const WORKFLOWS_DIR = '.claude/workflows'
+const WORKFLOWS_DIR = join('.claude', 'workflows')
 
 export interface ReportUnloadedSurfacesInput {
   /** Project root whose `.claude/` is inspected. */

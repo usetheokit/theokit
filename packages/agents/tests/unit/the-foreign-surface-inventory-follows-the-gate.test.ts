@@ -7,7 +7,12 @@ import { discoverSkills } from '@theokit/sdk/skills'
 import { describe, expect, it } from 'vitest'
 
 import { foreignSurfaceInventory } from '../../src/bridge/index.js'
-import { EVERY_SURFACE, SURFACE_FOLDERS } from '../../src/bridge/setting-sources-gate.js'
+import {
+  EVERY_SURFACE,
+  FOREIGN_FOLDERS,
+  SURFACE_FOLDERS,
+  surfaceOfFolder,
+} from '../../src/bridge/setting-sources-gate.js'
 import { reportUnloadedSurfaces } from '../../src/bridge/unloaded-surfaces.js'
 
 function project(): string {
@@ -53,6 +58,7 @@ describe('the foreign surface inventory follows the gate', () => {
     reportUnloadedSurfaces({ cwd, onWarn: (w) => warnings.push(w) })
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toContain(workflows.reason)
+    expect(warnings[0]?.startsWith(`${join('.claude', 'workflows')}: found 2`)).toBe(true)
   })
 
   it('plugins counts bundles that ship a skills folder', () => {
@@ -115,6 +121,14 @@ describe('the foreign surface inventory follows the gate', () => {
         expect(none?.state).toBe('refused')
       }
     }
+  })
+
+  it('admission is whatever the gate lists: a listed folder is read, an unlisted one refused', () => {
+    for (const surface of EVERY_SURFACE) {
+      for (const dir of SURFACE_FOLDERS[surface]) expect(surfaceOfFolder(dir)).toBe(surface)
+    }
+    expect(FOREIGN_FOLDERS).toContain('workflows')
+    expect(surfaceOfFolder('workflows')).toBeUndefined()
   })
 
   it('a surface the gate does not know cannot make a folder read', () => {
