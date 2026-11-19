@@ -87,8 +87,15 @@ export async function backup(options: BackupOptions): Promise<BackupManifest> {
           // Only a real SQLite database has sidecars; `notes-journal` beside `notes` is an ordinary file.
           try {
             return isSQLite(join(dir, base))
-          } catch {
-            return false
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code
+            // No such file or a directory: the name is not a database. Anything else means we cannot tell,
+            // and copying its sidecars could leak the excluded rows.
+            if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'EISDIR') return false
+            throw new BackupError(`cannot inspect excluded database ${join(dir, base)}`, {
+              path: join(dir, base),
+              cause: error,
+            })
           }
         }
         const listed = await listFiles(dir, excluded)
