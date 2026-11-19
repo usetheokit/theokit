@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1340 export(s) across 25 entry point(s).
+1350 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -671,6 +671,21 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolInvokeRouteOptions` | type |
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
+
+## `@theokit/agents/control`
+
+| Symbol | Kind |
+|---|---|
+| `createDevicePairing` | value |
+| `createSessionStore` | value |
+| `pairRoute` | value |
+| `DevicePairing` | type |
+| `DevicePairingOptions` | type |
+| `PairingApproval` | type |
+| `PairingRequestResult` | type |
+| `SessionOutcome` | type |
+| `SessionStore` | type |
+| `SessionStoreOptions` | type |
 
 ## `@theokit/agents/testing`
 
