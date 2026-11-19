@@ -263,6 +263,13 @@ async function runAdapterBuild(
   await adapter.build(config, cwd, ctx)
 }
 
+/** The base config and, when `NODE_ENV` selects one, its override — the files `loadConfig` merges. */
+function denoCronConfigPaths(cwd: string): string[] {
+  const names = ['theo.config.ts']
+  if (process.env.NODE_ENV) names.push(`theo.config.${process.env.NODE_ENV}.ts`)
+  return names.map((n) => resolve(cwd, n)).filter((p) => existsSync(p))
+}
+
 async function emitCronArtifacts(opts: {
   cwd: string
   serverDir: string
@@ -313,7 +320,10 @@ async function emitCronArtifacts(opts: {
         console.log(`  ✓ Cron → serverless.yml functions (${cronNodes.length})`)
         break
       case 'deno-deploy':
-        translateCronToDeno(resolve(opts.distDir, 'crons-entry.ts'), manifestEntries)
+        translateCronToDeno(resolve(opts.distDir, 'crons-entry.ts'), manifestEntries, {
+          projectRoot: opts.cwd,
+          configPaths: denoCronConfigPaths(opts.cwd),
+        })
         console.log(`  ✓ Cron → ${opts.distDir}/crons-entry.ts (Deno.cron)`)
         break
       case 'node':

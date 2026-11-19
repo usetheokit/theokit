@@ -2,6 +2,8 @@
  * Cron primitive types (R0.5.4).
  */
 
+import type { QueueClient } from '../jobs/queue-client.js'
+
 export type CronConcurrencyPolicy = 'forbid' | 'allow'
 
 export interface CronContext {
@@ -11,6 +13,8 @@ export interface CronContext {
   readonly scheduledAt: Date
   /** Abort signal triggered when the scheduler stops or shuts down. */
   readonly signal: AbortSignal
+  /** Present when `jobs.backend` is configured (Deno entry); jobs flush after the handler succeeds. */
+  readonly queue?: QueueClient
 }
 
 export interface CronOptions {

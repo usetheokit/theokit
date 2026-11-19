@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -188,6 +188,19 @@ describe('Deno Deploy cron translator (T1.5)', () => {
     const content = readFileSync(entry, 'utf8')
     expect(content).toMatch(/Deno\.cron\("morning",\s*"0 9 \* \* \*"/)
     expect(content).toMatch(/Deno\.cron\("hourly",\s*"0 \* \* \* \*"/)
+  })
+
+  it('imports the jobs runtime via npm: and the configs relative to a custom output dir', () => {
+    const entry = join(root, 'out', 'deep', 'crons-entry.ts')
+    mkdirSync(join(root, 'out', 'deep'), { recursive: true })
+    translateCronToDeno(entry, [cron('morning', '0 9 * * *')], {
+      projectRoot: root,
+      configPaths: [join(root, 'theo.config.ts'), join(root, 'theo.config.production.ts')],
+    })
+    const content = readFileSync(entry, 'utf8')
+    expect(content).toContain('from "npm:theokit/server/jobs"')
+    expect(content).toContain('["../../theo.config.ts","../../theo.config.production.ts"]')
+    expect(content).toContain('import("../../')
   })
 
   it('overwrites existing entry file (managed file)', () => {

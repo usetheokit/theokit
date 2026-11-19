@@ -488,6 +488,10 @@ function readProjectSourcesFromDisk(cwd: string, config: TheoConfig): string[] {
   }
   const themeConfig = resolve(cwd, 'theo.config.ts')
   if (existsSync(themeConfig)) texts.push(readFileSync(themeConfig, 'utf8'))
+  // The environment override is imported by the generated cron entry, so its bare imports need mapping too.
+  const nodeEnv = process.env.NODE_ENV
+  const envConfig = nodeEnv ? resolve(cwd, `theo.config.${nodeEnv}.ts`) : undefined
+  if (envConfig && existsSync(envConfig)) texts.push(readFileSync(envConfig, 'utf8'))
   return texts
 }
 
