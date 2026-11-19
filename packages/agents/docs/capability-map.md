@@ -153,8 +153,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ModelCapability` | value |
 | `moderateOutputStream` | value |
 | `NetworkError` | value |
-| `NoResultSubmittedError` | value |
 | `noopReflectionStrategy` | value |
+| `NoResultSubmittedError` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
 | `parseModelId` | value |
@@ -395,8 +395,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ReflectionStrategyConfig` | type |
 | `RefreshModelCatalogOptions` | type |
 | `RefreshModelCatalogResult` | type |
-| `ResultCapture` | type |
 | `ResolvedCompatSource` | type |
+| `ResultCapture` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
 | `RunEvent` | type |
