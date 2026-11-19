@@ -282,3 +282,8 @@ export {
   type RunAgentTurnOptions,
 } from './run-agent-turn.js'
 export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'
+export {
+  createResultCapture,
+  NoResultSubmittedError,
+  type ResultCapture,
+} from './result-capture.js'

@@ -104,6 +104,12 @@ export {
   type ShellResult,
   type TemplateDeps,
 } from './config/command-template.js'
+export {
+  findFileMentions,
+  resolveFileMentions,
+  type FileMentionOptions,
+  type ResolvedFileMentions,
+} from './config/file-mentions.js'
 
 /**
  * B-067 — the settings precedence stack, named.
