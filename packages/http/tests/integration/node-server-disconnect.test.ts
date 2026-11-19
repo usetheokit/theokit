@@ -116,3 +116,32 @@ describe('createNodeServer disconnect while handler pending', () => {
     expect(seen).toEqual(['request'])
   })
 })
+
+describe('createNodeServer disconnect with a read pending', () => {
+  it('cancels the body without waiting for another chunk', async () => {
+    let cancelled = false
+    node = createNodeServer(
+      () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start: (c) => {
+              c.enqueue(new TextEncoder().encode('x'))
+            },
+            // pull never settles: the next read stays pending forever
+            pull: () => new Promise<void>(() => undefined),
+            cancel: () => {
+              cancelled = true
+            },
+          }),
+        ),
+    )
+    const { port } = await node.listen(0, '127.0.0.1')
+    const sock = connect(port, '127.0.0.1')
+    sock.write('GET / HTTP/1.1\r\nHost: x\r\n\r\n')
+    await new Promise((r) => sock.once('data', r))
+    sock.destroy()
+    const start = Date.now()
+    while (!cancelled && Date.now() - start < 1000) await new Promise((r) => setTimeout(r, 10))
+    expect(cancelled).toBe(true)
+  })
+})
