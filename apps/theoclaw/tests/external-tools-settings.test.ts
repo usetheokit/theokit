@@ -79,10 +79,21 @@ describe('the external tools file at start', () => {
     expect(error.message).not.toContain('sk-leak')
   })
 
-  it('refuses an HTTP server that carries auth, naming the server and the gap item', () => {
+  it('refuses an HTTP server whose auth has no oauth block, which the SDK would refuse at create', () => {
     const error = refusalOf({ mcpServers: { docs: { url: 'https://x.example/mcp', auth: { CLIENT_ID: 'c' } } } })
-    expect(error.message).toContain('mcpServers.docs.auth')
-    expect(error.message).toContain('B-680')
+    expect(error.message).toContain('mcpServers.docs.auth.oauth')
+    expect(error.message).not.toContain('5.11.0')
+  })
+
+  it('accepts an HTTP server with auth.oauth and masks its CLIENT_SECRET', () => {
+    const auth = {
+      CLIENT_ID: 'client',
+      CLIENT_SECRET: 'client-secret-0123',
+      oauth: { authorizationEndpoint: 'https://x.example/a', tokenEndpoint: 'https://x.example/t', redirectMode: 'manual' },
+    }
+    const read = resolveExternalTools({ [VARIABLE]: toolsFile({ mcpServers: { docs: { url: 'https://x.example/mcp', auth } } }) })
+    expect(read.mcpServers.docs).toEqual({ url: 'https://x.example/mcp', auth })
+    expect(read.secrets).toEqual(['client-secret-0123'])
   })
 
   it('refuses envPolicy all', () => {
