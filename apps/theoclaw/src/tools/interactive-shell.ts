@@ -5,13 +5,10 @@ import { join } from 'node:path'
 import { PtyInteractiveBackend } from '@theokit/agents-pty'
 import { InteractiveBackend } from '@theokit/agents/interactive'
 import type { StartInteractiveOptions, StartInteractiveResult, WriteStdinOptions, WriteStdinResult } from '@theokit/agents/interactive'
-import { interactiveWrapCommand } from '@theokit/agents/sandbox'
+import { allowlistedEnv, interactiveWrapCommand } from '@theokit/agents/sandbox'
 import type { BwrapDetection } from '@theokit/agents/sandbox'
 
 import type { ToolSettings } from './tool-settings.js'
-
-/** The variables the confined shell keeps; the rest of the process environment (keys, tokens) is dropped. */
-const KEPT_VARIABLES: readonly string[] = ['PATH', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'TZ']
 
 function quote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
@@ -19,8 +16,8 @@ function quote(value: string): string {
 
 /** `env -i` with the kept variables and `HOME` in the tool root, then the command in `sh -c`. */
 function scrubbed(command: string, toolRoot: string, env: Readonly<Record<string, string | undefined>>): string {
-  const kept = KEPT_VARIABLES.flatMap((name) => (env[name] === undefined ? [] : [`${name}=${quote(env[name])}`]))
-  return `/usr/bin/env -i ${[...kept, `HOME=${quote(toolRoot)}`].join(' ')} /bin/sh -c ${quote(command)}`
+  const kept = Object.entries({ ...allowlistedEnv(env), HOME: toolRoot }).map(([name, value]) => `${name}=${quote(value)}`)
+  return `/usr/bin/env -i ${kept.join(' ')} /bin/sh -c ${quote(command)}`
 }
 
 /**

@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- ACP agents are spawned directly with the framework `env` option (`allowlistedEnv` plus the XDG variables) instead of through `env -i`, for `acpAgents` tools and `/acp` sessions alike; the interactive shell takes its variables from `allowlistedEnv` too (#1782).
+
 ### Fixed
 
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
