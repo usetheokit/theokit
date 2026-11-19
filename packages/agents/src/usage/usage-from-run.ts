@@ -70,6 +70,11 @@ export function formatUsd(amount: number): string {
   if (pointAt <= 0) text = `0.${'0'.repeat(-pointAt)}${digits}`
   else if (pointAt >= digits.length) text = digits + '0'.repeat(pointAt - digits.length)
   else text = `${digits.slice(0, pointAt)}.${digits.slice(pointAt)}`
-  if (text.includes('.')) text = text.replace(/0+$/, '').replace(/\.$/, '')
+  if (text.includes('.')) {
+    let end = text.length
+    while (text[end - 1] === '0') end -= 1
+    if (text[end - 1] === '.') end -= 1
+    text = text.slice(0, end)
+  }
   return amount < 0 ? `-${text}` : text
 }
