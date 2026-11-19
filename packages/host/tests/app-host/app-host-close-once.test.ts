@@ -27,11 +27,15 @@ describe('app host close once', () => {
 
   it('close during start waits and stops what started', async () => {
     const stops: string[] = []
+    let open!: () => void
+    const gate = new Promise<void>((resolve) => {
+      open = resolve
+    })
     const host = createAppHost()
     host.service(
       'A',
       async () => {
-        await Promise.resolve()
+        await gate
       },
       () => {
         stops.push('A')
@@ -45,7 +49,10 @@ describe('app host close once', () => {
       },
     )
     const started = host.start()
-    const closed = await host.close()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const closing = host.close()
+    open()
+    const closed = await closing
     await started
     expect(closed).toEqual({ ok: true })
     expect(stops).toEqual(['A'])

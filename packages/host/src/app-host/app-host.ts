@@ -53,6 +53,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   const { signals, exit, stopTimeoutMs = DEFAULT_STOP_TIMEOUT_MS } = options
   const entries: Entry[] = []
   let startPromise: Promise<void> | undefined
+  let teardownPromise: Promise<AppHostCloseResult> | undefined
   let closePromise: Promise<AppHostCloseResult> | undefined
   let signalled = false
 
@@ -79,7 +80,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   }
 
   /** Stops the started entries in reverse order under one watchdog. */
-  const teardown = async (): Promise<AppHostCloseResult> => {
+  const runTeardown = async (): Promise<AppHostCloseResult> => {
     const pending = entries.filter((entry) => entry.started).reverse()
     const failed: AppHostStepFailure[] = []
     let timedOut: string[] = []
@@ -119,6 +120,9 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       ? { ok: true }
       : { ok: false, failed, timedOut }
   }
+
+  /** One teardown shared by a failed start's rollback and close(). */
+  const teardown = (): Promise<AppHostCloseResult> => (teardownPromise ??= runTeardown())
 
   const runStart = async (): Promise<void> => {
     if (signals !== undefined) for (const name of SIGNALS) signals.on(name, onSignal)
@@ -178,7 +182,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       if (closePromise !== undefined) {
         return Promise.reject(new HostError('host_app_invalid_state', 'App host is closed'))
       }
-      startPromise ??= runStart()
+      startPromise ??= Promise.resolve().then(runStart)
       return startPromise
     },
     close,
