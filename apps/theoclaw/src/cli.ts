@@ -421,7 +421,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     Object.assign(env, resolveInstance(env, { homeDir: io.homeDir }).overrides)
     return Promise.resolve(ordersCommand(args, { ...io, env }))
   },
-  visitors: (args, io) => Promise.resolve(visitorsCommand(args, io)),
+  visitors: (args, io) => visitorsCommand(args, io),
   logs: (args, io) => logsCommand(args, io, io.runner),
   triage: (args, io) => triageCommand(args, io),
   claws: (args, io) => clawsCommand(args, io),
