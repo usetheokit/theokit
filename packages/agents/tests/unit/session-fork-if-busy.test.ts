@@ -114,4 +114,31 @@ describe('streamTurnForkingIfBusy', () => {
     await r.chunks[Symbol.asyncIterator]().return?.()
     await expect(r.sessionId).rejects.toThrow('closed before')
   })
+
+  it('iterating chunks twice opens the turn once and shares one iterator', async () => {
+    let opens = 0
+    const r = streamTurnForkingIfBusy(
+      's',
+      () => {
+        opens++
+        return from(ok)
+      },
+      { isBusy: never },
+    )
+    const a = r.chunks[Symbol.asyncIterator]()
+    const b = r.chunks[Symbol.asyncIterator]()
+    expect(b).toBe(a)
+    expect(await collect(r.chunks)).toEqual(ok)
+    expect(opens).toBe(1)
+    expect(await r.sessionId).toBe('s')
+  })
+
+  it('throw() before the first next() settles sessionId', async () => {
+    const r = streamTurnForkingIfBusy('s', () => from(ok), { isBusy: never })
+    const boom = new Error('boom')
+    await r.chunks[Symbol.asyncIterator]()
+      .throw?.(boom)
+      .catch(() => undefined)
+    await expect(r.sessionId).rejects.toBe(boom)
+  })
 })

@@ -124,19 +124,24 @@ export function streamTurnForkingIfBusy(
     }
   }
 
-  const chunks: AsyncIterable<UIMessageChunk> = {
-    [Symbol.asyncIterator]() {
-      const it = run()
-      return {
-        next: () => it.next(),
-        throw: (e) => it.throw(e),
-        return: (v) => {
-          // run()'s finally never executes if the generator was not started.
-          rejectId(new Error('streamTurnForkingIfBusy: stream closed before the turn completed'))
-          return it.return(v)
-        },
-      }
-    },
+  const it = run()
+  const closed = (): void => {
+    rejectId(new Error('streamTurnForkingIfBusy: stream closed before the turn completed'))
   }
+  // One underlying iterator for every consumer. run()'s catch/finally never execute if the
+  // generator was not started, so return()/throw() settle sessionId themselves.
+  const iterator: AsyncIterableIterator<UIMessageChunk> = {
+    next: () => it.next(),
+    throw: (e) => {
+      rejectId(e)
+      return it.throw(e)
+    },
+    return: (v) => {
+      closed()
+      return it.return(v)
+    },
+    [Symbol.asyncIterator]: () => iterator,
+  }
+  const chunks: AsyncIterable<UIMessageChunk> = { [Symbol.asyncIterator]: () => iterator }
   return { chunks, sessionId: idPromise }
 }
