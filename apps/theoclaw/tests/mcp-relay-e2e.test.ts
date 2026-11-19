@@ -26,7 +26,7 @@ async function setup() {
   writeFileSync(join(toolSettings.toolRoot, 'hello.txt'), 'hi')
   const path = grantsPath(h.io.env, h.io.homeDir)
   const store = new GrantStore(path).load()
-  const chatgpt = store.create('chatgpt').token
+  const chatgpt = (await store.create('chatgpt')).token
   const relay: Server = createMcpRelay({ instanceToken: INSTANCE_TOKEN, grantsPath: path, pollMs: 50, timeoutMs: 5000 })
   await new Promise<void>((r) => relay.listen(0, '127.0.0.1', r))
   closers.push(() => new Promise((r) => (relay.closeAllConnections(), relay.close(() => r()))))
@@ -69,7 +69,7 @@ describe('the MCP relay end to end', () => {
     expect(denied.error ?? denied.result?.isError).toBeTruthy()
 
     expect((await rpc('wrong-token', call('list_dir'))).status).toBe(401)
-    new GrantStore(path).load().revoke('chatgpt')
+    await new GrantStore(path).load().revoke('chatgpt')
     expect((await rpc(chatgpt, call('list_dir'))).status).toBe(401)
   })
 })

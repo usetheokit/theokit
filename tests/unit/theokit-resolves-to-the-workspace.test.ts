@@ -66,6 +66,7 @@ describe('theokit resolves to the workspace, never to the registry (#561)', () =
       'theo',
       'agents',
       'agents-pty',
+      'host',
       'http',
       'presenter',
       'tauri',

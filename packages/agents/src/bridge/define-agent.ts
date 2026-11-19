@@ -14,7 +14,9 @@ import type {
   BuiltinToolName,
   CustomTool,
   InlineSkill,
+  McpServerConfig,
   MemorySettings,
+  ModelSelection,
   TelemetrySettings,
 } from '@theokit/sdk'
 import type { z } from 'zod'
@@ -39,8 +41,8 @@ import {
  * One subagent, as `AgentOptions.agents` in the SDK takes it.
  *
  * Declared here rather than imported so the framework states its own contract: the SDK's
- * `AgentDefinition` carries fields this bridge does not thread, and re-exporting it would promise
- * every one of them.
+ * `AgentDefinition` also carries `sandbox` and `memory`, which this bridge does not thread
+ * (memory is applied by `applySubagentMemory`), and re-exporting it would promise every one.
  */
 export interface SubagentAgentDefinition {
   /** What the model reads when choosing this subagent. */
@@ -49,6 +51,10 @@ export interface SubagentAgentDefinition {
   readonly prompt: string
   /** Tool names it may call. Absent means the framework decides, as it does for a discovered one. */
   readonly tools?: readonly string[]
+  /** Model for this subagent. 'inherit' or absent = the parent's model. */
+  readonly model?: ModelSelection | 'inherit'
+  /** MCP servers this subagent may use, by name or inline config, as the SDK takes them. */
+  readonly mcpServers?: readonly (string | Record<string, McpServerConfig>)[]
 }
 
 /**
