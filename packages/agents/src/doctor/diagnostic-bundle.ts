@@ -83,6 +83,9 @@ export async function writeDiagnosticBundle(
     const candidates = (wording: (l: string) => string) => [
       wording(`file "${shown}"`),
       `"${shown}"`,
+      // Unquoted, for a secret that is a quote character.
+      wording(`file ${shown}`),
+      shown,
       wording(`file #${index}`),
     ]
     if (Buffer.byteLength(file.name, 'utf8') > NAME_BYTES) {

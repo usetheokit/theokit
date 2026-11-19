@@ -40,6 +40,17 @@ describe('writeDiagnosticBundle', () => {
     expect(existsSync(out)).toBe(false)
   })
 
+  it('names the file when the secret is a double quote', async () => {
+    const err = await writeDiagnosticBundle({
+      out: join(dir(), 'b.tar.gz'),
+      files: [{ name: 'report.txt', content: 'say "hi"' }],
+      secrets: ['"'],
+    }).catch((e: unknown) => e)
+    expect((err as DiagnosticBundleError).reason).toBe('secret_survived')
+    expect((err as Error).message).toContain('report.txt')
+    expect((err as Error).message).not.toContain('"')
+  })
+
   it('a mask that removes the secret lets the bundle through', async () => {
     const out = join(dir(), 'b.tar.gz')
     const d = dirname(out)
