@@ -1,7 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import {
   existsSync,
-  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -298,7 +297,7 @@ describe('worktreeProvider', () => {
       expect(readdirSync(outside)).toEqual([])
     })
 
-    it('replaces a destination that is a symlink instead of writing through it', async () => {
+    it('does not write through a destination file that is a symlink', async () => {
       const outside = mkdtempSync(join(tmpdir(), 'outside-'))
       writeFileSync(join(outside, 'target'), 'orig')
       const { repo, root } = withInclude('.env\n', (r) => writeFileSync(join(r, '.env'), 'new'))
@@ -307,10 +306,10 @@ describe('worktreeProvider', () => {
         `#!/bin/sh\nln -s ${join(outside, 'target')} .env\n`,
         { mode: 0o755 },
       )
-      const ws = await worktreeProvider(repo, root).acquire('df')
+      await expect(worktreeProvider(repo, root).acquire('df')).rejects.toBeInstanceOf(
+        WorkspaceProviderError,
+      )
       expect(readFileSync(join(outside, 'target'), 'utf8')).toBe('orig')
-      expect(lstatSync(join(ws.path, '.env')).isSymbolicLink()).toBe(false)
-      expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe('new')
     })
 
     it('does not truncate a destination that is a hard link to a file outside', async () => {
@@ -322,9 +321,19 @@ describe('worktreeProvider', () => {
         `#!/bin/sh\nln ${join(outside, 'target')} .env\n`,
         { mode: 0o755 },
       )
-      const ws = await worktreeProvider(repo, root).acquire('hl')
+      await expect(worktreeProvider(repo, root).acquire('hl')).rejects.toBeInstanceOf(
+        WorkspaceProviderError,
+      )
       expect(readFileSync(join(outside, 'target'), 'utf8')).toBe('orig')
-      expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe('new')
+    })
+
+    it('never renames or unlinks by path after the containment check', () => {
+      // Regression for the directory-swap race: a rename(temp, dest) re-resolves both paths.
+      const code = readFileSync(
+        join(import.meta.dirname, '../../src/bridge/workspace-provider.ts'),
+        'utf8',
+      )
+      expect(code).not.toMatch(/\brename\(/)
     })
 
     it('copies into a worktree root reached through a symlink', async () => {

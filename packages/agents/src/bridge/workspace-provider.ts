@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { constants } from 'node:fs'
-import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, readdir, realpath, stat, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -100,7 +100,7 @@ async function copyEntry(
  * Copies one file through open descriptors instead of paths. Both ends are opened with O_NOFOLLOW
  * (a link swapped in at the last component fails), and after each open the descriptor is compared
  * with the path's current realpath, so a directory swapped for a symlink since the checks above is
- * caught before any byte is read or written. The destination is replaced by renaming a fresh file, never truncated in place.
+ * caught before any byte is read or written. The destination is created O_EXCL or opened O_NOFOLLOW, and truncated only after the descriptor is verified.
  */
 async function copyFileAnchored(
   source: string,
@@ -132,21 +132,41 @@ async function copyFileAnchored(
   const from = await open_(source, constants.O_RDONLY)
   try {
     await verify(from, source, roots.repo)
-    // Write a new workspace-owned file and rename it over the destination: truncating `dest` in
-    // place would also truncate any file it is a hard link to (possibly outside the workspace).
-    const temp = `${dest}.worktreeinclude-${crypto.randomUUID()}`
-    const to = await open_(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL)
+    // No path-based replace (rename/unlink) happens after the containment check: Node has no
+    // directory-relative calls, so every such step could land in a directory swapped for a symlink.
+    // The destination is created O_EXCL (never overwrites anything) or, when it already exists,
+    // opened O_NOFOLLOW, and only truncated through the descriptor once that descriptor is verified
+    // to be inside the workspace and to have a single link (a hard link to an outside file has two).
+    let created = true
+    let to
+    try {
+      to = await open_(dest, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      created = false
+      to = await open_(dest, constants.O_WRONLY)
+    }
     try {
       try {
-        await verify(to, temp, roots.workspace)
-        await to.writeFile(await from.readFile())
-      } finally {
-        await to.close()
+        await verify(to, dest, roots.workspace)
+        const info = await to.stat()
+        if (!info.isFile() || info.nlink !== 1) {
+          throw new WorkspaceProviderError(`${label} would be written through a hard link`)
+        }
+      } catch (error) {
+        // A file we just created in a swapped-in directory is empty; remove it only if the path
+        // still names that very inode.
+        if (created) {
+          const here = await to.stat()
+          const now = await lstat(dest).catch(() => undefined)
+          if (now?.ino === here.ino && now.dev === here.dev) await unlink(dest)
+        }
+        throw error
       }
-      await rename(temp, dest)
-    } catch (error) {
-      await rm(temp, { force: true })
-      throw error
+      await to.truncate(0)
+      await to.writeFile(await from.readFile())
+    } finally {
+      await to.close()
     }
   } finally {
     await from.close()
