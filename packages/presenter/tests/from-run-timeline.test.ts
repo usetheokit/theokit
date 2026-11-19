@@ -117,4 +117,34 @@ describe('fromRunTimelineEvent', () => {
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({ isError: true })
   })
+
+  it.each([
+    ['delta first', false],
+    ['message first', true],
+  ])('distinct callId and modelCallId alias one tool call (%s)', (_n, msgFirst) => {
+    const d = delta({
+      type: 'tool-call-completed',
+      callId: 'c1',
+      modelCallId: 'm1',
+      toolCall: { name: 'sh', args: {}, result: 'boom' },
+    })
+    const m = completedMsg('m1', { exitCode: 1 })
+    const out = run(msgFirst ? [m, d] : [d, m]).filter((e) => e.type === 'tool-result')
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ isError: true })
+  })
+
+  it('a report under a recorded alias is still deduplicated', () => {
+    const s = createRunTimelineState()
+    const d = delta({
+      type: 'tool-call-completed',
+      callId: 'c1',
+      modelCallId: 'm1',
+      toolCall: { name: 'sh', args: {}, result: 'ok' },
+    })
+    fromRunTimelineEvent(d, s)
+    fromRunTimelineEvent(completedMsg('m1', 'ok'), s)
+    fromRunTimelineEvent(completedMsg('c1', 'ok'), s)
+    expect(flushRunTimeline(s)).toHaveLength(1)
+  })
 })

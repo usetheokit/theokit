@@ -15,7 +15,7 @@ export interface RunTimelineEventLike {
 const TOOL_RESULT = 'tool-result'
 
 interface PendingResult {
-  readonly ids: readonly string[]
+  ids: string[]
   event: AgentOutputEvent
 }
 
@@ -60,9 +60,11 @@ function mergeIntoPending(
   ids: readonly string[],
   state: RunTimelineState,
 ): void {
-  if (e.type !== TOOL_RESULT || !e.isError) return
   const held = state.pending.find((p) => p.ids.some((id) => ids.includes(id)))
-  if (held?.event.type !== TOOL_RESULT) return
+  if (held === undefined) return
+  // Record the aliases this report adds, so a later report under either id still matches.
+  for (const id of ids) if (!held.ids.includes(id)) held.ids.push(id)
+  if (e.type !== TOOL_RESULT || !e.isError || held.event.type !== TOOL_RESULT) return
   held.event = { ...held.event, isError: true }
 }
 
@@ -94,12 +96,13 @@ function dedupe(
     const ids = sources[toolIndex++] ?? []
     if (ids.length === 0) return true
     if (ids.some((id) => bucket.has(id))) {
+      for (const id of ids) bucket.add(id)
       mergeIntoPending(e, ids, state)
       return false
     }
     for (const id of ids) bucket.add(id)
     if (e.type === TOOL_RESULT) {
-      state.pending.push({ ids, event: e })
+      state.pending.push({ ids: [...ids], event: e })
       return false
     }
     return true
