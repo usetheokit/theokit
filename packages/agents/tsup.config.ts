@@ -43,6 +43,8 @@ export default defineConfig({
     session: 'src/session/index.ts',
     // M75 — the hook engine as a subpath: reachable by anyone who wants it, paid for only by them.
     hooks: 'src/hooks/index.ts',
+    // A thrown turn error as a category and a next step; only an app that renders a failed turn needs it.
+    'turn-failure': 'src/errors/turn-failure.ts',
   },
   format: ['esm'],
   dts: true,

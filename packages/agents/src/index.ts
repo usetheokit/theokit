@@ -432,11 +432,4 @@ export type { DiscoverSubagentsOptions } from '@theokit/sdk/subagents-loader'
 export type { ContextWindowOptions } from './bridge/compile-context-window.js'
 export type { SkillsOptions } from './bridge/compile-skills.js'
 
-// A thrown turn error, with its cause chain, as a category, a retry verdict and a next step.
-export {
-  classifyTurnFailure,
-  describeTurnFailure,
-  DEFAULT_TURN_FAILURE_HINTS,
-} from './errors/turn-failure.js'
-export type { TurnFailure, TurnFailureHints } from './errors/turn-failure.js'
 export type { KnownAgentRunErrorCode } from '@theokit/sdk/errors'
