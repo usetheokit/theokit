@@ -25,6 +25,16 @@ import {
 
 let rendered: string
 
+function mapCountMismatch(map: string): string | null {
+  const m = /^(\d+) export\(s\) across (\d+) entry point\(s\)\./m.exec(map)
+  if (!m) return 'no count line'
+  const rows = (map.match(/^\| `/gm) ?? []).length
+  const heads = (map.match(/^## /gm) ?? []).length
+  if (Number(m[1]) !== rows) return `declared ${m[1]} exports but ${rows} rows`
+  if (Number(m[2]) !== heads) return `declared ${m[2]} entries but ${heads} headings`
+  return null
+}
+
 describe('the committed capability map is what the package implies', () => {
   beforeAll(() => {
     rendered = currentCapabilityMap()
@@ -86,5 +96,23 @@ describe('the committed capability map is what the package implies', () => {
         "'npx tsx scripts/capability-map.mts' and commit the result. It is generated, never edited: a " +
         'hand-kept copy of an export list is the copy that goes stale.',
     ).toBe(true)
+  })
+
+  it('test_the_committed_map_counts_agree_with_its_own_rows', () => {
+    // Holds at ANY installed SDK, so the floor leg cannot skip it: the stale header count seen at
+    // 81f06bb (1245 declared, 1249 rows) fails here.
+    const committed = readFileSync(OUT, 'utf8')
+    expect(mapCountMismatch(committed)).toBeNull()
+  })
+
+  it('test_a_stale_declared_count_is_rejected', () => {
+    const stale = [
+      '1245 export(s) across 1 entry point(s).',
+      '## `a`',
+      ...Array.from({ length: 1249 }, (_, n) => `| \`S${n}\` | value |`),
+    ].join('\n')
+    expect(mapCountMismatch(stale)).toMatch(/1245.*1249/)
+    const ok = stale.replace('1245', '1249')
+    expect(mapCountMismatch(ok)).toBeNull()
   })
 })
