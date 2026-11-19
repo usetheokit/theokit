@@ -1,5 +1,7 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+
+import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import {
   generateIdentity,
@@ -24,6 +26,8 @@ interface Persisted {
 }
 
 export class RelayState {
+  private writes: Promise<void> = Promise.resolve()
+
   private constructor(
     private readonly file: string,
     private readonly data: Persisted,
@@ -31,7 +35,7 @@ export class RelayState {
   ) {}
 
   /** Loads the file or creates an identity on first use. */
-  static load(file: string, trusted: TrustedPeers): RelayState {
+  static async load(file: string, trusted: TrustedPeers): Promise<RelayState> {
     let data: Persisted
     if (existsSync(file)) {
       data = JSON.parse(readFileSync(file, 'utf8')) as Persisted
@@ -39,7 +43,7 @@ export class RelayState {
       data = { identity: generateIdentity(), sent: {}, received: {} }
     }
     const state = new RelayState(file, data, trusted)
-    state.save()
+    await state.save()
     return state
   }
 
@@ -47,26 +51,27 @@ export class RelayState {
     return this.data.identity.publicKey
   }
 
-  private save(): void {
+  /** Snapshots now and writes in call order, so a slow earlier write never lands over a later one. */
+  private save(): Promise<void> {
     mkdirSync(dirname(this.file), { recursive: true, mode: 0o700 })
-    const temp = `${this.file}.tmp`
-    writeFileSync(temp, JSON.stringify(this.data), { mode: 0o600 })
-    chmodSync(temp, 0o600)
-    renameSync(temp, this.file)
+    const text = JSON.stringify(this.data)
+    const run = this.writes.then(() => replaceFileAtomic(this.file, text, { mode: 0o600 }))
+    this.writes = run.catch(() => undefined)
+    return run
   }
 
   /** Seals `text` for the trusted peer `peerName`. */
-  seal(peerName: string, text: string): Envelope {
+  async seal(peerName: string, text: string): Promise<Envelope> {
     const key = this.trusted.get(peerName)
     if (key === undefined) throw new Error(`relay: peer "${peerName}" is not trusted`)
     const seq = (this.data.sent[key] ?? 0) + 1
     this.data.sent[key] = seq
-    this.save()
+    await this.save()
     return seal(this.data.identity, this.trusted, peerName, text, seq)
   }
 
   /** Opens an envelope; refuses an untrusted sender, a forgery and a replayed or older `seq`. */
-  receive(envelope: Envelope): { readonly from: string; readonly plaintext: string } {
+  async receive(envelope: Envelope): Promise<{ readonly from: string; readonly plaintext: string }> {
     const opened = open(this.data.identity, this.trusted, envelope)
     if (
       !Number.isSafeInteger(envelope.seq) ||
@@ -75,7 +80,7 @@ export class RelayState {
       throw new Error('relay: the envelope is a replay or out of order')
     }
     this.data.received[envelope.from] = envelope.seq
-    this.save()
+    await this.save()
     return opened
   }
 }

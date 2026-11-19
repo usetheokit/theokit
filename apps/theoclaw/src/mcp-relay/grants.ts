@@ -1,6 +1,9 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+
+import { replaceFileAtomic } from '@theokit/sdk/persistence'
+
 import { BUILT_TOOL_NAMES, CONTROL_TOOL_NAMES } from '../tools/tool-names.js'
 
 /** The tools a grant gets when none are named: read-only ones only. */
@@ -36,6 +39,8 @@ export function grantsPath(
 export class GrantStore {
   private grants: Grant[] = []
 
+  private writes: Promise<void> = Promise.resolve()
+
   constructor(private readonly path: string) {}
 
   /** Reads the file; a missing file is an empty store. */
@@ -51,10 +56,10 @@ export class GrantStore {
   }
 
   /** Makes a grant and returns it with the plaintext token, which is not stored. */
-  create(
+  async create(
     name: string,
     tools?: readonly string[],
-  ): { readonly grant: Grant; readonly token: string } {
+  ): Promise<{ readonly grant: Grant; readonly token: string }> {
     if (!NAME.test(name))
       throw new GrantError(`invalid name "${name}": use letters, digits, - and _`)
     if (this.grants.some((g) => g.name === name && g.revokedAt === undefined)) {
@@ -77,12 +82,12 @@ export class GrantStore {
       createdAt: new Date().toISOString(),
     }
     this.grants.push(grant)
-    this.persist()
+    await this.persist()
     return { grant, token }
   }
 
   /** Revokes the active grant with this name or id. */
-  revoke(nameOrId: string): Grant {
+  async revoke(nameOrId: string): Promise<Grant> {
     const index = this.grants.findIndex(
       (g) => g.revokedAt === undefined && (g.name === nameOrId || g.id === nameOrId),
     )
@@ -90,7 +95,7 @@ export class GrantStore {
     if (found === undefined) throw new GrantError(`no active grant "${nameOrId}"`)
     const revoked: Grant = { ...found, revokedAt: new Date().toISOString() }
     this.grants[index] = revoked
-    this.persist()
+    await this.persist()
     return revoked
   }
 
@@ -110,10 +115,12 @@ export class GrantStore {
     return match
   }
 
-  private persist(): void {
+  /** Snapshots now and writes in call order, so a slow earlier write never lands over a later one. */
+  private persist(): Promise<void> {
     mkdirSync(dirname(this.path), { recursive: true })
-    const temp = `${this.path}.tmp`
-    writeFileSync(temp, JSON.stringify({ grants: this.grants }), { mode: 0o600 })
-    renameSync(temp, this.path)
+    const text = JSON.stringify({ grants: this.grants })
+    const run = this.writes.then(() => replaceFileAtomic(this.path, text, { mode: 0o600 }))
+    this.writes = run.catch(() => undefined)
+    return run
   }
 }

@@ -84,4 +84,14 @@ describe('the configuration file', () => {
     expect(readdirSync(dir)).toEqual(['theoclaw.env'])
     expect(statSync(path).mode & 0o777).toBe(0o600)
   })
+
+  it('refuses the second of two concurrent writes without force', async () => {
+    const path = join(scratchDir(), 'theoclaw.env')
+    const results = await Promise.allSettled([
+      writeConfiguration(path, { THEOCLAW_MODEL: 'first' }, { force: false }),
+      writeConfiguration(path, { THEOCLAW_MODEL: 'second' }, { force: false }),
+    ])
+    expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected'])
+    expect(readFileSync(path, 'utf8')).toBe('THEOCLAW_MODEL="first"\n')
+  })
 })

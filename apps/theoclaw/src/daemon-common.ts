@@ -74,8 +74,13 @@ export function checkInstallable(io: DaemonIo): InstallTarget | undefined {
   return { ...target, workingDirectory: settings.THEOCLAW_WORKSPACE ?? target.workspace ?? io.homeDir }
 }
 
+/** The mode a plain `writeFile` gives: 0666 less the umask. The SDK sets its `mode` exactly, so it is passed on. */
+export function umaskFileMode(): number {
+  return 0o666 & ~process.umask()
+}
+
 /** Writes beside the destination and renames, so a reader never sees half a definition. */
 export async function writeAtomically(path: string, content: string): Promise<void> {
   mkdirSync(dirname(path), { recursive: true })
-  await replaceFileAtomic(path, content, { mode: 0o644 })
+  await replaceFileAtomic(path, content, { mode: umaskFileMode() })
 }

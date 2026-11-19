@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -20,6 +20,7 @@ describe('visitor grants', () => {
     expect(await runCli(['visitors', 'grant', 'Ann@Example.com', '--for', '1h'], { ...v.io, env })).toBe(0)
     const file = visitorsPath(env)
     expect(isGranted(file, 'ann@example.com')).toBe(true)
+    expect(statSync(file).mode & 0o777).toBe(0o600)
     expect(isGranted(file, 'ann@example.com', Date.now() + 2 * 3_600_000)).toBe(false)
     expect(isGranted(file, 'bob@example.com')).toBe(false)
     await runCli(['visitors', 'revoke', 'ann@example.com'], { ...v.io, env })

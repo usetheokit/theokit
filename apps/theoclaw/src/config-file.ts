@@ -93,6 +93,26 @@ export async function writeConfiguration(
   entries: Readonly<Record<string, string>>,
   options: { readonly force: boolean; readonly ownsDirectory?: boolean },
 ): Promise<void> {
+  // The write is asynchronous, so two calls in one process are queued per path: the second one
+  // checks for the file only after the first has finished, and is refused without `force`.
+  const previous = pendingWrites.get(path) ?? Promise.resolve()
+  const run = previous.then(() => writeNow(path, entries, options))
+  const settled = run.catch(() => undefined)
+  pendingWrites.set(path, settled)
+  try {
+    await run
+  } finally {
+    if (pendingWrites.get(path) === settled) pendingWrites.delete(path)
+  }
+}
+
+const pendingWrites = new Map<string, Promise<void>>()
+
+async function writeNow(
+  path: string,
+  entries: Readonly<Record<string, string>>,
+  options: { readonly force: boolean; readonly ownsDirectory?: boolean },
+): Promise<void> {
   assertWritable(entries)
   if (existsSync(path) && !options.force) {
     throw new TheoClawConfigError(`${path} exists; pass --force to replace it`, { variable: 'THEOCLAW_CONFIG' })

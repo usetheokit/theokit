@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
-import type { DaemonBackend, DaemonIo } from './daemon-common.js'
+import { umaskFileMode, type DaemonBackend, type DaemonIo } from './daemon-common.js'
 import type { Runner, RunResult } from './run-command.js'
 
 /** The Linux backend (B-374, OC-32): a `systemd --user` unit that runs the built entry. */
@@ -61,7 +61,7 @@ export function unitFor(input: UnitInput): string {
 
 /** Write `text` to `path` through a temporary file and a rename, so the unit is never half written. */
 async function replaceUnit(path: string, text: string): Promise<void> {
-  await replaceFileAtomic(path, text, { mode: 0o644 })
+  await replaceFileAtomic(path, text, { mode: umaskFileMode() })
 }
 
 async function systemctl(runner: Runner, ...args: string[]): Promise<RunResult> {

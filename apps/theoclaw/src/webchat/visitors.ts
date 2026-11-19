@@ -1,7 +1,9 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Writable } from 'node:stream'
+
+import { atomicWriteJson } from '@theokit/sdk/persistence'
 
 import { UsageError } from '../cli-args.js'
 
@@ -43,11 +45,9 @@ export function readGrants(file: string): VisitorGrants {
   }
 }
 
-function writeGrants(file: string, grants: VisitorGrants): void {
+async function writeGrants(file: string, grants: VisitorGrants): Promise<void> {
   mkdirSync(dirname(file), { recursive: true })
-  const temp = `${file}.tmp`
-  writeFileSync(temp, `${JSON.stringify(grants, null, 2)}\n`, { mode: 0o600 })
-  renameSync(temp, file)
+  await atomicWriteJson(file, grants, { mode: 0o600 })
 }
 
 const normalize = (email: string): string => email.trim().toLowerCase()
@@ -78,7 +78,7 @@ export interface VisitorsIo {
 const USAGE = 'theoclaw visitors: expected grant <email> --for <30m|12h|7d> | revoke <email> | list'
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-export function visitorsCommand(args: readonly string[], io: VisitorsIo, now: number = Date.now()): number {
+export async function visitorsCommand(args: readonly string[], io: VisitorsIo, now: number = Date.now()): Promise<number> {
   const [verb, email, ...rest] = args
   const file = visitorsPath(io.env, io.homeDir)
   if (verb === 'list') {
@@ -95,7 +95,7 @@ export function visitorsCommand(args: readonly string[], io: VisitorsIo, now: nu
   if (verb === 'revoke') {
     if (rest.length > 0) throw new UsageError(USAGE)
     delete grants[who]
-    writeGrants(file, grants)
+    await writeGrants(file, grants)
     io.stdout.write(`revoked ${who}\n`)
     return 0
   }
@@ -104,7 +104,7 @@ export function visitorsCommand(args: readonly string[], io: VisitorsIo, now: nu
     const until = now + parseDuration(rest[1] ?? '')
     for (const [other, at] of Object.entries(grants)) if (at <= now) delete grants[other]
     grants[who] = until
-    writeGrants(file, grants)
+    await writeGrants(file, grants)
     io.stdout.write(`granted ${who} until ${new Date(until).toISOString()}\n`)
     return 0
   }

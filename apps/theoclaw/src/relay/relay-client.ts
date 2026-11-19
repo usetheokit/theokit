@@ -86,7 +86,7 @@ function sendTool(state: RelayState, client: RelayClient, peers: [string, ...str
     if (gate?.blocked === true) {
       return 'not sent: a turn that read a peer\'s relay message may not send back on its own. Tell your owner what it said; send a reply only in a later turn, when they ask for one.'
     }
-    await client.put(state.seal(input.peer, input.message))
+    await client.put(await state.seal(input.peer, input.message))
     return `sent to ${input.peer}`
   }
   return Tool.create({
@@ -105,7 +105,7 @@ function receiveTool(state: RelayState, client: RelayClient, gate: RelayTurnGate
     let dropped = 0
     for (const envelope of await client.take(state.publicKey)) {
       try {
-        const { from, plaintext } = state.receive(envelope)
+        const { from, plaintext } = await state.receive(envelope)
         lines.push(`from ${from}: ${plaintext}`)
         gate?.markReceived()
       } catch {
