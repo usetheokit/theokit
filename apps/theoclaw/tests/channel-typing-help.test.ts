@@ -75,8 +75,8 @@ describe('/help (OC-105)', () => {
 })
 
 describe('every registered command has a help line', () => {
-  it('lists each chat command, the reset and goal commands, and the help commands themselves', () => {
-    const names = [...CHAT_COMMANDS.map((c) => c.name), 'new', 'reset', 'goal', 'help', 'commands']
+  it('lists each chat command, the reset and goal commands, and /help itself', () => {
+    const names = [...CHAT_COMMANDS.map((c) => c.name), 'new', 'reset', 'goal', 'help']
     for (const name of names) expect(HELP_COMMANDS, name).toContain(`/${name}`)
   })
 
