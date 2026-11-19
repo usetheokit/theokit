@@ -12,16 +12,8 @@ import {
   type ServiceSpec,
   type ServiceState,
 } from './spec.js'
+import { escapeXml } from './xml-escape.js'
 import { quotePowerShell, windowsCommandLine } from './windows-command-line.js'
-
-function escapeXml(text: string): string {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;')
-}
 
 /** The Task Scheduler definition. Throws ServiceDefinitionError for a value it cannot hold. */
 export function scheduledTaskXml(spec: ServiceSpec, options: { user: string }): string {
