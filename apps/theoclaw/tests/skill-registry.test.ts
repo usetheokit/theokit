@@ -19,7 +19,7 @@ function workspaceWith(files: Record<string, string>): string {
 }
 
 describe('skill registry (OC-70..72, OC-74)', () => {
-  it('parses frontmatter and rejects a file without one', () => {
+  it('parses frontmatter into a skill entry and returns undefined for text without frontmatter', () => {
     const entry = parseSkillMarkdown(skillFile('a', 'body', 'git, jq'), 'workspace')
     expect(entry).toMatchObject({ name: 'a', instructions: 'body', requiresBins: ['git', 'jq'] })
     expect(parseSkillMarkdown('no frontmatter', 'workspace')).toBeUndefined()
@@ -46,7 +46,7 @@ describe('skill registry (OC-70..72, OC-74)', () => {
     expect(new SkillRegistry({ workspaceDir: dir, path: empty }).offered().map((s) => s.name)).toContain('needy')
   })
 
-  it('exposes offered skills as SDK inline skills', () => {
+  it('exposes only the offered skills (binary requirements met) as SDK inline skills', () => {
     expect(new SkillRegistry({ path: '' }).inlineSkills().map((s) => s.name)).toEqual(['summarize-text'])
   })
 })
