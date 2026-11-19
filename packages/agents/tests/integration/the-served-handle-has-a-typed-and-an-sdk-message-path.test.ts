@@ -63,7 +63,7 @@ describe('a served agent handle', () => {
       { type: 'text_delta', content: 'hello' },
       {
         type: 'done',
-        result: '',
+        result: 'hello',
         usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
         durationMs: 0,
       },
