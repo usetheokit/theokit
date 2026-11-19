@@ -70,6 +70,18 @@ registry.palette() // [{ name: 'quit', description: 'leave' }]
 await registry.dispatch('/exit', { exit: () => process.exit(0) })
 ```
 
+A one-shot mode (`myapp "prompt"`) from the same subpath: the answer goes to stdout, progress to stderr, and the exit code says how the turn ended (0 ok, 1 error or empty, 2 cut by a step limit).
+
+```ts
+import { readHeadlessPrompt, runHeadlessTurn } from '@theokit/agents/commands'
+
+const prompt = readHeadlessPrompt({ prompt: process.argv[2], stdin: 'append', readStdin: () => readFileSync(0, 'utf8') })
+const result = await runHeadlessTurn(streamAgentTurnInProcess(mod, apiKey, { message: prompt }), {
+  io: { out: (s) => process.stdout.write(s), err: (s) => process.stderr.write(s) },
+})
+process.exitCode = result.exitCode
+```
+
 ### Claude Code hook dialect
 
 `parseClaudeHooks(raw, { aliases? })` (from `./hooks`) turns the `hooks` object of a Claude Code `.claude/settings.json` (`{ "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "...", "timeout": 5 }] }] }`) into `{ specs, dropped }`. Each group is flattened to one spec per command, `timeout` seconds become `timeout_ms`, and a `"*"` matcher becomes no matcher. Every spec is validated with `hookSpecSchema`, so a command with control characters is refused. Anything skipped (unknown event, non-command hook, non-object group or entry, invalid spec) gets one line in `dropped`. Events map through `CLAUDE_HOOK_EVENT_ALIASES` (`PreToolUse` to `pre_tool_call`, `PostToolUse` to `transform_tool_result`, `Stop` to `post_assistant_reply`, `SessionStart` to `on_session_start`); pass `aliases` to override, and map a name to `null` for an event this engine does not deliver. Fingerprints are computed on the translated spec, so `HookApprovalStore` works unchanged. `buildHookHandlers({ projectDirEnv: 'CLAUDE_PROJECT_DIR' })` sets that variable to `cwd` in each hook process.
