@@ -36,20 +36,25 @@ function fake(
 describe('delegationPortFromAgentFactory', () => {
   it('the worker is disposed after success, failure and cancellation', async () => {
     const ok = fake()
-    await expect(delegationPortFromAgentFactory(async () => ok.agent).run('t')).resolves.toMatchObject({
+    await expect(
+      delegationPortFromAgentFactory(async () => ok.agent).run('t'),
+    ).resolves.toMatchObject({
       response: 'done',
     })
     expect(ok.dispose).toHaveBeenCalledTimes(1)
 
     const failed = fake({ status: 'error' })
-    await expect(delegationPortFromAgentFactory(async () => failed.agent).run('t')).rejects.toBeInstanceOf(
-      DelegationError,
-    )
+    await expect(
+      delegationPortFromAgentFactory(async () => failed.agent).run('t'),
+    ).rejects.toBeInstanceOf(DelegationError)
     expect(failed.dispose).toHaveBeenCalledTimes(1)
 
     const controller = new AbortController()
     const cancelled = fake({
-      wait: () => new Promise((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error('stopped')))),
+      wait: () =>
+        new Promise((_, reject) =>
+          controller.signal.addEventListener('abort', () => reject(new Error('stopped'))),
+        ),
     })
     const pending = delegationPortFromAgentFactory(async () => cancelled.agent).run('t', {
       signal: controller.signal,
@@ -67,9 +72,14 @@ describe('delegationPortFromAgentFactory', () => {
       cancel: async () => {
         throw new Error('cancel broke')
       },
-      wait: () => new Promise((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error('run broke')))),
+      wait: () =>
+        new Promise((_, reject) =>
+          controller.signal.addEventListener('abort', () => reject(new Error('run broke'))),
+        ),
     })
-    const pending = delegationPortFromAgentFactory(async () => w.agent).run('t', { signal: controller.signal })
+    const pending = delegationPortFromAgentFactory(async () => w.agent).run('t', {
+      signal: controller.signal,
+    })
     await vi.waitFor(() => expect(w.agent.send).toHaveBeenCalled())
     controller.abort()
     const error = (await pending.catch((e: unknown) => e)) as DelegationError
@@ -91,19 +101,26 @@ describe('delegationPortFromAgentFactory', () => {
 
   it('a GuardrailError inside an AggregateError passes through unwrapped', async () => {
     const guard = new GuardrailViolationError('g', 'output', 'secret')
-    const aggregate = new AggregateError([new Error('x'), new AggregateError([guard], 'inner')], 'both')
+    const aggregate = new AggregateError(
+      [new Error('x'), new AggregateError([guard], 'inner')],
+      'both',
+    )
     const w = fake({
       wait: async () => {
         throw aggregate
       },
     })
-    await expect(delegationPortFromAgentFactory(async () => w.agent).run('t')).rejects.toBe(aggregate)
+    await expect(delegationPortFromAgentFactory(async () => w.agent).run('t')).rejects.toBe(
+      aggregate,
+    )
     const direct = fake({
       wait: async () => {
         throw guard
       },
     })
-    await expect(delegationPortFromAgentFactory(async () => direct.agent).run('t')).rejects.toBe(guard)
+    await expect(delegationPortFromAgentFactory(async () => direct.agent).run('t')).rejects.toBe(
+      guard,
+    )
   })
 
   it('the port works with createDelegateAllTool', async () => {
@@ -115,9 +132,20 @@ describe('delegationPortFromAgentFactory', () => {
     })
     const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: port }] })
     const out = JSON.parse(
-      await tool.handler({ tasks: [{ agent: 'worker', task: 'one' }, { agent: 'worker', task: 'two' }] }, {}),
+      await tool.handler(
+        {
+          tasks: [
+            { agent: 'worker', task: 'one' },
+            { agent: 'worker', task: 'two' },
+          ],
+        },
+        {},
+      ),
     ) as { results: { ok: boolean; response: string }[] }
-    expect(out.results.map((r) => [r.ok, r.response])).toEqual([[true, 'done'], [true, 'done']])
+    expect(out.results.map((r) => [r.ok, r.response])).toEqual([
+      [true, 'done'],
+      [true, 'done'],
+    ])
     expect(built).toHaveLength(2)
     expect(built.every((b) => b.dispose.mock.calls.length === 1)).toBe(true)
   })

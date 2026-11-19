@@ -36,14 +36,20 @@ async function streamedErrorOf(run: SdkTurnHandle): Promise<string | undefined> 
   if (run.stream === undefined) return undefined
   let streamed: string | undefined
   for await (const message of run.stream()) {
-    if (typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'error') {
+    if (
+      typeof message === 'object' &&
+      message !== null &&
+      (message as { type?: unknown }).type === 'error'
+    ) {
       streamed ??= describeStreamedError(message)
     }
   }
   return streamed
 }
 
-type Settled = Awaited<ReturnType<SdkTurnHandle['wait']>> & { readonly streamed: string | undefined }
+type Settled = Awaited<ReturnType<SdkTurnHandle['wait']>> & {
+  readonly streamed: string | undefined
+}
 
 /**
  * The run's outcome, its stream drained first. An abort of `signal` cancels the run; a failing
@@ -106,16 +112,27 @@ async function runOnce(
   signal: AbortSignal | undefined,
   sendOptions: SdkSendOptions | undefined,
 ): Promise<DelegationResult> {
-  if (signal?.aborted === true) throw new Error('the delegating run was cancelled before the worker started')
+  if (signal?.aborted === true)
+    throw new Error('the delegating run was cancelled before the worker started')
   const agent = await create()
   let outcome: DelegationResult
   try {
-    const run = await agent.send(task, { ...sendOptions, ...(signal === undefined ? {} : { signal }) })
+    const run = await agent.send(task, {
+      ...sendOptions,
+      ...(signal === undefined ? {} : { signal }),
+    })
     const { streamed, ...result } = await untilSettled(run, signal)
     if (streamed !== undefined) throw new Error(`the worker's run streamed an error (${streamed})`)
-    if (result.status !== 'finished') throw new Error(`the worker's run ended with status ${String(result.status)}`)
+    if (result.status !== 'finished')
+      throw new Error(`the worker's run ended with status ${String(result.status)}`)
     // The SDK accounts the worker's cost; this port reports none it measured.
-    outcome = { response: result.result ?? '', toolCalls: [], cost: 0, costUnknown: true, tokens: 0 }
+    outcome = {
+      response: result.result ?? '',
+      toolCalls: [],
+      cost: 0,
+      costUnknown: true,
+      tokens: 0,
+    }
   } catch (error) {
     // The disposal still runs; if it fails too, both failures are reported, the run's first.
     try {
