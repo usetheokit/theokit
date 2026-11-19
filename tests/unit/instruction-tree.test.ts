@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { ConfigurationError } from '../../packages/agents/src/errors.js'
 import { composeInstructions } from '../../packages/agents/src/config-entry.js'
 import {
   ContextPressureThresholdError,
@@ -815,6 +816,15 @@ describe('loadInstructionTree as-listed order and per-file cap', () => {
         fileNames: (e) => e.endsWith('.md'),
         order: 'as-listed',
       }),
+    ).toThrow(ConfigurationError)
+    expect(() =>
+      loadInstructionTree({
+        cwd: root,
+        roots: ['.'],
+        budget,
+        fileNames: (e) => e.endsWith('.md'),
+        order: 'as-listed',
+      }),
     ).toThrow(/order.*fileNames/)
   })
 
@@ -824,12 +834,13 @@ describe('loadInstructionTree as-listed order and per-file cap', () => {
     const tree = loadInstructionTree({
       cwd: root,
       roots: ['.'],
-      budget: { ...budget, maxCharsPerFile: 20_000 },
+      // Admits the capped first block plus the second, but not the uncapped 30,000-char first block.
+      budget: { ...budget, maxChars: 21_000, maxCharsPerFile: 20_000 },
       fileNames: ['A.md', 'B.md'],
       order: 'as-listed',
     })
     expect(tree.blocks).toHaveLength(2)
-    expect(tree.blocks[0]?.content.startsWith('x'.repeat(20_000))).toBe(true)
+    expect(tree.blocks[0]?.content).toBe(`${'x'.repeat(20_000)}\n[truncated]`)
     expect(tree.blocks[1]?.content).toBe('second')
   })
 
@@ -846,6 +857,21 @@ describe('loadInstructionTree as-listed order and per-file cap', () => {
     expect(a?.content.endsWith('[truncated]')).toBe(true)
     expect(a?.truncated).toBe(true)
     expect(b?.truncated).toBeUndefined()
+  })
+
+  it('warns when a listed file cannot be stat-ed (symlink loop)', () => {
+    symlinkSync(join(root, 'SOUL.md'), join(root, 'SOUL.md'))
+    write('USER.md', 'u')
+    warnings.length = 0
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      fileNames: ['SOUL.md', 'USER.md'],
+      onWarn,
+    })
+    expect(tree.count).toBe(1)
+    expect(warnings.some((w) => w.includes('SOUL.md'))).toBe(true)
   })
 
   it('warns on a directory named like an instruction file', () => {

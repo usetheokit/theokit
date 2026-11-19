@@ -319,6 +319,12 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
       entries,
       input.order ?? 'outward-in',
       Array.isArray(input.fileNames) ? (input.fileNames as readonly string[]) : [],
+      (entry, path) => {
+        // A matching entry that cannot be stat'ed (ELOOP, EACCES...) is a real failure; only a
+        // vanished one is quietly dropped.
+        if (accepts(entry))
+          warn(`instruction file could not be read, skipped: ${relative(cwd, path)}`)
+      },
     )) {
       // Inode identity, not path identity — see the function docblock.
       const inode = `${String(stats.dev)}:${String(stats.ino)}`
@@ -396,13 +402,15 @@ function walkOrder(
   entries: readonly string[],
   order: 'outward-in' | 'lexicographic' | 'as-listed',
   listed: readonly string[],
+  onStatError: (entry: string, path: string) => void,
 ): WalkEntry[] {
   const found: WalkEntry[] = []
   for (const entry of [...entries].sort((a, b) => a.localeCompare(b))) {
     const path = join(dir, entry)
     try {
       found.push({ entry, path, stats: statSync(path) })
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') onStatError(entry, path)
       continue
     }
   }
