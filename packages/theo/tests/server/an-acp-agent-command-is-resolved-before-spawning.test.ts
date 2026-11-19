@@ -1,0 +1,84 @@
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { describe, expect, it } from 'vitest'
+
+import { NodeAcpTransport, AcpTransportClosedError } from '../../src/server/agent/acp-tool.js'
+import { resolveAgentCommand } from '../../src/server/agent/index.js'
+
+const posix = process.platform !== 'win32'
+
+function fakeAgent(dir: string, mode = 0o755): string {
+  const file = join(dir, 'fake-agent')
+  writeFileSync(file, '#!/bin/sh\necho hi\n')
+  chmodSync(file, mode)
+  return file
+}
+
+function closeOf(t: NodeAcpTransport): Promise<AcpTransportClosedError> {
+  return new Promise((resolve) => {
+    t.onClose(resolve)
+  })
+}
+
+describe.skipIf(!posix)('resolveAgentCommand', () => {
+  it('resolves on absolute PATH entries and never in a relative one under cwd', () => {
+    const root = mkdtempSync(join(tmpdir(), 'resolve-agent-'))
+    const abs = join(root, 'abs')
+    mkdirSync(abs)
+    const file = fakeAgent(abs)
+    const cwd = process.cwd()
+    process.chdir(root)
+    try {
+      mkdirSync(join(root, 'relative-dir'))
+      fakeAgent(join(root, 'relative-dir'))
+      expect(resolveAgentCommand('fake-agent', 'relative-dir:' + abs)).toBe(file)
+      expect(resolveAgentCommand('fake-agent', ':' + 'relative-dir')).toBeUndefined()
+    } finally {
+      process.chdir(cwd)
+    }
+  })
+
+  it('skips a non-executable file and refuses relative commands', () => {
+    const root = mkdtempSync(join(tmpdir(), 'resolve-agent-'))
+    fakeAgent(root, 0o644)
+    expect(resolveAgentCommand('fake-agent', root)).toBeUndefined()
+    expect(resolveAgentCommand('./fake-agent', root)).toBeUndefined()
+    expect(resolveAgentCommand('does-not-exist', root)).toBeUndefined()
+  })
+
+  it('accepts an absolute executable path', () => {
+    const root = mkdtempSync(join(tmpdir(), 'resolve-agent-'))
+    const file = fakeAgent(root)
+    expect(resolveAgentCommand(file, undefined)).toBe(file)
+  })
+})
+
+describe.skipIf(!posix)('NodeAcpTransport command resolution', () => {
+  it.each(['does-not-exist', './agent'])('refuses %s before spawning', async (command) => {
+    const t = new NodeAcpTransport(command, [], undefined, { PATH: '/usr/bin:/bin' })
+    const err = await closeOf(t)
+    expect(err).toBeInstanceOf(AcpTransportClosedError)
+    expect(err.reason).toContain('could not be found or run')
+    t.send('x\n')
+    await t.close()
+  })
+
+  it('gives the child only the absolute PATH entries', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'resolve-agent-'))
+    const t = new NodeAcpTransport(
+      process.execPath,
+      ['-e', 'process.stdout.write(process.env.PATH ?? "none")'],
+      undefined,
+      { PATH: `rel::.:${root}` },
+    )
+    let out = ''
+    t.subscribe((c) => {
+      out += c
+    })
+    await closeOf(t)
+    await t.close()
+    expect(out).toBe(root)
+  })
+})
