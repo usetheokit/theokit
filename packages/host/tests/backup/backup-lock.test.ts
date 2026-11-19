@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { expect, it } from 'vitest'
@@ -58,4 +59,32 @@ it('takes the lock before the overlap check reads the filesystem', async () => {
   }
   await expect(backup({ roots: { a }, out: join(a, 'out'), lock })).rejects.toThrow(/overlap/)
   expect(events).toEqual(['acquire', 'release'])
+})
+
+it('backup reads nothing before the lock is held', async () => {
+  const base = await scratch()
+  const a = join(base, 'a')
+  const out = join(base, 'out')
+  await put(out, 'stale', 'x') // makes `out` non-empty until the lock empties it
+  const lock = async () => {
+    // State that only exists once the lock is held: any earlier read sees the old state and rejects.
+    await rm(out, { recursive: true })
+    await put(a, 'x', '1')
+    return async () => {}
+  }
+  const manifest = await backup({ roots: { a }, out, lock })
+  expect(manifest.files.map((f) => f.path)).toEqual(['a/x'])
+})
+
+it('restore reads nothing before the lock is held', async () => {
+  const base = await scratch()
+  const a = join(base, 'a')
+  await put(a, 'x', '1')
+  const from = join(base, 'bak')
+  const lock = async () => {
+    await backup({ roots: { a }, out: from })
+    return async () => {}
+  }
+  const manifest = await restore({ from, roots: { a: join(base, 't') }, lock })
+  expect(manifest.files.map((f) => f.path)).toEqual(['a/x'])
 })

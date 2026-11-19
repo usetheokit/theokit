@@ -79,7 +79,13 @@ export async function backup(options: BackupOptions): Promise<BackupManifest> {
           throw new BackupError(`root "${name}" ${dir} is not a directory`, { path: dir })
         }
         await mkdirPrivate(join(out, name))
-        const listed = await listFiles(dir, (rel) => options.exclude?.(name, rel) === true)
+        // A sidecar of an excluded database is excluded too: its WAL can hold the excluded rows.
+        const excluded = (rel: string): boolean => {
+          if (options.exclude?.(name, rel) === true) return true
+          const base = sidecarOf(rel)
+          return base !== undefined && options.exclude?.(name, base) === true
+        }
+        const listed = await listFiles(dir, excluded)
         const listedSet = new Set(listed)
         for (const rel of listed) {
           const base = sidecarOf(rel)
