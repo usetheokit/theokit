@@ -31,7 +31,7 @@ beforeAll(() => {
   cpSync(join(ROOT, 'package.json'), join(theo, 'package.json'))
   // Everything theokit installs for itself except the optional toolchain peers.
   for (const name of readdirSync(join(ROOT, 'node_modules'))) {
-    if (name === '.bin' || name === '@vitejs' || ['vite', 'typescript'].includes(name)) continue
+    if (name === '.bin' || name === '@vitejs' || ['vite', 'typescript', 'tsx'].includes(name)) continue
     symlinkSync(
       realpathSync(join(ROOT, 'node_modules', name)),
       join(theo, 'node_modules', name),
@@ -78,4 +78,16 @@ describe('the built CLI without the optional peers', () => {
       expect(res.stderr).toContain('npm install --save-dev vite')
     },
   )
+
+  it('`theokit start` exits non-zero naming tsx and the install command', () => {
+    const res = spawnSync(process.execPath, [cli, 'start'], {
+      cwd: sandbox,
+      encoding: 'utf8',
+      env: { ...process.env, NODE_PATH: '' },
+      timeout: 30_000,
+    })
+    expect(res.status).not.toBe(0)
+    expect(res.stderr).toContain('"tsx"')
+    expect(res.stderr).toContain('npm install --save-dev tsx')
+  })
 })

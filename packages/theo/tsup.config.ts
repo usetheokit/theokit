@@ -115,7 +115,7 @@ export default defineConfig([
     clean: false,
     target: 'node20',
     banner: {
-      js: '#!/usr/bin/env node\nimport "tsx/esm";',
+      js: '#!/usr/bin/env node',
     },
     external: [
       // Optional and never installed here, so esbuild cannot resolve it — and must not try.

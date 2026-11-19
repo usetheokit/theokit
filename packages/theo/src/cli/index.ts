@@ -1,6 +1,6 @@
 import cac from 'cac'
 
-import { requireToolchain } from './require-toolchain.js'
+import { useToolchain } from './require-toolchain.js'
 import { cliVersion } from './version.js'
 
 interface CliOptions {
@@ -22,7 +22,7 @@ cli
   .option('--crons', 'Schedule the crons in dev too (off by default)')
   .action(async (options: CliOptions) => {
     try {
-      requireToolchain()
+      await useToolchain()
       const { devCommand } = await import('./commands/dev.js')
       await devCommand({
         port: options.port ? Number(options.port) : undefined,
@@ -39,7 +39,7 @@ cli
   .option('--target <target>', 'Deploy target (node, vercel, cloudflare)')
   .action(async (options: CliOptions) => {
     try {
-      requireToolchain()
+      await useToolchain()
       const { buildCommand } = await import('./commands/build.js')
       await buildCommand({ target: options.target })
     } catch (err) {
@@ -54,6 +54,7 @@ cli
   .option('--port <port>', 'Port number')
   .action(async (options: CliOptions) => {
     try {
+      await useToolchain(['tsx'])
       const { startCommand } = await import('./commands/start/index.js')
       await startCommand({ port: options.port ? Number(options.port) : undefined })
     } catch (err) {
@@ -69,7 +70,7 @@ cli
   .option('--target <target>', 'Deploy target (node, vercel, cloudflare)')
   .action(async (options: CliOptions) => {
     try {
-      requireToolchain()
+      await useToolchain()
       const { previewCommand } = await import('./commands/preview.js')
       await previewCommand({
         port: options.port ? Number(options.port) : undefined,
@@ -105,7 +106,7 @@ cli
   )
   .action(async (name: string, message: string | undefined) => {
     try {
-      requireToolchain()
+      await useToolchain()
       const { agentCommand } = await import('./commands/agent.js')
       const { sawError } = await agentCommand(name, message)
       // The run ended with an error chunk (already rendered) — exit non-zero so `$?` / CI reflects it.

@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'typescript']
+const TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'typescript', 'tsx']
 const ENTRIES = ['dist/server/agent/index.js', 'dist/server/webhook/index.js']
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
   dependencies: Record<string, string>
@@ -82,7 +82,6 @@ afterAll(() => {
 
 describe('theokit/server entries do not need the build toolchain', () => {
   it('declares the toolchain as optional peers, not dependencies', () => {
-    expect(pkg.dependencies.tsx).toBeDefined()
     for (const name of TOOLCHAIN) {
       expect(pkg.dependencies[name], name).toBeUndefined()
       expect(pkg.peerDependencies[name], name).toBeDefined()

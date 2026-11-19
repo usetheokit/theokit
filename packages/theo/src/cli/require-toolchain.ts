@@ -1,21 +1,18 @@
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-/** Build-time packages `theokit` loads for the CLI only; they are optional peers, not dependencies (`tsx` stays a dependency: `theokit start` loads TypeScript source). */
-const CLI_TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'typescript'] as const
+/** Build-time packages `theokit` loads for the CLI only; they are optional peers, not dependencies. */
+const CLI_TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'typescript', 'tsx'] as const
 
 /** Throw a clear error naming the first toolchain package the app does not have installed. */
 export function requireToolchain(
   names: readonly string[] = CLI_TOOLCHAIN,
   from: string = process.cwd(),
 ): void {
-  // The app's own node_modules first, then wherever theokit itself is installed.
-  const resolvers = [join(from, 'package.json'), fileURLToPath(import.meta.url)].map((p) =>
-    createRequire(p),
-  )
+  // Resolve from the app only: theokit's own location can see a hoisted copy the app never declared.
+  const req = createRequire(join(from, 'package.json'))
   for (const name of names) {
-    if (!resolvers.some((req) => isInstalled(req, name))) {
+    if (!isInstalled(req, name)) {
       throw new Error(
         `theokit needs "${name}" to run this command, and it is not installed. ` +
           `Install it with: npm install --save-dev ${name}`,
@@ -32,4 +29,13 @@ function isInstalled(req: NodeJS.Require, name: string): boolean {
     // A package that hides package.json behind "exports" is still installed.
     return (err as NodeJS.ErrnoException).code === 'ERR_PACKAGE_PATH_NOT_EXPORTED'
   }
+}
+
+/**
+ * Guard the toolchain, then register tsx's global ESM hook so user `.ts` files import natively.
+ * This replaces the `import "tsx/esm"` the CLI bin used to start with, which ran before any guard.
+ */
+export async function useToolchain(names: readonly string[] = CLI_TOOLCHAIN): Promise<void> {
+  requireToolchain(names)
+  await import('tsx/esm')
 }
