@@ -21,7 +21,10 @@ describe('usageFromRun', () => {
   })
 
   it('defaults tokens, keeps cache absent, carries context', () => {
-    const r = usageFromRun({ usage: { outputTokens: 5, cacheReadTokens: 2 } }, { ...ctx, userId: 'u' })
+    const r = usageFromRun(
+      { usage: { outputTokens: 5, cacheReadTokens: 2 } },
+      { ...ctx, userId: 'u' },
+    )
     expect(r).toEqual({
       userId: 'u',
       model: 'm',
