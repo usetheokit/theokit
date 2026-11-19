@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1251 export(s) across 25 entry point(s).
+1255 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -91,6 +91,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
+| `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
 | `discoverSubagents` | value |
@@ -306,6 +307,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
 | `DelegationPort` | type |
+| `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
 | `DelegationTarget` | type |
 | `DiagnosticsSink` | type |
@@ -499,6 +501,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
+| `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `extractThinkTagStream` | value |
@@ -579,6 +582,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
 | `DelegationPort` | type |
+| `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
 | `DelegationTarget` | type |
 | `DoneEvent` | type |
