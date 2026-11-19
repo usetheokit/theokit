@@ -273,6 +273,7 @@ function runDenoEntry(
     if (!(id in modules)) throw new Error(`unexpected import ${id}`)
     return modules[id]
   }
+  // eslint-disable-next-line sonarjs/code-eval -- executes generated cron entry in a sandboxed vm context under test
   runInNewContext(js, { require, exports: {}, Deno: deno, crypto, AbortSignal, Date })
   return crons
 }
