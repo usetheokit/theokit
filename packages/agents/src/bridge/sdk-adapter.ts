@@ -754,12 +754,9 @@ async function* streamSdkAgent(
     ...m8,
     ...extra,
   }
-  const agent = (await getOrCreateReporting(
-    Agent,
-    sessionId,
-    createOptions,
-    compiled.onWired,
-  )) as Awaited<ReturnType<typeof Agent.getOrCreate>>
+  const agent = (await getOrCreateReporting(Agent, sessionId, createOptions)) as Awaited<
+    ReturnType<typeof Agent.getOrCreate>
+  >
   try {
     // theokit#140 — ONE ordered source. The `onDelta` sink + merge queue are gone: the SDK's
     // `run.events()` appends messages and deltas as the loop reports them, so arrival order IS
@@ -944,7 +941,7 @@ export function toAgentFactory(
       ...extra,
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     }
-    const agent = await getOrCreateReporting(rt.Agent, sessionId, createOptions, compiled.onWired)
+    const agent = await getOrCreateReporting(rt.Agent, sessionId, createOptions)
     return withGuardrails(
       withStepCeiling(agent as SdkAgentHandle, compiled.maxIterations),
       compiled.guardrails,

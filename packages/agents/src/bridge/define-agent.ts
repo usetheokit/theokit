@@ -27,7 +27,7 @@ import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { CodePlugin } from './code-plugins.js'
-import { type CompiledWiring, WIRED_HOOKS } from './compiled-wiring.js'
+import { type CompiledWiring, WIRED_HOOKS, WIRED_LISTENER } from './compiled-wiring.js'
 import type { HookHandlers } from './hook-handlers.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
 import {
@@ -405,18 +405,12 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
  * needs a transport. Doing the conversion HERE (not on the builder) means every entry point that
  * reaches `defineAgent` gets it, so `hooks` can never be declared-but-dropped.
  */
-function compileHooksAndPlugins(
-  def: AgentDefinition,
-): Pick<CompiledAgentOptions, 'plugins' | 'onWired'> {
-  return { ...compilePlugins(def), ...(def.onWired !== undefined ? { onWired: def.onWired } : {}) }
-}
-
-function compilePlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[] } {
+function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[] } {
   const map = (def as { hooks?: Readonly<Record<string, unknown>> }).hooks
   const entries = Object.entries(map ?? {}).filter(([, h]) => typeof h === 'function')
   const explicit = def.plugins ?? []
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && def.onWired === undefined) {
     return def.plugins !== undefined ? { plugins: def.plugins } : {}
   }
 
@@ -427,6 +421,8 @@ function compilePlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[]
     version: '1.0.0',
     kind: 'general' as const,
     [WIRED_HOOKS]: entries.map(([event]) => ({ event })),
+    // The listener rides on the plugin so it survives every clone of the compiled options.
+    [WIRED_LISTENER]: def.onWired,
     register(ctx: { on: (hook: string, handler: (c: never) => unknown) => void }): void {
       for (const [hookName, handler] of entries) {
         ctx.on(hookName, handler as (c: never) => unknown)
