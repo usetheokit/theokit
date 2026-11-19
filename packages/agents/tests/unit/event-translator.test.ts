@@ -470,3 +470,10 @@ describe('unknown events warn instead of vanishing (#141)', () => {
     expect(warnings).toEqual([])
   })
 })
+
+describe('translateSdkEvent accepts an index-signature-free message (#1802)', () => {
+  it('translates a message typed only by its discriminant', () => {
+    const msg: { readonly type: string } = { type: 'thinking' }
+    expect(translateSdkEvent(msg, RUN)).toEqual([{ type: 'thinking', content: '' }])
+  })
+})

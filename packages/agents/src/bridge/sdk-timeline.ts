@@ -1,6 +1,7 @@
-import type { StreamEvent } from './agent-sse-handler.js'
+import type { AgentStreamEvent } from './agent-stream-events.js'
 import {
   type SdkMessage,
+  type SdkMessageLike,
   translateInteractionUpdate,
   translateSdkEvent,
 } from './event-translator.js'
@@ -26,14 +27,14 @@ import {
 /** The SDK's timeline event, structurally typed so this module needs no value import from the SDK. */
 export interface SdkTimelineEvent {
   readonly kind: 'message' | 'delta'
-  readonly message?: SdkMessage
+  readonly message?: SdkMessageLike | SdkMessage
   readonly update?: unknown
   /** #140 — set by the SDK when this message's text already crossed as `kind: 'delta'`. */
   readonly textAlreadyStreamed?: boolean
 }
 
 /**
- * Translate one timeline event into zero or more `StreamEvent`s.
+ * Translate one timeline event into zero or more `AgentStreamEvent`s.
  *
  * The text drop is the whole dedup, and it is a read rather than a comparison. The message is still
  * translated — it carries tool calls the deltas do not repeat — so dropping the message wholesale
@@ -42,7 +43,7 @@ export interface SdkTimelineEvent {
 /** A `tool_result` held for one more report of the same call. */
 interface PendingToolResult {
   readonly ids: readonly string[]
-  event: StreamEvent
+  event: AgentStreamEvent
 }
 
 /**
@@ -100,9 +101,9 @@ interface ToolSeen {
 }
 
 /** Every id under which this call may be reported. Empty ⇒ unidentifiable ⇒ never deduped. */
-function idsOf(e: StreamEvent, raw: unknown): string[] {
+function idsOf(e: AgentStreamEvent, raw: unknown): string[] {
   const ids: string[] = []
-  const callId = typeof e.callId === 'string' ? e.callId : ''
+  const callId = 'callId' in e && typeof e.callId === 'string' ? e.callId : ''
   if (callId !== '') ids.push(callId)
   const model = (raw as { modelCallId?: unknown } | null | undefined)?.modelCallId
   if (typeof model === 'string' && model !== '' && model !== callId) ids.push(model)
@@ -110,14 +111,14 @@ function idsOf(e: StreamEvent, raw: unknown): string[] {
 }
 
 /** Which lifecycle bucket an event belongs to, or `undefined` when it is not a tool event. */
-function bucketFor(e: StreamEvent, seen: ToolSeen): Set<string> | undefined {
+function bucketFor(e: AgentStreamEvent, seen: ToolSeen): Set<string> | undefined {
   if (e.type === 'tool_call') return seen.started
   if (e.type === 'tool_result') return seen.completed
   return undefined
 }
 
 /** Whether an event belongs to a tool's lifecycle — the ones that must not force a held result out. */
-function isToolLifecycleEvent(e: StreamEvent): boolean {
+function isToolLifecycleEvent(e: AgentStreamEvent): boolean {
   return e.type === 'tool_call' || e.type === 'tool_result' || e.type === 'partial_tool_call'
 }
 
@@ -133,7 +134,7 @@ function isToolLifecycleEvent(e: StreamEvent): boolean {
  * A no-op when nothing is held for this call — the first report already shipped, and the second was
  * going to be dropped either way.
  */
-function mergeIntoPending(e: StreamEvent, ids: readonly string[], seen: ToolSeen): void {
+function mergeIntoPending(e: AgentStreamEvent, ids: readonly string[], seen: ToolSeen): void {
   if (e.type !== 'tool_result' || !e.isError) return
   const held = seen.pending.find((p) => p.ids.some((id) => ids.includes(id)))
   if (held?.event.type !== 'tool_result') return
@@ -141,7 +142,7 @@ function mergeIntoPending(e: StreamEvent, ids: readonly string[], seen: ToolSeen
 }
 
 /** Drop a tool event whose lifecycle point was already reported by the other source. */
-function dedupeTools(events: StreamEvent[], raw: unknown, seen: ToolSeen): StreamEvent[] {
+function dedupeTools(events: AgentStreamEvent[], raw: unknown, seen: ToolSeen): AgentStreamEvent[] {
   return events.filter((e) => {
     if (e.type === 'thinking') {
       // The delta arrives first; the complete message repeats it. Drop the repeat, keep the first.
@@ -181,7 +182,10 @@ function dedupeTools(events: StreamEvent[], raw: unknown, seen: ToolSeen): Strea
  * An event that translates to NOTHING releases nothing, for the same reason: there is no ordering to
  * preserve against an event that never reaches the wire.
  */
-function releasePendingToolResults(translated: StreamEvent[], seen: ToolSeen): StreamEvent[] {
+function releasePendingToolResults(
+  translated: AgentStreamEvent[],
+  seen: ToolSeen,
+): AgentStreamEvent[] {
   if (seen.pending.length === 0) return []
   if (translated.length === 0 || translated.every(isToolLifecycleEvent)) return []
   return flushPendingToolResults(seen)
@@ -192,7 +196,7 @@ function releasePendingToolResults(translated: StreamEvent[], seen: ToolSeen): S
  * run whose last act was a tool call has nothing left to release the hold, and a held result that
  * never ships is the hole this design exists to avoid.
  */
-export function flushPendingToolResults(seen: ToolSeen): StreamEvent[] {
+export function flushPendingToolResults(seen: ToolSeen): AgentStreamEvent[] {
   const out = seen.pending.map((p) => p.event)
   seen.pending = []
   return out
@@ -212,7 +216,7 @@ export function translateTimelineEvent(
   ev: SdkTimelineEvent,
   runId: string,
   seen: ToolSeen,
-): StreamEvent[] {
+): AgentStreamEvent[] {
   if (ev.kind === 'delta') {
     if (ev.update === undefined) return []
     const events = translateInteractionUpdate(

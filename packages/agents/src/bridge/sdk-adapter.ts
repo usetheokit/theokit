@@ -12,7 +12,7 @@ import type { ToolRefusal } from '@theokit/presenter'
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, QueueMode, RunEventSink, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
@@ -21,10 +21,11 @@ import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
+import type { AgentStreamEvent } from './agent-stream-events.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
-import { type SdkMessage } from './event-translator.js'
+import { type SdkMessage, type SdkMessageLike } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
@@ -685,7 +686,7 @@ async function* streamTimeline(
     events: () => AsyncGenerator<SdkTimelineEvent>
   }
   const seen = createToolSeen()
-  const emit = function* (events: StreamEvent[]): Generator<StreamEvent> {
+  const emit = function* (events: AgentStreamEvent[]): Generator<StreamEvent> {
     for (const event of events) {
       if (event.type === 'error') state.sawError = true
       // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
@@ -696,7 +697,7 @@ async function* streamTimeline(
         event.type === 'tool_result' && typeof callId === 'string'
           ? refusals.get(callId)
           : undefined
-      yield refusal !== undefined ? { ...event, refusal } : event
+      yield refusal !== undefined ? { ...event, refusal } : (event as StreamEvent)
     }
   }
   for await (const ev of run.events()) {
@@ -850,17 +851,28 @@ async function* streamSdkAgent(
  * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
 export interface SdkTurnHandle {
-  wait: () => Promise<{
+  wait(): Promise<{
     result?: string
-    usage?: { totalTokens?: number }
     status?: string
-    error?: { message: string }
+    error?: { code?: string; message: string }
+    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
+    cost?: { amountUsd?: number }
   }>
-  stream?: () => AsyncIterable<unknown>
+  stream?(): AsyncIterable<SdkMessageLike>
+  cancel?(): Promise<void>
 }
 
-/** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
-export type SdkSendOptions = Record<string, unknown>
+/**
+ * Per-turn options, typed for what an app drives a turn with. The index signature keeps the type
+ * open (the SDK accepts more than the layer declares), so a caller passing a
+ * `Record<string, unknown>` still compiles.
+ */
+export interface SdkSendOptions {
+  signal?: AbortSignal
+  onDelta?: (delta: { update: InteractionUpdate }) => void
+  queueMode?: QueueMode
+  [key: string]: unknown
+}
 
 export interface SdkAgentHandle {
   readonly agentId: string
@@ -889,10 +901,9 @@ export interface SdkAgentHandle {
    * decision about what a redaction means to a schema, and inventing one would be the gate that
    * reports without gating this module already refuses to build.
    */
-  readonly generate?: (
-    message: string,
-    options: { output: unknown; [key: string]: unknown },
-  ) => Promise<unknown>
+  // Method syntax on purpose: its parameters are bivariant, so the SDK's `generate` (whose `output`
+  // is a Zod schema, narrower than `unknown`) is assignable without a cast.
+  generate?(message: string, options: { output: unknown }): Promise<unknown>
   readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.

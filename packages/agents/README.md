@@ -311,6 +311,28 @@ gap worth declaring and one worth closing — so it was closed. `loadPersonalMcp
 and only that key, and returns empty on a malformed file rather than throwing, because one stray comma
 in a shared home file must not break every project on the machine.
 
+**Typed SDK seam.** The translators return the typed `AgentStreamEvent` union, and the handle types carry what an app drives a turn with, so an `@theokit/sdk` message or agent needs no cast:
+
+```ts
+// @theokit/agents/bridge
+translateSdkEvent(msg: SdkMessageLike, runId: string): AgentStreamEvent[]   // SdkMessageLike = { readonly type: string }
+translateInteractionUpdate(update: InteractionUpdate): AgentStreamEvent[]
+
+interface SdkSendOptions {
+  signal?: AbortSignal
+  onDelta?: (delta: { update: InteractionUpdate }) => void
+  queueMode?: QueueMode // 'followup' | 'steer' | 'collect'
+  [key: string]: unknown
+}
+interface SdkTurnHandle {
+  wait(): Promise<{ result?: string; status?: string; error?: { code?: string; message: string }
+    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
+    cost?: { amountUsd?: number } }>
+  stream?(): AsyncIterable<SdkMessageLike>
+  cancel?(): Promise<void>
+}
+```
+
 **MCP scopes.** `loadMcpScopes({ cwd, home, projectAllowed, onClash?, personalFiles?, onWarn? })` (from `@theokit/agents/bridge`) merges the personal servers (`~/.claude.json` by default) with `<cwd>/.mcp.json`. When `projectAllowed` is false the project's servers are withheld: the file is parsed only to list its names in `projectWithheld`. On a name clash the personal server wins by default, so a repository cannot replace a server the operator configured; pass `onClash: 'project-wins'` for the reference format. Clashes are returned as data in `shadowed`. A malformed project file throws `McpFileError`; a malformed personal file only warns.
 
 Both MCP readers are called by the host, not from inside this package — `loadMcpJson` has no internal
