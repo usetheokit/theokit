@@ -210,6 +210,10 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
+## Registering subagents
+
+`AgentBuilder.subagents()` (and `defineAgent({ subagents })`) takes `description` and `prompt` (required), plus optional `tools`, `model` (a `ModelSelection`, or `'inherit'`/absent for the parent's model) and `mcpServers` (names or inline configs, as the SDK takes them). All are passed to the SDK unchanged. `sandbox` and `memory` are not accepted: apply memory with `applySubagentMemory` before registering.
+
 ## Withholding SDK builtin tools
 
 `AgentBuilder.withholdBuiltinTools(['shell'])` keeps the named SDK builtin tools (`shell`,
