@@ -21,6 +21,39 @@ try {
 }
 ```
 
+## `@theokit/host/service`
+
+Install an agent app as a login service and restart it through its supervisor. Only Linux (`systemd --user`) exists today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
+
+```ts
+import { serviceBackend, isSupervised, restartSelf, waitForPredecessor } from '@theokit/host/service'
+
+const backend = serviceBackend() // linux -> systemd
+await backend.install({
+  label: 'my-agent',
+  command: '/usr/bin/node',
+  args: ['/srv/my-agent/dist/main.js'],
+  env: { MY_AGENT_CONFIG: '/home/me/.config/my-agent.json' },
+  workingDirectory: '/srv/my-agent',
+}) // writes ~/.config/systemd/user/my-agent.service, then daemon-reload, enable --now, restart
+console.log(await backend.status('my-agent')) // 'running' | 'stopped' | 'not-installed' | 'unknown'
+```
+
+- `install` writes the unit atomically. If a `systemctl` step fails it throws `ServiceCommandError` (with `command` and `exitCode`), puts the previous unit back (or removes the file on a first install) and runs `daemon-reload`.
+- A value the unit cannot hold (a line break, a bad label) throws `ServiceDefinitionError` naming the field, never the value. `%` is doubled everywhere and `$` in `ExecStart=`, per systemd.syntax(7).
+- The unit stops at logout unless lingering is on: run `loginctl enable-linger <user>` to keep it running.
+
+Restart from inside the app:
+
+```ts
+await waitForPredecessor(process.env) // first thing in a successor: waits for the old pid to exit
+// later, when a setting that needs a restart changes:
+const next = await restartSelf({ startEnv: originalEnv })
+if (next.kind === 'exit') process.exit(next.code) // 75: the supervisor starts the app again
+```
+
+`isSupervised` is true for `INVOCATION_ID` on Linux and for `XPC_SERVICE_NAME` other than `0` on macOS. Otherwise `restartSelf` spawns a detached successor (it gets `THEOKIT_HOST_RESTART_AFTER_PID`) and resolves with its pid. `restartSelf` is asynchronous because Node reports a failed spawn through the child's `error` event after `spawn` returns: it rejects with a `RestartError` whose `cause` is that actual error (or the error `spawn` threw). On a platform other than Linux or macOS it rejects with `UnsupportedPlatformError`.
+
 ## `@theokit/host/backup`
 
 Back up and restore named directories of an agent app. Needs `@theokit/sdk` (peer) for the atomic manifest write; SQLite databases need Node 22.16 or later.
