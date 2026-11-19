@@ -211,6 +211,12 @@ The job commits or rolls back with the row, and workers cannot see it before the
 backend with `enqueueInTransaction` (`PostgresJobBackend` has it); any other backend rejects with
 `TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction.
 
+`PostgresJobBackend` also moves pending jobs in the caller's transaction, skipping jobs a worker has
+leased: `defer(client, { name, where, until })` moves the jobs whose input matches `where` (top-level
+keys, compared as text) to `until` (a `Date` or `'infinity'`) and remembers the time each had;
+`restore(client, { name, where })` gives that time back; `reschedule(client, jobId, { availableAt })`
+sets one job's time, to bring it ahead of others.
+
 To take back a queued job in a transaction, call
 `ctx.queue.cancelInTransaction(client, 'process-task', { idempotencyKey })`. It removes the job
 only while no worker ever leased it and resolves `true` if it removed one; a leased job (even with
