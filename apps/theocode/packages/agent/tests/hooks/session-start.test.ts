@@ -21,7 +21,15 @@ import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import * as frameworkHooks from '@theokit/agents/hooks'
+
+// Wrap, don't replace: the real runner still runs, and the spy can see whether it was called.
+vi.mock('@theokit/agents/hooks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@theokit/agents/hooks')>()
+  return { ...actual, runHostHooks: vi.fn(actual.runHostHooks) }
+})
 
 import { runSessionStartHooks, sessionStartSpecs } from '../../src/hooks/session-start.js'
 import type { HookSpec } from '../../src/hooks/hooks-spec.js'
@@ -193,5 +201,72 @@ describe('the seam the surfaces call', () => {
     // A parse failure here would refuse the session before the operator typed anything. The
     // parse error is already surfaced by the path that builds the framework handlers.
     expect(sessionStartSpecs({ trusted: true, hooks: [{ nonsense: true }] })).toEqual([])
+  })
+})
+
+describe('the framework runner is the one that runs it', () => {
+  it('test_session_start_goes_through_runHostHooks_with_the_framework_event', async () => {
+    // Fails if the surface goes back to running the command itself: the spy sees no call.
+    const spy = vi.mocked(frameworkHooks.runHostHooks)
+    spy.mockClear()
+    try {
+      await runSessionStartHooks({
+        specs: [spec(`echo START >> ${marker}`)],
+        cwd,
+        sessionId: 'tui-1',
+        approved: () => true,
+      })
+      expect(spy).toHaveBeenCalledTimes(1)
+      expect(spy.mock.calls[0]?.[0]).toBe('on_session_start')
+      expect(lines()).toEqual(['START'])
+    } finally {
+      spy.mockClear()
+    }
+  })
+
+  it('test_an_unapproved_spec_never_reaches_runHostHooks', async () => {
+    const spy = vi.mocked(frameworkHooks.runHostHooks)
+    spy.mockClear()
+    try {
+      await runSessionStartHooks({
+        specs: [spec(`echo START >> ${marker}`)],
+        cwd,
+        sessionId: 'tui-1',
+        approved: () => false,
+        onWarn: () => undefined,
+      })
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockClear()
+    }
+  })
+
+  it('test_a_hook_killed_by_a_signal_keeps_its_stderr_in_the_warning', async () => {
+    const warns: string[] = []
+    await runSessionStartHooks({
+      specs: [spec('echo diagnostic-from-hook >&2; kill -TERM $$')],
+      cwd,
+      sessionId: 'tui-1',
+      approved: () => true,
+      onWarn: (m) => warns.push(m),
+    })
+    expect(warns.join(' ')).toContain('could not run')
+    expect(warns.join(' ')).toContain('diagnostic-from-hook')
+  })
+
+  it('test_an_error_the_framework_caught_keeps_its_message_in_the_warning', async () => {
+    vi.mocked(frameworkHooks.runHostHooks).mockImplementationOnce(async (_e, specs, options) => {
+      options.onWarn?.('hook "x" on on_session_start failed: spawn EBOOM')
+      return [{ spec: specs[0] as never, status: 'failed' }]
+    })
+    const warns: string[] = []
+    await runSessionStartHooks({
+      specs: [spec('true')],
+      cwd,
+      sessionId: 'tui-1',
+      approved: () => true,
+      onWarn: (m) => warns.push(m),
+    })
+    expect(warns.join(' ')).toContain('spawn EBOOM')
   })
 })

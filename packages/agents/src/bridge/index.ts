@@ -57,6 +57,11 @@ export {
 } from './agent-route-generator.js'
 
 export {
+  delegationPortFromAgentFactory,
+  type DelegationPortFromAgentFactoryOptions,
+} from './delegation-port-from-factory.js'
+
+export {
   createSdkAgentStream,
   toAgentFactory,
   type SdkAgentHandle,
