@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 const root = new URL('../../', import.meta.url)
 const read = (f: string): string => readFileSync(new URL(f, root), 'utf8')
 
-type Baseline = { entries: Record<string, { names: Record<string, { tier: string }> }> }
+interface Baseline {
+  entries: Record<string, { names: Record<string, { tier: string }> }>
+}
 
 function fromBaseline(): Record<string, string[]> {
   const out: Record<string, string[]> = {}
