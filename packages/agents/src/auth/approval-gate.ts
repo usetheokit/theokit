@@ -81,7 +81,7 @@ export function createApprovalGate(options: ApprovalGateOptions): {
           by: 'none',
         }
       }
-      const answer = typeof result === 'string' ? result : result.answer
+      const answer: unknown = typeof result === 'string' ? result : result.answer
       const by = typeof result === 'string' ? 'person' : `person:${result.by}`
       if (answer === 'deny') return { allowed: false, reason: `${note}the person denied it`, by }
       if (answer === 'always') {
@@ -97,7 +97,8 @@ export function createApprovalGate(options: ApprovalGateOptions): {
         }
         return { allowed: true, reason: `${note}the person approved it and it is saved`, by }
       }
-      return { allowed: true, reason: `${note}the person approved once`, by }
+      if (answer === 'once') return { allowed: true, reason: `${note}the person approved once`, by }
+      return { allowed: false, reason: `${note}unrecognised answer, denied`, by }
     } catch (error) {
       report(error, 'ask')
       return {
@@ -141,16 +142,10 @@ export function createApprovalGate(options: ApprovalGateOptions): {
     let decision: ApprovalDecision
     try {
       query = options.key(ctx)
-    } catch (error) {
-      return {
-        allowed: false,
-        reason: `could not classify the call: ${message(error)}`,
-        by: 'none',
-      }
-    }
-    if (query === undefined) return { allowed: true, reason: 'not governed', by: 'none' }
-    try {
-      decision = await chain(query, ctx)
+      decision =
+        query === undefined
+          ? { allowed: true, reason: 'not governed', by: 'none' }
+          : await chain(query, ctx)
     } catch (error) {
       decision = { allowed: false, reason: `the decision failed: ${message(error)}`, by: 'none' }
     }
@@ -161,7 +156,7 @@ export function createApprovalGate(options: ApprovalGateOptions): {
           runId: ctx.runId,
           agentId: ctx.agentId,
           tool: ctx.name,
-          query,
+          ...(query === undefined ? {} : { query }),
           allowed: decision.allowed,
           decidedBy: decision.by,
           reason: decision.reason,

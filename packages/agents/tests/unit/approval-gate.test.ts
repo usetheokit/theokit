@@ -191,4 +191,33 @@ describe('createApprovalGate', () => {
     ;(strict.plugin as any).register({ on: (_h: string, fn: any) => (handler = fn) })
     expect(await handler?.(ctx('ls'))).toMatchObject({ block: true })
   })
+
+  it('denies a malformed answer from the asker', async () => {
+    const { store, scope } = fixture()
+    for (const bad of ['yes', { answer: 'ok', by: 'x' }, {}, null]) {
+      const gate = createApprovalGate({
+        store,
+        key: keyFor(scope),
+        ask: () => Promise.resolve(bad as never),
+      })
+      expect((await gate.decide(ctx('ls'))).allowed).toBe(false)
+    }
+  })
+
+  it('receipts an ungoverned call and a classification failure', async () => {
+    const { store, dir } = fixture()
+    const ledger = createJsonlLedger(dir)
+    await createApprovalGate({ store, key: () => undefined, ledger }).decide(ctx('ls'))
+    const failing = createApprovalGate({
+      store,
+      key: () => {
+        throw new Error('bad key')
+      },
+      ledger,
+    })
+    expect((await failing.decide(ctx('ls'))).allowed).toBe(false)
+    const lines = await ledger.read()
+    expect(lines.map((l) => l.allowed)).toEqual([true, false])
+    expect(lines[1]?.reason).toMatch(/bad key/)
+  })
 })

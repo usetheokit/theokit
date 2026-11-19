@@ -10,7 +10,8 @@ export interface ApprovalRecord {
   readonly runId: string
   readonly agentId: string
   readonly tool: string
-  readonly query: PermissionQuery
+  /** Absent when the call could not be classified or is not governed. */
+  readonly query?: PermissionQuery
   readonly allowed: boolean
   /** `'waiver' | 'saved' | 'reviewer' | 'person' | 'person:<id>' | 'none'`. */
   readonly decidedBy: string
