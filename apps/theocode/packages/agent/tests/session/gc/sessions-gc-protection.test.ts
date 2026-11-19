@@ -143,7 +143,7 @@ describe('the report', () => {
   })
 })
 
-describe('sessions gc floors', () => {
+describe('sessions gc floors and legacy names', () => {
   it('test_a_knob_below_the_floor_fails_with_the_frameworks_GCFloorError_message', async () => {
     const old = writeTranscript(fx, 'old', 90)
 
@@ -155,6 +155,47 @@ describe('sessions gc floors', () => {
       '`maxAgeDays` must be at least 1, received 0',
     )
     expect(existsSync(old)).toBe(true)
+  })
+
+  it('test_both_naming_conventions_of_the_tui_pointer_session_are_protected', async () => {
+    writeTranscript(fx, 'decoy-newer', 1)
+    const current = writeTranscript(fx, 'tui-live', 90)
+    const legacy = writeTranscript(fx, 'tui-live', 90, { legacy: true })
+    writePointer(fx, 'tui-live')
+
+    await run(true, { maxAgeDays: 1 })
+
+    expect(existsSync(current)).toBe(true)
+    expect(existsSync(legacy), 'the legacy transcript of the pointed session was deleted').toBe(
+      true,
+    )
+  })
+
+  it('test_a_legacy_name_the_sdk_sanitises_is_still_protected', async () => {
+    // `a.b` is filed as `a-b.jsonl` on 4.x: a stem comparison with the raw id would miss it.
+    const id = 'tui.live.1'
+    writeTranscript(fx, 'decoy-newer', 1)
+    const legacy = writeTranscript(fx, id, 90, { legacy: true })
+    writePointer(fx, id)
+
+    await run(true, { maxAgeDays: 1 })
+
+    expect(existsSync(legacy), 'the sanitised legacy name of the pointed session was deleted').toBe(
+      true,
+    )
+  })
+
+  it('test_a_legacy_and_a_current_file_of_one_id_are_reported_per_file', async () => {
+    writeTranscript(fx, 'newest', 1)
+    const current = writeTranscript(fx, 'twin', 90)
+    writeTranscript(fx, 'twin', 80, { legacy: true })
+
+    const { plan, result } = await run(true)
+    // Both files share one id; the report is judged per file, and both are gone.
+    expect(result.errors).toEqual([])
+    expect(humanReport(plan, result).join('\n')).not.toMatch(/NOT removed/)
+    expect(existsSync(current)).toBe(false)
+    expect(plan.candidates).toHaveLength(2)
   })
 })
 
