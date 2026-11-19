@@ -133,3 +133,6 @@ export type {
 // script carries none and the browser refuses it. `NonceProvider` is exported beside the hook because
 // a consumer testing a component that calls `useNonce()` has to be able to supply the value.
 export { NonceProvider, NonceContext, useNonce } from './nonce.js'
+
+// The browser-side encoder that round-trips through the server's `formDataToObject`.
+export { objectToFormData, FormDataEncodingError } from './object-to-form-data.js'
