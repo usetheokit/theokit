@@ -23,6 +23,18 @@ try {
 }
 ```
 
+## `createHostLifecycle`
+
+Starts services in order and stops them in reverse. If a start fails, the services already started are stopped and a `HostError` (`host_start_failed`) is thrown. `stop()` runs every stop and reports failures in one `HostError` (`host_stop_failed`).
+
+```ts
+import { createHostLifecycle } from '@theokit/host'
+
+const host = createHostLifecycle([{ name: 'db', start: openDb, stop: closeDb }])
+await host.start()
+await host.stop()
+```
+
 ## License
 
 Apache-2.0
