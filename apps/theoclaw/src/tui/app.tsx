@@ -15,7 +15,7 @@ import { Text, useInput } from 'ink'
 import { type ReactElement, useRef, useState } from 'react'
 
 import type { ControlClient } from '../control-client/control-client.js'
-import { controlStream, nextSessionId, type TuiNotice } from './frames.js'
+import { controlStream, nextSessionId, type TuiNotice, type TurnNotice, turnEntries } from './frames.js'
 
 export interface TheoClawTuiProps {
   /** The connection to the running instance; the TUI builds no agent (plan D1). */
@@ -36,13 +36,15 @@ const COMMANDS: readonly ChatComposerCommand[] = [
 type Item =
   | { readonly kind: 'user'; readonly text: string }
   | ({ readonly kind: 'notice' } & TuiNotice)
-  | { readonly kind: 'turn'; readonly source: AgentStreamSource }
+  | { readonly kind: 'turn'; readonly id: number; readonly source: AgentStreamSource; readonly notices: readonly TurnNotice[] }
 
-function Turn({ source }: { readonly source: AgentStreamSource }): ReactElement {
+function Turn({ source, notices }: { readonly source: AgentStreamSource; readonly notices: readonly TurnNotice[] }): ReactElement {
   const { events } = useAgentStream(source)
   return (
     <>
-      {events.map((event) => {
+      {turnEntries(events, notices).map((entry, index) => {
+        if (entry.kind === 'notice') return <Notice key={`n${index}`} variant={entry.variant}>{entry.text}</Notice>
+        const { event } = entry
         if (event.kind === 'message') return <ChatMessage key={event.id} role={event.role}>{event.text}</ChatMessage>
         if (event.kind === 'tool') return <ToolCallCard key={event.id} name={event.name} status={event.status} />
         return null
@@ -56,7 +58,7 @@ function Entry({ item }: { readonly item: Item }): ReactElement {
     case 'user':
       return <ChatMessage role="user">{item.text}</ChatMessage>
     case 'turn':
-      return <Turn source={item.source} />
+      return <Turn source={item.source} notices={item.notices} />
     case 'notice':
       return <Notice variant={item.variant}>{item.text}</Notice>
   }
@@ -82,9 +84,15 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
 
   const notice = (n: TuiNotice): void => setItems((current) => [...current, { kind: 'notice', ...n }])
 
+  const turns = useRef(0)
+
   const send = (text: string): void => {
+    turns.current += 1
+    const id = turns.current
     running.current = true
     setBusy(true)
+    const inTurn = (n: TurnNotice): void =>
+      setItems((current) => current.map((item) => (item.kind === 'turn' && item.id === id ? { ...item, notices: [...item.notices, n] } : item)))
     const onEnd = (): void => {
       running.current = false
       setBusy(false)
@@ -93,8 +101,8 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
       if (next !== undefined) send(next)
     }
     // A function source: the hook starts the turn when it mounts, so the stream is opened exactly once.
-    const source: AgentStreamSource = () => controlStream(client, text, session, notice, onEnd)
-    setItems((current) => [...current, { kind: 'user', text }, { kind: 'turn', source }])
+    const source: AgentStreamSource = () => controlStream(client, text, session, inTurn, onEnd)
+    setItems((current) => [...current, { kind: 'user', text }, { kind: 'turn', id, source, notices: [] }])
   }
 
   useInput((_input, key) => {

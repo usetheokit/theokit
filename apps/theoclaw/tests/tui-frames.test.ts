@@ -1,13 +1,13 @@
 /**
  * B-376 — the TUI's frame adapter (`src/tui/frames.ts`): how a turn's control frames become the
  * `AgentStreamSource` that `@theokit/tui`'s `agentStreamReducer` folds, and which frame-level notices
- * TheoClaw adds. Unit tests, no socket and no terminal.
+ * TheoClaw adds and where they sit in the turn. Unit tests, no socket and no terminal.
  */
 import { type AgentStreamEvent, agentStreamReducer, initialAgentStreamState } from "@theokit/tui";
 import { describe, expect, it } from "vitest";
 
 import type { ControlClient, ControlFrame } from "../src/control-client/control-client.js";
-import { controlStream, nextSessionId, type TuiNotice } from "../src/tui/frames.js";
+import { controlStream, nextSessionId, type TurnNotice, turnEntries } from "../src/tui/frames.js";
 
 const SESSION = "owner";
 
@@ -16,8 +16,9 @@ function event(fields: Record<string, unknown>): ControlFrame {
   return { type: "event", session: SESSION, event: fields } as unknown as ControlFrame;
 }
 
+/** Run a turn's frames as the TUI does: the stream folds in the framework reducer, ending with its done. */
 async function run(frames: readonly ControlFrame[], fail?: Error) {
-  const notices: TuiNotice[] = [];
+  const notices: TurnNotice[] = [];
   let ended = 0;
   const client = {
     chat: async function* () {
@@ -27,71 +28,126 @@ async function run(frames: readonly ControlFrame[], fail?: Error) {
   } as unknown as ControlClient;
   const events: AgentStreamEvent[] = [];
   for await (const e of controlStream(client, "hi", SESSION, (n) => notices.push(n), () => (ended += 1))) events.push(e);
-  // The hook folds a terminal done when the source ends.
   const state = [...events, { type: "done" }].reduce(agentStreamReducer, initialAgentStreamState);
-  return { state, notices, ended };
+  return { state, notices, ended, entries: turnEntries(state.events, notices) };
 }
 
-describe("controlStream: text and tools fold through the framework reducer", () => {
+const DONE: ControlFrame = { type: "done", session: SESSION };
+
+describe("controlStream: text deltas", () => {
   it("joins consecutive deltas into one assistant message", async () => {
-    const { state } = await run([
-      event({ type: "text_delta", content: "Hel" }),
-      event({ type: "text_delta", content: "lo" }),
-      { type: "done", session: SESSION },
-    ]);
+    const { state } = await run([event({ type: "text_delta", content: "Hel" }), event({ type: "text_delta", content: "lo" }), DONE]);
     expect(state.events).toMatchObject([{ kind: "message", role: "assistant", text: "Hello" }]);
     expect(state.status).toBe("done");
   });
 
-  it("settles a tool as success, or as failed when the result says isError: true", async () => {
+  it("starts a new assistant message after a tool card", async () => {
     const { state } = await run([
+      event({ type: "text_delta", content: "one" }),
       event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
-      event({ type: "tool_call", callId: "c2", toolName: "Grep" }),
-      event({ type: "tool_result", callId: "c1", isError: false }),
-      event({ type: "tool_result", callId: "c2", isError: true }),
-      { type: "done", session: SESSION },
+      event({ type: "text_delta", content: "two" }),
+      DONE,
     ]);
-    expect(state.events).toMatchObject([
-      { kind: "tool", name: "ReadFile", status: "success" },
-      { kind: "tool", name: "Grep", status: "failed" },
+    expect(state.events).toMatchObject([{ kind: "message", text: "one" }, { kind: "tool" }, { kind: "message", text: "two" }]);
+  });
+});
+
+describe("controlStream: tool cards", () => {
+  it("draws a running card for a tool call (until the turn ends)", async () => {
+    const client = { chat: async function* () { yield event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }); } } as unknown as ControlClient;
+    const first = await controlStream(client, "hi", SESSION, () => undefined, () => undefined).next();
+    expect(agentStreamReducer(initialAgentStreamState, first.value as AgentStreamEvent).events).toMatchObject([
+      { kind: "tool", name: "ReadFile", status: "running" },
     ]);
   });
 
-  it("an interrupted turn keeps its text, fails the unfinished tool, and raises a warning", async () => {
-    const { state, notices, ended } = await run([
+  it("settles the matching card as success, leaving the other card running", async () => {
+    const client = {
+      chat: async function* () {
+        yield event({ type: "tool_call", callId: "c1", toolName: "ReadFile" });
+        yield event({ type: "tool_call", callId: "c2", toolName: "Grep" });
+        yield event({ type: "tool_result", callId: "c1", isError: false });
+      },
+    } as unknown as ControlClient;
+    let state = initialAgentStreamState;
+    for await (const e of controlStream(client, "hi", SESSION, () => undefined, () => undefined)) state = agentStreamReducer(state, e);
+    expect(state.events).toMatchObject([
+      { kind: "tool", name: "ReadFile", status: "success" },
+      { kind: "tool", name: "Grep", status: "running" },
+    ]);
+  });
+
+  it("settles a card as failed only when the result says isError: true", async () => {
+    const { state } = await run([
+      event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
+      event({ type: "tool_call", callId: "c2", toolName: "Grep" }),
+      event({ type: "tool_result", callId: "c1", isError: true }),
+      event({ type: "tool_result", callId: "c2", isError: false }),
+      DONE,
+    ]);
+    expect(state.events).toMatchObject([
+      { kind: "tool", name: "ReadFile", status: "failed" },
+      { kind: "tool", name: "Grep", status: "success" },
+    ]);
+  });
+
+  it("ignores a result whose call id matches no card", async () => {
+    const { state } = await run([
+      event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
+      event({ type: "tool_result", callId: "missing", isError: true }),
+      DONE,
+    ]);
+    expect(state.events).toHaveLength(1);
+    expect(state.events[0]).toMatchObject({ name: "ReadFile" });
+  });
+});
+
+describe("controlStream: the end of a turn", () => {
+  it("done ends the turn and keeps the text", async () => {
+    const { state, notices, ended } = await run([event({ type: "text_delta", content: "hi" }), DONE]);
+    expect(state.events).toMatchObject([{ text: "hi" }]);
+    expect(notices).toEqual([]);
+    expect(ended).toBe(1);
+  });
+
+  it("interrupted ends the turn with a warning line after the partial output, failing the unfinished tool", async () => {
+    const { entries, notices, ended } = await run([
       event({ type: "text_delta", content: "part" }),
       event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
       { type: "interrupted", session: SESSION },
     ]);
-    expect(state.events).toMatchObject([
-      { kind: "message", text: "part" },
-      { kind: "tool", status: "failed" },
+    expect(entries).toMatchObject([
+      { kind: "event", event: { kind: "message", text: "part" } },
+      { kind: "event", event: { kind: "tool", status: "failed" } },
+      { kind: "notice", variant: "warning", text: "interrupted" },
     ]);
-    expect(notices).toEqual([{ variant: "warning", text: "interrupted" }]);
+    expect(notices).toHaveLength(1);
     expect(ended).toBe(1);
   });
-});
 
-describe("controlStream: notices", () => {
-  it("an error frame ends the turn with a notice naming its code", async () => {
-    const { notices } = await run([{ type: "error", code: "busy", session: SESSION }]);
-    expect(notices).toEqual([{ variant: "error", text: "the turn ended: busy" }]);
+  it("an error frame ends the turn with an error line naming its code", async () => {
+    const { entries } = await run([{ type: "error", code: "busy", session: SESSION }]);
+    expect(entries).toEqual([{ kind: "notice", variant: "error", text: "the turn ended: busy" }]);
   });
 
-  it("an error event inside the turn is a notice and the text after it still streams", async () => {
-    const { state, notices } = await run([
+  it("an error event inside the turn adds an error line in place and the turn goes on", async () => {
+    const { entries, state } = await run([
+      event({ type: "text_delta", content: "before" }),
       event({ type: "error", code: "rate_limited" }),
       event({ type: "text_delta", content: "after" }),
-      { type: "done", session: SESSION },
+      DONE,
     ]);
-    expect(notices).toEqual([{ variant: "error", text: "the turn failed (rate_limited)" }]);
-    expect(state.events).toMatchObject([{ kind: "message", text: "after" }]);
+    expect(entries).toMatchObject([
+      { kind: "event", event: { text: "before" } },
+      { kind: "notice", variant: "error", text: "the turn failed (rate_limited)" },
+      { kind: "event", event: { text: "after" } },
+    ]);
     expect(state.status).toBe("done");
   });
 
-  it("a failed connection ends the turn with the reason", async () => {
+  it("a failed connection ends the turn with the reason as an error line", async () => {
     const { notices, ended } = await run([], new Error("connection closed before the turn ended"));
-    expect(notices).toEqual([{ variant: "error", text: "connection closed before the turn ended" }]);
+    expect(notices).toMatchObject([{ variant: "error", text: "connection closed before the turn ended" }]);
     expect(ended).toBe(1);
   });
 
@@ -100,7 +156,7 @@ describe("controlStream: notices", () => {
       { type: "interrupt_ok", session: SESSION },
       { type: "no_turn", session: SESSION },
       event({ type: "usage", tokens: 12 }),
-      { type: "done", session: SESSION },
+      DONE,
     ]);
     expect(state.events).toEqual([]);
     expect(notices).toEqual([]);
