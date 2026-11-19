@@ -10,11 +10,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `theokit`: the route manifest gives each page, layout, error, loading and not-found component a unique identifier, so `tasks/[id]/page.tsx` and `plans/[id]/page.tsx` build together.
 
+## [@theokit/agents 16.13.0, create-theokit 3.1.7, theokit 0.83.1, @theokit/host 0.1.0, @theokit/http 2.7.0, @theokit/presenter 0.16.0] - 2026-11-19
+
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
+
+## [@theokit/agents 16.12.0, create-theokit 3.1.6] - 2026-11-19
+
 ### Added
 
 - `@theokit/agents`: `streamFromEmitter()` in `@theokit/agents/bridge` turns a callback producer into an abortable `AsyncIterable` for `generateAgentRoutes` and `streamAgentResponse`.
+
+## [@theokit/agents 16.12.0, create-theokit 3.1.6] - 2026-11-19
+
+### Added
+
 - `@theokit/agents`: `createGoalSignal()` gives `GoalRunner` an `update_goal` tool and a matching judge, so a goal loop ends when the agent reports `complete` or `blocked`.
 - `@theokit/agents`: `.subagents()` accepts `model` (a `ModelSelection` or `'inherit'`) and `mcpServers` on a registered subagent, so a discovered definition keeps its declared model and MCP servers.
+
+## [@theokit/agents 16.12.0] - 2026-11-19
+
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
 
 ## [@theokit/agents 16.11.0, create-theokit 3.1.5] - 2026-11-19
 

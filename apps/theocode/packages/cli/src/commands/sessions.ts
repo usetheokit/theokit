@@ -120,7 +120,7 @@ async function runTargeted(args: ExecSessions, ops: SessionOps, say: Say): Promi
     if (report.failed) process.exit(1)
     return
   }
-  const r = ops.forkSession(target, `${target}-fork-${String(process.pid)}`)
+  const r = await ops.forkSession(target, `${target}-fork-${String(process.pid)}`)
   if (!r.copied) {
     process.stderr.write(`[sessions fork] no transcript for ${target}\n`)
     process.exit(1)
