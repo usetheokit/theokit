@@ -44,7 +44,6 @@ export const validateAgainstInputSchema: ToolArgsValidator = (tool, args) => {
   const parsed = schema.safeParse(args)
   if (parsed.success) return undefined
   const issue = parsed.error.issues[0]
-  if (issue === undefined) return 'invalid arguments'
   const path = issue.path.map(String).join('.')
   return `${path === '' ? '(root)' : path}: ${issue.message}`
 }
