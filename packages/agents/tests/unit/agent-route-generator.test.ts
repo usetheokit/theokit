@@ -104,11 +104,17 @@ describe('agent-route-generator', () => {
           body: JSON.stringify({ message: 'Hi', sessionId: 's1' }),
         }),
       )
-      return { status: res.status, body: await res.text() }
+      // `streamAgentResponse` mints a fresh `textId` UUID per request; mask it, compare the rest.
+      const body = (await res.text()).replace(
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+        '<uuid>',
+      )
+      return { status: res.status, body }
     }
     const withOptions = await ask(compiled)
     const without = await ask()
     expect(without.status).toBe(200)
+    expect(without.body).toContain('Hello!')
     expect(without).toEqual(withOptions)
   })
 
