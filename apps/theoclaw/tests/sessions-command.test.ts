@@ -18,7 +18,13 @@ function workspaceWithSession(): string {
   mkdirSync(dir, { recursive: true })
   const id = 'matrix-dm-_owner_localhost-g0'
   const lines = [
-    { type: 'user', uuid: 'u1', parentUuid: null, sessionId: id, message: { content: [{ type: 'text', text: 'hello there' }] } },
+    {
+      type: 'user',
+      uuid: 'u1',
+      parentUuid: null,
+      sessionId: id,
+      message: { content: [{ type: 'text', text: 'hello there' }] },
+    },
     {
       type: 'assistant',
       uuid: 'a1',
@@ -31,10 +37,15 @@ function workspaceWithSession(): string {
       uuid: 'u2',
       parentUuid: 'a1',
       sessionId: id,
-      message: { content: [{ type: 'tool_result', content: 'x' }] } },
+      message: { content: [{ type: 'tool_result', content: 'x' }] },
+    },
   ]
   // A line that is not JSON sits between the turns; the reader skips it.
-  const body = [JSON.stringify(lines[0]), '{not json', ...lines.slice(1).map((line) => JSON.stringify(line))]
+  const body = [
+    JSON.stringify(lines[0]),
+    '{not json',
+    ...lines.slice(1).map((line) => JSON.stringify(line)),
+  ]
   writeFileSync(join(dir, `${id}.jsonl`), body.join('\n') + '\n')
   return workspace
 }
@@ -117,8 +128,75 @@ describe('transcript reading', () => {
     expect(readSessionMessages).toHaveBeenCalledWith({
       sessionId: 'matrix-dm-_owner_localhost-g0',
       cwd: workspace,
-      sessionDir: join(workspace, '.theoclaw'),
+      sessionDir: expect.any(String),
     })
+  })
+
+  it('keeps the messages before a compact boundary', async () => {
+    const workspace = scratchDir()
+    const id = 'compacted-g0'
+    const dir = join(workspace, '.theoclaw', 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
+    mkdirSync(dir, { recursive: true })
+    const turn = (type: string, uuid: string, parentUuid: string | null, content: unknown) =>
+      JSON.stringify({ type, uuid, parentUuid, sessionId: id, message: { content } })
+    const boundary = (uuid: string) =>
+      JSON.stringify({
+        type: 'system',
+        subtype: 'compact_boundary',
+        uuid,
+        parentUuid: null,
+        sessionId: id,
+      })
+    const text = (value: string) => [{ type: 'text', text: value }]
+    const body = [
+      turn('user', 'u1', null, text('first question')),
+      turn('assistant', 'a1', 'u1', text('first answer')),
+      boundary('b1'),
+      turn('user', 'u2', 'b1', text('second question')),
+      turn('assistant', 'a2', 'u2', text('second answer')),
+      boundary('b2'),
+      turn('user', 'u3', 'b2', text('third question')),
+    ]
+    writeFileSync(join(dir, `${id}.jsonl`), body.join('\n') + '\n')
+    const expected =
+      'user: first question\nassistant: first answer\nuser: second question\n' +
+      'assistant: second answer\nuser: third question\n'
+    expect((await run(['sessions', 'export', 'compacted'], workspace)).out).toBe(expected)
+    expect((await run(['sessions', 'list'], workspace)).out).toContain('compacted-g0\t5 messages')
+    expect((await run(['resume'], workspace)).out).toContain(expected)
+    const shared = scratchDir()
+    await run(['sessions', 'share', 'compacted', '--to', shared], workspace)
+    const snapshot = JSON.parse(
+      readFileSync(join(shared, 'shared-sessions', `${id}.json`), 'utf8'),
+    ) as { messages: unknown[] }
+    expect(snapshot.messages).toHaveLength(5)
+  })
+
+  it('reads a record whose content is a plain string', async () => {
+    const workspace = scratchDir()
+    const id = 'legacy-g0'
+    const dir = join(workspace, '.theoclaw', 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
+    mkdirSync(dir, { recursive: true })
+    const body = [
+      {
+        type: 'user',
+        uuid: 'u1',
+        parentUuid: null,
+        sessionId: id,
+        message: { content: 'plain question' },
+      },
+      {
+        type: 'assistant',
+        uuid: 'a1',
+        parentUuid: 'u1',
+        sessionId: id,
+        message: { content: 'plain answer' },
+      },
+    ].map((line) => JSON.stringify(line))
+    writeFileSync(join(dir, `${id}.jsonl`), body.join('\n') + '\n')
+    const { code, out } = await run(['sessions', 'export', 'legacy'], workspace)
+    expect(code).toBe(0)
+    expect(out).toBe('user: plain question\nassistant: plain answer\n')
   })
 
   it('shows what the SDK reader returns, not what the file holds', async () => {

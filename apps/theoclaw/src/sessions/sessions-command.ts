@@ -3,12 +3,12 @@ import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
 import { listSessions } from '@theokit/agents/session'
-import { readSessionMessages } from '@theokit/sdk'
 
 import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { resolveInstance } from '../instance.js'
+import { readFullHistory } from './transcript-history.js'
 
 /**
  * `theoclaw sessions list|show|export` (OC-51): a read-only view over the chat transcripts the SDK
@@ -32,10 +32,10 @@ const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [
 
 /** The user and assistant turns of a session, read by the SDK; entries with no text are dropped. */
 async function readMessages(session: ChatSession): Promise<Message[]> {
-  const stored = await readSessionMessages({
+  const stored = await readFullHistory({
     sessionId: session.id,
     cwd: session.workspace,
-    sessionDir: join(session.workspace, '.theoclaw'),
+    transcript: session.transcript,
   })
   // The reader's `text` also renders tool calls and results; the CLI shows only what was said.
   return stored
