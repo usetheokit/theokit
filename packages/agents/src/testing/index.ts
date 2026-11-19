@@ -1,3 +1,11 @@
+/**
+ * `@theokit/agents/testing` — a utility subpath for consumers' own tests, not a test-only seam.
+ *
+ * Tier decision: stable by default (`createMockWireStream`, `createMockOutputEvents`, `wireChunk`,
+ * `inspectCompiled`, the live-suite provider-key guard). The exception is the legacy snake_case
+ * `createMockAgentStream` and its types, each tagged `@experimental` on its own declaration.
+ */
+
 export {
   createMockAgentStream,
   type MockAgentStreamOptions,
