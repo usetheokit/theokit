@@ -253,6 +253,20 @@ it; the last valid submission wins. `result()` throws `NoResultSubmittedError` w
 `submitted()` tells you beforehand. The schema must be an object schema; `name` and `description` rename or
 reword the tool.
 
+## Turning a pushed event stream into an iterable
+
+`streamFromEmitter(start, { signal, isFinal, onError })` from `@theokit/agents/bridge` returns an
+`AsyncIterable` for a producer that pushes events to a callback. `return()` aborts the producer's signal
+at once, unless a final event (`done` or `error` by default) was already seen. A rejecting producer
+yields the `onError` event, unless an error event already went out.
+
+```ts
+generateAgentRoutes({
+  createRun: (m, s, signal) =>
+    streamFromEmitter((emit, sig) => runAgentTurn(/* ... */ emit, sig), { signal }),
+})
+```
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
