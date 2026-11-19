@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1252 export(s) across 25 entry point(s).
+1271 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -98,12 +98,15 @@ Measured against `@theokit/sdk@5.17.0`.
 | `encodeAcpMessage` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `estimateTokens` | value |
+| `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
 | `extractToolUses` | value |
 | `FieldCapability` | value |
 | `flushPendingToolResults` | value |
 | `foldLayers` | value |
 | `foldTurnLifecycle` | value |
+| `FOREIGN_FOLDERS` | value |
+| `foreignSurfaceInventory` | value |
 | `formatGoalEvent` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
@@ -195,6 +198,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `setDiagnosticsSink` | value |
 | `setOnce` | value |
 | `SettingSourcesCapability` | value |
+| `shapeToolsAsCustomTools` | value |
 | `shouldAutoApprove` | value |
 | `SkillsCapability` | value |
 | `SkillsOptionsCapability` | value |
@@ -209,6 +213,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SubAgent` | value |
 | `SubagentsCapability` | value |
 | `SubAgentsCapability` | value |
+| `SURFACE_FOLDERS` | value |
+| `surfaceOfFolder` | value |
 | `TaskNotFoundError` | value |
 | `TelemetryCapability` | value |
 | `textPayloadExtractor` | value |
@@ -318,6 +324,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ErrorMetadata` | type |
 | `FileEditEvent` | type |
 | `FinalizedDraft` | type |
+| `ForeignSurfaceEntry` | type |
+| `ForeignSurfaceInventoryInput` | type |
 | `GatedCompatSource` | type |
 | `GatedSettingSource` | type |
 | `GoalEvent` | type |
@@ -501,8 +509,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `ERROR_CODE_DATA_PART` | value |
+| `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
 | `flushPendingToolResults` | value |
+| `FOREIGN_FOLDERS` | value |
+| `foreignSurfaceInventory` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
 | `isAgentContext` | value |
@@ -534,6 +545,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `streamAgentResponse` | value |
 | `streamAgentUIMessages` | value |
 | `streamFromEmitter` | value |
+| `SURFACE_FOLDERS` | value |
+| `surfaceOfFolder` | value |
 | `toAgentFactory` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
@@ -584,6 +597,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `EphemeralAgent` | type |
 | `ErrorEvent` | type |
 | `FileEditEvent` | type |
+| `ForeignSurfaceEntry` | type |
+| `ForeignSurfaceInventoryInput` | type |
 | `GatedCompatSource` | type |
 | `GatedSettingSource` | type |
 | `HookApprovalGate` | type |
