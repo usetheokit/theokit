@@ -1,5 +1,6 @@
 import { chmod, rm, writeFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
+
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /**
