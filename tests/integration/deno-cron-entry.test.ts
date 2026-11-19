@@ -90,6 +90,31 @@ describe('Deno import map for the cron entry configs', () => {
   })
 })
 
+describe('Deno import map built through the build wiring', () => {
+  it('keeps deno.json aliases and maps the env override config dependencies', async () => {
+    write('deno.json', JSON.stringify({ imports: { '@app/backend': './lib/backend.ts' } }))
+    write(
+      'theo.config.production.ts',
+      `import { backend } from '@app/backend'\nimport { z } from 'zod'\nexport default { jobs: { backend }, z }\n`,
+    )
+    write('lib/backend.ts', `import { Pool } from 'pg'\nexport const backend = new Pool()\n`)
+    vi.stubEnv('NODE_ENV', 'production')
+    const { buildDeno } = await import('../../packages/theo/src/adapters/deno-deploy.js')
+    const written = new Map<string, string>()
+    await buildDeno({ port: 3000, serverDir: 'server', agentsDir: 'agents' } as never, root, {
+      runNodeBuild: async () => {},
+      writeEntry: (path, content) => written.set(path, content),
+      ensureDir: () => {},
+      copyClient: () => {},
+    })
+    const emitted = JSON.parse(written.get(join(root, 'deno.json')) ?? '{}') as {
+      imports: Record<string, string>
+    }
+    expect(emitted.imports['@app/backend']).toBe('./lib/backend.ts')
+    expect(emitted.imports.zod).toBe('npm:zod')
+  })
+})
+
 describe('renderDenoConfig', () => {
   it('keeps a project alias instead of remapping it to npm:', async () => {
     const { renderDenoConfig } = await import('../../packages/theo/src/adapters/deno-deploy.js')
