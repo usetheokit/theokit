@@ -898,10 +898,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `applyOutputStyle` | value |
 | `applySubagentMemory` | value |
 | `assertBootstrapped` | value |
+| `auditEnvKnobs` | value |
 | `blockAppliesTo` | value |
 | `BootstrapNotRunError` | value |
 | `BootstrapStepError` | value |
 | `CLAUDE_SETTINGS_KEYS` | value |
+| `coerceEnvValue` | value |
 | `composeInstructions` | value |
 | `contextPressure` | value |
 | `ContextPressureThresholdError` | value |
@@ -910,6 +912,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `defineAppBootstrap` | value |
 | `DottedOverrideError` | value |
 | `effectiveContextWindow` | value |
+| `envKnob` | value |
+| `envLayerFrom` | value |
 | `expandCommandTemplate` | value |
 | `expandInstructionImports` | value |
 | `FILE_INLINE_CAP` | value |
@@ -956,6 +960,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CustomCommand` | type |
 | `CustomCommandsResult` | type |
 | `DeclaredLayer` | type |
+| `EnvKnob` | type |
+| `EnvKnobKind` | type |
+| `EnvOptOut` | type |
+| `EnvReachabilityAudit` | type |
 | `ExpandImportsInput` | type |
 | `InstructionBlock` | type |
 | `InstructionCut` | type |
