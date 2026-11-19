@@ -125,6 +125,12 @@ Lookup is exact by design. A name that is not in the table gives `undefined`, ne
 
 When both exit-code spellings are present and differ, `exitCode` wins. A missing exit code stays `undefined`, never 0. `{ok: false, error}` reads as `error` (`tool_failed` when absent, `stderr` as `detail`); `{ok: true, diff}` and a raw unified diff string read as `diff`; anything else is `text`.
 
+## Folding a transcript
+
+`foldTranscript(state, event)` folds `AgentOutputEvent`s into what a chat screen shows: `TranscriptState { items, status, error? }`, starting from `EMPTY_TRANSCRIPT`. Items are `message`, `reasoning`, `tool` (a `TranscriptTool` keyed by `callId`, with `status` `pending`, `running`, `success` or `failed` and a `result` read by `readToolResult`) or `error`. Text before and after a tool call are two messages. `finish` sets `done`, `error` sets `error` and keeps its `code`; either marks every `pending` or `running` tool `failed`. After that the fold is terminal-final: every further event returns the same state object. `status` events change nothing. The fold is pure and never mutates its input.
+
+Use `foldTranscript` to render. Use `foldTurnLifecycle` to follow a turn's lifecycle (items started and completed in a vocabulary such as Codex JSONL), which has no tool status, result view or reasoning item.
+
 ## Pending approvals
 
 `pendingApprovals(messages)` returns every outstanding approval across wire messages, in order, as `PendingApproval { approvalId, toolCallId, toolName, input, question?, timeoutMs? }`. With nothing outstanding it returns one shared empty array. `readPendingApproval(part)` reads a single part. A part in `approval-requested` without a string `approval.id` is skipped, never settled by its `toolCallId`, because `approve()` could not settle it.
