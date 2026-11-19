@@ -265,4 +265,10 @@ export {
   type ForeignSurfaceInventoryInput,
 } from './foreign-surfaces.js'
 
+export {
+  runAgentTurn,
+  completeFromTurn,
+  type AgentTurnOutcome,
+  type RunAgentTurnOptions,
+} from './run-agent-turn.js'
 export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'

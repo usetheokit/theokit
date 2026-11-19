@@ -48,7 +48,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./session` | Session lifecycle, listing, fork/rewind, transcript GC with a retention floor |
 | `./hooks` | The lifecycle-hook engine and its fingerprint gate; `parseClaudeHooks` reads the Claude Code hook dialect (see below) |
 | `./ask` | The human-in-the-loop rendezvous — ask a question, settle it, abandon it safely |
-| `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable |
+| `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable. `protectedPaths` (absolute, or relative to `projectRoot`) lists state directories tools must not touch; `createPathVetoPlugin(scope)` is a `pre_tool_call` plugin that refuses any `path`, `file_path`, `filename`, `paths[]` or `apply_patch` destination that resolves, through symlinks and case variants, into one, and an unscoped `git_diff`. `vetoPathCall(scope, name, args)` gives the same verdict for calls that skip the plugin chain; `resolveRealPath`, `isWithin` and `SymlinkLoopError` are exported too |
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
@@ -89,6 +89,8 @@ process.exitCode = result.exitCode
 `AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
 
 `loginWithApiKey(key, store, { provider?, overwrite?, env? })` (from `./auth`) trims the key, infers the provider from its prefix when none is given, and writes the credential file, returning `{ provider, path }`. It throws `CredentialError` for an empty key or an unknown prefix without a provider, `ProviderPrefixMismatchError` when the declared provider contradicts the prefix, and `CredentialExistsError` (`code: 'credential_exists'`, names the path) when a file exists and `overwrite` is not set. `logout(store, env?)` removes the file and returns whether there was one; a concurrent removal returns `false`.
+
+`grantGate(store, classify)` (from `./auth`) vetoes a governed call that has no standing grant and never asks anyone. `createApprovalGate({ store, key, waived?, reviewer?, ask?, timeoutMs?, ledger?, onError? })` is the chain in front of it: a session waiver, a saved approval in the same `PermissionStore`, an optional reviewer (`'allow' | 'deny' | 'ask'`), then the person via `ask` (`'once'`, `'always'` which is saved with `store.grant`, or `'deny'`; `{ answer, by }` records who). No `ask` means a refusal (`nobody can approve it`); a timeout is a denial named in the decision's `reason` (it does not call `onError`); a throwing reviewer defers to the person, a throwing asker denies, and each is reported through `onError(error, stage)` and named in `reason`. `decide(ctx)` returns `{ allowed, reason, by }`; `plugin` applies it as a `pre_tool_call` veto. `createJsonlLedger(dir)` is an append-only `activity.jsonl` (mode 0600) with `read()`; pass it as `ledger` to get one receipt per decision.
 
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
 
@@ -240,6 +242,16 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
+## Reading skills with `skill_read`
+
+By default only inline skills (`createSkill(...)`) get a `skill_read` tool; a skill enabled by name or found on disk is listed in the `<skills>` block but its body is not readable. Opt in with `read: 'advertised'`:
+
+```ts
+AgentBuilder.create().skills(['deploy'], { read: 'advertised' }) // or defineAgent({ skillsRead: 'advertised' })
+```
+
+`skill_read` then serves exactly what the `<skills>` block lists: inline skills, skills enabled by name, and skills discovered through the granted `settingSources` and `claudeCode` roots (project, user, `.claude`, plugin bundles). It runs after the trust gate, so a root the gate withheld is neither read nor named in a not-found answer. The project root wins a name clash. An app-declared `skill_read` tool still takes precedence.
+
 ## Delegating to a fresh agent per task
 
 `delegationPortFromAgentFactory(create, { sendOptions })` (from `@theokit/agents/bridge`) returns a
@@ -266,6 +278,10 @@ const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: worker }
 `streamAgentTurnInProcess`, the client's `InProcessTransport` and `toAgentFactory`. An unknown name is
 refused with a `ConfigurationError`. `toAgentFactory({ withholdBuiltinShell: true })` still works;
 when both are set, the union is passed.
+
+## Describing a failed turn
+
+Import from `@theokit/agents`. `classifyTurnFailure(err)` walks `err.cause` (at most eight links) and returns `{ code, transient, message }`. A typed code anywhere in the chain wins over text, and `transient` comes only from `isTransientError` and typed provider status fields, never from digits in a message. `describeTurnFailure(failure, { attempts, hints })` renders `"<message> [<code>]: <hint>"` and appends `after N attempts` only when `attempts > 1`. `DEFAULT_TURN_FAILURE_HINTS` is neutral; pass `hints` to replace the wording for single codes.
 
 ## Hooks the host owns
 
@@ -296,6 +312,20 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Running scheduled prompts
+
+`createScheduler` needs a `RunPort`. `agentRunPort(withAgent)` is the stock one: it runs each prompt on the
+agent `withAgent` hands it, sends with the scheduler's signal, drains and waits, and returns
+`{ ok: false, error }` for a run that ends `error` or `cancelled` or has no result. `withAgent` owns disposal.
+
+```ts
+import { agentRunPort, createScheduler, fileTransientJob } from '@theokit/agents/tools'
+
+const scheduler = createScheduler({ store, deliver, run: agentRunPort(withAgent) })
+const { job, transient } = fileTransientJob({ id: 'heartbeat', cron: '*/30 * * * *', target, file: 'HEARTBEAT.md' })
+await scheduler.add(job, transient) // an absent or blank file means no run; other read errors reject
+```
 
 ## Secret references in configuration
 
@@ -394,6 +424,8 @@ from `.mcp.json`, and the personal scope measured 0 when this was written. **It 
 gap worth declaring and one worth closing — so it was closed. `loadPersonalMcpServers` reads that key
 and only that key, and returns empty on a malformed file rather than throwing, because one stray comma
 in a shared home file must not break every project on the machine.
+
+**One turn.** `runAgentTurn({ agent, message, runId, emit, signal?, sendOptions?, mapEvent? })` (from `@theokit/agents/bridge`) runs one `agent.send` on an agent you already hold, passes each translated event to `emit` (final assistant text already streamed as deltas is not repeated), and resolves, never rejects, with `{ ok: true, usage? }` or `{ ok: false, code: 'turn_failed' | 'turn_cancelled', reason }`. A streamed `error` fails the turn even when `wait()` reports finished. An aborted `signal` cancels the run and closes the stream without waiting on a hung cancel, and nothing is emitted after that. `completeFromTurn(withAgent)` adapts it to the `complete` port of `createOpenAICompatibleRoutes`; a failed turn throws, so the route answers 502.
 
 **MCP scopes.** `loadMcpScopes({ cwd, home, projectAllowed, onClash?, personalFiles?, onWarn? })` (from `@theokit/agents/bridge`) merges the personal servers (`~/.claude.json` by default) with `<cwd>/.mcp.json`. When `projectAllowed` is false the project's servers are withheld: the file is parsed only to list its names in `projectWithheld`. On a name clash the personal server wins by default, so a repository cannot replace a server the operator configured; pass `onClash: 'project-wins'` for the reference format. Clashes are returned as data in `shadowed`. A malformed project file throws `McpFileError`; a malformed personal file only warns.
 
@@ -577,6 +609,8 @@ change knows which of the two worlds they are in.
 | Variable | Security | What it changes | Read at |
 |---|---|---|---|
 | `PROGRAMDATA` | no | Where the machine-wide operator policy is looked for on Windows. Changing it moves which policy file governs the run. | `src/config/operator-policy.ts:119` |
+| `PATH` | no | Which executables count as installed when `skill_read` (`read: 'advertised'`) decides whether a skill with `requires-bins` is offered to the model, the same test the SDK applies to the `<skills>` block. | `src/bridge/advertised-skill-read.ts:26` |
+| `PATHEXT` | no | Windows executable extensions (default `.EXE;.CMD`), used to decide whether a skill's `requires-bins` are on `PATH` for `skill_read` (`read: 'advertised'`), as the SDK does. Ignored off Windows. | `src/bridge/advertised-skill-read.ts:26` |
 | `THEOKIT_CODEX_CLIENT_ID` | **yes** | Overrides the OAuth client id used for the Codex device flow. It selects which OAuth client the device authorisation is issued against, so it is a credential-path decision rather than a convenience one. | `src/auth/device-provider.ts:97`, via the constant at `:93` |
 | `THEOKIT_DEBUG` | no | Turns on debug logging. Log output can contain request shapes, so treat the logs as sensitive even though the switch is not. | `src/debug-log.ts:10` |
 
@@ -644,6 +678,16 @@ See `LICENSE`.
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
+
+`streamTurnForkingIfBusy(sessionId, open, { onFork?, forkId?, isBusy? })` is for one-shot surfaces (an `exec`
+command, a cron job, a CI step) that resume a session another process may be writing. `open(id)` returns the
+turn's chunk stream. If the session is busy, the turn re-runs once under `${id}-fork-<8 hex>` and `onFork(from, to)`
+is called. Busy is detected up front with `isBusy` (default: `sessionHasWriter` on the transcript under
+`transcriptRoot()` and `process.cwd()`; pass `isBusy` for another cwd) or from the `data-error-code`
+`session_busy` part and the `error` chunk after it. Both are swallowed, and the structural chunks held before the
+first content chunk are dropped, so the contended attempt emits nothing. The fork starts a fresh session; no history
+is copied. A second contention throws `ForkedSessionBusyError` (`code: 'session_busy_after_fork'`). The returned
+`sessionId` promise resolves to the id that ran once `chunks` has been consumed. Other errors pass through.
 
 `deleteSession(id, { cwd, removeFromRegistry })` reports `registryOutcome: 'unconfirmed'` with the SDK's
 `Agent.delete`, because that returns `Promise<void>`. Pass `isListedInRegistry` to have it measure instead.
