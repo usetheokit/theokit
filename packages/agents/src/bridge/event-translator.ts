@@ -266,8 +266,12 @@ const INTERACTION_UPDATE_IGNORED: ReadonlySet<string> = new Set([
 //    `ReturnType<typeof translateSdkEvent>` stays the open `StreamEvent[]` for existing consumers.
 export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
 export function translateSdkEvent(msg: SdkMessageLike, runId: string): AgentStreamEvent[]
+// eslint-disable-next-line @typescript-eslint/unified-signatures -- the separate signature is what keeps `ReturnType` open
 export function translateSdkEvent(msg: TranslatorInput, runId: string): StreamEvent[]
-export function translateSdkEvent(input: TranslatorInput, runId: string): AgentStreamEvent[] {
+export function translateSdkEvent(
+  input: TranslatorInput,
+  runId: string,
+): StreamEvent[] | AgentStreamEvent[] {
   // The reads below are all `unknown`-guarded; the index-signature view is internal only.
   const msg = input as SdkMessage
   switch (msg.type) {
