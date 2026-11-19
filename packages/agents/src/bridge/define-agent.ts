@@ -123,6 +123,12 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    */
   skills?: SkillsSelection
   /**
+   * Which skills `skill_read` serves. `'inline'` (default): inline skills only. `'advertised'`: also
+   * skills enabled by name and discovered through `settingSources` / `compatSources`, after the trust
+   * gate — exactly what the `<skills>` block lists.
+   */
+  skillsRead?: 'inline' | 'advertised'
+  /**
    * Subagents this agent carries, registered by name — `AgentOptions.agents` in the SDK.
    *
    * #825 — distinct from what `settingSources` discovers, and that distinction is the whole reason it
@@ -306,6 +312,7 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
     // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
     ...compileSkillsSelection(def.skills),
+    ...(def.skillsRead !== undefined ? { skillsRead: def.skillsRead } : {}),
     // #825 — the author's own subagents, carried verbatim. Absent ⇒ no key, so an agent that
     // declares none is indistinguishable from one written before the field existed, and the SDK
     // goes on discovering from `settingSources` exactly as it did.
