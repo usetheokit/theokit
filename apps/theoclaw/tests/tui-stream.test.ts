@@ -337,7 +337,7 @@ describe('controlStream: interruption fallback and notices from the app', () => 
     }
   })
 
-  it('a notice posted in the same tick a frame resolved is placed after that frame', async () => {
+  it('a notice posted before a frame resolves in the same tick is placed before that frame', async () => {
     const gate = deferred<void>()
     const client = {
       chat: async function* () {
@@ -351,17 +351,40 @@ describe('controlStream: interruption fallback and notices from the app', () => 
     const notices: TurnNotice[] = []
     const stream = controlStream(client, 'hi', SESSION, (n) => notices.push(n), () => undefined, inbox)
     const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
-    // The frame's promise resolves and the notice is posted before the stream's continuation runs.
-    gate.resolve()
     inbox.post({ variant: 'warning', text: 'queued' })
+    gate.resolve()
     for await (const e of stream) events.push(e)
     const state = [...events, { type: 'done' } as AgentStreamEvent].reduce(
       agentStreamReducer,
       initialAgentStreamState,
     )
     expect(turnEntries(state.events, notices)).toMatchObject([
-      { kind: 'event', event: { text: 'beforeafter' } },
+      { kind: 'event', event: { text: 'before' } },
       { kind: 'notice', text: 'queued' },
+      { kind: 'event', event: { text: 'after' } },
+    ])
+  })
+
+  it('a notice posted before the interrupted frame resolves is frozen before the warning', async () => {
+    const gate = deferred<void>()
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'part' })
+        await gate.promise
+        yield { type: 'interrupted', session: SESSION } as ControlFrame
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    let handed: readonly TranscriptEntry[] | undefined
+    const stream = controlStream(client, 'hi', SESSION, () => undefined, () => undefined, inbox, (t) => (handed = t))
+    await stream.next()
+    inbox.post({ variant: 'warning', text: 'queued' })
+    gate.resolve()
+    for await (const e of stream) void e
+    expect(handed).toEqual([
+      { kind: 'assistant', text: 'part' },
+      { kind: 'notice', variant: 'warning', text: 'queued' },
+      { kind: 'notice', variant: 'warning', text: 'interrupted' },
     ])
   })
 

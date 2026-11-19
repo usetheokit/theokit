@@ -82,30 +82,22 @@ export interface TurnInbox {
 }
 
 export function createTurnInbox(): TurnInbox {
-  // A post is stamped once the current tick's microtasks have run (`seq` undefined until then), so a frame whose
-  // promise resolved before the post, but whose continuation has not run yet, is stamped first and keeps its place.
-  let queue: { n: TuiNotice; seq: number | undefined }[] = []
+  let queue: { n: TuiNotice; seq: number }[] = []
   let clock = 0
   let wake: (() => void) | undefined
   return {
     post(n) {
-      const item: { n: TuiNotice; seq: number | undefined } = { n, seq: undefined }
-      queue.push(item)
-      setImmediate(() => {
-        item.seq = ++clock
-        wake?.()
-        wake = undefined
-      })
+      queue.push({ n, seq: ++clock })
+      wake?.()
+      wake = undefined
     },
-    take(before) {
-      const taken = queue.filter((item) =>
-        before === undefined ? true : item.seq !== undefined && item.seq < before,
-      )
-      queue = queue.filter((item) => !taken.includes(item))
+    take(before = Number.POSITIVE_INFINITY) {
+      const taken = queue.filter((item) => item.seq < before)
+      queue = queue.filter((item) => item.seq >= before)
       return taken.map((item) => item.n)
     },
     wait() {
-      if (queue.some((item) => item.seq !== undefined)) return Promise.resolve()
+      if (queue.length > 0) return Promise.resolve()
       return new Promise<void>((resolve) => {
         wake = resolve
       })
