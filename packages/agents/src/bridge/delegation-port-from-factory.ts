@@ -33,7 +33,6 @@ function describeStreamedError(event: object): string {
 
 /** Drain the run's stream and return a description of the first error event, if any. */
 async function streamedErrorOf(run: SdkTurnHandle): Promise<string | undefined> {
-  if (run.stream === undefined) return undefined
   let streamed: string | undefined
   for await (const message of run.stream()) {
     // Untrusted at runtime: an injected handle's stream may yield null or a primitive.

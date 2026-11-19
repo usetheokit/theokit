@@ -193,3 +193,22 @@ describe('toAgentStreamEvent (untrusted input)', () => {
     ).toBeUndefined()
   })
 })
+
+describe('toAgentStreamEvent rejects variants missing required properties', () => {
+  it.each([
+    ['tool_call without input', { type: 'tool_call', callId: 'c', toolName: 't' }],
+    ['partial_tool_call without input', { type: 'partial_tool_call', callId: 'c', toolName: 't' }],
+    ['state_update without data', { type: 'state_update', channel: 'ch' }],
+  ])('%s', async (_name, value) => {
+    const { toAgentStreamEvent } = await import('../../src/bridge/agent-stream-events.js')
+    expect(toAgentStreamEvent(value)).toBeUndefined()
+  })
+
+  it('still accepts them when the property is present, even if undefined-valued', async () => {
+    const { toAgentStreamEvent } = await import('../../src/bridge/agent-stream-events.js')
+    expect(
+      toAgentStreamEvent({ type: 'tool_call', callId: 'c', toolName: 't', input: null }),
+    ).toBeDefined()
+    expect(toAgentStreamEvent({ type: 'state_update', channel: 'ch', data: 1 })).toBeDefined()
+  })
+})

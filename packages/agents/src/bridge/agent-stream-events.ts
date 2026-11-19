@@ -367,8 +367,8 @@ function validUsage(u: unknown): boolean {
 const VALIDATORS: Record<AgentStreamEvent['type'], (e: Record<string, unknown>) => boolean> = {
   run_started: (e) => isStr(e.runId) && isStr(e.agentName) && optional(e.model, isStr),
   text_delta: (e) => isStr(e.content),
-  tool_call: (e) => isStr(e.callId) && isStr(e.toolName),
-  partial_tool_call: (e) => isStr(e.callId) && isStr(e.toolName),
+  tool_call: (e) => isStr(e.callId) && isStr(e.toolName) && 'input' in e,
+  partial_tool_call: (e) => isStr(e.callId) && isStr(e.toolName) && 'input' in e,
   tool_result: (e) =>
     isStr(e.callId) &&
     isStr(e.toolName) &&
@@ -394,7 +394,7 @@ const VALIDATORS: Record<AgentStreamEvent['type'], (e: Record<string, unknown>) 
     optional(e.filename, isStr) &&
     optional(e.metadata, isRecord),
   artifact_chunk: (e) => isStr(e.artifactId) && isStr(e.chunk) && isBool(e.isLast),
-  state_update: (e) => isStr(e.channel),
+  state_update: (e) => isStr(e.channel) && 'data' in e,
   checkpoint_saved: (e) => isStr(e.checkpointId) && isNum(e.step) && isStr(e.resumeToken),
   file_edit: (e) =>
     isStr(e.file) &&

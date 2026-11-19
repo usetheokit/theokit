@@ -12,7 +12,7 @@ import type { ToolRefusal } from '@theokit/presenter'
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SDKAgent, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
@@ -854,11 +854,11 @@ export interface SdkTurnHandle {
   readonly id?: string
   wait: () => Promise<SdkTurnOutcome>
   /** The SDK's raw message stream (`Run.stream()`), preserved as-is. */
-  stream?: () => AsyncIterable<SdkStreamMessage>
+  stream: () => AsyncIterable<SdkStreamMessage>
   /** The SDK's ordered timeline (`Run.events()`): messages and deltas interleaved. */
   events?: () => AsyncIterable<SdkTimelineEvent>
   /** Cancel the run; stops the stream and in-flight tool calls. */
-  cancel?: () => Promise<void>
+  cancel: () => Promise<void>
 }
 
 /** A message on the SDK's raw `Run.stream()`; discriminate on `type`. */
@@ -921,10 +921,8 @@ export interface SdkAgentHandle {
    * decision about what a redaction means to a schema, and inventing one would be the gate that
    * reports without gating this module already refuses to build.
    */
-  // `options` is `any` on purpose: the SDK's `generate` is generic over a Zod schema
-  // (`GenerateOptions<T>`), which no non-generic parameter type can accept contravariantly.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  generate?(message: string, options: any): Promise<unknown>
+  // The SDK's own generic signature: schema-validated options and the inferred result type.
+  generate?: SDKAgent['generate']
   readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.

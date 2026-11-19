@@ -5,6 +5,7 @@
  */
 import type { Run, SDKAgent, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
 import { describe, expectTypeOf, it } from 'vitest'
+import { z } from 'zod'
 
 import {
   isDeltaTimelineEvent,
@@ -114,5 +115,18 @@ describe('SdkRunAgent vs TheoClaw TurnAgent', () => {
     expectTypeOf<SDKAgent['dispose']>().toExtend<SdkRunAgent['dispose']>()
     expectTypeOf<SDKAgent['agentId']>().toExtend<SdkRunAgent['agentId']>()
     expectTypeOf<ReturnType<SDKAgent['send']>>().toExtend<Promise<SdkRun>>()
+  })
+
+  it('generate keeps the SDK generic signature: infers the result, rejects bad options', () => {
+    type Gen = NonNullable<SdkRunAgent['generate']>
+    expectTypeOf<Gen>().toEqualTypeOf<SDKAgent['generate']>()
+    const agent = {} as SdkRunAgent
+    const schema = z.object({ n: z.number() })
+    const r = agent.generate?.('x', { output: schema })
+    expectTypeOf(r).not.toBeAny()
+    // @ts-expect-error — `output` must be a Zod schema
+    void agent.generate?.('x', { output: 'nope' })
+    // @ts-expect-error — `output` is required
+    void agent.generate?.('x', {})
   })
 })
