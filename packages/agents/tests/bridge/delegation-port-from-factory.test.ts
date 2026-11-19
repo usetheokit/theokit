@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createDelegateAllTool } from '../tools/delegate-all-tool.js'
-import type { Guardrail } from '../guardrails/types.js'
-import { GuardrailViolationError } from '../guardrails/types.js'
-import { delegationPortFromAgentFactory } from './delegation-port-from-factory.js'
-import { DelegationTimeoutError } from './delegation-lifecycle.js'
-import { DelegationBudgetExceededError, DelegationError } from './delegation-types.js'
-import { withGuardrails } from './handle-wrappers.js'
-import type { SdkAgentHandle, SdkTurnHandle } from './sdk-adapter.js'
+import { createDelegateAllTool } from '../../src/tools/delegate-all-tool.js'
+import type { Guardrail } from '../../src/guardrails/types.js'
+import { GuardrailViolationError } from '../../src/guardrails/types.js'
+import { delegationPortFromAgentFactory } from '../../src/bridge/delegation-port-from-factory.js'
+import { DelegationTimeoutError } from '../../src/bridge/delegation-lifecycle.js'
+import {
+  DelegationBudgetExceededError,
+  DelegationError,
+} from '../../src/bridge/delegation-types.js'
+import { withGuardrails } from '../../src/bridge/handle-wrappers.js'
+import type { SdkAgentHandle, SdkTurnHandle } from '../../src/bridge/sdk-adapter.js'
 
 interface Fake {
   agent: SdkAgentHandle
@@ -185,6 +188,17 @@ describe('delegationPortFromAgentFactory', () => {
       .catch((e: unknown) => e)
     expect(error).toBeInstanceOf(DelegationError)
     expect((error as Error).message).toContain('run error')
+    expect(w.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('an error event streamed by a guarded agent that finished still rejects', async () => {
+    const w = fake({ events: [{ type: 'error', code: 'boom', message: 'bad' }] })
+    const guarded = withGuardrails(w.agent, [passing])
+    const error = await delegationPortFromAgentFactory(async () => guarded)
+      .run('t')
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(DelegationError)
+    expect((error as Error).message).toContain('boom: bad')
     expect(w.dispose).toHaveBeenCalledTimes(1)
   })
 
