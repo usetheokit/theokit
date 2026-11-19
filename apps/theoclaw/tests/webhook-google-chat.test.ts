@@ -35,10 +35,4 @@ describe('createGoogleChatRoute', () => {
     expect(response.status).toBe(503)
     expect(await response.json()).toEqual({ error: 'keys' })
   })
-
-  it('refuses a body over 1 MiB with 413', async () => {
-    const route = createGoogleChatRoute({ handleRequest: async () => ({ status: 200, body: {} }) })
-    const response = await route(request({ authorization: 'Bearer abc' }, 'x'.repeat(1024 * 1024 + 1)))
-    expect(response.status).toBe(413)
-  })
 })

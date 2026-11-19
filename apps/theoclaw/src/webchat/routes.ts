@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { type AgentRouteContext, generateAgentRoutes } from '@theokit/agents/bridge'
+import { type AgentRouteContext, BodyTooLargeError, generateAgentRoutes, readCappedBody } from '@theokit/agents/bridge'
 
 import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from '../control-plane/bearer.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -188,24 +188,16 @@ function relay(body: ReadableStream<Uint8Array>, stopTurn: () => void): Readable
 }
 
 /**
- * The post's body, read up to `MAX_MESSAGE_BYTES` and no further, or `undefined` past it. Read
- * from the stream rather than trusted from `content-length`, which a chunked post does not send.
- * A read that fails while the client is still connected rejects with the stream's error.
+ * The post's body, read up to `MAX_MESSAGE_BYTES` and no further, or `undefined` past it. A read
+ * that fails while the client is still connected rejects with the stream's error.
  */
 async function boundedBody(request: Request): Promise<Uint8Array<ArrayBuffer> | undefined> {
-  if (request.body === null) return new Uint8Array()
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let size = 0
-  for (let read = await reader.read(); !read.done; read = await reader.read()) {
-    size += read.value.byteLength
-    if (size > MAX_MESSAGE_BYTES) {
-      reader.cancel().catch(ignore)
-      return undefined
-    }
-    chunks.push(read.value)
+  try {
+    return await readCappedBody(request, MAX_MESSAGE_BYTES)
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) return undefined
+    throw error
   }
-  return new Uint8Array(Buffer.concat(chunks))
 }
 
 /**
