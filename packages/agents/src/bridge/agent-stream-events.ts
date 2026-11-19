@@ -343,7 +343,7 @@ const isBool = (v: unknown): v is boolean => typeof v === 'boolean'
 const optional = (v: unknown, check: (x: unknown) => boolean): boolean =>
   v === undefined || check(v)
 
-const FILE_EDIT_FORMATS = ['search-replace', 'unified-diff', 'full-file', 'line-range']
+const FILE_EDIT_FORMATS = new Set(['search-replace', 'unified-diff', 'full-file', 'line-range'])
 
 function validUsage(u: unknown): boolean {
   return (
@@ -393,7 +393,7 @@ const VALIDATORS: Record<AgentStreamEvent['type'], (e: Record<string, unknown>) 
   file_edit: (e) =>
     isStr(e.file) &&
     isStr(e.format) &&
-    FILE_EDIT_FORMATS.includes(e.format) &&
+    FILE_EDIT_FORMATS.has(e.format) &&
     optional(e.search, isStr) &&
     optional(e.replace, isStr) &&
     optional(e.content, isStr) &&

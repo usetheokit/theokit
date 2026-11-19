@@ -152,7 +152,8 @@ describe('AgentStreamEvent type guards', () => {
 
 describe('toAgentStreamEvent (untrusted input)', () => {
   it('accepts a well-formed event and narrows it', async () => {
-    const { toAgentStreamEvent, isAgentStreamEvent } = await import('../../src/bridge/agent-stream-events.js')
+    const { toAgentStreamEvent, isAgentStreamEvent } =
+      await import('../../src/bridge/agent-stream-events.js')
     const e = toAgentStreamEvent({ type: 'text_delta', content: 'hi' })
     expect(e).toEqual({ type: 'text_delta', content: 'hi' })
     expect(isAgentStreamEvent({ type: 'iteration', step: 1, totalSteps: null })).toBe(true)
@@ -165,10 +166,10 @@ describe('toAgentStreamEvent (untrusted input)', () => {
     expect(toAgentStreamEvent({ type: 'nope' })).toBeUndefined()
     expect(toAgentStreamEvent({ type: 'toString' })).toBeUndefined()
     expect(toAgentStreamEvent({ type: 'text_delta', content: 1 })).toBeUndefined()
-    expect(toAgentStreamEvent({ type: 'done', result: '', usage: {}, durationMs: 1 })).toBeUndefined()
     expect(
-      toAgentStreamEvent({ type: 'file_edit', file: 'a', format: 'bogus' }),
+      toAgentStreamEvent({ type: 'done', result: '', usage: {}, durationMs: 1 }),
     ).toBeUndefined()
+    expect(toAgentStreamEvent({ type: 'file_edit', file: 'a', format: 'bogus' })).toBeUndefined()
     expect(
       toAgentStreamEvent({ type: 'run_started', runId: 'r', agentName: 'a', model: 3 }),
     ).toBeUndefined()
