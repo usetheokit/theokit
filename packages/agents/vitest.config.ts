@@ -18,7 +18,7 @@ export default defineConfig({
     // test environment. Capping leaves headroom for the host, and costs no wall-clock
     // because the gain above this point was already noise when measured.
     maxWorkers: Math.max(2, cpus().length - 4),
-    include: ['tests/**/*.test.ts', 'src/schedule/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
     // `tests/live/**` hits a real provider: excluded from the deterministic suite
     // (rules/testing.md § 3 — flaky-by-nature tests are not unit tests) and run on demand
     // via `npm run test:live`. It is still typechecked by the root tsconfig.
