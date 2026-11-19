@@ -29,7 +29,11 @@
  * refused and named. Firing at the surface must not become a way around the fingerprint, which is
  * the whole security model for a command that arrived with a clone.
  */
-import { runHostHooks, type HookSpec as FrameworkSpec } from '@theokit/agents/hooks'
+import {
+  runHostHooks,
+  type HostHookOutcome,
+  type HookSpec as FrameworkSpec,
+} from '@theokit/agents/hooks'
 
 import { parseHooks } from './hooks.js'
 import type { HookSpec } from './hooks-spec.js'
@@ -57,6 +61,22 @@ export function sessionStartSpecs(input: {
     return parseHooks(input.hooks).filter((s) => s.event === 'SessionStart')
   } catch {
     return []
+  }
+}
+
+function reportOutcome(outcome: HostHookOutcome, warn: (message: string) => void): void {
+  const { spec, result } = outcome
+  if (outcome.status === 'ran') return
+  if (outcome.status === 'timed-out') {
+    warn(`SessionStart hook timed out after ${String(spec.timeout_ms)}ms: "${spec.command}"`)
+  } else if (result !== undefined && result.exitCode !== null) {
+    const detail = result.stderr.trim()
+    warn(
+      `SessionStart hook "${spec.command}" exit ${String(result.exitCode)}` +
+        (detail.length > 0 ? ` — ${detail}` : ''),
+    )
+  } else {
+    warn(`SessionStart hook "${spec.command}" could not run`)
   }
 }
 
@@ -110,19 +130,7 @@ export async function runSessionStartHooks(input: RunSessionStartInput): Promise
         cwd: input.cwd,
         env,
       })
-      const result = outcome?.result
-      if (outcome === undefined || outcome.status === 'ran') continue
-      if (outcome.status === 'timed-out') {
-        warn(`SessionStart hook timed out after ${String(spec.timeout_ms)}ms: "${spec.command}"`)
-      } else if (result !== undefined && result.exitCode !== null) {
-        const detail = result.stderr.trim()
-        warn(
-          `SessionStart hook "${spec.command}" exit ${String(result.exitCode)}` +
-            (detail.length > 0 ? ` — ${detail}` : ''),
-        )
-      } else {
-        warn(`SessionStart hook "${spec.command}" could not run`)
-      }
+      if (outcome !== undefined) reportOutcome(outcome, warn)
     } catch (err) {
       warn(`SessionStart hook "${spec.command}" could not run: ${(err as Error).message}`)
     }
