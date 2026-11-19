@@ -5,16 +5,19 @@ import type { ToolRefusal } from '@theokit/presenter'
  *
  * Every event has a `type` field for discrimination.
  * Clients narrow via `if (event.type === 'text_delta') event.content`.
+ *
+ * Declared as type aliases, not interfaces, on purpose: an alias is implicitly assignable to the open
+ * `StreamEvent` (`[key: string]: unknown`) wire shape, an interface is not, and apps hold both.
  */
 
 /** Partial text content from the LLM. */
-export interface TextDeltaEvent {
+export type TextDeltaEvent = {
   type: 'text_delta'
   content: string
 }
 
 /** Agent started a tool call. */
-export interface ToolCallEvent {
+export type ToolCallEvent = {
   type: 'tool_call'
   callId: string
   toolName: string
@@ -27,7 +30,7 @@ export interface ToolCallEvent {
  * the later `tool_call` (args committed) and `tool_result`. Consumers opt in to render tool-input
  * progressively; those that don't simply ignore this variant (it never replaces `tool_call`).
  */
-export interface PartialToolCallEvent {
+export type PartialToolCallEvent = {
   type: 'partial_tool_call'
   callId: string
   toolName: string
@@ -35,7 +38,7 @@ export interface PartialToolCallEvent {
 }
 
 /** Tool execution completed. */
-export interface ToolResultEvent {
+export type ToolResultEvent = {
   type: 'tool_result'
   callId: string
   toolName: string
@@ -47,20 +50,20 @@ export interface ToolResultEvent {
 }
 
 /** Extended thinking / reasoning (when model supports it). */
-export interface ThinkingEvent {
+export type ThinkingEvent = {
   type: 'thinking'
   content: string
 }
 
 /** Agent loop iteration. */
-export interface IterationEvent {
+export type IterationEvent = {
   type: 'iteration'
   step: number
   totalSteps: number | null
 }
 
 /** Human approval required before proceeding. */
-export interface ApprovalRequiredEvent {
+export type ApprovalRequiredEvent = {
   type: 'approval_required'
   callId: string
   toolName: string
@@ -85,13 +88,13 @@ export interface ApprovalRequiredEvent {
  * A consumer that cannot resolve the request should still SHOW that the run is waiting. Silence is
  * the one response that is always wrong.
  */
-export interface InputRequestedEvent {
+export type InputRequestedEvent = {
   type: 'input_requested'
   requestId: string
 }
 
 /** Task-level milestone or summary — theokit#141. Both fields are optional at the source. */
-export interface TaskProgressEvent {
+export type TaskProgressEvent = {
   type: 'task_progress'
   status?: string
   text?: string
@@ -104,13 +107,13 @@ export interface TaskProgressEvent {
  * layer deliberately does not interpret or render it: guessing a shape here would be a second,
  * weaker oracle over a payload whose real contract lives upstream.
  */
-export interface ShellOutputEvent {
+export type ShellOutputEvent = {
   type: 'shell_output'
   event: Record<string, unknown>
 }
 
 /** Agent encountered an error. */
-export interface ErrorEvent {
+export type ErrorEvent = {
   type: 'error'
   code: string
   message: string
@@ -154,7 +157,7 @@ export interface ErrorEvent {
 export type AgentStopReason = 'step_limit' | 'no_progress'
 
 /** Agent completed with a final result. */
-export interface DoneEvent {
+export type DoneEvent = {
   type: 'done'
   result: string
   usage: {
@@ -211,7 +214,7 @@ export interface DoneEvent {
  * cost meter) show real tokens/cost for the turn it just streamed. Mirrors `DoneEvent`'s usage/cost
  * (the authoritative totals the SDK reports at turn end) plus the wall-clock `durationMs`.
  */
-export interface AgentTurnMetadata {
+export type AgentTurnMetadata = {
   usage: DoneEvent['usage']
   /** Total cost in USD for the turn (present iff the SDK reported it). */
   cost?: number
@@ -233,7 +236,7 @@ export interface AgentTurnMetadata {
 }
 
 /** Agent run started. */
-export interface RunStartedEvent {
+export type RunStartedEvent = {
   type: 'run_started'
   runId: string
   agentName: string
@@ -241,7 +244,7 @@ export interface RunStartedEvent {
 }
 
 /** Artifact generation started (code, document, diagram). */
-export interface ArtifactStartEvent {
+export type ArtifactStartEvent = {
   type: 'artifact_start'
   artifactId: string
   mimeType: string
@@ -250,7 +253,7 @@ export interface ArtifactStartEvent {
 }
 
 /** Artifact content chunk (streamable artifacts). */
-export interface ArtifactChunkEvent {
+export type ArtifactChunkEvent = {
   type: 'artifact_chunk'
   artifactId: string
   chunk: string
@@ -258,14 +261,14 @@ export interface ArtifactChunkEvent {
 }
 
 /** Real-time state update from @Observable channels. */
-export interface StateUpdateEvent {
+export type StateUpdateEvent = {
   type: 'state_update'
   channel: string
   data: unknown
 }
 
 /** Checkpoint saved (resumable agents). */
-export interface CheckpointSavedEvent {
+export type CheckpointSavedEvent = {
   type: 'checkpoint_saved'
   checkpointId: string
   step: number
@@ -273,7 +276,7 @@ export interface CheckpointSavedEvent {
 }
 
 /** File edit produced by a code assistant tool. */
-export interface FileEditEvent {
+export type FileEditEvent = {
   type: 'file_edit'
   file: string
   format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range'
