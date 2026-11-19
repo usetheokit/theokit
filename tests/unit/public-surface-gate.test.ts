@@ -175,8 +175,8 @@ describe('public surface gate', () => {
   it('keeps both declarations when two chunks mask to the same name, and fails a break in either', () => {
     const prev = surface(tuple, chunks('a: string', 'b: string'))
     expect(Object.keys(refsOf(prev))).toEqual([
-      'dist/chunk-<hash>.d.ts#T@A',
-      'dist/chunk-<hash>.d.ts#T@B',
+      'dist/chunk-<hash>.d.ts#T@dist/index.d.ts#Out>A',
+      'dist/chunk-<hash>.d.ts#T@dist/index.d.ts#Out>B',
     ])
     for (const f of [chunks('a: number', 'b: string'), chunks('a: string', 'b: number')]) {
       expect(run(prev, surface(tuple, f))).toEqual([changed])
@@ -195,6 +195,20 @@ describe('public surface gate', () => {
     const prev = surface(iface('a: A; b: B'), chunks('p: string', 'q: string'))
     // `x?: B` comes first and the two shapes swap: both old members change incompatibly.
     const next = surface(iface('x?: B; a: A; b: B'), chunks('q: string', 'p: string'))
+    expect(run(prev, next)).not.toEqual([])
+  })
+
+  it('keys a reference by the declaration it resolves to when two wrappers import different `T` as `T`', () => {
+    const wrappers = (one: string, two: string) => ({
+      ...chunks(one, two),
+      'w1.d.ts': `import { T } from './chunk-ABCDEFG1'\nexport interface W1 { t: T }\n`,
+      'w2.d.ts': `import { T } from './chunk-ABCDEFG2'\nexport interface W2 { t: T }\n`,
+    })
+    const index = (members: string) =>
+      `import { W1 } from './w1'\nimport { W2 } from './w2'\nexport interface Out { ${members} }\n`
+    const prev = surface(index('a: W1; b: W2'), wrappers('p: string', 'q: string'))
+    // `x?: W2` is met first and the two shapes swap: both old members change incompatibly.
+    const next = surface(index('x?: W2; a: W1; b: W2'), wrappers('q: string', 'p: string'))
     expect(run(prev, next)).not.toEqual([])
   })
 

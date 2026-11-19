@@ -89,15 +89,15 @@ function record(internals, d, key, text, localName) {
   if (localName) rec.names.add(localName)
 }
 
-function visitReference(node, ctx, internals, seen, queue) {
+function visitReference(node, ctx, internals, seen, queue, referrer) {
   const raw = ctx.checker.getSymbolAtLocation(node)
   const sym = raw && resolveAlias(raw, ctx.checker)
   for (const d of sym?.declarations ?? []) {
     if (!isOwnDeclaration(d, ctx)) continue
-    // The local name an import gives the declaration ties a reference to its declaration.
+    // The referring declaration and the local name it imports under tie a reference to its declaration.
     const fresh = !seen.has(d)
     const text = fresh ? printDecl(d, ctx.printer) : null
-    record(internals, d, declKey(d, ctx), text, raw !== sym ? node.text : null)
+    record(internals, d, declKey(d, ctx), text, raw !== sym ? `${declKey(referrer, ctx)}>${node.text}` : null)
     if (!fresh) continue
     seen.add(d)
     queue.push(d)
@@ -115,7 +115,7 @@ function collectInternals(roots, ctx, internals) {
   while (queue.length > 0) {
     const root = queue.pop()
     ts.forEachChild(root, function visit(node) {
-      if (ts.isIdentifier(node)) visitReference(node, ctx, internals, seen, queue)
+      if (ts.isIdentifier(node)) visitReference(node, ctx, internals, seen, queue, root)
       ts.forEachChild(node, visit)
     })
   }
@@ -167,7 +167,7 @@ function describeSymbol(sym, ctx) {
   const grouped = new Map()
   collectInternals(decls, ctx, grouped)
   // Masking can map several real files to one name. Those are told apart by the local names the
-  // references use for them (`#T@A`, `#T@B`), which belong to the referencing declaration and not to
+  // references use for them (`#T@<referrer>>T`), which belong to the referencing declaration and not to
   // the hash or the walk order; overloads in one file stay together in source order.
   const refs = new Map()
   for (const [key, byFile] of grouped) {
