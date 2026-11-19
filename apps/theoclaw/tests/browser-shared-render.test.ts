@@ -96,26 +96,32 @@ function mcpClient(command: string, args: readonly string[]) {
   }
 }
 
+/** A tiny site: `/login` sets the cookie `sid=ok`; any other path greets a signed-in browser. */
+async function startSite(): Promise<string> {
+  const http = createServer((req, res) => {
+    const signedIn = /(^|; )sid=ok/.test(req.headers.cookie ?? '')
+    const page = (text: string): void => {
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        ...(req.url === '/login' ? { 'set-cookie': 'sid=ok; Path=/; Max-Age=3600' } : {}),
+      })
+      res.end(`<!doctype html><title>t</title><h1>${text}</h1>`)
+    }
+    if (req.url === '/login') page('Signed in')
+    else page(signedIn ? 'Welcome back' : 'Please sign in')
+  })
+  await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve))
+  cleanups.push(() => new Promise<void>((resolve) => http.close(() => resolve())))
+  const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
+  return base
+}
+
 describe.skipIf(!CHROMIUM)('the shared browser on the installed Chromium', () => {
   it(
     'keeps a login after the browser is closed and started again on the same profile',
     { timeout: 4 * DEADLINE_MS },
     async () => {
-      const http = createServer((req, res) => {
-        const signedIn = /(^|; )sid=ok/.test(req.headers.cookie ?? '')
-        const page = (text: string): void => {
-          res.writeHead(200, {
-            'content-type': 'text/html; charset=utf-8',
-            ...(req.url === '/login' ? { 'set-cookie': 'sid=ok; Path=/; Max-Age=3600' } : {}),
-          })
-          res.end(`<!doctype html><title>t</title><h1>${text}</h1>`)
-        }
-        if (req.url === '/login') page('Signed in')
-        else page(signedIn ? 'Welcome back' : 'Please sign in')
-      })
-      await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve))
-      cleanups.push(() => new Promise<void>((resolve) => http.close(() => resolve())))
-      const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
+      const base = await startSite()
 
       const profile = mkdtempSync(join(tmpdir(), 'theoclaw-shared-profile-'))
       const profileDir = join(profile, 'browser-profile')
@@ -159,6 +165,44 @@ describe.skipIf(!CHROMIUM)('the shared browser on the installed Chromium', () =>
       expect(await second.client.call('browser_navigate', { url: `${base}/me` })).toContain(
         'Welcome back',
       )
+    },
+  )
+
+  it(
+    'serves two sessions at once on one signed-in browser, each on its own page',
+    { timeout: 4 * DEADLINE_MS },
+    async () => {
+      const base = await startSite()
+      const profile = mkdtempSync(join(tmpdir(), 'theoclaw-shared-profile-'))
+      cleanups.push(() => rmSync(profile, { recursive: true, force: true }))
+      const settings = readBrowser({
+        THEOCLAW_BROWSER: 'on',
+        PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH,
+      })
+      const shared = createSharedBrowser(join(profile, 'browser-profile'))
+      cleanups.push(() => shared.close())
+      const cdpEndpoint = await shared.start()
+      const attach = async () => {
+        const server = browserServer({
+          ...(settings as NonNullable<typeof settings>),
+          cdpEndpoint,
+        }) as { command: string; args: string[] }
+        const client = mcpClient(server.command, server.args)
+        cleanups.push(() => client.stop())
+        await client.start()
+        return client
+      }
+      const [one, two] = [await attach(), await attach()]
+      expect(await one.call('browser_navigate', { url: `${base}/login` })).toContain('Signed in')
+
+      const [a, b] = await Promise.all([
+        one.call('browser_navigate', { url: `${base}/me?who=one` }),
+        two.call('browser_navigate', { url: `${base}/me?who=two` }),
+      ])
+      expect(a).toContain('Welcome back')
+      expect(a).toContain('who=one')
+      expect(b).toContain('Welcome back')
+      expect(b).toContain('who=two')
     },
   )
 })

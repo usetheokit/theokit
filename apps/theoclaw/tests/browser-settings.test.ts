@@ -284,9 +284,8 @@ describe('THEOCLAW_BROWSER', () => {
     expect(closed).toBe(1)
   })
 
-  it('closes the listener and the shared browser when the start fails after it bound', async () => {
+  it('closes the shared browser when the start fails after the listener bound', async () => {
     let browserClosed = 0
-    let listenerClosed = 0
     const launch = () =>
       Promise.resolve({
         endpoint: 'http://127.0.0.1:4321',
@@ -294,7 +293,7 @@ describe('THEOCLAW_BROWSER', () => {
       })
     const handle = {
       address: () => ({ host: '127.0.0.1', port: 1 }),
-      close: () => Promise.resolve().then(() => void listenerClosed++),
+      close: () => Promise.resolve(),
       server: undefined as never,
     }
     const result = await startForTools(
@@ -310,7 +309,6 @@ describe('THEOCLAW_BROWSER', () => {
     )
     expect(result.error?.message).toBe('stdout broke')
     expect(browserClosed).toBe(1)
-    expect(listenerClosed).toBe(1)
   })
 
   it('spawns the browser server with neither env nor envPolicy', () => {

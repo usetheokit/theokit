@@ -48,14 +48,9 @@ const CHROMIUM_BUILD = /^chromium(_headless_shell)?-\d+$/
 function defaultResolveCli(): string {
   const manifestPath = createRequire(import.meta.url).resolve('@playwright/mcp/package.json')
   const { bin } = JSON.parse(readFileSync(manifestPath, 'utf8')) as { readonly bin?: unknown }
-  const entry =
-    typeof bin === 'string'
-      ? bin
-      : (bin as Readonly<Record<string, unknown>> | undefined)?.['playwright-mcp']
+  const entry = typeof bin === 'string' ? bin : (bin as Readonly<Record<string, unknown>> | undefined)?.['playwright-mcp']
   if (typeof entry !== 'string') {
-    throw new TheoClawConfigError(`${manifestPath} declares no playwright-mcp bin`, {
-      variable: 'THEOCLAW_BROWSER',
-    })
+    throw new TheoClawConfigError(`${manifestPath} declares no playwright-mcp bin`, { variable: 'THEOCLAW_BROWSER' })
   }
   return join(dirname(manifestPath), entry)
 }
@@ -68,12 +63,9 @@ function resolveCliOrRefuse(resolveCli: () => string): string {
     return resolveCli()
   } catch (error) {
     if (!NOT_RESOLVED.has((error as NodeJS.ErrnoException).code ?? '')) throw error
-    throw new TheoClawConfigError(
-      `THEOCLAW_BROWSER=on needs @playwright/mcp, which does not resolve; run \`pnpm install\``,
-      {
-        variable: 'THEOCLAW_BROWSER',
-      },
-    )
+    throw new TheoClawConfigError(`THEOCLAW_BROWSER=on needs @playwright/mcp, which does not resolve; run \`pnpm install\``, {
+      variable: 'THEOCLAW_BROWSER',
+    })
   }
 }
 
@@ -87,9 +79,7 @@ function browsersDirOf(env: Env, deps: BrowserDeps): string {
       { variable: 'PLAYWRIGHT_BROWSERS_PATH' },
     )
   }
-  return fromEnv === undefined || fromEnv === ''
-    ? join(homedir(), '.cache', 'ms-playwright')
-    : fromEnv
+  return fromEnv === undefined || fromEnv === '' ? join(homedir(), '.cache', 'ms-playwright') : fromEnv
 }
 
 /** A Chromium build directory in `dir`, followed through symlinks: a dangling one does not count. */
@@ -104,11 +94,7 @@ function hasChromium(dir: string): boolean {
     if (code === 'ENOENT' || code === 'ENOTDIR') return false
     throw error
   }
-  return names.some(
-    (name) =>
-      CHROMIUM_BUILD.test(name) &&
-      statSync(join(dir, name), { throwIfNoEntry: false })?.isDirectory() === true,
-  )
+  return names.some((name) => CHROMIUM_BUILD.test(name) && statSync(join(dir, name), { throwIfNoEntry: false })?.isDirectory() === true)
 }
 
 /**
@@ -119,19 +105,14 @@ export function readBrowser(env: Env, deps: BrowserDeps = {}): BrowserSettings |
   const value = env.THEOCLAW_BROWSER
   if (value === undefined || value === '') return undefined
   if (value !== 'on') {
-    throw new TheoClawConfigError(`THEOCLAW_BROWSER must be "on" or unset, not "${value}"`, {
-      variable: 'THEOCLAW_BROWSER',
-    })
+    throw new TheoClawConfigError(`THEOCLAW_BROWSER must be "on" or unset, not "${value}"`, { variable: 'THEOCLAW_BROWSER' })
   }
   const cliPath = resolveCliOrRefuse(deps.resolveCli ?? defaultResolveCli)
   const dir = browsersDirOf(env, deps)
   if (!hasChromium(dir)) {
-    throw new TheoClawConfigError(
-      `THEOCLAW_BROWSER=on found no Chromium build in ${dir}; ${INSTALL_HINT}`,
-      {
-        variable: 'THEOCLAW_BROWSER',
-      },
-    )
+    throw new TheoClawConfigError(`THEOCLAW_BROWSER=on found no Chromium build in ${dir}; ${INSTALL_HINT}`, {
+      variable: 'THEOCLAW_BROWSER',
+    })
   }
   return { cliPath }
 }
