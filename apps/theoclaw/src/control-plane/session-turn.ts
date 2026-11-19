@@ -34,9 +34,9 @@ export interface SessionTurnOptions {
 /** Every translated event of the run, live text deltas included; the first streamed error's code. */
 async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<string | undefined> {
   let streamedError: string | undefined
-  const forward = (events: readonly AgentStreamEvent[]): void => {
+  const forward = (events: readonly (AgentStreamEvent | TurnEvent)[]): void => {
     for (const typed of events) {
-      const event = toTurnEvent(typed)
+      const event = toTurnEvent(typed as AgentStreamEvent)
       if (event.type === 'error') streamedError ??= describeStreamedError(event)
       options.emit(event)
     }
