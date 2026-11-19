@@ -86,12 +86,6 @@ function appendValue(fd: FormData, key: string, schema: unknown, value: unknown)
   const inner = unwrap(schema)
   const name = ctorName(inner)
   if (value === null || value === undefined) {
-    if (name === 'ZodArray') {
-      throw new FormDataEncodingError(
-        key,
-        `Field '${key}' is an array with no value; formDataToObject decodes an absent array as [], so pass [] instead.`,
-      )
-    }
     return
   }
 
