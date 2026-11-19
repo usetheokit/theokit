@@ -120,6 +120,15 @@ const layer = parseDottedOverrides(['model=x', 'limits.turns=3'], {
 })
 ```
 
+### Trim policy per instruction source
+
+`composeInstructions(base, sources, { maxChars })` from `@theokit/agents/config` walks `sources` from the last
+entry. Each source may carry `trim`: `{ kind: 'drop' }` (default, the original behaviour), `keep-head` (cut the end),
+`keep-tail` (cut the start) or `{ kind: 'blocks-from-start', separator }` (drop whole blocks from the start, never
+cutting inside one). A source with a policy is trimmed as far as it allows before the walk moves on. Sources are
+never re-split unless their own policy is `blocks-from-start`. The result's `cuts` lists `{ name, from, to }` for
+every source that lost characters (`to` is 0 when dropped); it is empty when everything fit.
+
 ## Calling an agent route without `HttpTransport`
 
 An agent route's CSRF gate answers `403 CSRF_FAILED` unless the request carries `X-Theo-Action: 1`.
@@ -514,6 +523,22 @@ See `LICENSE`.
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
+
+`deleteSession(id, { cwd, removeFromRegistry })` reports `registryOutcome: 'unconfirmed'` with the SDK's
+`Agent.delete`, because that returns `Promise<void>`. Pass `isListedInRegistry` to have it measure instead.
+It is called before and after the removal:
+
+```ts
+await deleteSession(id, {
+  cwd,
+  removeFromRegistry: (sessionId) => Agent.delete(sessionId),
+  isListedInRegistry: async (sessionId) => (await Agent.list({ runtime: 'local', cwd })).items.some((a) => a.agentId === sessionId),
+})
+```
+
+Listed after the removal is `still-present`; not listed before is `nothing-to-remove`; listed before and not
+after is `removed`. A verifier that throws or exceeds `registryTimeoutMs` gives `unconfirmed` with the error in
+`registryError`, and the transcript step still runs. Without a verifier nothing changes.
 
 ## Refused tool calls
 

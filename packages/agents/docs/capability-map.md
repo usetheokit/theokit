@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1239 export(s) across 25 entry point(s).
+1241 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -901,9 +901,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DeclaredLayer` | type |
 | `ExpandImportsInput` | type |
 | `InstructionBlock` | type |
+| `InstructionCut` | type |
 | `InstructionSource` | type |
 | `InstructionTree` | type |
 | `InstructionTreeBudget` | type |
+| `InstructionTrim` | type |
 | `LayeredConfigInput` | type |
 | `LayeredConfigResult` | type |
 | `LayerValues` | type |
