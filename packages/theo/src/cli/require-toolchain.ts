@@ -37,5 +37,6 @@ function isInstalled(req: NodeJS.Require, name: string): boolean {
  */
 export async function useToolchain(names: readonly string[] = CLI_TOOLCHAIN): Promise<void> {
   requireToolchain(names)
-  await import('tsx/esm')
+  const { register } = await import('tsx/esm/api')
+  register()
 }
