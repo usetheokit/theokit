@@ -9,6 +9,8 @@
 
 import type { InlineSkill } from '@theokit/sdk'
 
+import type { CompiledAgentOptions } from './bridge/agent-compiler.js'
+
 /** The request context handed to a skills resolver (the M7 run-context — opaque per-request data). */
 export type SkillsRequestContext = Record<string, unknown>
 
@@ -49,4 +51,16 @@ export async function resolveEnabledSkills(
     throw new Error('[@theokit/agents] skills resolver must return non-empty skill NAME strings')
   }
   return [...names]
+}
+
+/** Fold a function-valued selection into a static `skills.enabled` for the SDK; a static list is untouched. */
+export async function withResolvedSkills(
+  compiled: CompiledAgentOptions,
+  runContext: Record<string, unknown> | undefined,
+): Promise<CompiledAgentOptions> {
+  if (!compiled.skillsResolver) return compiled
+  const enabled = await resolveEnabledSkills(compiled.skillsResolver, runContext ?? {})
+  return enabled === undefined
+    ? compiled
+    : { ...compiled, skills: { ...compiled.skills, enabled, autoInject: true } }
 }

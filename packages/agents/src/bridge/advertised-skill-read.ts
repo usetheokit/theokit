@@ -50,20 +50,36 @@ function isDisclosed(skill: Skill | InlineSkill): boolean {
   return s.disableModelInvocation !== true && (s.requiresBins ?? []).every(binaryOnPath)
 }
 
+interface Holder {
+  agent?: ListsSkills
+  /** Keys of the skills the manager listed when the agent was created: the post-trust-gate roots. */
+  roots?: Set<string>
+}
+
+/** A filesystem skill is identified by its file; an inline one has none, so by name. */
+function skillKey(s: Skill | InlineSkill): string {
+  return (s as { source?: string }).source ?? `inline:${s.name}`
+}
+
 /**
  * #1855 — the skills `skill_read` serves in `'advertised'` mode, read on EVERY call from the SDK
  * agent's own skills manager: the same live snapshot the `<skills>` block is built from, so the trust
  * gate, `skills.enabled`, compat roots, plugin bundles, root precedence AND a later refresh are the
  * SDK's resolution, not a second one. Nothing is re-discovered from disk here; the disclosure flags
- * come from the manager's own skills. Without the manager (a peer that hides it) nothing is served: the public
+ * come from the manager's own skills. A refresh (`agent.reload()`) re-discovers project roots even
+ * when the trust gate withheld them at creation, so only skills the manager listed at creation (the
+ * post-gate set, keyed by source file) stay readable; their bodies and flags still follow refreshes.
+ * Without the manager (a peer that hides it) nothing is served: the public
  * listing lacks the disclosure flags, so it cannot tell a hidden skill from a listed one.
  *
  * A function-valued `skills` never reaches the SDK from this bridge: the request path resolves it to a
  * static `enabled` list first, so the agent's manager is the one every listing is built from.
  */
-async function advertisedSkills(agent: ListsSkills | undefined): Promise<(InlineSkill | Skill)[]> {
-  if (agent?.skillsManager !== undefined) {
-    return (await agent.skillsManager.list()).filter(isDisclosed)
+async function advertisedSkills(holder: Holder): Promise<(InlineSkill | Skill)[]> {
+  const manager = holder.agent?.skillsManager
+  if (manager !== undefined && holder.roots !== undefined) {
+    const roots = holder.roots
+    return (await manager.list()).filter((s) => roots.has(skillKey(s)) && isDisclosed(s))
   }
   // Fail closed: the public listing carries no disclosure flags, so without the manager nothing is served.
   return []
@@ -94,8 +110,8 @@ export function wireInlineSkillRead<R extends WireRuntime>(
     return rt
   }
   // Resolved on each read from the agent the SDK built, so it follows the manager's current snapshot.
-  const holder: { agent?: ListsSkills } = {}
-  sdkTools.push(define(() => advertisedSkills(holder.agent)))
+  const holder: Holder = {}
+  sdkTools.push(define(() => advertisedSkills(holder)))
   return {
     ...rt,
     Agent: {
@@ -103,6 +119,8 @@ export function wireInlineSkillRead<R extends WireRuntime>(
       getOrCreate: async (id, opts) => {
         const agent = await rt.Agent.getOrCreate(id, opts)
         holder.agent = agent as ListsSkills
+        const listed = await holder.agent.skillsManager?.list()
+        if (listed !== undefined) holder.roots = new Set(listed.map(skillKey))
         return agent
       },
     },

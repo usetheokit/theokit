@@ -17,6 +17,7 @@ import type { RetryOptions } from '@theokit/sdk/retry'
 import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
+import { withResolvedSkills } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
@@ -932,7 +933,10 @@ export function toAgentFactory(
     const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
     // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream).
     const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
-    const { options: m8 } = assembleM8CreateOptions(compiled)
+    // A function-valued selection must reach the SDK as a static `enabled` list, or it would list every
+    // discovered skill (`createSdkAgentStream`'s callers resolve it the same way before streaming).
+    const created = await withResolvedSkills(compiled, runContext)
+    const { options: m8 } = assembleM8CreateOptions(created)
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
     applyPosture(extra, m8, opts.approvals, compiled.hitl)

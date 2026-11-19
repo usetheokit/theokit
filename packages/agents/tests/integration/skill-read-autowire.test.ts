@@ -376,6 +376,43 @@ describe('read advertised — skill_read serves what the <skills> block lists', 
     expect(typeof (h.lastOpts as { skills?: unknown }).skills).not.toBe('function')
   })
 
+  it('read advertised keeps a withheld project root unreadable after the SDK reloads', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    writeSkill(join(cwd, '.theokit', 'skills'), 'secret', 'SECRET BODY')
+    await run({ model: 'm', skills: ['secret'], skillsRead: 'advertised' }, cwd)
+    expect(await read('secret')).toContain('not found')
+    // The SDK's own reload path: refresh() discovers project roots whatever the trust gate said.
+    await h.lastAgent?.skillsManager?.refresh()
+    expect(await read('secret')).toBe('Skill "secret" not found. Available skills: (none).')
+  })
+
+  it('read advertised on the factory path resolves a function selection to its names', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    const root = join(cwd, '.theokit', 'skills')
+    writeSkill(root, 'picked', 'PICKED BODY')
+    writeSkill(root, 'unpicked', 'UNPICKED BODY')
+    const def = defineAgent({
+      model: 'm',
+      skills: () => ['picked'],
+      skillsRead: 'advertised',
+      ...project,
+    })
+    h.readSource = []
+    h.realAgent = true
+    await toAgentFactory(def as never, {
+      apiKey: 'test-key',
+      approvals: {
+        kind: 'auto-approve',
+        confinedBy: { mode: 'workspace-write', enforced: true, detail: 't' },
+        reason: 't',
+      } as never,
+      overrides: { cwd } as never,
+    })('s-fn')
+    expect((h.lastOpts as { skills?: { enabled?: string[] } }).skills?.enabled).toEqual(['picked'])
+    expect(await read('picked')).toContain('PICKED BODY')
+    expect(await read('unpicked')).toContain('not found')
+  })
+
   it('read advertised does not read the compat root when only the project root is granted', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
     writeSkill(join(cwd, '.claude', 'skills'), 'foreign', 'FOREIGN BODY')
