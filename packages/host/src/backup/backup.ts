@@ -54,11 +54,12 @@ async function copyOne(source: string, target: string): Promise<void> {
 export async function backup(options: BackupOptions): Promise<BackupManifest> {
   validateRoots(options.roots)
   const names = Object.keys(options.roots).sort((x, y) => x.localeCompare(y))
-  assertDisjoint([
-    ...names.map((name) => [`root "${name}"`, options.roots[name]] as const),
-    ['output', options.out],
-  ])
   return withLock(options.lock, async () => {
+    // Every filesystem read, the overlap check included, happens holding the lock.
+    assertDisjoint([
+      ...names.map((name) => [`root "${name}"`, options.roots[name]] as const),
+      ['output', options.out],
+    ])
     if (!(await isEmptyOrAbsent(options.out))) {
       throw new BackupError(`output ${options.out} is not empty`, { path: options.out })
     }
@@ -69,6 +70,7 @@ export async function backup(options: BackupOptions): Promise<BackupManifest> {
     )
     try {
       await mkdirPrivate(out)
+      await chmod(out, 0o700)
       const files: ManifestEntry[] = []
       for (const name of names) {
         const dir = options.roots[name]

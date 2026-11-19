@@ -44,3 +44,18 @@ it('holds the lock around restore and releases it when the backup is bad', async
   ).rejects.toThrow()
   expect(events).toEqual(['acquire', 'release'])
 })
+
+it('takes the lock before the overlap check reads the filesystem', async () => {
+  const base = await scratch()
+  const a = join(base, 'a')
+  await put(a, 'x', '1')
+  const events: string[] = []
+  const lock = () => {
+    events.push('acquire')
+    return async () => {
+      events.push('release')
+    }
+  }
+  await expect(backup({ roots: { a }, out: join(a, 'out'), lock })).rejects.toThrow(/overlap/)
+  expect(events).toEqual(['acquire', 'release'])
+})

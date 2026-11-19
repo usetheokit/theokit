@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -34,4 +34,18 @@ it('refuses a manifest path that leaves its root', async () => {
   await writeFile(file, JSON.stringify(manifest))
   await expect(restore({ from: out, roots: { a: target } })).rejects.toThrow(/not a file inside/)
   expect(await readFile(join(target, 'mine.txt'), 'utf8')).toBe('keep me')
+})
+
+it('refuses a symbolic link in an intermediate directory of the backup', async () => {
+  const base = await scratch()
+  const a = join(base, 'a')
+  await put(a, 'deep/x.txt', 'original')
+  const out = join(base, 'out')
+  await backup({ roots: { a }, out })
+  await put(base, 'outside/x.txt', 'original')
+  await rm(join(out, 'a/deep'), { recursive: true })
+  await symlink(join(base, 'outside'), join(out, 'a/deep'))
+  const target = join(base, 'target')
+  await expect(restore({ from: out, roots: { a: target } })).rejects.toThrow(/symbolic link/)
+  expect(existsSync(target)).toBe(false)
 })

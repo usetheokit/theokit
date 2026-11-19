@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises'
+import { chmod, mkdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { expect, it } from 'vitest'
@@ -52,4 +52,15 @@ it('refuses a non-empty output', async () => {
   await expect(backup({ roots: { a: join(base, 'a') }, out: join(base, 'out') })).rejects.toThrow(
     /not empty/,
   )
+})
+
+it('sets an existing empty output directory to 0700', async () => {
+  if (process.platform === 'win32') return
+  const base = await scratch()
+  await put(join(base, 'a'), 'x', '1')
+  const out = join(base, 'out')
+  await mkdir(out, { mode: 0o755 })
+  await chmod(out, 0o755)
+  await backup({ roots: { a: join(base, 'a') }, out })
+  expect((await stat(out)).mode & 0o777).toBe(0o700)
 })

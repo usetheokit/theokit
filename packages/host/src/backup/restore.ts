@@ -18,6 +18,22 @@ export interface RestoreOptions {
   readonly lock?: BackupLock
 }
 
+/** Refuse a symbolic link in any component of `relative` below `base`. */
+async function assertNoLinks(base: string, relative: string): Promise<void> {
+  let current = base
+  for (const part of relative.split('/')) {
+    current = join(current, part)
+    const entry = await lstat(current).catch((cause: unknown) => {
+      throw new BackupError(`backup file ${current} is missing`, { path: current, cause })
+    })
+    if (entry.isSymbolicLink()) {
+      throw new BackupError(`${current} is a symbolic link; a restore follows none`, {
+        path: current,
+      })
+    }
+  }
+}
+
 async function verify(path: string, sha256: string, size: number): Promise<void> {
   const entry = await lstat(path).catch((cause: unknown) => {
     throw new BackupError(`backup file ${path} is missing`, { path, cause })
@@ -48,6 +64,7 @@ export async function restoreWith(options: RestoreOptions, fs: RestoreFs): Promi
     // Nothing is written until every file matches its manifest entry.
     for (const entry of manifest.files) {
       splitEntryPath(entry.path, manifest.roots)
+      await assertNoLinks(options.from, entry.path)
       await verify(join(options.from, entry.path), entry.sha256, entry.size)
     }
     const stages = new Map<string, string>()
