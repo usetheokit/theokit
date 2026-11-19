@@ -37,11 +37,6 @@ interface SuccessorProcess {
 export interface RestartSelfOptions {
   /** The environment the first process was started with; the successor gets it. */
   readonly startEnv: Readonly<Record<string, string | undefined>>
-  /**
-   * Node reports a failed spawn through the child's `error` event, after `restartSelf` has
-   * returned. That error arrives here, wrapped in a RestartError whose `cause` is the spawn error.
-   */
-  readonly onSpawnError?: (error: RestartError) => void
   /** Test seam: replaces `child_process.spawn`. */
   readonly spawn?: (
     command: string,
@@ -53,16 +48,16 @@ export interface RestartSelfOptions {
 }
 
 /**
- * Under a supervisor returns `{ kind: 'exit', code: 75 }` and the caller exits with it. Otherwise
- * starts a detached successor that waits for this process (see `waitForPredecessor`) and returns
- * `{ kind: 'spawned', pid }`. The call is synchronous, so it can only report what is known at
- * once: a throw from `spawn`, or a child with no pid, both thrown as RestartError. A platform
- * other than linux or darwin throws UnsupportedPlatformError. The spawn error Node delivers
- * later through the `error` event goes to `onSpawnError`.
+ * Under a supervisor resolves `{ kind: 'exit', code: 75 }` and the caller exits with it. Otherwise
+ * starts a detached successor that waits for this process (see `waitForPredecessor`) and resolves
+ * `{ kind: 'spawned', pid }`. Node reports a failed spawn through the child's `error` event, after
+ * `spawn` has returned, so the call is asynchronous: it rejects with a RestartError whose `cause`
+ * is that actual error (or the error thrown by `spawn`). A platform other than linux or darwin
+ * rejects with UnsupportedPlatformError.
  */
-export function restartSelf(
+export async function restartSelf(
   options: RestartSelfOptions,
-): { kind: 'exit'; code: number } | { kind: 'spawned'; pid: number } {
+): Promise<{ kind: 'exit'; code: number } | { kind: 'spawned'; pid: number }> {
   const platform = options.platform ?? process.platform
   if (platform !== 'linux' && platform !== 'darwin') throw new UnsupportedPlatformError(platform)
   if (isSupervised(options.env, platform)) return { kind: 'exit', code: RESTART_EXIT_CODE }
@@ -81,48 +76,16 @@ export function restartSelf(
   } catch (cause) {
     throw new RestartError('could not start the successor process', { cause })
   }
-  child.once('error', (cause) => {
-    options.onSpawnError?.(new RestartError('could not start the successor process', { cause }))
+  const failed = new Promise<never>((_resolve, reject) => {
+    child.once('error', (cause) => {
+      reject(new RestartError('could not start the successor process', { cause }))
+    })
   })
-  if (child.pid === undefined) {
-    // The real error is not known yet; it goes to onSpawnError. No synthetic cause is made up.
-    throw new RestartError(
-      'could not start the successor process: spawn returned no pid (use restartSelfAsync to get the spawn error as the cause)',
-    )
-  }
+  // A started child has a pid; without one, Node emits the real error on the next tick.
+  if (child.pid === undefined) return failed
+  failed.catch(() => undefined)
   child.unref()
   return { kind: 'spawned', pid: child.pid }
-}
-
-/**
- * Like `restartSelf`, but waits for Node's `spawn` event, so a failed spawn rejects with a
- * RestartError whose `cause` is the actual error from the child's `error` event.
- */
-export async function restartSelfAsync(
-  options: Omit<RestartSelfOptions, 'onSpawnError'>,
-): Promise<{ kind: 'exit'; code: number } | { kind: 'spawned'; pid: number }> {
-  let early: RestartError | undefined
-  let notify: ((error: RestartError) => void) | undefined
-  const onSpawnError = (error: RestartError): void => {
-    early = error
-    notify?.(error)
-  }
-  let result: ReturnType<typeof restartSelf>
-  try {
-    result = restartSelf({ ...options, onSpawnError })
-  } catch (error) {
-    // No pid: the spawn error arrives on the next tick.
-    if (error instanceof RestartError && error.cause === undefined) {
-      throw (
-        early ??
-        (await new Promise<RestartError>((resolve) => {
-          notify = resolve
-        }))
-      )
-    }
-    throw error
-  }
-  return result
 }
 
 function alive(pid: number): boolean {
