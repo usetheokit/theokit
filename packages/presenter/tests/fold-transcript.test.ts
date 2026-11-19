@@ -107,7 +107,15 @@ describe('foldTranscript', () => {
     })
     const d = fold([at(new Date(1))])
     expect(foldTranscript(d, at(new Date(2))).items[0]?.tool?.input).toEqual(new Date(2))
-    expect(foldTranscript(fold([at(new Map([[1, 1]]))]), at(new Map([[2, 2]])))).not.toBe(d)
+    const m = fold([at(new Map([[1, 1]]))])
+    const m2 = foldTranscript(m, at(new Map([[2, 2]])))
+    expect(m2).not.toBe(m)
+    expect(m2.items[0]?.tool?.input).toEqual(new Map([[2, 2]]))
+    // arrays of different length are not equal even when they have no own keys
+    const e = fold([at([])])
+    const sparse: unknown[] = []
+    sparse.length = 2
+    expect(foldTranscript(e, at(sparse))).not.toBe(e)
     const mk = () => {
       const o: Record<string, unknown> = {}
       o.self = o

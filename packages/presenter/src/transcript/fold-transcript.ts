@@ -64,6 +64,7 @@ function sameValue(a: unknown, b: unknown, depth = 0): boolean {
   if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
   if (depth >= MAX_COMPARE_DEPTH || !isPlain(a) || !isPlain(b)) return false
   if (Array.isArray(a) !== Array.isArray(b)) return false
+  if (Array.isArray(a) && a.length !== (b as unknown[]).length) return false
   const ka = Object.keys(a)
   if (ka.length !== Object.keys(b).length) return false
   const ra = a as Record<string, unknown>
