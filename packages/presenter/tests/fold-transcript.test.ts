@@ -60,7 +60,7 @@ describe('foldTranscript', () => {
   })
 
   it('a tool-result with isError true marks the tool failed and reads the shell exit code', () => {
-    const result = JSON.stringify({ ok: false, stdout: 'a', stderr: 'b', exit_code: 2 })
+    const result = JSON.stringify({ ok: true, stdout: 'a', stderr: 'b', exit_code: 2 })
     const s = fold([
       call(),
       { type: 'tool-result', callId: 'c1', name: 'sh', result, isError: true },
