@@ -11,6 +11,7 @@ it('copies a gitignored file listed in .worktreeinclude and nothing else', async
   const base = mkdtempSync(join(tmpdir(), 'wti-'))
   const repo = join(base, 'repo')
   mkdirSync(repo)
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- test fixture uses the system git
   const git = (...a: string[]) => execFileSync('git', a, { cwd: repo, stdio: 'pipe' })
   git('init', '-q', '-b', 'main')
   git('config', 'user.email', 't@t.t')

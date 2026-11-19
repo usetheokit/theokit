@@ -12,6 +12,7 @@ function setup() {
   const base = mkdtempSync(join(tmpdir(), 'wp-'))
   const repo = join(base, 'repo')
   mkdirSync(repo)
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- test fixture uses the system git
   const git = (...a: string[]) => execFileSync('git', a, { cwd: repo, stdio: 'pipe' }).toString()
   git('init', '-q', '-b', 'main')
   git('config', 'user.email', 't@t.t')

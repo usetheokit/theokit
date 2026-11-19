@@ -112,7 +112,12 @@ export function worktreeProvider(
     if (failures.length > 0) {
       throw new WorkspaceProviderError(
         `cleanup of ${path} failed: ${failures.map((f) => (f as Error).message).join('; ')}`,
-        { cause: failures.length === 1 ? failures[0] : new AggregateError(failures) },
+        {
+          cause:
+            failures.length === 1
+              ? failures[0]
+              : new AggregateError(failures, 'worktree and branch cleanup failed'),
+        },
       )
     }
   }
