@@ -52,7 +52,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
+| `./doctor` | Environment diagnostics. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
@@ -146,6 +146,19 @@ const res = await fetch('http://localhost:3000/agents/support', {
 const headers = agentRequestHeaders(AGENT_ACTION_HEADERS, { authorization: `Bearer ${token}` })
 ```
 
+## Mounting a chat route for an agent built elsewhere
+
+`generateAgentRoutes` needs only the route and a `createRun`; `compiledOptions` is optional and never read.
+
+```ts
+import { generateAgentRoutes } from '@theokit/agents/bridge'
+
+const routes = generateAgentRoutes({
+  walkResult: { route: '/api/agents/support' },
+  createRun: (message, sessionId, signal) => runMyAgent(message, sessionId, signal),
+})
+```
+
 ## The shapes worth knowing before you start
 
 **Tool scope is bound once, not per tool.** `bindToolScope({ projectRoot, writeRoot, sandbox })`
@@ -212,6 +225,21 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
+
+## Delegating to a fresh agent per task
+
+`delegationPortFromAgentFactory(create, { sendOptions })` (from `@theokit/agents/bridge`) returns a
+`DelegationPort` that builds an agent with `create` for each task, sends the task, cancels the run when
+the delegating signal aborts, and disposes the agent after success, failure or cancellation. A run that
+streamed an error or did not end `finished` rejects with a `DelegationError`; guardrail and delegation
+errors pass through unchanged.
+
+```ts
+import { delegationPortFromAgentFactory } from '@theokit/agents/bridge'
+
+const worker = delegationPortFromAgentFactory(() => createWorkerAgent())
+const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: worker }] })
+```
 
 ## Registering subagents
 
@@ -376,6 +404,16 @@ This package has no colour at all — a grep for `color`, `chalk` or `theme` acr
 nothing, the one apparent hit being `ansi` inside `stateTransitionHistory`. It produces text and tool
 calls; a palette here would be configuration nothing could act on. The toolkit reads no theme file
 either, so naming an owner would repeat the mistake the `keybindings.json` row already made.
+
+### Instruction tree: `as-listed` order and `maxCharsPerFile`
+
+`loadInstructionTree({ order: 'as-listed', fileNames: ['SOUL.md', 'IDENTITY.md'] })` returns blocks in
+the order of the `fileNames` array within each root. It is only valid with an array; a predicate
+throws a `ConfigurationError` naming `order` and `fileNames`.
+
+`budget.maxCharsPerFile` cuts each file at that many characters and appends a `[truncated]` line; the
+block carries `truncated: true`. It applies before `maxChars`, so one runaway file cannot push the
+others out. A file that fails to read for any reason except `ENOENT` is reported to `onWarn`.
 
 ### `CLAUDE.md`
 

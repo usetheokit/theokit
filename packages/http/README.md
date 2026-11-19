@@ -253,6 +253,38 @@ const Roles = createDecorator<string[]>()
 | `./runtime/node` | The Node runtime adapter |
 | `./action-encryption`, `./server-inserted-html`, `./css-resource` | Opt-in capabilities kept off the main bundle |
 
+## Node server with a disconnect signal
+
+`createNodeServer` from `@theokit/http/runtime/node` serves a Web-standard handler on Node.
+
+```ts
+import { createNodeServer, BindError } from '@theokit/http/runtime/node'
+
+const node = createNodeServer(
+  async (request) => {
+    // Aborts when the client disconnects before the response finished.
+    request.signal.addEventListener('abort', () => cancelTurn())
+    return streamTurn(request)
+  },
+  {
+    onUpgrade: (req, socket, head) => handleWebSocket(req, socket, head), // omitted: 404 and close
+    onError: (error, phase) => log(phase, error),
+  },
+)
+
+try {
+  const { host, port } = await node.listen(3000, '127.0.0.1')
+} catch (e) {
+  if (e instanceof BindError) console.error(e.code, e.host, e.port)
+}
+await node.close({ force: true }) // memoized; force ends open and upgraded sockets
+```
+
+- The signal follows the response's `close`, not the request's, so it is reliable on Node 23+. A response that finishes normally never aborts it. Pass `abortOnDisconnect: false` to turn it off.
+- When the client leaves mid-body, the response body is cancelled so its producer stops.
+- `listen` rejects with `BindError` (`code`, `host`, `port`); after binding, server errors go to `onError(error, 'server')`.
+- `close()` is memoized: concurrent calls share one promise, and the first call decides whether it is forced.
+
 ## `registerControllers` (low-level)
 
 For advanced use without the Vite plugin:
