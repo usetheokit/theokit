@@ -97,6 +97,11 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** Reads the signal through a call, so a flag set during an await is not narrowed away. */
+function wasAborted(turn: Turn): boolean {
+  return turn.controller.signal.aborted
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms).unref()
@@ -116,6 +121,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
   const waiting = new Map<Turn, string>()
   let clock = 0
   let closed = false
+  const isClosed = (): boolean => closed
 
   function evictIdle(): Entry | undefined {
     let victim: [string, Entry] | undefined
@@ -196,7 +202,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
         entries.delete(session)
         return { ok: false, code: 'turn_failed', reason: describe(error) }
       }
-      if (turn.controller.signal.aborted) {
+      if (wasAborted(turn)) {
         entries.delete(session)
         await disposeReported(agent)
         return INTERRUPTED
@@ -241,7 +247,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
       turn.end()
       return INTERRUPTED
     }
-    if (closed) {
+    if (isClosed()) {
       turn.finished = true
       turn.end()
       return CLOSING
