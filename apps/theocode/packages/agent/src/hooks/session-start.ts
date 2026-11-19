@@ -17,7 +17,8 @@
  * per-turn agent as the case where it bites.
  *
  * A session is this product's own concept: the surfaces mint the id (`tui-…`, `exec-…`). So the
- * surfaces fire this, once, at that moment.
+ * surfaces fire this, once, at that moment — through the framework's `runHostHooks`, which owns the
+ * gate and the process run; what stays here is the trust check, the session variable and the wording.
  *
  * ## What this is NOT
  *
@@ -29,8 +30,9 @@
  * refused and named. Firing at the surface must not become a way around the fingerprint, which is
  * the whole security model for a command that arrived with a clone.
  */
-import { runHookCommand } from '@theokit/agents/hooks'
+import { runHostHooks } from '@theokit/agents/hooks'
 
+import { hookFingerprint } from './hook-trust.js'
 import { parseHooks } from './hooks.js'
 import type { HookSpec } from './hooks-spec.js'
 
@@ -72,8 +74,31 @@ export interface RunSessionStartInput {
   readonly onWarn?: (message: string) => void
 }
 
+type Outcome = Awaited<ReturnType<typeof runHostHooks>>[number]
+
+/** This product's wording for a hook outcome; `undefined` when it ran cleanly. */
+function describeOutcome({ spec, status, result }: Outcome): string | undefined {
+  if (status === 'not-approved') {
+    return (
+      `SessionStart hook not approved and will not run: "${spec.command}". ` +
+      'Approve it by fingerprint — editing the command invalidates any previous approval.'
+    )
+  }
+  if (status === 'timed-out') {
+    return `SessionStart hook timed out after ${String(spec.timeout_ms)}ms: "${spec.command}"`
+  }
+  if (status === 'failed' || status === 'could-not-start') {
+    const detail = result?.stderr.trim() ?? ''
+    return (
+      `SessionStart hook "${spec.command}" exit ${String(result?.exitCode)}` +
+      (detail.length > 0 ? ` — ${detail}` : '')
+    )
+  }
+  return undefined
+}
+
 /**
- * Run the approved `SessionStart` hooks, once.
+ * Run the approved `SessionStart` hooks, once, through the framework's host-event runner.
  *
  * Never throws. A hook runs before the operator has typed anything, and refusing the whole session
  * over one is a larger punishment than the failure warrants — so a non-zero exit is reported and the
@@ -82,35 +107,44 @@ export interface RunSessionStartInput {
 export async function runSessionStartHooks(input: RunSessionStartInput): Promise<void> {
   const warn = input.onWarn ?? ((): void => undefined)
   const mine = input.specs.filter((s) => s.event === 'SessionStart')
+  if (mine.length === 0) return
 
-  for (const spec of mine) {
-    if (!input.approved(spec)) {
-      warn(
-        `SessionStart hook not approved and will not run: "${spec.command}". ` +
-          'Approve it by fingerprint — editing the command invalidates any previous approval.',
-      )
-      continue
+  // The approval store is keyed by OUR fingerprint (PascalCase event); the framework hands its
+  // injected function the translated identity, so hash the original it came from.
+  const keyOf = (s: { command: string; matcher?: string; timeoutMs: number }): string =>
+    JSON.stringify([s.command, s.matcher ?? '', s.timeoutMs])
+  const origin = new Map<string, HookSpec>()
+  const approved = new Set<string>()
+  const translated = mine.map((spec) => {
+    origin.set(keyOf({ ...spec, timeoutMs: spec.timeout_ms }), spec)
+    if (input.approved(spec)) approved.add(hookFingerprint(spec))
+    return {
+      event: 'on_session_start' as const,
+      command: spec.command,
+      ...(spec.matcher !== undefined && { matcher: spec.matcher }),
+      timeout_ms: spec.timeout_ms,
     }
-    try {
-      const result = await runHookCommand({
-        command: spec.command,
-        cwd: input.cwd,
-        timeoutMs: spec.timeout_ms,
-        // Explicit, never inherited: the framework's own contract for this input says a caller may
-        // restrict the environment, and a hook has no business reading whatever happens to be set.
-        env: { ...process.env, [SESSION_ENV]: input.sessionId } as Record<string, string>,
-      })
-      if (result.timedOut) {
-        warn(`SessionStart hook timed out after ${String(spec.timeout_ms)}ms: "${spec.command}"`)
-      } else if (result.exitCode !== 0) {
-        const detail = result.stderr.trim()
-        warn(
-          `SessionStart hook "${spec.command}" exit ${String(result.exitCode)}` +
-            (detail.length > 0 ? ` — ${detail}` : ''),
-        )
-      }
-    } catch (err) {
-      warn(`SessionStart hook "${spec.command}" could not run: ${(err as Error).message}`)
-    }
+  })
+
+  let outcomes: readonly Outcome[]
+  try {
+    outcomes = await runHostHooks('on_session_start', translated, {
+      trusted: true,
+      approved,
+      fingerprint: (identity) => {
+        const original = origin.get(keyOf(identity))
+        return original === undefined ? '' : hookFingerprint(original)
+      },
+      cwd: input.cwd,
+      env: { ...process.env, [SESSION_ENV]: input.sessionId } as Record<string, string>,
+    })
+  } catch (err) {
+    warn(`SessionStart hooks could not run: ${(err as Error).message}`)
+    return
+  }
+
+  for (const outcome of outcomes) {
+    const message = describeOutcome(outcome)
+    if (message !== undefined) warn(message)
   }
 }
