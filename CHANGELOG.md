@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `@theokit/agents`: `createProvenanceGuard()` in `@theokit/agents/bridge` blocks a tool call whose argument was copied from untrusted tool output (`web_fetch`, `web_search`, `mcp_*`) and never typed by the person.
 - `@theokit/agents`: `createGoalSignal()` gives `GoalRunner` an `update_goal` tool and a matching judge, so a goal loop ends when the agent reports `complete` or `blocked`.
 - `@theokit/agents`: `.subagents()` accepts `model` (a `ModelSelection` or `'inherit'`) and `mcpServers` on a registered subagent, so a discovered definition keeps its declared model and MCP servers.
 

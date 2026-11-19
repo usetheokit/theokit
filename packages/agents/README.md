@@ -244,6 +244,22 @@ answers `continue` until the agent calls the tool with `complete` (`done`) or `b
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
 
+## Blocking values copied from untrusted output
+
+`createProvenanceGuard(options?)` from `@theokit/agents/bridge` returns a plugin that refuses a tool call
+whose argument was only ever seen in the output of an untrusted tool (default: `web_fetch`, `web_search`
+and every `mcp_*` tool). It remembers untrusted outputs, the outputs of every other tool, and the person's
+messages (`pre_user_send`) as trusted. A string argument (nested objects and arrays included) is blocked
+when a run of `minRun` (default 8) or more characters from `[A-Za-z0-9_\-.:/@#+=%]` that contains a digit or
+punctuation is in an untrusted text and in no trusted one. The untrusted tools themselves are never
+blocked, so a search followed by a fetch still runs. Options: `untrustedSources` (exact names, or a
+predicate for prefixes), `minRun`, `keep` (texts per list, default 50) and `message(toolName, run)`.
+
+State is per instance: the remembered texts live in the plugin, so create one guard per agent or session;
+one shared by several agents mixes their conversations. Blind spots: a value shorter than `minRun`, a plain
+lowercase word, and a value that fell out of the last `keep` texts are not checked, and the system prompt
+is not visible to a plugin.
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the

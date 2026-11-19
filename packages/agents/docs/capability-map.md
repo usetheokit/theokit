@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1241 export(s) across 25 entry point(s).
+1245 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -75,6 +75,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createGoalSignal` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createProvenanceGuard` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -388,6 +389,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProjectSettingsGrant` | type |
 | `PromptInjectionOptions` | type |
 | `ProvenanceEntry` | type |
+| `ProvenanceGuardOptions` | type |
 | `ProviderRoutingSettings` | type |
 | `ReasoningEffort` | type |
 | `ReflectionContext` | type |
@@ -483,6 +485,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createApiErrorHandler` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createProvenanceGuard` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -599,6 +602,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PermissionsPluginOptions` | type |
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
+| `ProvenanceGuardOptions` | type |
 | `ResolvedCompatSource` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
