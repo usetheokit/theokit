@@ -97,7 +97,7 @@ function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): 
     ),
   ]
   const withheld: { id: string | undefined; reason: string }[] = []
-  const candidates = planned.candidates.flatMap((c) => {
+  const candidates = planned.candidates.flatMap((c): Candidate[] => {
     const ids = identitiesOf(c)
     if (ids.length === 1) return [{ ...c, id: ids[0] }]
     const reason =
