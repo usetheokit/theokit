@@ -201,14 +201,44 @@ export type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skil
 // and this gate does not know fails the build instead of being dropped.
 const _covers: readonly CompatSurface[] = [] as readonly SdkCompatSurface[]
 
-const EVERY_SURFACE: readonly CompatSurface[] = [
-  'commands',
-  'context',
-  'hooks',
-  'plugins',
-  'skills',
-  'subagents',
+/**
+ * The folders of a foreign root each surface feeds. A `Record` over `CompatSurface`, so a surface
+ * added to the union cannot be left without an entry — and this is the one declaration both the gate
+ * and the foreign-surface inventory read.
+ */
+export const SURFACE_FOLDERS: Readonly<Record<CompatSurface, readonly string[]>> = {
+  commands: ['commands'],
+  context: ['rules'],
+  hooks: [],
+  plugins: ['plugins'],
+  skills: ['skills'],
+  // Agent memory is applied by the host, but it travels with the agents that own it.
+  subagents: ['agents', 'agent-memory'],
+}
+
+/**
+ * Every surface the bare `'claude-code'` literal stands for, derived from {@link SURFACE_FOLDERS} so
+ * the enumeration cannot fall behind the declaration.
+ */
+export const EVERY_SURFACE: readonly CompatSurface[] = Object.keys(
+  SURFACE_FOLDERS,
+) as readonly CompatSurface[]
+
+/** Folders of the convention that no surface lists: found, reported, never loaded. */
+const UNADMITTED_FOLDERS: readonly string[] = ['workflows']
+
+/** Every folder of the foreign root this layer knows about. */
+export const FOREIGN_FOLDERS: readonly string[] = [
+  ...new Set([...Object.values(SURFACE_FOLDERS).flat(), ...UNADMITTED_FOLDERS]),
 ]
+
+/**
+ * The surface that admits `dir`, or `undefined` when none lists it (the folder is refused). Derived
+ * from {@link SURFACE_FOLDERS}: listing a folder under a surface is what admits it.
+ */
+export function surfaceOfFolder(dir: string): CompatSurface | undefined {
+  return EVERY_SURFACE.find((surface) => SURFACE_FOLDERS[surface].includes(dir))
+}
 
 const IGNORE_WARNING = (): void => undefined
 

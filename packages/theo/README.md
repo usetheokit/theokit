@@ -347,3 +347,10 @@ Cloudflare Workers, step by step: [`docs/wiki/sops/cloudflare-deploy.md`](https:
 ## Licence
 
 Apache-2.0 — see `LICENSE`.
+
+## Serving tools over MCP (HTTP)
+
+`theokit/server/agent` exports two helpers for serving a list of `CustomTool`s as an MCP server:
+
+- `handleMcpToolsHttp(tools, name, request, options?)` handles a whole HTTP request: 405 with `allow: POST` for other methods, 400 with `-32700` for bad JSON, 400 with `-32600` for a batch, and 202 with an empty body for a notification such as `notifications/initialized`. `initialize` echoes the client's `protocolVersion` when it is in `options.protocolVersions` (default `2025-06-18`, `2025-03-26`, `2024-11-05`), else the newest.
+- `handleMcpToolsJsonRpc(tools, name, body)` takes an already parsed body. A message without `id` (notification) gets a 202 with an empty body, `ping` returns `{}`, and a successful `tools/call` carries `isError: false`. The agent MCP route and stdio (which writes no line for a notification) behave the same.
