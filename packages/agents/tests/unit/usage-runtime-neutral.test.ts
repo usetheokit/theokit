@@ -32,6 +32,7 @@ describe('usage without a userId — the terminal case', () => {
       totalTokens: 150,
       totalCostUsd: 0.01,
       runs: 1,
+      unpricedRuns: 0,
     })
   })
 
@@ -94,5 +95,20 @@ describe('the legacy shape keeps working', () => {
     const storage = new InMemoryUsageStorage()
     await storage.record(llm(0.01))
     expect(storage.latestUsage()?.kind).toBe('llm')
+  })
+})
+
+describe('unpriced runs', () => {
+  it('in-memory totals report the count of unpriced runs and do not add them as 0', async () => {
+    const storage = new InMemoryUsageStorage()
+    await storage.record(llm(0.01))
+    await storage.record({ ...llm(0), priced: false })
+    await storage.record({ ...llm(0), priced: true })
+    await expect(storage.getUsage({})).resolves.toEqual({
+      totalTokens: 450,
+      totalCostUsd: 0.01,
+      runs: 3,
+      unpricedRuns: 1,
+    })
   })
 })

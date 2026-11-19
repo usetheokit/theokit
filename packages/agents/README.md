@@ -53,7 +53,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
 | `./doctor` | Environment diagnostics. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
-| `./usage` | Token and cost accounting |
+| `./usage` | Token and cost accounting. `usageFromRun(result, { model })` builds a `UsageRecord` from a run result; `priced` is `false` (and `costUsd` `0`) when the run has no finite `cost.amountUsd`, so an unpriced model is not read as a free run (`undefined` means priced). `InMemoryUsageStorage.getUsage` leaves unpriced runs out of `totalCostUsd` and counts them in `unpricedRuns`. `formatUsd` prints six significant digits, trailing zeros trimmed |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
 
