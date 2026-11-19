@@ -7,7 +7,9 @@
     "strict": true,
     "paths": {
       "@theokit/http": ["../http/src/index.ts"],
-      "@theokit/http/runtime/node": ["../http/src/runtime-node.ts"]
+      "@theokit/http/runtime/node": ["../http/src/runtime-node.ts"],
+      "@theokit/presenter/wire": ["../presenter/src/wire/index.ts"],
+      "@theokit/presenter": ["../presenter/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "tests/**/*.test.ts", "scripts/**/*.mts"]

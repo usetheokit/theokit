@@ -1,9 +1,7 @@
 // This module READS credentials; it contains none. The filename matches the repository's
 // secret-pattern gate (`credentials*`), so it is flagged on every diff that touches it — verified
 // on 2026-08-08: no key material, no tokens, no PEM blocks. Every `apiKey` here is a parameter name
-// or a type field, and the only long literal is a class name. Provider inference compares PREFIXES
-// (`apiKey.startsWith(prefix)`), which is the opposite of embedding one.
-//
+// or a type field, and the only long literal is a class name. //
 // Keep it that way: values belong in the store the SDK writes at 0600, never in source.
 import {
   authFilePath as storeAuthFilePath,
@@ -26,6 +24,7 @@ import { OPENAI_OAUTH_CONFIG, credentialStore } from './oauth-config.js'
 
 const PROVIDERS = ['openrouter', 'anthropic', 'openai'] as const
 export type Provider = (typeof PROVIDERS)[number]
+export const PROVIDER_NAMES: readonly Provider[] = PROVIDERS
 
 /**
  * The provider table, DERIVED from the framework's defaults instead of hand-written.
@@ -131,21 +130,6 @@ export interface ResolvedCredential {
 }
 
 /**
- * Which provider issued this key.
- *
- * The longest-prefix scan lived here; `DESCRIPTORS` now carries the prefixes, so what remains is the
- * narrowing to this product's union. Ordering by length is still explicit rather than assumed —
- * every OpenRouter and Anthropic key also starts with `sk-`, and a shortest-match-first scan calls
- * them OpenAI.
- */
-export function inferProvider(apiKey: string): Provider | undefined {
-  const byLength = [...DESCRIPTORS].sort(
-    (a, b) => (b.keyPrefix ?? '').length - (a.keyPrefix ?? '').length,
-  )
-  return byLength.find((d) => apiKey.startsWith(d.keyPrefix ?? ''))?.name as Provider | undefined
-}
-
-/**
  * The resolution chain — the framework's since `@theokit/agents@9.2.1`.
  *
  * ~165 lines lived here: the declared-provider pin, the env precedence walk, the file reader with
@@ -182,7 +166,7 @@ export interface StoredOAuthCredential {
  * mistake originates — `theocode auth login --provider anthropic` with an OpenAI key — and catching
  * it here means the bad pair never reaches disk.
  */
-function assertPairMatches(provider: Provider, apiKey: string, where: string): void {
+export function assertPairMatches(provider: Provider, apiKey: string, where: string): void {
   const expected = PREFIXES[provider]
   if (expected !== undefined && expected !== '' && !apiKey.startsWith(expected)) {
     throw new CredentialError(
