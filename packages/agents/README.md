@@ -35,7 +35,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
-| `./testing` | Test seams: compiled-agent inspection, mock streams |
+| `./testing` | Test seams: compiled-agent inspection, mock streams, the live-suite provider-key guard |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
 | `./interactive` | The interactive-shell backend contract |
@@ -93,6 +93,17 @@ process.exitCode = result.exitCode
 `grantGate(store, classify)` (from `./auth`) vetoes a governed call that has no standing grant and never asks anyone. `createApprovalGate({ store, key, waived?, reviewer?, ask?, timeoutMs?, ledger?, onError? })` is the chain in front of it: a session waiver, a saved approval in the same `PermissionStore`, an optional reviewer (`'allow' | 'deny' | 'ask'`), then the person via `ask` (`'once'`, `'always'` which is saved with `store.grant`, or `'deny'`; `{ answer, by }` records who). No `ask` means a refusal (`nobody can approve it`); a timeout is a denial named in the decision's `reason` (it does not call `onError`); a throwing reviewer defers to the person, a throwing asker denies, and each is reported through `onError(error, stage)` and named in `reason`. `decide(ctx)` returns `{ allowed, reason, by }`; `plugin` applies it as a `pre_tool_call` veto. `createJsonlLedger(dir)` is an append-only `activity.jsonl` (mode 0600) with `read()`; pass it as `ledger` to get one receipt per decision.
 
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
+
+## Testing: the live-suite guard
+
+A live (real-model) suite must not skip green in CI when the provider key is missing. `@theokit/agents/testing` exports `assertProviderKeyWhenRequired`, `requireProviderKeySetup`, `LIVE_KEY_NAMES` and `MissingProviderKeyError`: when `THEOKIT_LIVE_REQUIRED=1` and none of the key variables is set (whitespace-only counts as unset), the run fails with an error that names the variables, never a value. Without the flag it returns, so a local run keeps its skip.
+
+```ts
+// tests/live/setup.ts — register it as vitest `globalSetup`
+import { requireProviderKeySetup } from '@theokit/agents/testing'
+
+export default requireProviderKeySetup({ requiredFlag: 'MYAPP_LIVE' }) // names and requiredFlag are optional
+```
 
 ## One bootstrap for every entry
 
