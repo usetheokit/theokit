@@ -29,6 +29,19 @@ describe('mcp-relay', () => {
     expect(new GrantStore(path).load().authenticate(token)).toBeUndefined()
   })
 
+  it('keeps every change when separate CLI commands mutate at once', async () => {
+    const v = harness()
+    expect(await runCli(['mcp-relay', 'grant', 'first'], v.io)).toBe(0)
+    const path = grantsPath(v.io.env, v.io.homeDir)
+    const run = (...args: string[]) => runCli(['mcp-relay', ...args], { ...v.io, stdout: harness().io.stdout })
+    const codes = await Promise.all([run('revoke', 'first'), run('grant', 'second'), run('grant', 'third')])
+    expect(codes).toEqual([0, 0, 0])
+    const byName = new Map(new GrantStore(path).load().list().map((g) => [g.name, g]))
+    expect(byName.get('first')?.revokedAt).toBeDefined()
+    expect(byName.get('second')?.revokedAt).toBeUndefined()
+    expect(byName.get('third')?.revokedAt).toBeUndefined()
+  })
+
   it('exits 2 on duplicate, invalid name and unknown tool', async () => {
     const v = harness()
     expect(await runCli(['mcp-relay', 'grant', 'a'], v.io)).toBe(0)
