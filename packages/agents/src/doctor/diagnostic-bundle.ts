@@ -74,11 +74,12 @@ export async function writeDiagnosticBundle(
   const mask = options.mask ?? ((t: string) => t)
   const blocks: Buffer[] = []
   for (const [index, file] of options.files.entries()) {
-    // Never show a name that holds a secret; fall back to the position.
-    const nameLeaks = secrets.some((s) => file.name.includes(s))
+    // Show the name with every secret value redacted; safeMessage still guards the result.
+    const shown = secrets.reduce((n, s) => n.split(s).join('[redacted]'), file.name)
     // Most to least informative; the name alone comes before the position.
     const candidates = (wording: (l: string) => string) => [
-      ...(nameLeaks ? [] : [wording(`file "${file.name}"`), `"${file.name}"`]),
+      wording(`file "${shown}"`),
+      `"${shown}"`,
       wording(`file #${index}`),
     ]
     if (Buffer.byteLength(file.name, 'utf8') > NAME_BYTES) {

@@ -96,6 +96,20 @@ describe('writeDiagnosticBundle', () => {
     expect(existsSync(out)).toBe(false)
   })
 
+  it('names the file with the secret redacted when the name holds a secret', async () => {
+    const secret = 'sk-live-ABC123'
+    const out = join(dir(), 'b.tar.gz')
+    const err = await writeDiagnosticBundle({
+      out,
+      files: [{ name: `report-${secret}.json`, content: 'x' }],
+      secrets: [secret],
+    }).catch((e: unknown) => e)
+    expect((err as DiagnosticBundleError).reason).toBe('secret_survived')
+    const message = (err as Error).message
+    expect(message).not.toContain(secret)
+    expect(message).toContain('report-[redacted].json')
+  })
+
   it('a name over 100 bytes throws name_too_long', async () => {
     const out = join(dir(), 'b.tar.gz')
     await expect(
