@@ -22,6 +22,8 @@ async function probe(
   identity?: string
   peer?: string
   protocol: string
+  host: string
+  hostHeader: string | null
   seen: string | null
   leaked: string | null
 }> {
@@ -31,6 +33,8 @@ async function probe(
         identity: trustedIdentity(req),
         peer: peerAddress(req),
         protocol: new URL(req.url).protocol,
+        host: new URL(req.url).host,
+        hostHeader: req.headers.get('host'),
         seen: req.headers.get('x-theokit-trusted-identity'),
         leaked: req.headers.get('x-user'),
       }),
@@ -105,5 +109,72 @@ describe('createNodeServer trustedProxy', () => {
         trustedProxy: { identityHeader: 'x-user', addresses: [] },
       }),
     ).toThrow(/addresses/)
+  })
+
+  it('normalizes allowlist addresses (case and ::ffff: prefix)', async () => {
+    const r = await probe(
+      { identityHeader: 'x-user', addresses: ['::FFFF:127.0.0.1'] },
+      { 'x-user': 'alice' },
+    )
+    expect(r.identity).toBe('alice')
+  })
+
+  it('rejects malformed and reserved identity header names', () => {
+    for (const identityHeader of [
+      'X-User',
+      'x_user',
+      '',
+      'x user',
+      'authorization',
+      'x-theokit-peer',
+      'x-theokit-trusted-identity',
+    ]) {
+      expect(() =>
+        createNodeServer(() => new Response('x'), {
+          trustedProxy: { identityHeader, addresses: ['127.0.0.1'] },
+        }),
+      ).toThrow(/identityHeader/)
+    }
+  })
+
+  it('suppresses an empty identity and still removes the header', async () => {
+    const r = await probe(
+      { identityHeader: 'x-user', addresses: ['127.0.0.1'] },
+      { 'x-user': '   ' },
+    )
+    expect(r.identity).toBeUndefined()
+    expect(r.leaked).toBeNull()
+  })
+
+  it('removes the identity header from the Request on the trusted path', async () => {
+    const r = await probe({ identityHeader: 'x-user', addresses: ['127.0.0.1'] }, { 'x-user': 'a' })
+    expect(r.identity).toBe('a')
+    expect(r.leaked).toBeNull()
+  })
+
+  it('accepts x-forwarded-proto as identity header and keeps the allowlist for the URL', async () => {
+    const trusted = await probe(
+      { identityHeader: 'x-forwarded-proto', addresses: ['127.0.0.1'] },
+      { 'x-forwarded-proto': 'https' },
+    )
+    expect(trusted.identity).toBe('https')
+    expect(trusted.protocol).toBe('https:')
+    await node?.close({ force: true })
+    const other = await probe(
+      { identityHeader: 'x-forwarded-proto', addresses: ['10.0.0.1'] },
+      { 'x-forwarded-proto': 'https' },
+    )
+    expect(other.identity).toBeUndefined()
+    expect(other.protocol).toBe('http:')
+  })
+
+  it('keeps the host in the URL when host is the identity header, but removes it from the Request', async () => {
+    const r = await probe(
+      { identityHeader: 'host', addresses: ['127.0.0.1'] },
+      { host: 'app.example.com' },
+    )
+    expect(r.host).toBe('app.example.com')
+    expect(r.hostHeader).toBeNull()
+    expect(r.identity).toBe('app.example.com')
   })
 })

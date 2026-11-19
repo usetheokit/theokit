@@ -38,7 +38,6 @@ export function normalizeTrustedProxy(options: TrustedProxyOptions): NormalizedT
   }
   if (
     identityHeader === 'authorization' ||
-    identityHeader === 'x-forwarded-proto' ||
     identityHeader === PEER_ADDRESS_HEADER ||
     identityHeader === TRUSTED_IDENTITY_HEADER
   ) {

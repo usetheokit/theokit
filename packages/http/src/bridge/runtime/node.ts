@@ -17,9 +17,12 @@ import {
 import type { RuntimeAdapter } from './types.js'
 
 /** Convert Node.js IncomingMessage to Web Standard Request. */
-export function nodeIncomingToRequest(nodeReq: IncomingMessage): Request {
-  const proto = nodeReq.headers['x-forwarded-proto'] ?? 'http'
-  const host = nodeReq.headers.host ?? 'localhost'
+export function nodeIncomingToRequest(
+  nodeReq: IncomingMessage,
+  origin?: { readonly proto?: string | string[]; readonly host?: string },
+): Request {
+  const proto = origin ? (origin.proto ?? 'http') : (nodeReq.headers['x-forwarded-proto'] ?? 'http')
+  const host = (origin ? origin.host : nodeReq.headers.host) ?? 'localhost'
   const url = `${proto}://${host}${nodeReq.url ?? '/'}` // eslint-disable-line @typescript-eslint/restrict-template-expressions -- proto/host are string|string[]
   const method = nodeReq.method ?? 'GET'
 
@@ -206,8 +209,14 @@ export function createNodeServer(
             if (!nodeRes.writableFinished) controller.abort()
           })
         }
-        stampTrustedIdentity(nodeReq, proxy)
-        const base = nodeIncomingToRequest(nodeReq)
+        // Read URL inputs before stamping: the identity header may be `host` or `x-forwarded-proto`.
+        const { host } = nodeReq.headers
+        const forwardedProto = nodeReq.headers['x-forwarded-proto']
+        const trusted = stampTrustedIdentity(nodeReq, proxy)
+        const base = nodeIncomingToRequest(nodeReq, {
+          proto: trusted ? forwardedProto : undefined,
+          host,
+        })
         const request = abortOnDisconnect ? new Request(base, { signal: controller.signal }) : base
         const response = await handler(request)
         await writeResponseToNode(response, nodeRes)
