@@ -26,6 +26,8 @@ const PROXY = join(import.meta.dirname, '..', 'tools', 'browser-proxy.mjs')
 /** The browser config the server is started with: it names the headless shell `browser:install` installs. */
 const CONFIG = join(import.meta.dirname, '..', 'tools', 'browser-config.json')
 const ON_LINE = 'tools: browser is on (headless chromium, isolated profile)'
+const SHARED_LINE =
+  'tools: browser is on (headless chromium, persistent profile shared by sessions)'
 const OFF_LINE = 'tools: browser is off (THEOCLAW_BROWSER unset)'
 const MODEL_ENV = { THEOCLAW_MODEL: 'openrouter/m', OPENROUTER_API_KEY: 'router-key' }
 
@@ -52,6 +54,15 @@ function browsersDir(...entries: string[]): string {
 
 function installed(): BrowserDeps {
   return { resolveCli: () => CLI, browsersDir: browsersDir('chromium-1200') }
+}
+
+/** A launcher that starts no Chromium: the start tests only look at the wiring. */
+function fakeInstalled(): BrowserDeps {
+  return {
+    ...installed(),
+    launch: () =>
+      Promise.resolve({ endpoint: 'http://127.0.0.1:4321', close: () => Promise.resolve() }),
+  }
 }
 
 function settingsWith(env: Record<string, string | undefined>, browser: BrowserDeps = installed()) {
@@ -231,22 +242,25 @@ describe('THEOCLAW_BROWSER', () => {
   it('prints the browser line on start', async () => {
     const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), {
       detect: notEnforced,
-      browser: installed(),
+      browser: fakeInstalled(),
     })
     started.push(result)
     expect(result.error).toBeUndefined()
-    expect(result.output()).toContain(ON_LINE)
+    expect(result.output()).toContain(SHARED_LINE)
   })
 
   it('gives a /control turn of the started process the browser server', async () => {
     // Review round 1 (F-tests-2, F-wire-1): through the composition, not one layer below it.
     const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), {
       detect: notEnforced,
-      browser: installed(),
+      browser: fakeInstalled(),
     })
     started.push(result)
     const options = await runControlTurn(result)
     expect(Object.keys(options.mcpServers ?? {})).toEqual(['browser'])
+    expect(options.mcpServers?.browser).toMatchObject({
+      args: expect.arrayContaining(['--cdp-endpoint', 'http://127.0.0.1:4321']),
+    })
   })
 
   it('spawns the browser server with neither env nor envPolicy', () => {
