@@ -25,7 +25,7 @@ export function agentRunPort(
       const outcome = await turn.wait()
       if (outcome.status === 'error' || outcome.error) {
         // The SDK's error carries a `code` that the declared handle type omits.
-        const err = outcome.error
+        const err: { message?: string; code?: string } | undefined = outcome.error
         const named = err?.code ?? err?.message ?? 'unknown'
         return { ok: false as const, error: `run ended with error: ${named}` }
       }
