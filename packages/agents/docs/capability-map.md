@@ -774,7 +774,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `assertSecureModes` | value |
 | `authFilePath` | value |
 | `AuthProvider` | value |
-| `builtinSecretStores` | value |
 | `CODEX_CLIENT_ID_ENV_VAR` | value |
 | `CODEX_PROVIDER` | value |
 | `createPlanOnlyGate` | value |
@@ -809,8 +808,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveAgentCredential` | value |
 | `resolveCredential` | value |
 | `resolveOperatorApiKey` | value |
-| `resolveSecretRefs` | value |
-| `SecretReferenceError` | value |
 | `writeCredential` | value |
 | `AgentCredentialInput` | type |
 | `AuthMethod` | type |
@@ -842,7 +839,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ResolveCredentialOptions` | type |
 | `ResolvedCredential` | type |
 | `RunCredentialHelperOptions` | type |
-| `SecretStore` | type |
 | `SourceOrigin` | type |
 | `StoredCredential` | type |
 | `StoredOAuthCredential` | type |

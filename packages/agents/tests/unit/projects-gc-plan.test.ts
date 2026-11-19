@@ -369,11 +369,29 @@ describe('planProjectsGC protection edge cases', () => {
     const hidden = '/work-app'
     transcript('new', 1)
     const active = transcript('active', 300)
+    const stale = transcript('stale', 300)
+    const base = defaultFs()
+    // Only the header cwd is gone: every other path resolves normally.
+    const fs: ProjectsGCFs = {
+      ...base,
+      stat: (p) => {
+        if (p === CWD) throw Object.assign(new Error('gone'), { code: 'ENOENT' })
+        return base.stat(p)
+      },
+    }
+    const asked: string[] = []
     const result = await plan({
       classify: undefined,
+      fs,
       candidateCwds: () => [hidden],
-      listRegistry: (cwd) => Promise.resolve(cwd === hidden ? [{ id: 'active' }] : []),
+      listRegistry: (cwd) => {
+        asked.push(cwd)
+        return Promise.resolve(cwd === hidden ? [{ id: 'active' }] : [])
+      },
     })
+    expect(result.kept.some((k) => k.reason.includes('undetermined'))).toBe(false)
+    expect(asked).toContain(hidden)
+    expect(result.candidates.map((c) => c.target)).toContain(stale)
     expect(result.candidates.map((c) => c.target)).not.toContain(active)
   })
 
