@@ -259,6 +259,20 @@ await copyJobs(files, db, { force: false }) // throws JobCopyError naming the co
 
 Reads come from the jobs loaded when the store opened, and writes run one after another; replicas do not see each other's later changes until they reopen the store. A malformed row raises `ScheduleStoreError` naming the table and job id. `copyJobs` writes through the target's atomic `putMany` (one statement for PostgreSQL, one file rewrite for the file store), so a failure leaves the target unchanged; a custom `JobStore` without `putMany` raises `JobCopyUnsupportedError` before anything is written.
 
+## Turning a pushed event stream into an iterable
+
+`streamFromEmitter(start, { signal, isFinal, onError })` from `@theokit/agents/bridge` returns an
+`AsyncIterable` for a producer that pushes events to a callback. `return()` aborts the producer's signal
+at once, unless a final event (`done` or `error` by default) was already seen. A rejecting producer
+yields the `onError` event, unless an error event already went out.
+
+```ts
+generateAgentRoutes({
+  createRun: (m, s, signal) =>
+    streamFromEmitter((emit, sig) => runAgentTurn(/* ... */ emit, sig), { signal }),
+})
+```
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
