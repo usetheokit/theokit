@@ -226,3 +226,190 @@ describe('askUserVia — the adapter the question tool consumes', () => {
     )
   })
 })
+
+describe('ask / pending and onChange', () => {
+  const setup = () => {
+    const bridge = createAskBridge()
+    let seen: PendingQuestion | undefined
+    bridge.setListener('t', (q) => {
+      seen = q
+    })
+    return { bridge, question: () => seen }
+  }
+
+  it('pending returns the question while it is open and undefined after answer', async () => {
+    const { bridge, question } = setup()
+    expect(bridge.pending('t')).toBeUndefined()
+    const p = bridge.ask('t', 'why?')
+    expect(bridge.pending('t')).toEqual({ id: question()?.id, threadId: 't', question: 'why?' })
+    bridge.answer(question()?.id ?? '', 'because')
+    await p
+    expect(bridge.pending('t')).toBeUndefined()
+  })
+
+  it('pending is undefined after abandon', async () => {
+    const { bridge } = setup()
+    const p = bridge.ask('t', 'q').catch((e: unknown) => e)
+    bridge.abandon('t')
+    expect(await p).toBeInstanceOf(QuestionAbandonedError)
+    expect(bridge.pending('t')).toBeUndefined()
+  })
+
+  it('onChange fires after ask, answer and abandon with the thread id', async () => {
+    const { bridge, question } = setup()
+    const log: (string | undefined)[] = []
+    bridge.onChange((threadId) => log.push(`${threadId}:${bridge.pending(threadId)?.question}`))
+    const p = bridge.ask('t', 'a')
+    bridge.answer(question()?.id ?? '', 'x')
+    await p
+    const p2 = bridge.ask('t', 'b').catch(() => undefined)
+    bridge.abandon('t')
+    await p2
+    expect(log).toEqual(['t:a', 't:undefined', 't:b', 't:undefined'])
+  })
+
+  it('a rejected concurrent ask does not change pending', async () => {
+    const { bridge } = setup()
+    const first = bridge.ask('t', 'first')
+    const onChange = vi.fn()
+    bridge.onChange(onChange)
+    await expect(bridge.ask('t', 'second')).rejects.toBeInstanceOf(ConcurrentQuestionError)
+    expect(bridge.pending('t')?.question).toBe('first')
+    expect(onChange).not.toHaveBeenCalled()
+    bridge.abandon('t')
+    await first.catch(() => undefined)
+  })
+
+  it('a throwing listener rejects the ask, clears pending and notifies observers', async () => {
+    const bridge = createAskBridge()
+    bridge.setListener('t', () => {
+      throw new Error('surface broke')
+    })
+    const seen: Array<PendingQuestion | undefined> = []
+    bridge.onChange((id) => seen.push(bridge.pending(id)))
+    await expect(bridge.ask('t', 'q')).rejects.toThrow('surface broke')
+    expect(bridge.pending('t')).toBeUndefined()
+    expect(seen.at(-1)).toBeUndefined()
+    expect(seen.length).toBe(2)
+    await expect(bridge.ask('t', 'again')).rejects.toThrow('surface broke')
+  })
+
+  it('a throwing listener does not fail a replacement question it started', async () => {
+    const bridge = createAskBridge()
+    let replacement: Promise<string> | undefined
+    bridge.setListener('t', (q) => {
+      if (q.question !== 'first') return
+      bridge.answer(q.id, 'done')
+      replacement = bridge.ask('t', 'second')
+      throw new Error('surface broke')
+    })
+    const first = bridge.ask('t', 'first')
+    await expect(first).resolves.toBe('done')
+    expect(bridge.pending('t')?.question).toBe('second')
+    bridge.abandon('t')
+    await replacement?.catch(() => undefined)
+  })
+
+  it('an onChange disposer stops further calls', async () => {
+    const { bridge } = setup()
+    const a = vi.fn()
+    const b = vi.fn()
+    const disposeA = bridge.onChange(a)
+    bridge.onChange(b)
+    disposeA()
+    const p = bridge.ask('t', 'q').catch(() => undefined)
+    bridge.abandon('t')
+    await p
+    expect(a).not.toHaveBeenCalled()
+    expect(b).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not show the listener a question an observer already abandoned', async () => {
+    const bridge = createAskBridge()
+    const listener = vi.fn()
+    bridge.setListener('t', listener)
+    bridge.onChange((threadId) => {
+      bridge.abandon(threadId)
+    })
+    await expect(bridge.ask('t', 'q')).rejects.toBeInstanceOf(QuestionAbandonedError)
+    expect(listener).not.toHaveBeenCalled()
+    expect(bridge.pending('t')).toBeUndefined()
+  })
+
+  it('shows the question to the listener an observer swapped in', async () => {
+    const bridge = createAskBridge()
+    const old = vi.fn()
+    const fresh = vi.fn()
+    const dispose = bridge.setListener('t', old)
+    const off = bridge.onChange(() => {
+      off()
+      dispose()
+      bridge.setListener('t', fresh)
+    })
+    const p = bridge.ask('t', 'q')
+    expect(old).not.toHaveBeenCalled()
+    expect(fresh).toHaveBeenCalledTimes(1)
+    bridge.answer(fresh.mock.calls[0]![0].id, 'a')
+    await expect(p).resolves.toBe('a')
+  })
+
+  it('abandon cleanup cannot clear a question an observer started', async () => {
+    const bridge = createAskBridge()
+    let shown: string | undefined
+    bridge.setListener('t', (q) => (shown = q.question), {
+      onAbandon: () => {
+        shown = undefined
+      },
+    })
+    const first = bridge.ask('t', 'one').catch(() => undefined)
+    let restarted = false
+    bridge.onChange((threadId) => {
+      if (restarted || bridge.pending(threadId) !== undefined) return
+      restarted = true
+      void bridge.ask(threadId, 'two')
+    })
+    bridge.abandon('t')
+    await first
+    expect(bridge.pending('t')?.question).toBe('two')
+    expect(shown).toBe('two')
+  })
+
+  it('abandon settles and notifies even when onAbandon throws', async () => {
+    const bridge = createAskBridge()
+    bridge.setListener('t', () => undefined, {
+      onAbandon: () => {
+        throw new Error('boom')
+      },
+    })
+    const changed = vi.fn()
+    bridge.onChange(changed)
+    const p = bridge.ask('t', 'q')
+    changed.mockClear()
+    expect(() => bridge.abandon('t')).toThrow('boom')
+    await expect(p).rejects.toBeInstanceOf(QuestionAbandonedError)
+    expect(bridge.pending('t')).toBeUndefined()
+    expect(changed).toHaveBeenCalledWith('t')
+  })
+
+  it('onAbandon answering the old question cannot disturb a replacement', async () => {
+    const bridge = createAskBridge()
+    let oldId = ''
+    bridge.setListener('t', (q) => (oldId ||= q.id), {
+      onAbandon: () => {
+        expect(bridge.answer(oldId, 'late')).toBe(false)
+      },
+    })
+    const first = bridge.ask('t', 'one').catch(() => undefined)
+    let restarted = false
+    bridge.onChange((threadId) => {
+      if (restarted || bridge.pending(threadId) !== undefined) return
+      restarted = true
+      void bridge.ask(threadId, 'two')
+    })
+    bridge.abandon('t')
+    await first
+    const next = bridge.pending('t')
+    expect(next?.question).toBe('two')
+    expect(bridge.answer(next!.id, 'ok')).toBe(true)
+  })
+})
