@@ -19,6 +19,9 @@ const backendSource = (label: string): string => `
 export const calls = (globalThis.__calls ??= [])
 export const backend = {
   name: '${label}',
+  async dequeue() { return undefined },
+  async ack() {},
+  async nack() {},
   async enqueue(input) { calls.push({ backend: '${label}', input }); return { jobId: 'j' } },
   async enqueueInTransaction(client, input) { calls.push({ backend: '${label}', client, input }); return { jobId: 'tx' } },
 }
@@ -98,7 +101,10 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
     .map((n) => join(root, n))
   // The real CLI build writes the entry: scan, manifest, config paths and all.
   const DEFINE = resolve(__dirname, '../../packages/theo/src/server/cron/define-cron.ts')
-  write('package.json', JSON.stringify({ name: 'deno-cron-fixture', private: true, type: 'module' }))
+  write(
+    'package.json',
+    JSON.stringify({ name: 'deno-cron-fixture', private: true, type: 'module' }),
+  )
   write('app/page.tsx', 'export default function Page() { return null }\n')
   write('index.html', '<!doctype html><html><body></body></html>\n')
   write(
@@ -113,7 +119,7 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
       env: { ...process.env, THEOKIT_SKIP_NATIVE_PREFLIGHT: '1' },
     })
   } catch {
-    /* asserted through the entry below */
+    // asserted through the entry below
   }
   const entry = join(root, '.theokit', 'crons-entry.ts')
   expect(existsSync(entry), 'CLI build emitted the cron entry').toBe(true)
@@ -147,16 +153,27 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
 }
 
 describe('generated entry loaded through the build wiring', () => {
-  const stubPackage = (name: string): void =>
+  const stubPackage = (name: string): void => {
+    write(
+      `node_modules/${name}/package.json`,
+      `{"name":"${name}","type":"module","main":"index.js"}`,
+    )
     write(`node_modules/${name}/index.js`, `export const Pool = class { name = 'pg' }\n`)
+  }
 
   it('resolves a deno.json alias and the override dependency, merging a partial backend override', async () => {
     write('deno.json', JSON.stringify({ imports: { '@app/backend': './lib/backend.ts' } }))
     stubPackage('pg')
+    // Node (which loads the config during the CLI build) has no import map: give it the alias too.
+    write(
+      'node_modules/@app/backend/package.json',
+      '{"name":"@app/backend","type":"module","main":"index.js"}',
+    )
+    write('node_modules/@app/backend/index.js', `export * from '../../../lib/backend.ts'\n`)
     write(
       'lib/backend.ts',
       `import { Pool } from 'pg'\nexport const pool = new Pool()\n` +
-        `export const backend = { name: 'aliased', async enqueue(input) { (globalThis.__calls ??= []).push({ backend: 'aliased', input }); return { jobId: 'j' } }, async enqueueInTransaction(client, input) { (globalThis.__calls ??= []).push({ backend: 'aliased-tx', client, input }); return { jobId: 'tx' } } }\n`,
+        `export const backend = { name: 'aliased', async dequeue() {}, async ack() {}, async nack() {}, async enqueue(input) { (globalThis.__calls ??= []).push({ backend: 'aliased', input }); return { jobId: 'j' } }, async enqueueInTransaction(client, input) { (globalThis.__calls ??= []).push({ backend: 'aliased-tx', client, input }); return { jobId: 'tx' } } }\n`,
     )
     write(
       'theo.config.ts',
