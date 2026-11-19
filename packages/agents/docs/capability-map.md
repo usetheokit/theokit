@@ -1269,6 +1269,7 @@ Measured against `@theokit/sdk@5.17.0`.
 ## `@theokit/agents/a2a`
 
 | Symbol | Kind |
+| `A2ATimeoutError` | value |
 |---|---|
 | `createA2AJsonRpcHandler` | value |
 | `createA2ATool` | value |

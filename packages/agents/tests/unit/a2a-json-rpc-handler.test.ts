@@ -351,3 +351,46 @@ describe('createA2AJsonRpcHandler', () => {
     expect(respond).not.toHaveBeenCalled()
   })
 })
+
+describe('createA2AJsonRpcHandler maxInFlight', () => {
+  function limited(respond: (t: string, s: AbortSignal) => Promise<string>, timeoutMs = 5000) {
+    return createA2AJsonRpcHandler({
+      authorize: (h) => h === 'Bearer good',
+      respond,
+      maxBodyBytes: 65536,
+      timeoutMs,
+      maxInFlight: 1,
+      retryAfterSeconds: 7,
+    })
+  }
+  const body = sendBody([{ kind: 'text', text: 'hi' }])
+
+  it('the request over maxInFlight answers 503 with retry-after and calls respond zero times', async () => {
+    const release: (() => void)[] = []
+    const respond = vi.fn(() => new Promise<string>((resolve) => release.push(() => resolve('ok'))))
+    const handler = limited(respond)
+    const first = handler(post(body))
+    await new Promise((r) => setTimeout(r, 0))
+    const res = await handler(post(body))
+    expect(res.status).toBe(503)
+    expect(res.headers.get('retry-after')).toBe('7')
+    expect(respond).toHaveBeenCalledTimes(1)
+    release[0]?.()
+    expect((await first).status).toBe(200)
+  })
+
+  it('a slot stays taken until respond settles, even after the handler timed out', async () => {
+    const release: (() => void)[] = []
+    const respond = vi.fn(() => new Promise<string>((resolve) => release.push(() => resolve('ok'))))
+    const handler = limited(respond, 20)
+    const timedOut = await (await handler(post(body))).json()
+    expect(timedOut.error.code).toBe(-32603)
+    expect((await handler(post(body))).status).toBe(503)
+    release[0]?.()
+    await new Promise((r) => setTimeout(r, 0))
+    const next = handler(post(body))
+    await new Promise((r) => setTimeout(r, 0))
+    release[1]?.()
+    expect((await next).status).toBe(200)
+  })
+})

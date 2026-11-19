@@ -11,7 +11,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-import { createA2ATool } from '../../src/a2a/a2a-client.js'
+import { A2ATimeoutError, createA2ATool } from '../../src/a2a/a2a-client.js'
 import { streamAgentResponse, type StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 
 async function* textRun(text: string): AsyncGenerator<StreamEvent> {
@@ -250,5 +250,57 @@ describe('createA2ATool', () => {
     })
 
     await expect(tool.handler({ message: 'hi' })).rejects.toThrow(/ask.*0 chunks/)
+  })
+})
+
+describe('createA2ATool timeoutMs', () => {
+  const hung = () => new Promise<Response>(() => undefined)
+
+  it('a peer that never answers rejects with A2ATimeoutError after timeoutMs', async () => {
+    vi.useFakeTimers()
+    try {
+      const tool = createA2ATool({
+        url: 'http://peer.test/a',
+        name: 'peer',
+        description: 'd',
+        timeoutMs: 1000,
+        fetchImpl: hung,
+      })
+      const result = tool.handler({ message: 'hi' }).catch((e: unknown) => e)
+      await vi.advanceTimersByTimeAsync(1000)
+      const error = await result
+      expect(error).toBeInstanceOf(A2ATimeoutError)
+      expect((error as A2ATimeoutError).message).toBe(
+        'A2A call to "peer" failed: no answer within 1000 ms',
+      )
+      expect((error as A2ATimeoutError).peer).toBe('peer')
+      expect((error as A2ATimeoutError).timeoutMs).toBe(1000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('the caller signal still aborts before the timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const tool = createA2ATool({
+        url: 'http://peer.test/a',
+        name: 'peer',
+        description: 'd',
+        timeoutMs: 1000,
+        fetchImpl: hung,
+      })
+      const controller = new AbortController()
+      const result = tool
+        .handler({ message: 'hi' }, { signal: controller.signal })
+        .catch((e: unknown) => e)
+      await vi.advanceTimersByTimeAsync(10)
+      controller.abort(new Error('cancelled'))
+      const error = await result
+      expect(error).not.toBeInstanceOf(A2ATimeoutError)
+      expect((error as Error).message).toBe('cancelled')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

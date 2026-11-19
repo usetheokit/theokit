@@ -8,6 +8,7 @@
  */
 import type { WireMessage } from '@theokit/presenter/wire'
 import type { CustomTool } from '@theokit/sdk'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { AGENT_ACTION_HEADERS, agentRequestHeaders } from '../wire/agent-request-headers.js'
 import { consumeUIMessageStream } from '../wire/consume-ui-message-stream.js'
@@ -48,6 +49,27 @@ export interface A2AToolConfig {
    * and reads the event stream a TheoKit agent route answers, exactly as before.
    */
   protocol?: 'jsonrpc'
+  /**
+   * Give up on the peer after this many milliseconds, composed with the caller's signal: the call
+   * rejects with {@link A2ATimeoutError} and the request is aborted. Omitted, only the caller's
+   * signal bounds the call.
+   */
+  timeoutMs?: number
+}
+
+/** A peer that did not answer within `timeoutMs`. */
+export class A2ATimeoutError extends TheokitAgentError {
+  override readonly name = 'A2ATimeoutError'
+  readonly peer: string
+  readonly timeoutMs: number
+  constructor(peer: string, timeoutMs: number) {
+    super(`A2A call to "${peer}" failed: no answer within ${timeoutMs} ms`, {
+      code: 'A2A_TIMEOUT',
+      isRetryable: true,
+    })
+    this.peer = peer
+    this.timeoutMs = timeoutMs
+  }
 }
 
 /** The JSON-RPC request asks for a JSON answer, not the event stream TheoKit's routes serve. */
@@ -208,6 +230,42 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
       required: ['message'],
     },
     async handler(input: Record<string, unknown>, ctx?: A2AToolContext): Promise<string> {
+      const timeoutMs = config.timeoutMs
+      if (timeoutMs === undefined) return call(input, ctx?.signal)
+      // A plain controller and timer, not AbortSignal.any + AbortSignal.timeout: the composite can
+      // be collected before its timer fires. The race also bounds a fetch that ignores its signal.
+      const caller = ctx?.signal
+      const controller = new AbortController()
+      let timer: ReturnType<typeof setTimeout> | undefined
+      let onAbort: (() => void) | undefined
+      const bound = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          const err = new A2ATimeoutError(name, timeoutMs)
+          controller.abort(err)
+          reject(err)
+        }, timeoutMs)
+        if (caller) {
+          onAbort = () => {
+            controller.abort(caller.reason)
+            reject(caller.reason)
+          }
+          if (caller.aborted) onAbort()
+          else caller.addEventListener('abort', onAbort, { once: true })
+        }
+      })
+      const work = call(input, controller.signal)
+      work.catch(() => undefined)
+      try {
+        return await Promise.race([work, bound])
+      } finally {
+        clearTimeout(timer)
+        if (caller && onAbort) caller.removeEventListener('abort', onAbort)
+      }
+    },
+  }
+
+  async function call(input: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+    {
       // The input schema requires `message: string`; narrow defensively (never base-to-string).
       const message = typeof input.message === 'string' ? input.message : ''
       // Headers merge the way `HttpTransport` merges them (`agent-request-headers.ts`): the stream
@@ -225,7 +283,7 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
           auth?.apiKey ? { [auth.apiKey.header]: auth.apiKey.value } : undefined,
         ),
         body: jsonRpc ? jsonRpcBody(message) : JSON.stringify({ message }),
-        signal: ctx?.signal,
+        signal,
       })
       if (!res.ok) {
         // Release the unread body so the connection returns to the pool. The status is the error
@@ -233,7 +291,7 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
         await res.body?.cancel().catch(() => undefined)
         throw failure(name, `${res.status} ${res.statusText}`)
       }
-      return jsonRpc ? readJsonRpcResult(name, res, ctx?.signal) : readReply(name, res, ctx?.signal)
-    },
+      return jsonRpc ? readJsonRpcResult(name, res, signal) : readReply(name, res, signal)
+    }
   }
 }
