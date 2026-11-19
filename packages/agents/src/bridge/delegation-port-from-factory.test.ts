@@ -91,7 +91,7 @@ describe('delegationPortFromAgentFactory', () => {
 
   it('a GuardrailError inside an AggregateError passes through unwrapped', async () => {
     const guard = new GuardrailViolationError('g', 'output', 'secret')
-    const aggregate = new AggregateError([new Error('x'), new AggregateError([guard])], 'both')
+    const aggregate = new AggregateError([new Error('x'), new AggregateError([guard], 'inner')], 'both')
     const w = fake({
       wait: async () => {
         throw aggregate

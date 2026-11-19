@@ -4,11 +4,12 @@
  * agent in every case.
  */
 import { GuardrailError } from '../guardrails/types.js'
+
+import { DelegationTimeoutError } from './delegation-lifecycle.js'
 import type { DelegationPort } from './delegation-scoring.js'
 import {
   DelegationBudgetExceededError,
   DelegationError,
-  DelegationTimeoutError,
   type DelegationResult,
 } from './delegation-types.js'
 import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
@@ -26,7 +27,7 @@ function describeError(error: unknown): string {
 
 function describeStreamedError(event: object): string {
   const { code, message } = event as { code?: unknown; message?: unknown }
-  const text = String(code ?? 'error')
+  const text = typeof code === 'string' || typeof code === 'number' ? String(code) : 'error'
   return typeof message === 'string' && message !== '' ? `${text}: ${message}` : text
 }
 
