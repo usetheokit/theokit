@@ -154,7 +154,7 @@ async function shareCommand(
   rmSync(file, { force: true })
   const fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
   try {
-    writeFileSync(fd, `${JSON.stringify({ id: session.id, messages: (await readMessages(session)) })}\n`)
+    writeFileSync(fd, `${JSON.stringify({ id: session.id, messages: await readMessages(session) })}\n`)
     fchmodSync(fd, 0o444)
   } finally {
     closeSync(fd)
