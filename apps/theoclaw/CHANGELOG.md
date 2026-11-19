@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Skills load through the SDK's `SkillsSettings` (`bundledDirs`: workspace, user, then the bundled `skills/` folder) instead of a TheoClaw loader. A skill's binaries now come from the `requires-bins:` key, as in every other TheoKit app. The old `requires:` key still works for one release and logs a deprecation warning naming the file.
+
 ### Fixed
 
 - The configuration file, the daemon unit and plist files, the pairing, device, exec-approval, MCP relay grant, visitor grant and relay state and mailbox files are written through `@theokit/sdk/persistence`, so two writers in one process no longer share a `<pid>.tmp` temporary name.
@@ -19,6 +23,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A scheduled job can target the local `inbox` platform, so an instance with no chat platform can schedule: the answer is stored under the workspace (latest 100, secrets masked) and a `/control` agent reads it with the new `read_schedule_inbox` tool. (#1153)
 - An HTTP MCP server in `THEOCLAW_EXTERNAL_TOOLS` may carry `auth` with an `oauth` block: a test against a local MCP server that requires a bearer shows `@theokit/sdk` 5.17.0 sends the stored OAuth token on `tools/list`, so the refusal that named 5.11.0 (B-680) is lifted. An `auth` without `oauth` is still refused, as the SDK refuses it. `auth.CLIENT_SECRET` is refused: 5.17.0 never sends it to the token endpoint. Not run against a real OAuth server. (#1783)
 - An MCP server's event can start an automation: with `THEOCLAW_MCP_EVENTS_REPLY_TO=<platform>:<channel>`, TheoClaw subscribes (`events/subscribe`, Streamable HTTP, per-subscription HMAC callbacks) to the HTTP servers of `THEOCLAW_EXTERNAL_TOOLS`, posts "event received" to that chat and then the outcome of one tool-less run that treats the event as untrusted input. Optional `THEOCLAW_MCP_EVENTS_SERVERS`, `_CALLBACK_ORIGIN` (a public HTTPS origin), `_HOST`, `_PORT`, `_TYPES`, `_INSTRUCTIONS`. Needs `@theokit/sdk` 5.17.0 (raised, with the root override). Run against a local fake MCP server only, not a real events-profile server. (OC-115, #1545)
 - `theoclaw mcp-relay smoke` runs relay, connector and `list_dir` on the loopback as a one-command check, and an end-to-end test covers a granted client, a refused tool and a revoke. OC-116 stays open: no real-client run. (#1588)
