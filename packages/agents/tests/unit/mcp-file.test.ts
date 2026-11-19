@@ -19,7 +19,13 @@ import { join } from 'node:path'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { loadMcpJson, McpFileError } from '../../src/bridge/mcp-file.js'
+import {
+  loadMcpJson,
+  loadMcpServersFile,
+  mcpSecretValues,
+  McpFileError,
+} from '../../src/bridge/mcp-file.js'
+import * as bridge from '../../src/bridge/index.js'
 import { loadMcpJson as loadMcpJsonFromBarrel } from '../../src/index.js'
 
 describe('loadMcpJson — disco', () => {
@@ -181,5 +187,214 @@ describe('loadMcpJson — import purity', () => {
 
     expect(readFileSync).not.toHaveBeenCalled()
     expect(existsSync).not.toHaveBeenCalled()
+  })
+})
+
+describe('loadMcpServersFile', () => {
+  it('is exported from the bridge entry point with mcpSecretValues', () => {
+    expect(bridge.loadMcpServersFile).toBe(loadMcpServersFile)
+    expect(bridge.mcpSecretValues).toBe(mcpSecretValues)
+  })
+
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'mcp-servers-file-'))
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+  const load = (servers: unknown, policy?: Parameters<typeof loadMcpServersFile>[1]) => {
+    const path = join(dir, 'servers.json')
+    writeFileSync(path, JSON.stringify({ mcpServers: servers }))
+    return loadMcpServersFile(path, { onWarn: () => undefined, ...policy })
+  }
+
+  it('loads a valid file and carries envPolicy and requestTimeoutMs', () => {
+    const out = load({
+      good: { command: '/usr/bin/x', envPolicy: 'core', requestTimeoutMs: 5000, cwd: '/tmp' },
+    })
+    expect(out.good).toMatchObject({
+      command: '/usr/bin/x',
+      envPolicy: 'core',
+      requestTimeoutMs: 5000,
+    })
+  })
+
+  it('a relative command with a slash is refused with McpFileError naming the JSON path', () => {
+    expect(() => load({ bad: { command: './evil.sh' } })).toThrow(McpFileError)
+    expect(() => load({ bad: { command: './evil.sh' } })).toThrow(/mcpServers\.bad\.command/)
+  })
+
+  it('a bare command name is accepted', () => {
+    expect(load({ ok: { command: 'npx' } }).ok).toBeDefined()
+  })
+
+  it('a relative cwd is refused', () => {
+    expect(() => load({ bad: { command: 'npx', cwd: 'rel' } })).toThrow(/mcpServers\.bad\.cwd/)
+  })
+
+  it('envPolicy all is refused by the default policy', () => {
+    expect(() => load({ bad: { command: 'npx', envPolicy: 'all' } })).toThrow(/envPolicy/)
+  })
+
+  it('envPolicy all is allowed when the policy lists it', () => {
+    const out = load(
+      { s: { command: 'npx', envPolicy: 'all' } },
+      { policy: { allowedEnvPolicies: ['all'] } },
+    )
+    expect(out.s).toBeDefined()
+  })
+
+  it('a timeout above 2147483647 is refused', () => {
+    expect(() => load({ bad: { command: 'npx', requestTimeoutMs: 2_147_483_648 } })).toThrow(
+      /requestTimeoutMs/,
+    )
+    expect(() => load({ bad: { command: 'npx', requestTimeoutMs: 0 } })).toThrow(McpFileError)
+  })
+
+  it('refuses a server name outside the SDK-safe pattern', () => {
+    expect(() => load({ Bad_Name: { command: 'npx' } })).toThrow(McpFileError)
+  })
+
+  it('refuses unknown keys and http auth', () => {
+    expect(() => load({ s: { command: 'npx', extra: 1 } })).toThrow(/mcpServers\.s\.extra/)
+    expect(() => load({ s: { url: 'https://x.test/mcp', auth: {} } })).toThrow(/auth/)
+  })
+
+  it('an invalid JSON file error does not contain text from the file', () => {
+    const path = join(dir, 'broken.json')
+    writeFileSync(path, '{"mcpServers": SECRETTEXT-12345}')
+    let message = ''
+    try {
+      loadMcpServersFile(path)
+    } catch (err) {
+      message = (err as Error).message
+    }
+    expect(message).toContain(path)
+    expect(message).not.toContain('SECRETTEXT')
+  })
+
+  it('a missing file is an error', () => {
+    expect(() => loadMcpServersFile(join(dir, 'nope.json'))).toThrow(McpFileError)
+  })
+
+  it('keeps a __proto__ header or env key as an own property and masks its value', () => {
+    const path = join(dir, 'proto.json')
+    writeFileSync(
+      path,
+      '{"mcpServers":{"a":{"command":"npx","env":{"__proto__":"proto-env-secret"}},' +
+        '"b":{"url":"https://x.test/mcp","headers":{"__proto__":"proto-header-secret"}}}}',
+    )
+    const servers = loadMcpServersFile(path, { onWarn: () => undefined })
+    const a = servers.a as { env: Record<string, string> }
+    expect(Object.keys(a.env)).toEqual(['__proto__'])
+    expect(Object.getOwnPropertyDescriptor(a.env, '__proto__')?.value).toBe('proto-env-secret')
+    expect(mcpSecretValues(servers).sort((x, y) => x.localeCompare(y))).toEqual([
+      'proto-env-secret',
+      'proto-header-secret',
+    ])
+  })
+
+  it('mcpSecretValues returns header and env values of 8 or more characters only', () => {
+    const servers = load(
+      {
+        a: { command: 'npx', env: { K: 'short', L: 'long-enough-value' } },
+        b: {
+          url: 'https://x.test/mcp',
+          headers: { Authorization: 'Bearer abcdefgh', X: '1234567' },
+        },
+      },
+      { policy: {} },
+    )
+    expect([...mcpSecretValues(servers)].sort((a, b) => a.localeCompare(b))).toEqual(
+      ['Bearer abcdefgh', 'long-enough-value'].sort((a, b) => a.localeCompare(b)),
+    )
+    expect(mcpSecretValues(servers, 5)).toContain('short')
+  })
+
+  it('throws on a shape violation instead of skipping the entry, naming the path', () => {
+    expect(() => load({ s: { command: 5 } })).toThrow(/mcpServers\.s\.command: /)
+    expect(() => load({ s: { url: 'https://x.test/mcp', headers: { A: 1 } } })).toThrow(
+      /mcpServers\.s\.headers\.A: /,
+    )
+    expect(() => load({ s: { command: 'x', env: { K: 'v', L: 2 } } })).toThrow(
+      /mcpServers\.s\.env\.L: /,
+    )
+    expect(() => load({ s: { command: 'x', args: ['a', 3] } })).toThrow(/mcpServers\.s\.args\.1: /)
+  })
+
+  it('a shape error names the path and never a value', () => {
+    let message = ''
+    try {
+      load({ s: { url: 'https://x.test/mcp', headers: { A: 'SECRETVALUE', B: 1 } } })
+    } catch (err) {
+      message = (err as Error).message
+    }
+    expect(message).toContain('mcpServers.s.headers.B')
+    expect(message).not.toContain('SECRETVALUE')
+  })
+
+  it('requireAbsoluteCommandPaths false accepts a relative command; cwd stays enforced', () => {
+    const policy = { requireAbsoluteCommandPaths: false }
+    expect(load({ s: { command: './x.sh' } }, { policy }).s).toBeDefined()
+    expect(() => load({ s: { command: './x.sh', cwd: 'rel' } }, { policy })).toThrow(/\.cwd/)
+  })
+
+  it('requireAbsoluteCwd false accepts a relative cwd; command paths stay enforced', () => {
+    const policy = { requireAbsoluteCwd: false }
+    expect(load({ s: { command: 'npx', cwd: 'rel' } }, { policy }).s).toBeDefined()
+    expect(() => load({ s: { command: './x.sh' } }, { policy })).toThrow(/\.command/)
+  })
+
+  it('maxTimeoutMs lowers the ceiling; the default ceiling is unchanged without it', () => {
+    const policy = { maxTimeoutMs: 1000 }
+    expect(load({ s: { command: 'npx', requestTimeoutMs: 1000 } }, { policy }).s).toBeDefined()
+    expect(() => load({ s: { command: 'npx', requestTimeoutMs: 1001 } }, { policy })).toThrow(
+      /requestTimeoutMs/,
+    )
+    expect(load({ s: { command: 'npx', requestTimeoutMs: 1001 } }).s).toBeDefined()
+  })
+
+  it('serverName replaces the name pattern; other defaults still apply', () => {
+    const policy = { serverName: /^[A-Z_]+$/ }
+    expect(load({ MY_SRV: { command: 'npx' } }, { policy }).MY_SRV).toBeDefined()
+    expect(() => load({ ok: { command: 'npx' } }, { policy })).toThrow(McpFileError)
+    expect(() => load({ MY_SRV: { command: 'npx', envPolicy: 'all' } }, { policy })).toThrow(
+      /envPolicy/,
+    )
+  })
+
+  it('a custom serverName may admit __proto__ and the entry is an own, enumerable server', () => {
+    const path = join(dir, 'proto.json')
+    writeFileSync(
+      path,
+      '{"mcpServers":{"__proto__":{"command":"npx","env":{"K":"long-enough-value"}}}}',
+    )
+    const out = loadMcpServersFile(path, {
+      onWarn: () => undefined,
+      policy: { serverName: /^[a-z_]+$/ },
+    })
+    expect(Object.keys(out)).toEqual(['__proto__'])
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype)
+    expect(mcpSecretValues(out)).toEqual(['long-enough-value'])
+  })
+
+  it('refuseUnknownKeys false accepts unknown keys; the default refuses them', () => {
+    const policy = { refuseUnknownKeys: false }
+    expect(load({ s: { command: 'npx', extra: 1 } }, { policy }).s).toBeDefined()
+    expect(() => load({ s: { command: 'npx', extra: 1 } })).toThrow(/extra/)
+    expect(() => load({ s: { command: 'npx', envPolicy: 'all' } }, { policy })).toThrow(/envPolicy/)
+  })
+
+  it('refuses an unknown root key', () => {
+    const path = join(dir, 'root.json')
+    writeFileSync(path, JSON.stringify({ mcpServer: { s: { command: 'npx' } } }))
+    expect(() => loadMcpServersFile(path)).toThrow(/mcpServer: unknown key/)
+  })
+
+  it('accepts type stdio and refuses another type on a command entry', () => {
+    const out = load({ s: { type: 'stdio', command: 'node' } })
+    expect(out.s).toEqual({ command: 'node' })
+    expect(() => load({ s: { type: 'http', command: 'node' } })).toThrow(/mcpServers\.s\.type/)
   })
 })

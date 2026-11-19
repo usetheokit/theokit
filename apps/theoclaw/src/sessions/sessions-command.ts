@@ -47,9 +47,9 @@ async function readMessages(session: ChatSession): Promise<Message[]> {
     .filter((entry) => entry.text !== '')
 }
 
-type ChatSession = ReturnType<typeof listSessions>[number] & { id: string; workspace: string }
+type ChatSession = Awaited<ReturnType<typeof listSessions>>[number] & { id: string; workspace: string }
 
-function listChatSessions(io: SessionsIo): ChatSession[] {
+async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {
   const env: NodeJS.ProcessEnv = { ...io.env }
   loadConfiguration(env, io.homeDir)
   const workspace =
@@ -60,7 +60,7 @@ function listChatSessions(io: SessionsIo): ChatSession[] {
       { variable: 'THEOCLAW_WORKSPACE' },
     )
   }
-  return listSessions(workspace, join(workspace, '.theoclaw'))
+  return (await listSessions(workspace, join(workspace, '.theoclaw')))
     .filter((entry) => entry.id !== undefined)
     .map((entry) => ({ ...entry, id: entry.id!, workspace }))
 }
@@ -85,8 +85,8 @@ function pickSession(
   return found[0]
 }
 
-function findSession(wanted: string, io: SessionsIo): ChatSession | string {
-  const found = matchSession(listChatSessions(io), wanted)
+async function findSession(wanted: string, io: SessionsIo): Promise<ChatSession | string> {
+  const found = matchSession(await listChatSessions(io), wanted)
   return found.length === 1
     ? found[0]!
     : `theoclaw: ${found.length === 0 ? 'no session' : 'more than one session'} matches ${wanted}\n`
@@ -142,7 +142,7 @@ async function shareCommand(
     for (const message of snapshot.messages) io.stdout.write(`${message.role}: ${message.text}\n`)
     return 0
   }
-  const session = findSession(wanted, io)
+  const session = await findSession(wanted, io)
   if (typeof session === 'string') {
     io.stderr.write(session)
     return 1
@@ -166,7 +166,7 @@ async function shareCommand(
 /** `theoclaw resume`: prints the messages of the most recently updated chat session. */
 export async function resumeCommand(args: readonly string[], io: SessionsIo): Promise<number> {
   if (args.length > 0) throw new UsageError('theoclaw resume: expected no arguments')
-  const [last] = listChatSessions(io).sort(
+  const [last] = (await listChatSessions(io)).sort(
     (a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime(),
   )
   if (last === undefined) {
@@ -179,10 +179,7 @@ export async function resumeCommand(args: readonly string[], io: SessionsIo): Pr
   return 0
 }
 
-export async function sessionsCommand(
-  args: readonly string[],
-  io: SessionsIo,
-): Promise<number> {
+export async function sessionsCommand(args: readonly string[], io: SessionsIo): Promise<number> {
   const [verb, ...rest] = args
   if (verb === 'share' || verb === 'open') return shareCommand(verb, rest, io)
   const json = rest.includes('--json')
@@ -199,7 +196,7 @@ export async function sessionsCommand(
   ) {
     throw new UsageError(USAGE_TEXT)
   }
-  const sessions = listChatSessions(io)
+  const sessions = await listChatSessions(io)
   if (verb === 'list') {
     for (const entry of sessions) {
       io.stdout.write(

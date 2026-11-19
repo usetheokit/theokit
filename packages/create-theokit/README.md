@@ -40,6 +40,7 @@ The same agent, three frontends — only the transport differs:
 ```bash
 npx create-theokit my-app                      # web (default) — HTTP transport
 npx create-theokit my-app --surface=tui        # terminal (Ink) — in-process transport
+npx create-theokit my-app --surface=cli        # one-shot command: prompt in, answer out
 npx create-theokit my-app --surface=desktop    # desktop (Tauri) — channel transport
 ```
 
@@ -49,7 +50,7 @@ npx create-theokit my-app --surface=desktop    # desktop (Tauri) — channel tra
 |---|---|
 | `--yes` | Take the recommended defaults, skip the prompts |
 | `--template=<name>` | Template to use (default `default`) |
-| `--surface=<web\|tui\|desktop>` | App surface (default `web`) |
+| `--surface=<web\|tui\|desktop\|cli>` | App surface (default `web`) |
 | `--bare` | Minimal app: no agent, no `@theokit/*` runtime deps, a plain Hello Theo page |
 | `--skip-install` | Write the files, skip the install |
 | `--disable-git` | Skip `git init` |
