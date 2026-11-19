@@ -60,7 +60,8 @@ export function hooksForChild(
     kind: 'general',
     register(ctx) {
       if (typeof pre === 'function') {
-        ctx.on('pre_tool_call', async (c: PreToolCallContext) => {
+        ctx.on('pre_tool_call', async (raw: unknown) => {
+          const c = raw as PreToolCallContext
           try {
             return await pre({ ...c, ...label })
           } catch (cause) {
@@ -74,13 +75,14 @@ export function hooksForChild(
         })
       }
       if (typeof post === 'function') {
-        ctx.on('post_tool_call', async (c: PostToolCallContext) => {
+        ctx.on('post_tool_call', async (raw: unknown) => {
+          const c = raw as PostToolCallContext
           await post({ ...c, ...label })
         })
       }
       if (typeof transform === 'function') {
-        ctx.on('transform_tool_result', (results: unknown, c: ToolResultTransformContext) =>
-          transform(results, { ...c, ...label }),
+        ctx.on('transform_tool_result', (results: unknown, raw: unknown) =>
+          transform(results, { ...(raw as ToolResultTransformContext), ...label }),
         )
       }
     },

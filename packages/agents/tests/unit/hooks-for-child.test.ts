@@ -52,7 +52,7 @@ describe('hooksForChild', () => {
     const handlers = {
       pre_tool_call: vi.fn(),
       post_tool_call: vi.fn(),
-      transform_tool_result: vi.fn((r: unknown) => [r, 'x']),
+      transform_tool_result: <T>(r: T): T => ('x' + String(r)) as T,
     }
     expect(Object.keys(capture(hooksForChild(handlers)))).toEqual(['pre_tool_call'])
     const all = capture(
@@ -62,7 +62,7 @@ describe('hooksForChild', () => {
     )
     await all.post_tool_call(call)
     expect(handlers.post_tool_call).toHaveBeenCalledOnce()
-    expect(await all.transform_tool_result('r', call)).toEqual(['r', 'x'])
+    expect(await all.transform_tool_result('r', call)).toBe('xr')
   })
 
   it('hooksForChild returns undefined when no forwarded handler exists', () => {

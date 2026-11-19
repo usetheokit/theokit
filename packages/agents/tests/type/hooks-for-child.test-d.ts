@@ -7,4 +7,4 @@ const h = { pre_tool_call: () => undefined }
 const o: AgentOptions = { plugins: [hooksForChild(h)!] }
 
 expectTypeOf(hooksForChild(h)).toEqualTypeOf<Plugin | undefined>()
-void o
+expectTypeOf(o).toExtend<AgentOptions>()
