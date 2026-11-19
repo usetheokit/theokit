@@ -523,7 +523,7 @@ It is called before and after the removal:
 await deleteSession(id, {
   cwd,
   removeFromRegistry: (sessionId) => Agent.delete(sessionId),
-  isListedInRegistry: async (sessionId) => (await Agent.list({ cwd })).items.some((a) => a.agentId === sessionId),
+  isListedInRegistry: async (sessionId) => (await Agent.list({ runtime: 'local', cwd })).items.some((a) => a.agentId === sessionId),
 })
 ```
 
