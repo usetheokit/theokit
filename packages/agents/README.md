@@ -52,7 +52,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
+| `./doctor` | Environment diagnostics. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
@@ -68,6 +68,18 @@ const registry = createCommandRegistry<{ exit(): void }>([
 ])
 registry.palette() // [{ name: 'quit', description: 'leave' }]
 await registry.dispatch('/exit', { exit: () => process.exit(0) })
+```
+
+A one-shot mode (`myapp "prompt"`) from the same subpath: the answer goes to stdout, progress to stderr, and the exit code says how the turn ended (0 ok, 1 error or empty, 2 cut by a step limit).
+
+```ts
+import { readHeadlessPrompt, runHeadlessTurn } from '@theokit/agents/commands'
+
+const prompt = readHeadlessPrompt({ prompt: process.argv[2], stdin: 'append', readStdin: () => readFileSync(0, 'utf8') })
+const result = await runHeadlessTurn(streamAgentTurnInProcess(mod, apiKey, { message: prompt }), {
+  io: { out: (s) => process.stdout.write(s), err: (s) => process.stderr.write(s) },
+})
+process.exitCode = result.exitCode
 ```
 
 ### Claude Code hook dialect
@@ -180,6 +192,8 @@ live writer holds, floors both `keepLast` and `maxAgeDays`, and plans before it 
 app knows about live sessions this package cannot see, inject them — protection is additive and
 never subtractive.
 
+`listSessions(cwd, root?)` in `./session` is the SDK's `listSessions` (the one `./persistence` exports) sorted newest first, minus directories named like a transcript. It is async, as are `protectedTranscriptPaths`, `forkBeforeUserTurn` and `planTranscriptGC`.
+
 **Credentials answer two questions.** Which credential to use, and where it came from. The second
 matters more than it looks: without provenance, "why is it calling Anthropic?" has no answer in the
 data, and a user cannot tell an explicit choice from a precedence fallback.
@@ -273,6 +287,23 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Secret references in configuration
+
+`resolveSecretRefs(env, stores?)` from `@theokit/agents/auth` replaces every value that names a secret
+store with the value read from it, once at start. The syntax:
+
+- `secretref:env:NAME` reads another variable of `env`.
+- `secretref:file:PATH` reads a file (one trailing newline is dropped).
+- `op://vault/item/field` runs `op read --no-newline` (1Password CLI, 15 s timeout).
+- `secretref:vault:PATH#FIELD` reads Vault KV v2 at `$VAULT_ADDR/v1/PATH` with `VAULT_TOKEN`.
+
+It returns `{ env, values, refs }`: the new environment, the resolved values (pass them to your output
+masks) and a map of variable name to store kind, never a value. References are read from the input
+`env` and are not resolved recursively. A failure throws `SecretReferenceError` with `variable` and
+`store`; its message never contains the value, and an empty result is refused. Pass your own
+`SecretStore` (`kind`, `matches`, `read`) in `stores`, with `...builtinSecretStores` to keep the built-in
+ones. The cause of a failure from your own store is never kept, since it could carry the value. A built-in store failure keeps a sanitized replacement as the cause: fixed text plus only `code`, `syscall`, `signal` and `killed` values from a fixed list (for example `ENOENT`). Messages, stderr and any other field of the underlying error are never kept.
 
 ## Turning a pushed event stream into an iterable
 
@@ -442,6 +473,18 @@ them itself — the same shape as `agent-memory/` above, and stated for the same
 Grouping it with `outputStyle` under one `read` claimed for both what is true of one. The rule this
 table serves is that a surface is read, or refused with a reason, and never accepted and ignored;
 a key that is parsed and dropped is the third state, and it was in this file's own table.
+
+### Inventory of a foreign root
+
+`foreignSurfaceInventory({ cwd, root?, enabled? })` from `@theokit/agents/bridge` returns one entry per
+folder (`agents`, `commands`, `skills`, `agent-memory`, `workflows`, `plugins`) with `state`
+(`'read'` or `'refused'`), `count` (what that folder's loader would take: `.md` files that open with
+frontmatter for `agents`, `.md` files for `commands`, valid `SKILL.md` definitions for `skills`, one per
+`<agent>/MEMORY.md`, scripts for `workflows`, bundles with a `skills/` folder for `plugins`),
+`unreadable` (entries that exist and could not be read, never thrown) and, when refused, `reason`.
+A folder is `read` when the compat surface that feeds it is in `enabled` (default: every surface), so
+the inventory follows the gate. `workflows` is always refused. `agent-memory` follows `subagents`;
+the host still applies it.
 
 ## Why `env` is not applied, rather than not yet applied
 

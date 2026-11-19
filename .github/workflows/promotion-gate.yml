@@ -24,6 +24,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # A newer push to the same pull request supersedes this run; a push to a branch is never cancelled.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   promotion-gate:
     uses: usetheokit/shared-workflows/.github/workflows/promotion-gate.yml@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021

@@ -20,6 +20,7 @@ export {
   DEFAULT_ACP_TIMEOUT_MS,
 } from './acp-tool.js'
 export type { AcpToolConfig, AcpToolTransport } from './acp-tool.js'
+export { resolveAgentCommand } from './resolve-agent-command.js'
 export { createVendorAgentTool } from './vendor-agent-tool.js'
 export type { VendorAgentClient, VendorAgentToolConfig } from './vendor-agent-tool.js'
 
