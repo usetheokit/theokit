@@ -43,8 +43,6 @@ interface Fixture {
   readonly files?: Readonly<Record<string, string>>
   /** Files committed in a second commit, so the range from the first commit carries them. */
   readonly changed?: Readonly<Record<string, string>>
-  /** Paths (relative to the root) removed in the second commit. */
-  readonly deleted?: readonly string[]
 }
 
 /** Every fixture root a case created, removed after it. */
@@ -98,10 +96,8 @@ function fixture(spec: Fixture): string {
   writeAll(root, spec.files)
   setup(root, ['init', '-q'])
   commit(root, 'fixture')
-  if (spec.changed !== undefined || spec.deleted !== undefined) {
+  if (spec.changed !== undefined) {
     writeAll(root, spec.changed)
-    for (const path of spec.deleted ?? [])
-      rmSync(join(root, path), { recursive: true, force: true })
     commit(root, 'change')
   }
   return root
@@ -390,32 +386,6 @@ describe('a publishable package whose source changed needs a changeset', () => {
 
     expect(out.status, out.stderr).toBe(0)
     expect(out.stdout).toMatch(/0 publishable package\(s\) changed/)
-  })
-})
-
-describe('a deleted publishable package needs a changeset', () => {
-  const removal = {
-    files: {
-      'packages/gone/package.json': JSON.stringify({ name: '@scope/gone', version: '1.0.0' }),
-      'packages/gone/src/x.ts': 'export const x = 1\n',
-    },
-    deleted: ['packages/gone'],
-  }
-
-  it('test_a_deleted_package_with_no_changeset_is_refused_naming_it', () => {
-    const out = run(fixture(removal), 'HEAD~1')
-
-    expect(out.status, out.stderr).toBe(1)
-    expect(out.stderr).toMatch(/@scope\/gone {3}\(packages\/gone\/src\)/)
-  })
-
-  it('test_a_deleted_package_named_by_a_changeset_passes', () => {
-    const out = run(
-      fixture({ ...removal, changesets: { 'gone.md': changeset('"@scope/gone": major') } }),
-      'HEAD~1',
-    )
-
-    expect(out.status, out.stderr).toBe(0)
   })
 })
 

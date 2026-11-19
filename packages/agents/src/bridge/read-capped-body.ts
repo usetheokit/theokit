@@ -44,8 +44,7 @@ export async function readCappedBody(
     if (done) break
     total += value.byteLength
     if (total > maxBytes) {
-      // Best effort: a cancel that rejects or never settles must not change the 413 answer.
-      reader.cancel().catch(() => undefined)
+      await reader.cancel()
       throw new BodyTooLargeError(maxBytes)
     }
     chunks.push(value)
