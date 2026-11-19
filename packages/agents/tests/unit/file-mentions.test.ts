@@ -70,19 +70,42 @@ describe('file mentions', () => {
     expect(on.attached).toEqual(['~/notes.md'])
   })
 
-  it('forbidden, missing and unreadable files are skipped with their reasons', () => {
-    const r = resolveFileMentions('@.env @nope.md @locked.md', {
+  it('forbidden and missing files are skipped with their reasons', () => {
+    const r = resolveFileMentions('@.env @nope.md', {
       cwd: '/w',
       readFile: (p) => {
-        if (p.endsWith('locked.md')) throw Object.assign(new Error('x'), { code: 'EACCES' })
+        if (p.endsWith('nope.md')) throw Object.assign(new Error('x'), { code: 'ENOENT' })
         return undefined
       },
     })
     expect(r.skipped).toEqual([
       { ref: '.env', reason: 'forbidden' },
       { ref: 'nope.md', reason: 'not-found' },
-      { ref: 'locked.md', reason: 'unreadable' },
     ])
+  })
+
+  it('a forbidden path is judged after ~/ and .. are resolved', () => {
+    const r = resolveFileMentions('@~/.ssh/config @dir/../.env', {
+      cwd: '/w',
+      allowHome: true,
+      readFile: () => 'secret',
+    })
+    expect(r.attached).toEqual([])
+    expect(r.skipped).toEqual([
+      { ref: '~/.ssh/config', reason: 'forbidden' },
+      { ref: 'dir/../.env', reason: 'forbidden' },
+    ])
+  })
+
+  it.each(['EACCES', 'EISDIR', 'ENOTDIR', 'EPERM'])('a %s read error is rethrown', (code) => {
+    expect(() =>
+      resolveFileMentions('@a.md', {
+        cwd: '/w',
+        readFile: () => {
+          throw Object.assign(new Error(code), { code })
+        },
+      }),
+    ).toThrow(code)
   })
 
   it('an unexpected read error is rethrown', () => {
@@ -94,6 +117,19 @@ describe('file mentions', () => {
         },
       }),
     ).toThrow('boom')
+  })
+
+  it('a truncated file stays within the per-file cap and fits a total equal to it', () => {
+    const r = resolveFileMentions('@b.md', {
+      cwd: '/w',
+      readFile: () => 'y'.repeat(1000),
+      perFileTokens: 5,
+      totalTokens: 5,
+    })
+    expect(r.attached).toEqual(['b.md'])
+    expect(r.skipped).toEqual([])
+    const body = r.message.split('--- b.md ---\n')[1] ?? ''
+    expect(Math.ceil(body.length / 4)).toBeLessThanOrEqual(5)
   })
 
   it('the total budget skips the overflow with reason budget', () => {

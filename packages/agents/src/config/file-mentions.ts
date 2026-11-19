@@ -9,6 +9,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
+import { relative } from 'node:path'
 
 import {
   assertNoSymlinkEscape,
@@ -59,15 +60,15 @@ export interface ResolvedFileMentions {
   }[]
 }
 
+/** Counted inside the per-file cap, so a truncated file never exceeds `perFileTokens`. */
+const TRUNCATION_MARKER = '\n…(truncated)'
+
 type Skip = ResolvedFileMentions['skipped'][number]['reason']
 
-const NOT_FOUND_CODES = new Set(['ENOENT', 'ENOTDIR'])
-const UNREADABLE_CODES = new Set(['EACCES', 'EPERM', 'EISDIR'])
-
-function errorCode(error: unknown): string | undefined {
-  if (typeof error !== 'object' || error === null) return undefined
-  const code = (error as { code?: unknown }).code
-  return typeof code === 'string' ? code : undefined
+function isNotFound(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'ENOENT'
+  )
 }
 
 function defaultRead(abs: string): string | undefined {
@@ -86,6 +87,9 @@ function locate(ref: string, opts: FileMentionOptions): { abs: string } | { reas
   }
   try {
     const abs = safePathJoin(base, rel)
+    // Judged on the path as it will be opened, relative to its root: `~/.ssh/x` and
+    // `dir/../.env` look harmless as written.
+    if (isForbiddenPath(relative(base, abs))) return { reason: 'forbidden' }
     assertNoSymlinkEscape(abs, base)
     return { abs }
   } catch (error) {
@@ -102,9 +106,7 @@ function read(
     const content = readFile(abs)
     return content === undefined ? { reason: 'not-found' } : { content }
   } catch (error) {
-    const code = errorCode(error)
-    if (code !== undefined && NOT_FOUND_CODES.has(code)) return { reason: 'not-found' }
-    if (code !== undefined && UNREADABLE_CODES.has(code)) return { reason: 'unreadable' }
+    if (isNotFound(error)) return { reason: 'not-found' }
     throw error
   }
 }
@@ -140,7 +142,7 @@ export function resolveFileMentions(text: string, opts: FileMentionOptions): Res
     }
     const content =
       estimateTokens(raw.content) > perFile
-        ? `${raw.content.slice(0, perFile * 4)}\n…(truncated)`
+        ? `${raw.content.slice(0, Math.max(0, perFile * 4 - TRUNCATION_MARKER.length))}${TRUNCATION_MARKER}`
         : raw.content
     const cost = estimateTokens(content)
     if (used + cost > total) {
