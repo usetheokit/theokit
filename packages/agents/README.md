@@ -316,6 +316,7 @@ in a shared home file must not break every project on the machine.
 ```ts
 // @theokit/agents/bridge
 translateSdkEvent(msg: SdkMessageLike, runId: string): AgentStreamEvent[]   // SdkMessageLike = { readonly type: string }
+// a message typed with the open `SdkMessage` index signature keeps returning the open `StreamEvent[]`
 translateInteractionUpdate(update: InteractionUpdate): AgentStreamEvent[]
 
 interface SdkSendOptions {
@@ -325,7 +326,7 @@ interface SdkSendOptions {
   [key: string]: unknown
 }
 interface SdkTurnHandle {
-  wait(): Promise<{ result?: string; status?: string; error?: { code?: string; message: string }
+  wait(): Promise<{ result?: string; status?: string; error?: { message: string }
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number } }>
   stream?(): AsyncIterable<SdkMessageLike>

@@ -13,7 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- WebChat compiles against the typed `AgentStreamEvent` that `@theokit/agents` `translateSdkEvent` now returns: the turn queue spreads each event into the open `StreamEvent` wire shape, and a local slash command's `done` event carries the `result`, `usage` and `durationMs` fields the type requires. Nothing a client receives changes.
+- The bridge adapter in `@theokit/agents` types `translateSdkEvent`/`translateInteractionUpdate` as `AgentStreamEvent[]` for an SDK-typed message and widens `SdkAgentHandle`/`SdkTurnHandle` (`signal`, `onDelta`, `queueMode`, `cancel`, `usage`, `cost`, a typed `stream()`). TheoClaw's own code is unchanged; dropping its casts is tracked in #2317.
 
 ### Fixed
 

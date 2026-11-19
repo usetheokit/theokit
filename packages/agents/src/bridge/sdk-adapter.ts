@@ -854,7 +854,7 @@ export interface SdkTurnHandle {
   wait(): Promise<{
     result?: string
     status?: string
-    error?: { code?: string; message: string }
+    error?: { message: string }
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number }
   }>

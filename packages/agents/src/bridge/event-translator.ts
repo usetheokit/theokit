@@ -7,6 +7,7 @@
  */
 import type { CostBreakdown, InteractionUpdate } from '@theokit/sdk'
 
+import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStreamEvent } from './agent-stream-events.js'
 
 /** Minimal SDK message shape — duck-typed to avoid hard import of @theokit/sdk types. */
@@ -256,6 +257,16 @@ const INTERACTION_UPDATE_IGNORED: ReadonlySet<string> = new Set([
  * Translate a single SDK message to zero or more TheoKit stream events.
  * Returns an array because one SDK message may map to multiple TheoKit events.
  */
+// Overloads, in this order, so no existing caller needs an edit to compile:
+// 1. a message typed with the open `SdkMessage` index signature (every object literal, and the
+//    casts apps already write) keeps the open `StreamEvent[]` it always returned;
+// 2. a message typed only by its discriminant (an `@theokit/sdk` `SDKMessage`) gets the typed
+//    `AgentStreamEvent[]`;
+// 3. a catch-all that never wins resolution (2 accepts everything it does) and exists so that
+//    `ReturnType<typeof translateSdkEvent>` stays the open `StreamEvent[]` for existing consumers.
+export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
+export function translateSdkEvent(msg: SdkMessageLike, runId: string): AgentStreamEvent[]
+export function translateSdkEvent(msg: TranslatorInput, runId: string): StreamEvent[]
 export function translateSdkEvent(input: TranslatorInput, runId: string): AgentStreamEvent[] {
   // The reads below are all `unknown`-guarded; the index-signature view is internal only.
   const msg = input as SdkMessage

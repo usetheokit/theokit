@@ -23,7 +23,7 @@ function doneOf(status: string, result?: unknown) {
     RUN,
   )
   if (events.length !== 1) throw new Error(`expected one event for ${status}, got ${events.length}`)
-  return events[0] as unknown as Record<string, unknown>
+  return events[0] as Record<string, unknown>
 }
 
 describe('translateSdkEvent cost on a terminal status', () => {
