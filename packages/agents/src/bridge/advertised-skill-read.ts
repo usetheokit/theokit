@@ -1,3 +1,5 @@
+// #1855 — kept out of sdk-adapter.ts on purpose: that file is already ~990 lines (lint max-lines is 500), and the
+// advertised-mode reader plus its PATH check are self-contained.
 import { accessSync, constants } from 'node:fs'
 import { delimiter, join } from 'node:path'
 
