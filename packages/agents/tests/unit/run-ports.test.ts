@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const readFile = vi.hoisted(() => vi.fn())
 vi.mock('node:fs/promises', () => ({ readFile }))
 
-import type { SdkAgentHandle, SdkTurnHandle } from '../bridge/sdk-adapter.js'
-import { agentRunPort, fileTransientJob } from './run-ports.js'
+import type { SdkAgentHandle, SdkTurnHandle } from '../../src/bridge/sdk-adapter.js'
+import { agentRunPort, fileTransientJob } from '../../src/schedule/run-ports.js'
 
 function boundary(turn: () => Promise<SdkTurnHandle>) {
   const send = vi.fn(turn)
