@@ -1,3 +1,4 @@
+import type { RunTimelineEvent } from '@theokit/sdk'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -90,5 +91,30 @@ describe('fromRunTimelineEvent', () => {
     fromRunTimelineEvent(completedDelta('c1', 'ok'), b)
     expect(flushRunTimeline(a)).toHaveLength(1)
     expect(flushRunTimeline(b)).toHaveLength(1)
+  })
+
+  it('accepts the SDK RunTimelineEvent type', () => {
+    const accept = (e: RunTimelineEvent) => fromRunTimelineEvent(e, createRunTimelineState())
+    expect(typeof accept).toBe('function')
+  })
+
+  it('keeps several id-less tool calls visible', () => {
+    const call = { type: 'tool_call', status: 'running', name: 'sh' }
+    const out = run([msg(call), msg(call)])
+    expect(out.filter((e) => e.type === 'tool-call')).toHaveLength(2)
+    const block = { type: 'tool_use', name: 'sh', input: {} }
+    const a = run([msg({ type: 'assistant', message: { content: [block, block] } })])
+    expect(a.filter((e) => e.type === 'tool-call')).toHaveLength(2)
+  })
+
+  it('a discarded thinking repeat does not release a held result before its failure report', () => {
+    const out = run([
+      delta({ type: 'thinking-delta', text: 'hmm' }),
+      completedDelta('c1', 'boom'),
+      msg({ type: 'thinking', text: 'hmm' }),
+      completedMsg('c1', { exitCode: 1 }),
+    ]).filter((e) => e.type === 'tool-result')
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ isError: true })
   })
 })

@@ -2,12 +2,12 @@ import type { InteractionUpdate } from '@theokit/sdk'
 
 import type { AgentOutputEvent } from '../agent-output-event.js'
 
-import { fromInteractionUpdate, fromSdkMessage, type SdkMessage } from './from-sdk.js'
+import { fromInteractionUpdate, fromSdkMessage } from './from-sdk.js'
 
 /** Structural copy of the SDK's RunTimelineEvent, so this module needs no value import from the SDK. */
 export interface RunTimelineEventLike {
   readonly kind: 'message' | 'delta'
-  readonly message?: SdkMessage
+  readonly message?: { readonly type: string }
   readonly update?: unknown
   readonly textAlreadyStreamed?: boolean
 }
@@ -31,14 +31,23 @@ export function createRunTimelineState(): RunTimelineState {
   return { started: new Set(), completed: new Set(), pending: [], sawThinkingDelta: false }
 }
 
-/** Every id the call answers to (`callId`, and the delta's `modelCallId`). Empty means never deduped. */
-function idsOf(event: AgentOutputEvent, raw: unknown): string[] {
-  const ids: string[] = []
-  const callId = 'callId' in event && typeof event.callId === 'string' ? event.callId : ''
-  if (callId !== '') ids.push(callId)
-  const model = (raw as { modelCallId?: unknown } | null | undefined)?.modelCallId
-  if (typeof model === 'string' && model !== '' && model !== callId) ids.push(model)
-  return ids
+const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+
+/**
+ * The ids each translated tool event answers to, read from the ORIGINAL report (the translator
+ * invents a `tc-<time>` id when the source has none, and that must never be used to dedupe).
+ * One entry per tool-call / tool-result event, in the order the translator emits them.
+ */
+function sourceIds(raw: unknown, fromDelta: boolean): string[][] {
+  const r = raw as Record<string, unknown>
+  const one = (...ids: string[]): string[][] => [[...new Set(ids.filter((i) => i !== ''))]]
+  if (fromDelta) return one(str(r.callId), str(r.modelCallId))
+  if (r.type === 'tool_call') return one(str(r.call_id))
+  const content = (r.message as { content?: unknown } | undefined)?.content
+  if (!Array.isArray(content)) return []
+  return content
+    .filter((b) => (b as { type?: unknown } | null)?.type === 'tool_use')
+    .map((b) => one(str((b as { id?: unknown }).id))[0] ?? [])
 }
 
 function isToolLifecycle(e: AgentOutputEvent): boolean {
@@ -69,6 +78,8 @@ function dedupe(
   fromDelta: boolean,
   state: RunTimelineState,
 ): AgentOutputEvent[] {
+  const sources = sourceIds(raw, fromDelta)
+  let toolIndex = 0
   return events.filter((e) => {
     if (e.type === 'reasoning') {
       if (fromDelta) {
@@ -80,7 +91,7 @@ function dedupe(
     }
     const bucket = bucketFor(e, state)
     if (bucket === undefined) return true
-    const ids = idsOf(e, raw)
+    const ids = sources[toolIndex++] ?? []
     if (ids.length === 0) return true
     if (ids.some((id) => bucket.has(id))) {
       mergeIntoPending(e, ids, state)
@@ -102,10 +113,21 @@ export function flushRunTimeline(state: RunTimelineState): AgentOutputEvent[] {
   return out
 }
 
-function release(translated: AgentOutputEvent[], state: RunTimelineState): AgentOutputEvent[] {
-  if (state.pending.length === 0) return []
-  if (translated.length === 0 || translated.every(isToolLifecycle)) return []
-  return flushRunTimeline(state)
+/**
+ * Dedupe `translated`, then release the results held BEFORE this event only when something that
+ * must follow them is actually going out (a discarded repeat releases nothing).
+ */
+function step(
+  translated: AgentOutputEvent[],
+  raw: unknown,
+  fromDelta: boolean,
+  state: RunTimelineState,
+): AgentOutputEvent[] {
+  const prior = [...state.pending]
+  const emitted = dedupe(translated, raw, fromDelta, state)
+  if (prior.length === 0 || emitted.every(isToolLifecycle)) return emitted
+  state.pending = state.pending.slice(prior.length)
+  return [...prior.map((p) => p.event), ...emitted]
 }
 
 /** Translate one timeline event, in arrival order. */
@@ -115,12 +137,11 @@ export function fromRunTimelineEvent(
 ): AgentOutputEvent[] {
   if (event.kind === 'delta') {
     if (event.update === undefined) return []
-    const events = fromInteractionUpdate(event.update as InteractionUpdate)
-    return [...release(events, state), ...dedupe(events, event.update, true, state)]
+    return step(fromInteractionUpdate(event.update as InteractionUpdate), event.update, true, state)
   }
   if (event.message === undefined) return []
   const all = fromSdkMessage(event.message)
   // Only the text is a duplicate the producer names; tool calls on the same message are kept.
   const kept = event.textAlreadyStreamed === true ? all.filter((e) => e.type !== 'text') : all
-  return [...release(kept, state), ...dedupe(kept, event.message, false, state)]
+  return step(kept, event.message, false, state)
 }
