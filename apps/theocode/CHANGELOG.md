@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Changed
+- **`SessionStart` hooks now run through the framework's `runHostHooks`.** The local command runner is gone; the approval gate, the once-per-session cadence and the warning wording are unchanged, and a hook whose process cannot be started is reported with its cause. (#1922)
 - **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)
 
 ### Fixed

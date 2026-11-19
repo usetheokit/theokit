@@ -113,6 +113,23 @@ describe('running the hook', () => {
     expect(warns.join(' ')).toContain('exit 3')
   })
 
+  it('test_a_runner_exception_is_reported_with_its_cause_not_as_exit_undefined', async () => {
+    // A NUL in the session id makes the spawn throw before any process exists, so there is no exit
+    // code to report. The operator must still be told what went wrong.
+    const warns: string[] = []
+    await runSessionStartHooks({
+      specs: [spec('echo hi')],
+      cwd,
+      sessionId: 'bad\0id',
+      approved: () => true,
+      onWarn: (m) => warns.push(m),
+    })
+
+    expect(warns).toHaveLength(1)
+    expect(warns[0]).toContain('could not run')
+    expect(warns[0]).not.toContain('undefined')
+  })
+
   it('test_the_session_id_reaches_the_command', async () => {
     // Without it the hook cannot tell which session it is starting, which is most of what a
     // SessionStart hook is for.

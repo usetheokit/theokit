@@ -77,7 +77,10 @@ export interface RunSessionStartInput {
 type Outcome = Awaited<ReturnType<typeof runHostHooks>>[number]
 
 /** This product's wording for a hook outcome; `undefined` when it ran cleanly. */
-function describeOutcome({ spec, status, result }: Outcome): string | undefined {
+function describeOutcome(
+  { spec, status, result }: Outcome,
+  frameworkWarnings: readonly string[],
+): string | undefined {
   if (status === 'not-approved') {
     return (
       `SessionStart hook not approved and will not run: "${spec.command}". ` +
@@ -88,9 +91,14 @@ function describeOutcome({ spec, status, result }: Outcome): string | undefined 
     return `SessionStart hook timed out after ${String(spec.timeout_ms)}ms: "${spec.command}"`
   }
   if (status === 'failed' || status === 'could-not-start') {
-    const detail = result?.stderr.trim() ?? ''
+    if (result === undefined) {
+      // The runner threw before producing a result; its only record of why is the warning it raised.
+      const why = frameworkWarnings.find((w) => w.includes(spec.command)) ?? 'unknown error'
+      return `SessionStart hook "${spec.command}" could not run — ${why}`
+    }
+    const detail = result.stderr.trim()
     return (
-      `SessionStart hook "${spec.command}" exit ${String(result?.exitCode)}` +
+      `SessionStart hook "${spec.command}" exit ${String(result.exitCode)}` +
       (detail.length > 0 ? ` — ${detail}` : '')
     )
   }
@@ -126,6 +134,7 @@ export async function runSessionStartHooks(input: RunSessionStartInput): Promise
     }
   })
 
+  const frameworkWarnings: string[] = []
   let outcomes: readonly Outcome[]
   try {
     outcomes = await runHostHooks('on_session_start', translated, {
@@ -136,6 +145,7 @@ export async function runSessionStartHooks(input: RunSessionStartInput): Promise
         return original === undefined ? '' : hookFingerprint(original)
       },
       cwd: input.cwd,
+      onWarn: (m) => frameworkWarnings.push(m),
       env: { ...process.env, [SESSION_ENV]: input.sessionId } as Record<string, string>,
     })
   } catch (err) {
@@ -144,7 +154,7 @@ export async function runSessionStartHooks(input: RunSessionStartInput): Promise
   }
 
   for (const outcome of outcomes) {
-    const message = describeOutcome(outcome)
+    const message = describeOutcome(outcome, frameworkWarnings)
     if (message !== undefined) warn(message)
   }
 }
