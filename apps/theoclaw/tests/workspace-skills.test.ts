@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { agentOptionsFor, createAgentFactory, type CreateAgent } from '../src/control-plane/agent-factory.js'
 import { theoClawAgentOptions } from '../src/agent/create-agent.js'
+import { BUNDLED_SKILLS_DIR } from '../src/skills/registry.js'
 import type { ImportedSetup } from '../src/migration/import-store.js'
 
 const dirs: string[] = []
@@ -40,7 +41,9 @@ describe('workspace skills (OC-70)', () => {
     skill(join(workspace, 'skills'), 'needs-missing', 'x', 'requires: no-such-binary-xyz\n')
     const env = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k', THEOCLAW_WORKSPACE: workspace, HOME: home }
     const options = agentOptionsFor(env)
-    expect(options.skills?.inline.map((s) => s.name).sort()).toEqual(['canary-word', 'from-user', 'git-helper', 'summarize-text'])
+    // The SDK discovers the folders: workspace, then user, then the bundled one; only the skill with a legacy `requires:` is inline.
+    expect(options.skills?.bundledDirs).toEqual([join(workspace, 'skills'), join(home, '.theoclaw', 'skills'), BUNDLED_SKILLS_DIR])
+    expect(options.skills?.inline.map((s) => s.name)).toEqual(['needs-missing'])
     expect(await readBody(options as never, 'canary-word')).toContain('ZEBRA-7731')
     expect(await readBody(options as never, 'from-user')).toContain('user only')
   })
@@ -70,7 +73,7 @@ describe('workspace skills (OC-70)', () => {
       ],
     } as unknown as ImportedSetup
     const options = theoClawAgentOptions({ model: 'm', apiKey: 'k', skillsDir: workspace, imported: { setup, mcp: false } })
-    expect(options.skills?.inline.map((s) => s.name).sort()).toEqual(['dup', 'git-helper', 'only-imported', 'summarize-text'])
+    expect(options.skills?.inline.map((s) => s.name)).toEqual(['only-imported'])
     expect(await readBody(options as never, 'dup')).toContain('workspace body')
     expect(await readBody(options as never, 'only-imported')).toContain('imported only')
   })
@@ -89,10 +92,10 @@ describe('custodian skills (OC-137)', () => {
       expect.arrayContaining(['diagnose-gateway', 'add-model-provider', 'configure-channel', 'cloud-image-bake']),
     )
     expect(await readBody(seen as never, 'diagnose-gateway')).toContain('theoclaw doctor')
-    expect(agentOptionsFor(env).skills?.inline.map((s) => s.name).sort()).toEqual(['git-helper', 'summarize-text'])
+    expect(agentOptionsFor(env).skills?.inline).toEqual([])
     seen = {}
     await createAgentFactory(env, create)()
-    expect(seen.skills?.inline.map((s) => s.name).sort()).toEqual(['git-helper', 'summarize-text'])
+    expect(seen.skills?.inline).toEqual([])
   })
 })
 
@@ -100,7 +103,8 @@ describe('bundled skills (OC-74)', () => {
   it('offers git-helper and summarize-text to a chat agent, and skill_read returns the body', async () => {
     const env = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k', HOME: tmp() }
     const options = agentOptionsFor(env)
-    expect(options.skills?.inline.map((s) => s.name)).toEqual(expect.arrayContaining(['git-helper', 'summarize-text']))
+    expect(options.skills?.bundledDirs).toContain(BUNDLED_SKILLS_DIR)
+    expect(await readBody(options as never, 'git-helper')).toContain('git status')
     expect(await readBody(options as never, 'summarize-text')).toContain('five bullet points')
   })
 })

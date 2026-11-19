@@ -9,6 +9,7 @@
   },
   "files": [
     "dist",
+    "skills",
     "tools/browser-proxy.mjs",
     "tools/browser-config.json",
     "tools/install-browser.mjs",

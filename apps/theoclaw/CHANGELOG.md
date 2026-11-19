@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Skills load through the SDK's `SkillsSettings` (`bundledDirs`: workspace, user, then the bundled `skills/` folder) instead of a TheoClaw loader. A skill's binaries now come from the `requires-bins:` key, as in every other TheoKit app. The old `requires:` key still works for one release and logs a deprecation warning naming the file.
+
 ### Fixed
 
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
