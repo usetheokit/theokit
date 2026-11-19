@@ -18,7 +18,7 @@ function executableFile(file: string): boolean {
 /**
  * The executable `command` names: itself when it is an absolute path to an executable file, else the
  * first executable file named `command` on an absolute entry of `path`. A relative command with a
- * `/` (`./agent`, `bin/agent`), a command with `=`, and relative or empty `PATH` entries are never
+ * `/` (`./agent`, `bin/agent`), a bare-name candidate whose path contains `=`, and relative or empty `PATH` entries are never
  * used, so nothing resolves inside the agent's working directory. `undefined` when nothing matches.
  *
  * Windows: PATHEXT lookup is out of scope, so there the command is returned as given and the
@@ -26,13 +26,13 @@ function executableFile(file: string): boolean {
  */
 export function resolveAgentCommand(command: string, path: string | undefined): string | undefined {
   if (process.platform === 'win32') return command
-  if (command === '' || command.includes('=')) return undefined
+  if (command === '') return undefined
   if (command.includes('/')) {
     return isAbsolute(command) && executableFile(command) ? command : undefined
   }
   for (const dir of absolutePathEntries(path)) {
     const candidate = join(dir, command)
-    if (executableFile(candidate)) return candidate
+    if (!candidate.includes('=') && executableFile(candidate)) return candidate
   }
   return undefined
 }

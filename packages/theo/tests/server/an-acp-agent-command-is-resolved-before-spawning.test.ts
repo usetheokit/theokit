@@ -2,7 +2,14 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import * as childProcess from 'node:child_process'
+
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof childProcess>()
+  return { ...actual, spawn: vi.fn(actual.spawn) }
+})
 
 import { NodeAcpTransport, AcpTransportClosedError } from '../../src/server/agent/acp-tool.js'
 import { resolveAgentCommand } from '../../src/server/agent/index.js'
@@ -53,16 +60,28 @@ describe.skipIf(!posix)('resolveAgentCommand', () => {
     const file = fakeAgent(root)
     expect(resolveAgentCommand(file, undefined)).toBe(file)
   })
+
+  it('skips a bare-name candidate whose path has "=" but accepts an absolute command with one', () => {
+    const root = mkdtempSync(join(tmpdir(), 'resolve-agent-'))
+    const eq = join(root, 'a=b')
+    mkdirSync(eq)
+    const file = fakeAgent(eq)
+    expect(resolveAgentCommand('fake-agent', eq)).toBeUndefined()
+    expect(resolveAgentCommand(file, undefined)).toBe(file)
+  })
 })
 
 describe.skipIf(!posix)('NodeAcpTransport command resolution', () => {
   it.each(['does-not-exist', './agent'])('refuses %s before spawning', async (command) => {
+    const spawn = vi.mocked(childProcess.spawn)
+    spawn.mockClear()
     const t = new NodeAcpTransport(command, [], undefined, { PATH: '/usr/bin:/bin' })
     const err = await closeOf(t)
     expect(err).toBeInstanceOf(AcpTransportClosedError)
     expect(err.reason).toContain('could not be found or run')
     t.send('x\n')
     await t.close()
+    expect(spawn).not.toHaveBeenCalled()
   })
 
   it('gives the child only the absolute PATH entries', async () => {
