@@ -12,7 +12,10 @@ const run = (events: RunTimelineEventLike[]) => {
   return [...events.flatMap((e) => fromRunTimelineEvent(e, s)), ...flushRunTimeline(s)]
 }
 const delta = (update: unknown): RunTimelineEventLike => ({ kind: 'delta', update })
-const msg = (message: Record<string, unknown>, textAlreadyStreamed?: boolean): RunTimelineEventLike => ({
+const msg = (
+  message: Record<string, unknown>,
+  textAlreadyStreamed?: boolean,
+): RunTimelineEventLike => ({
   kind: 'message',
   message: message as never,
   textAlreadyStreamed,
@@ -57,13 +60,16 @@ describe('fromRunTimelineEvent', () => {
   it.each([
     ['delta first', false],
     ['message first', true],
-  ])('a tool completed by delta and then by a message with exitCode 1 yields one tool-result with isError true (%s)', (_n, msgFirst) => {
-    const d = completedDelta('c1', 'boom')
-    const m = completedMsg('c1', { exitCode: 1 })
-    const out = run(msgFirst ? [m, d] : [d, m]).filter((e) => e.type === 'tool-result')
-    expect(out).toHaveLength(1)
-    expect(out[0]).toMatchObject({ isError: true })
-  })
+  ])(
+    'a tool completed by delta and then by a message with exitCode 1 yields one tool-result with isError true (%s)',
+    (_n, msgFirst) => {
+      const d = completedDelta('c1', 'boom')
+      const m = completedMsg('c1', { exitCode: 1 })
+      const out = run(msgFirst ? [m, d] : [d, m]).filter((e) => e.type === 'tool-result')
+      expect(out).toHaveLength(1)
+      expect(out[0]).toMatchObject({ isError: true })
+    },
+  )
 
   it('a held tool result is released before the text that follows it', () => {
     const out = run([completedDelta('c1', 'ok'), delta({ type: 'text-delta', text: 'next' })])
