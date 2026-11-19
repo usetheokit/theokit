@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1286 export(s) across 25 entry point(s).
+1313 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -50,6 +50,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CapabilityPreset` | value |
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
+| `classifyTurnFailure` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
 | `compileAgentDefinition` | value |
@@ -59,6 +60,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `compileProjectContext` | value |
 | `compileSkills` | value |
 | `compileTools` | value |
+| `completeFromTurn` | value |
 | `CompressionFailedError` | value |
 | `ConfigurationError` | value |
 | `CONTEXT_WINDOW_FLOOR` | value |
@@ -85,6 +87,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DEFAULT_HANDLER_TIMEOUT_MS` | value |
 | `DEFAULT_KEEP_TOKENS` | value |
 | `DEFAULT_MAX_ITERATIONS` | value |
+| `DEFAULT_TURN_FAILURE_HINTS` | value |
 | `delegate` | value |
 | `delegateBackground` | value |
 | `delegateWithScoring` | value |
@@ -94,6 +97,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
+| `describeTurnFailure` | value |
 | `discoverSubagents` | value |
 | `encodeAcpMessage` | value |
 | `ERROR_CODE_DATA_PART` | value |
@@ -188,6 +192,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveSettingSources` | value |
 | `resolveTrustPosture` | value |
 | `Retry` | value |
+| `runAgentTurn` | value |
 | `RunContextCapability` | value |
 | `runInputGuards` | value |
 | `runOutputGuards` | value |
@@ -240,6 +245,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `UnsupportedRunOperationError` | value |
 | `UnsupportedTaskOperationError` | value |
 | `UntrustedSettingSourceError` | value |
+| `validateAgainstInputSchema` | value |
 | `verifyLayerOrdering` | value |
 | `wellKnownCardPath` | value |
 | `WindowBudgetExceededError` | value |
@@ -272,6 +278,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
 | `AgentTurnMetadata` | type |
+| `AgentTurnOutcome` | type |
 | `AgentWithNarrowedListAlias` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
@@ -410,6 +417,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ResolvedCompatSource` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
+| `RunAgentTurnOptions` | type |
 | `RunEvent` | type |
 | `RunStartedEvent` | type |
 | `RuntimeOverrides` | type |
@@ -463,6 +471,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `TrustPosture` | type |
 | `TrustPostureInput` | type |
 | `TrustSource` | type |
+| `TurnFailure` | type |
+| `TurnFailureHints` | type |
 | `TurnLifecycle` | type |
 | `TurnOutcome` | type |
 | `Verdict` | type |
@@ -490,6 +500,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `compileProjectContext` | value |
 | `compileSkills` | value |
 | `compileTools` | value |
+| `completeFromTurn` | value |
 | `ContextualTool` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
@@ -540,6 +551,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveCompatSources` | value |
 | `resolveMcpServers` | value |
 | `resolveSettingSources` | value |
+| `runAgentTurn` | value |
 | `runWithApiErrorHandling` | value |
 | `shouldAutoApprove` | value |
 | `streamAgentResponse` | value |
@@ -552,6 +564,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
 | `UntrustedSettingSourceError` | value |
+| `validateAgainstInputSchema` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
 | `WRITE_SCOPED_TOOLS` | value |
@@ -570,6 +583,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
 | `AgentTurnMetadata` | type |
+| `AgentTurnOutcome` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
 | `ApiErrorPolicy` | type |
@@ -622,6 +636,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
 | `ResolvedCompatSource` | type |
+| `RunAgentTurnOptions` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
 | `Scorer` | type |
@@ -655,21 +670,16 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
-| `assertProviderKeyWhenRequired` | value |
 | `createMockAgentStream` | value |
 | `createMockOutputEvents` | value |
 | `createMockWireStream` | value |
 | `inspectCompiled` | value |
-| `LIVE_KEY_NAMES` | value |
-| `MissingProviderKeyError` | value |
-| `requireProviderKeySetup` | value |
 | `wireChunk` | value |
 | `AgentOutputEvent` | type |
 | `CompiledInspection` | type |
 | `MockAgentStreamOptions` | type |
 | `MockResponse` | type |
 | `MockStreamEvent` | type |
-| `ProviderKeyGuardOptions` | type |
 
 ## `@theokit/agents/sandbox`
 
@@ -797,6 +807,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `builtinSecretStores` | value |
 | `CODEX_CLIENT_ID_ENV_VAR` | value |
 | `CODEX_PROVIDER` | value |
+| `createApprovalGate` | value |
+| `createJsonlLedger` | value |
 | `createPlanOnlyGate` | value |
 | `CredentialError` | value |
 | `CredentialExistsError` | value |
@@ -833,6 +845,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SecretReferenceError` | value |
 | `writeCredential` | value |
 | `AgentCredentialInput` | type |
+| `ApprovalAnswer` | type |
+| `ApprovalDecision` | type |
+| `ApprovalGateOptions` | type |
+| `ApprovalLedger` | type |
+| `ApprovalRecord` | type |
 | `AuthMethod` | type |
 | `AuthProviderOptions` | type |
 | `Classification` | type |
@@ -980,6 +997,7 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `agentRunPort` | value |
 | `buildEnvContext` | value |
 | `buildRepoMap` | value |
 | `CatastrophicCommandError` | value |
@@ -1024,6 +1042,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DEFAULT_TOOL_GUIDANCE` | value |
 | `DelegateToolConfigError` | value |
 | `denyCatastrophicCommands` | value |
+| `fileTransientJob` | value |
 | `formatCode` | value |
 | `formatDiff` | value |
 | `formatError` | value |
@@ -1194,6 +1213,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `classifyProjects` | value |
 | `deleteSession` | value |
 | `forkBeforeUserTurn` | value |
+| `ForkedSessionBusyError` | value |
 | `GCFloorError` | value |
 | `GCProtectionUnavailableError` | value |
 | `listSessions` | value |
@@ -1213,11 +1233,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
+| `streamTurnForkingIfBusy` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
 | `ClassifyProjectsOptions` | type |
 | `DeleteSessionOptions` | type |
 | `DeleteSessionResult` | type |
+| `ForkIfBusyOptions` | type |
 | `FsSeam` | type |
 | `GCCandidate` | type |
 | `GCError` | type |
@@ -1293,7 +1315,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `bindToolScope` | value |
+| `createPathVetoPlugin` | value |
+| `isWithin` | value |
+| `resolveRealPath` | value |
 | `sandboxWritePolicy` | value |
+| `SymlinkLoopError` | value |
+| `vetoPathCall` | value |
 | `SandboxWritePolicy` | type |
 | `ToolScope` | type |
 | `ToolScopeInput` | type |
