@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1311 export(s) across 25 entry point(s).
+1313 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -1268,6 +1268,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `HOOK_EVENTS` | value |
 | `HookApprovalStore` | value |
 | `hookFingerprint` | value |
+| `hooksForChild` | value |
 | `HookSpecError` | value |
 | `hookSpecSchema` | value |
 | `hooksPlugin` | value |
@@ -1286,6 +1287,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `HookIdentity` | type |
 | `HookRunInput` | type |
 | `HookRunResult` | type |
+| `HooksForChildOptions` | type |
 | `HookSpec` | type |
 | `HostHookOutcome` | type |
 | `ParsedClaudeHooks` | type |
