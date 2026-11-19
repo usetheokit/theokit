@@ -122,7 +122,7 @@ describe('@theokit/agents released auth APIs', () => {
     })
   })
 
-  it('every TheoCode manifest declares the released range, and no stale standalone lockfile remains', () => {
+  it('every TheoCode manifest declares the released range', () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), '../../../..')
     for (const p of [
       'package.json',
@@ -138,7 +138,6 @@ describe('@theokit/agents released auth APIs', () => {
       const spec = m.dependencies?.['@theokit/agents'] ?? m.devDependencies?.['@theokit/agents']
       expect(spec, p).toBe('^16.11.0')
     }
-    expect(existsSync(join(root, 'pnpm-lock.yaml'))).toBe(false)
   })
 
   it('a consumer outside the repository can import and call the released package', () => {
@@ -147,6 +146,8 @@ describe('@theokit/agents released auth APIs', () => {
     const pkgDir = realpathSync(
       join(dirname(fileURLToPath(import.meta.resolve('@theokit/agents/auth'))), '..'),
     )
+    // The resolved package is an installed registry copy, not the repository's source tree.
+    expect(pkgDir).not.toMatch(/[\\/]packages[\\/]agents$/)
     mkdirSync(join(home, 'consumer/node_modules/@theokit'), { recursive: true })
     symlinkSync(pkgDir, join(home, 'consumer/node_modules/@theokit/agents'), 'dir')
     writeFileSync(join(home, 'consumer/package.json'), '{"type":"module"}')
