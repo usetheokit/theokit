@@ -289,10 +289,10 @@ await node.close({ force: true }) // memoized; force ends open and upgraded sock
 The server lives in `src/bridge/runtime/node-server.ts`; the request/response conversion and `createNodeAdapter` stay in `node.ts`. Its integration tests run with:
 
 ```sh
-pnpm exec vitest run tests/integration/node-server-*.test.ts
+THEOKIT_TEST_RUN_ID=1 pnpm exec vitest run packages/http/tests/integration/node-server-*.test.ts
 ```
 
-They cover bind errors, memoized and forced close, client-disconnect aborts and upgrade handling.
+(Run it from the repository root: the root `vitest.config.ts` owns the package projects.) They cover bind errors, memoized and forced close, client-disconnect aborts and upgrade handling.
 ## `registerControllers` (low-level)
 
 For advanced use without the Vite plugin:
