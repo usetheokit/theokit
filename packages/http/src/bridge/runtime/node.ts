@@ -42,11 +42,18 @@ export function nodeIncomingToRequest(nodeReq: IncomingMessage): Request {
   })
 }
 
+const isGone = (res: ServerResponse): boolean => res.destroyed
+
 /** Write Web Standard Response to Node.js ServerResponse. */
 export async function writeResponseToNode(
   response: Response,
   nodeRes: ServerResponse,
 ): Promise<void> {
+  // Client left while the handler was still working: nothing to write, stop the producer.
+  if (isGone(nodeRes)) {
+    await response.body?.cancel().catch(() => undefined)
+    return
+  }
   nodeRes.writeHead(response.status, Object.fromEntries(response.headers.entries()))
 
   if (!response.body) {
@@ -65,7 +72,7 @@ export async function writeResponseToNode(
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      if (nodeRes.destroyed) {
+      if (isGone(nodeRes)) {
         await reader.cancel().catch(() => undefined)
         break
       }
@@ -78,7 +85,7 @@ export async function writeResponseToNode(
     } catch {
       // a cancel still pending keeps the lock; nothing to release
     }
-    if (!nodeRes.destroyed) nodeRes.end()
+    if (!isGone(nodeRes)) nodeRes.end()
   }
 }
 

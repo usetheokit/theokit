@@ -30,4 +30,21 @@ describe('createNodeServer bind', () => {
     expect((err as BindError).code).toBe('EADDRINUSE')
     expect((err as BindError).message).toContain(String(port))
   })
+
+  it('rejects with BindError naming the address on EADDRNOTAVAIL', async () => {
+    const s = make()
+    const err = await s.listen(0, '203.0.113.1').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(BindError)
+    expect((err as BindError).code).toBe('EADDRNOTAVAIL')
+    expect((err as BindError).message).toContain('203.0.113.1')
+  })
+
+  it('reports a post-bind server error with phase server', async () => {
+    const seen: string[] = []
+    const s = createNodeServer(() => new Response('ok'), { onError: (_e, p) => seen.push(p) })
+    servers.push(s)
+    await s.listen(0, '127.0.0.1')
+    s.server.emit('error', new Error('late'))
+    expect(seen).toEqual(['server'])
+  })
 })

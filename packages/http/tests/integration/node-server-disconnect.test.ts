@@ -52,3 +52,67 @@ describe('createNodeServer disconnect', () => {
     expect(signal?.aborted).toBe(false)
   })
 })
+
+describe('createNodeServer disconnect while handler pending', () => {
+  it('cancels a body returned after the client left', async () => {
+    let cancelled = false
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    let signal: AbortSignal | undefined
+    node = createNodeServer(async (request) => {
+      signal = request.signal
+      await gate
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          cancel: () => {
+            cancelled = true
+          },
+        }),
+      )
+    })
+    const { port } = await node.listen(0, '127.0.0.1')
+    const sock = connect(port, '127.0.0.1')
+    sock.write('GET / HTTP/1.1\r\nHost: x\r\n\r\n')
+    await new Promise((r) => setTimeout(r, 50))
+    sock.destroy()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(signal?.aborted).toBe(true)
+    release()
+    const start = Date.now()
+    while (!cancelled && Date.now() - start < 1000) await new Promise((r) => setTimeout(r, 10))
+    expect(cancelled).toBe(true)
+  })
+
+  it('keeps the signal live with abortOnDisconnect: false', async () => {
+    let signal: AbortSignal | undefined
+    node = createNodeServer(
+      async (request) => {
+        signal = request.signal
+        await new Promise((r) => setTimeout(r, 100))
+        return new Response('ok')
+      },
+      { abortOnDisconnect: false },
+    )
+    const { port } = await node.listen(0, '127.0.0.1')
+    const sock = connect(port, '127.0.0.1')
+    sock.write('GET / HTTP/1.1\r\nHost: x\r\n\r\n')
+    await new Promise((r) => setTimeout(r, 30))
+    sock.destroy()
+    await new Promise((r) => setTimeout(r, 150))
+    expect(signal?.aborted).toBe(false)
+  })
+
+  it('reports handler errors with phase request and answers 500', async () => {
+    const seen: string[] = []
+    node = createNodeServer(
+      () => {
+        throw new Error('boom')
+      },
+      { onError: (_e, phase) => seen.push(phase) },
+    )
+    const { port } = await node.listen(0, '127.0.0.1')
+    const res = await fetch(`http://127.0.0.1:${String(port)}/`)
+    expect(res.status).toBe(500)
+    expect(seen).toEqual(['request'])
+  })
+})
