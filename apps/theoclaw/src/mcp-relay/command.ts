@@ -62,7 +62,7 @@ async function smoke(io: CliIo): Promise<number> {
   const toolSettings = resolveToolSettings({}, dir)
   writeFileSync(join(toolSettings.toolRoot, 'smoke.txt'), 'ok')
   const grants = join(dir, 'grants.json')
-  const { token } = new GrantStore(grants).load().create('smoke')
+  const { token } = await new GrantStore(grants).load().create('smoke')
   const relay = createMcpRelay({ instanceToken, grantsPath: grants, pollMs: 50, timeoutMs: 5000 })
   await new Promise<void>((resolve) => relay.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(relay.address() as AddressInfo).port}`
@@ -123,7 +123,7 @@ export async function mcpRelayCommand(args: readonly string[], io: CliIo): Promi
               .split(',')
               .map((t) => t.trim())
               .filter((t) => t !== '')
-      const { grant, token } = store.create(name, tools)
+      const { grant, token } = await store.create(name, tools)
       io.stdout.write(
         `granted ${grant.name} (${grant.id}): ${grant.tools.join(', ')}\ntoken (shown once): ${token}\n`,
       )
@@ -138,7 +138,7 @@ export async function mcpRelayCommand(args: readonly string[], io: CliIo): Promi
       return 0
     }
     if (verb === 'revoke' && rest.length === 1 && !rest[0]!.startsWith('-')) {
-      const grant = store.revoke(rest[0]!)
+      const grant = await store.revoke(rest[0]!)
       io.stdout.write(`revoked ${grant.name} (${grant.id})\n`)
       return 0
     }
