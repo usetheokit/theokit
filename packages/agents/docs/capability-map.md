@@ -1261,7 +1261,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `bindToolScope` | value |
+| `createPathVetoPlugin` | value |
+| `isWithin` | value |
+| `resolveRealPath` | value |
 | `sandboxWritePolicy` | value |
+| `SymlinkLoopError` | value |
+| `vetoPathCall` | value |
 | `SandboxWritePolicy` | type |
 | `ToolScope` | type |
 | `ToolScopeInput` | type |
