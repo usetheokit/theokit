@@ -127,6 +127,15 @@ describe('wireScheduler inbox', () => {
     expect(out.ok).toBe(false)
   })
 
+  it('tells the model the inbox is local and its channel id is a free label', async () => {
+    const { scheduleTools } = await start(new AnsweringAgent('x'), [], [], dir)
+    const schedule = scheduleTools.find((tool) => tool.name === 'schedule_job')!
+    expect(schedule.description).toContain('do not ask the user for an id')
+    expect(schedule.description).toContain('read_schedule_inbox')
+    const channel = (schedule.inputSchema as { properties: { channelId: { description: string } } }).properties.channelId
+    expect(channel.description).toContain('any label')
+  })
+
   it('accepts the inbox target through schedule_job when a workspace is given', async () => {
     const { scheduleTools } = await start(new AnsweringAgent('x'), [], [], dir)
     const schedule = scheduleTools.find((tool) => tool.name === 'schedule_job')!
