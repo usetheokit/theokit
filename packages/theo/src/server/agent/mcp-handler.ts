@@ -76,7 +76,7 @@ function collectPreToolHandlers(plugin: Plugin): Promise<PreToolHandler[]> {
               handlers.push(handler as PreToolHandler)
             return noop
           },
-        } as unknown as Parameters<Extract<Plugin, { kind: 'general' }>['register']>[0])
+        })
       }
       return handlers
     })()
@@ -98,7 +98,7 @@ async function preToolCallRefusal(
     for (const plugin of plugins) {
       for (const handler of await collectPreToolHandlers(plugin)) {
         const decision = await handler(ctx)
-        if (decision && decision.block === true) return decision.message
+        if (decision && decision.block) return decision.message
       }
     }
     return undefined
