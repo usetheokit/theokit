@@ -52,7 +52,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
+| `./doctor` | Environment diagnostics: `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
@@ -269,6 +269,10 @@ const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: worker }
 refused with a `ConfigurationError`. `toAgentFactory({ withholdBuiltinShell: true })` still works;
 when both are set, the union is passed.
 
+## Describing a failed turn
+
+Import from `@theokit/agents`. `classifyTurnFailure(err)` walks `err.cause` (at most eight links) and returns `{ code, transient, message }`. A typed code anywhere in the chain wins over text, and `transient` comes only from `isTransientError` and typed provider status fields, never from digits in a message. `describeTurnFailure(failure, { attempts, hints })` renders `"<message> [<code>]: <hint>"` and appends `after N attempts` only when `attempts > 1`. `DEFAULT_TURN_FAILURE_HINTS` is neutral; pass `hints` to replace the wording for single codes.
+
 ## Hooks the host owns
 
 `buildHookHandlers` wires hooks into one agent loop. Some events belong to the host instead:
@@ -287,6 +291,20 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Running scheduled prompts
+
+`createScheduler` needs a `RunPort`. `agentRunPort(withAgent)` is the stock one: it runs each prompt on the
+agent `withAgent` hands it, sends with the scheduler's signal, drains and waits, and returns
+`{ ok: false, error }` for a run that ends `error` or `cancelled` or has no result. `withAgent` owns disposal.
+
+```ts
+import { agentRunPort, createScheduler, fileTransientJob } from '@theokit/agents/tools'
+
+const scheduler = createScheduler({ store, deliver, run: agentRunPort(withAgent) })
+const { job, transient } = fileTransientJob({ id: 'heartbeat', cron: '*/30 * * * *', target, file: 'HEARTBEAT.md' })
+await scheduler.add(job, transient) // an absent or blank file means no run; other read errors reject
+```
 
 ## Secret references in configuration
 
@@ -385,6 +403,8 @@ from `.mcp.json`, and the personal scope measured 0 when this was written. **It 
 gap worth declaring and one worth closing — so it was closed. `loadPersonalMcpServers` reads that key
 and only that key, and returns empty on a malformed file rather than throwing, because one stray comma
 in a shared home file must not break every project on the machine.
+
+**One turn.** `runAgentTurn({ agent, message, runId, emit, signal?, sendOptions?, mapEvent? })` (from `@theokit/agents/bridge`) runs one `agent.send` on an agent you already hold, passes each translated event to `emit` (final assistant text already streamed as deltas is not repeated), and resolves, never rejects, with `{ ok: true, usage? }` or `{ ok: false, code: 'turn_failed' | 'turn_cancelled', reason }`. A streamed `error` fails the turn even when `wait()` reports finished. An aborted `signal` cancels the run and closes the stream without waiting on a hung cancel, and nothing is emitted after that. `completeFromTurn(withAgent)` adapts it to the `complete` port of `createOpenAICompatibleRoutes`; a failed turn throws, so the route answers 502.
 
 **MCP scopes.** `loadMcpScopes({ cwd, home, projectAllowed, onClash?, personalFiles?, onWarn? })` (from `@theokit/agents/bridge`) merges the personal servers (`~/.claude.json` by default) with `<cwd>/.mcp.json`. When `projectAllowed` is false the project's servers are withheld: the file is parsed only to list its names in `projectWithheld`. On a name clash the personal server wins by default, so a repository cannot replace a server the operator configured; pass `onClash: 'project-wins'` for the reference format. Clashes are returned as data in `shadowed`. A malformed project file throws `McpFileError`; a malformed personal file only warns.
 
@@ -635,6 +655,16 @@ See `LICENSE`.
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
+
+`streamTurnForkingIfBusy(sessionId, open, { onFork?, forkId?, isBusy? })` is for one-shot surfaces (an `exec`
+command, a cron job, a CI step) that resume a session another process may be writing. `open(id)` returns the
+turn's chunk stream. If the session is busy, the turn re-runs once under `${id}-fork-<8 hex>` and `onFork(from, to)`
+is called. Busy is detected up front with `isBusy` (default: `sessionHasWriter` on the transcript under
+`transcriptRoot()` and `process.cwd()`; pass `isBusy` for another cwd) or from the `data-error-code`
+`session_busy` part and the `error` chunk after it. Both are swallowed, and the structural chunks held before the
+first content chunk are dropped, so the contended attempt emits nothing. The fork starts a fresh session; no history
+is copied. A second contention throws `ForkedSessionBusyError` (`code: 'session_busy_after_fork'`). The returned
+`sessionId` promise resolves to the id that ran once `chunks` has been consumed. Other errors pass through.
 
 `deleteSession(id, { cwd, removeFromRegistry })` reports `registryOutcome: 'unconfirmed'` with the SDK's
 `Agent.delete`, because that returns `Promise<void>`. Pass `isListedInRegistry` to have it measure instead.
