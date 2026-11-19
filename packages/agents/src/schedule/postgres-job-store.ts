@@ -31,7 +31,7 @@ export class JobCopyUnsupportedError extends TheokitAgentError {
 
   constructor() {
     super(
-      'the target store cannot take a copy atomically; copy into a store from createPostgresJobStore',
+      'the target store cannot take a copy atomically; use a store with an atomic putMany (createJobStore or createPostgresJobStore)',
       { code: 'SCHEDULE_COPY_TARGET_UNSUPPORTED', isRetryable: false },
     )
   }
@@ -39,9 +39,6 @@ export class JobCopyUnsupportedError extends TheokitAgentError {
 
 const TABLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/
 const DEFAULT_TABLE = 'theokit_schedule_jobs'
-
-// Stores that can take a whole batch in one statement (so one atomic write), found by `copyJobs`.
-const bulkWriters = new WeakMap<JobStore, (jobs: ScheduledJob[]) => Promise<void>>()
 
 /**
  * Open a job store over `pool`: creates the table if absent and loads every row (each validated like
@@ -110,7 +107,7 @@ export async function createPostgresJobStore(
       }),
   }
 
-  bulkWriters.set(store, (batch) =>
+  store.putMany = (batch) =>
     serialized(async () => {
       if (batch.length === 0) return
       // One INSERT ... VALUES (...), (...) statement is atomic: all rows land or none do.
@@ -120,15 +117,14 @@ export async function createPostgresJobStore(
         batch.flatMap((job) => [job.id, JSON.stringify(job)]),
       )
       for (const job of batch) jobs.set(job.id, job)
-    }),
-  )
+    })
   return store
 }
 
 /**
  * Copy every job of `from` into `to` and resolve the count. A non-empty target raises
- * {@link JobCopyError} unless `force`. The copy is one atomic statement, so only a
- * store from {@link createPostgresJobStore} is accepted; any other target raises
+ * {@link JobCopyError} unless `force`. The copy goes through the target's atomic
+ * `putMany` (both built-in stores have it); a target without one raises
  * {@link JobCopyUnsupportedError} before anything is written.
  */
 export async function copyJobs(
@@ -136,11 +132,10 @@ export async function copyJobs(
   to: JobStore,
   options: { force: boolean },
 ): Promise<number> {
-  const bulk = bulkWriters.get(to)
-  if (bulk === undefined) throw new JobCopyUnsupportedError()
+  if (to.putMany === undefined) throw new JobCopyUnsupportedError()
   const existing = to.list().length
   if (existing > 0 && !options.force) throw new JobCopyError(existing)
   const batch = from.list()
-  await bulk(batch)
+  await to.putMany(batch)
   return batch.length
 }

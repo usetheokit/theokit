@@ -40,6 +40,11 @@ export interface JobStore {
   remove(id: string): Promise<boolean>
   /** Resolves `false`, and changes nothing, when the job is no longer held (a cancel won the race). */
   setPreviousOutput(id: string, text: string): Promise<boolean>
+  /**
+   * Optional: save all of `jobs` as one atomic write (all land or none do), replacing a held job
+   * with the same id. `copyJobs` needs it, and refuses a target without it.
+   */
+  putMany?(jobs: ScheduledJob[]): Promise<void>
 }
 
 /**
@@ -97,6 +102,10 @@ export function createJobStore(filePath: string): JobStore {
     put: (job) =>
       serialized((next) => {
         next.set(job.id, job)
+      }),
+    putMany: (batch) =>
+      serialized((next) => {
+        for (const job of batch) next.set(job.id, job)
       }),
     remove: (id) => serialized((next) => next.delete(id)),
     setPreviousOutput: (id, text) =>

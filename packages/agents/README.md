@@ -257,7 +257,7 @@ const db = await createPostgresJobStore(pool, { table: 'schedule_jobs' }) // /^[
 await copyJobs(files, db, { force: false }) // throws JobCopyError naming the count if `db` holds jobs
 ```
 
-Reads come from the jobs loaded when the store opened, and writes run one after another; replicas do not see each other's later changes until they reopen the store. A malformed row raises `ScheduleStoreError` naming the table and job id. `copyJobs` is one atomic statement, so its target must be a PostgreSQL store; any other target raises `JobCopyUnsupportedError` before anything is written.
+Reads come from the jobs loaded when the store opened, and writes run one after another; replicas do not see each other's later changes until they reopen the store. A malformed row raises `ScheduleStoreError` naming the table and job id. `copyJobs` writes through the target's atomic `putMany` (one statement for PostgreSQL, one file rewrite for the file store), so a failure leaves the target unchanged; a custom `JobStore` without `putMany` raises `JobCopyUnsupportedError` before anything is written.
 
 ## What changed recently
 

@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -115,6 +119,22 @@ describe('reserved-word table names', () => {
   })
 })
 
+describe('copyJobs into the file store', () => {
+  it('copies into an empty file store and refuses a non-empty one', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'copy-jobs-'))
+    try {
+      const to = createJobStore(join(dir, 'schedules.json'))
+      const from = { ...to, list: () => [job('a'), job('b')] }
+      expect(await copyJobs(from, to, { force: false })).toBe(2)
+      expect(to.list()).toHaveLength(2)
+      expect(createJobStore(join(dir, 'schedules.json')).list()).toHaveLength(2)
+      await expect(copyJobs(from, to, { force: false })).rejects.toBeInstanceOf(JobCopyError)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('copyJobs', () => {
   it('refuses a target that cannot take the copy atomically, writing nothing', async () => {
     const puts: string[] = []
@@ -122,6 +142,7 @@ describe('copyJobs', () => {
     const to = {
       ...base,
       list: () => [] as ScheduledJob[],
+      putMany: undefined,
       put: (j: ScheduledJob) => {
         puts.push(j.id)
         return j.id === 'b' ? Promise.reject(new Error('boom')) : Promise.resolve()
