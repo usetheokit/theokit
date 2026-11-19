@@ -1,5 +1,26 @@
 # theo
 
+## 0.83.0
+
+### Minor Changes
+
+- 3a7bfbe: `handleChannelWebhook` now also accepts `{ agent, platform }` as its second argument, for apps that serve the webhook on their own route. A string path works as before.
+- 379accc: Add an optional `JobBackend.cancelInTransaction(client, { name, idempotencyKey })` and `ctx.queue.cancelInTransaction`. They remove a queued job inside the caller's transaction while no worker ever leased it, and answer whether one was removed. `PostgresJobBackend` implements it.
+- 3555fcd: `discoverOidcProvider` now checks every endpoint it returns (`authorization_endpoint`, `token_endpoint`, and `userinfo_endpoint`, `jwks_uri`, `end_session_endpoint` when present) and throws the new `OidcInsecureEndpointError` unless the URL is https or loopback (`localhost`, `[::1]`, `127.0.0.0/8`, never `0.0.0.0`). `isSafeOidcUrl` is exported too.
+- 6163d3a: `theokit/server/webhook` now exports `verifyHmacSha256`, `decodeBase64Signature` and `decodeHexSignature` (and the `DecodeSignature` and `DecodeResult` types), so a webhook source the package does not ship can reuse the framework's constant-time, rotation-aware HMAC check. The `theokit-gateways` scaffold skill shows a custom verifier built on it.
+
+### Patch Changes
+
+- Updated dependencies [5b6e883]
+- Updated dependencies [8854467]
+- Updated dependencies [5f102db]
+- Updated dependencies [c46c058]
+- Updated dependencies [8d53eb9]
+- Updated dependencies [8f1f165]
+  - @theokit/agents@16.10.0
+  - @theokit/http@2.6.0
+  - @theokit/presenter@0.15.0
+
 ## 0.82.0
 
 ### Minor Changes
@@ -514,8 +535,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                      [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                      were found and every /api/agents/* route will 404.
+                                                        [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                        were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 

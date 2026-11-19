@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1233 export(s) across 25 entry point(s).
+1252 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -72,6 +72,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
 | `createDraft` | value |
+| `createGoalSignal` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
 | `createSdkAgentStream` | value |
@@ -90,6 +91,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
+| `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
 | `discoverSubagents` | value |
@@ -201,6 +203,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `streamAgentResponse` | value |
 | `streamAgentTurnInProcess` | value |
 | `streamAgentUIMessages` | value |
+| `streamFromEmitter` | value |
 | `StreamObjectError` | value |
 | `StructuredOutputError` | value |
 | `SubAgent` | value |
@@ -302,6 +305,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
 | `DelegationPort` | type |
+| `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
 | `DelegationTarget` | type |
 | `DiagnosticsSink` | type |
@@ -321,6 +325,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `GoalOptions` | type |
 | `GoalResult` | type |
 | `GoalRunnerDeps` | type |
+| `GoalSignal` | type |
+| `GoalSignalStatus` | type |
 | `Guardrail` | type |
 | `GuardrailAction` | type |
 | `GuardrailPhase` | type |
@@ -421,6 +427,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `StreamAgentTurnDeps` | type |
 | `StreamAgentTurnInProcessInput` | type |
 | `StreamEvent` | type |
+| `StreamFromEmitterOptions` | type |
 | `StructuredOutputErrorCode` | type |
 | `SubagentDefinition` | type |
 | `Summarize` | type |
@@ -491,6 +498,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
+| `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `extractThinkTagStream` | value |
@@ -525,6 +533,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `shouldAutoApprove` | value |
 | `streamAgentResponse` | value |
 | `streamAgentUIMessages` | value |
+| `streamFromEmitter` | value |
 | `toAgentFactory` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
@@ -568,6 +577,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
 | `DelegationPort` | type |
+| `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
 | `DelegationTarget` | type |
 | `DoneEvent` | type |
@@ -612,6 +622,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ShouldAutoApproveOptions` | type |
 | `StateUpdateEvent` | type |
 | `StreamEvent` | type |
+| `StreamFromEmitterOptions` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
 | `ToolArgsValidator` | type |
@@ -838,6 +849,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `AgentMemoryError` | value |
+| `applyOutputStyle` | value |
 | `applySubagentMemory` | value |
 | `assertBootstrapped` | value |
 | `blockAppliesTo` | value |
@@ -850,6 +862,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `currentOperatorPolicy` | value |
 | `DEFAULT_CONTEXT_PRESSURE_THRESHOLDS` | value |
 | `defineAppBootstrap` | value |
+| `DottedOverrideError` | value |
 | `effectiveContextWindow` | value |
 | `expandCommandTemplate` | value |
 | `expandInstructionImports` | value |
@@ -870,6 +883,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `MEMORY_LINE_CAP` | value |
 | `OperatorRootUnreadableError` | value |
 | `OutputStyleError` | value |
+| `parseDottedOverrides` | value |
 | `permissionRulesFromSettings` | value |
 | `projectEnvStep` | value |
 | `readSettingsFile` | value |
@@ -898,9 +912,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DeclaredLayer` | type |
 | `ExpandImportsInput` | type |
 | `InstructionBlock` | type |
+| `InstructionCut` | type |
 | `InstructionSource` | type |
 | `InstructionTree` | type |
 | `InstructionTreeBudget` | type |
+| `InstructionTrim` | type |
 | `LayeredConfigInput` | type |
 | `LayeredConfigResult` | type |
 | `LayerValues` | type |
@@ -1339,14 +1355,17 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `diagnose` | value |
+| `DiagnosticBundleError` | value |
 | `installDiagnosticSink` | value |
 | `renderDiagnosis` | value |
 | `secretPresence` | value |
+| `writeDiagnosticBundle` | value |
 | `Check` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |
 | `InstallDiagnosticSinkOptions` | type |
 | `SecretPresence` | type |
+| `WriteDiagnosticBundleOptions` | type |
 
 ## `@theokit/agents/usage`
 
