@@ -1,32 +1,13 @@
 /**
- * The live suite's globalSetup: under `THEOKIT_LIVE_REQUIRED=1` an absent provider key fails the
- * run instead of letting every live file skip green (B-415). Without the flag it returns, so a
- * developer with no key keeps the local skip the live files already apply.
- *
- * The key names match the `KEYS` list each live file reads. The message names variables, never
- * values, so nothing here can print a credential.
+ * The live suite's globalSetup. The guard now lives in the published `@theokit/agents/testing`
+ * entry; this file keeps the existing import paths and `vitest.live.config.ts` working.
  */
-/** Every variable the live tests read a provider key from. */
-export const LIVE_KEY_NAMES = [
-  'OPENROUTER_API_KEY',
-  'ANTHROPIC_API_KEY',
-  'OPENAI_API_KEY',
-  'THEOKIT_API_KEY',
-] as const
+import { requireProviderKeySetup } from '../../src/testing/provider-key.js'
 
-export class MissingProviderKeyError extends Error {
-  constructor(names: readonly string[]) {
-    super(`provider key absent: THEOKIT_LIVE_REQUIRED=1 and none of ${names.join(', ')} is set`)
-    this.name = 'MissingProviderKeyError'
-  }
-}
+export {
+  LIVE_KEY_NAMES,
+  MissingProviderKeyError,
+  assertProviderKeyWhenRequired,
+} from '../../src/testing/provider-key.js'
 
-export function assertProviderKeyWhenRequired(env: Record<string, string | undefined>): void {
-  if (env.THEOKIT_LIVE_REQUIRED !== '1') return
-  if (LIVE_KEY_NAMES.some((name) => (env[name]?.trim() ?? '') !== '')) return
-  throw new MissingProviderKeyError(LIVE_KEY_NAMES)
-}
-
-export default function setup(): void {
-  assertProviderKeyWhenRequired(process.env)
-}
+export default requireProviderKeySetup()
