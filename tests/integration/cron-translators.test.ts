@@ -280,7 +280,7 @@ async function runDenoEntry(
     if (!(id in modules)) throw new Error(`unexpected import ${id}`)
     return modules[id]
   }
-  type Registered = {
+  interface Registered {
     setters: Array<(m: unknown) => void>
     execute: () => Promise<void>
   }
