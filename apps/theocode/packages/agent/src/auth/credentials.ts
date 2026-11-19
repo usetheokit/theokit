@@ -8,7 +8,6 @@ import {
   AuthProvider,
   CredentialError,
   credentialHome as storeCredentialHome,
-  writeCredential as writeStoreCredential,
 } from '@theokit/agents/auth'
 import { isTransientError } from '@theokit/agents'
 import {
@@ -149,16 +148,6 @@ export interface ResolvedCredential {
  * lossy one — `credential-helpers.ts` re-derives the origin from it with a regex — so this is a
  * translation to keep, not a difference to celebrate.
  */
-/** The stored OAuth shape, narrowed to this product's `Provider` union — the same refinement as `ResolvedCredential`. */
-export interface StoredOAuthCredential {
-  type: 'oauth'
-  provider: Provider
-  access: string
-  refresh: string
-  expires: number
-  account_id?: string
-}
-
 /**
  * Refuse a key whose prefix contradicts its declared provider, on the WRITE path.
  *
@@ -220,37 +209,6 @@ export function resolveCredential(opts: {
     }
     throw err
   }
-}
-
-function isOAuthWrite(
-  c: { provider: Provider; apiKey: string } | StoredOAuthCredential,
-): c is StoredOAuthCredential {
-  return 'type' in c && c.type === 'oauth'
-}
-
-export function writeCredential(
-  cred: { provider: Provider; apiKey: string } | StoredOAuthCredential,
-  home: string,
-  env: Record<string, string | undefined> = {},
-): string {
-  if (isOAuthWrite(cred)) {
-    if (cred.access.length === 0 || cred.refresh.length === 0) {
-      throw new CredentialError(
-        'refusing to write an oauth credential with an empty access/refresh token',
-      )
-    }
-  } else {
-    if (typeof cred.apiKey !== 'string' || cred.apiKey.length === 0) {
-      throw new CredentialError('refusing to write an empty API key')
-    }
-    assertPairMatches(cred.provider, cred.apiKey, 'the credential being written')
-  }
-
-  return writeStoreCredential(
-    isOAuthWrite(cred) ? cred : { provider: cred.provider, apiKey: cred.apiKey },
-    credentialStore(home),
-    env,
-  )
 }
 
 function classifyRefreshFailure(err: unknown): {
