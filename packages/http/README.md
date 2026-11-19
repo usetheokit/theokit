@@ -252,6 +252,26 @@ const Roles = createDecorator<string[]>()
 | `./app` | App-level composition |
 | `./runtime/node` | The Node runtime adapter |
 | `./action-encryption`, `./server-inserted-html`, `./css-resource` | Opt-in capabilities kept off the main bundle |
+| `./guards` | Bearer token and loopback bind guards (see below) |
+
+## Guards: bearer token and loopback bind
+
+`@theokit/http/guards` is the one reviewed copy of the checks a self-hosted app needs (Node built-ins only).
+
+```ts
+import { bearerGuard, readBearerToken, resolveBindAddress, parsePort } from '@theokit/http/guards'
+
+const token = readBearerToken(process.env, 'APP_TOKEN') // undefined = surface off
+const guard = token && bearerGuard(token) // (request) => Response | undefined
+const host = resolveBindAddress(process.env, { hostVariable: 'APP_HOST', consentVariable: 'APP_PUBLIC_BIND' })
+const port = parsePort(process.env, 'APP_PORT')
+```
+
+- `readBearerToken(env, variable, { minLength? })`: unset or empty returns `undefined`; padding whitespace or fewer than 32 characters (`minLength`, never below 16) throws `GuardConfigError`, naming the variable and never the value.
+- `bearerCheck(token)` compares SHA-256 digests with `timingSafeEqual`; the scheme matches in any case. `bearerGuard(token)` returns `undefined` or a 401 with `www-authenticate: Bearer`.
+- `isLoopback(host)` accepts only `localhost`, `::1` and dotted IPv4 in 127.0.0.0/8. `LOCALHOST`, `[::1]`, `::ffff:127.0.0.1` and `127.1` count as public.
+- `resolveBindAddress` defaults to `127.0.0.1`; a non-loopback host needs `consentVariable` set to `consentValue` (default `yes`) or it throws `BindRefusedError`. The generic `HOST` is never read.
+- `parsePort` accepts digits only, 0 to 65535; otherwise `GuardConfigError`.
 
 ## `registerControllers` (low-level)
 
