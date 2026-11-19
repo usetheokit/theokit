@@ -1,0 +1,198 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@theokit/agents':
+        specifier: 16.11.0
+        version: 16.11.0(@theokit/http@2.6.0(reflect-metadata@0.2.2)(zod@4.6.7))(zod@4.6.7)
+    devDependencies:
+      '@theokit/sdk':
+        specifier: 5.17.0
+        version: 5.17.0
+
+packages:
+
+  '@theokit/agents@16.11.0':
+    resolution: {integrity: sha512-z1oBBlZP91yJsq++S5RcbYBE6FTNEvFgiTytOweT6lDgSjHz5VcbEyyiQPBTIh/mRU/i/eRv1U6aVvTnr0WFaw==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@jitl/quickjs-wasmfile-release-sync': 0.32.0
+      '@theokit/http': '>=2.1.0-next.0'
+      quickjs-emscripten-core: 0.32.0
+      react: '>=18'
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      '@jitl/quickjs-wasmfile-release-sync':
+        optional: true
+      quickjs-emscripten-core:
+        optional: true
+      react:
+        optional: true
+
+  '@theokit/http@2.6.0':
+    resolution: {integrity: sha512-Mi9TKrUOoW1mq/PxxcNxfutgcLq5apEHhGJ7HwmZFLso/VaceacrF3tPJjrmFYzeGa1i0R6PeWP4OBQRpYJnXg==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@swc/core': '>=1.3.0'
+      '@theokit/di': '>=0.2.1 <0.3'
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
+      reflect-metadata: ^0.2.2
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      '@swc/core':
+        optional: true
+      '@theokit/di':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
+  '@theokit/presenter@0.15.0':
+    resolution: {integrity: sha512-8E0RGBKLPTHX6GGlNSvzyZPAxDEkecUF0pHx/XRmIXrTLiVLQHrXgykk6BZGvDPUWl8ZrgbYFNBxIg9ZorqHBA==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/sdk': ^5.3.0
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      '@theokit/sdk':
+        optional: true
+      zod:
+        optional: true
+
+  '@theokit/sdk-tools@0.29.0':
+    resolution: {integrity: sha512-O96htwfh40QlQgEAcWbSMqdJ9555XjpqWqopoT3sGQ7B4QW58v7sQw0a0WgILeJUlR8EXxmMDK8RP7LBRNFMuQ==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/sdk': '>=5.0.0-next.1'
+      mammoth: ^1.13.0
+      simple-git: ^4.0.1
+      unpdf: ^2.1.0
+      vitest: '>=2.0.0'
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      mammoth:
+        optional: true
+      simple-git:
+        optional: true
+      unpdf:
+        optional: true
+      vitest:
+        optional: true
+
+  '@theokit/sdk@5.17.0':
+    resolution: {integrity: sha512-M2uvpsOx+YUIXPTsntpobNpdBoz7uh5sn2S1bLXPlpaaSdnI6Ka+kocsAWl1YS5XtrrnEmRO50bfxeTy+gRpYw==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@lancedb/lancedb': ^0.30.0
+      '@opentelemetry/api': ^1.9.0
+      '@types/ws': '>=8.0.0'
+      better-sqlite3: ^12.0.0
+      onnxruntime-node: '>=1.17.0'
+      proper-lockfile: ^4.1.2
+      sqlite-vec: ^0.1.0
+      ws: '>=8.0.0'
+    peerDependenciesMeta:
+      '@lancedb/lancedb':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@types/ws':
+        optional: true
+      better-sqlite3:
+        optional: true
+      onnxruntime-node:
+        optional: true
+      proper-lockfile:
+        optional: true
+      sqlite-vec:
+        optional: true
+      ws:
+        optional: true
+
+  croner@9.1.0:
+    resolution: {integrity: sha512-p9nwwR4qyT5W996vBZhdvBCnMhicY5ytZkR4D1Xj0wuTDEiMnjwR57Q3RXYY/s0EpX6Ay3vgIcfaR+ewGHsi+g==}
+    engines: {node: '>=18.0'}
+
+  diff@8.0.4:
+    resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
+    engines: {node: '>=0.3.1'}
+
+  jsonrepair@3.15.0:
+    resolution: {integrity: sha512-wy8OTjwsJwQRnQJkKnMJJ9vcytRdBPAgIF/Hy6+s1dAj42BHMKiyL8JzEieIl3JY7idt8eyHwBWTO8mh/+mtwA==}
+    hasBin: true
+
+  parse-diff@0.12.0:
+    resolution: {integrity: sha512-2Xr5mW4Bqd4CqYq2zttfw/RZraK+KcRuJvNkJzbDk3ea67Ap525XeTvBdtDE5tigJMVzIx/DMUzsShAf6+5SCA==}
+
+  reflect-metadata@0.2.2:
+    resolution: {integrity: sha512-urBwgfrvVP/eAyXx4hluJivBKzuEbSQs9rKWCrCkbSxNv8mxPcUZKeuoF3Uy4mJl3Lwprp6yy5/39VWigZ4K6Q==}
+
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
+
+snapshots:
+
+  '@theokit/agents@16.11.0(@theokit/http@2.6.0(reflect-metadata@0.2.2)(zod@4.6.7))(zod@4.6.7)':
+    dependencies:
+      '@theokit/http': 2.6.0(reflect-metadata@0.2.2)(zod@4.6.7)
+      '@theokit/presenter': 0.15.0(@theokit/sdk@5.17.0)(zod@4.6.7)
+      '@theokit/sdk': 5.17.0
+      '@theokit/sdk-tools': 0.29.0(@theokit/sdk@5.17.0)(zod@4.6.7)
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@lancedb/lancedb'
+      - '@opentelemetry/api'
+      - '@types/ws'
+      - better-sqlite3
+      - mammoth
+      - onnxruntime-node
+      - proper-lockfile
+      - simple-git
+      - sqlite-vec
+      - unpdf
+      - vitest
+      - ws
+
+  '@theokit/http@2.6.0(reflect-metadata@0.2.2)(zod@4.6.7)':
+    dependencies:
+      reflect-metadata: 0.2.2
+      zod: 4.6.7
+
+  '@theokit/presenter@0.15.0(@theokit/sdk@5.17.0)(zod@4.6.7)':
+    dependencies:
+      diff: 8.0.4
+      parse-diff: 0.12.0
+    optionalDependencies:
+      '@theokit/sdk': 5.17.0
+      zod: 4.6.7
+
+  '@theokit/sdk-tools@0.29.0(@theokit/sdk@5.17.0)(zod@4.6.7)':
+    dependencies:
+      '@theokit/sdk': 5.17.0
+      zod: 4.6.7
+
+  '@theokit/sdk@5.17.0':
+    dependencies:
+      croner: 9.1.0
+      jsonrepair: 3.15.0
+      zod: 4.6.7
+
+  croner@9.1.0: {}
+
+  diff@8.0.4: {}
+
+  jsonrepair@3.15.0: {}
+
+  parse-diff@0.12.0: {}
+
+  reflect-metadata@0.2.2: {}
+
+  zod@4.6.7: {}

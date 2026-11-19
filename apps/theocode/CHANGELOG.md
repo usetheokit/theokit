@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Added
+- **A standalone consumer, `standalone/`.** It installs the released `@theokit/agents@16.11.0` from the registry with its own `pnpm-lock.yaml` and no `workspace:*`, and tests `loginWithApiKey`, `ensureFreshCredential` and `refreshOAuthTokens` through `@theokit/agents/auth`. It replaces the stale `apps/theocode/pnpm-lock.yaml`, whose importers no longer matched the manifests. (#2276)
+
 ### Changed
 - **`AgentDefinitionLike` no longer declares `model?: string`.** The framework's `SubagentAgentDefinition` now takes `model` as `ModelSelection | 'inherit'`, so the string field no longer type-checked against `.subagents()`. `definitionFrom` never set it. Carrying a role's model is a separate migration. (#1858)
 - **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)

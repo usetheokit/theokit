@@ -1,0 +1,16 @@
+{
+  "name": "theocode-standalone-consumer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Installs the released @theokit/agents from the registry, with no workspace link, and exercises the auth API TheoCode uses.",
+  "scripts": {
+    "test": "node --test auth.test.mjs"
+  },
+  "dependencies": {
+    "@theokit/agents": "16.11.0"
+  },
+  "devDependencies": {
+    "@theokit/sdk": "5.17.0"
+  }
+}
