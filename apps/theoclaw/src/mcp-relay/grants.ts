@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
+import { serializedPerFile } from '../serial-queue.js'
 import { BUILT_TOOL_NAMES, CONTROL_TOOL_NAMES } from '../tools/tool-names.js'
 
 /** The tools a grant gets when none are named: read-only ones only. */
@@ -39,8 +40,6 @@ export function grantsPath(
 export class GrantStore {
   private grants: Grant[] = []
 
-  private writes: Promise<void> = Promise.resolve()
-
   constructor(private readonly path: string) {}
 
   /** Reads the file; a missing file is an empty store. */
@@ -62,9 +61,6 @@ export class GrantStore {
   ): Promise<{ readonly grant: Grant; readonly token: string }> {
     if (!NAME.test(name))
       throw new GrantError(`invalid name "${name}": use letters, digits, - and _`)
-    if (this.grants.some((g) => g.name === name && g.revokedAt === undefined)) {
-      throw new GrantError(`an active grant named "${name}" exists`)
-    }
     const chosen = tools ?? DEFAULT_GRANT_TOOLS
     const known = new Set([...BUILT_TOOL_NAMES, ...CONTROL_TOOL_NAMES])
     const unknown = chosen.filter((t) => !known.has(t))
@@ -81,22 +77,33 @@ export class GrantStore {
       tools: [...new Set(chosen)],
       createdAt: new Date().toISOString(),
     }
-    this.grants.push(grant)
-    await this.persist()
+    // Load, change and write as one step per file, so another store on the same file in this
+    // process (each CLI command makes its own) never writes back an older snapshot.
+    await serializedPerFile(this.path, async () => {
+      this.load()
+      if (this.grants.some((g) => g.name === name && g.revokedAt === undefined)) {
+        throw new GrantError(`an active grant named "${name}" exists`)
+      }
+      this.grants.push(grant)
+      await this.persist()
+    })
     return { grant, token }
   }
 
   /** Revokes the active grant with this name or id. */
   async revoke(nameOrId: string): Promise<Grant> {
-    const index = this.grants.findIndex(
-      (g) => g.revokedAt === undefined && (g.name === nameOrId || g.id === nameOrId),
-    )
-    const found = this.grants[index]
-    if (found === undefined) throw new GrantError(`no active grant "${nameOrId}"`)
-    const revoked: Grant = { ...found, revokedAt: new Date().toISOString() }
-    this.grants[index] = revoked
-    await this.persist()
-    return revoked
+    return serializedPerFile(this.path, async () => {
+      this.load()
+      const index = this.grants.findIndex(
+        (g) => g.revokedAt === undefined && (g.name === nameOrId || g.id === nameOrId),
+      )
+      const found = this.grants[index]
+      if (found === undefined) throw new GrantError(`no active grant "${nameOrId}"`)
+      const revoked: Grant = { ...found, revokedAt: new Date().toISOString() }
+      this.grants[index] = revoked
+      await this.persist()
+      return revoked
+    })
   }
 
   /** The active grant this token belongs to, or undefined. */
@@ -115,12 +122,9 @@ export class GrantStore {
     return match
   }
 
-  /** Snapshots now and writes in call order, so a slow earlier write never lands over a later one. */
   private persist(): Promise<void> {
     mkdirSync(dirname(this.path), { recursive: true })
     const text = JSON.stringify({ grants: this.grants })
-    const run = this.writes.then(() => replaceFileAtomic(this.path, text, { mode: 0o600 }))
-    this.writes = run.catch(() => undefined)
-    return run
+    return replaceFileAtomic(this.path, text, { mode: 0o600 })
   }
 }

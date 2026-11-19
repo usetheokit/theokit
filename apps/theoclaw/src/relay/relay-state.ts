@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
+import { serializedPerFile } from '../serial-queue.js'
 import {
   generateIdentity,
   open,
@@ -36,15 +37,18 @@ export class RelayState {
 
   /** Loads the file or creates an identity on first use. */
   static async load(file: string, trusted: TrustedPeers): Promise<RelayState> {
-    let data: Persisted
-    if (existsSync(file)) {
-      data = JSON.parse(readFileSync(file, 'utf8')) as Persisted
-    } else {
-      data = { identity: generateIdentity(), sent: {}, received: {} }
-    }
-    const state = new RelayState(file, data, trusted)
-    await state.save()
-    return state
+    // Queued per file: two first loads of a missing file must not each make an identity.
+    return serializedPerFile(file, async () => {
+      let data: Persisted
+      if (existsSync(file)) {
+        data = JSON.parse(readFileSync(file, 'utf8')) as Persisted
+      } else {
+        data = { identity: generateIdentity(), sent: {}, received: {} }
+      }
+      const state = new RelayState(file, data, trusted)
+      await state.save()
+      return state
+    })
   }
 
   get publicKey(): string {
@@ -71,7 +75,10 @@ export class RelayState {
   }
 
   /** Opens an envelope; refuses an untrusted sender, a forgery and a replayed or older `seq`. */
-  async receive(envelope: Envelope): Promise<{ readonly from: string; readonly plaintext: string }> {
+  async receive(
+    envelope: Envelope,
+    onAccepted?: () => void,
+  ): Promise<{ readonly from: string; readonly plaintext: string }> {
     const opened = open(this.data.identity, this.trusted, envelope)
     if (
       !Number.isSafeInteger(envelope.seq) ||
@@ -80,6 +87,8 @@ export class RelayState {
       throw new Error('relay: the envelope is a replay or out of order')
     }
     this.data.received[envelope.from] = envelope.seq
+    // The envelope counts as read from here on, before the disk write is waited for.
+    onAccepted?.()
     await this.save()
     return opened
   }

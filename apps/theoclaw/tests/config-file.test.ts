@@ -94,4 +94,14 @@ describe('the configuration file', () => {
     expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected'])
     expect(readFileSync(path, 'utf8')).toBe('THEOCLAW_MODEL="first"\n')
   })
+
+  it('queues equivalent spellings of one path together', async () => {
+    const dir = scratchDir()
+    const results = await Promise.allSettled([
+      writeConfiguration(join(dir, 'theoclaw.env'), { THEOCLAW_MODEL: 'first' }, { force: false }),
+      writeConfiguration(join(dir, '.', 'theoclaw.env'), { THEOCLAW_MODEL: 'second' }, { force: false }),
+    ])
+    expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected'])
+    expect(readFileSync(join(dir, 'theoclaw.env'), 'utf8')).toBe('THEOCLAW_MODEL="first"\n')
+  })
 })

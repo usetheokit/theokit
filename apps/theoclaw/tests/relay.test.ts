@@ -175,6 +175,25 @@ describe('relay state files', () => {
     expect((await again.seal('bob', 'next')).seq).toBe(6)
   })
 
+  it('two first loads of a missing file share one identity', async () => {
+    const file = join(dir(), 'a.json')
+    const [one, two] = await Promise.all([RelayState.load(file, new Map()), RelayState.load(file, new Map())])
+    expect(one.publicKey).toBe(two.publicKey)
+    expect((await RelayState.load(file, new Map())).publicKey).toBe(one.publicKey)
+  })
+
+  it('closes the send gate as soon as an envelope is accepted, before its disk write ends', async () => {
+    const fileB = join(dir(), 'b.json')
+    const idB = await RelayState.load(fileB, new Map())
+    const a = await RelayState.load(join(dir(), 'a.json'), new Map([['bob', idB.publicKey]]))
+    const b = await RelayState.load(fileB, new Map([['alice', a.publicKey]]))
+    const envelope = await a.seal('bob', 'hi')
+    const gate = new RelayTurnGate()
+    const reading = b.receive(envelope, () => gate.markReceived())
+    expect(gate.blocked).toBe(true)
+    expect((await reading).plaintext).toBe('hi')
+  })
+
   it('queues concurrent mailbox puts without losing one', async () => {
     const file = join(dir(), 'box.json')
     const mailbox = new RelayMailbox(10, file)

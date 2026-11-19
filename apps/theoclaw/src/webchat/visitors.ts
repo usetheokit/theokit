@@ -6,6 +6,7 @@ import type { Writable } from 'node:stream'
 import { atomicWriteJson } from '@theokit/sdk/persistence'
 
 import { UsageError } from '../cli-args.js'
+import { serializedPerFile } from '../serial-queue.js'
 
 /**
  * Expiring visitor grants for WebChat (OC-143). A reverse proxy such as Cloudflare Access
@@ -91,20 +92,26 @@ export async function visitorsCommand(args: readonly string[], io: VisitorsIo, n
   }
   if (email === undefined || !EMAIL.test(email)) throw new UsageError(USAGE)
   const who = normalize(email)
-  const grants = { ...readGrants(file) }
   if (verb === 'revoke') {
     if (rest.length > 0) throw new UsageError(USAGE)
-    delete grants[who]
-    await writeGrants(file, grants)
+    // Read, change and write as one step per file, so two commands never start from the same old grants.
+    await serializedPerFile(file, async () => {
+      const grants = { ...readGrants(file) }
+      delete grants[who]
+      await writeGrants(file, grants)
+    })
     io.stdout.write(`revoked ${who}\n`)
     return 0
   }
   if (verb === 'grant') {
     if (rest.length !== 2 || rest[0] !== '--for') throw new UsageError(USAGE)
     const until = now + parseDuration(rest[1] ?? '')
-    for (const [other, at] of Object.entries(grants)) if (at <= now) delete grants[other]
-    grants[who] = until
-    await writeGrants(file, grants)
+    await serializedPerFile(file, async () => {
+      const grants = { ...readGrants(file) }
+      for (const [other, at] of Object.entries(grants)) if (at <= now) delete grants[other]
+      grants[who] = until
+      await writeGrants(file, grants)
+    })
     io.stdout.write(`granted ${who} until ${new Date(until).toISOString()}\n`)
     return 0
   }

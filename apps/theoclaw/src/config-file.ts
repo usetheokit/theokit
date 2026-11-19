@@ -5,6 +5,7 @@ import { parseEnv } from 'node:util'
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
+import { serializedPerFile } from './serial-queue.js'
 
 /**
  * Where TheoClaw's configuration lives and how it reaches the environment (B-374, plan D2). The
@@ -95,18 +96,8 @@ export async function writeConfiguration(
 ): Promise<void> {
   // The write is asynchronous, so two calls in one process are queued per path: the second one
   // checks for the file only after the first has finished, and is refused without `force`.
-  const previous = pendingWrites.get(path) ?? Promise.resolve()
-  const run = previous.then(() => writeNow(path, entries, options))
-  const settled = run.catch(() => undefined)
-  pendingWrites.set(path, settled)
-  try {
-    await run
-  } finally {
-    if (pendingWrites.get(path) === settled) pendingWrites.delete(path)
-  }
+  await serializedPerFile(path, () => writeNow(path, entries, options))
 }
-
-const pendingWrites = new Map<string, Promise<void>>()
 
 async function writeNow(
   path: string,

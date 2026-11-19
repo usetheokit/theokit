@@ -105,9 +105,8 @@ function receiveTool(state: RelayState, client: RelayClient, gate: RelayTurnGate
     let dropped = 0
     for (const envelope of await client.take(state.publicKey)) {
       try {
-        const { from, plaintext } = await state.receive(envelope)
+        const { from, plaintext } = await state.receive(envelope, () => gate?.markReceived())
         lines.push(`from ${from}: ${plaintext}`)
-        gate?.markReceived()
       } catch {
         dropped += 1
       }
