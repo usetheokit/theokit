@@ -9,9 +9,6 @@ import { EXEC_DESCRIPTIONS } from './exec-approval-chat.js'
 import { ACTIVATION_DESCRIPTION } from './group-activation-hook.js'
 import { USAGE_DESCRIPTION } from './usage-hook.js'
 import type { ChatCommand, GatewayHook, HookDecision } from '@theokit/gateway'
-/** Every command the list names; a test sends each through its real handler. */
-
-export const HELP_COMMANDS = ['/status', '/model', '/new', '/reset', '/goal', '/steer', '/think', '/compact', '/usage', '/activation', '/approve', '/deny', '/elevated', '/acp'] as const
 
 /** What the list says about a command another hook answers; this one only describes it. */
 function described(name: string, usage: string, description: string): ChatCommand {
@@ -34,6 +31,9 @@ const DESCRIBED: readonly ChatCommand[] = [
     described(entry.name, entry.usage ?? `/${entry.name}`, entry.description),
   ),
 ]
+
+/** Every command the list names, read from the descriptions that make the text. */
+export const HELP_COMMANDS: readonly string[] = DESCRIBED.filter((c) => c.name !== 'help').map((c) => `/${c.name}`)
 
 export const HELP_TEXT = `Commands answered without the model:\n${helpText(DESCRIBED)}`
 

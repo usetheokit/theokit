@@ -52,6 +52,22 @@ describe('agent routing through the gateway bindings', () => {
     expect(router.route({ platform: 'slack' }).id).toBe('work')
     expect(router.route({ platform: 'telegram', peer: 'u1' }).id).toBe('main')
   })
+  it('lets a peer rule beat a platform rule, as the gateway bindings rank them', () => {
+    const ranked = createAgentRouter({
+      defaultAgent: 'main',
+      agents: [
+        { id: 'main', workspace: '/m' },
+        { id: 'work', workspace: '/w' },
+        { id: 'vip', workspace: '/v' },
+      ],
+      routes: [
+        { agent: 'work', platform: 'slack' },
+        { agent: 'vip', platform: 'slack', peer: 'u9' },
+      ],
+    })
+    expect(ranked.route({ platform: 'slack', peer: 'u9' }).id).toBe('vip')
+    expect(ranked.route({ platform: 'slack', peer: 'u1' }).id).toBe('work')
+  })
   it('names the unconfigured agent', () => {
     expect(() => createAgentRouter({ defaultAgent: 'main', agents: [{ id: 'main', workspace: '/m' }], routes: [{ agent: 'ghost', platform: 'slack' }] })).toThrow(
       'routing names an unconfigured agent: ghost',
