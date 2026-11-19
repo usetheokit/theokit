@@ -4,14 +4,14 @@ import type { JobBackend, JobLease } from '../../packages/theo/src/server/jobs/j
 import { createJobRunner } from '../../packages/theo/src/server/jobs/job-runner.js'
 import { defineJob } from '../../packages/theo/src/server/jobs/define-job.js'
 
-function setup(handler: (ctx: any) => void | Promise<void>) {
+function setup(handler: (ctx: any) => void | Promise<void>, traceparent?: string) {
   const lease: JobLease = {
     jobId: 'j1',
     name: 'parent',
     input: {},
     attempts: 1,
     lockExpiresAt: new Date(Date.now() + 60_000),
-    traceparent: '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01',
+    traceparent: traceparent ?? '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01',
   } as JobLease
   const enqueue = vi.fn(async () => ({ jobId: 'child' }))
   const enqueueInTransaction = vi.fn(async () => ({ jobId: 'tx' }))
@@ -39,6 +39,15 @@ describe('ctx.queue in a job handler', () => {
     expect(entry).toMatchObject({ name: 'child', input: { a: 1 }, idempotencyKey: 'k' })
     expect(entry.traceparent).toMatch(/^00-0af7651916cd43dd8448eb211c80319c-[0-9a-f]{16}-01$/)
     expect(backend.ack).toHaveBeenCalled()
+  })
+
+  it('keeps the unsampled flag of the parent trace', async () => {
+    const { runner, enqueue } = setup((ctx) => {
+      ctx.queue.enqueue('child', {})
+    }, '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-00')
+    await runner.tick()
+    const entry = (enqueue.mock.calls[0] as unknown as [any])[0]
+    expect(entry.traceparent).toMatch(/^00-0af7651916cd43dd8448eb211c80319c-[0-9a-f]{16}-00$/)
   })
 
   it('drops buffered jobs when the handler throws', async () => {

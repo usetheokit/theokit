@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import ts from 'typescript'
 import { tmpdir } from 'node:os'
 
 import {
   translateCronToAws,
   translateCronToCloudflare,
+  DENO_UNAVAILABLE_QUEUE,
   translateCronToDeno,
   translateCronToVercel,
   ExistingConfigUnparseableError,
@@ -205,7 +207,30 @@ describe('Deno cron context queue', () => {
     const entry = join(root, 'crons-queue-entry.ts')
     translateCronToDeno(entry, [cron('q', '* * * * *')])
     const content = readFileSync(entry, 'utf8')
-    expect(content).toContain('queue:')
+    expect(content).toContain('queue: unavailableQueue')
     expect(content).toContain('no jobs.backend')
+  })
+
+  it('generates a queue that type-checks as a QueueClient', () => {
+    const file = join(root, 'queue-typecheck.ts')
+    const queueTypes = resolve('packages/theo/src/server/jobs/queue-client.ts')
+    writeFileSync(
+      file,
+      `import type { QueueClient } from ${JSON.stringify(queueTypes)}\n${DENO_UNAVAILABLE_QUEUE}\nexport const q: QueueClient = unavailableQueue\n`,
+    )
+    const options: ts.CompilerOptions = {
+      noEmit: true,
+      strict: true,
+      skipLibCheck: true,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      target: ts.ScriptTarget.ES2022,
+      types: [],
+    }
+    const program = ts.createProgram([file], options)
+    const errors = ts
+      .getPreEmitDiagnostics(program, program.getSourceFile(file))
+      .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
+    expect(errors).toEqual([])
   })
 })

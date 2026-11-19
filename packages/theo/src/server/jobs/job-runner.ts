@@ -90,14 +90,10 @@ export function createJobRunner(
     }
 
     // Resolve trace ID from lease's traceparent, or fall back to fresh.
-    let traceId: string
-    if (lease.traceparent) {
-      const headers = new Headers({ traceparent: lease.traceparent })
-      const ctx = extractTraceContext(headers)
-      traceId = ctx?.trace_id ?? generateNewTraceContext().trace_id
-    } else {
-      traceId = generateNewTraceContext().trace_id
-    }
+    const parent = lease.traceparent
+      ? extractTraceContext(new Headers({ traceparent: lease.traceparent }))
+      : null
+    const traceId = parent?.trace_id ?? generateNewTraceContext().trace_id
 
     // Optional Zod validation on input.
     let parsedInput: unknown = lease.input
@@ -131,7 +127,7 @@ export function createJobRunner(
 
     // Children carry this job's trace; the worker's span id is not tracked, so a fresh one stands in.
     const handlerQueue = createHandlerQueue(backend, {
-      traceparent: `00-${traceId}-${newSpanId()}-01`,
+      traceparent: `00-${traceId}-${newSpanId()}-${parent?.flags ?? '01'}`,
     })
     const jobCtx: JobContext = {
       traceId,
