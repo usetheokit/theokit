@@ -1,6 +1,6 @@
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { enforced } from './tool-start-fixtures.js'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -14,6 +14,17 @@ import { createExecApproval, createExecApprovalStore, execApprovalPlugin } from 
 const dir = (): string => mkdtempSync(join(tmpdir(), 'exec-approval-'))
 
 describe('exec approval', () => {
+  it('saves the approvals in a file only its owner can read, with concurrent saves intact', async () => {
+    const state = dir()
+    const store = createExecApprovalStore(state)
+    await Promise.all(['ls', 'pwd', 'date'].map((command) => store.add(command)))
+    const file = join(state, 'exec-approvals.json')
+    expect(statSync(file).mode & 0o777).toBe(0o600)
+    expect(readdirSync(state)).toEqual(['exec-approvals.json'])
+    const reloaded = createExecApprovalStore(state)
+    expect(['ls', 'pwd', 'date'].map((command) => reloaded.has(command))).toEqual([true, true, true])
+  })
+
   it('runs a saved command after a restart without a prompt, and still asks about another', async () => {
     const state = dir()
     const first = createExecApproval({ store: createExecApprovalStore(state), ask: async () => 'always' })
