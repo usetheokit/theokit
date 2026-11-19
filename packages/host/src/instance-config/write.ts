@@ -34,7 +34,7 @@ function renderEntries(
   const lines: string[] = []
   for (const [key, value] of Object.entries(entries)) {
     if (value === undefined) continue
-    if (!Object.hasOwn(keys, key) || !KEY.test(key)) {
+    if (!Object.hasOwn(keys, key) || !KEY.test(key) || key === '__proto__') {
       throw new InstanceConfigError('instance_config_unknown_key', `${key} is not a declared key`)
     }
     assertWritable(key, value)

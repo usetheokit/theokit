@@ -87,6 +87,16 @@ describe('write', () => {
     expect(err.message).not.toContain(secret)
     expect(err.cause).toBeUndefined()
   })
+  it('refuses a __proto__ key that parseEnv cannot preserve', async () => {
+    const d = mk()
+    const proto = defineInstanceConfig({ app: 'demo', keys: { ['__proto__']: {} } as never })
+    const f = join(d, 'c.env')
+    const entries = JSON.parse('{"__proto__":"x"}')
+    await expect(proto.write(f, entries, { force: false })).rejects.toBeInstanceOf(
+      InstanceConfigError,
+    )
+    expect(readdirSync(d)).toEqual([])
+  })
   it('concurrent writers do not collide', async () => {
     const d = mk()
     const f = join(d, 'c.env')
