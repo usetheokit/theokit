@@ -1,10 +1,16 @@
 import { lstatSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { readSessionMessages } from '@theokit/sdk'
+import { describe, expect, it, vi } from 'vitest'
 
 import { runCli } from '../src/cli.js'
 import { harness, scratchDir } from './support/cli-harness.js'
+
+vi.mock('@theokit/sdk', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@theokit/sdk')>()
+  return { ...actual, readSessionMessages: vi.fn(actual.readSessionMessages) }
+})
 
 function workspaceWithSession(): string {
   const workspace = scratchDir()
@@ -100,6 +106,27 @@ describe('theoclaw sessions', () => {
     expect((await run(['sessions', 'share', 'matrix-dm', '--to', shared], workspace)).code).toBe(0)
     expect(readFileSync(victim, 'utf8')).toBe('keep')
     expect(lstatSync(file).isSymbolicLink()).toBe(false)
+  })
+})
+
+describe('transcript reading', () => {
+  it('goes through the SDK reader with the session id, workspace and session directory', async () => {
+    const workspace = workspaceWithSession()
+    vi.mocked(readSessionMessages).mockClear()
+    await run(['sessions', 'export', 'matrix-dm'], workspace)
+    expect(readSessionMessages).toHaveBeenCalledWith({
+      sessionId: 'matrix-dm-_owner_localhost-g0',
+      cwd: workspace,
+      sessionDir: join(workspace, '.theoclaw'),
+    })
+  })
+
+  it('shows what the SDK reader returns, not what the file holds', async () => {
+    vi.mocked(readSessionMessages).mockResolvedValueOnce([
+      { role: 'user', text: 'from the reader', parts: [{ type: 'text', text: 'from the reader' }] },
+    ])
+    const { out } = await run(['sessions', 'export', 'matrix-dm'], workspaceWithSession())
+    expect(out).toBe('user: from the reader\n')
   })
 })
 
