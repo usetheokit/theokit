@@ -7,11 +7,14 @@ import { fileURLToPath } from 'node:url'
 import type { McpServerConfig } from '@theokit/sdk'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import type { BrowserLauncher } from './shared-browser.js'
 
 /** What the browser server is started from, resolved once at start. */
 export interface BrowserSettings {
   /** The `playwright-mcp` CLI of the pinned `@playwright/mcp`. */
   readonly cliPath: string
+  /** The loopback CDP endpoint of the instance's shared browser; absent, each session starts an isolated one. */
+  readonly cdpEndpoint?: string
 }
 
 /** What the tests inject; the process passes nothing. */
@@ -19,6 +22,8 @@ export interface BrowserDeps {
   readonly resolveCli?: () => string
   /** Where Playwright keeps its browsers. Default: `PLAYWRIGHT_BROWSERS_PATH`, else `~/.cache/ms-playwright`. */
   readonly browsersDir?: string
+  /** Starts the shared Chromium; the tests inject one so no browser is needed. */
+  readonly launch?: BrowserLauncher
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -43,9 +48,14 @@ const CHROMIUM_BUILD = /^chromium(_headless_shell)?-\d+$/
 function defaultResolveCli(): string {
   const manifestPath = createRequire(import.meta.url).resolve('@playwright/mcp/package.json')
   const { bin } = JSON.parse(readFileSync(manifestPath, 'utf8')) as { readonly bin?: unknown }
-  const entry = typeof bin === 'string' ? bin : (bin as Readonly<Record<string, unknown>> | undefined)?.['playwright-mcp']
+  const entry =
+    typeof bin === 'string'
+      ? bin
+      : (bin as Readonly<Record<string, unknown>> | undefined)?.['playwright-mcp']
   if (typeof entry !== 'string') {
-    throw new TheoClawConfigError(`${manifestPath} declares no playwright-mcp bin`, { variable: 'THEOCLAW_BROWSER' })
+    throw new TheoClawConfigError(`${manifestPath} declares no playwright-mcp bin`, {
+      variable: 'THEOCLAW_BROWSER',
+    })
   }
   return join(dirname(manifestPath), entry)
 }
@@ -58,9 +68,12 @@ function resolveCliOrRefuse(resolveCli: () => string): string {
     return resolveCli()
   } catch (error) {
     if (!NOT_RESOLVED.has((error as NodeJS.ErrnoException).code ?? '')) throw error
-    throw new TheoClawConfigError(`THEOCLAW_BROWSER=on needs @playwright/mcp, which does not resolve; run \`pnpm install\``, {
-      variable: 'THEOCLAW_BROWSER',
-    })
+    throw new TheoClawConfigError(
+      `THEOCLAW_BROWSER=on needs @playwright/mcp, which does not resolve; run \`pnpm install\``,
+      {
+        variable: 'THEOCLAW_BROWSER',
+      },
+    )
   }
 }
 
@@ -74,7 +87,9 @@ function browsersDirOf(env: Env, deps: BrowserDeps): string {
       { variable: 'PLAYWRIGHT_BROWSERS_PATH' },
     )
   }
-  return fromEnv === undefined || fromEnv === '' ? join(homedir(), '.cache', 'ms-playwright') : fromEnv
+  return fromEnv === undefined || fromEnv === ''
+    ? join(homedir(), '.cache', 'ms-playwright')
+    : fromEnv
 }
 
 /** A Chromium build directory in `dir`, followed through symlinks: a dangling one does not count. */
@@ -89,7 +104,11 @@ function hasChromium(dir: string): boolean {
     if (code === 'ENOENT' || code === 'ENOTDIR') return false
     throw error
   }
-  return names.some((name) => CHROMIUM_BUILD.test(name) && statSync(join(dir, name), { throwIfNoEntry: false })?.isDirectory() === true)
+  return names.some(
+    (name) =>
+      CHROMIUM_BUILD.test(name) &&
+      statSync(join(dir, name), { throwIfNoEntry: false })?.isDirectory() === true,
+  )
 }
 
 /**
@@ -100,23 +119,29 @@ export function readBrowser(env: Env, deps: BrowserDeps = {}): BrowserSettings |
   const value = env.THEOCLAW_BROWSER
   if (value === undefined || value === '') return undefined
   if (value !== 'on') {
-    throw new TheoClawConfigError(`THEOCLAW_BROWSER must be "on" or unset, not "${value}"`, { variable: 'THEOCLAW_BROWSER' })
+    throw new TheoClawConfigError(`THEOCLAW_BROWSER must be "on" or unset, not "${value}"`, {
+      variable: 'THEOCLAW_BROWSER',
+    })
   }
   const cliPath = resolveCliOrRefuse(deps.resolveCli ?? defaultResolveCli)
   const dir = browsersDirOf(env, deps)
   if (!hasChromium(dir)) {
-    throw new TheoClawConfigError(`THEOCLAW_BROWSER=on found no Chromium build in ${dir}; ${INSTALL_HINT}`, {
-      variable: 'THEOCLAW_BROWSER',
-    })
+    throw new TheoClawConfigError(
+      `THEOCLAW_BROWSER=on found no Chromium build in ${dir}; ${INSTALL_HINT}`,
+      {
+        variable: 'THEOCLAW_BROWSER',
+      },
+    )
   }
   return { cliPath }
 }
 
 /** The start line that says whether the browser is on. */
 export function browserLine(settings: BrowserSettings | undefined): string {
-  return settings === undefined
-    ? 'tools: browser is off (THEOCLAW_BROWSER unset)'
-    : 'tools: browser is on (headless chromium, isolated profile)'
+  if (settings === undefined) return 'tools: browser is off (THEOCLAW_BROWSER unset)'
+  return settings.cdpEndpoint === undefined
+    ? 'tools: browser is on (headless chromium, isolated profile)'
+    : 'tools: browser is on (headless chromium, persistent profile shared by sessions)'
 }
 
 /**
@@ -129,7 +154,10 @@ export function browserServer(settings: BrowserSettings): McpServerConfig {
   return {
     type: 'stdio',
     command: process.execPath,
-    args: [PROXY_PATH, settings.cliPath, '--headless', '--isolated', '--config', CONFIG_PATH],
+    args:
+      settings.cdpEndpoint === undefined
+        ? [PROXY_PATH, settings.cliPath, '--headless', '--isolated', '--config', CONFIG_PATH]
+        : [PROXY_PATH, settings.cliPath, '--cdp-endpoint', settings.cdpEndpoint],
     // One step's calls run in the order listed: a wait or snapshot must not run while a navigate loads.
     sequential: true,
   }

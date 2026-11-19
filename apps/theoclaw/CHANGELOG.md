@@ -13,6 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- With `THEOCLAW_BROWSER=on` the instance runs one Chromium on a persistent profile (`.theoclaw/browser-profile`) that every `/control` session attaches to over loopback CDP, so a login survives between turns and two sessions can use the browser at once (#1152).
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
 - CodeQL alerts (#1726): the capture proxy forwards only `http:` URLs, `skills publish` and the control client accept only http(s) and ws(s) addresses, and `sessions share` creates its file without following a planted link.
 
