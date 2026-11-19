@@ -5,6 +5,7 @@ import { Agent } from '@theokit/agents'
 import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
 import {
   planTranscriptGC,
+  protectedTranscriptPaths,
   runTranscriptGC,
   type RunTranscriptGCResult,
   type TranscriptGCPlan,
@@ -129,6 +130,24 @@ function hasOtherTranscript(plan: TranscriptGCPlan, id: string, except: string):
     .some((path) => existsSync(path))
 }
 
+/**
+ * True when `id` is protected by the framework's rules (pointer, most recent, writer lease) or by
+ * TheoCode's own provider, archived or not: either of its two transcript names is protected, or the
+ * id itself is. Read fresh on every call — protection can change during an apply.
+ */
+function isIdentityProtected(
+  plan: TranscriptGCPlan,
+  id: string,
+  protectedIds: () => ReadonlyMap<string, string>,
+): boolean {
+  if (protectedIds().has(id)) return true
+  const paths = protectedTranscriptPaths(plan.cwd, plan.root)
+  return (
+    paths.has(transcriptPath(plan.root, plan.cwd, id)) ||
+    paths.has(legacyTranscriptPath(plan.root, plan.cwd, id))
+  )
+}
+
 interface CollectContext {
   plan: TranscriptGCPlan
   apply: boolean
@@ -167,7 +186,7 @@ async function collectCandidate(ctx: CollectContext, candidate: Candidate): Prom
         candidate.id !== undefined &&
         id === candidate.id &&
         ctx.registered.has(id) &&
-        !protectedIds().has(id) &&
+        !isIdentityProtected(plan, id, protectedIds) &&
         !hasOtherTranscript(plan, id, candidate.transcript)
           ? ctx.remove(id)
           : undefined,
@@ -196,7 +215,9 @@ export async function listIncludingArchived(
 ): Promise<{ agentId: string; archived?: boolean }[]> {
   const r = await list({ runtime: 'local', cwd, includeArchived: true })
   if (r.nextCursor !== undefined) {
-    throw new Error(`the agent listing returned a cursor (${r.nextCursor}) this version cannot drain`)
+    throw new Error(
+      `the agent listing returned a cursor (${r.nextCursor}) this version cannot drain`,
+    )
   }
   return r.items
 }
