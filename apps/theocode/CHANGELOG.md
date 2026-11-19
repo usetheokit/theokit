@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Removed
+- **The unused `writeCredential` wrapper and `StoredOAuthCredential` type in `auth/credentials.ts`.** Sign-in already writes through the framework's `loginWithApiKey`; nothing called the wrapper, and `knip` flagged both.
+
 ### Added
 - **A standalone consumer install (`standalone/`).** TheoCode's five manifests, with `@theokit/agents`, `@theokit/agents-pty` and `@theokit/presenter` pinned to their registry releases and no `workspace:*` left, its own `pnpm-workspace.yaml` and a committed `pnpm-lock.yaml`. `standalone/auth.test.mjs` imports `@theokit/agents/auth` from that install and exercises `loginWithApiKey`, `refreshOAuthTokens` and `ensureFreshCredential`; `tools/standalone-consumer.test.mjs` keeps the manifests in step with the real ones. (#2276)
 
