@@ -424,7 +424,7 @@ interface SdkTurnHandle {
   wait(): Promise<{ result?: string; status?: string; error?: { code?: string; message: string }
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number } }>
-  stream?(): AsyncIterable<SdkMessageLike | number> // SDK messages feed translateSdkEvent; `number` keeps handles that yield bare values compiling
+  stream?(): AsyncIterable<SdkMessageLike> // SDK messages feed translateSdkEvent without a cast
   cancel?(): unknown
 }
 ```

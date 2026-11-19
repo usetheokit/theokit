@@ -62,16 +62,19 @@ describe('agentRunPort', () => {
 
   it('drains the stream before waiting', async () => {
     const order: string[] = []
-    const b = boundary(async () => ({
-      stream: async function* () {
-        order.push('stream')
-        yield 1
-      },
-      wait: async () => {
-        order.push('wait')
-        return { status: 'finished', result: 'x' }
-      },
-    }))
+    const b = boundary(
+      async () =>
+        ({
+          stream: async function* () {
+            order.push('stream')
+            yield 1
+          },
+          wait: async () => {
+            order.push('wait')
+            return { status: 'finished', result: 'x' }
+          },
+        }) as unknown as SdkTurnHandle,
+    )
     await agentRunPort(b.withAgent)('p', signal)
     expect(order).toEqual(['stream', 'wait'])
   })

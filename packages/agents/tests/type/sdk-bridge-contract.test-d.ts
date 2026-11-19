@@ -62,7 +62,6 @@ describe('existing handle contracts still compile', () => {
   it('passes a streamed message to the translator without a cast', async () => {
     const turn = {} as SdkTurnHandle
     for await (const streamed of turn.stream?.() ?? []) {
-      if (typeof streamed !== 'object') continue
       const message: SdkMessageLike = streamed
       expectTypeOf(translateSdkEvent(message, 'r')).toEqualTypeOf<AgentStreamEvent[]>()
     }
