@@ -854,7 +854,7 @@ export interface SdkTurnHandle {
     result?: string
     usage?: { totalTokens?: number }
     status?: string
-    error?: { message: string; code?: string }
+    error?: { message: string }
   }>
   stream?: () => AsyncIterable<unknown>
 }
