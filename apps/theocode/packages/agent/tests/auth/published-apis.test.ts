@@ -12,7 +12,6 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -140,34 +139,45 @@ describe('@theokit/agents released auth APIs', () => {
     }
   })
 
-  it('a consumer outside the repository can import and call the released package', () => {
-    // A directory with its own node_modules and no link to this working tree: the package is the
-    // released one that resolved here, reached the way an installed dependency would be.
-    const pkgDir = realpathSync(
-      join(dirname(fileURLToPath(import.meta.resolve('@theokit/agents/auth'))), '..'),
-    )
-    // The resolved package is an installed registry copy, not the repository's source tree.
-    expect(pkgDir).not.toMatch(/[\\/]packages[\\/]agents$/)
-    mkdirSync(join(home, 'consumer/node_modules/@theokit'), { recursive: true })
-    symlinkSync(pkgDir, join(home, 'consumer/node_modules/@theokit/agents'), 'dir')
-    writeFileSync(join(home, 'consumer/package.json'), '{"type":"module"}')
+  it('an isolated consumer installs the released package from the registry and uses all three APIs', () => {
+    // No link to this working tree: a fresh directory, its own `npm install` from the registry.
+    const consumer = join(home, 'consumer')
+    mkdirSync(consumer, { recursive: true })
     writeFileSync(
-      join(home, 'consumer/main.mjs'),
-      `import { loginWithApiKey, readAuthFile, refreshOAuthTokens } from '@theokit/agents/auth'
+      join(consumer, 'package.json'),
+      JSON.stringify({ type: 'module', private: true, dependencies: { '@theokit/agents': '^16.11.0' } }),
+    )
+    execFileSync('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts'], {
+      cwd: consumer,
+      stdio: 'pipe',
+    })
+    const installed = JSON.parse(
+      readFileSync(join(consumer, 'node_modules/@theokit/agents/package.json'), 'utf8'),
+    ) as { version: string }
+    expect(realpathSync(join(consumer, 'node_modules/@theokit/agents'))).toContain(consumer)
+    expect(installed.version).toMatch(/^16\.(1[1-9]|[2-9]\d)\.|^(1[7-9]|[2-9]\d)\./)
+    writeFileSync(
+      join(consumer, 'main.mjs'),
+      `import { loginWithApiKey, readAuthFile, refreshOAuthTokens, ensureFreshCredential, persistOAuthTokens, readStoredOAuth } from '@theokit/agents/auth'
 const store = { home: process.argv[2], dirName: '.c', fileName: 'auth.json' }
+const cfg = { provider: 'openai', authorizeEndpoint: 'x', tokenEndpoint: 'https://t', clientId: 'c', scopes: [], redirectUri: 'r' }
+const f = (access, refresh) => async () => new Response(JSON.stringify({ access_token: access, refresh_token: refresh, expires_in: 60 }))
 loginWithApiKey('sk-consumer', store, { provider: 'openai', env: {} })
-const t = await refreshOAuthTokens(
-  { provider: 'openai', authorizeEndpoint: 'x', tokenEndpoint: 'https://t', clientId: 'c', scopes: [], redirectUri: 'r' },
-  'r1',
-  { fetch: async () => new Response(JSON.stringify({ access_token: 'a2', refresh_token: 'r2', expires_in: 60 })), now: () => 0 },
+const t = await refreshOAuthTokens(cfg, 'r1', { fetch: f('a2', 'r2'), now: () => 0 })
+const store2 = { ...store, home: process.argv[2] + '-oauth' }
+persistOAuthTokens('openai', { access: 'stale', refresh: 'r0', expires: 10 }, store2, {})
+const fresh = await ensureFreshCredential(
+  { kind: 'oauth', provider: 'openai', apiKey: 'stale', source: 'file', inferred: false, expiresAt: 10 },
+  { config: cfg, store: store2, env: {} },
+  { fetch: f('a3', 'r3'), now: () => 1_000_000 },
 )
-console.log(JSON.stringify({ key: readAuthFile(store, {}).api_key, access: t.access }))
+console.log(JSON.stringify({ key: readAuthFile(store, {}).api_key, access: t.access, fresh: fresh.apiKey, stored: readStoredOAuth(store2, {}).refresh }))
 `,
     )
-    const out = execFileSync('node', [join(home, 'consumer/main.mjs'), join(home, 'store')], {
-      cwd: join(home, 'consumer'),
+    const out = execFileSync('node', [join(consumer, 'main.mjs'), join(home, 'store')], {
+      cwd: consumer,
       encoding: 'utf8',
     })
-    expect(JSON.parse(out)).toEqual({ key: 'sk-consumer', access: 'a2' })
-  })
+    expect(JSON.parse(out)).toEqual({ key: 'sk-consumer', access: 'a2', fresh: 'a3', stored: 'r3' })
+  }, 240_000)
 })
