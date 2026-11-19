@@ -11,9 +11,7 @@ import { join } from 'node:path'
 import { transcriptPath } from '@theokit/agents/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import {
-  planAndRunCurrentProjectGC,
-} from '../../../../cli/src/commands/sessions.js'
+import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
 
 const DAY = 86_400_000
 const NOW = new Date('2026-08-13T12:00:00Z').getTime()
