@@ -4,9 +4,9 @@ import { resolve } from 'node:path'
 import type { TheoConfig } from '../../../config/schema.js'
 import { jobBackendFromConfig } from '../../../server/jobs/job-backend-from-config.js'
 import type { JobBackend } from '../../../server/jobs/job-backend.js'
+import type { JobDefinition } from '../../../server/jobs/job-handler-types.js'
 import type { JobManifest } from '../../../server/jobs/job-manifest.js'
 import { createJobRunner } from '../../../server/jobs/job-runner.js'
-import type { JobDefinition } from '../../../server/jobs/job-handler-types.js'
 import { createJobWorker, type JobWorker } from '../../../server/jobs/job-worker.js'
 
 /**
