@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  type AgentStreamEvent,
   type SdkMessage,
   translateInteractionUpdate,
   translateSdkEvent,
@@ -15,8 +16,8 @@ import { createEventMask } from './event-mask.js'
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
-/** One event as `translateSdkEvent` returns it. */
-export type TurnEvent = ReturnType<typeof translateSdkEvent>[number]
+/** One event as the bridge translators return it. */
+export type TurnEvent = AgentStreamEvent
 
 /**
  * How a turn ended. `reason` says why a failed or cancelled one ended, for stderr; it is never sent
