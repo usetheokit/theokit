@@ -55,7 +55,7 @@ export function withLocalCommands(runner: TurnRunner, context: LocalCommandConte
     const reply = await answer(message, context)
     if (reply === undefined) return runner(message, emit, signal)
     emit({ type: 'text_delta', content: reply })
-    emit({ type: 'done' })
+    emit({ type: 'done', result: reply, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 0 })
     return { ok: true }
   }
 }

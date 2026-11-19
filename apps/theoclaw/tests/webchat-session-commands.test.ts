@@ -7,7 +7,7 @@ function collect() {
   const events: TurnEvent[] = []
   const emit = (event: TurnEvent): void => void events.push(event)
   const text = (): string => events.map((e) => (e.type === 'text_delta' ? String(e.content) : '')).join('')
-  return { emit, text }
+  return { emit, text, events }
 }
 
 function build(runner: TurnRunner) {
@@ -74,5 +74,19 @@ describe('WebChat slash commands', () => {
     await run('/stop', stop.emit)
     expect(stop.text()).toBe('Stopped 1 running turn.')
     expect(await turn).toMatchObject({ ok: false, code: 'turn_cancelled' })
+  })
+})
+
+describe('WebChat local command done event', () => {
+  it('ends the reply with a complete done carrying the reply text and zero usage', async () => {
+    const { turnFor } = build(vi.fn<TurnRunner>())
+    const c = collect()
+    await turnFor('c1')('/stop', c.emit)
+    expect(c.events.at(-1)).toEqual({
+      type: 'done',
+      result: 'Nothing is running to stop.',
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      durationMs: 0,
+    })
   })
 })
