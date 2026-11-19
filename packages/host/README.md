@@ -47,6 +47,7 @@ await restore({ from: '/srv/backups/2026-11-19', roots })
 
 - Each root is copied to `<out>/<name>`; `manifest.json` (path, sha256, size per file) is written last, atomically. Directories are 0700 and files 0600.
 - A symbolic link in a root makes `backup` reject with a `BackupError` naming it. A failed backup removes its output.
+- A root that is itself a symbolic link is rejected too. Backups are portable between POSIX systems; a file name holding a backslash (legal on POSIX only) cannot be restored on Windows, where `restore` refuses it.
 - SQLite files (found by header) are snapshotted with the `node:sqlite` backup API, without their `-wal`, `-shm` and `-journal` files.
 - `restore` checks every file against the manifest before writing, refuses manifest paths that leave their root, stages each root beside its target, checks the bytes again, then renames into place. An existing target is kept aside and put back if a later root fails to place.
 - The lock protects cooperating writers only; the renames of several roots are not crash-atomic.
