@@ -160,6 +160,9 @@ without one would be an unconfined shell, and making it unrepresentable is cheap
 the builder, the *posture* decides whether auto-approval is even permissible (it carries the sandbox
 posture as evidence, so "auto-approve without confinement" cannot be expressed), and the *resolver*
 settles an individual request. `./ask` is the inverse channel — the agent asking you.
+A surface reads the open question with `bridge.pending(threadId)` (a read, not a second listener)
+and learns of changes with `bridge.onChange(fn)`, which fires after a question is asked, answered,
+abandoned or failed and returns its own disposer.
 
 **Sessions are deleted carefully or not at all.** `./session` refuses to collect a transcript that a
 live writer holds, floors both `keepLast` and `maxAgeDays`, and plans before it applies. When your
