@@ -1,6 +1,7 @@
-import type { AgentOutputEvent } from '../agent-output-event.js'
+import type { AgentOutputEvent, ToolRefusal } from '../agent-output-event.js'
 import type { Presenter } from '../presenter.js'
 import type { WireChunk } from '../wire/chunk-schema.js'
+import { WIRE_TOOL_REFUSAL_PART } from '../wire/constants.js'
 
 /**
  * The frame type is TheoKit's own since the `remove-ai-dependency` plan; it is structurally the
@@ -93,7 +94,13 @@ export class UIMessageStreamPresenter implements Presenter<UIMessageChunk> {
       case 'tool-result':
         return [
           ...this.#closeOpenBlock(),
-          ...this.#emitToolResult(event.callId, event.name, event.result, event.isError ?? false),
+          ...this.#emitToolResult(
+            event.callId,
+            event.name,
+            event.result,
+            (event.isError ?? false) || event.refusal !== undefined,
+            event.refusal,
+          ),
         ]
       case 'error':
         // Surface the failure as an ai-sdk error chunk (fail-clear); the host stops and calls finish().
@@ -189,6 +196,7 @@ export class UIMessageStreamPresenter implements Presenter<UIMessageChunk> {
     name: string,
     result: unknown,
     isError: boolean,
+    refusal?: ToolRefusal,
   ): UIMessageChunk[] {
     const out: UIMessageChunk[] = []
     if (!this.#seen.has(callId)) {
@@ -206,6 +214,17 @@ export class UIMessageStreamPresenter implements Presenter<UIMessageChunk> {
     if (isError) {
       // The tool's own stderr reached the browser verbatim until #390. See `onError` for why the
       // model does not lose anything by this being masked.
+      if (refusal !== undefined) {
+        out.push({
+          type: WIRE_TOOL_REFUSAL_PART,
+          data: {
+            toolCallId: callId,
+            by: refusal.by,
+            ...(refusal.reason !== undefined ? { reason: refusal.reason } : {}),
+          },
+          transient: true,
+        })
+      }
       out.push({
         type: 'tool-output-error',
         toolCallId: callId,

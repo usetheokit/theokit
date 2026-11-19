@@ -1,80 +1,72 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { handleFork } from '../../src/commands/session-commands.js'
-import { forkCurrentSessionWith } from '../../src/persistence/fork-session.js'
+import { forkCurrentSessionWith, noteTurnStart } from '../../src/persistence/fork-session.js'
 
-function harness(fork: (from: string, to: string) => Promise<{ newId: string; copied: boolean }>) {
-  let current = 'a'
-  let blocked = false
-  const commit = vi.fn((id: string) => {
-    current = id
-  })
-  return {
-    commit,
-    move: (id: string) => {
-      current = id
-    },
-    block: () => {
-      blocked = true
-    },
-    run: () =>
-      forkCurrentSessionWith({
-        newId: () => 'b',
-        fork,
-        current: () => current,
-        commit,
-        shouldCommit: () => !blocked,
-      }),
-  }
-}
-
-describe('forkCurrentSessionWith with a delayed fork', () => {
-  it('commits when nothing changed while it ran', async () => {
-    const h = harness(async (_f, to) => ({ newId: to, copied: true }))
-    expect(await h.run()).toEqual({ newId: 'b', copied: true })
-    expect(h.commit).toHaveBeenCalledWith('b')
-  })
-
-  it('does not commit when the session changed while it ran', async () => {
-    let release!: () => void
-    const gate = new Promise<void>((r) => (release = r))
-    const h = harness(async (_f, to) => {
-      await gate
-      return { newId: to, copied: true }
+describe('forkCurrentSessionWith', () => {
+  it('commits the copy once an async fork resolves', async () => {
+    const commit = vi.fn()
+    const out = await forkCurrentSessionWith({
+      newId: () => 'b',
+      fork: () => Promise.resolve({ newId: 'b', copied: true }),
+      current: () => 'a',
+      commit,
     })
-    const pending = h.run()
-    h.move('other')
-    release()
-    expect(await pending).toEqual({ newId: 'b', copied: true, switched: false })
-    expect(h.commit).not.toHaveBeenCalled()
+    expect(out).toEqual({ newId: 'b', copied: true })
+    expect(commit).toHaveBeenCalledWith('b')
   })
 
-  it('does not commit when a turn started while it ran', async () => {
-    const h = harness(async (_f, to) => {
-      h.block()
-      return { newId: to, copied: true }
+  it('does not adopt the copy when the session changed while it was pending', async () => {
+    let cur = 'a'
+    const commit = vi.fn()
+    const out = await forkCurrentSessionWith({
+      newId: () => 'b',
+      fork: () => {
+        cur = 'z'
+        return Promise.resolve({ newId: 'b', copied: true })
+      },
+      current: () => cur,
+      commit,
     })
-    expect((await h.run()).switched).toBe(false)
-    expect(h.commit).not.toHaveBeenCalled()
+    expect(out).toEqual({ newId: 'z', copied: false, stale: true })
+    expect(commit).not.toHaveBeenCalled()
   })
 
-  it('reports an absent transcript as not copied', async () => {
-    const h = harness(async () => ({ newId: 'b', copied: false }))
-    expect(await h.run()).toEqual({ newId: 'a', copied: false })
-    expect(h.commit).not.toHaveBeenCalled()
-  })
-})
-
-describe('handleFork reports the real outcome', () => {
-  it('toasts the failure of a rejected fork', async () => {
-    const setToast = vi.fn()
-    await handleFork(() => Promise.reject(new Error('boom')), setToast)
-    expect(setToast.mock.calls[0]![0].message).toMatch(/Fork failed: boom/)
+  it('stays on the current session when nothing was copied, and propagates failure', async () => {
+    const commit = vi.fn()
+    const base = { newId: () => 'b', current: () => 'a', commit }
+    expect(
+      await forkCurrentSessionWith({ ...base, fork: () => ({ newId: 'b', copied: false }) }),
+    ).toEqual({ newId: 'a', copied: false })
+    await expect(
+      forkCurrentSessionWith({ ...base, fork: () => Promise.reject(new Error('x')) }),
+    ).rejects.toThrow('x')
   })
 
-  it('does not claim a copy that did not happen', async () => {
-    const setToast = vi.fn()
-    await handleFork(() => Promise.resolve({ newId: 'a', copied: false }), setToast)
-    expect(setToast.mock.calls[0]![0].message).toMatch(/no prior transcript/)
+  it('does not adopt the copy when a new turn started on the same session meanwhile', async () => {
+    const commit = vi.fn()
+    const out = await forkCurrentSessionWith({
+      newId: () => 'b',
+      fork: () => {
+        noteTurnStart()
+        return Promise.resolve({ newId: 'b', copied: true })
+      },
+      current: () => 'a',
+      commit,
+    })
+    expect(out).toEqual({ newId: 'a', copied: false, stale: true })
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('a fork started after a turn began is not stale from earlier turns', async () => {
+    noteTurnStart()
+    const commit = vi.fn()
+    const out = await forkCurrentSessionWith({
+      newId: () => 'b',
+      fork: () => Promise.resolve({ newId: 'b', copied: true }),
+      current: () => 'a',
+      commit,
+    })
+    expect(out.copied).toBe(true)
+    expect(commit).toHaveBeenCalledWith('b')
   })
 })

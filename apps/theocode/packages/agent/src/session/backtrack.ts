@@ -10,6 +10,8 @@ import {
   transcriptRoot,
 } from '@theokit/agents/persistence'
 
+import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
+
 import { protectedSessions } from './session-ops.js'
 import type { SessionRecord } from '@theokit/agents'
 
@@ -49,7 +51,7 @@ function isRealUserTurn(record: SessionRecord): boolean {
   if (record.type !== 'user') return false
   const hasText = textBlocks(record).some((t) => t.length > 0)
   if (!hasText) return false
-  return !textOf(record).startsWith('[[theokit:goal-continuation]]')
+  return !textOf(record).startsWith(GOAL_CONTINUATION_MARKER)
 }
 
 interface TruncationResult {

@@ -24,7 +24,13 @@ format — so no surface leaks into the contract.
 pnpm add @theokit/presenter
 ```
 
-Peers: `@theokit/sdk` and `zod`.
+Peers (`@theokit/sdk` and `zod`) are optional. What each entry needs:
+
+- `@theokit/presenter` (root): neither at runtime.
+- `@theokit/presenter/wire`: `zod`.
+- The `.d.ts` files reference types from both packages, so a TypeScript consumer without them needs `skipLibCheck` (or installs them as devDependencies).
+
+New root exports must stay free of runtime imports of either peer; `tests/root-entry-has-no-runtime-peers.test.ts` pins it.
 
 ## The canonical event
 
@@ -58,6 +64,21 @@ for (const message of sdkMessages) {
 not from `status`, because the SDK reports every finished call as `completed`. An absent or non-numeric
 exit code is not a failure.
 
+`fromRunTimelineEvent` is the door for `run.events()`, the SDK's one ordered timeline of messages and
+token deltas. It drops text a message repeats (`textAlreadyStreamed`), repeated reasoning and repeated
+tool lifecycle points, and holds a tool result until the other report can mark it failed. Keep one
+state per run and flush it when the timeline ends:
+
+```typescript
+import { createRunTimelineState, flushRunTimeline, fromRunTimelineEvent } from '@theokit/presenter'
+
+const state = createRunTimelineState()
+for await (const item of run.events()) {
+  for (const event of fromRunTimelineEvent(item, state)) render(event)
+}
+for (const event of flushRunTimeline(state)) render(event)
+```
+
 `fromWireChunk` is the other door — from the transport wire into the canonical event, which is what
 a client-side surface receives. `createWireReader()` wraps it with the state a stream needs: it keeps
 the call-name map and attaches the `data-error-code` code (`WIRE_ERROR_CODE_PART`) to the next `error` event. `fromInteractionUpdate` covers interactive runs.
@@ -70,6 +91,17 @@ key is unknown — never a silent fallback.
 
 `foldTurnLifecycle` collapses a turn's events into a `TurnLifecycle` when a surface wants the
 outcome rather than the stream.
+
+Pass `{ messageBoundary: 'tool-call' }` as the third argument to split a preamble from the answer:
+text seen before a tool call is emitted as its own completed message item (`message_0`,
+`message_1`, ...) when the call arrives, and only the remainder is emitted at `finish`. The default,
+`'none'`, keeps one concatenated `message` item. A `tool-result` chunk with `isError: true` reaches
+`itemCompleted` with `isError: true`.
+
+`contentChunkFromEvent(event)` turns an `AgentOutputEvent` into the `ContentChunk` the fold reads,
+or `null` for events it does not model (reasoning, partial tool calls, status, finish).
+`finalMessageOf(events)` returns the trimmed text after the last tool call, or all the text when
+the turn made no tool call.
 
 ## Tool kinds
 
@@ -92,6 +124,18 @@ Lookup is exact by design. A name that is not in the table gives `undefined`, ne
 - The SDK runtime: an object `{stdout, stderr, exitCode}`.
 
 When both exit-code spellings are present and differ, `exitCode` wins. A missing exit code stays `undefined`, never 0. `{ok: false, error}` reads as `error` (`tool_failed` when absent, `stderr` as `detail`); `{ok: true, diff}` and a raw unified diff string read as `diff`; anything else is `text`.
+
+## Pending approvals
+
+`pendingApprovals(messages)` returns every outstanding approval across wire messages, in order, as `PendingApproval { approvalId, toolCallId, toolName, input, question?, timeoutMs? }`. With nothing outstanding it returns one shared empty array. `readPendingApproval(part)` reads a single part. A part in `approval-requested` without a string `approval.id` is skipped, never settled by its `toolCallId`, because `approve()` could not settle it.
+
+## Turn metadata
+
+`readTurnMetadata(chunk)` (from `@theokit/presenter/wire`) reads a `finish` chunk's `messageMetadata` as a `WireTurnMetadata { usage?, cost?, durationMs?, stopReason?, model? }`. Fields of the wrong type are dropped rather than thrown on, and an unknown `stopReason` is dropped. It returns `undefined` for any other chunk or a finish without object metadata. A `stopReason` of `'step_limit'` or `'no_progress'` means the turn was cut, not finished.
+
+## Refused tool calls
+
+`AgentToolResultEvent.refusal?: ToolRefusal` (`{ by: 'human' | 'timeout' | 'policy' | 'hook' | 'plugin', reason? }`) marks a result as refused rather than run. `UIMessageStreamPresenter` sends it as a transient `data-tool-refusal` part (`WIRE_TOOL_REFUSAL_PART`, from `./wire`) just before the `tool-output-error`, and `readMessageStream` sets `refusal` on that tool part. The text the model reads does not change.
 
 ## Subpaths
 

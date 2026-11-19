@@ -1,3 +1,5 @@
+import type { LlmCallContext, PreUserSendContext } from '@theokit/sdk'
+
 /**
  * M10 (theokit-ai-first) — createToolHooksPlugin: `beforeToolCall` / `afterToolCall` observability.
  *
@@ -53,20 +55,11 @@ export interface ToolHooks {
   processInput?: (ctx: ProcessInputContext) => string | undefined | Promise<string | undefined>
 }
 
-/** Context of the input seam (mirrors the SDK `PreUserSendContext`). */
-export interface ProcessInputContext {
-  prompt: string
-  agentId: string
-  runId: string
-}
+/** Context of the input seam: the SDK `PreUserSendContext` fields this layer reads. */
+export type ProcessInputContext = Pick<PreUserSendContext, 'prompt' | 'agentId' | 'runId'>
 
-/** Context of an LLM turn (mirrors the SDK `LlmCallContext` for `pre_llm_call`/`post_llm_call`). */
-export interface LLMCallContext {
-  agentId: string
-  runId: string
-  /** 0-based iteration index of the current turn, when available. */
-  iteration?: number
-}
+/** Context of an LLM turn, for `pre_llm_call`/`post_llm_call`: the SDK's `LlmCallContext`. */
+export type LLMCallContext = LlmCallContext
 
 /**
  * Minimal SDK hook context (type-only — no runtime import, keeps the SDK peer optional). Tool hooks

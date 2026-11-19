@@ -1,27 +1,45 @@
+let submissions = 0
+
+/**
+ * Called synchronously whenever the user submits input, before any async work a turn does. A fork
+ * still copying the transcript then knows the session was used and must not be adopted.
+ */
+export function noteTurnStart(): void {
+  submissions += 1
+}
+
+/** How many turns have started; lets a caller tell whether one started since it last looked. */
+export function turnStartCount(): number {
+  return submissions
+}
+
+/** `stale`: the copy finished but the session had moved on, so it was not adopted. */
 export interface ForkResult {
   newId: string
   copied: boolean
-  /** `false` when the copy was made but the live session changed meanwhile, so it was not adopted. */
-  switched?: boolean
+  stale?: boolean
 }
 
 export interface ForkDeps {
   newId: () => string
-  fork: (from: string, to: string) => Promise<{ newId: string; copied: boolean }>
+  fork: (
+    from: string,
+    to: string,
+  ) => { newId: string; copied: boolean } | Promise<{ newId: string; copied: boolean }>
   current: () => string
   commit: (id: string) => void
-  /** Extra veto checked after the fork finishes (e.g. a turn started meanwhile). */
-  shouldCommit?: () => boolean
 }
 
 export async function forkCurrentSessionWith(deps: ForkDeps): Promise<ForkResult> {
+  const candidate = deps.newId()
   const from = deps.current()
-  const out = await deps.fork(from, deps.newId())
+  const seen = submissions
+  const out = await deps.fork(from, candidate)
   if (!out.copied) return { newId: deps.current(), copied: false }
-  // The fork is async: if the user moved to another session, or a turn began, adopting the copy
-  // would replace the live session with a stale one.
-  if (deps.current() !== from || deps.shouldCommit?.() === false) {
-    return { newId: out.newId, copied: true, switched: false }
+  // The session may have moved, or a new turn started on it, while the copy was pending: adopting
+  // the copy would repoint the user away from where they are, or drop that turn from the transcript.
+  if (deps.current() !== from || submissions !== seen) {
+    return { newId: deps.current(), copied: false, stale: true }
   }
   deps.commit(out.newId)
   return out

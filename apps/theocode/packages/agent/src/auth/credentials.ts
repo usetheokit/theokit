@@ -1,16 +1,13 @@
 // This module READS credentials; it contains none. The filename matches the repository's
 // secret-pattern gate (`credentials*`), so it is flagged on every diff that touches it — verified
 // on 2026-08-08: no key material, no tokens, no PEM blocks. Every `apiKey` here is a parameter name
-// or a type field, and the only long literal is a class name. Provider inference compares PREFIXES
-// (`apiKey.startsWith(prefix)`), which is the opposite of embedding one.
-//
+// or a type field, and the only long literal is a class name. //
 // Keep it that way: values belong in the store the SDK writes at 0600, never in source.
 import {
   authFilePath as storeAuthFilePath,
   AuthProvider,
   CredentialError,
   credentialHome as storeCredentialHome,
-  writeCredential as writeStoreCredential,
 } from '@theokit/agents/auth'
 import { isTransientError } from '@theokit/agents'
 import {
@@ -26,6 +23,7 @@ import { OPENAI_OAUTH_CONFIG, credentialStore } from './oauth-config.js'
 
 const PROVIDERS = ['openrouter', 'anthropic', 'openai'] as const
 export type Provider = (typeof PROVIDERS)[number]
+export const PROVIDER_NAMES: readonly Provider[] = PROVIDERS
 
 /**
  * The provider table, DERIVED from the framework's defaults instead of hand-written.
@@ -131,21 +129,6 @@ export interface ResolvedCredential {
 }
 
 /**
- * Which provider issued this key.
- *
- * The longest-prefix scan lived here; `DESCRIPTORS` now carries the prefixes, so what remains is the
- * narrowing to this product's union. Ordering by length is still explicit rather than assumed —
- * every OpenRouter and Anthropic key also starts with `sk-`, and a shortest-match-first scan calls
- * them OpenAI.
- */
-export function inferProvider(apiKey: string): Provider | undefined {
-  const byLength = [...DESCRIPTORS].sort(
-    (a, b) => (b.keyPrefix ?? '').length - (a.keyPrefix ?? '').length,
-  )
-  return byLength.find((d) => apiKey.startsWith(d.keyPrefix ?? ''))?.name as Provider | undefined
-}
-
-/**
  * The resolution chain — the framework's since `@theokit/agents@9.2.1`.
  *
  * ~165 lines lived here: the declared-provider pin, the env precedence walk, the file reader with
@@ -165,16 +148,6 @@ export function inferProvider(apiKey: string): Provider | undefined {
  * lossy one — `credential-helpers.ts` re-derives the origin from it with a regex — so this is a
  * translation to keep, not a difference to celebrate.
  */
-/** The stored OAuth shape, narrowed to this product's `Provider` union — the same refinement as `ResolvedCredential`. */
-export interface StoredOAuthCredential {
-  type: 'oauth'
-  provider: Provider
-  access: string
-  refresh: string
-  expires: number
-  account_id?: string
-}
-
 /**
  * Refuse a key whose prefix contradicts its declared provider, on the WRITE path.
  *
@@ -182,7 +155,7 @@ export interface StoredOAuthCredential {
  * mistake originates — `theocode auth login --provider anthropic` with an OpenAI key — and catching
  * it here means the bad pair never reaches disk.
  */
-function assertPairMatches(provider: Provider, apiKey: string, where: string): void {
+export function assertPairMatches(provider: Provider, apiKey: string, where: string): void {
   const expected = PREFIXES[provider]
   if (expected !== undefined && expected !== '' && !apiKey.startsWith(expected)) {
     throw new CredentialError(
@@ -236,37 +209,6 @@ export function resolveCredential(opts: {
     }
     throw err
   }
-}
-
-function isOAuthWrite(
-  c: { provider: Provider; apiKey: string } | StoredOAuthCredential,
-): c is StoredOAuthCredential {
-  return 'type' in c && c.type === 'oauth'
-}
-
-export function writeCredential(
-  cred: { provider: Provider; apiKey: string } | StoredOAuthCredential,
-  home: string,
-  env: Record<string, string | undefined> = {},
-): string {
-  if (isOAuthWrite(cred)) {
-    if (cred.access.length === 0 || cred.refresh.length === 0) {
-      throw new CredentialError(
-        'refusing to write an oauth credential with an empty access/refresh token',
-      )
-    }
-  } else {
-    if (typeof cred.apiKey !== 'string' || cred.apiKey.length === 0) {
-      throw new CredentialError('refusing to write an empty API key')
-    }
-    assertPairMatches(cred.provider, cred.apiKey, 'the credential being written')
-  }
-
-  return writeStoreCredential(
-    isOAuthWrite(cred) ? cred : { provider: cred.provider, apiKey: cred.apiKey },
-    credentialStore(home),
-    env,
-  )
 }
 
 function classifyRefreshFailure(err: unknown): {

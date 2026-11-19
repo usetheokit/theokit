@@ -6,10 +6,12 @@
  * `Interrupted by user` under the cut reply; this does the same, as a `system` line, so the copy
  * and export paths that read the last ASSISTANT text never pick the marker up as the answer.
  */
+import { Text } from 'ink'
 import { render } from 'ink-testing-library'
 import { describe, expect, it, vi } from 'vitest'
 
-import { makeInterruptTurn } from '../../src/agent-session/interrupt.js'
+import { useTurnInterrupt } from '../../src/composition/use-tui-composition.js'
+import { makeInterruptTurn, newForkGate } from '../../src/agent-session/interrupt.js'
 import { INTERRUPTED_TEXT, lastMessageId } from '../../src/rendering/interrupt-marks.js'
 import { useTimeline } from '../../src/rendering/use-timeline.js'
 import { waitFor } from '../helpers/wait-for.js'
@@ -83,5 +85,62 @@ describe('the interrupt records which message it cut', () => {
     makeInterruptTurn(d)()
 
     expect(d.onInterrupted).not.toHaveBeenCalled()
+  })
+
+  it('test_a_second_interrupt_while_the_fork_is_pending_does_not_fork_again', async () => {
+    let finish!: (v: { newId: string; copied: boolean }) => void
+    const d = deps({
+      forkSession: vi.fn(
+        () => new Promise<{ newId: string; copied: boolean }>((r) => (finish = r)),
+      ),
+    })
+    const interrupt = makeInterruptTurn(d)
+    interrupt()
+    interrupt()
+    expect(d.abort).toHaveBeenCalledTimes(2)
+    expect(d.forkSession).toHaveBeenCalledOnce()
+    finish({ newId: 'n', copied: true })
+    await new Promise((r) => setTimeout(r, 0))
+    interrupt()
+    expect(d.forkSession).toHaveBeenCalledTimes(2)
+  })
+
+  it('test_an_async_fork_failure_is_reported', async () => {
+    const d = deps({ forkSession: vi.fn(() => Promise.reject(new Error('boom'))) })
+    makeInterruptTurn(d)()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(d.onForkFailure).toHaveBeenCalledOnce()
+  })
+
+  it('test_the_in_flight_guard_survives_a_rebuilt_handler', () => {
+    // The TUI rebuilds the handler on every render; the guard must be shared between the builds.
+    const inFlight = newForkGate()
+    const d = deps({ forkSession: vi.fn(() => new Promise<never>(() => undefined)) })
+    makeInterruptTurn(d, inFlight)()
+    makeInterruptTurn(d, inFlight)()
+    expect(d.forkSession).toHaveBeenCalledOnce()
+  })
+})
+
+describe('useTurnInterrupt keeps its fork guard across renders', () => {
+  it('test_a_rerender_while_a_fork_is_pending_does_not_allow_a_second_fork', () => {
+    const fork = vi.fn(() => new Promise<never>(() => undefined))
+    let interrupt: (() => void) | undefined
+    const Probe = ({ n }: { n: number }) => {
+      interrupt = useTurnInterrupt({
+        agent: { abort: vi.fn(), thread: [] as never },
+        markInterrupted: vi.fn(),
+        streaming: true,
+        pendingApproval: undefined,
+        forkCurrentSession: fork,
+        screen: { setToast: vi.fn() },
+      })
+      return <Text>{n}</Text>
+    }
+    const { rerender } = render(<Probe n={1} />)
+    interrupt?.()
+    rerender(<Probe n={2} />)
+    interrupt?.()
+    expect(fork).toHaveBeenCalledOnce()
   })
 })

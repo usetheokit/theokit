@@ -178,6 +178,27 @@ export class AgentsController {
 The request is delegated straight to the one agent runtime. Guards run on that route; interceptors
 do not.
 
+## Accepting an upload
+
+`request.formData()` buffers the whole body before any size check can run. `readCappedFormData`
+refuses the body as soon as more than `maxBytes` have arrived (413), and refuses a declared
+`Content-Length` over the cap before the first read. A non-form content type or an unparseable body
+is a 400.
+
+```typescript
+import { Controller, Post, Req, readCappedFormData } from '@theokit/http'
+
+@Controller('api/upload')
+export class UploadController {
+  @Post()
+  async upload(@Req() request: Request) {
+    const form = await readCappedFormData(request, { maxBytes: 25 * 1024 * 1024 })
+    const file = form.get('file') as File
+    return { name: file.name, size: file.size }
+  }
+}
+```
+
 ## `module` and `container`
 
 `TheoApp.create({ module })` resolves providers and controllers through an `@theokit/di`
@@ -231,6 +252,59 @@ const Roles = createDecorator<string[]>()
 | `./app` | App-level composition |
 | `./runtime/node` | The Node runtime adapter |
 | `./action-encryption`, `./server-inserted-html`, `./css-resource` | Opt-in capabilities kept off the main bundle |
+
+## Node server with a disconnect signal
+
+`createNodeServer` from `@theokit/http/runtime/node` serves a Web-standard handler on Node.
+
+```ts
+import { createNodeServer, BindError } from '@theokit/http/runtime/node'
+
+const node = createNodeServer(
+  async (request) => {
+    // Aborts when the client disconnects before the response finished.
+    request.signal.addEventListener('abort', () => cancelTurn())
+    return streamTurn(request)
+  },
+  {
+    onUpgrade: (req, socket, head) => handleWebSocket(req, socket, head), // omitted: 404 and close
+    onError: (error, phase) => log(phase, error),
+  },
+)
+
+try {
+  const { host, port } = await node.listen(3000, '127.0.0.1')
+} catch (e) {
+  if (e instanceof BindError) console.error(e.code, e.host, e.port)
+}
+await node.close({ force: true }) // memoized; force ends open and upgraded sockets
+```
+
+- The signal follows the response's `close`, not the request's, so it is reliable on Node 23+. A response that finishes normally never aborts it. Pass `abortOnDisconnect: false` to turn it off.
+- When the client leaves mid-body, the response body is cancelled so its producer stops.
+- `listen` rejects with `BindError` (`code`, `host`, `port`); after binding, server errors go to `onError(error, 'server')`.
+- `close()` is memoized: concurrent calls share one promise, and the first call decides whether it is forced.
+
+### Trusted proxy identity
+
+When a reverse proxy authenticates the user (Tailscale serve, Caddy, nginx with auth) and forwards the identity in a header, believe it only from the proxy's address:
+
+```ts
+import { createNodeServer, trustedIdentity, peerAddress } from '@theokit/http/runtime/node'
+
+const node = createNodeServer(
+  (request) => new Response(`hello ${trustedIdentity(request) ?? 'anonymous'}`),
+  { trustedProxy: { identityHeader: 'tailscale-user-login', addresses: ['127.0.0.1', '::1'] } },
+)
+```
+
+Caddy: `reverse_proxy 127.0.0.1:3000 { header_up X-Auth-User {http.auth.user.id} }` with `identityHeader: 'x-auth-user'`.
+
+- A request from an allowlisted peer with a non-empty identity header gets `trustedIdentity(request)`; from any other peer it is `undefined`, and the identity header is removed.
+- `x-theokit-peer` and `x-theokit-trusted-identity` supplied by a client are always removed; `peerAddress(request)` is the socket address.
+- `x-forwarded-proto` is honoured only from an allowlisted peer; otherwise the URL protocol is `http:`.
+- `identityHeader` must match `[a-z0-9-]+` and not be `authorization`; `addresses` must be non-empty (`::ffff:` is ignored, case is ignored). Invalid options throw a `TypeError` naming the option.
+- `onUpgrade` receives the raw `IncomingMessage`; use `request.socket.remoteAddress` there.
 
 ## `registerControllers` (low-level)
 

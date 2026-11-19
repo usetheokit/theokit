@@ -455,3 +455,140 @@ describe('deleteSession — a snapshot taken before an await is not a fact after
     lease?.release()
   })
 })
+
+describe('deleteSession with a verifier', () => {
+  const verifierFrom = (answers: boolean[]) => {
+    const calls: string[] = []
+    return {
+      calls,
+      isListedInRegistry: async (id: string) => {
+        calls.push(id)
+        return answers[Math.min(calls.length - 1, answers.length - 1)] as boolean
+      },
+    }
+  }
+
+  it('deleteSession with a verifier reports removed when the id leaves the listing', async () => {
+    writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('keeper', 0)
+    await persistSessionId(CWD, 'keeper', root)
+    const v = verifierFrom([true, false])
+    const result = await deleteSession('doomed', {
+      cwd: CWD,
+      root,
+      removeFromRegistry: async () => undefined,
+      isListedInRegistry: v.isListedInRegistry,
+    })
+    expect(result.registryOutcome).toBe('removed')
+    expect(result.transcriptRemoved).toBe(true)
+    expect(v.calls).toEqual(['doomed', 'doomed'])
+  })
+
+  it('deleteSession with a verifier reports still-present when the remover removes nothing', async () => {
+    writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('keeper', 0)
+    await persistSessionId(CWD, 'keeper', root)
+    const v = verifierFrom([true])
+    const result = await deleteSession('doomed', {
+      cwd: CWD,
+      root,
+      removeFromRegistry: async () => undefined,
+      isListedInRegistry: v.isListedInRegistry,
+    })
+    expect(result.registryOutcome).toBe('still-present')
+  })
+
+  it('deleteSession with a verifier reports nothing-to-remove for an id that was never listed', async () => {
+    const v = verifierFrom([false])
+    const result = await deleteSession('ghost', {
+      cwd: CWD,
+      root,
+      removeFromRegistry: async () => undefined,
+      isListedInRegistry: v.isListedInRegistry,
+    })
+    expect(result.registryOutcome).toBe('nothing-to-remove')
+  })
+
+  it('a verifier that throws gives unconfirmed and keeps the error in registryError', async () => {
+    writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('keeper', 0)
+    await persistSessionId(CWD, 'keeper', root)
+    const boom = new Error('list failed')
+    const result = await deleteSession('doomed', {
+      cwd: CWD,
+      root,
+      removeFromRegistry: async () => undefined,
+      isListedInRegistry: async () => {
+        throw boom
+      },
+    })
+    expect(result.registryOutcome).toBe('unconfirmed')
+    expect(result.registryError).toBe(boom)
+    expect(result.transcriptRemoved).toBe(true)
+  })
+
+  it('a verifier that exceeds registryTimeoutMs gives unconfirmed', async () => {
+    const result = await deleteSession('ghost', {
+      cwd: CWD,
+      root,
+      registryTimeoutMs: 10,
+      removeFromRegistry: async () => undefined,
+      isListedInRegistry: () => new Promise<boolean>(() => undefined),
+    })
+    expect(result.registryOutcome).toBe('unconfirmed')
+    expect(result.registryError).toBeInstanceOf(Error)
+  })
+
+  it('reads before the remover and after it, in that order', async () => {
+    writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('keeper', 0)
+    await persistSessionId(CWD, 'keeper', root)
+    const log: string[] = []
+    let listed = true
+    await deleteSession('doomed', {
+      cwd: CWD,
+      root,
+      removeFromRegistry: async () => {
+        log.push('remove')
+        listed = false
+      },
+      isListedInRegistry: async () => {
+        log.push(`read:${String(listed)}`)
+        return listed
+      },
+    })
+    expect(log).toEqual(['read:true', 'remove', 'read:false'])
+  })
+
+  it('a session protected during the after-read is not deleted', async () => {
+    const path = writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('other', 0)
+    let lease: { release: () => void } | undefined
+    let reads = 0
+    await expect(
+      deleteSession('doomed', {
+        cwd: CWD,
+        root,
+        removeFromRegistry: async () => undefined,
+        isListedInRegistry: async () => {
+          reads += 1
+          if (reads === 2) lease = await acquireSessionWriter(path)
+          return false
+        },
+      }),
+    ).rejects.toBeInstanceOf(SessionInUseError)
+    expect(existsSync(path)).toBe(true)
+    lease?.release()
+  })
+
+  it('does not call the verifier without a remover', async () => {
+    const v = verifierFrom([true])
+    const result = await deleteSession('ghost', {
+      cwd: CWD,
+      root,
+      isListedInRegistry: v.isListedInRegistry,
+    })
+    expect(result.registryOutcome).toBe('not-attempted')
+    expect(v.calls).toEqual([])
+  })
+})
