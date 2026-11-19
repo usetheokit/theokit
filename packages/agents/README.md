@@ -53,7 +53,7 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool; `timeoutMs` bounds the call and rejects with `A2ATimeoutError` (`A2A call to "<name>" failed: no answer within <ms> ms`), composed with the caller's signal. `createA2AJsonRpcHandler` serves `message/send`; `maxInFlight` caps concurrent turns and answers 503 with `retry-after` (`retryAfterSeconds`, default 5) before the body is read. A slot is held until `respond` settles, even after the handler's own deadline answered. Both options are off by default |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics: `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
+| `./doctor` | Environment diagnostics: `credentialShape(value, { minLength? })` names a malformed credential (`edge_whitespace`, `inner_whitespace`, `quote_or_backslash`, `control_character`, `placeholder`, `too_short`) or returns `ok`, and `describeCredentialDefect` words it without echoing the value; `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
@@ -64,7 +64,13 @@ A terminal command list, with aliases, hidden names and handlers, from `./comman
 import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
 
 const registry = createCommandRegistry<{ exit(): void }>([
-  defineCommand({ name: 'quit', description: 'leave', aliases: ['exit'], arg: 'none', run: (_arg, ctx) => ctx.exit() }),
+  defineCommand({
+    name: 'quit',
+    description: 'leave',
+    aliases: ['exit'],
+    arg: 'none',
+    run: (_arg, ctx) => ctx.exit(),
+  }),
   defineCommand({ name: 'debug', description: 'toggle debug', hidden: true }),
 ])
 registry.palette() // [{ name: 'quit', description: 'leave' }]
@@ -76,7 +82,11 @@ A one-shot mode (`myapp "prompt"`) from the same subpath: the answer goes to std
 ```ts
 import { readHeadlessPrompt, runHeadlessTurn } from '@theokit/agents/commands'
 
-const prompt = readHeadlessPrompt({ prompt: process.argv[2], stdin: 'append', readStdin: () => readFileSync(0, 'utf8') })
+const prompt = readHeadlessPrompt({
+  prompt: process.argv[2],
+  stdin: 'append',
+  readStdin: () => readFileSync(0, 'utf8'),
+})
 const result = await runHeadlessTurn(streamAgentTurnInProcess(mod, apiKey, { message: prompt }), {
   io: { out: (s) => process.stdout.write(s), err: (s) => process.stderr.write(s) },
 })
@@ -208,9 +218,9 @@ const routes = generateAgentRoutes({
 returns a binder; every factory it binds inherits the scope. `sandbox` is **required** — a scope
 without one would be an unconfined shell, and making it unrepresentable is cheaper than detecting it.
 
-**Human gates come in three layers, and they compose.** You *declare* which tools need approval on
-the builder, the *posture* decides whether auto-approval is even permissible (it carries the sandbox
-posture as evidence, so "auto-approve without confinement" cannot be expressed), and the *resolver*
+**Human gates come in three layers, and they compose.** You _declare_ which tools need approval on
+the builder, the _posture_ decides whether auto-approval is even permissible (it carries the sandbox
+posture as evidence, so "auto-approve without confinement" cannot be expressed), and the _resolver_
 settles an individual request. `./ask` is the inverse channel — the agent asking you.
 A surface reads the open question with `bridge.pending(threadId)` (a read, not a second listener)
 and learns of changes with `bridge.onChange(fn)`, which fires after a question is asked, answered,
@@ -270,6 +280,23 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
+
+## Reporting what an agent was built with
+
+`onWired(listener)` on `AgentBuilder` (and `onWired` in `defineAgent`) reports a `CompiledWiring` once per `Agent.create`, after the options are final. Every field is read from those options, not from a second copy of the inputs:
+
+```ts
+AgentBuilder.create()
+  .model('provider/model')
+  .onWired((w) => console.log(w.tools, w.skills.listed, w.skills.readable, w.mcpServers))
+```
+
+- `tools`: tool names handed to `Agent.create`, with `withheldBuiltinTools` removed. SDK default builtins are not enumerated.
+- `skills.listed` / `skills.readable`: the skills the created agent resolved (`agent.skills.list()`, so a withheld project source or an unknown name is absent; SDK 5.17 discovers no user skills and lists an inline skill only when it is also in `skills.enabled`), and, separately, the inline skills a `skill_read` wired by this build serves. A `skill_read` you supply yourself reports none as readable. The listener runs only when the call created the agent, not on a cache hit, a resume, or a concurrent call that shared another's creation.
+- `mcpServers`, `subagents`, `settingSources` (`project` / `user`), `withheldBuiltinTools`.
+- `hooks`: events registered through `.hooks()`. Hooks inside your own plugins are opaque and not listed.
+
+A listener that throws is reported with `console.warn` and does not fail the build. `recordWiring` is unchanged; feed it from `CompiledWiring` if you want trust suppression.
 
 ## Reading skills with `skill_read`
 
@@ -370,7 +397,6 @@ await copyJobs(files, db, { force: false }) // throws JobCopyError naming the co
 
 Reads come from the jobs loaded when the store opened, and writes run one after another; replicas do not see each other's later changes until they reopen the store. A malformed row raises `ScheduleStoreError` naming the table and job id. `copyJobs` writes through the target's atomic `putMany` (one statement for PostgreSQL, one file rewrite for the file store), so a failure leaves the target unchanged; a custom `JobStore` without `putMany` raises `JobCopyUnsupportedError` before anything is written.
 
-
 ## Running scheduled prompts
 
 `createScheduler` needs a `RunPort`. `agentRunPort(withAgent)` is the stock one: it runs each prompt on the
@@ -381,7 +407,12 @@ agent `withAgent` hands it, sends with the scheduler's signal, drains and waits,
 import { agentRunPort, createScheduler, fileTransientJob } from '@theokit/agents/tools'
 
 const scheduler = createScheduler({ store, deliver, run: agentRunPort(withAgent) })
-const { job, transient } = fileTransientJob({ id: 'heartbeat', cron: '*/30 * * * *', target, file: 'HEARTBEAT.md' })
+const { job, transient } = fileTransientJob({
+  id: 'heartbeat',
+  cron: '*/30 * * * *',
+  target,
+  file: 'HEARTBEAT.md',
+})
 await scheduler.add(job, transient) // an absent or blank file means no run; other read errors reject
 ```
 
@@ -430,25 +461,24 @@ Which `.claude/` surfaces this package reads, and which it refuses. A surface is
 with a reason** — never accepted and ignored, which is the failure an author cannot tell apart from
 configuration that had no effect.
 
-| Surface | State |
-|---|---|
-| `CLAUDE.md` | **read when the host names it** — see below |
-| `settings.json` — `permissions` | translated into the SDK's `PermissionRule[]`; an entry that cannot be rendered faithfully is reported and excluded |
-| `settings.json` — `outputStyle` | read | 
-| `settings.json` — `env` | **parsed, not applied** — see below |
-| `settings.local.json` | read, layered above `settings.json` |
-| `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared |
-| `.mcp.json` | read; a field this runtime does not carry is reported |
-| `output-styles/*.md` | read, selected by `settings.json` |
-| `agent-memory/` | **read** — `applySubagentMemory` applies a subagent's `memory:` declaration, and `apps/theocode` calls it (`apps/theocode/packages/agent/src/delegation/role-discovery.ts`). The host still decides: nothing here calls it for you |
-| `workflows/*.js` | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you |
-| `keybindings.json` | **out of scope HERE** — read by the consumer, see below |
-| `themes/*.json` | **out of scope HERE** — read by the consumer, like `keybindings.json`. `apps/theocode` resolves `~/.claude/themes/` in `apps/theocode/packages/tui/src/theme/custom-theme.ts`; this package and `@theokit/tui` read neither |
-| `~/.claude.json` — OAuth state, UI toggles | **out of scope** — a CLI's own state |
-| `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers` |
+| Surface                                       | State                                                                                                                                                                                                                              |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLAUDE.md`                                   | **read when the host names it** — see below                                                                                                                                                                                        |
+| `settings.json` — `permissions`               | translated into the SDK's `PermissionRule[]`; an entry that cannot be rendered faithfully is reported and excluded                                                                                                                 |
+| `settings.json` — `outputStyle`               | read                                                                                                                                                                                                                               |
+| `settings.json` — `env`                       | **parsed, not applied** — see below                                                                                                                                                                                                |
+| `settings.local.json`                         | read, layered above `settings.json`                                                                                                                                                                                                |
+| `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared                                                                                                                                                                                                  |
+| `.mcp.json`                                   | read; a field this runtime does not carry is reported                                                                                                                                                                              |
+| `output-styles/*.md`                          | read, selected by `settings.json`                                                                                                                                                                                                  |
+| `agent-memory/`                               | **read** — `applySubagentMemory` applies a subagent's `memory:` declaration, and `apps/theocode` calls it (`apps/theocode/packages/agent/src/delegation/role-discovery.ts`). The host still decides: nothing here calls it for you |
+| `workflows/*.js`                              | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you                                                     |
+| `keybindings.json`                            | **out of scope HERE** — read by the consumer, see below                                                                                                                                                                            |
+| `themes/*.json`                               | **out of scope HERE** — read by the consumer, like `keybindings.json`. `apps/theocode` resolves `~/.claude/themes/` in `apps/theocode/packages/tui/src/theme/custom-theme.ts`; this package and `@theokit/tui` read neither        |
+| `~/.claude.json` — OAuth state, UI toggles    | **out of scope** — a CLI's own state                                                                                                                                                                                               |
+| `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers`                                                                                                                                                                                                |
 
 **Output styles.** `loadOutputStyle({ name, cwd, homeDir })` matches a style by its file name (without `.md`) or by its frontmatter `name`. The project directory is searched before the home directory; within one directory a file-name match wins over another file's frontmatter name, and two files claiming the same frontmatter name throw `OutputStyleError` naming both paths. A named style with no match throws `OutputStyleError`. `applyOutputStyle(base, style)` (from `@theokit/agents/config`) returns `base` unchanged when there is no style, `` `${base}\n\n${style.content}` `` when `keepCodingInstructions` is true, and `style.content` otherwise.
-
 
 ### Out of scope, and who owns it instead
 
@@ -512,7 +542,7 @@ this as the same finding — and it **is** the same finding, which this document
 three packages were named.
 
 The denial is worth keeping, because it shows what an unfalsifiable sentence costs. This section
-read *"nobody reads it, in any of the three packages"* and never said which three. A reader could
+read _"nobody reads it, in any of the three packages"_ and never said which three. A reader could
 not check a set they could not enumerate, so nobody did; naming them took one edit, and the sentence
 was false the moment it became checkable — `apps/theocode` resolves `~/.claude/themes/` in
 `apps/theocode/packages/tui/src/theme/custom-theme.ts`, with three reads in that one file.
@@ -552,7 +582,11 @@ own root before foreign root; `foreignRoot: false` reads only the own root) and 
 
 ```ts
 const c = settingsCandidates({ cwd, home, ownRoot: '.myapp' })
-const read = firstSettingsFile(c.project, { ownKeys: ['model'], renames: { outputStyle: 'style' }, onWarn })
+const read = firstSettingsFile(c.project, {
+  ownKeys: ['model'],
+  renames: { outputStyle: 'style' },
+  onWarn,
+})
 ```
 
 In an own-root file an unknown key stays in `values`, so your strict schema rejects it by name. In a
@@ -620,9 +654,9 @@ through `agent-memory.ts:231`. So the chain runs end to end, and this document s
 than **resolvable**.
 
 It said the opposite until 2026-09-16, and the reason is worth keeping because it is the failure
-mode this table exists to prevent. The measurement behind *"no consumer does yet"* was true when
-taken: the consumer could not call it. Its own source says why — *"`applySubagentMemory` … is NOT in
-the published 14.4.0 this project pins, so the one line that wires it does not compile here yet"*.
+mode this table exists to prevent. The measurement behind _"no consumer does yet"_ was true when
+taken: the consumer could not call it. Its own source says why — _"`applySubagentMemory` … is NOT in
+the published 14.4.0 this project pins, so the one line that wires it does not compile here yet"_.
 The integration was written, tested, and left disconnected, waiting on a publish.
 
 What changed is not the code on either side. `apps/theocode` joined this repository, `@theokit/agents`
@@ -634,11 +668,11 @@ delivery problem as a design decision.
 the version — `agent-memory.ts` carries that measurement, and
 `the-sdk-version-that-parses-memory.test.ts` pins it.
 
-| `memory:` | Root | Who can see it |
-|---|---|---|
-| `project` | `<cwd>/.claude/agent-memory/<agent>/` | committed, shared with the team |
-| `local` | `<cwd>/.claude/agent-memory-local/<agent>/` | kept out of version control |
-| `user` | `~/.claude/agent-memory/<agent>/` | crosses projects |
+| `memory:` | Root                                        | Who can see it                  |
+| --------- | ------------------------------------------- | ------------------------------- |
+| `project` | `<cwd>/.claude/agent-memory/<agent>/`       | committed, shared with the team |
+| `local`   | `<cwd>/.claude/agent-memory-local/<agent>/` | kept out of version control     |
+| `user`    | `~/.claude/agent-memory/<agent>/`           | crosses projects                |
 
 ```ts
 import { resolveAgentMemory } from '@theokit/agents/config'
@@ -659,20 +693,20 @@ writes its own `MEMORY.md`, not the operator's.
 **This list is CLOSED.** A variable that is not in this table is not read by this package — not
 "undocumented", not "read somewhere else": not read. That is the whole point of writing it down.
 `rules/foreign-config-surfaces.md` settles the same question for `.claude/` file surfaces in one
-sentence — *a surface is read, or it is refused with a reason about this product; it is never
-accepted and ignored* — and this is that sentence applied to the environment.
+sentence — _a surface is read, or it is refused with a reason about this product; it is never
+accepted and ignored_ — and this is that sentence applied to the environment.
 
 The reason the guarantee is worth more than a list of three: it answers for every variable anyone
 could export, including the ones nobody enumerated, so an operator who sets something and sees no
 change knows which of the two worlds they are in.
 
-| Variable | Security | What it changes | Read at |
-|---|---|---|---|
-| `PROGRAMDATA` | no | Where the machine-wide operator policy is looked for on Windows. Changing it moves which policy file governs the run. | `src/config/operator-policy.ts:119` |
-| `PATH` | no | Which executables count as installed when `skill_read` (`read: 'advertised'`) decides whether a skill with `requires-bins` is offered to the model, the same test the SDK applies to the `<skills>` block. | `src/bridge/advertised-skill-read.ts:26` |
-| `PATHEXT` | no | Windows executable extensions (default `.EXE;.CMD`), used to decide whether a skill's `requires-bins` are on `PATH` for `skill_read` (`read: 'advertised'`), as the SDK does. Ignored off Windows. | `src/bridge/advertised-skill-read.ts:26` |
-| `THEOKIT_CODEX_CLIENT_ID` | **yes** | Overrides the OAuth client id used for the Codex device flow. It selects which OAuth client the device authorisation is issued against, so it is a credential-path decision rather than a convenience one. | `src/auth/device-provider.ts:97`, via the constant at `:93` |
-| `THEOKIT_DEBUG` | no | Turns on debug logging. Log output can contain request shapes, so treat the logs as sensitive even though the switch is not. | `src/debug-log.ts:10` |
+| Variable                  | Security | What it changes                                                                                                                                                                                            | Read at                                                     |
+| ------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `PROGRAMDATA`             | no       | Where the machine-wide operator policy is looked for on Windows. Changing it moves which policy file governs the run.                                                                                      | `src/config/operator-policy.ts:119`                         |
+| `PATH`                    | no       | Which executables count as installed when `skill_read` (`read: 'advertised'`) decides whether a skill with `requires-bins` is offered to the model, the same test the SDK applies to the `<skills>` block. | `src/bridge/advertised-skill-read.ts:26`                    |
+| `PATHEXT`                 | no       | Windows executable extensions (default `.EXE;.CMD`), used to decide whether a skill's `requires-bins` are on `PATH` for `skill_read` (`read: 'advertised'`), as the SDK does. Ignored off Windows.         | `src/bridge/advertised-skill-read.ts:26`                    |
+| `THEOKIT_CODEX_CLIENT_ID` | **yes**  | Overrides the OAuth client id used for the Codex device flow. It selects which OAuth client the device authorisation is issued against, so it is a credential-path decision rather than a convenience one. | `src/auth/device-provider.ts:97`, via the constant at `:93` |
+| `THEOKIT_DEBUG`           | no       | Turns on debug logging. Log output can contain request shapes, so treat the logs as sensitive even though the switch is not.                                                                               | `src/debug-log.ts:10`                                       |
 
 The `Security` column is a decision per row, not a keyword match on the name. A name containing
 `AWS` can be a plain address, and a name matching nothing can disable a control — so each row was
@@ -705,21 +739,21 @@ here because it is the one a team evaluating this framework for deployment needs
 else.
 
 It was not always true. Hooks, MCP servers, permissions and skill execution were each a value the
-*programmer* passed at build time — a constructor argument, decided in code, by whoever wrote the
+_programmer_ passed at build time — a constructor argument, decided in code, by whoever wrote the
 agent. That is a defensible design for a framework and an indefensible one for anything an
 organisation deploys: it means the person responsible for what an agent may do on a machine has no
 way to say so.
 
 Policy is read from disk, and the layers have a fixed precedence:
 
-| Layer | Who writes it | Wins against |
-|---|---|---|
-| `managed-settings.json` | the operator / the organisation | everything below |
-| `.claude/settings.json`, `.theokit/settings.json` | the project | the code |
-| `defineAgent({ … })` | the programmer | nothing |
+| Layer                                             | Who writes it                   | Wins against     |
+| ------------------------------------------------- | ------------------------------- | ---------------- |
+| `managed-settings.json`                           | the operator / the organisation | everything below |
+| `.claude/settings.json`, `.theokit/settings.json` | the project                     | the code         |
+| `defineAgent({ … })`                              | the programmer                  | nothing          |
 
 A programmer can still decide everything, and in a single-author project nothing above them exists.
-What changed is that they are no longer the *only* one who can.
+What changed is that they are no longer the _only_ one who can.
 
 Two consequences worth stating, because they are the cost:
 
@@ -781,7 +815,8 @@ It is called before and after the removal:
 await deleteSession(id, {
   cwd,
   removeFromRegistry: (sessionId) => Agent.delete(sessionId),
-  isListedInRegistry: async (sessionId) => (await Agent.list({ runtime: 'local', cwd })).items.some((a) => a.agentId === sessionId),
+  isListedInRegistry: async (sessionId) =>
+    (await Agent.list({ runtime: 'local', cwd })).items.some((a) => a.agentId === sessionId),
 })
 ```
 
@@ -789,6 +824,64 @@ Listed after the removal is `still-present`; not listed before is `nothing-to-re
 after is `removed`. A verifier that throws or exceeds `registryTimeoutMs` gives `unconfirmed` with the error in
 `registryError`, and the transcript step still runs. Without a verifier nothing changes.
 
+### Planning a GC across every project
+
+`planProjectsGC({ projectsRoot, keepLast, maxAgeDays })` is the read-only plan for reclaiming disk across every
+project under `projectsRoot(root)`, where `planTranscriptGC` covers one `cwd`. It never deletes anything; applying a
+plan is a separate step. Each candidate is `{ project, kind, target, sessionId?, ageDays }`, with `kind` one of
+`transcript`, `writer-lock`, `lock-directory`, `temp` or `registry`.
+
+- A project whose liveness is `undetermined` is kept whole.
+- The newest `keepLast` transcripts survive, and in a live project so do the newest one, the session the pointer
+  names, every non-archived registry entry, anything `protectedIds(cwd)` names and anything with a live writer.
+- Locks whose transcript is gone, atomic-write temp files and registry entries whose transcript is gone are planned
+  once they are older than `maxAgeDays`. Temp files are recognised by `classifySessionArtifact`, so an editor's
+  `notes.txt.tmp` or `.foo.swp` is never a candidate. A registry entry with no `lastModified` is kept.
+- An entry whose `mtime` cannot be read is never collected. A failed pointer or registry read skips that project and
+  adds to `errors`.
+- Several cwds can share one project directory (the encoding is lossy). Every cwd the transcripts record is consulted,
+  and `candidateCwds()` adds known workspaces that encode to the project, so a colliding cwd with no transcript of
+  its own is protected too. Planning a project needs `candidateCwds` listing every cwd of the app that could share the directory AND `candidateCwdsComplete: true`, the caller's declaration that the list is complete (a colliding cwd known only to its own registry cannot be discovered from disk); without both a project (live or dead: a dead verdict can rest on headers alone) is kept whole and the reason is in `kept`. Any project, live or dead,
+  holding a transcript whose header cannot be read or names no cwd of the project is kept whole.
+- `keepLast` or `maxAgeDays` below 1 throws `GCFloorError`.
+
+The plan also reports `touchedProjects`, `liveCwds` and `countByKind`. `listRegistry` defaults to `Agent.list`.
+
 ## Refused tool calls
 
 When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
+
+## Serving sessions over a WebSocket
+
+`attachControlSocket(server, { authorize, sessions, path?, maxPayloadBytes?, log? })` (from
+`@theokit/agents/control`) attaches to an existing `node:http` server and serves a session store to a
+remote surface. It needs the optional peer `ws`, loaded when you call it.
+
+```ts
+import { attachControlSocket, createSessionStore } from '@theokit/agents/control'
+
+const sessions = createSessionStore({ build: () => createMyAgent() })
+const control = attachControlSocket(server, {
+  authorize: (header) => header === `Bearer ${token}`, // or { revoked: (cb) => ... }
+  sessions,
+})
+await control.close() // removes the upgrade listener, terminates sockets
+```
+
+An upgrade is refused before any agent exists: `404` for another path (default `/control`), `401` when
+`authorize(authorization)` returns `false` (or throws). Returning `{ revoked(cb) }` closes the socket
+(1008) when `cb` is called. A frame above `maxPayloadBytes` (default 65 536) closes the socket with 1009.
+
+Frames are JSON text. Client to server:
+
+| Frame | Meaning |
+| --- | --- |
+| `{ type: 'chat', message, session? }` | One turn. One chat at a time per socket (`error` `busy` otherwise). Without `session`, a private session per socket is used and responses omit `session`. |
+| `{ type: 'interrupt', session }` | Cancel the session's running turn. |
+| `{ type: 'steer', session, message }` | Inject a message into the running turn. |
+
+Server to client: `event` (`{ event, session? }`), `done` (`{ session?, usage? }`), `interrupted`,
+`interrupt_ok`, `steer_ok`, `no_turn` (each with `session`), and `error` (`{ code, session? }`). `code` is
+`bad_frame` for an unparsable or unknown frame (the socket stays open), or the store's refusal
+(`busy`, `bad_session`, `turn_failed`, `turn_cancelled`). `interrupted` for a sessionless chat carries the
+private session id. When a socket closes, the turns it started are cancelled.

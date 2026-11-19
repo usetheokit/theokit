@@ -273,6 +273,8 @@ export {
   type ForeignSurfaceInventoryInput,
 } from './foreign-surfaces.js'
 
+// #1866 — the compiled wiring reported through `onWired`.
+export type { CompiledWiring } from './compiled-wiring.js'
 export {
   runAgentTurn,
   completeFromTurn,

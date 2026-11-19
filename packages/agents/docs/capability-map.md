@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1346 export(s) across 25 entry point(s).
+1367 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -311,6 +311,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CompiledAgentOptionsDraft` | type |
 | `CompiledContextWindow` | type |
 | `CompiledTool` | type |
+| `CompiledWiring` | type |
 | `CompressibleMessage` | type |
 | `ContentChunk` | type |
 | `ContextWindowOptions` | type |
@@ -609,6 +610,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CompiledAgentOptions` | type |
 | `CompiledContextWindow` | type |
 | `CompiledTool` | type |
+| `CompiledWiring` | type |
 | `DefineAgentConfig` | type |
 | `DefinitionOrThunk` | type |
 | `DelegateFn` | type |
@@ -677,6 +679,20 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolInvokeRouteOptions` | type |
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
+
+## `@theokit/agents/control`
+
+| Symbol | Kind |
+|---|---|
+| `attachControlSocket` | value |
+| `createSessionStore` | value |
+| `AgentTurnUsage` | type |
+| `ControlClientFrame` | type |
+| `ControlServerFrame` | type |
+| `ControlSocketOptions` | type |
+| `SessionOutcome` | type |
+| `SessionStore` | type |
+| `SessionStoreOptions` | type |
 
 ## `@theokit/agents/testing`
 
@@ -1251,6 +1267,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `LivenessBudgetError` | value |
 | `loadOrCreateSessionId` | value |
 | `persistSessionId` | value |
+| `planProjectsGC` | value |
 | `planTranscriptGC` | value |
 | `projectDirFor` | value |
 | `projectDirMatches` | value |
@@ -1276,6 +1293,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `GCKept` | type |
 | `Liveness` | type |
 | `LivenessVerdict` | type |
+| `PlanProjectsGCOptions` | type |
+| `ProjectsGCCandidate` | type |
+| `ProjectsGCFs` | type |
+| `ProjectsGCKind` | type |
+| `ProjectsGCPlan` | type |
+| `ProjectsGCRegistryEntry` | type |
 | `ReadThreadHistoryOptions` | type |
 | `RegistryOutcome` | type |
 | `RunTranscriptGCResult` | type |
@@ -1446,6 +1469,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `checks` | value |
+| `credentialShape` | value |
+| `describeCredentialDefect` | value |
 | `diagnose` | value |
 | `DiagnosticBundleError` | value |
 | `installDiagnosticSink` | value |
@@ -1453,6 +1478,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `secretPresence` | value |
 | `writeDiagnosticBundle` | value |
 | `Check` | type |
+| `CredentialDefect` | type |
 | `CredentialState` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |
