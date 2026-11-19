@@ -27,7 +27,7 @@ const PROXY = join(import.meta.dirname, '..', 'tools', 'browser-proxy.mjs')
 const CONFIG = join(import.meta.dirname, '..', 'tools', 'browser-config.json')
 const ON_LINE = 'tools: browser is on (headless chromium, isolated profile)'
 const SHARED_LINE =
-  'tools: browser is on (headless chromium, persistent profile shared by sessions)'
+  'tools: browser is on (headless chromium, persistent profile shared by sessions, started on first use)'
 const OFF_LINE = 'tools: browser is off (THEOCLAW_BROWSER unset)'
 const MODEL_ENV = { THEOCLAW_MODEL: 'openrouter/m', OPENROUTER_API_KEY: 'router-key' }
 
@@ -263,53 +263,47 @@ describe('THEOCLAW_BROWSER', () => {
     })
   })
 
-  it('closes the shared browser when the start fails after it launched', async () => {
+  it('launches no browser at start, one at the first /control turn, and closes it at stop', async () => {
+    let launched = 0
     let closed = 0
     const launch = () =>
       Promise.resolve({
         endpoint: 'http://127.0.0.1:4321',
         close: () => Promise.resolve().then(() => void closed++),
+      }).then((browser) => {
+        launched++
+        return browser
       })
-    const result = await startForTools(
-      { THEOCLAW_BROWSER: 'on' },
-      tempCwd(cleanups),
-      { detect: notEnforced, browser: { ...installed(), launch } },
-      {
-        listen: () => {
-          throw new Error('cannot listen')
-        },
-      },
-    )
-    expect(result.error?.message).toBe('cannot listen')
+    const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), {
+      detect: notEnforced,
+      browser: { ...installed(), launch },
+    })
+    expect(result.error).toBeUndefined()
+    expect(launched).toBe(0)
+    await runControlTurn(result)
+    await runControlTurn(result)
+    expect(launched).toBe(1)
+    await stop(result)
     expect(closed).toBe(1)
   })
 
-  it('closes the shared browser when the start fails after the listener bound', async () => {
-    let browserClosed = 0
-    const launch = () =>
-      Promise.resolve({
-        endpoint: 'http://127.0.0.1:4321',
-        close: () => Promise.resolve().then(() => void browserClosed++),
-      })
-    const handle = {
-      address: () => ({ host: '127.0.0.1', port: 1 }),
-      close: () => Promise.resolve(),
-      server: undefined as never,
+  it('starts even when Chromium cannot launch, and fails only the turn that needs it', async () => {
+    let attempts = 0
+    const launch = () => {
+      attempts++
+      return Promise.reject(new Error('no chromium here'))
     }
-    const result = await startForTools(
-      { THEOCLAW_BROWSER: 'on' },
-      tempCwd(cleanups),
-      { detect: notEnforced, browser: { ...installed(), launch } },
-      {
-        listen: () => Promise.resolve(handle),
-        stdout: () => {
-          throw new Error('stdout broke')
-        },
-      },
-    )
-    expect(result.error?.message).toBe('stdout broke')
-    expect(browserClosed).toBe(1)
-  })
+    const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), {
+      detect: notEnforced,
+      browser: { ...installed(), launch },
+    })
+    started.push(result)
+    expect(result.error).toBeUndefined()
+    expect(attempts).toBe(0)
+    // The turn's agent is never built, so the turn waits out the fixture's 5 s and gives up.
+    await expect(runControlTurn(result)).rejects.toThrow('no /control agent')
+    expect(attempts).toBe(1)
+  }, 15_000)
 
   it('spawns the browser server with neither env nor envPolicy', () => {
     // Neither key present, so the SDK's `inherit-scrubbed` default applies (NFR-004).

@@ -533,7 +533,7 @@ DISPLAY=:99 THEOCLAW_HOST_TOOLS=on THEOCLAW_COMPUTER=on THEOCLAW_COMPUTER_FRAMEB
 ### The `/control` agent's browser
 
 With `THEOCLAW_BROWSER=on`, `/control` agents also get a headless Chromium through the pinned
-`@playwright/mcp` server, spawned over stdio. The instance starts one headless Chromium at start on
+`@playwright/mcp` server, spawned over stdio. The instance starts one headless Chromium, with the first `/control` session and again if it dies, on
 a persistent profile in `<workspace>/.theoclaw/browser-profile`, listening for DevTools only on
 loopback, and every session's server attaches to it, so a site signed in once stays signed in on
 later turns and for every agent, and two sessions can use the browser at once (they share cookies

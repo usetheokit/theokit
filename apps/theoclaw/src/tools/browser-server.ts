@@ -122,7 +122,7 @@ export function browserLine(settings: BrowserSettings | undefined): string {
   if (settings === undefined) return 'tools: browser is off (THEOCLAW_BROWSER unset)'
   return settings.cdpEndpoint === undefined
     ? 'tools: browser is on (headless chromium, isolated profile)'
-    : 'tools: browser is on (headless chromium, persistent profile shared by sessions)'
+    : 'tools: browser is on (headless chromium, persistent profile shared by sessions, started on first use)'
 }
 
 /**

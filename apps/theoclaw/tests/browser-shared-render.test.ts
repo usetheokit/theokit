@@ -205,4 +205,39 @@ describe.skipIf(!CHROMIUM)('the shared browser on the installed Chromium', () =>
       expect(b).toContain('who=two')
     },
   )
+
+  it(
+    'keeps the signed-in browser usable after the session that signed in has ended',
+    { timeout: 4 * DEADLINE_MS },
+    async () => {
+      const base = await startSite()
+      const profile = mkdtempSync(join(tmpdir(), 'theoclaw-shared-profile-'))
+      cleanups.push(() => rmSync(profile, { recursive: true, force: true }))
+      const settings = readBrowser({
+        THEOCLAW_BROWSER: 'on',
+        PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH,
+      })
+      const shared = createSharedBrowser(join(profile, 'browser-profile'))
+      cleanups.push(() => shared.close())
+      const cdpEndpoint = await shared.start()
+      const attach = async () => {
+        const server = browserServer({
+          ...(settings as NonNullable<typeof settings>),
+          cdpEndpoint,
+        }) as { command: string; args: string[] }
+        const client = mcpClient(server.command, server.args)
+        cleanups.push(() => client.stop())
+        await client.start()
+        return client
+      }
+      const first = await attach()
+      expect(await first.call('browser_navigate', { url: `${base}/login` })).toContain('Signed in')
+      await first.stop()
+
+      // The Chromium process is the same: only the MCP session ended.
+      expect(await shared.start()).toBe(cdpEndpoint)
+      const second = await attach()
+      expect(await second.call('browser_navigate', { url: `${base}/me` })).toContain('Welcome back')
+    },
+  )
 })

@@ -8,6 +8,8 @@ import { TheoClawConfigError } from '../control-plane/errors.js'
 export interface LaunchedBrowser {
   readonly endpoint: string
   readonly close: () => Promise<void>
+  /** Resolves when the browser ends by itself (a crash, a closed window); absent for a launcher that cannot tell. */
+  readonly exited?: Promise<void>
 }
 
 /** Starts Chromium on `profileDir`; the tests inject one so no browser is needed. */
@@ -15,7 +17,7 @@ export type BrowserLauncher = (profileDir: string) => Promise<LaunchedBrowser>
 
 /** The one browser of an instance: a persistent profile, many MCP sessions attached over CDP. */
 export interface SharedBrowser {
-  /** Launches the browser once; concurrent callers share one launch. A failed launch is retried by the next call. */
+  /** Launches the browser once; concurrent callers share one launch. A failed launch, or a browser that has exited, is replaced by the next call on the same profile. */
   readonly start: () => Promise<string>
   /** Stops the browser; safe before, during and after `start`. */
   readonly close: () => Promise<void>
@@ -27,7 +29,10 @@ interface PlaywrightCore {
     readonly launchPersistentContext: (
       dir: string,
       options: Record<string, unknown>,
-    ) => Promise<{ readonly close: () => Promise<void> }>
+    ) => Promise<{
+      readonly close: () => Promise<void>
+      readonly on: (event: 'close', listener: () => void) => unknown
+    }>
   }
 }
 
@@ -61,6 +66,7 @@ export const launchChromium: BrowserLauncher = async (profileDir) => {
     args: ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'],
   })
   const close = (): Promise<void> => context.close()
+  const exited = new Promise<void>((resolve) => context.on('close', () => resolve()))
   const deadline = Date.now() + PORT_FILE_DEADLINE_MS
   let port = readDevToolsPort(profileDir)
   while (port === undefined && Date.now() < deadline) {
@@ -76,7 +82,7 @@ export const launchChromium: BrowserLauncher = async (profileDir) => {
       },
     )
   }
-  return { endpoint: `http://127.0.0.1:${port}`, close }
+  return { endpoint: `http://127.0.0.1:${port}`, close, exited }
 }
 
 export function createSharedBrowser(
@@ -93,9 +99,17 @@ export function createSharedBrowser(
         const attempt = launch(profileDir)
         starting = attempt
         // A failed launch is not cached, so the next call tries again.
-        attempt.catch(() => {
-          if (starting === attempt) starting = undefined
-        })
+        attempt.then(
+          (browser) => {
+            // A browser that ended by itself must not be handed out again: the next call relaunches it.
+            void browser.exited?.then(() => {
+              if (starting === attempt) starting = undefined
+            })
+          },
+          () => {
+            if (starting === attempt) starting = undefined
+          },
+        )
       }
       return (await starting).endpoint
     },

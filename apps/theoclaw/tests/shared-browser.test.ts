@@ -29,6 +29,27 @@ describe('the shared browser', () => {
     expect(existsSync(dir)).toBe(true)
   })
 
+  it('launches a replacement on the same profile after the browser exited by itself', async () => {
+    const dir = profile()
+    let crash: () => void = () => undefined
+    let n = 0
+    const launch = vi.fn((_dir: string) => {
+      const endpoint = `http://127.0.0.1:${++n}`
+      const exited = new Promise<void>((resolve) => {
+        crash = resolve
+      })
+      return Promise.resolve({ endpoint, close: () => Promise.resolve(), exited })
+    })
+    const shared = createSharedBrowser(dir, launch)
+    expect(await shared.start()).toBe('http://127.0.0.1:1')
+    expect(await shared.start()).toBe('http://127.0.0.1:1')
+    crash()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(await shared.start()).toBe('http://127.0.0.1:2')
+    expect(launch).toHaveBeenCalledTimes(2)
+    expect(launch).toHaveBeenLastCalledWith(dir)
+  })
+
   it('retries after a failed launch', async () => {
     const launch = vi
       .fn()

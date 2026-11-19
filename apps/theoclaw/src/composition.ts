@@ -451,18 +451,23 @@ function pairingStoreFor(
 }
 
 /**
- * With the browser on, starts the instance's one Chromium on a persistent profile in the workspace
- * state directory and points every session's browser server at it, so a login outlives a turn and
- * sessions do not fight over the profile. `adopt` hands the browser to the teardown before it starts.
+ * With the browser on, makes the instance's one Chromium, on a persistent profile in the workspace
+ * state directory, without starting it: it starts with the first `/control` session, so an instance
+ * that never uses the browser never launches one. Every session's browser server attaches to it, so
+ * a login outlives a turn and sessions do not fight over the profile.
  */
-async function withSharedBrowser(settings: ToolSettings, launch: BrowserLauncher | undefined, adopt: (browser: SharedBrowser) => void): Promise<ToolSettings> {
+function withSharedBrowser(settings: ToolSettings, launch: BrowserLauncher | undefined, adopt: (browser: SharedBrowser) => void): ToolSettings {
   if (settings.browser === undefined) return settings
-  const browser = createSharedBrowser(join(settings.workspace, '.theoclaw', 'browser-profile'), launch)
-  adopt(browser)
-  const cdpEndpoint = await browser.start()
-  const next = { ...settings.browser, cdpEndpoint }
+  adopt(createSharedBrowser(join(settings.workspace, '.theoclaw', 'browser-profile'), launch))
   const was = browserLine(settings.browser)
-  return { ...settings, browser: next, offLines: settings.offLines.map((line) => (line === was ? browserLine(next) : line)) }
+  const line = browserLine({ ...settings.browser, cdpEndpoint: 'shared' })
+  return { ...settings, offLines: settings.offLines.map((l) => (l === was ? line : l)) }
+}
+
+/** The tools of one `/control` session: the browser server attached to the shared browser, started on first use. */
+async function withBrowserStarted(settings: ToolSettings, browser: SharedBrowser | undefined): Promise<ToolSettings> {
+  if (settings.browser === undefined || browser === undefined) return settings
+  return { ...settings, browser: { ...settings.browser, cdpEndpoint: await browser.start() } }
 }
 
 /** What the start says about the tools: what is off and why, the shell's reach, the external tools by name. */
@@ -637,7 +642,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
   })
   // After the shutdown hook is in place, so a signal during the probe still closes cleanly. Nothing reads `tools` before this.
   tools = await withInteractiveShell(tools, options.toolDeps)
-  tools = await withSharedBrowser(tools, options.toolDeps?.browser?.launch, (browser) => {
+  tools = withSharedBrowser(tools, options.toolDeps?.browser?.launch, (browser) => {
     shared.browser = browser
   })
   writeToolLines(tools, stderr)
@@ -694,7 +699,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
   const controlExtras = [...extraTools, ...relayToolsFor(), ...(memory?.tools ?? [])]
   const buildControlAgent = async (): Promise<TurnAgent> => {
     const relayGate = new RelayTurnGate()
-    const control = controlAgentToolOptions(tools, buildWorker, [...extraTools, ...relayToolsFor(relayGate), ...(memory?.tools ?? [])], execApproval)
+    const control = controlAgentToolOptions(await withBrowserStarted(tools, shared.browser), buildWorker, [...extraTools, ...relayToolsFor(relayGate), ...(memory?.tools ?? [])], execApproval)
     const recalled = (await memory?.recall()) ?? ''
     const agent = relayGate.wrap(await options.agentFactory(recalled === '' ? control : { ...control, systemPromptSuffix: recalled }))
     // TUI, desktop and `/control` turns share the chat surfaces' memory; the reviewer has `save_memory` alone.
