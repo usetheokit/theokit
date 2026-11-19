@@ -23,7 +23,7 @@ try {
 
 ## `@theokit/host/service`
 
-Install an agent app as a login service and restart it through its supervisor. Only Linux (`systemd --user`) exists today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
+Install an agent app as a login service and restart it through its supervisor. Linux (`systemd --user`) and Windows (Task Scheduler) exist today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
 
 ```ts
 import { serviceBackend, isSupervised, restartSelf, waitForPredecessor } from '@theokit/host/service'
@@ -42,6 +42,15 @@ console.log(await backend.status('my-agent')) // 'running' | 'stopped' | 'not-in
 - `install` writes the unit atomically. If a `systemctl` step fails it throws `ServiceCommandError` (with `command` and `exitCode`), puts the previous unit back (or removes the file on a first install) and runs `daemon-reload`.
 - A value the unit cannot hold (a line break, a bad label) throws `ServiceDefinitionError` naming the field, never the value. `%` is doubled everywhere and `$` in `ExecStart=`, per systemd.syntax(7).
 - The unit stops at logout unless lingering is on: run `loginctl enable-linger <user>` to keep it running.
+
+### Windows (Task Scheduler)
+
+`serviceBackend('win32')` registers a logon-triggered scheduled task named by `label` (least privilege, no time limit, restart after failure every minute) from a UTF-16 XML file kept in a fresh private temporary directory and removed afterwards. `scheduledTaskXml(spec, { user })` returns the definition.
+
+- **A task carries no environment.** `install` with a non-empty `spec.env` throws `ServiceDefinitionError`: pass the values as `args` instead. Every argument is quoted per the `CommandLineToArgvW` rules.
+- The task runs as `USERDOMAIN\USERNAME` from `options.env`; without `USERNAME`, `install` throws `ServiceDefinitionError`. `command` and `workingDirectory` must be Windows absolute paths.
+- A failing `/Create` or `/Run` deletes the task and throws `ServiceCommandError`.
+- State is read through `Get-ScheduledTask` (`schtasks` output is localised). `uninstall` stops the task's process tree, then deletes the task; a failed `/Delete` counts as success only when PowerShell confirms the task is absent. `definitionPath` returns the task name.
 
 Restart from inside the app:
 
