@@ -29,6 +29,7 @@ export interface WriteDiagnosticBundleOptions {
 }
 
 const NAME_BYTES = 100
+const PLACEHOLDERS = ['[redacted]', '[removed]', '[hidden]', '***', '#', '_']
 
 function tarHeader(name: string, size: number): Buffer {
   const header = Buffer.alloc(512)
@@ -75,7 +76,9 @@ export async function writeDiagnosticBundle(
   const blocks: Buffer[] = []
   for (const [index, file] of options.files.entries()) {
     // Show the name with every secret value redacted; safeMessage still guards the result.
-    const shown = secrets.reduce((n, s) => n.split(s).join('[redacted]'), file.name)
+    // The placeholder must not itself contain a secret (a secret of `redacted` would match).
+    const mark = PLACEHOLDERS.find((m) => !secrets.some((s) => m.includes(s))) ?? ''
+    const shown = secrets.reduce((n, s) => n.split(s).join(mark), file.name)
     // Most to least informative; the name alone comes before the position.
     const candidates = (wording: (l: string) => string) => [
       wording(`file "${shown}"`),

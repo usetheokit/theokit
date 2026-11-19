@@ -110,6 +110,18 @@ describe('writeDiagnosticBundle', () => {
     expect(message).toContain('report-[redacted].json')
   })
 
+  it('still names the file when the secret is a word of the placeholder', async () => {
+    const out = join(dir(), 'b.tar.gz')
+    const err = await writeDiagnosticBundle({
+      out,
+      files: [{ name: 'report-redacted.json', content: 'x' }],
+      secrets: ['redacted'],
+    }).catch((e: unknown) => e)
+    const message = (err as Error).message
+    expect(message).not.toContain('redacted')
+    expect(message).toContain('report-[removed].json')
+  })
+
   it('a name over 100 bytes throws name_too_long', async () => {
     const out = join(dir(), 'b.tar.gz')
     await expect(
