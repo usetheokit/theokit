@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+
 import { InstanceConfigError } from './errors.js'
 
 const NAME = /^[a-z0-9-]+$/

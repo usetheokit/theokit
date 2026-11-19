@@ -43,7 +43,9 @@ describe('write', () => {
   it('refuses quote values without echoing them', async () => {
     const d = mk()
     const f = join(d, 'c.env')
-    const err = await cfg.write(f, { DEMO_A: 'sec"ret' }, { force: false }).catch((e: unknown) => e as Error)
+    const err = await cfg
+      .write(f, { DEMO_A: 'sec"ret' }, { force: false })
+      .catch((e: unknown) => e as Error)
     expect(err).toBeInstanceOf(InstanceConfigError)
     expect(err.message).toContain('DEMO_A')
     expect(err.message).not.toContain('sec"ret')

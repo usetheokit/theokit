@@ -55,14 +55,7 @@ export function defineInstanceConfig<K extends string>(
   return {
     path: (env, homeDir) => resolve(env, homeDir).path,
     load: (env, homeDir) => loadInstanceConfig(resolve(env, homeDir), declared, env),
-    write: (path, entries, opts) =>
-      writeInstanceConfig(
-        app,
-        keys,
-        path,
-        entries as Readonly<Record<string, string | undefined>>,
-        opts,
-      ),
+    write: (path, entries, opts) => writeInstanceConfig(app, keys, path, entries, opts),
     audit: (path) => auditInstanceConfig(app, path),
     fix: (findings) => fixInstanceConfig(findings),
   }
