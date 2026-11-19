@@ -276,7 +276,9 @@ export function translateCronToDeno(
   const envImports = envEntries
     .map(([, spec], i) => `import * as envConfig${i} from ${JSON.stringify(spec)};`)
     .join('\n')
-  const envTable = envEntries.map(([env], i) => `  ${JSON.stringify(env)}: envConfig${i},`).join('\n')
+  const envTable = envEntries
+    .map(([env], i) => `  ${JSON.stringify(env)}: envConfig${i},`)
+    .join('\n')
   const prelude = wired
     ? `import { createHandlerQueue } from "npm:theokit/server/jobs";
 import * as configModule from ${JSON.stringify(options.configImport)};
