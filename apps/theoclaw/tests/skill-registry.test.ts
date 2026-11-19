@@ -129,6 +129,26 @@ describe('skills through the SDK (OC-70..72, OC-74)', () => {
     }
   })
 
+  it('with the project source on, keeps the compat sources .theokit/config.json lists: their skills are gated and the SDK keeps loading their hooks and plugins', async () => {
+    const cwd = dirWith({})
+    mkdirSync(join(cwd, '.theokit'), { recursive: true })
+    mkdirSync(join(cwd, '.claude', 'skills', 'foreign'), { recursive: true })
+    writeFileSync(join(cwd, '.claude', 'skills', 'foreign', 'SKILL.md'), skillFile('foreign', 'FOREIGN-BODY', 'requires-bins', 'theoclaw-foreign-bin'))
+    writeFileSync(join(cwd, '.theokit', 'config.json'), JSON.stringify({ compat: { adapters: ['claude-code'] } }))
+    const extra = { approvedHooks: new Set(['fingerprint']), pluginWorkspace: cwd }
+    const options = theoClawAgentOptions({ model: 'm', apiKey: 'stub-key', skillsDir: dirWith({}), ...extra })
+    expect(options.local).not.toHaveProperty('compatSources')
+    expect(await skillRead(options, 'foreign')).not.toContain('FOREIGN-BODY')
+    expect(await firstRequest(dirWith({}), extra)).not.toContain('foreign skill')
+    const restore = withBin('theoclaw-foreign-bin')
+    try {
+      expect(await skillRead(options, 'foreign')).toContain('FOREIGN-BODY')
+      expect(await firstRequest(dirWith({}), extra)).toContain('foreign skill')
+    } finally {
+      restore()
+    }
+  })
+
   it('with the project source on, a workspace skill beats a user skill, which beats a project skill', async () => {
     const cwd = dirWith({})
     mkdirSync(join(cwd, '.theokit', 'skills', 'dup'), { recursive: true })

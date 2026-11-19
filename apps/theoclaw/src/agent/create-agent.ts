@@ -1,12 +1,10 @@
-import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
-
 import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 import type { Skill } from '@theokit/sdk/skills'
 
 import { custodianSkills } from '../skills/custodian.js'
 import { discoverWinners, legacyRequiresSkills } from '../skills/legacy-compat.js'
+import { projectSkillRoots } from '../skills/project-roots.js'
 import { binaryOnPath, bundledSkills } from '../skills/registry.js'
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
@@ -127,9 +125,6 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
       hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
       ...(input.pluginWorkspace === undefined ? {} : { cwd: input.pluginWorkspace }),
       ...settingSourcesFor(input),
-      // With the `project` source on, the SDK adds the project config roots named by this list; the
-      // native `.theokit` root only, so `skillRoots` can name every root the SDK reads.
-      ...(projectSourceOn(input) ? { compatSources: [] } : {}),
     },
     ...(input.telemetry === undefined ? {} : { telemetry: input.telemetry }),
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
@@ -168,21 +163,13 @@ function projectSourceOn(input: TheoClawAgentInput<string | ModelSelection>): bo
 
 /**
  * Every directory skills are discovered from, in precedence order (the SDK takes the first skill of a
- * name): workspace, user, then, with the `project` source on, the project root `<cwd>/.theokit/skills`
- * and each plugin's `skills` folder. The SDK, the `requires:` adapter and `skill_read` all use this one list.
+ * name): workspace, user, then, with the `project` source on, the project roots (`.theokit`, and the
+ * compat adapters `.theokit/config.json` lists) and each plugin's `skills` folder. The SDK, the `requires:` adapter and `skill_read` all use this one list.
  */
 function skillRoots(input: TheoClawAgentInput<string | ModelSelection>): string[] {
   const roots = [input.skillsDir, input.userSkillsDir].filter((dir): dir is string => dir !== undefined)
   if (!projectSourceOn(input)) return roots
-  const config = join(input.pluginWorkspace ?? process.cwd(), '.theokit')
-  const plugins = join(config, 'plugins')
-  let bundles: string[] = []
-  try {
-    bundles = readdirSync(plugins, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => join(plugins, entry.name, 'skills'))
-  } catch {
-    // No plugins folder.
-  }
-  return [...roots, join(config, 'skills'), ...bundles]
+  return [...roots, ...projectSkillRoots(input.pluginWorkspace ?? process.cwd())]
 }
 
 /** `options` with the custom provider plugins after its own. */
