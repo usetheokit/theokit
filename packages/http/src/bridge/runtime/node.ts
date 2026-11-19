@@ -9,6 +9,11 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { Readable, type Duplex } from 'node:stream'
 
+import {
+  normalizeTrustedProxy,
+  stampTrustedIdentity,
+  type TrustedProxyOptions,
+} from './trusted-proxy.js'
 import type { RuntimeAdapter } from './types.js'
 
 /** Convert Node.js IncomingMessage to Web Standard Request. */
@@ -143,6 +148,8 @@ export interface NodeServerOptions {
   /** Omitted: upgrade requests are answered with 404 and the socket is closed. */
   readonly onUpgrade?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void
   readonly onError?: (error: unknown, phase: 'request' | 'server') => void
+  /** Believe an identity header (and `x-forwarded-proto`) only from these peers. Invalid options throw. */
+  readonly trustedProxy?: TrustedProxyOptions
 }
 
 export interface NodeServer {
@@ -185,6 +192,7 @@ export function createNodeServer(
       // a failing hook must not escape
     }
   }
+  const proxy = options.trustedProxy ? normalizeTrustedProxy(options.trustedProxy) : undefined
   const abortOnDisconnect = options.abortOnDisconnect !== false
   const upgraded = new Set<Duplex>()
 
@@ -198,6 +206,7 @@ export function createNodeServer(
             if (!nodeRes.writableFinished) controller.abort()
           })
         }
+        stampTrustedIdentity(nodeReq, proxy)
         const base = nodeIncomingToRequest(nodeReq)
         const request = abortOnDisconnect ? new Request(base, { signal: controller.signal }) : base
         const response = await handler(request)
