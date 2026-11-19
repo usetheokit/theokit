@@ -5,10 +5,7 @@ import { dirname } from 'node:path'
 
 import { Agent, TheokitAgentError } from '@theokit/agents'
 import { forkTranscript, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
-import {
-  deleteSession as deleteInFramework,
-  protectedTranscriptPaths,
-} from '@theokit/agents/session'
+import { deleteSession as deleteInFramework, protectedTranscriptPaths } from '@theokit/agents/session'
 
 import { listAgents } from './agent-list.js'
 import { readPointerId } from './gc/pointer.js'

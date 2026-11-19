@@ -13,6 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The TUI folds a turn's text and tool status with `@theokit/tui`'s `useAgentStream` instead of its own reducer; `tui/frames.ts` keeps only the control-frame adapter and its interrupted/error notices (#1785).
 - Skills load through the SDK's `SkillsSettings` (`bundledDirs`: workspace, user, then the bundled `skills/` folder) instead of a TheoClaw loader. A skill's binaries now come from the `requires-bins:` key, as in every other TheoKit app. The old `requires:` key still works for one release and logs a deprecation warning naming the file.
 
 ### Fixed

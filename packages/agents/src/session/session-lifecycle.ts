@@ -99,7 +99,6 @@ function registryNote(outcome: RegistryOutcome | undefined): string {
   return ''
 }
 
-/** One session as the lifecycle vocabulary sees it. */
 /**
  * One session listing entry. This IS the SDK's `SessionListing`: `id` is read from the transcript
  * (never from the filename), and `idSource` says whether it could be.
