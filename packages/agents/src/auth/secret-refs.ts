@@ -215,14 +215,16 @@ export async function resolveSecretRefs(
       value = await store.read(reference, env)
     } catch (error) {
       // Only our own fixed-text failures are safe to quote. The original error is kept as the
-      // cause only when nothing reachable from it carries a resolved value or another variable's
-      // value (a token, a key); otherwise it is dropped.
+      // cause only for built-in stores, and only when nothing reachable from it carries a resolved
+      // value or another variable's value (a token, a key); otherwise it is dropped.
       const known = error instanceof BuiltinStoreFailure
       const detail = known ? `: ${error.message}` : ''
       const sensitive = [...values, ...Object.values(env)].filter(
         (v): v is string => typeof v === 'string' && v !== '' && v.trim() !== reference,
       )
-      const keep = !carriesAny(error, sensitive)
+      // A caller store may throw the very value it was reading, which the resolver cannot know,
+      // so only a built-in failure (fixed text, underlying I/O error) can be vouched for.
+      const keep = known && !carriesAny(error, sensitive)
       throw new SecretReferenceError(
         `${name}: secret reference (${store.kind}) could not be resolved${detail}`,
         name,

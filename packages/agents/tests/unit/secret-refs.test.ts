@@ -76,9 +76,7 @@ describe('resolveSecretRefs', () => {
       matches: (r) => r.startsWith('stub:'),
       read: () => Promise.reject(new Error('boom hunter2', { cause: 'hunter2' })),
     }
-    const error = await resolveSecretRefs({ TOKEN: 'stub:x', OTHER: 'hunter2' }, [store]).catch(
-      (e: unknown) => e,
-    )
+    const error = await resolveSecretRefs({ TOKEN: 'stub:x' }, [store]).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(SecretReferenceError)
     const e = error as SecretReferenceError
     expect(e.variable).toBe('TOKEN')
@@ -89,22 +87,14 @@ describe('resolveSecretRefs', () => {
     expect(e.cause).toBeUndefined()
   })
 
-  it('a safe original cause is kept and one carrying a value is omitted', async () => {
-    const original = new Error('connection refused')
-    const make = (err: unknown): SecretStore => ({
+  it('a custom store error is never kept as the cause, even one that looks harmless', async () => {
+    const store: SecretStore = {
       kind: 'stub',
       matches: (r) => r.startsWith('stub:'),
-      read: () => Promise.reject(err as Error),
-    })
-    const safe = await resolveSecretRefs({ T: 'stub:x', K: 'hunter2' }, [make(original)]).catch(
-      (e: unknown) => e,
-    )
-    expect((safe as SecretReferenceError).cause).toBe(original)
-    const unsafe = await resolveSecretRefs({ T: 'stub:x', K: 'hunter2' }, [
-      make(new Error('x', { cause: { detail: 'bad hunter2' } })),
-    ]).catch((e: unknown) => e)
-    expect(unsafe).toBeInstanceOf(SecretReferenceError)
-    expect((unsafe as SecretReferenceError).cause).toBeUndefined()
+      read: () => Promise.reject(new Error('connection refused')),
+    }
+    const error = await resolveSecretRefs({ T: 'stub:x' }, [store]).catch((e: unknown) => e)
+    expect((error as SecretReferenceError).cause).toBeUndefined()
   })
 
   it('a builtin failure keeps the underlying error as the cause', async () => {

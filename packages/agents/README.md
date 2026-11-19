@@ -259,7 +259,7 @@ masks) and a map of variable name to store kind, never a value. References are r
 `env` and are not resolved recursively. A failure throws `SecretReferenceError` with `variable` and
 `store`; its message never contains the value, and an empty result is refused. Pass your own
 `SecretStore` (`kind`, `matches`, `read`) in `stores`, with `...builtinSecretStores` to keep the built-in
-ones. The cause of a failure from your own store is not kept, since it could carry the value.
+ones. The cause of a failure from your own store is never kept, since it could carry the value. A built-in store keeps its underlying error (for example `ENOENT`) as the cause unless it contains a resolved value or another variable's value.
 
 ## Turning a pushed event stream into an iterable
 
