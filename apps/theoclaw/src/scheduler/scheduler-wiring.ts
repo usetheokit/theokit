@@ -20,9 +20,9 @@ import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { createContainer } from '../agent-container.js'
 import type { TurnAgent } from '../agent-port.js'
 import { type ChannelLoop, maskSecrets } from '../channels/channel-loop.js'
-import { createInboxTool, INBOX_PLATFORM, inboxFile, ScheduleInbox } from './schedule-inbox.js'
 import { type AgentToolOptions, workerToolOptions } from '../tools/tool-registry.js'
 import type { ToolSettings } from '../tools/tool-settings.js'
+import { createInboxTool, INBOX_PLATFORM, inboxFile, ScheduleInbox } from './schedule-inbox.js'
 
 /** Where the durable jobs are kept: beside `sessions.json`, in the directory the start makes with 0700. */
 export function scheduleFile(workspace: string): string {
