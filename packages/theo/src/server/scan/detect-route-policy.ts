@@ -36,11 +36,12 @@
  * one somewhere else, and the alternative cost is a route reported as declared
  * because the scanner guessed.
  */
-import { createRequire } from 'node:module'
 
 import type * as TS from 'typescript'
 
 import { HTTP_METHODS, type HttpMethod } from '../../core/contracts/http-methods.js'
+
+import { loadTypescript } from './load-typescript.js'
 
 /**
  * The compiler, loaded on first use and never at import time.
@@ -56,11 +57,8 @@ import { HTTP_METHODS, type HttpMethod } from '../../core/contracts/http-methods
  *
  * Cached, so scanning many files still loads it once.
  */
-let compiler: typeof TS | undefined
-
 function ts_(): typeof TS {
-  compiler ??= createRequire(import.meta.url)('typescript') as typeof TS
-  return compiler
+  return loadTypescript()
 }
 
 const HTTP_METHOD_NAMES = new Set<string>(HTTP_METHODS)

@@ -9,12 +9,20 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { Readable, type Duplex } from 'node:stream'
 
+import {
+  normalizeTrustedProxy,
+  stampTrustedIdentity,
+  type TrustedProxyOptions,
+} from './trusted-proxy.js'
 import type { RuntimeAdapter } from './types.js'
 
 /** Convert Node.js IncomingMessage to Web Standard Request. */
-export function nodeIncomingToRequest(nodeReq: IncomingMessage): Request {
-  const proto = nodeReq.headers['x-forwarded-proto'] ?? 'http'
-  const host = nodeReq.headers.host ?? 'localhost'
+export function nodeIncomingToRequest(
+  nodeReq: IncomingMessage,
+  origin?: { readonly proto?: string | string[]; readonly host?: string },
+): Request {
+  const proto = origin ? (origin.proto ?? 'http') : (nodeReq.headers['x-forwarded-proto'] ?? 'http')
+  const host = (origin ? origin.host : nodeReq.headers.host) ?? 'localhost'
   const url = `${proto}://${host}${nodeReq.url ?? '/'}` // eslint-disable-line @typescript-eslint/restrict-template-expressions -- proto/host are string|string[]
   const method = nodeReq.method ?? 'GET'
 
@@ -143,6 +151,8 @@ export interface NodeServerOptions {
   /** Omitted: upgrade requests are answered with 404 and the socket is closed. */
   readonly onUpgrade?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void
   readonly onError?: (error: unknown, phase: 'request' | 'server') => void
+  /** Believe an identity header (and `x-forwarded-proto`) only from these peers. Invalid options throw. */
+  readonly trustedProxy?: TrustedProxyOptions
 }
 
 export interface NodeServer {
@@ -185,6 +195,7 @@ export function createNodeServer(
       // a failing hook must not escape
     }
   }
+  const proxy = options.trustedProxy ? normalizeTrustedProxy(options.trustedProxy) : undefined
   const abortOnDisconnect = options.abortOnDisconnect !== false
   const upgraded = new Set<Duplex>()
 
@@ -198,7 +209,14 @@ export function createNodeServer(
             if (!nodeRes.writableFinished) controller.abort()
           })
         }
-        const base = nodeIncomingToRequest(nodeReq)
+        // Read URL inputs before stamping: the identity header may be `host` or `x-forwarded-proto`.
+        const { host } = nodeReq.headers
+        const forwardedProto = nodeReq.headers['x-forwarded-proto']
+        const trusted = stampTrustedIdentity(nodeReq, proxy)
+        const base = nodeIncomingToRequest(nodeReq, {
+          proto: trusted ? forwardedProto : undefined,
+          host,
+        })
         const request = abortOnDisconnect ? new Request(base, { signal: controller.signal }) : base
         const response = await handler(request)
         await writeResponseToNode(response, nodeRes)
