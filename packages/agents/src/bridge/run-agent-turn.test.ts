@@ -67,6 +67,12 @@ describe('runAgentTurn', () => {
     }
   })
 
+  it('a run that waits as cancelled is a cancelled turn, not a success', async () => {
+    const { agent } = fakeAgent({ status: 'cancelled' })
+    const outcome = await runAgentTurn({ agent, message: 'hi', runId: 'r', emit: () => {} })
+    expect(outcome).toMatchObject({ ok: false, code: 'turn_cancelled' })
+  })
+
   it('an aborted signal cancels the run and the iterator without waiting on a hung cancel', async () => {
     let returned = false
     let cancelled = false

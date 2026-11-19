@@ -255,6 +255,9 @@ async function runTurn(
   const result = await raceAbort(run.wait(), aborted)
   if (result === ABORTED || !isLive()) return cancelRun(run)
   if (streamedError !== undefined) return failed(`the run streamed an error (${streamedError})`)
+  if (result.status === 'cancelled') {
+    return { ok: false, code: 'turn_cancelled', reason: 'the run ended with status cancelled' }
+  }
   if (result.status === 'error') {
     const detail = result.error === undefined ? '' : `: ${result.error.message}`
     return failed(`the run ended with status error${detail}`)
