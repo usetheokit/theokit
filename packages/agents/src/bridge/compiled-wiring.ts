@@ -71,6 +71,18 @@ async function resolvedSkills(agent: unknown): Promise<string[]> {
   }
 }
 
+/** Skills a `skill_read` wired by this build serves; a caller-supplied reader reports none. */
+function readableSkills(tools: object[], listed: string[], skills: Loose): string[] {
+  for (const t of tools) {
+    if ((t as { name?: unknown }).name !== 'skill_read') continue
+    // eslint-disable-next-line sonarjs/no-empty-collection -- populated by advertised-skill-read.ts
+    const mode = BUILD_WIRED_SKILL_READERS.get(t)
+    if (mode === 'advertised') return listed
+    if (mode === 'inline') return names(skills?.inline)
+  }
+  return []
+}
+
 /** Read the wiring from the options as they reached `Agent.create`, and skills from the created agent. */
 async function readCompiledWiring(
   options: Record<string, unknown>,
@@ -82,17 +94,14 @@ async function readCompiledWiring(
     : []
   const skills = options.skills as Loose
   const listed = [...new Set(await resolvedSkills(agent))]
-  const reader = tools.find(
-    (t) => (t as { name?: unknown }).name === 'skill_read' && BUILD_WIRED_SKILL_READERS.has(t),
-  )
-  const mode = reader === undefined ? undefined : BUILD_WIRED_SKILL_READERS.get(reader)
+  const readable = readableSkills(tools, listed, skills)
   const sources = ((options.local as Loose)?.settingSources as string[] | undefined) ?? []
   return {
     // Caller-supplied tools only: a custom tool may deliberately replace a withheld builtin.
     tools: names(tools),
     skills: {
       listed,
-      readable: mode === 'advertised' ? listed : mode === 'inline' ? names(skills?.inline) : [],
+      readable,
     },
     mcpServers: Object.keys((options.mcpServers as object | undefined) ?? {}),
     hooks: hooksOf(options),
