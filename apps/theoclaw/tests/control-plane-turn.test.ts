@@ -11,6 +11,7 @@ import type {
   TurnAgent as ReplyTurnAgent,
   TurnRun as ReplyTurnRun,
 } from '../src/channels/reply-handler.js'
+import { runSessionTurn } from '../src/control-plane/session-turn.js'
 import { createEventMask } from '../src/control-plane/event-mask.js'
 import { createContainer } from '../src/composition.js'
 import {
@@ -598,7 +599,8 @@ describe('the typed conversions of the port (#2317)', () => {
   })
 
   it('narrows a wire event to an AgentStreamEvent by its discriminant and required fields', () => {
-    expect(isAgentStreamEvent({ type: 'text_delta', content: 'a' })).toBe(true)
+    const withContent = { type: 'text_delta', content: 'a' }
+    expect(isAgentStreamEvent(withContent)).toBe(true)
     expect(isAgentStreamEvent({ type: 'done' })).toBe(true)
     expect(isAgentStreamEvent({ type: 'text_delta' })).toBe(false)
     expect(isAgentStreamEvent({ type: 'not_an_event' })).toBe(false)
@@ -615,12 +617,17 @@ describe('the typed conversions of the port (#2317)', () => {
       cancel: async () => undefined,
     }
     const events: TurnEvent[] = []
-    const outcome = await runTheoClawTurn({
-      withAgent: (work) => work({ send: async () => run }),
-      message: 'hi',
-      runId: 'r1',
-      emit: (event) => events.push(event),
-    })
+    const outcome = await runSessionTurn(
+      { send: async () => run },
+      {
+        message: 'hi',
+        runId: 'r1',
+        signal: new AbortController().signal,
+        emit: (event) => events.push(event),
+        onRun: () => undefined,
+        onEventsEnded: () => undefined,
+      },
+    )
     expect(outcome).toEqual({ ok: true })
     expect(
       events
