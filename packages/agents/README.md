@@ -267,6 +267,10 @@ const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: worker }
 refused with a `ConfigurationError`. `toAgentFactory({ withholdBuiltinShell: true })` still works;
 when both are set, the union is passed.
 
+## Describing a failed turn
+
+Import from `@theokit/agents`. `classifyTurnFailure(err)` walks `err.cause` (at most eight links) and returns `{ code, transient, message }`. A typed code anywhere in the chain wins over text, and `transient` comes only from `isTransientError` and typed provider status fields, never from digits in a message. `describeTurnFailure(failure, { attempts, hints })` renders `"<message> [<code>]: <hint>"` and appends `after N attempts` only when `attempts > 1`. `DEFAULT_TURN_FAILURE_HINTS` is neutral; pass `hints` to replace the wording for single codes.
+
 ## Hooks the host owns
 
 `buildHookHandlers` wires hooks into one agent loop. Some events belong to the host instead:
