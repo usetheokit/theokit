@@ -2,6 +2,7 @@
 import { readFile } from 'node:fs/promises'
 
 import type { SdkAgentHandle, SdkSendOptions } from '../bridge/sdk-adapter.js'
+
 import type { ScheduledJob, ScheduleTarget } from './job-store.js'
 import type { RunPort, TransientJobOptions } from './scheduler.js'
 
@@ -24,7 +25,7 @@ export function agentRunPort(
       const outcome = await turn.wait()
       if (outcome.status === 'error' || outcome.error) {
         // The SDK's error carries a `code` that the declared handle type omits.
-        const err = outcome.error as { message: string; code?: string } | undefined
+        const err = outcome.error
         const named = err?.code ?? err?.message ?? 'unknown'
         return { ok: false as const, error: `run ended with error: ${named}` }
       }
