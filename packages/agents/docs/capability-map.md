@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1262 export(s) across 25 entry point(s).
+1299 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -50,6 +50,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CapabilityPreset` | value |
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
+| `classifyTurnFailure` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
 | `compileAgentDefinition` | value |
@@ -86,6 +87,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DEFAULT_HANDLER_TIMEOUT_MS` | value |
 | `DEFAULT_KEEP_TOKENS` | value |
 | `DEFAULT_MAX_ITERATIONS` | value |
+| `DEFAULT_TURN_FAILURE_HINTS` | value |
 | `delegate` | value |
 | `delegateBackground` | value |
 | `delegateWithScoring` | value |
@@ -95,16 +97,20 @@ Measured against `@theokit/sdk@5.17.0`.
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
+| `describeTurnFailure` | value |
 | `discoverSubagents` | value |
 | `encodeAcpMessage` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `estimateTokens` | value |
+| `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
 | `extractToolUses` | value |
 | `FieldCapability` | value |
 | `flushPendingToolResults` | value |
 | `foldLayers` | value |
 | `foldTurnLifecycle` | value |
+| `FOREIGN_FOLDERS` | value |
+| `foreignSurfaceInventory` | value |
 | `formatGoalEvent` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
@@ -212,6 +218,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SubAgent` | value |
 | `SubagentsCapability` | value |
 | `SubAgentsCapability` | value |
+| `SURFACE_FOLDERS` | value |
+| `surfaceOfFolder` | value |
 | `TaskNotFoundError` | value |
 | `TelemetryCapability` | value |
 | `textPayloadExtractor` | value |
@@ -322,6 +330,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ErrorMetadata` | type |
 | `FileEditEvent` | type |
 | `FinalizedDraft` | type |
+| `ForeignSurfaceEntry` | type |
+| `ForeignSurfaceInventoryInput` | type |
 | `GatedCompatSource` | type |
 | `GatedSettingSource` | type |
 | `GoalEvent` | type |
@@ -460,6 +470,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `TrustPosture` | type |
 | `TrustPostureInput` | type |
 | `TrustSource` | type |
+| `TurnFailure` | type |
+| `TurnFailureHints` | type |
 | `TurnLifecycle` | type |
 | `TurnOutcome` | type |
 | `Verdict` | type |
@@ -507,8 +519,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `ERROR_CODE_DATA_PART` | value |
+| `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
 | `flushPendingToolResults` | value |
+| `FOREIGN_FOLDERS` | value |
+| `foreignSurfaceInventory` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
 | `isAgentContext` | value |
@@ -541,6 +556,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `streamAgentResponse` | value |
 | `streamAgentUIMessages` | value |
 | `streamFromEmitter` | value |
+| `SURFACE_FOLDERS` | value |
+| `surfaceOfFolder` | value |
 | `toAgentFactory` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
@@ -592,6 +609,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `EphemeralAgent` | type |
 | `ErrorEvent` | type |
 | `FileEditEvent` | type |
+| `ForeignSurfaceEntry` | type |
+| `ForeignSurfaceInventoryInput` | type |
 | `GatedCompatSource` | type |
 | `GatedSettingSource` | type |
 | `HookApprovalGate` | type |
@@ -1185,6 +1204,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `classifyProjects` | value |
 | `deleteSession` | value |
 | `forkBeforeUserTurn` | value |
+| `ForkedSessionBusyError` | value |
 | `GCFloorError` | value |
 | `GCProtectionUnavailableError` | value |
 | `listSessions` | value |
@@ -1204,11 +1224,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
+| `streamTurnForkingIfBusy` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
 | `ClassifyProjectsOptions` | type |
 | `DeleteSessionOptions` | type |
 | `DeleteSessionResult` | type |
+| `ForkIfBusyOptions` | type |
 | `FsSeam` | type |
 | `GCCandidate` | type |
 | `GCError` | type |
@@ -1356,14 +1378,21 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createShutdown` | value |
 | `DEFAULT_WATCHDOG_MS` | value |
 | `defineCommand` | value |
+| `EmptyPromptError` | value |
 | `exitAfterDrain` | value |
+| `readHeadlessPrompt` | value |
 | `routeCommand` | value |
+| `runHeadlessTurn` | value |
 | `SHUTDOWN_EXIT_CODES` | value |
 | `CleanupTask` | type |
 | `CommandArgument` | type |
 | `CommandDefinition` | type |
 | `CommandRegistry` | type |
 | `ExitAfterDrainDeps` | type |
+| `HeadlessIo` | type |
+| `HeadlessOutcome` | type |
+| `HeadlessTurnOptions` | type |
+| `HeadlessTurnResult` | type |
 | `RoutedInput` | type |
 | `RouteFailure` | type |
 | `Shutdown` | type |
