@@ -176,6 +176,12 @@ export {
   type ScheduleTarget,
 } from './schedule/job-store.js'
 export {
+  copyJobs,
+  createPostgresJobStore,
+  JobCopyError,
+  type SqlPool,
+} from './schedule/postgres-job-store.js'
+export {
   createScheduler,
   type CreateSchedulerOptions,
   type DeliverPort,
