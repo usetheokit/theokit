@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
-import { type AgentStreamEvent, presentUIMessageStream } from '@theokit/agents/bridge'
+import { type AgentStreamEvent, presentUIMessageStream, toAgentStreamEvent } from '@theokit/agents/bridge'
 
 import { type ControlClient, type ControlFrame, createControlClient } from '../control-client/control-client.js'
 import { type ControlClientSettings, readControlClientSettings } from '../control-client/settings.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import type { TurnEvent } from '../control-plane/turn.js'
 
 export interface SidecarIo {
   readonly argv: readonly string[]
@@ -20,20 +19,13 @@ function errorLine(io: SidecarIo, errorText: string): number {
   return 1
 }
 
-/** Whether a control event carries the discriminant the presenter switches on. */
-function isStreamEvent(event: TurnEvent): event is TurnEvent & AgentStreamEvent {
-  return typeof event.type === 'string'
-}
-
 /** The turn's events, from its frames; `ending` records how the turn ended. */
 async function* eventsOf(
   frames: AsyncIterable<ControlFrame>,
   ending: { code?: string },
 ): AsyncGenerator<AgentStreamEvent> {
   for await (const frame of frames) {
-    if (frame.type === 'event') {
-      if (isStreamEvent(frame.event)) yield frame.event
-    }
+    if (frame.type === 'event') yield toAgentStreamEvent(frame.event)
     else if (frame.type === 'error') ending.code = frame.code
   }
 }

@@ -15,6 +15,14 @@ export interface SdkMessage {
   [key: string]: unknown
 }
 
+/**
+ * What `translateSdkEvent` reads of a message: only its discriminant. The SDK's own message
+ * interfaces declare no index signature, so they are assignable to this and not to {@link SdkMessage}.
+ */
+export interface SdkMessageLike {
+  readonly type: string
+}
+
 /** Safely coerce unknown value to string. */
 function asString(value: unknown, fallback: string): string {
   if (typeof value === 'string') return value
@@ -245,7 +253,12 @@ const INTERACTION_UPDATE_IGNORED: ReadonlySet<string> = new Set([
  * Translate a single SDK message to zero or more TheoKit stream events.
  * Returns an array because one SDK message may map to multiple TheoKit events.
  */
-export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[] {
+export function translateSdkEvent(
+  message: SdkMessage | SdkMessageLike,
+  runId: string,
+): StreamEvent[] {
+  // A copy with the index signature the per-kind readers use; the SDK's messages are plain objects.
+  const msg: SdkMessage = { ...message }
   switch (msg.type) {
     case 'system':
       return translateSystemEvent(msg, runId)

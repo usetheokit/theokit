@@ -1,17 +1,17 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  type SdkMessageLike,
   translateInteractionUpdate,
   translateSdkEvent,
 } from '@theokit/agents/bridge'
 
 import type { InteractionUpdate } from '@theokit/sdk'
 
-import type { SdkMessageLike, TurnAgent, TurnRun } from '../agent-port.js'
+import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { type TurnUsage, usageOf } from '../usage/turn-usage.js'
-import { toBridgeMessage } from './bridge-input.js'
 import { describeError } from './errors.js'
 import { createEventMask } from './event-mask.js'
 
@@ -136,7 +136,7 @@ function emitMessage(
   // The step's finished `assistant` message repeats text its deltas already sent.
   const textStreamed = message.type === 'assistant' && delta.streamed
   if (message.type === 'assistant') delta.streamed = false
-  for (const event of translateSdkEvent(toBridgeMessage(message), options.runId)) {
+  for (const event of translateSdkEvent(message, options.runId)) {
     if (options.signal?.aborted === true) break
     if (textStreamed && event.type === 'text_delta') continue
     if (event.type === 'error') streamedError ??= describeStreamedError(event)

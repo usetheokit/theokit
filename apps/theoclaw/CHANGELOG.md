@@ -13,7 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- The agent port (`TurnAgent`, `TurnRun`, `TurnTimelineEvent`) is typed with the SDK's messages and `InteractionUpdate`, and the bridge input is built by a copy, so the control-plane turns and the desktop sidecar no longer cast SDK messages or events (#2317). The bridge's own `SdkTurnHandle`/`SdkAgentHandle` typing (#1802) is not yet in the framework; the port is not built on it.
+- The agent port (`TurnAgent`, `TurnRun`, `TurnTimelineEvent`) uses the SDK's typed messages, `InteractionUpdate` and the bridge's `SdkTimelineEvent`, so the control-plane turns and the desktop sidecar no longer cast SDK messages or events (#2317, follow-up of #1802).
 
 ### Fixed
 

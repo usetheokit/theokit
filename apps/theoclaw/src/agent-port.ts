@@ -1,3 +1,4 @@
+import type { SdkMessageLike, SdkTimelineEvent } from '@theokit/agents/bridge'
 import type { InteractionUpdate } from '@theokit/sdk'
 
 /**
@@ -67,18 +68,7 @@ export interface GoalRunResult {
  * same reason as the stream element: the bridge's `SdkTimelineEvent` carries `SdkMessage`, whose
  * index signature the SDK's own event type does not declare.
  */
-export interface TurnTimelineEvent {
-  readonly kind: 'message' | 'delta'
-  readonly message?: SdkMessageLike
-  readonly update?: InteractionUpdate
-  /** Set by the SDK when this message's text already crossed as `kind: 'delta'`. */
-  readonly textAlreadyStreamed?: boolean
-}
-
-/** A stream message as the SDK emits it, read through its `type` alone; the SDK's message interfaces fit it. */
-export interface SdkMessageLike {
-  readonly type: string
-}
+export type TurnTimelineEvent = SdkTimelineEvent
 
 export interface TurnRun {
   stream(): AsyncIterable<SdkMessageLike>

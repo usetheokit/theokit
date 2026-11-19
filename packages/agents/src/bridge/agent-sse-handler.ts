@@ -36,10 +36,22 @@ export interface StreamEvent {
   [key: string]: unknown
 }
 
+/**
+ * A framework `StreamEvent` as the typed `AgentStreamEvent` the presenter reads. The one place the
+ * loose, wire-shaped event is narrowed, so a consumer does not cast it itself.
+ */
+export function toAgentStreamEvent(event: StreamEvent): AgentStreamEvent {
+  return event as unknown as AgentStreamEvent
+}
+
 const encoder = new TextEncoder()
 
 /** What the durable encoder writes to close a stream; a client keys its terminal state on it. */
 const DONE_FRAME = 'data: [DONE]\n\n'
+
+async function* mapEvents(events: AsyncIterable<StreamEvent>): AsyncGenerator<AgentStreamEvent> {
+  for await (const event of events) yield toAgentStreamEvent(event)
+}
 
 /**
  * Create a Web Standard Response that streams the agent's turn as UIMessage wire chunks.
@@ -55,7 +67,7 @@ export function streamAgentResponse(
   eventStream: AsyncIterable<StreamEvent>,
   opts: { onError?: Parameters<typeof presentUIMessageStream>[1]['onError'] } = {},
 ): Response {
-  const chunks = presentUIMessageStream(eventStream as AsyncIterable<AgentStreamEvent>, {
+  const chunks = presentUIMessageStream(mapEvents(eventStream), {
     textId: crypto.randomUUID(),
     ...(opts.onError !== undefined ? { onError: opts.onError } : {}),
   })

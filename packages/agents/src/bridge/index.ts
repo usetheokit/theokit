@@ -108,6 +108,7 @@ export {
   translateInteractionUpdate,
   translateSdkEvent,
   type SdkMessage,
+  type SdkMessageLike,
 } from './event-translator.js'
 // B-373 — the OpenAI-compatible routes and the tool route, Web-standard handlers over ports, with
 // every option and callback type they take, so a consumer can type what it passes.
@@ -127,6 +128,7 @@ export {
   type ToolInvokeRouteOptions,
 } from './tool-invoke-route.js'
 export { BodyTooLargeError, MAX_REQUEST_BODY_BYTES, readCappedBody } from './read-capped-body.js'
+export { toAgentStreamEvent } from './agent-sse-handler.js'
 export { ERROR_CODE_DATA_PART, presentUIMessageStream } from './present-ui-message-stream.js'
 // B-376 — the `run.events()` timeline translator, so a consumer that streams live text deltas
 // translates them with the code `sdk-adapter.ts` uses rather than a copy (REQ-7).

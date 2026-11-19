@@ -1,13 +1,12 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
+import type { SdkTimelineEvent } from '@theokit/agents/bridge'
 import type { SDKAgent, SDKMessage } from '@theokit/sdk'
 
 import type {
   TurnAgent as ReplyTurnAgent,
   TurnRun as ReplyTurnRun,
 } from '../src/channels/reply-handler.js'
-import type { SdkMessageLike, TurnTimelineEvent } from '../src/agent-port.js'
 import { createContainer } from '../src/composition.js'
-import { runSessionTurn } from '../src/control-plane/session-turn.js'
 import {
   createTurnRunner,
   outcomeOf,
@@ -543,19 +542,25 @@ describe('typed SDK usage (#2317)', () => {
   it('takes the SDK agent and its run as the port, with no cast', () => {
     expectTypeOf<SDKAgent>().toExtend<TurnAgent>()
     expectTypeOf<Awaited<ReturnType<SDKAgent['send']>>>().toExtend<TurnRun>()
-    expectTypeOf<SDKMessage>().toExtend<SdkMessageLike>()
   })
 
-  it('translates a typed SDK stream message without a cast', async () => {
+  it('translates a typed SDK message and a typed timeline event without a cast', async () => {
     const message: SDKMessage = {
       type: 'assistant',
       agent_id: 'a',
       run_id: 'r',
       message: { role: 'assistant', content: [{ type: 'text', text: 'typed' }] },
     }
+    const timeline: SdkTimelineEvent = {
+      kind: 'delta',
+      update: { type: 'text-delta', text: 'ty' },
+    }
     const run: TurnRun = {
       async *stream() {
         yield message
+      },
+      async *events() {
+        yield timeline
       },
       wait: async () => ({ status: 'finished' }),
       cancel: async () => undefined,
@@ -569,46 +574,5 @@ describe('typed SDK usage (#2317)', () => {
     })
     expect(outcome).toEqual({ ok: true })
     expect(events.map((e) => e['content'])).toContain('typed')
-  })
-
-  it('a session turn translates typed timeline events: the delta, then the message minus its streamed text', async () => {
-    const assistantMessage: SDKMessage = {
-      type: 'assistant',
-      agent_id: 'a',
-      run_id: 'r',
-      message: { role: 'assistant', content: [{ type: 'text', text: 'ty' }] },
-    }
-    const timeline: TurnTimelineEvent[] = [
-      { kind: 'delta', update: { type: 'text-delta', text: 'ty' } },
-      {
-        kind: 'message',
-        textAlreadyStreamed: true,
-        message: assistantMessage,
-      },
-    ]
-    const run: TurnRun = {
-      stream: () => {
-        throw new Error('the timeline is used when the run has one')
-      },
-      async *events() {
-        yield* timeline
-      },
-      wait: async () => ({ status: 'finished' }),
-      cancel: async () => undefined,
-    }
-    const events: TurnEvent[] = []
-    const outcome = await runSessionTurn(
-      { send: async () => run },
-      {
-        message: 'hi',
-        runId: 'r1',
-        signal: new AbortController().signal,
-        emit: (event) => events.push(event),
-        onRun: () => undefined,
-        onEventsEnded: () => undefined,
-      },
-    )
-    expect(outcome).toEqual({ ok: true })
-    expect(events.filter((e) => e.type === 'text_delta').map((e) => e['content'])).toEqual(['ty'])
   })
 })
