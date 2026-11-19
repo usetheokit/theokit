@@ -524,6 +524,22 @@ See `LICENSE`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
 
+`deleteSession(id, { cwd, removeFromRegistry })` reports `registryOutcome: 'unconfirmed'` with the SDK's
+`Agent.delete`, because that returns `Promise<void>`. Pass `isListedInRegistry` to have it measure instead.
+It is called before and after the removal:
+
+```ts
+await deleteSession(id, {
+  cwd,
+  removeFromRegistry: (sessionId) => Agent.delete(sessionId),
+  isListedInRegistry: async (sessionId) => (await Agent.list({ runtime: 'local', cwd })).items.some((a) => a.agentId === sessionId),
+})
+```
+
+Listed after the removal is `still-present`; not listed before is `nothing-to-remove`; listed before and not
+after is `removed`. A verifier that throws or exceeds `registryTimeoutMs` gives `unconfirmed` with the error in
+`registryError`, and the transcript step still runs. Without a verifier nothing changes.
+
 ## Refused tool calls
 
 When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
