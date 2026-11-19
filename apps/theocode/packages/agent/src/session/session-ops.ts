@@ -165,7 +165,7 @@ export async function deleteSession(
   const dir = opts.baseDir ?? defaultBaseDir()
   const target = transcriptPath(dir, cwd, agentId)
 
-  if (protectedSessions(cwd, dir).includes(target)) {
+  if ((await protectedSessions(cwd, dir)).includes(target)) {
     throw new LiveSessionDeletionError(agentId)
   }
 
@@ -241,8 +241,8 @@ export async function deleteSession(
  * a compile error here instead of a deletion. That is the only reason this comment describes a near
  * miss rather than an incident.
  */
-export function protectedSessions(cwd: string, baseDir: string): string[] {
-  const paths = new Set(protectedTranscriptPaths(cwd, baseDir).keys())
+export async function protectedSessions(cwd: string, baseDir: string): Promise<string[]> {
+  const paths = new Set((await protectedTranscriptPaths(cwd, baseDir)).keys())
   // The TUI's own pointer (`<cwd>/.theokit/tui-session`) is not the framework's `last-session`, so
   // the framework set does not contain it (#1905).
   const pointed = readPointerId(cwd)
@@ -250,18 +250,18 @@ export function protectedSessions(cwd: string, baseDir: string): string[] {
   return [...paths]
 }
 
-export function forkSession(
+export async function forkSession(
   sessionId: string,
   newId: string,
   opts: { cwd?: string; baseDir?: string } = {},
-): { newId: string; copied: boolean } {
+): Promise<{ newId: string; copied: boolean }> {
   const cwd = opts.cwd ?? process.cwd()
   const dir = opts.baseDir ?? defaultBaseDir()
   const src = transcriptPath(dir, cwd, sessionId)
   const dst = transcriptPath(dir, cwd, newId)
   if (!existsSync(src)) return { newId, copied: false }
   mkdirSync(dirname(dst), { recursive: true })
-  forkTranscript(src, dst, { liveSessionPaths: protectedSessions(cwd, dir) })
+  forkTranscript(src, dst, { liveSessionPaths: await protectedSessions(cwd, dir) })
   return { newId, copied: true }
 }
 

@@ -21,6 +21,35 @@ try {
 }
 ```
 
+## `@theokit/host/backup`
+
+Back up and restore named directories of an agent app. Needs `@theokit/sdk` (peer) for the atomic manifest write; SQLite databases need Node 22.16 or later.
+
+```ts
+import { backup, restore, BackupError } from '@theokit/host/backup'
+
+const roots = { state: '/srv/app/state', workspace: '/srv/app/workspace' } // names: [a-z0-9-]+, absolute paths
+
+await backup({
+  roots,
+  out: '/srv/backups/2026-11-19', // must be absent or empty, and not overlap a root
+  exclude: (root, relativePath) => root === 'state' && relativePath === 'import', // e.g. credentials
+  lock: async () => {
+    const release = await takeMyLock()
+    return async () => release() // acquired before the first read, released after success or failure
+  },
+})
+
+await restore({ from: '/srv/backups/2026-11-19', roots })
+```
+
+- Each root is copied to `<out>/<name>`; `manifest.json` (path, sha256, size per file) is written last, atomically. Directories are 0700 and files 0600.
+- A symbolic link in a root makes `backup` reject with a `BackupError` naming it. A failed backup removes its output.
+- A root that is itself a symbolic link is rejected too. Backups are portable between POSIX systems; a file name holding a backslash (legal on POSIX only) cannot be restored on Windows, where `restore` refuses it.
+- SQLite files (found by header) are snapshotted with the `node:sqlite` backup API, without their `-wal`, `-shm` and `-journal` files.
+- `restore` checks every file against the manifest before writing, refuses manifest paths that leave their root, stages each root beside its target, checks the bytes again, then renames into place. An existing target is kept aside and put back if a later root fails to place.
+- The lock protects cooperating writers only; the renames of several roots are not crash-atomic.
+
 ## `createAppHost` (`@theokit/host/app-host`)
 
 Starts an app's services in order, stops them in reverse, and does it once however the app ends: a failed start, `close()` or SIGINT/SIGTERM.

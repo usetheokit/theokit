@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1267 export(s) across 25 entry point(s).
+1270 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -1369,6 +1369,7 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `checks` | value |
 | `diagnose` | value |
 | `DiagnosticBundleError` | value |
 | `installDiagnosticSink` | value |
@@ -1376,10 +1377,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `secretPresence` | value |
 | `writeDiagnosticBundle` | value |
 | `Check` | type |
+| `CredentialState` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |
 | `InstallDiagnosticSinkOptions` | type |
 | `SecretPresence` | type |
+| `SettingsFileReport` | type |
 | `WriteDiagnosticBundleOptions` | type |
 
 ## `@theokit/agents/usage`

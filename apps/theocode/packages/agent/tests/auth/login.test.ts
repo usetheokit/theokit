@@ -19,7 +19,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { CredentialError, authFilePath } from '../../src/auth/credentials.js'
+import { CredentialError, authFilePath, resolveCredential } from '../../src/auth/credentials.js'
 import {
   knownProviders,
   login,
@@ -39,6 +39,14 @@ afterEach(() => {
 })
 
 describe('signing in with an API key', () => {
+  it('writes a credential that resolution reads back', () => {
+    login('sk-ant-roundtrip', home)
+
+    const resolved = resolveCredential({ env: {}, home })
+    expect(resolved.provider).toBe('anthropic')
+    expect(resolved.apiKey).toBe('sk-ant-roundtrip')
+  })
+
   it('test_login_refuses_a_credential_that_would_overwrite_an_existing_one', () => {
     // Anti-vacuity floor, and the refusal with the highest cost if it were dropped: the store holds
     // ONE credential, so a second `login` without `overwrite` would replace a working sign-in with
