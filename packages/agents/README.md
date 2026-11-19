@@ -52,7 +52,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
+| `./doctor` | Environment diagnostics. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
 | `./usage` | Token and cost accounting. `usageFromRun(result, { model })` builds a `UsageRecord` from a run result; `priced` is `false` (and `costUsd` `0`) when the run has no finite `cost.amountUsd`, so an unpriced model is not read as a free run (`undefined` means priced). `InMemoryUsageStorage.getUsage` leaves unpriced runs out of `totalCostUsd` and counts them in `unpricedRuns`. `formatUsd` prints six significant digits, trailing zeros trimmed |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
@@ -146,6 +146,19 @@ const res = await fetch('http://localhost:3000/agents/support', {
 const headers = agentRequestHeaders(AGENT_ACTION_HEADERS, { authorization: `Bearer ${token}` })
 ```
 
+## Mounting a chat route for an agent built elsewhere
+
+`generateAgentRoutes` needs only the route and a `createRun`; `compiledOptions` is optional and never read.
+
+```ts
+import { generateAgentRoutes } from '@theokit/agents/bridge'
+
+const routes = generateAgentRoutes({
+  walkResult: { route: '/api/agents/support' },
+  createRun: (message, sessionId, signal) => runMyAgent(message, sessionId, signal),
+})
+```
+
 ## The shapes worth knowing before you start
 
 **Tool scope is bound once, not per tool.** `bindToolScope({ projectRoot, writeRoot, sandbox })`
@@ -213,6 +226,21 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
+## Delegating to a fresh agent per task
+
+`delegationPortFromAgentFactory(create, { sendOptions })` (from `@theokit/agents/bridge`) returns a
+`DelegationPort` that builds an agent with `create` for each task, sends the task, cancels the run when
+the delegating signal aborts, and disposes the agent after success, failure or cancellation. A run that
+streamed an error or did not end `finished` rejects with a `DelegationError`; guardrail and delegation
+errors pass through unchanged.
+
+```ts
+import { delegationPortFromAgentFactory } from '@theokit/agents/bridge'
+
+const worker = delegationPortFromAgentFactory(() => createWorkerAgent())
+const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: worker }] })
+```
+
 ## Registering subagents
 
 `AgentBuilder.subagents()` (and `defineAgent({ subagents })`) takes `description` and `prompt` (required), plus optional `tools`, `model` (a `ModelSelection`, or `'inherit'`/absent for the parent's model) and `mcpServers` (names or inline configs, as the SDK takes them). All are passed to the SDK unchanged. `sandbox` and `memory` are not accepted: apply memory with `applySubagentMemory` before registering.
@@ -243,6 +271,37 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Secret references in configuration
+
+`resolveSecretRefs(env, stores?)` from `@theokit/agents/auth` replaces every value that names a secret
+store with the value read from it, once at start. The syntax:
+
+- `secretref:env:NAME` reads another variable of `env`.
+- `secretref:file:PATH` reads a file (one trailing newline is dropped).
+- `op://vault/item/field` runs `op read --no-newline` (1Password CLI, 15 s timeout).
+- `secretref:vault:PATH#FIELD` reads Vault KV v2 at `$VAULT_ADDR/v1/PATH` with `VAULT_TOKEN`.
+
+It returns `{ env, values, refs }`: the new environment, the resolved values (pass them to your output
+masks) and a map of variable name to store kind, never a value. References are read from the input
+`env` and are not resolved recursively. A failure throws `SecretReferenceError` with `variable` and
+`store`; its message never contains the value, and an empty result is refused. Pass your own
+`SecretStore` (`kind`, `matches`, `read`) in `stores`, with `...builtinSecretStores` to keep the built-in
+ones. The cause of a failure from your own store is never kept, since it could carry the value. A built-in store failure keeps a sanitized replacement as the cause: fixed text plus only `code`, `syscall`, `signal` and `killed` values from a fixed list (for example `ENOENT`). Messages, stderr and any other field of the underlying error are never kept.
+
+## Turning a pushed event stream into an iterable
+
+`streamFromEmitter(start, { signal, isFinal, onError })` from `@theokit/agents/bridge` returns an
+`AsyncIterable` for a producer that pushes events to a callback. `return()` aborts the producer's signal
+at once, unless a final event (`done` or `error` by default) was already seen. A rejecting producer
+yields the `onError` event, unless an error event already went out.
+
+```ts
+generateAgentRoutes({
+  createRun: (m, s, signal) =>
+    streamFromEmitter((emit, sig) => runAgentTurn(/* ... */ emit, sig), { signal }),
+})
+```
 
 ## What changed recently
 
@@ -345,6 +404,16 @@ This package has no colour at all — a grep for `color`, `chalk` or `theme` acr
 nothing, the one apparent hit being `ansi` inside `stateTransitionHistory`. It produces text and tool
 calls; a palette here would be configuration nothing could act on. The toolkit reads no theme file
 either, so naming an owner would repeat the mistake the `keybindings.json` row already made.
+
+### Instruction tree: `as-listed` order and `maxCharsPerFile`
+
+`loadInstructionTree({ order: 'as-listed', fileNames: ['SOUL.md', 'IDENTITY.md'] })` returns blocks in
+the order of the `fileNames` array within each root. It is only valid with an array; a predicate
+throws a `ConfigurationError` naming `order` and `fileNames`.
+
+`budget.maxCharsPerFile` cuts each file at that many characters and appends a `[truncated]` line; the
+block carries `truncated: true`. It applies before `maxChars`, so one runaway file cannot push the
+others out. A file that fails to read for any reason except `ENOENT` is reported to `onWarn`.
 
 ### `CLAUDE.md`
 

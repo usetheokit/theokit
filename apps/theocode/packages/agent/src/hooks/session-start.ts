@@ -29,7 +29,11 @@
  * refused and named. Firing at the surface must not become a way around the fingerprint, which is
  * the whole security model for a command that arrived with a clone.
  */
-import { runHookCommand } from '@theokit/agents/hooks'
+import {
+  runHostHooks,
+  type HostHookOutcome,
+  type HookSpec as FrameworkSpec,
+} from '@theokit/agents/hooks'
 
 import { parseHooks } from './hooks.js'
 import type { HookSpec } from './hooks-spec.js'
@@ -57,6 +61,38 @@ export function sessionStartSpecs(input: {
     return parseHooks(input.hooks).filter((s) => s.event === 'SessionStart')
   } catch {
     return []
+  }
+}
+
+function failureDetail(
+  result: HostHookOutcome['result'],
+  runnerWarning: string | undefined,
+): string | undefined {
+  const stderr = result?.stderr.trim() ?? ''
+  if (stderr.length > 0) return stderr
+  return /failed: (.*)$/s.exec(runnerWarning ?? '')?.[1]
+}
+
+function reportOutcome(
+  outcome: HostHookOutcome,
+  warn: (message: string) => void,
+  runnerWarning: string | undefined,
+): void {
+  const { spec, result } = outcome
+  if (outcome.status === 'ran') return
+  if (outcome.status === 'timed-out') {
+    warn(`SessionStart hook timed out after ${String(spec.timeout_ms)}ms: "${spec.command}"`)
+  } else if (result !== undefined && result.exitCode !== null) {
+    const detail = result.stderr.trim()
+    warn(
+      `SessionStart hook "${spec.command}" exit ${String(result.exitCode)}` +
+        (detail.length > 0 ? ` — ${detail}` : ''),
+    )
+  } else {
+    // Killed by a signal or never started (`exitCode` null), or the runner threw (no result): keep
+    // what the process wrote, or the error the framework caught, instead of a bare "could not run".
+    const detail = failureDetail(result, runnerWarning)
+    warn(`SessionStart hook "${spec.command}" could not run${detail ? `: ${detail}` : ''}`)
   }
 }
 
@@ -91,24 +127,30 @@ export async function runSessionStartHooks(input: RunSessionStartInput): Promise
       )
       continue
     }
+    // The surface already applied `approved`, so the framework gate is told yes for this one spec;
+    // the framework runner supplies the run, the timeout and the outcome classification.
+    const framework: FrameworkSpec = {
+      event: 'on_session_start',
+      command: spec.command,
+      ...(spec.matcher !== undefined && { matcher: spec.matcher }),
+      timeout_ms: spec.timeout_ms,
+    }
+    const env: Record<string, string> = {}
+    for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
+    env[SESSION_ENV] = input.sessionId
+    let runnerWarning: string | undefined
     try {
-      const result = await runHookCommand({
-        command: spec.command,
+      const [outcome] = await runHostHooks('on_session_start', [framework], {
+        trusted: true,
+        approved: new Set(['approved']),
+        fingerprint: () => 'approved',
         cwd: input.cwd,
-        timeoutMs: spec.timeout_ms,
-        // Explicit, never inherited: the framework's own contract for this input says a caller may
-        // restrict the environment, and a hook has no business reading whatever happens to be set.
-        env: { ...process.env, [SESSION_ENV]: input.sessionId } as Record<string, string>,
+        env,
+        onWarn: (message) => {
+          runnerWarning = message
+        },
       })
-      if (result.timedOut) {
-        warn(`SessionStart hook timed out after ${String(spec.timeout_ms)}ms: "${spec.command}"`)
-      } else if (result.exitCode !== 0) {
-        const detail = result.stderr.trim()
-        warn(
-          `SessionStart hook "${spec.command}" exit ${String(result.exitCode)}` +
-            (detail.length > 0 ? ` — ${detail}` : ''),
-        )
-      }
+      if (outcome !== undefined) reportOutcome(outcome, warn, runnerWarning)
     } catch (err) {
       warn(`SessionStart hook "${spec.command}" could not run: ${(err as Error).message}`)
     }
