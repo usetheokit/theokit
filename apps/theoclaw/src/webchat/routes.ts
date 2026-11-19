@@ -3,7 +3,12 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { type AgentRouteContext, BodyTooLargeError, generateAgentRoutes, readCappedBody } from '@theokit/agents/bridge'
+import {
+  type AgentRouteContext,
+  BodyTooLargeError,
+  generateAgentRoutes,
+  readCappedBody,
+} from '@theokit/agents/bridge'
 
 import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from '../control-plane/bearer.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -298,7 +303,8 @@ function chatIdRefusal(body: Uint8Array): Response | undefined {
 
 /**
  * The request, its body reader changed so that cancelling it past the bound does not wait: the
- * 413 is answered at once, and a cancel that stalls or rejects reaches neither the answer nor the caller.
+ * 413 is answered at once, and a cancel that stalls or rejects reaches neither the answer nor
+ * the caller.
  */
 function withoutCancelWait(request: Request): Request {
   const stream = request.body
@@ -327,13 +333,15 @@ async function boundedChat(
   scope = '',
 ): Promise<Response> {
   // The post's body, read up to `MAX_MESSAGE_BYTES`: `undefined` past it, `null` when the client left.
-  const body = await readCappedBody(withoutCancelWait(request), MAX_MESSAGE_BYTES).catch((error: unknown) => {
-    if (error instanceof BodyTooLargeError) return undefined
-    // A client that leaves mid-upload errors the body stream: answer, since the listener would
-    // otherwise log "request failed" and write a 500 to a socket that is already gone.
-    if (request.signal.aborted) return null
-    throw error
-  })
+  const body = await readCappedBody(withoutCancelWait(request), MAX_MESSAGE_BYTES).catch(
+    (error: unknown) => {
+      if (error instanceof BodyTooLargeError) return undefined
+      // A client that leaves mid-upload errors the body stream: answer, since the listener would
+      // otherwise log "request failed" and write a 500 to a socket that is already gone.
+      if (request.signal.aborted) return null
+      throw error
+    },
+  )
   if (body === null) return clientLeft()
   if (body === undefined) return tooLarge()
   const refused = chatIdRefusal(body)
