@@ -203,10 +203,10 @@ describe('Bundle size regression', () => {
    *
    * ## Raised to 43 000 for `createResultCapture` (#1853)
    *
-   * The issue requires `createResultCapture` and `NoResultSubmittedError` in the root entry. Measured
-   * on a built tree: `dist/index.js` is 42 624 bytes with the module, and the module (the error
-   * class, the schema check, the handler, `createResultCapture`) is about 2 800 bytes of it, so the
-   * root stood near 39 800 without it and the 42 000 cap could not hold. Headroom is 376 bytes.
+   * The issue requires `createResultCapture` and `NoResultSubmittedError` in the root entry. Two
+   * builds of `tsup` on the same tree: `dist/index.js` is 40 334 bytes with the export removed from
+   * `src/index.ts` and 42 624 with it, so the module costs 2 290 bytes against 1 666 of headroom
+   * under the old 42 000 cap. The smallest cap that holds is above 42 624; 43 000 leaves 376 bytes.
    * Raised by an implementation run from that measurement; a person should confirm it.
    */
   it('agents main bundle under 43KB', (ctx) => {
