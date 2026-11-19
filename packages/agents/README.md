@@ -536,7 +536,7 @@ await deleteSession(id, {
 })
 ```
 
-Listed after the removal is `still-present` (the transcript is kept so the entry is not orphaned); not listed before is `nothing-to-remove`; listed before and not
+Listed after the removal is `still-present`; not listed before is `nothing-to-remove`; listed before and not
 after is `removed`. A verifier that throws or exceeds `registryTimeoutMs` gives `unconfirmed` with the error in
 `registryError`, and the transcript step still runs. Without a verifier nothing changes.
 
