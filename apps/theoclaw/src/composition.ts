@@ -649,7 +649,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   }
   scheduled = wireScheduler({ store: scheduleStore!, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, workspace: sessionSettings.workspace, ...beat, ...teamReport, write: stderr, secrets: secretValues })
   const relayDir = join(sessionSettings.workspace, '.theoclaw')
-  const relayState = relay.client === undefined ? undefined : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
+  const relayState = relay.client === undefined ? undefined : await RelayState.load(join(relayDir, 'relay.json'), relay.peers)
   if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
   const relayClient = relayState === undefined || relay.client === undefined || relay.peers.size === 0 ? undefined : new RelayClient(relay.client!.url, relay.client!.token)
   // A turn that read a peer's relay message may not send back; the owner's next turn may (OC-14).
