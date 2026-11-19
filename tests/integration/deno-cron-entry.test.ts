@@ -1,10 +1,48 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
-import { join, relative, resolve } from 'node:path'
+import { execFile, execFileSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { promisify } from 'node:util'
+import { join, resolve } from 'node:path'
 
 import { translateCronToDeno } from '../../packages/theo/src/server/cron/adapter-translators.js'
 
+const execFileAsync = promisify(execFile)
+const RUNNER = `
+import { registerHooks } from 'node:module'
+import { pathToFileURL } from 'node:url'
+import { resolve } from 'node:path'
+const [root, mapJson, jobs, entry] = process.argv.slice(2)
+const map = JSON.parse(mapJson)
+const cbs = new Map()
+globalThis.Deno = { cron: (n, _s, cb) => cbs.set(n, cb) }
+const mapped = (spec) => {
+  if (map[spec] !== undefined) return map[spec]
+  const prefix = Object.keys(map).filter((k) => k.endsWith('/') && spec.startsWith(k)).sort((a, b) => b.length - a.length)[0]
+  return prefix === undefined ? undefined : map[prefix] + spec.slice(prefix.length)
+}
+registerHooks({
+  resolve(spec, ctx, next) {
+    // Only the project's own modules are resolved by the map; the workspace source behind them is Node's.
+    if (!ctx.parentURL?.startsWith(pathToFileURL(root).href)) return next(spec, ctx)
+    if (/^npm:theokit(@[^/]*)?\\/server\\/jobs$/.test(spec)) return next(pathToFileURL(jobs).href, ctx)
+    if (spec.startsWith('npm:')) throw new Error('unmapped ' + spec)
+    if (/^(\\.|\\/|node:|file:)/.test(spec)) return next(spec, ctx)
+    const target = mapped(spec)
+    if (target === undefined) throw new Error('not in import map: ' + spec)
+    if (target.startsWith('npm:')) return next(target.slice(4), ctx)
+    return next(pathToFileURL(resolve(root, target)).href, ctx)
+  },
+})
+let error
+try {
+  await import(pathToFileURL(entry).href)
+  await cbs.get('job')()
+} catch (e) {
+  error = e.message
+}
+console.log(JSON.stringify({ error, calls: globalThis.__calls ?? [], trace: globalThis.__trace, queueDefined: globalThis.__q !== undefined }))
+`
 const CLI = resolve(__dirname, '../../packages/theo/src/cli/index.ts')
 const TSX = resolve(__dirname, '../../node_modules/.bin/tsx')
 const JOBS = resolve(__dirname, '../../packages/theo/src/server/jobs/index.ts')
@@ -12,7 +50,6 @@ const JOBS = resolve(__dirname, '../../packages/theo/src/server/jobs/index.ts')
 let root: string
 type Callback = () => Promise<void>
 let callbacks: Map<string, Callback>
-let seq = 0
 
 /** An in-memory backend that records what reaches it. */
 const backendSource = (label: string): string => `
@@ -95,10 +132,6 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
       imports: Record<string, string>
     }
   ).imports
-  // The files `loadConfig` merges: the base config and the NODE_ENV override, when present.
-  const configs = ['theo.config.ts', `theo.config.${process.env.NODE_ENV ?? ''}.ts`]
-    .filter((n) => existsSync(join(root, n)))
-    .map((n) => join(root, n))
   // The real CLI build writes the entry: scan, manifest, config paths and all.
   const DEFINE = resolve(__dirname, '../../packages/theo/src/server/cron/define-cron.ts')
   write(
@@ -127,29 +160,30 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
   for (const spec of bareSpecifiersOf(readProjectSourcesFromDisk(root, cfg))) {
     expect(map[spec], `${spec} is mapped`).toBeDefined()
   }
-  const resolveSpec = (spec: string): string => {
-    const target = map[spec]
-    if (target === undefined) return spec
-    if (target.startsWith('npm:')) return join(root, 'node_modules', spec, 'index.js')
-    return resolve(root, target)
-  }
-  const rewrite = (text: string): string =>
-    text.replace(/(from\s+['"])([^'".][^'"]*)(['"])/gu, (m, a, spec, c) =>
-      map[spec] === undefined ? m : `${a}${resolveSpec(spec)}${c}`,
-    )
-  for (const rel of [...configs.map((c) => relative(root, c)), 'lib/backend.ts']) {
-    if (existsSync(join(root, rel))) write(rel, rewrite(readFileSync(join(root, rel), 'utf8')))
-  }
-  // The entry itself is resolved by the same map: its `npm:theokit…/server/jobs` import is the
-  // one specifier mapped to the workspace source instead of a stub package.
-  const text = rewrite(readFileSync(entry, 'utf8')).replace(
-    /npm:theokit[^"'/]*\/server\/jobs/u,
-    JOBS,
-  )
-  expect(text).not.toMatch(/from\s+['"]npm:/u)
-  const loaded = join(root, '.theokit', `built-${seq++}.ts`)
-  writeFileSync(loaded, text)
-  await import(/* @vite-ignore */ loaded)
+  // The entry and the configs load UNMODIFIED in a child process; a resolve hook applies the
+  // emitted map the way Deno does (`npm:` targets resolve from node_modules, local targets
+  // against the project root, the `theokit/server/jobs` specifier to the workspace source).
+  const entryText = readFileSync(entry, 'utf8')
+  expect(entryText).toMatch(/from\s+['"]npm:theokit/u)
+  const runner = join(mkdtempSync(join(tmpdir(), 'deno-cron-runner-')), 'run.mjs')
+  writeFileSync(runner, RUNNER)
+  callbacks.set('job', async () => {
+    const out = await execFileAsync(TSX, [runner, root, JSON.stringify(map), JOBS, entry], {
+      cwd: root,
+      env: { ...process.env },
+    })
+    const res = JSON.parse(out.stdout.trim().split('\n').pop() ?? '{}') as {
+      error?: string
+      calls: never[]
+      trace?: string
+      queueDefined: boolean
+    }
+    const g = globalThis as Record<string, unknown>
+    g.__calls = res.calls
+    g.__trace = res.trace
+    g.__q = res.queueDefined ? {} : undefined
+    if (res.error !== undefined) throw new Error(res.error)
+  })
 }
 
 describe('generated entry loaded through the build wiring', () => {
@@ -172,8 +206,7 @@ describe('generated entry loaded through the build wiring', () => {
     write('node_modules/@app/backend/index.js', `export * from '../../../lib/backend.ts'\n`)
     write(
       'lib/backend.ts',
-      `import { Pool } from 'pg'\nexport const pool = new Pool()\n` +
-        `export const backend = { name: 'aliased', async dequeue() {}, async ack() {}, async nack() {}, async enqueue(input) { (globalThis.__calls ??= []).push({ backend: 'aliased', input }); return { jobId: 'j' } }, async enqueueInTransaction(client, input) { (globalThis.__calls ??= []).push({ backend: 'aliased-tx', client, input }); return { jobId: 'tx' } } }\n`,
+      `export const backend = { name: 'aliased', async dequeue() {}, async ack() {}, async nack() {}, async enqueue(input) { (globalThis.__calls ??= []).push({ backend: 'aliased', input }); return { jobId: 'j' } }, async enqueueInTransaction(client, input) { (globalThis.__calls ??= []).push({ backend: 'aliased-tx', client, input }); return { jobId: 'tx' } } }\n`,
     )
     write(
       'theo.config.ts',
@@ -182,14 +215,14 @@ describe('generated entry loaded through the build wiring', () => {
     // The override supplies only `enqueue`; `enqueueInTransaction` and `name` come from the base.
     write(
       'theo.config.production.ts',
-      `export default { jobs: { backend: { async enqueue(input) { (globalThis.__calls ??= []).push({ backend: 'partial', input }); return { jobId: 'p' } } } } }\n`,
+      `const { Pool } = await import('pg')\nexport default { jobs: { backend: { async enqueue(input) { (globalThis.__calls ??= []).push({ backend: new Pool().name, input }); return { jobId: 'p' } } } } }\n`,
     )
     vi.stubEnv('NODE_ENV', 'production')
     await loadBuiltEntry(
       `ctx.queue.enqueue('a', {}); await ctx.queue.enqueueInTransaction({ tx: 1 }, 't', {})`,
     )
     await callbacks.get('job')!()
-    expect(calls().map((c) => c.backend)).toEqual(['aliased-tx', 'partial'])
+    expect(calls().map((c) => c.backend)).toEqual(['aliased-tx', 'pg'])
   })
 })
 
@@ -219,6 +252,31 @@ describe('local alias precedence while reading config dependencies', () => {
     expect(found).toContain('deep-pkg')
     expect(found).not.toContain('wrong-pkg')
     expect(found).not.toContain('shallow-pkg')
+  })
+})
+
+describe('bareSpecifiersOf', () => {
+  it('finds literal dynamic imports', async () => {
+    const { bareSpecifiersOf } = await import('../../packages/theo/src/adapters/deno-deploy.js')
+    expect(bareSpecifiersOf([`const { Pool } = await import('pg')`, `import("zod")`])).toEqual([
+      'pg',
+      'zod',
+    ])
+  })
+})
+
+describe('environment override without a base config', () => {
+  it('is not read: loadConfig returns the defaults, so neither the entry nor the map use it', async () => {
+    rmSync(join(root, 'theo.config.ts'))
+    write('theo.config.test.ts', `import 'only-in-override'\nexport default {}\n`)
+    vi.stubEnv('NODE_ENV', 'test')
+    const { readProjectSourcesFromDisk } =
+      await import('../../packages/theo/src/adapters/deno-deploy.js')
+    expect(
+      readProjectSourcesFromDisk(root, { serverDir: 'server', agentsDir: 'agents' } as never),
+    ).toEqual([])
+    const { denoCronConfigPaths } = await import('../../packages/theo/src/cli/commands/build.js')
+    expect(denoCronConfigPaths(root)).toEqual([])
   })
 })
 

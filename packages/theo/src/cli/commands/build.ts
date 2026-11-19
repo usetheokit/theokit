@@ -265,7 +265,9 @@ async function runAdapterBuild(
 }
 
 /** The base config and, when `NODE_ENV` selects one, its override — the files `loadConfig` merges. */
-function denoCronConfigPaths(cwd: string): string[] {
+export function denoCronConfigPaths(cwd: string): string[] {
+  // `loadConfig` returns the defaults when the base file is missing, never reading an override.
+  if (!existsSync(resolve(cwd, 'theo.config.ts'))) return []
   const names = ['theo.config.ts']
   if (process.env.NODE_ENV) names.push(`theo.config.${process.env.NODE_ENV}.ts`)
   return names.map((n) => resolve(cwd, n)).filter((p) => existsSync(p))

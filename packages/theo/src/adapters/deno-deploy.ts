@@ -409,7 +409,7 @@ export const DENO_DEPLOY_CONFIG_PATH = 'deno.json'
 export function bareSpecifiersOf(sources: Iterable<string>): string[] {
   const found = new Set<string>()
   for (const source of sources) {
-    for (const match of source.matchAll(/(?:from|import)\s+['"]([^'"]+)['"]/gu)) {
+    for (const match of source.matchAll(/(?:from|import)[\s(]*['"]([^'"]+)['"]/gu)) {
       // `match[1]` and not a guarded read: the capture group is not optional in this pattern,
       // so it participates in every match the loop yields.
       const specifier = match[1]
@@ -496,7 +496,9 @@ export function readProjectSourcesFromDisk(cwd: string, config: TheoConfig): str
   // The base config, the NODE_ENV override the generated cron entry also imports, and every local
   // module they reach: a backend file the config imports can itself import a bare package.
   const nodeEnv = process.env.NODE_ENV
-  const configs = ['theo.config.ts', ...(nodeEnv ? [`theo.config.${nodeEnv}.ts`] : [])]
+  // As `loadConfig`: without the base file the defaults apply and the override is never read.
+  const base = existsSync(resolve(cwd, 'theo.config.ts'))
+  const configs = base ? ['theo.config.ts', ...(nodeEnv ? [`theo.config.${nodeEnv}.ts`] : [])] : []
   const seen = new Set<string>()
   const aliases = readLocalAliases(cwd)
   for (const name of configs) collectLocalSources(resolve(cwd, name), seen, texts, aliases)
