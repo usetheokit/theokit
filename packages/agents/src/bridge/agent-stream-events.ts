@@ -11,13 +11,13 @@ import type { ToolRefusal } from '@theokit/presenter'
  */
 
 /** Partial text content from the LLM. */
-export type TextDeltaEvent = {
+export interface TextDeltaEvent {
   type: 'text_delta'
   content: string
 }
 
 /** Agent started a tool call. */
-export type ToolCallEvent = {
+export interface ToolCallEvent {
   type: 'tool_call'
   callId: string
   toolName: string
@@ -30,7 +30,7 @@ export type ToolCallEvent = {
  * the later `tool_call` (args committed) and `tool_result`. Consumers opt in to render tool-input
  * progressively; those that don't simply ignore this variant (it never replaces `tool_call`).
  */
-export type PartialToolCallEvent = {
+export interface PartialToolCallEvent {
   type: 'partial_tool_call'
   callId: string
   toolName: string
@@ -38,7 +38,7 @@ export type PartialToolCallEvent = {
 }
 
 /** Tool execution completed. */
-export type ToolResultEvent = {
+export interface ToolResultEvent {
   type: 'tool_result'
   callId: string
   toolName: string
@@ -50,20 +50,20 @@ export type ToolResultEvent = {
 }
 
 /** Extended thinking / reasoning (when model supports it). */
-export type ThinkingEvent = {
+export interface ThinkingEvent {
   type: 'thinking'
   content: string
 }
 
 /** Agent loop iteration. */
-export type IterationEvent = {
+export interface IterationEvent {
   type: 'iteration'
   step: number
   totalSteps: number | null
 }
 
 /** Human approval required before proceeding. */
-export type ApprovalRequiredEvent = {
+export interface ApprovalRequiredEvent {
   type: 'approval_required'
   callId: string
   toolName: string
@@ -88,13 +88,13 @@ export type ApprovalRequiredEvent = {
  * A consumer that cannot resolve the request should still SHOW that the run is waiting. Silence is
  * the one response that is always wrong.
  */
-export type InputRequestedEvent = {
+export interface InputRequestedEvent {
   type: 'input_requested'
   requestId: string
 }
 
 /** Task-level milestone or summary — theokit#141. Both fields are optional at the source. */
-export type TaskProgressEvent = {
+export interface TaskProgressEvent {
   type: 'task_progress'
   status?: string
   text?: string
@@ -107,13 +107,13 @@ export type TaskProgressEvent = {
  * layer deliberately does not interpret or render it: guessing a shape here would be a second,
  * weaker oracle over a payload whose real contract lives upstream.
  */
-export type ShellOutputEvent = {
+export interface ShellOutputEvent {
   type: 'shell_output'
   event: Record<string, unknown>
 }
 
 /** Agent encountered an error. */
-export type ErrorEvent = {
+export interface ErrorEvent {
   type: 'error'
   code: string
   message: string
@@ -157,7 +157,7 @@ export type ErrorEvent = {
 export type AgentStopReason = 'step_limit' | 'no_progress'
 
 /** Agent completed with a final result. */
-export type DoneEvent = {
+export interface DoneEvent {
   type: 'done'
   result: string
   usage: {
@@ -214,7 +214,7 @@ export type DoneEvent = {
  * cost meter) show real tokens/cost for the turn it just streamed. Mirrors `DoneEvent`'s usage/cost
  * (the authoritative totals the SDK reports at turn end) plus the wall-clock `durationMs`.
  */
-export type AgentTurnMetadata = {
+export interface AgentTurnMetadata {
   usage: DoneEvent['usage']
   /** Total cost in USD for the turn (present iff the SDK reported it). */
   cost?: number
@@ -236,7 +236,7 @@ export type AgentTurnMetadata = {
 }
 
 /** Agent run started. */
-export type RunStartedEvent = {
+export interface RunStartedEvent {
   type: 'run_started'
   runId: string
   agentName: string
@@ -244,7 +244,7 @@ export type RunStartedEvent = {
 }
 
 /** Artifact generation started (code, document, diagram). */
-export type ArtifactStartEvent = {
+export interface ArtifactStartEvent {
   type: 'artifact_start'
   artifactId: string
   mimeType: string
@@ -253,7 +253,7 @@ export type ArtifactStartEvent = {
 }
 
 /** Artifact content chunk (streamable artifacts). */
-export type ArtifactChunkEvent = {
+export interface ArtifactChunkEvent {
   type: 'artifact_chunk'
   artifactId: string
   chunk: string
@@ -261,14 +261,14 @@ export type ArtifactChunkEvent = {
 }
 
 /** Real-time state update from @Observable channels. */
-export type StateUpdateEvent = {
+export interface StateUpdateEvent {
   type: 'state_update'
   channel: string
   data: unknown
 }
 
 /** Checkpoint saved (resumable agents). */
-export type CheckpointSavedEvent = {
+export interface CheckpointSavedEvent {
   type: 'checkpoint_saved'
   checkpointId: string
   step: number
@@ -276,7 +276,7 @@ export type CheckpointSavedEvent = {
 }
 
 /** File edit produced by a code assistant tool. */
-export type FileEditEvent = {
+export interface FileEditEvent {
   type: 'file_edit'
   file: string
   format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range'
