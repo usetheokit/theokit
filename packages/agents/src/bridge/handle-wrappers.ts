@@ -118,8 +118,11 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
           ? out
           : { ...out, result: await runOutputGuards(out.result, guardrails) },
       ))
+  const cancelTurn = (turn as { cancel?: () => Promise<unknown> }).cancel
   return {
     wait: guardedOutcome,
+    // Cancellation must reach the inner run: a guarded turn that dropped it could not be aborted.
+    ...(typeof cancelTurn === 'function' ? { cancel: () => cancelTurn.call(turn) } : {}),
     async *stream() {
       let out: Awaited<ReturnType<SdkTurnHandle['wait']>>
       try {

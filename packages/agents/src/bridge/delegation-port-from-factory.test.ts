@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDelegateAllTool } from '../tools/delegate-all-tool.js'
+import type { Guardrail } from '../guardrails/types.js'
 import { GuardrailViolationError } from '../guardrails/types.js'
 import { delegationPortFromAgentFactory } from './delegation-port-from-factory.js'
-import { DelegationError } from './delegation-types.js'
+import { DelegationTimeoutError } from './delegation-lifecycle.js'
+import { DelegationBudgetExceededError, DelegationError } from './delegation-types.js'
+import { withGuardrails } from './handle-wrappers.js'
 import type { SdkAgentHandle, SdkTurnHandle } from './sdk-adapter.js'
 
 interface Fake {
@@ -147,5 +150,75 @@ describe('delegationPortFromAgentFactory', () => {
     ])
     expect(built).toHaveLength(2)
     expect(built.every((b) => b.dispose.mock.calls.length === 1)).toBe(true)
+  })
+
+  const passing: Guardrail = {
+    name: 'pass',
+    checkInput: () => ({ action: 'allow' }),
+    checkOutput: () => ({ action: 'allow' }),
+  } as unknown as Guardrail
+
+  it('an abort reaches the run of a guarded agent', async () => {
+    const controller = new AbortController()
+    const w = fake({
+      wait: () =>
+        new Promise((_, reject) =>
+          controller.signal.addEventListener('abort', () => reject(new Error('stopped'))),
+        ),
+    })
+    const guarded = withGuardrails(w.agent, [passing])
+    const pending = delegationPortFromAgentFactory(async () => guarded).run('t', {
+      signal: controller.signal,
+    })
+    await vi.waitFor(() => expect(w.agent.send).toHaveBeenCalled())
+    controller.abort()
+    await expect(pending).rejects.toBeInstanceOf(DelegationError)
+    expect(w.cancel).toHaveBeenCalledTimes(1)
+    expect(w.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('a streamed error of a guarded agent rejects with DelegationError', async () => {
+    const w = fake({ status: 'error' })
+    const guarded = withGuardrails(w.agent, [passing])
+    const error = await delegationPortFromAgentFactory(async () => guarded)
+      .run('t')
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(DelegationError)
+    expect((error as Error).message).toContain('run error')
+    expect(w.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('the task and sendOptions reach agent.send, and the delegation signal wins', async () => {
+    const w = fake()
+    const own = new AbortController()
+    const optionSignal = new AbortController()
+    const port = delegationPortFromAgentFactory(async () => w.agent, {
+      sendOptions: { model: 'm', signal: optionSignal.signal },
+    })
+    await port.run('do it', { signal: own.signal })
+    expect(w.agent.send).toHaveBeenCalledWith('do it', { model: 'm', signal: own.signal })
+    await port.run('again')
+    expect(w.agent.send).toHaveBeenLastCalledWith('again', {
+      model: 'm',
+      signal: optionSignal.signal,
+    })
+  })
+
+  it('existing delegation errors pass through unchanged', async () => {
+    const errors = [
+      new DelegationError('inner', new Error('x')),
+      new DelegationTimeoutError('inner', 5),
+      new DelegationBudgetExceededError('inner', 1, 2),
+    ]
+    for (const thrown of errors) {
+      const w = fake({
+        wait: async () => {
+          throw thrown
+        },
+      })
+      await expect(delegationPortFromAgentFactory(async () => w.agent).run('t')).rejects.toBe(
+        thrown,
+      )
+    }
   })
 })
