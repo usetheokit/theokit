@@ -168,7 +168,7 @@ function resolveProtection(
   return union
 }
 
-export function planTranscriptGC(options: TranscriptGCOptions): TranscriptGCPlan {
+export async function planTranscriptGC(options: TranscriptGCOptions): Promise<TranscriptGCPlan> {
   if (!Number.isFinite(options.keepLast) || options.keepLast < FLOOR.keepLast) {
     throw new GCFloorError('keepLast', options.keepLast)
   }
@@ -180,9 +180,9 @@ export function planTranscriptGC(options: TranscriptGCOptions): TranscriptGCPlan
   const now = options.now ?? Date.now()
   const cutoff = now - options.maxAgeDays * 86_400_000
 
-  const sessions = listSessions(options.cwd, root) // newest first
+  const sessions = await listSessions(options.cwd, root) // newest first
   const protectedBy = resolveProtection(
-    protectedTranscriptPaths(options.cwd, root),
+    await protectedTranscriptPaths(options.cwd, root),
     options.protectedIds,
     options.cwd,
     root,
@@ -356,7 +356,7 @@ export async function runTranscriptGC(
   // "was safe when we looked" into "is safe now".
   const protectedNow = options.apply
     ? resolveProtection(
-        protectedTranscriptPaths(plan.cwd, plan.root),
+        await protectedTranscriptPaths(plan.cwd, plan.root),
         options.protectedIds,
         plan.cwd,
         plan.root,

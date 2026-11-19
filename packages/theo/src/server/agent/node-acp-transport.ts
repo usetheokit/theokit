@@ -10,9 +10,12 @@
  * SIGKILL past a grace period.
  */
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
+import { delimiter } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
 
 import type { AcpTransport } from '@theokit/agents'
+
+import { absolutePathEntries, resolveAgentCommand } from './resolve-agent-command.js'
 
 /** The agent process could not start, failed, or exited before the call finished. */
 export class AcpTransportClosedError extends Error {
@@ -59,11 +62,12 @@ const OWN_PROCESS_GROUP = process.platform !== 'win32'
 /** Stdio transport backed by a spawned subprocess (the default for `createACPTool`). */
 export class NodeAcpTransport implements AcpToolTransport {
   // stdin=pipe, stdout=pipe, stderr=inherit (null) or pipe (to the caller's sink).
-  private readonly proc: ChildProcessByStdio<Writable, Readable, Readable | null>
+  // Undefined when the command did not resolve: nothing was spawned and the channel is closed.
+  private readonly proc: ChildProcessByStdio<Writable, Readable, Readable | null> | undefined
   private closed: AcpTransportClosedError | undefined
   private readonly listeners: ((error: AcpTransportClosedError) => void)[] = []
   /** Settles when the process has exited (or never started). */
-  private readonly exited: Promise<void>
+  private readonly exited: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly command: string,
@@ -74,49 +78,67 @@ export class NodeAcpTransport implements AcpToolTransport {
     /** Receives what the agent writes to stderr. Omitted: it goes to the parent's stderr. */
     onStderr?: (chunk: string) => void,
   ) {
+    const searched = env === undefined ? process.env.PATH : env.PATH
+    const resolved = resolveAgentCommand(command, searched)
+    if (resolved === undefined) {
+      this.end(
+        'could not be found or run (a command is an absolute path or a bare name found on an absolute PATH entry)',
+      )
+      return
+    }
+    let childEnv = env
+    if (process.platform !== 'win32') {
+      const base = env ?? process.env
+      if (base.PATH !== undefined) {
+        const { PATH: _drop, ...rest } = base
+        const entries = absolutePathEntries(base.PATH)
+        childEnv = entries.length === 0 ? rest : { ...rest, PATH: entries.join(delimiter) }
+      }
+    }
     // `detached` makes the agent the leader of a new process group (POSIX), the group close signals.
-    this.proc = spawn(command, args, {
+    const proc = spawn(resolved, args, {
       cwd,
-      ...(env === undefined ? {} : { env }),
+      ...(childEnv === undefined ? {} : { env: childEnv }),
       stdio: ['pipe', 'pipe', onStderr === undefined ? 'inherit' : 'pipe'],
       detached: OWN_PROCESS_GROUP,
     }) as ChildProcessByStdio<Writable, Readable, Readable | null>
+    this.proc = proc
     // A pipe cuts stdout wherever it likes; a streaming decoder carries a multibyte character split
     // across two chunks instead of turning each half into U+FFFD.
-    this.proc.stdout.setEncoding('utf8')
-    if (onStderr !== undefined && this.proc.stderr !== null) {
-      this.proc.stderr.setEncoding('utf8')
-      this.proc.stderr.on('data', onStderr)
+    proc.stdout.setEncoding('utf8')
+    if (onStderr !== undefined && proc.stderr !== null) {
+      proc.stderr.setEncoding('utf8')
+      proc.stderr.on('data', onStderr)
     }
     // 'exit', not 'close': a grandchild holding stdout open delays 'close' but not the exit.
     this.exited = new Promise((resolve) => {
-      this.proc.once('exit', () => {
+      proc.once('exit', () => {
         resolve()
       })
     })
     // Without an 'error' listener a spawn failure (ENOENT) is thrown as an uncaught exception that
     // takes the host down; stdin raises EPIPE when the process is gone. Both end the channel.
-    this.proc.on('error', (err) => {
+    proc.on('error', (err) => {
       this.end(`failed: ${err.message}`, err)
     })
-    this.proc.stdin.on('error', (err) => {
+    proc.stdin.on('error', (err) => {
       this.end(`closed its stdin: ${err.message}`, err)
     })
     // 'close', not 'exit': it fires after stdout is drained, so a reply written just before the
     // process exits is still delivered.
-    this.proc.on('close', (code, signal) => {
+    proc.on('close', (code, signal) => {
       this.end(code === null ? `exited on signal ${String(signal)}` : `exited with code ${code}`)
     })
   }
 
   send(line: string): void {
-    if (this.closed === undefined) this.proc.stdin.write(line)
+    if (this.closed === undefined) this.proc?.stdin.write(line)
   }
 
   subscribe(onData: (chunk: string) => void): void {
     // A byte pipe: what the agent writes is judged by AcpClient, the one owner of the JSON-RPC
     // shape rule for every transport, which never throws back into this listener.
-    this.proc.stdout.on('data', onData)
+    this.proc?.stdout.on('data', onData)
   }
 
   onClose(listener: (error: AcpTransportClosedError) => void): void {
@@ -139,23 +161,22 @@ export class NodeAcpTransport implements AcpToolTransport {
     } finally {
       // Nothing is read or written after close; a process that escaped its group and still holds
       // the pipes must not keep the host's event loop alive.
-      this.proc.stdin.destroy()
-      this.proc.stdout.destroy()
-      this.proc.stderr?.destroy()
-      this.proc.unref()
+      this.proc?.stdin.destroy()
+      this.proc?.stdout.destroy()
+      this.proc?.stderr?.destroy()
+      this.proc?.unref()
     }
   }
 
   /** Whether the process started and has not exited yet. */
   private running(): boolean {
-    return (
-      this.proc.pid !== undefined && this.proc.exitCode === null && this.proc.signalCode === null
-    )
+    const proc = this.proc
+    return proc?.pid !== undefined && proc.exitCode === null && proc.signalCode === null
   }
 
   /** Whether a process of the agent's group is still running (always `false` without a group). */
   private groupAlive(): boolean {
-    const pid = this.proc.pid
+    const pid = this.proc?.pid
     if (!OWN_PROCESS_GROUP || pid === undefined) return false
     try {
       process.kill(-pid, 0)
@@ -168,9 +189,9 @@ export class NodeAcpTransport implements AcpToolTransport {
 
   /** Send `signal` to the agent's process group, or to the spawned process without one. */
   private signal(signal: NodeJS.Signals): void {
-    const pid = this.proc.pid
+    const pid = this.proc?.pid
     if (!OWN_PROCESS_GROUP || pid === undefined) {
-      this.proc.kill(signal)
+      this.proc?.kill(signal)
       return
     }
     try {

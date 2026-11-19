@@ -2,7 +2,7 @@
 
 Every public symbol this package publishes, and the exact specifier to import it from.
 
-**Generated — do not edit.** `npx tsx scripts/capability-map.mts` rewrites it, and
+**Generated — do not edit.** `pnpm exec tsx scripts/capability-map.mts` rewrites it, and
 `tests/unit/capability-map-is-current.test.ts` fails when the committed copy has drifted. A
 hand-edited map is a second copy of the export list, and the copy is the one that goes stale.
 
@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1247 export(s) across 25 entry point(s).
+1262 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -91,6 +91,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
+| `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
 | `discoverSubagents` | value |
@@ -194,6 +195,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `setDiagnosticsSink` | value |
 | `setOnce` | value |
 | `SettingSourcesCapability` | value |
+| `shapeToolsAsCustomTools` | value |
 | `shouldAutoApprove` | value |
 | `SkillsCapability` | value |
 | `SkillsOptionsCapability` | value |
@@ -304,6 +306,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
 | `DelegationPort` | type |
+| `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
 | `DelegationTarget` | type |
 | `DiagnosticsSink` | type |
@@ -496,6 +499,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
+| `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `extractThinkTagStream` | value |
@@ -574,6 +578,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
 | `DelegationPort` | type |
+| `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
 | `DelegationTarget` | type |
 | `DoneEvent` | type |
@@ -770,6 +775,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `assertSecureModes` | value |
 | `authFilePath` | value |
 | `AuthProvider` | value |
+| `builtinSecretStores` | value |
 | `CODEX_CLIENT_ID_ENV_VAR` | value |
 | `CODEX_PROVIDER` | value |
 | `createPlanOnlyGate` | value |
@@ -804,6 +810,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveAgentCredential` | value |
 | `resolveCredential` | value |
 | `resolveOperatorApiKey` | value |
+| `resolveSecretRefs` | value |
+| `SecretReferenceError` | value |
 | `writeCredential` | value |
 | `AgentCredentialInput` | type |
 | `AuthMethod` | type |
@@ -835,6 +843,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ResolveCredentialOptions` | type |
 | `ResolvedCredential` | type |
 | `RunCredentialHelperOptions` | type |
+| `SecretStore` | type |
 | `SourceOrigin` | type |
 | `StoredCredential` | type |
 | `StoredOAuthCredential` | type |
@@ -1352,15 +1361,21 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `checks` | value |
 | `diagnose` | value |
+| `DiagnosticBundleError` | value |
 | `installDiagnosticSink` | value |
 | `renderDiagnosis` | value |
 | `secretPresence` | value |
+| `writeDiagnosticBundle` | value |
 | `Check` | type |
+| `CredentialState` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |
 | `InstallDiagnosticSinkOptions` | type |
 | `SecretPresence` | type |
+| `SettingsFileReport` | type |
+| `WriteDiagnosticBundleOptions` | type |
 
 ## `@theokit/agents/usage`
 
