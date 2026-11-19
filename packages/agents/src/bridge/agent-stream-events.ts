@@ -328,3 +328,100 @@ export function isError(e: AgentStreamEvent): e is ErrorEvent {
 export function isApprovalRequired(e: AgentStreamEvent): e is ApprovalRequiredEvent {
   return e.type === 'approval_required'
 }
+export function isThinking(e: AgentStreamEvent): e is ThinkingEvent {
+  return e.type === 'thinking'
+}
+export function isInputRequested(e: AgentStreamEvent): e is InputRequestedEvent {
+  return e.type === 'input_requested'
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+const isStr = (v: unknown): v is string => typeof v === 'string'
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const isBool = (v: unknown): v is boolean => typeof v === 'boolean'
+const optional = (v: unknown, check: (x: unknown) => boolean): boolean =>
+  v === undefined || check(v)
+
+const FILE_EDIT_FORMATS = ['search-replace', 'unified-diff', 'full-file', 'line-range']
+
+function validUsage(u: unknown): boolean {
+  return (
+    isRecord(u) &&
+    isNum(u.inputTokens) &&
+    isNum(u.outputTokens) &&
+    isNum(u.totalTokens) &&
+    optional(u.reasoningTokens, isNum) &&
+    optional(u.cacheReadTokens, isNum) &&
+    optional(u.cacheWriteTokens, isNum)
+  )
+}
+
+/** Per-variant field validators; each checks every field its interface promises. */
+const VALIDATORS: Record<AgentStreamEvent['type'], (e: Record<string, unknown>) => boolean> = {
+  run_started: (e) => isStr(e.runId) && isStr(e.agentName) && optional(e.model, isStr),
+  text_delta: (e) => isStr(e.content),
+  tool_call: (e) => isStr(e.callId) && isStr(e.toolName),
+  partial_tool_call: (e) => isStr(e.callId) && isStr(e.toolName),
+  tool_result: (e) =>
+    isStr(e.callId) &&
+    isStr(e.toolName) &&
+    isStr(e.output) &&
+    isNum(e.durationMs) &&
+    isBool(e.isError) &&
+    optional(e.refusal, isRecord),
+  thinking: (e) => isStr(e.content),
+  iteration: (e) => isNum(e.step) && (e.totalSteps === null || isNum(e.totalSteps)),
+  approval_required: (e) =>
+    isStr(e.callId) &&
+    isStr(e.toolName) &&
+    isStr(e.question) &&
+    isStr(e.callbackUrl) &&
+    isNum(e.timeoutMs) &&
+    optional(e.payloadSchema, isRecord),
+  input_requested: (e) => isStr(e.requestId),
+  task_progress: (e) => optional(e.status, isStr) && optional(e.text, isStr),
+  shell_output: (e) => isRecord(e.event),
+  artifact_start: (e) =>
+    isStr(e.artifactId) &&
+    isStr(e.mimeType) &&
+    optional(e.filename, isStr) &&
+    optional(e.metadata, isRecord),
+  artifact_chunk: (e) => isStr(e.artifactId) && isStr(e.chunk) && isBool(e.isLast),
+  state_update: (e) => isStr(e.channel),
+  checkpoint_saved: (e) => isStr(e.checkpointId) && isNum(e.step) && isStr(e.resumeToken),
+  file_edit: (e) =>
+    isStr(e.file) &&
+    isStr(e.format) &&
+    FILE_EDIT_FORMATS.includes(e.format) &&
+    optional(e.search, isStr) &&
+    optional(e.replace, isStr) &&
+    optional(e.content, isStr) &&
+    optional(e.diff, isStr) &&
+    optional(e.startLine, isNum) &&
+    optional(e.endLine, isNum),
+  error: (e) => isStr(e.code) && isStr(e.message) && isBool(e.retryable),
+  done: (e) =>
+    isStr(e.result) &&
+    validUsage(e.usage) &&
+    isNum(e.durationMs) &&
+    optional(e.cost, isNum) &&
+    optional(e.stopReason, (s) => s === 'step_limit' || s === 'no_progress') &&
+    optional(e.model, isStr),
+}
+
+/**
+ * Validate an untrusted value as an {@link AgentStreamEvent}. Returns the event, or `undefined`
+ * when the value is not an object, has an unknown `type`, or violates its variant's field types.
+ */
+export function toAgentStreamEvent(value: unknown): AgentStreamEvent | undefined {
+  if (!isRecord(value) || !isStr(value.type)) return undefined
+  if (!Object.prototype.hasOwnProperty.call(VALIDATORS, value.type)) return undefined
+  const validate = VALIDATORS[value.type as AgentStreamEvent['type']]
+  return validate(value) ? (value as unknown as AgentStreamEvent) : undefined
+}
+
+/** Type guard form of {@link toAgentStreamEvent} for untrusted input. */
+export function isAgentStreamEvent(value: unknown): value is AgentStreamEvent {
+  return toAgentStreamEvent(value) !== undefined
+}

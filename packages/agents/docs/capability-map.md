@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1245 export(s) across 25 entry point(s).
+1261 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -121,12 +121,17 @@ Measured against `@theokit/sdk@5.17.0`.
 | `InvalidTaskIdError` | value |
 | `isAgentContext` | value |
 | `isAgentDefinition` | value |
+| `isAgentStreamEvent` | value |
 | `isApprovalRequired` | value |
+| `isDeltaTimelineEvent` | value |
 | `isDone` | value |
 | `isError` | value |
 | `isForbiddenPath` | value |
+| `isInputRequested` | value |
+| `isMessageTimelineEvent` | value |
 | `isPartialToolCall` | value |
 | `isTextDelta` | value |
+| `isThinking` | value |
 | `isToolCall` | value |
 | `isToolResult` | value |
 | `isTransientError` | value |
@@ -214,6 +219,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `textPayloadExtractor` | value |
 | `TheokitAgentError` | value |
 | `toAgentFactory` | value |
+| `toAgentStreamEvent` | value |
 | `tokenBudgetCompactionStrategy` | value |
 | `toModelOption` | value |
 | `Tool` | value |
@@ -507,11 +513,16 @@ Measured against `@theokit/sdk@5.17.0`.
 | `generateAgentRoutes` | value |
 | `isAgentContext` | value |
 | `isAgentDefinition` | value |
+| `isAgentStreamEvent` | value |
 | `isApprovalRequired` | value |
+| `isDeltaTimelineEvent` | value |
 | `isDone` | value |
 | `isError` | value |
+| `isInputRequested` | value |
+| `isMessageTimelineEvent` | value |
 | `isPartialToolCall` | value |
 | `isTextDelta` | value |
+| `isThinking` | value |
 | `isToolCall` | value |
 | `isToolResult` | value |
 | `loadMcpJson` | value |
@@ -535,6 +546,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `streamAgentUIMessages` | value |
 | `streamFromEmitter` | value |
 | `toAgentFactory` | value |
+| `toAgentStreamEvent` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |

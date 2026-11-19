@@ -43,6 +43,10 @@ export {
   isDone,
   isError,
   isApprovalRequired,
+  isThinking,
+  isInputRequested,
+  isAgentStreamEvent,
+  toAgentStreamEvent,
   type ArtifactStartEvent,
   type ArtifactChunkEvent,
   type StateUpdateEvent,
@@ -138,6 +142,8 @@ export { ERROR_CODE_DATA_PART, presentUIMessageStream } from './present-ui-messa
 export {
   createToolSeen,
   flushPendingToolResults,
+  isDeltaTimelineEvent,
+  isMessageTimelineEvent,
   translateTimelineEvent,
   type SdkTimelineEvent,
 } from './sdk-timeline.js'

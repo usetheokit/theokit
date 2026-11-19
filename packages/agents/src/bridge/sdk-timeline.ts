@@ -32,6 +32,20 @@ export interface SdkTimelineEvent {
   readonly textAlreadyStreamed?: boolean
 }
 
+/** Narrow a timeline event to one that carries a complete SDK message. */
+export function isMessageTimelineEvent(
+  e: SdkTimelineEvent,
+): e is SdkTimelineEvent & { readonly kind: 'message'; readonly message: SdkMessage } {
+  return e.kind === 'message' && e.message !== undefined
+}
+
+/** Narrow a timeline event to one that carries a delta update. */
+export function isDeltaTimelineEvent(
+  e: SdkTimelineEvent,
+): e is SdkTimelineEvent & { readonly kind: 'delta'; readonly update: unknown } {
+  return e.kind === 'delta' && e.update !== undefined
+}
+
 /**
  * Translate one timeline event into zero or more `StreamEvent`s.
  *
