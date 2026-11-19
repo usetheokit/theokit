@@ -113,7 +113,6 @@ export default defineConfig({
       // is what keeps this list honest; it sweeps `packages/*/tests` too.
       './packages/agents/vitest.config.ts',
       './packages/agents-pty/vitest.config.ts',
-      './packages/host/vitest.config.ts',
       './packages/http/vitest.config.ts',
       './packages/presenter/vitest.config.ts',
       './packages/theo/vitest.config.ts',
