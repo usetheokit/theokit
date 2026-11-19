@@ -703,10 +703,9 @@ function buildSendOptions(
       // the SDK reports the denial, so a later external denial of the same tool cannot claim it.
       // The SDK event carries no runId, so the run handle's id is used; `streamTimeline` resolves
       // anything seen before the handle was known.
-      if (handle.id !== undefined) {
-        retainRun(handle.id)
-        resolveRefusal(found, handle.id)
-      }
+      // No retainRun here: `streamTimeline` owns the retention for the stream's lifetime, and a
+      // denial reported after the consumer closed the stream must not re-retain a dropped run.
+      if (handle.id !== undefined) resolveRefusal(found, handle.id)
       refusals.set(found.callId, found)
     }
     return callerSink?.(ev)

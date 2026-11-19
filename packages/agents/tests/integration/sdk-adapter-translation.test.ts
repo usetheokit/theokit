@@ -271,6 +271,26 @@ describe('permission_denied → typed refusal on the tool result', () => {
     expect(byCall.c2).toMatchObject({ by: 'human', reason: 'person said no' })
   })
 
+  it('a denial reported after the consumer closed the stream does not re-retain the run', async () => {
+    h.handleId = 'sdk-run-7'
+    let sink: ((e: unknown) => void) | undefined
+    h.onSend = (o) => {
+      sink = o.onRunEvent
+    }
+    h.messages = [toolDone('c1', { stdout: 'ok', stderr: '', exitCode: 0 })]
+    const factory = createSdkAgentStream(trAgent, [], 'test-key', { model: 'openai/gpt-4o-mini' })
+    const it = factory('hi', 's1')[Symbol.asyncIterator]()
+    await it.next()
+    await it.return(undefined) // consumer cancels; the detached SDK run keeps going
+    // The still-running SDK run vetoes twice more; its late denial takes only one of them.
+    const m1 = recordRefusal('sdk-run-7', 'Bash', { by: 'human', reason: 'a' }, 'x')
+    recordRefusal('sdk-run-7', 'Bash', { by: 'human', reason: 'b' }, 'x')
+    sink?.(denied('c2', 'plugin', m1))
+    // Unmanaged runs flooding in must be able to evict the leftover entry: it is not retained.
+    for (let r = 0; r < 600; r++) recordRefusal(`r-late-${r}`, 'Bash', { by: 'policy' }, 'm')
+    expect(takeRefusal('sdk-run-7', 'Bash')).toBeUndefined()
+  })
+
   it('entries a run left unmatched are dropped when it ends', async () => {
     recordRefusal('sdk-run-3', 'Bash', { by: 'policy' }, 'm')
     h.onSend = (o) => {
