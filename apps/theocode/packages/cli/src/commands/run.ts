@@ -9,8 +9,7 @@ import {
   silentEmptyTurnDiagnostic,
 } from '../runtime/index.js'
 import { consumeWithForkIfBusy, availableIdOrFork } from '../runtime/index.js'
-import { DEFAULT_WATCHDOG_MS } from '@theokit/agents/commands'
-import { createDrainedProcessOutput } from '../runtime/index.js'
+import { exitAfterDrain } from '@theokit/agents/commands'
 import { homedir } from 'node:os'
 import { readFileSync, writeFileSync } from 'node:fs'
 import type { ExecRun } from '../runtime/index.js'
@@ -283,6 +282,5 @@ export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<voi
   //
   // So collection belongs to the long-lived surface (the TUI spawns a child), and `sessions gc`
   // remains here as the explicit command it always was.
-  const drainedExit = createDrainedProcessOutput(DEFAULT_WATCHDOG_MS)
-  drainedExit(execExitCode(result, emptyTurn))
+  exitAfterDrain(execExitCode(result, emptyTurn))
 }
