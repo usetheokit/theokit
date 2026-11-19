@@ -149,6 +149,17 @@ describe('skills through the SDK (OC-70..72, OC-74)', () => {
     }
   })
 
+  it('with the project source on, reads a plugin skill folder added after the options were created', async () => {
+    const cwd = dirWith({})
+    const options = theoClawAgentOptions({ model: 'm', apiKey: 'stub-key', skillsDir: dirWith({}), approvedHooks: new Set(['f']), pluginWorkspace: cwd })
+    expect(await skillRead(options, 'late-plugin')).not.toContain('LATE-BODY')
+    const root = join(cwd, '.theokit', 'plugins', 'acme', 'skills')
+    mkdirSync(join(root, 'late-plugin'), { recursive: true })
+    writeFileSync(join(root, '..', 'plugin.json'), JSON.stringify({ name: 'acme', version: '1.0.0' }))
+    writeFileSync(join(root, 'late-plugin', 'SKILL.md'), skillFile('late-plugin', 'LATE-BODY'))
+    expect(await skillRead(options, 'late-plugin')).toContain('LATE-BODY')
+  })
+
   it('with the project source on, a workspace skill beats a user skill, which beats a project skill', async () => {
     const cwd = dirWith({})
     mkdirSync(join(cwd, '.theokit', 'skills', 'dup'), { recursive: true })
