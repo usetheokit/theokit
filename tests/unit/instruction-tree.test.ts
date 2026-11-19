@@ -903,6 +903,21 @@ describe('loadInstructionTree as-listed order and per-file cap', () => {
     expect(tree.blocks.map((b) => b.path)).toEqual(['nested/A.md', 'B.md'])
   })
 
+  it('as-listed applies the list order before maxFiles, nested files included', () => {
+    write('B.md', 'b')
+    mkdirSync(join(root, 'nested'))
+    write('nested/A.md', 'a')
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget: { ...budget, maxFiles: 1 },
+      fileNames: ['A.md', 'B.md'],
+      order: 'as-listed',
+    })
+    expect(tree.blocks.map((b) => b.path)).toEqual(['nested/A.md'])
+    expect(tree.truncated).toBe(true)
+  })
+
   it.skipIf(process.getuid?.() === 0)('warns when a listed file cannot be read (EACCES)', () => {
     write('SOUL.md', 's')
     write('USER.md', 'u')

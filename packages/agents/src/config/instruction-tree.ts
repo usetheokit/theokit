@@ -279,6 +279,9 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
 
   const blocks: InstructionBlock[] = []
   const seenInodes = new Set<string>()
+  // `as-listed` collects a root's accepted files first so the list order is applied BEFORE the
+  // budgets: otherwise a root `B.md` would use up `maxFiles` ahead of a listed-first nested `A.md`.
+  let candidates: string[] | undefined
   let chars = 0
 
   /**
@@ -294,6 +297,25 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
    * threads it. No shared mutable state, so nothing to narrow wrongly — and the recursion now says
    * out loud what it decided instead of leaving a flag behind for someone else to read.
    */
+
+  /** Budget-checks and reads one accepted file. @returns `true` when a ceiling stopped the walk. */
+  const admit = (path: string): boolean => {
+    if (blocks.length >= input.budget.maxFiles) {
+      warn(`instruction budget: stopped at ${String(input.budget.maxFiles)} files`)
+      return true
+    }
+
+    const parsed = parseInstructionFile(path, cwd, warn, input.budget.maxCharsPerFile)
+    if (parsed === undefined) return false
+
+    if (chars + parsed.content.length > input.budget.maxChars) {
+      warn(`instruction budget: stopped at ${String(input.budget.maxChars)} characters`)
+      return true
+    }
+    chars += parsed.content.length
+    blocks.push(parsed)
+    return false
+  }
 
   /** @returns `true` when a ceiling stopped the walk — the caller must stop descending too. */
   const visit = (dir: string, depth: number): boolean => {
@@ -354,35 +376,30 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
         continue
       }
 
-      if (blocks.length >= input.budget.maxFiles) {
-        warn(`instruction budget: stopped at ${String(input.budget.maxFiles)} files`)
-        return true
+      if (candidates !== undefined) {
+        candidates.push(path)
+        continue
       }
-
-      const parsed = parseInstructionFile(path, cwd, warn, input.budget.maxCharsPerFile)
-      if (parsed === undefined) continue
-
-      if (chars + parsed.content.length > input.budget.maxChars) {
-        warn(`instruction budget: stopped at ${String(input.budget.maxChars)} characters`)
-        return true
-      }
-      chars += parsed.content.length
-      blocks.push(parsed)
+      if (admit(path)) return true
     }
     return false
   }
 
   let truncated = false
   for (const root of input.roots) {
-    const start = blocks.length
+    if (input.order === 'as-listed') candidates = []
     truncated = visit(resolve(cwd, root), 0)
-    // `as-listed` orders the blocks of the whole root by the array, nested directories included:
-    // the walk is per directory, so a nested `A.md` would otherwise follow a root `B.md`.
-    if (input.order === 'as-listed') {
+    if (candidates !== undefined) {
       const listed = input.fileNames as readonly string[]
-      const rank = (block: InstructionBlock): number => listed.indexOf(basename(block.path))
-      const sorted = blocks.splice(start).sort((a, b) => rank(a) - rank(b))
-      blocks.push(...sorted)
+      const found = candidates
+      candidates = undefined
+      found.sort((x, y) => listed.indexOf(basename(x)) - listed.indexOf(basename(y)))
+      for (const path of found) {
+        if (admit(path)) {
+          truncated = true
+          break
+        }
+      }
     }
     if (truncated) break
   }
