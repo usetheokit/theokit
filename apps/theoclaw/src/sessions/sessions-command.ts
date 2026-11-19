@@ -58,9 +58,9 @@ export function readMessages(file: string): Message[] {
   return messages
 }
 
-type ChatSession = ReturnType<typeof listSessions>[number] & { id: string }
+type ChatSession = Awaited<ReturnType<typeof listSessions>>[number] & { id: string }
 
-function listChatSessions(io: SessionsIo): ChatSession[] {
+async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {
   const env: NodeJS.ProcessEnv = { ...io.env }
   loadConfiguration(env, io.homeDir)
   const workspace =
@@ -71,7 +71,7 @@ function listChatSessions(io: SessionsIo): ChatSession[] {
       { variable: 'THEOCLAW_WORKSPACE' },
     )
   }
-  return listSessions(workspace, join(workspace, '.theoclaw')).filter(
+  return (await listSessions(workspace, join(workspace, '.theoclaw'))).filter(
     (entry): entry is ChatSession => entry.id !== undefined,
   )
 }
@@ -96,8 +96,8 @@ function pickSession(
   return found[0]
 }
 
-function findSession(wanted: string, io: SessionsIo): ChatSession | string {
-  const found = matchSession(listChatSessions(io), wanted)
+async function findSession(wanted: string, io: SessionsIo): Promise<ChatSession | string> {
+  const found = matchSession(await listChatSessions(io), wanted)
   return found.length === 1
     ? found[0]!
     : `theoclaw: ${found.length === 0 ? 'no session' : 'more than one session'} matches ${wanted}\n`
@@ -125,7 +125,11 @@ function flagValue(args: readonly string[], flag: string): { value: string; oper
  * read; `sessions open` prints one. A snapshot has no verb that appends to it, so the receiving
  * instance can read it but never send into it.
  */
-function shareCommand(verb: 'share' | 'open', args: readonly string[], io: SessionsIo): number {
+async function shareCommand(
+  verb: 'share' | 'open',
+  args: readonly string[],
+  io: SessionsIo,
+): Promise<number> {
   const { value: dir, operands } = flagValue(args, verb === 'share' ? '--to' : '--from')
   const wanted = operands[0]!
   const shared = join(dir, SHARED_SUBDIR)
@@ -149,7 +153,7 @@ function shareCommand(verb: 'share' | 'open', args: readonly string[], io: Sessi
     for (const message of snapshot.messages) io.stdout.write(`${message.role}: ${message.text}\n`)
     return 0
   }
-  const session = findSession(wanted, io)
+  const session = await findSession(wanted, io)
   if (typeof session === 'string') {
     io.stderr.write(session)
     return 1
@@ -171,9 +175,9 @@ function shareCommand(verb: 'share' | 'open', args: readonly string[], io: Sessi
 }
 
 /** `theoclaw resume`: prints the messages of the most recently updated chat session. */
-export function resumeCommand(args: readonly string[], io: SessionsIo): number {
+export async function resumeCommand(args: readonly string[], io: SessionsIo): Promise<number> {
   if (args.length > 0) throw new UsageError('theoclaw resume: expected no arguments')
-  const [last] = listChatSessions(io).sort(
+  const [last] = (await listChatSessions(io)).sort(
     (a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime(),
   )
   if (last === undefined) {
@@ -186,7 +190,7 @@ export function resumeCommand(args: readonly string[], io: SessionsIo): number {
   return 0
 }
 
-export function sessionsCommand(args: readonly string[], io: SessionsIo): number {
+export async function sessionsCommand(args: readonly string[], io: SessionsIo): Promise<number> {
   const [verb, ...rest] = args
   if (verb === 'share' || verb === 'open') return shareCommand(verb, rest, io)
   const json = rest.includes('--json')
@@ -203,7 +207,7 @@ export function sessionsCommand(args: readonly string[], io: SessionsIo): number
   ) {
     throw new UsageError(USAGE_TEXT)
   }
-  const sessions = listChatSessions(io)
+  const sessions = await listChatSessions(io)
   if (verb === 'list') {
     for (const entry of sessions) {
       io.stdout.write(
