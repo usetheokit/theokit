@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1252 export(s) across 25 entry point(s).
+1267 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -195,6 +195,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `setDiagnosticsSink` | value |
 | `setOnce` | value |
 | `SettingSourcesCapability` | value |
+| `shapeToolsAsCustomTools` | value |
 | `shouldAutoApprove` | value |
 | `SkillsCapability` | value |
 | `SkillsOptionsCapability` | value |
@@ -241,6 +242,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `withEphemeralAgent` | value |
 | `WithheldBuiltinToolsCapability` | value |
 | `withPreCompaction` | value |
+| `WorkspaceProviderError` | value |
+| `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `A2ACapabilities` | type |
 | `A2ASkill` | type |
@@ -341,6 +344,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `InlineSkill` | type |
 | `InProcessApprovalRequest` | type |
 | `InProcessAwaitApproval` | type |
+| `IsolatedWorkspace` | type |
 | `IterationEvent` | type |
 | `JudgeResult` | type |
 | `KnownAgentRunErrorCode` | type |
@@ -430,6 +434,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `StreamFromEmitterOptions` | type |
 | `StructuredOutputErrorCode` | type |
 | `SubagentDefinition` | type |
+| `SubAgentSpec` | type |
 | `Summarize` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
@@ -461,6 +466,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `WireChunk` | type |
 | `WireDataPart` | type |
 | `WiredEntity` | type |
+| `WorkspaceProvider` | type |
 
 ## `@theokit/agents/bridge`
 
@@ -541,6 +547,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `UntrustedSettingSourceError` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
+| `WorkspaceProviderError` | value |
+| `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `AfterToolCallContext` | type |
 | `AgentDefinition` | type |
@@ -590,6 +598,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `HookApprovalRequest` | type |
 | `InferAgentInput` | type |
 | `InferAgentToolNames` | type |
+| `IsolatedWorkspace` | type |
 | `IterationEvent` | type |
 | `LLMCallContext` | type |
 | `McpApprovalSpec` | type |
@@ -623,6 +632,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `StateUpdateEvent` | type |
 | `StreamEvent` | type |
 | `StreamFromEmitterOptions` | type |
+| `SubAgentSpec` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
 | `ToolArgsValidator` | type |
@@ -635,6 +645,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolInvokeRouteOptions` | type |
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
+| `WorkspaceProvider` | type |
 
 ## `@theokit/agents/testing`
 
