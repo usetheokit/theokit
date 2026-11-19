@@ -244,6 +244,23 @@ answers `continue` until the agent calls the tool with `complete` (`done`) or `b
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
 
+## Secret references in configuration
+
+`resolveSecretRefs(env, stores?)` from `@theokit/agents/auth` replaces every value that names a secret
+store with the value read from it, once at start. The syntax:
+
+- `secretref:env:NAME` reads another variable of `env`.
+- `secretref:file:PATH` reads a file (one trailing newline is dropped).
+- `op://vault/item/field` runs `op read --no-newline` (1Password CLI, 15 s timeout).
+- `secretref:vault:PATH#FIELD` reads Vault KV v2 at `$VAULT_ADDR/v1/PATH` with `VAULT_TOKEN`.
+
+It returns `{ env, values, refs }`: the new environment, the resolved values (pass them to your output
+masks) and a map of variable name to store kind, never a value. References are read from the input
+`env` and are not resolved recursively. A failure throws `SecretReferenceError` with `variable` and
+`store`; its message never contains the value, and an empty result is refused. Pass your own
+`SecretStore` (`kind`, `matches`, `read`) in `stores`, with `...builtinSecretStores` to keep the built-in
+ones. The cause of a failure from your own store is not kept, since it could carry the value.
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the

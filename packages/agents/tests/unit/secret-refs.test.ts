@@ -1,0 +1,111 @@
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import {
+  builtinSecretStores,
+  resolveSecretRefs,
+  SecretReferenceError,
+  type SecretStore,
+} from '../../src/auth-entry.js'
+
+const dirs: string[] = []
+afterEach(() => {
+  vi.unstubAllGlobals()
+  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+})
+const tmp = (): string => {
+  const d = mkdtempSync(join(tmpdir(), 'secret-refs-'))
+  dirs.push(d)
+  return d
+}
+
+describe('resolveSecretRefs', () => {
+  it('each builtin store resolves its reference', async () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'secret.txt'), 'from-file\n')
+    writeFileSync(join(dir, 'op'), '#!/bin/sh\nprintf "from-op:%s" "$3"\n')
+    chmodSync(join(dir, 'op'), 0o755)
+    const fetchFake = vi.fn(async () => Response.json({ data: { data: { key: 'from-vault' } } }))
+    vi.stubGlobal('fetch', fetchFake)
+    const result = await resolveSecretRefs({
+      PATH: `${dir}:${process.env.PATH ?? ''}`,
+      BASE: 'from-env',
+      A: 'secretref:env:BASE',
+      B: `secretref:file:${join(dir, 'secret.txt')}`,
+      C: 'op://v/i/f',
+      D: 'secretref:vault:secret/data/x#key',
+      VAULT_ADDR: 'https://vault.test/',
+      VAULT_TOKEN: 't',
+      PLAIN: 'keep',
+    })
+    expect(result.env).toMatchObject({
+      A: 'from-env',
+      B: 'from-file',
+      C: 'from-op:op://v/i/f',
+      D: 'from-vault',
+      PLAIN: 'keep',
+    })
+    expect(fetchFake).toHaveBeenCalledWith('https://vault.test/v1/secret/data/x', {
+      headers: { 'X-Vault-Token': 't' },
+    })
+    expect([...result.values].sort((a, b) => a.localeCompare(b))).toEqual([
+      'from-env',
+      'from-file',
+      'from-op:op://v/i/f',
+      'from-vault',
+    ])
+  })
+
+  it('a store failure throws SecretReferenceError naming the variable and the store', async () => {
+    const store: SecretStore = {
+      kind: 'stub',
+      matches: (r) => r.startsWith('stub:'),
+      read: () => Promise.reject(new Error('boom hunter2', { cause: 'hunter2' })),
+    }
+    const error = await resolveSecretRefs({ TOKEN: 'stub:x' }, [store]).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(SecretReferenceError)
+    const e = error as SecretReferenceError
+    expect(e.variable).toBe('TOKEN')
+    expect(e.store).toBe('stub')
+    expect(e.message).toContain('TOKEN')
+    expect(e.message).toContain('stub')
+    expect(e.message).not.toContain('hunter2')
+    expect(e.cause).toBeUndefined()
+  })
+
+  it('a builtin failure names the variable and store', async () => {
+    const error = await resolveSecretRefs({ K: 'secretref:file:/nonexistent/zzz' }).catch(
+      (e: unknown) => e,
+    )
+    expect(error).toMatchObject({ variable: 'K', store: 'file' })
+  })
+
+  it('a reference that resolves to an empty string is refused', async () => {
+    await expect(resolveSecretRefs({ A: 'secretref:env:MISSING' })).rejects.toBeInstanceOf(
+      SecretReferenceError,
+    )
+  })
+
+  it('a caller store is consulted for its own prefix', async () => {
+    const store: SecretStore = {
+      kind: 'mine',
+      matches: (r) => r.startsWith('mine:'),
+      read: async (r) => `got-${r.slice(5)}`,
+    }
+    const result = await resolveSecretRefs({ A: 'mine:1', B: 'secretref:env:A' }, [
+      store,
+      ...builtinSecretStores,
+    ])
+    expect(result.env.A).toBe('got-1')
+    expect(result.env.B).toBe('mine:1')
+  })
+
+  it('refs maps names to store kinds and never to values', async () => {
+    const result = await resolveSecretRefs({ S: 's3cret', A: 'secretref:env:S', P: 'plain' })
+    expect(result.refs).toEqual({ A: 'env' })
+    expect(JSON.stringify(result.refs)).not.toContain('s3cret')
+  })
+})
