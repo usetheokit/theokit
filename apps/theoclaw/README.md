@@ -1159,3 +1159,9 @@ than 4 tool rounds is trimmed from the next request. `THEOCLAW_PRUNE_TOOL_RESULT
 `pnpm build && pnpm build:sea` writes `dist/sea/theoclaw`, a single executable (Node SEA) that runs
 `./theoclaw --help` on a machine without Node. Commands that start the service (`start`, `acp`) still
 spawn `main.js` from a checkout or npm install.
+
+## Related work
+
+Issue #1781 stays TheoClaw-only. The unrelated `@theokit/host` package and presenter run-timeline
+features are tracked in the follow-up #2366; see
+[docs/program/theoclaw-1781-split.md](../../docs/program/theoclaw-1781-split.md).
