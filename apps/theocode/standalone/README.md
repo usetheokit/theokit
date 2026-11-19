@@ -6,6 +6,7 @@ run against it.
 
 ```sh
 cd apps/theocode/standalone
+pnpm install --frozen-lockfile
 node sync-manifest.mjs --check
 pnpm test   # auth and sync-manifest tests
 ```
