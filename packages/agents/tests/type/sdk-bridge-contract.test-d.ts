@@ -16,6 +16,7 @@ import {
   type SdkTurnHandle,
   type SdkTurnOutcome,
   type SdkRun,
+  type SdkRunAgent,
   translateSdkEvent,
   translateTimelineEvent,
   createToolSeen,
@@ -82,5 +83,27 @@ describe('bridge contract vs TheoClaw requirements', () => {
   it('the outcome carries cost and error.code', () => {
     expectTypeOf<SdkTurnOutcome>().toHaveProperty('cost')
     expectTypeOf<NonNullable<SdkTurnOutcome['error']>>().toHaveProperty('code')
+  })
+})
+
+/** TheoClaw's `TurnAgent.send` (apps/theoclaw/src/agent-port.ts), restated. */
+interface TheoClawTurnAgent {
+  send(
+    message:
+      | string
+      | { readonly text: string; readonly images: { data: string; mimeType: string }[] },
+    options?: {
+      readonly signal?: AbortSignal
+      readonly toolResultGuard?: { readonly delimit?: boolean }
+      readonly queueMode?: 'followup' | 'steer' | 'collect'
+      readonly onDelta?: (args: { readonly update: { readonly type: string } }) => void
+    },
+  ): Promise<TheoClawTurnRun>
+}
+
+describe('SdkRunAgent vs TheoClaw TurnAgent', () => {
+  it('a real SDKAgent send and SdkRunAgent can replace the TheoClaw agent port', () => {
+    expectTypeOf<SDKAgent['send']>().toExtend<SdkRunAgent['send']>()
+    expectTypeOf<SdkRunAgent>().toExtend<TheoClawTurnAgent>()
   })
 })

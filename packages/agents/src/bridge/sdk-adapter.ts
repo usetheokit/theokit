@@ -946,6 +946,15 @@ export interface SdkAgentHandle {
 }
 
 /**
+ * An agent whose `send` resolves the strict {@link SdkRun}: what a consumer that streams, cancels
+ * and reads priced outcomes (TheoClaw) needs. A real SDK agent satisfies it; `SdkAgentHandle` stays
+ * the lenient shape for injected doubles.
+ */
+export type SdkRunAgent = Omit<SdkAgentHandle, 'send'> & {
+  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkRun>
+}
+
+/**
  * #12 — bridge a builder/`defineAgent` {@link TheokitAgentDefinition} to a real `SDKAgent` FACTORY,
  * so surfaces that require an `SDKAgent` (or `(sessionId) => SDKAgent`) — notably `theokit acp`,
  * whose entry default-export must be one — can serve an agent defined with the `AgentBuilder.create()` chain.

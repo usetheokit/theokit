@@ -75,6 +75,7 @@ export {
   type SdkTurnHandle,
   type SdkTurnOutcome,
   type SdkRun,
+  type SdkRunAgent,
   type SdkStreamMessage,
 } from './sdk-adapter.js'
 // M96 — the approval posture crosses the boundary: without it being nameable, the consumer cannot
