@@ -179,6 +179,7 @@ export {
   copyJobs,
   createPostgresJobStore,
   JobCopyError,
+  JobCopyUnsupportedError,
   type SqlPool,
 } from './schedule/postgres-job-store.js'
 export {

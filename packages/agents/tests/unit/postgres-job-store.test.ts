@@ -9,6 +9,7 @@ import {
   copyJobs,
   createPostgresJobStore,
   JobCopyError,
+  JobCopyUnsupportedError,
   type SqlPool,
 } from '../../src/schedule/postgres-job-store.js'
 
@@ -101,7 +102,38 @@ describe('createPostgresJobStore', () => {
   })
 })
 
+describe('reserved-word table names', () => {
+  it('quotes the table in every statement', async () => {
+    const { pool, calls } = fakePool()
+    const store = await createPostgresJobStore(pool, { table: 'user' })
+    await store.put(job('a'))
+    await store.setPreviousOutput('a', 'x')
+    await store.remove('a')
+    expect(calls.length).toBeGreaterThanOrEqual(5)
+    for (const c of calls) expect(c.sql).toContain('"user"')
+    for (const c of calls) expect(c.sql).not.toMatch(/(FROM|INTO|EXISTS|UPDATE) user\b/)
+  })
+})
+
 describe('copyJobs', () => {
+  it('refuses a target that cannot take the copy atomically, writing nothing', async () => {
+    const puts: string[] = []
+    const base = createJobStore('/nonexistent-dir/none.json')
+    const to = {
+      ...base,
+      list: () => [] as ScheduledJob[],
+      put: (j: ScheduledJob) => {
+        puts.push(j.id)
+        return j.id === 'b' ? Promise.reject(new Error('boom')) : Promise.resolve()
+      },
+    }
+    const from = { ...base, list: () => [job('a'), job('b')] }
+    await expect(copyJobs(from, to, { force: false })).rejects.toBeInstanceOf(
+      JobCopyUnsupportedError,
+    )
+    expect(puts).toEqual([])
+  })
+
   it('copyJobs refuses a non-empty target without force, and with force copies every job', async () => {
     const dummy = fakePool([{ id: 'x', job: job('x') }])
     const target = await createPostgresJobStore(dummy.pool)
