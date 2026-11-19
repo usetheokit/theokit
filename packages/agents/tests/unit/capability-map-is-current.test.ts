@@ -92,7 +92,7 @@ describe('the committed capability map is what the package implies', () => {
     const start = rendered.indexOf('## `@theokit/agents/config`')
     expect(start, 'the config section is missing from the map').toBeGreaterThanOrEqual(0)
     const next = rendered.indexOf('\n## ', start + 1)
-    const section = rendered.slice(start, next === -1 ? undefined : next)
+    const section = rendered.slice(start, next === -1 ? rendered.length : next)
     for (const name of ['parseDottedOverrides', 'DottedOverrideError', 'applyOutputStyle']) {
       expect(section, `${name} is missing from the config section`).toContain(`\`${name}\``)
     }
