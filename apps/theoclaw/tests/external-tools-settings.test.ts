@@ -79,21 +79,35 @@ describe('the external tools file at start', () => {
     expect(error.message).not.toContain('sk-leak')
   })
 
-  it('refuses an HTTP server whose auth has no oauth block, which the SDK would refuse at create', () => {
+  it('refuses an HTTP server whose auth has no oauth block, naming auth.oauth and not SDK 5.11.0', () => {
     const error = refusalOf({ mcpServers: { docs: { url: 'https://x.example/mcp', auth: { CLIENT_ID: 'c' } } } })
     expect(error.message).toContain('mcpServers.docs.auth.oauth')
     expect(error.message).not.toContain('5.11.0')
   })
 
-  it('accepts an HTTP server with auth.oauth and masks its CLIENT_SECRET', () => {
+  it('refuses auth.CLIENT_SECRET, which the SDK never sends to the token endpoint', () => {
+    const oauth = { authorizationEndpoint: 'https://x.example/a', tokenEndpoint: 'https://x.example/t', redirectMode: 'manual' }
+    const error = refusalOf({ mcpServers: { docs: { url: 'https://x.example/mcp', auth: { CLIENT_ID: 'c', CLIENT_SECRET: 'client-secret-0123', oauth } } } })
+    expect(error.message).toContain('mcpServers.docs.auth')
+    expect(error.message).not.toContain('client-secret-0123')
+  })
+
+  it('masks a header named CLIENT_SECRET beside an auth.oauth block', () => {
+    const oauth = { authorizationEndpoint: 'https://x.example/a', tokenEndpoint: 'https://x.example/t', redirectMode: 'manual' }
+    const read = resolveExternalTools({
+      [VARIABLE]: toolsFile({ mcpServers: { docs: { url: 'https://x.example/mcp', headers: { CLIENT_SECRET: 'header-secret-0123' }, auth: { CLIENT_ID: 'c', oauth } } } }),
+    })
+    expect(read.secrets).toEqual(['header-secret-0123'])
+  })
+
+  it('accepts an HTTP server with auth.oauth', () => {
     const auth = {
       CLIENT_ID: 'client',
-      CLIENT_SECRET: 'client-secret-0123',
       oauth: { authorizationEndpoint: 'https://x.example/a', tokenEndpoint: 'https://x.example/t', redirectMode: 'manual' },
     }
     const read = resolveExternalTools({ [VARIABLE]: toolsFile({ mcpServers: { docs: { url: 'https://x.example/mcp', auth } } }) })
     expect(read.mcpServers.docs).toEqual({ url: 'https://x.example/mcp', auth })
-    expect(read.secrets).toEqual(['client-secret-0123'])
+    expect(read.secrets).toEqual([])
   })
 
   it('refuses envPolicy all', () => {

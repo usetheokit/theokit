@@ -76,10 +76,11 @@ const stdioServer = z.strictObject({
 })
 
 // The SDK sends a bearer only for `auth.oauth` (a stored token, refreshed, or the PKCE flow) and
-// refuses an `auth` without it at `Agent.create`, so the file must carry it.
+// refuses an `auth` without it at `Agent.create`, so the file must carry it. `CLIENT_SECRET` is not
+// accepted: SDK 5.17.0 sends only `client_id` to the token endpoint (code exchange and refresh), so a
+// confidential client would pass validation and then fail to get a token.
 const mcpAuth = z.strictObject({
   CLIENT_ID: z.string().min(1),
-  CLIENT_SECRET: z.string().min(1).optional(),
   scopes: z.array(z.string()).optional(),
   oauth: z.strictObject({
     authorizationEndpoint: z.url({ protocol: /^https?$/ }),
@@ -166,10 +167,10 @@ function checkAcpNames(agents: readonly AcpAgentConfig[], path: string): void {
   }
 }
 
-/** The values the output mask hides for `servers`: every header and env value, and an HTTP `auth.CLIENT_SECRET`, of at least 8 characters. */
+/** The values the output mask hides for `servers`: every header and env value of at least 8 characters. */
 export function secretsOf(servers: Readonly<Record<string, McpServerConfig>>): string[] {
   return Object.values(servers).flatMap((server) => {
-    const values = 'url' in server ? { ...server.headers, CLIENT_SECRET: server.auth?.CLIENT_SECRET ?? '' } : server.env
+    const values = 'url' in server ? server.headers : server.env
     return Object.values(values ?? {}).filter((value) => value.length >= MIN_MASKED_LENGTH)
   })
 }

@@ -115,7 +115,7 @@ describe('an HTTP MCP server configured through auth.oauth', () => {
 
   it('is refused by the SDK at create when auth has no oauth block', async () => {
     const mcp = await startMcp()
-    await expect(turn({ url: mcp.url, auth: { CLIENT_ID: 'client', CLIENT_SECRET: 'a-secret-value' } })).rejects.toThrow(/without auth\.oauth/)
+    await expect(turn({ url: mcp.url, auth: { CLIENT_ID: 'client' } })).rejects.toThrow(/without auth\.oauth/)
     expect(mcp.listAuthorizations).toEqual([])
   }, 30_000)
 })
