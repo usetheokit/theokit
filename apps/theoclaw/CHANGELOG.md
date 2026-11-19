@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- WebChat's terminal event is typed as the bridge's `DoneEvent`: the usage line and model are added only to a `done` that carries `result`, `usage` and `durationMs`, and a command answered locally (`/think`, `/compact`, `/steer`, `/stop`, `/status`) ends with a complete `done` holding its reply, zero usage and zero duration, so no usage line is written for it.
+
 - The configuration file, the daemon unit and plist files, the pairing, device, exec-approval, MCP relay grant, visitor grant and relay state and mailbox files are written through `@theokit/sdk/persistence`, so two writers in one process no longer share a `<pid>.tmp` temporary name.
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
 - CodeQL alerts (#1726): the capture proxy forwards only `http:` URLs, `skills publish` and the control client accept only http(s) and ws(s) addresses, and `sessions share` creates its file without following a planted link.

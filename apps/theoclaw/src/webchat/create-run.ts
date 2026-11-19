@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@theokit/agents/bridge'
+import type { DoneEvent, StreamEvent } from '@theokit/agents/bridge'
 
 import { describeError } from '../control-plane/errors.js'
 import type { TurnEvent, TurnOutcome, TurnRunner } from '../control-plane/turn.js'
@@ -19,17 +19,27 @@ const DONE: IteratorReturnResult<undefined> = { done: true, value: undefined }
  * The run's `done` with the turn's usage record (FR-003): the token counts and cost the run
  * reported, the cost left out when the run was unpriced, and the model.
  */
-function withUsage(done: StreamEvent, usage: TurnUsage): StreamEvent {
+function withUsage(done: DoneEvent, usage: TurnUsage): DoneEvent {
   const { inputTokens, outputTokens } = usage
-  const prior = typeof done.usage === 'object' && done.usage !== null ? done.usage : {}
-  const enriched: StreamEvent = {
+  const enriched: DoneEvent = {
     ...done,
-    usage: { ...prior, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
+    usage: { ...done.usage, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
     model: usage.model,
   }
   if (usage.costUsd === undefined) delete enriched.cost
   else enriched.cost = usage.costUsd
   return enriched
+}
+
+/** A `done` that carries the typed terminal fields; one that lacks them is passed on unenriched. */
+function isTypedDone(event: StreamEvent): event is StreamEvent & DoneEvent {
+  return (
+    event.type === 'done' &&
+    typeof event.result === 'string' &&
+    typeof event.durationMs === 'number' &&
+    typeof event.usage === 'object' &&
+    event.usage !== null
+  )
 }
 
 /**
@@ -71,7 +81,7 @@ function startTurn(
   }
   const release = (usage?: TurnUsage): void => {
     if (held === undefined) return
-    queue.push(usage === undefined ? held.done : withUsage(held.done, usage), ...held.after)
+    queue.push(usage === undefined || !isTypedDone(held.done) ? held.done : { ...withUsage(held.done, usage) }, ...held.after)
     held = undefined
     notify()
   }
