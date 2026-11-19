@@ -1,4 +1,5 @@
 import {
+  type AgentStreamEvent,
   createToolSeen,
   flushPendingToolResults,
   type SdkMessage,
@@ -11,7 +12,7 @@ import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { createEventMask } from './event-mask.js'
-import { describeStreamedError, outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
+import { describeStreamedError, outcomeOf, toTurnEvent, type TurnEvent, type TurnOutcome } from './turn.js'
 
 /** Where a session turn's translated events go, and who learns of the run once it exists. */
 export interface SessionTurnOptions {
@@ -33,8 +34,9 @@ export interface SessionTurnOptions {
 /** Every translated event of the run, live text deltas included; the first streamed error's code. */
 async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<string | undefined> {
   let streamedError: string | undefined
-  const forward = (events: readonly TurnEvent[]): void => {
-    for (const event of events) {
+  const forward = (events: readonly (AgentStreamEvent | TurnEvent)[]): void => {
+    for (const typed of events) {
+      const event = toTurnEvent(typed as AgentStreamEvent)
       if (event.type === 'error') streamedError ??= describeStreamedError(event)
       options.emit(event)
     }
