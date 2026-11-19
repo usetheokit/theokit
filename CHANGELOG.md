@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `@theokit/host`: `@theokit/host/backup` keeps backups in named storage locations, optionally encrypted with AES-256-GCM (`createStorageRegistry`).
+
 ### Fixed
 
 - `theokit`: the route manifest gives each page, layout, error, loading and not-found component a unique identifier, so `tasks/[id]/page.tsx` and `plans/[id]/page.tsx` build together.
