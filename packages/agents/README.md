@@ -213,6 +213,21 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
+## Delegating to a fresh agent per task
+
+`delegationPortFromAgentFactory(create, { sendOptions })` (from `@theokit/agents/bridge`) returns a
+`DelegationPort` that builds an agent with `create` for each task, sends the task, cancels the run when
+the delegating signal aborts, and disposes the agent after success, failure or cancellation. A run that
+streamed an error or did not end `finished` rejects with a `DelegationError`; guardrail and delegation
+errors pass through unchanged.
+
+```ts
+import { delegationPortFromAgentFactory } from '@theokit/agents/bridge'
+
+const worker = delegationPortFromAgentFactory(() => createWorkerAgent())
+const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: worker }] })
+```
+
 ## Registering subagents
 
 `AgentBuilder.subagents()` (and `defineAgent({ subagents })`) takes `description` and `prompt` (required), plus optional `tools`, `model` (a `ModelSelection`, or `'inherit'`/absent for the parent's model) and `mcpServers` (names or inline configs, as the SDK takes them). All are passed to the SDK unchanged. `sandbox` and `memory` are not accepted: apply memory with `applySubagentMemory` before registering.
