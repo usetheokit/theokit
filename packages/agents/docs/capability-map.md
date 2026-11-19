@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1249 export(s) across 25 entry point(s).
+1245 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -213,7 +213,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `textPayloadExtractor` | value |
 | `TheokitAgentError` | value |
 | `toAgentFactory` | value |
-| `toAgentStreamEvent` | value |
 | `tokenBudgetCompactionStrategy` | value |
 | `toModelOption` | value |
 | `Tool` | value |
@@ -410,7 +409,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SDKAgent` | type |
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
-| `SdkMessageLike` | type |
 | `SdkSendOptions` | type |
 | `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
@@ -534,7 +532,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `streamAgentUIMessages` | value |
 | `streamFromEmitter` | value |
 | `toAgentFactory` | value |
-| `toAgentStreamEvent` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
@@ -612,7 +609,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ScoreVerdict` | type |
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
-| `SdkMessageLike` | type |
 | `SdkSendOptions` | type |
 | `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |

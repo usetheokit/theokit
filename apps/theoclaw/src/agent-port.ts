@@ -1,4 +1,4 @@
-import type { SdkMessageLike, SdkTimelineEvent } from '@theokit/agents/bridge'
+import type { AgentStreamEvent, SdkMessage, SdkTimelineEvent } from '@theokit/agents/bridge'
 import type { InteractionUpdate } from '@theokit/sdk'
 
 /**
@@ -68,7 +68,37 @@ export interface GoalRunResult {
  * same reason as the stream element: the bridge's `SdkTimelineEvent` carries `SdkMessage`, whose
  * index signature the SDK's own event type does not declare.
  */
-export type TurnTimelineEvent = SdkTimelineEvent
+export interface TurnTimelineEvent {
+  readonly kind: 'message' | 'delta'
+  readonly message?: SdkMessageLike
+  readonly update?: InteractionUpdate
+  readonly textAlreadyStreamed?: boolean
+}
+
+/** What the translators read of an SDK message: its discriminant. The SDK's own messages have it. */
+export interface SdkMessageLike {
+  readonly type: string
+}
+
+/** A stream message as the bridge's `SdkMessage`; the copy carries the index signature the SDK's interfaces lack. */
+export function toSdkMessage(message: SdkMessageLike): SdkMessage {
+  return { ...message }
+}
+
+/** A timeline event as the bridge's `SdkTimelineEvent`, built field by field (no cast). */
+export function toSdkTimelineEvent(event: TurnTimelineEvent): SdkTimelineEvent {
+  return {
+    kind: event.kind,
+    ...(event.message === undefined ? {} : { message: toSdkMessage(event.message) }),
+    ...(event.update === undefined ? {} : { update: event.update }),
+    ...(event.textAlreadyStreamed === undefined ? {} : { textAlreadyStreamed: event.textAlreadyStreamed }),
+  }
+}
+
+/** Whether a wire event carries the discriminant of an `AgentStreamEvent`; the one narrowing, no cast. */
+export function isAgentStreamEvent(event: { readonly type: string }): event is AgentStreamEvent {
+  return typeof event.type === 'string'
+}
 
 export interface TurnRun {
   stream(): AsyncIterable<SdkMessageLike>

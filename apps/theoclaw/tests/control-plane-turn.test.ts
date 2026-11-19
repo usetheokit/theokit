@@ -1,6 +1,11 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import type { SdkTimelineEvent } from '@theokit/agents/bridge'
 import type { SDKAgent, SDKMessage } from '@theokit/sdk'
+import {
+  isAgentStreamEvent,
+  toSdkMessage,
+  toSdkTimelineEvent,
+  type TurnTimelineEvent,
+} from '../src/agent-port.js'
 
 import type {
   TurnAgent as ReplyTurnAgent,
@@ -551,7 +556,7 @@ describe('typed SDK usage (#2317)', () => {
       run_id: 'r',
       message: { role: 'assistant', content: [{ type: 'text', text: 'typed' }] },
     }
-    const timeline: SdkTimelineEvent = {
+    const timeline: TurnTimelineEvent = {
       kind: 'delta',
       update: { type: 'text-delta', text: 'ty' },
     }
@@ -574,5 +579,24 @@ describe('typed SDK usage (#2317)', () => {
     })
     expect(outcome).toEqual({ ok: true })
     expect(events.map((e) => e['content'])).toContain('typed')
+  })
+})
+
+describe('the typed conversions of the port (#2317)', () => {
+  it('copies a message and a timeline event into the bridge types', () => {
+    expect(toSdkMessage({ type: 'status' })).toEqual({ type: 'status' })
+    expect(toSdkTimelineEvent({ kind: 'delta', update: { type: 'text-delta', text: 'x' } })).toEqual({
+      kind: 'delta',
+      update: { type: 'text-delta', text: 'x' },
+    })
+    expect(toSdkTimelineEvent({ kind: 'message', message: { type: 'status' }, textAlreadyStreamed: true })).toEqual({
+      kind: 'message',
+      message: { type: 'status' },
+      textAlreadyStreamed: true,
+    })
+  })
+
+  it('narrows a wire event to an AgentStreamEvent by its discriminant', () => {
+    expect(isAgentStreamEvent({ type: 'text_delta' })).toBe(true)
   })
 })
