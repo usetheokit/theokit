@@ -9,7 +9,7 @@
  * The agent card builder is also exported here (and stays in the root barrel); the MCP server
  * manifest stays in the root barrel only.
  */
-export { createA2ATool } from './a2a/a2a-client.js'
+export { A2ATimeoutError, createA2ATool } from './a2a/a2a-client.js'
 export type { A2AAuth, A2AToolConfig } from './a2a/a2a-client.js'
 export { createA2AJsonRpcHandler } from './a2a/a2a-json-rpc-handler.js'
 export type { A2AJsonRpcHandlerOptions } from './a2a/a2a-json-rpc-handler.js'
