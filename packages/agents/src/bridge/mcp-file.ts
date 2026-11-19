@@ -40,7 +40,7 @@
  * `.mcp.json` is a **project** file, which can be committed by accident.
  */
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
@@ -183,20 +183,113 @@ export function loadMcpJson(cwd: string, opts: LoadMcpJsonOptions = {}): McpServ
   const path = join(cwd, MCP_FILENAME)
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- `cwd` is the caller's own project directory; the filename is the fixed convention above
   if (!existsSync(path)) return {}
+  return parseMcpJson(
+    readJsonFile(path, false),
+    path,
+    warningChannel(opts),
+    opts.env ?? process.env,
+  )
+}
+
+/** Read and JSON-parse `path`. `quiet` keeps V8's parse message (it quotes file text) out of the error. */
+function readJsonFile(path: string, quiet: boolean): unknown {
   let text: string
   try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path, already existence-checked one line above
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- the caller's own path
     text = readFileSync(path, 'utf8')
   } catch (err) {
     throw new McpFileError(`failed to read ${path}: ${describeIt(err)}`)
   }
-  let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    return JSON.parse(text)
   } catch (err) {
-    throw new McpFileError(`${path} is not valid JSON: ${describeIt(err)}`)
+    const detail = quiet ? '.' : ': ' + describeIt(err)
+    throw new McpFileError(`${path} is not valid JSON${detail}`)
   }
-  return parseMcpJson(parsed, path, warningChannel(opts), opts.env ?? process.env)
+}
+
+/**
+ * The security policy {@link loadMcpServersFile} applies. Every field is optional; the default of
+ * each is the strict choice.
+ */
+export interface McpServersPolicy {
+  /** A `command` containing `/` must be absolute (a relative one resolves inside a directory a model may write). Default `true`. */
+  requireAbsoluteCommandPaths?: boolean
+  /** A stdio `cwd` must be absolute. Default `true`. */
+  requireAbsoluteCwd?: boolean
+  /** The `envPolicy` values a stdio entry may carry. Default `['inherit-scrubbed', 'core']`. */
+  allowedEnvPolicies?: readonly ('inherit-scrubbed' | 'core' | 'all')[]
+  /** The largest `requestTimeoutMs`; Node clamps a longer delay to 1 ms. Default `2_147_483_647`. */
+  maxTimeoutMs?: number
+  /** A server name must match this. Default `^[a-z](?:[a-z0-9-]{0,62}[a-z0-9])?$` (keeps `mcp_<server>_<tool>` intact). */
+  serverName?: RegExp
+  /** Refuse keys an entry may not carry, instead of warning. Default `true`. */
+  refuseUnknownKeys?: boolean
+}
+
+interface ResolvedPolicy {
+  requireAbsoluteCommandPaths: boolean
+  requireAbsoluteCwd: boolean
+  allowedEnvPolicies: readonly string[]
+  maxTimeoutMs: number
+  serverName: RegExp
+  refuseUnknownKeys: boolean
+}
+
+const MAX_TIMEOUT_MS = 2_147_483_647
+// eslint-disable-next-line security/detect-unsafe-regex -- bounded quantifier on a fixed pattern
+const SAFE_SERVER_NAME = /^[a-z](?:[a-z0-9-]{0,62}[a-z0-9])?$/
+
+function resolvePolicy(policy: McpServersPolicy = {}): ResolvedPolicy {
+  return {
+    requireAbsoluteCommandPaths: policy.requireAbsoluteCommandPaths ?? true,
+    requireAbsoluteCwd: policy.requireAbsoluteCwd ?? true,
+    allowedEnvPolicies: policy.allowedEnvPolicies ?? ['inherit-scrubbed', 'core'],
+    maxTimeoutMs: policy.maxTimeoutMs ?? MAX_TIMEOUT_MS,
+    // A copy without `g`/`y`: a stateful caller regex would answer differently per server.
+    // eslint-disable-next-line security/detect-non-literal-regexp -- re-compiles the caller's own regex
+    serverName: new RegExp(
+      (policy.serverName ?? SAFE_SERVER_NAME).source,
+      (policy.serverName ?? SAFE_SERVER_NAME).flags.replace(/[gy]/g, ''),
+    ),
+    refuseUnknownKeys: policy.refuseUnknownKeys ?? true,
+  }
+}
+
+/**
+ * Load the MCP servers from a file at `path` the caller names, applying a security policy.
+ *
+ * Parses with the same parser as {@link loadMcpJson}; the difference is that a violation THROWS
+ * {@link McpFileError} naming the file and the JSON path (never a value) instead of skipping the
+ * entry. An absent file is an error too: the operator named it. Policy defaults are the strict ones.
+ */
+export function loadMcpServersFile(
+  path: string,
+  options: { policy?: McpServersPolicy } & LoadMcpJsonOptions = {},
+): McpServersMap {
+  return parseMcpJson(
+    readJsonFile(path, true),
+    path,
+    warningChannel(options),
+    options.env ?? process.env,
+    resolvePolicy(options.policy),
+  )
+}
+
+/**
+ * Every header and env value of at least `minLength` characters, for an output mask. Shorter values
+ * are skipped: masking "1" or "true" would corrupt unrelated output.
+ */
+export function mcpSecretValues(servers: McpServersMap, minLength = 8): string[] {
+  const out = new Set<string>()
+  for (const server of Object.values(servers)) {
+    const rec = server as { env?: Record<string, string>; headers?: Record<string, string> }
+    for (const bag of [rec.headers, rec.env]) {
+      if (bag === undefined) continue
+      for (const v of Object.values(bag)) if (v.length >= minLength) out.add(v)
+    }
+  }
+  return [...out]
 }
 
 /**
@@ -244,6 +337,7 @@ function parseMcpJson(
   source: string,
   onWarn: (a: string) => void,
   env: Record<string, string | undefined>,
+  strict?: ResolvedPolicy,
 ): McpServersMap {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new McpFileError(`${source}: root must be a JSON object with an "mcpServers" key.`)
@@ -271,6 +365,10 @@ function parseMcpJson(
     }
     // THE FAILURE RADIUS IS THE ENTRY. An entry that does not validate is omitted and NAMED; its
     // neighbours still come through.
+    if (strict !== undefined) {
+      const violation = strictViolation(name, entryRaw, strict)
+      if (violation !== undefined) throw new McpFileError(`${source}: ${violation}`)
+    }
     const reason = validateEntry(name, entryRaw)
     if (reason !== undefined) {
       // The message never carries a `headers` value — `validateEntry` returns only the reason, and it
@@ -278,9 +376,74 @@ function parseMcpJson(
       onWarn(`${source}: server "${name}" ignored — ${reason}`)
       continue
     }
-    out[name] = buildEntry(entryRaw as Record<string, unknown>, name, env, onWarn, source)
+    out[name] = buildEntry(
+      entryRaw as Record<string, unknown>,
+      name,
+      env,
+      onWarn,
+      source,
+      strict !== undefined,
+    )
   }
   return out
+}
+
+/**
+ * The policy check for one entry, in strict mode. Returns a message naming the JSON path, built from
+ * the SHAPE only — never from a value in the file. Runs before shape validation, so a violation is
+ * an error where the lenient parser would warn and skip.
+ */
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- a flat list of independent policy checks
+function strictViolation(
+  name: string,
+  entryRaw: unknown,
+  policy: ResolvedPolicy,
+): string | undefined {
+  const at = `mcpServers.${name}`
+  if (!policy.serverName.test(name)) {
+    return `${at}: the server name does not match ${policy.serverName.source}.`
+  }
+  if (typeof entryRaw !== 'object' || entryRaw === null || Array.isArray(entryRaw)) {
+    return `${at}: the entry must be an object.`
+  }
+  const entry = entryRaw as Record<string, unknown>
+  const remote = entry.url !== undefined
+  if (entry.auth !== undefined) {
+    return `${at}.auth: refused — the installed SDK ignores "auth", so it would not take effect.`
+  }
+  if (policy.refuseUnknownKeys) {
+    const allowed = remote ? STRICT_REMOTE_KEYS : STRICT_STDIO_KEYS
+    for (const key of Object.keys(entry)) {
+      if (!allowed.has(key)) return `${at}.${key}: unknown key.`
+    }
+  }
+  if (entry.requestTimeoutMs !== undefined) {
+    const t = entry.requestTimeoutMs
+    if (typeof t !== 'number' || !Number.isInteger(t) || t <= 0 || t > policy.maxTimeoutMs) {
+      return `${at}.requestTimeoutMs: must be a positive integer of at most ${policy.maxTimeoutMs}.`
+    }
+  }
+  if (remote) return undefined
+  if (
+    policy.requireAbsoluteCommandPaths &&
+    typeof entry.command === 'string' &&
+    entry.command.includes('/') &&
+    !isAbsolute(entry.command)
+  ) {
+    return `${at}.command: a command containing "/" must be an absolute path.`
+  }
+  if (policy.requireAbsoluteCwd && typeof entry.cwd === 'string' && !isAbsolute(entry.cwd)) {
+    return `${at}.cwd: must be an absolute path.`
+  }
+  if (entry.envPolicy !== undefined) {
+    if (
+      typeof entry.envPolicy !== 'string' ||
+      !policy.allowedEnvPolicies.includes(entry.envPolicy)
+    ) {
+      return `${at}.envPolicy: not one of ${policy.allowedEnvPolicies.join(', ')}.`
+    }
+  }
+  return undefined
 }
 
 /**
@@ -400,6 +563,10 @@ const REMOTE_KEYS = new Set(['url', 'type', 'headers', 'auth', 'requestTimeoutMs
 /** Keys a STDIO entry carries. */
 const STDIO_KEYS = new Set(['command', 'args', 'env', 'cwd'])
 
+/** Strict mode also carries the host-posture fields the policy has vetted. */
+const STRICT_STDIO_KEYS = new Set([...STDIO_KEYS, 'envPolicy', 'requestTimeoutMs'])
+const STRICT_REMOTE_KEYS = REMOTE_KEYS
+
 /**
  * Fields this layer knows the reference format declares and deliberately does not carry, each with
  * the reason a reader needs instead of a changelog.
@@ -455,6 +622,7 @@ function reportUncarriedKeys(
   }
 }
 
+// eslint-disable-next-line max-params -- internal; `vetted` joins the existing positional list
 function buildEntry(
   entry: Record<string, unknown>,
   name: string,
@@ -462,8 +630,12 @@ function buildEntry(
   warn: (warning: string) => void,
   /** The file this entry came from — see {@link reportUncarriedKeys}. */
   source: string,
+  /** Strict mode: the policy vetted `envPolicy`/`requestTimeoutMs`, so they are carried. */
+  vetted = false,
 ): McpServerConfig {
-  reportUncarriedKeys(entry, entry.url !== undefined ? REMOTE_KEYS : STDIO_KEYS, name, warn, source)
+  let carriedKeys = vetted ? STRICT_STDIO_KEYS : STDIO_KEYS
+  if (entry.url !== undefined) carriedKeys = REMOTE_KEYS
+  reportUncarriedKeys(entry, carriedKeys, name, warn, source)
   if (entry.url !== undefined) {
     const remote: Record<string, unknown> = { url: entry.url }
     // NORMALISED, not forwarded. `streamable-http` is the MCP spec's current name for the transport
@@ -490,6 +662,10 @@ function buildEntry(
     stdio.env = expandEnvReferences(entry.env as Record<string, string>, env, 'env', name, warn)
   }
   if (entry.cwd !== undefined) stdio.cwd = entry.cwd
+  if (vetted) {
+    if (entry.envPolicy !== undefined) stdio.envPolicy = entry.envPolicy
+    if (entry.requestTimeoutMs !== undefined) stdio.requestTimeoutMs = entry.requestTimeoutMs
+  }
   return stdio as McpServerConfig
 }
 

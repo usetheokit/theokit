@@ -19,7 +19,12 @@ import { join } from 'node:path'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { loadMcpJson, McpFileError } from '../../src/bridge/mcp-file.js'
+import {
+  loadMcpJson,
+  loadMcpServersFile,
+  mcpSecretValues,
+  McpFileError,
+} from '../../src/bridge/mcp-file.js'
 import { loadMcpJson as loadMcpJsonFromBarrel } from '../../src/index.js'
 
 describe('loadMcpJson — disco', () => {
@@ -181,5 +186,106 @@ describe('loadMcpJson — import purity', () => {
 
     expect(readFileSync).not.toHaveBeenCalled()
     expect(existsSync).not.toHaveBeenCalled()
+  })
+})
+
+describe('loadMcpServersFile', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'mcp-servers-file-'))
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+  const load = (servers: unknown, policy?: Parameters<typeof loadMcpServersFile>[1]) => {
+    const path = join(dir, 'servers.json')
+    writeFileSync(path, JSON.stringify({ mcpServers: servers }))
+    return loadMcpServersFile(path, { onWarn: () => undefined, ...policy })
+  }
+
+  it('loads a valid file and carries envPolicy and requestTimeoutMs', () => {
+    const out = load({
+      good: { command: '/usr/bin/x', envPolicy: 'core', requestTimeoutMs: 5000, cwd: '/tmp' },
+    })
+    expect(out.good).toMatchObject({
+      command: '/usr/bin/x',
+      envPolicy: 'core',
+      requestTimeoutMs: 5000,
+    })
+  })
+
+  it('a relative command with a slash is refused with McpFileError naming the JSON path', () => {
+    expect(() => load({ bad: { command: './evil.sh' } })).toThrow(McpFileError)
+    expect(() => load({ bad: { command: './evil.sh' } })).toThrow(/mcpServers\.bad\.command/)
+  })
+
+  it('a bare command name is accepted', () => {
+    expect(load({ ok: { command: 'npx' } }).ok).toBeDefined()
+  })
+
+  it('a relative cwd is refused', () => {
+    expect(() => load({ bad: { command: 'npx', cwd: 'rel' } })).toThrow(/mcpServers\.bad\.cwd/)
+  })
+
+  it('envPolicy all is refused by the default policy', () => {
+    expect(() => load({ bad: { command: 'npx', envPolicy: 'all' } })).toThrow(/envPolicy/)
+  })
+
+  it('envPolicy all is allowed when the policy lists it', () => {
+    const out = load(
+      { s: { command: 'npx', envPolicy: 'all' } },
+      { policy: { allowedEnvPolicies: ['all'] } },
+    )
+    expect(out.s).toBeDefined()
+  })
+
+  it('a timeout above 2147483647 is refused', () => {
+    expect(() => load({ bad: { command: 'npx', requestTimeoutMs: 2_147_483_648 } })).toThrow(
+      /requestTimeoutMs/,
+    )
+    expect(() => load({ bad: { command: 'npx', requestTimeoutMs: 0 } })).toThrow(McpFileError)
+  })
+
+  it('refuses a server name outside the SDK-safe pattern', () => {
+    expect(() => load({ Bad_Name: { command: 'npx' } })).toThrow(McpFileError)
+  })
+
+  it('refuses unknown keys and http auth', () => {
+    expect(() => load({ s: { command: 'npx', extra: 1 } })).toThrow(/mcpServers\.s\.extra/)
+    expect(() => load({ s: { url: 'https://x.test/mcp', auth: {} } })).toThrow(/auth/)
+  })
+
+  it('an invalid JSON file error does not contain text from the file', () => {
+    const path = join(dir, 'broken.json')
+    writeFileSync(path, '{"mcpServers": SECRETTEXT-12345}')
+    let message = ''
+    try {
+      loadMcpServersFile(path)
+    } catch (err) {
+      message = (err as Error).message
+    }
+    expect(message).toContain(path)
+    expect(message).not.toContain('SECRETTEXT')
+  })
+
+  it('a missing file is an error', () => {
+    expect(() => loadMcpServersFile(join(dir, 'nope.json'))).toThrow(McpFileError)
+  })
+
+  it('mcpSecretValues returns header and env values of 8 or more characters only', () => {
+    const servers = load(
+      {
+        a: { command: 'npx', env: { K: 'short', L: 'long-enough-value' } },
+        b: {
+          url: 'https://x.test/mcp',
+          headers: { Authorization: 'Bearer abcdefgh', X: '1234567' },
+        },
+      },
+      { policy: {} },
+    )
+    expect([...mcpSecretValues(servers)].sort((a, b) => a.localeCompare(b))).toEqual(
+      ['Bearer abcdefgh', 'long-enough-value'].sort((a, b) => a.localeCompare(b)),
+    )
+    expect(mcpSecretValues(servers, 5)).toContain('short')
   })
 })
