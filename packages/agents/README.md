@@ -35,7 +35,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
-| `./testing` | Test seams: compiled-agent inspection, mock streams |
+| `./testing` | Test seams: compiled-agent inspection, mock streams, the live-suite provider-key guard |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
 | `./interactive` | The interactive-shell backend contract |
@@ -49,7 +49,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./hooks` | The lifecycle-hook engine and its fingerprint gate; `parseClaudeHooks` reads the Claude Code hook dialect (see below) |
 | `./ask` | The human-in-the-loop rendezvous — ask a question, settle it, abandon it safely |
 | `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable. `protectedPaths` (absolute, or relative to `projectRoot`) lists state directories tools must not touch; `createPathVetoPlugin(scope)` is a `pre_tool_call` plugin that refuses any `path`, `file_path`, `filename`, `paths[]` or `apply_patch` destination that resolves, through symlinks and case variants, into one, and an unscoped `git_diff`. `vetoPathCall(scope, name, args)` gives the same verdict for calls that skip the plugin chain; `resolveRealPath`, `isWithin` and `SymlinkLoopError` are exported too |
-| `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
+| `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool; `timeoutMs` bounds the call and rejects with `A2ATimeoutError` (`A2A call to "<name>" failed: no answer within <ms> ms`), composed with the caller's signal. `createA2AJsonRpcHandler` serves `message/send`; `maxInFlight` caps concurrent turns and answers 503 with `retry-after` (`retryAfterSeconds`, default 5) before the body is read. A slot is held until `respond` settles, even after the handler's own deadline answered. Both options are off by default |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
 | `./doctor` | Environment diagnostics: `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
@@ -94,6 +94,17 @@ process.exitCode = result.exitCode
 
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
 
+## Testing: the live-suite guard
+
+A live (real-model) suite must not skip green in CI when the provider key is missing. `@theokit/agents/testing` exports `assertProviderKeyWhenRequired`, `requireProviderKeySetup`, `LIVE_KEY_NAMES` and `MissingProviderKeyError`: when `THEOKIT_LIVE_REQUIRED=1` and none of the key variables is set (whitespace-only counts as unset), the run fails with an error that names the variables, never a value. Without the flag it returns, so a local run keeps its skip.
+
+```ts
+// tests/live/setup.ts — register it as vitest `globalSetup`
+import { requireProviderKeySetup } from '@theokit/agents/testing'
+
+export default requireProviderKeySetup({ requiredFlag: 'MYAPP_LIVE' }) // names and requiredFlag are optional
+```
+
 ## One bootstrap for every entry
 
 An app with several entries (CLI, ACP server) declares its setup once. Each step runs once, in order,
@@ -117,6 +128,23 @@ await bootstrap.run({ env: process.env, cwd: process.cwd(), home: homedir() })
 import { assertBootstrapped } from '@theokit/agents/config'
 assertBootstrapped(bootstrap, 'openTranscriptStore')
 ```
+
+## Config keys set from the environment
+
+Declare which keys the environment may set, then build a layer for `LayeredConfig` from the variables that are set:
+
+```ts
+import { envKnob, envLayerFrom, auditEnvKnobs } from '@theokit/agents/config'
+
+const KNOBS = { model: envKnob('MYAPP_MODEL', 'string'), memory: envKnob('MYAPP_MEMORY', 'boolean') }
+const layer = envLayerFrom(process.env, KNOBS) // { memory: true } when MYAPP_MEMORY=on
+auditEnvKnobs({ keys: ['model', 'memory', 'cwd'], knobs: KNOBS, optOuts: [{ key: 'cwd', reason: 'set per run' }] })
+```
+
+Booleans accept `1/true/yes/on` and `0/false/no/off` (trimmed, case-insensitive); numbers must be finite and non-blank.
+Any other value is passed through unchanged, so the schema rejects `MYAPP_MEMORY=maybe` by key name instead of reading it as `false`.
+`auditEnvKnobs` reports keys with neither a knob nor an opt-out as unreachable.
+
 
 ### `-c a.b=value` overrides
 
@@ -294,6 +322,17 @@ fingerprint gate as `buildHookHandlers`, ignores specs of other events, and retu
 without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
 is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
 
+## Hooks for a child agent
+
+`hooksForChild(handlers, { forward?, childLabel? })` from `@theokit/agents/hooks` turns the parent's
+`HookHandlers` into an SDK `Plugin` for a child you build yourself (`Agent.create`, a squad member,
+a reviewer), so the parent's `pre_tool_call` veto also covers the child. The parent handler gets the
+child's real `agentId` and `runId`. By default only `pre_tool_call` is forwarded; pass
+`forward: ['pre_tool_call', 'post_tool_call', 'transform_tool_result']` to add the others.
+`childLabel` is added to the hook context as `childLabel`. A `pre_tool_call` that throws refuses the
+call. It returns `undefined` when no forwarded handler exists, so spread it conditionally:
+`plugins: [...(p ? [p] : [])]`.
+
 ## Validating direct tool calls
 
 `createToolInvokeRoute` (from `@theokit/agents/bridge`) checks `args` against the tool's own `inputSchema` by default (`validateAgainstInputSchema`, compiled once per tool): a violation answers 400 `invalid_args` with `<path>: <message>`, and a schema that does not compile answers 500 `tool_error`. Pass `validate: myValidator` to replace the default, or `validate: false` to turn validation off.
@@ -305,6 +344,22 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Scheduled jobs: file or PostgreSQL
+
+`createScheduler` keeps its jobs in a `JobStore` from `@theokit/agents/tools`. Pick the file store for one host with a disk, or the PostgreSQL store when there are several replicas or no durable disk. The PostgreSQL store takes a ready pool (a `pg` `Pool` has the `query` it needs), so this package adds no driver.
+
+```ts
+import { copyJobs, createJobStore, createPostgresJobStore } from '@theokit/agents/tools'
+
+const files = createJobStore('.theoclaw/schedules.json')
+const db = await createPostgresJobStore(pool, { table: 'schedule_jobs' }) // /^[a-z_][a-z0-9_]{0,62}$/
+
+await copyJobs(files, db, { force: false }) // throws JobCopyError naming the count if `db` holds jobs
+```
+
+Reads come from the jobs loaded when the store opened, and writes run one after another; replicas do not see each other's later changes until they reopen the store. A malformed row raises `ScheduleStoreError` naming the table and job id. `copyJobs` writes through the target's atomic `putMany` (one statement for PostgreSQL, one file rewrite for the file store), so a failure leaves the target unchanged; a custom `JobStore` without `putMany` raises `JobCopyUnsupportedError` before anything is written.
+
 
 ## Running scheduled prompts
 
