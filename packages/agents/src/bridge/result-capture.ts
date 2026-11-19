@@ -76,7 +76,7 @@ export function createResultCapture<T>(
       accepted = true
       return Promise.resolve(JSON.stringify({ ok: true }))
     },
-  } as CustomTool
+  }
 
   return {
     tool,
