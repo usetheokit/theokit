@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Skills load through the SDK's `SkillsSettings` (`bundledDirs`: workspace, user, then the bundled `skills/` folder) instead of a TheoClaw loader. A skill's binaries now come from the `requires-bins:` key, as in every other TheoKit app. The old `requires:` key still works for one release and logs a deprecation warning naming the file.
+
 ### Fixed
 
 - The configuration file, the daemon unit and plist files, the pairing, device, exec-approval, MCP relay grant, visitor grant and relay state and mailbox files are written through `@theokit/sdk/persistence`, so two writers in one process no longer share a `<pid>.tmp` temporary name.
