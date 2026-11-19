@@ -36,6 +36,8 @@ async function streamedErrorOf(run: SdkTurnHandle): Promise<string | undefined> 
   if (run.stream === undefined) return undefined
   let streamed: string | undefined
   for await (const message of run.stream()) {
+    // Untrusted at runtime: an injected handle's stream may yield null or a primitive.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (typeof message !== 'object' || message === null) continue
     const event = message as { type?: unknown; status?: unknown; message?: unknown }
     if (event.type === 'error') streamed ??= describeStreamedError(message)
@@ -160,7 +162,7 @@ export function delegationPortFromAgentFactory(
 ): DelegationPort {
   return {
     run: async (message, runOptions): Promise<DelegationResult> => {
-      const signal = runOptions?.signal ?? (options?.sendOptions?.signal as AbortSignal | undefined)
+      const signal = runOptions?.signal ?? options?.sendOptions?.signal
       try {
         return await runOnce(create, message, signal, options?.sendOptions)
       } catch (error) {
