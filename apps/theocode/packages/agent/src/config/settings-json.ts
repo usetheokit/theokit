@@ -243,8 +243,11 @@ function withOurTimeoutDefault(raw: Record<string, unknown>): Record<string, unk
     out[event] = Array.isArray(groups)
       ? groups.map((group: unknown) => {
           if (!isRecord(group) || !Array.isArray(group['hooks'])) return group
+          // A matcher that is not a string means "no matcher" here, as it always has.
+          const { matcher, ...rest } = group
           return {
-            ...group,
+            ...rest,
+            ...(typeof matcher === 'string' ? { matcher } : {}),
             hooks: group['hooks'].map((entry: unknown) =>
               isRecord(entry) && entry['timeout'] === undefined
                 ? { ...entry, timeout: DEFAULT_TIMEOUT_SECONDS }
