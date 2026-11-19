@@ -7,10 +7,8 @@
  * (method not found). Web Standards Response (G8). The stdio transport + full method set stay
  * SDK-side (sdk-runtime.md); this exposes the agent over the app's own HTTP route.
  */
-import { randomUUID } from 'node:crypto'
-
 import { type CompiledTool, compileLoadedAgentModule } from '@theokit/agents'
-import type { CustomTool, Plugin, PreToolCallContext, PreToolCallDecision } from '@theokit/sdk'
+import type { CustomTool } from '@theokit/sdk'
 
 import { type AppResource, buildResourceDescriptors, readAppResource } from './mcp-app-resources.js'
 
@@ -43,70 +41,6 @@ function toolDescriptors(tools: readonly CompiledTool[]): McpToolDescriptor[] {
         ? (t.inputSchema as Record<string, unknown>)
         : { type: 'object', properties: {} },
   }))
-}
-
-/** Options for the MCP tool handlers. */
-export interface McpToolsOptions {
-  /** pre_tool_call hooks of these plugins run before each tools/call; a block answers a tool result with isError true and the plugin message. */
-  plugins?: readonly Plugin[]
-  /** The agent id handed to the hooks; `runId` is generated per call. Defaults to the server name. */
-  hookContext?: { agentId: string }
-}
-
-type PreToolHandler = (
-  ctx: PreToolCallContext,
-) => PreToolCallDecision | undefined | Promise<PreToolCallDecision | undefined>
-
-/** Each plugin is registered once; its `pre_tool_call` handlers are kept for every later call. */
-const preToolHandlers = new WeakMap<Plugin, Promise<PreToolHandler[]>>()
-
-function collectPreToolHandlers(plugin: Plugin): Promise<PreToolHandler[]> {
-  let cached = preToolHandlers.get(plugin)
-  if (!cached) {
-    cached = (async () => {
-      const handlers: PreToolHandler[] = []
-      if (plugin.kind === 'general') {
-        const noop = (): void => undefined
-        await plugin.register({
-          registerTool: noop,
-          registerCommand: noop,
-          injectMessage: noop,
-          on: (hook: string, handler: unknown) => {
-            if (hook === 'pre_tool_call' && typeof handler === 'function')
-              handlers.push(handler as PreToolHandler)
-            return noop
-          },
-        })
-      }
-      return handlers
-    })()
-    preToolHandlers.set(plugin, cached)
-  }
-  return cached
-}
-
-/**
- * Run the plugins' `pre_tool_call` hooks in order, first block wins. Returns the refusal text, or
- * `undefined` to allow. A hook (or registration) that throws refuses the call (fail closed).
- * TODO: swap for `runPreToolCall` from `@theokit/sdk` once it is published (theokit-sdk#1022).
- */
-async function preToolCallRefusal(
-  plugins: readonly Plugin[],
-  ctx: PreToolCallContext,
-): Promise<string | undefined> {
-  try {
-    for (const plugin of plugins) {
-      for (const handler of await collectPreToolHandlers(plugin)) {
-        const decision = await handler(ctx)
-        if (decision) return decision.message
-      }
-    }
-    return undefined
-  } catch (err) {
-    return `A pre_tool_call plugin failed, so the call was refused: ${
-      err instanceof Error ? err.message : String(err)
-    }`
-  }
 }
 
 /** An MCP `CallToolResult` — `content[]` + `isError` (the shape MCP clients expect). */
@@ -157,7 +91,6 @@ async function callTool(
   toolName: unknown,
   args: unknown,
   hitl?: ReadonlyMap<string, unknown>,
-  guard?: (toolName: string, args: unknown) => Promise<string | undefined>,
 ): Promise<CallToolResult> {
   if (typeof toolName !== 'string') {
     return {
@@ -183,10 +116,6 @@ async function callTool(
       ],
       isError: true,
     }
-  }
-  const refusal = await guard?.(toolName, args)
-  if (refusal !== undefined) {
-    return { content: [{ type: 'text', text: refusal }], isError: true }
   }
   try {
     const result = await tool.handler(args)
@@ -232,7 +161,6 @@ interface McpServed {
   tools: readonly CompiledTool[]
   hitl?: ReadonlyMap<string, unknown>
   appResources: readonly AppResource[]
-  options?: McpToolsOptions
 }
 
 function rpcResult(id: JsonRpcId, result: unknown): Response {
@@ -262,22 +190,7 @@ async function dispatchMcp(
       return rpcResult(id, { tools: toolDescriptors(served.tools) })
     case 'tools/call': {
       const p = params as { name?: unknown; arguments?: unknown } | undefined
-      const plugins = served.options?.plugins
-      const agentId = served.options?.hookContext?.agentId ?? name
-      const guard =
-        plugins && plugins.length > 0
-          ? (toolName: string, args: unknown) =>
-              preToolCallRefusal(plugins, {
-                name: toolName,
-                args: (args && typeof args === 'object' ? args : {}) as Record<string, unknown>,
-                agentId,
-                runId: randomUUID(),
-              })
-          : undefined
-      return rpcResult(
-        id,
-        await callTool(served.tools, p?.name, p?.arguments ?? {}, served.hitl, guard),
-      )
+      return rpcResult(id, await callTool(served.tools, p?.name, p?.arguments ?? {}, served.hitl))
     }
     case 'resources/list':
       return rpcResult(id, { resources: buildResourceDescriptors(served.appResources) })
@@ -326,15 +239,10 @@ export function handleMcpJsonRpc(
   name: string,
   body: unknown,
   appResources: readonly AppResource[] = [],
-  options?: McpToolsOptions,
 ): Promise<Response> {
   return runMcp(body, (req) => {
     const compiled = compileLoadedAgentModule(mod, `mcp server for "${name}"`)
-    return dispatchMcp(
-      { tools: compiled.tools, hitl: compiled.hitl, appResources, options },
-      name,
-      req,
-    )
+    return dispatchMcp({ tools: compiled.tools, hitl: compiled.hitl, appResources }, name, req)
   })
 }
 
@@ -360,9 +268,8 @@ export function handleMcpToolsJsonRpc(
   tools: readonly CustomTool[],
   name: string,
   body: unknown,
-  options?: McpToolsOptions,
 ): Promise<Response> {
   assertUniqueToolNames(tools)
-  const served: McpServed = { tools: tools as readonly CompiledTool[], appResources: [], options }
+  const served: McpServed = { tools: tools as readonly CompiledTool[], appResources: [] }
   return runMcp(body, (req) => dispatchMcp(served, name, req))
 }

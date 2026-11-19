@@ -12,7 +12,7 @@
 import type { CustomTool } from '@theokit/sdk'
 
 import type { AppResource } from './mcp-app-resources.js'
-import { handleMcpJsonRpc, handleMcpToolsJsonRpc, type McpToolsOptions } from './mcp-handler.js'
+import { handleMcpJsonRpc, handleMcpToolsJsonRpc } from './mcp-handler.js'
 
 /** Parse one line and answer it via `respond`; `null` for a blank line, `-32700` for bad JSON. */
 async function answerLine(
@@ -46,9 +46,8 @@ export function handleMcpStdioLine(
   mod: unknown,
   name: string,
   appResources: readonly AppResource[] = [],
-  options?: McpToolsOptions,
 ): Promise<string | null> {
-  return answerLine(line, (body) => handleMcpJsonRpc(mod, name, body, appResources, options))
+  return answerLine(line, (body) => handleMcpJsonRpc(mod, name, body, appResources))
 }
 
 /** A minimal readable line source (an async iterable of lines) + a writable sink. */

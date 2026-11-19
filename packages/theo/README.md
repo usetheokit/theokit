@@ -308,10 +308,6 @@ carry, so on those targets `theokit build` names it as not applied and `GET /__t
 
 Cloudflare Workers, step by step: [`docs/wiki/sops/cloudflare-deploy.md`](https://github.com/usetheokit/theokit/blob/main/docs/wiki/sops/cloudflare-deploy.md).
 
-## Guarding MCP tool calls with plugins
-
-`handleMcpToolsJsonRpc`, `handleMcpJsonRpc` and `handleMcpStdioLine` from `theokit/server/agent` take a trailing `McpToolsOptions`: `plugins` (the `pre_tool_call` hooks of these plugins run before each `tools/call`) and `hookContext` (`{ agentId }`; a `runId` is generated per call). A blocking hook, or one that throws, answers the call with `isError: true` and the plugin message, and the tool does not run. `tools/list` is not filtered. Without options nothing changes.
-
 ## Licence
 
 Apache-2.0 — see `LICENSE`.

@@ -52,7 +52,7 @@ export {
   handleMcpStdioLine,
   type StdioStreams,
 } from './mcp-stdio.js'
-export { handleMcpToolsJsonRpc, type McpToolsOptions } from './mcp-handler.js'
+export { handleMcpToolsJsonRpc } from './mcp-handler.js'
 export {
   defineAppResource,
   buildResourceDescriptors,
