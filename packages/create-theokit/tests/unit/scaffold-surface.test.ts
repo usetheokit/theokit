@@ -45,6 +45,30 @@ describe('applySurface (M45)', () => {
     expect(existsSync(join(targetDir, 'src/app'))).toBe(true)
   })
 
+  it('the cli surface scaffolds cli/main.ts, removes the web UI and sets start to tsx cli/main.ts', () => {
+    scaffold(targetDir, 'my-cli')
+    applySurface({ targetDir, projectName: 'my-cli', surface: 'cli' })
+    expect(existsSync(join(targetDir, 'cli/main.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src/app'))).toBe(false)
+    expect(existsSync(join(targetDir, 'index.html'))).toBe(false)
+    expect(read('README-surface.md')).toContain('my-cli')
+    const p = JSON.parse(read('package.json'))
+    expect(p.scripts.start).toBe('tsx cli/main.ts')
+    expect(p.scripts.build).toBe('tsc --noEmit')
+    expect(p.dependencies['@theokit/agents']).toBeDefined()
+    expect(p.devDependencies.tsx).toBeDefined()
+    expect(JSON.parse(read('tsconfig.json')).include).toContain('cli/**/*.ts')
+  })
+
+  it('the generated cli/main.ts imports runHeadlessTurn from @theokit/agents/commands and sets process.exitCode from its result', () => {
+    scaffold(targetDir, 'my-cli')
+    applySurface({ targetDir, projectName: 'my-cli', surface: 'cli' })
+    const main = read('cli/main.ts')
+    expect(main).toMatch(/import \{[^}]*runHeadlessTurn[^}]*\} from '@theokit\/agents\/commands'/)
+    expect(main).toContain('process.exitCode = result.exitCode')
+    expect(main).toContain('loadProjectEnv()')
+  })
+
   it('tui scaffolds an Ink app on useAgent(InProcessTransport) and drops the web UI', () => {
     scaffold(targetDir, 'my-tui')
     applySurface({ targetDir, projectName: 'my-tui', surface: 'tui' })

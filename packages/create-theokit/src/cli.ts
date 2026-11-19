@@ -38,7 +38,7 @@ function showHelp(): void {
     -v, --version                 Show version number
     --yes                         Use recommended defaults (skip prompts)
     --template=<name>             Template to use (default: "default")
-    --surface=<web|tui|desktop>   App surface (default: "web") — tui (Ink) / desktop (Tauri)
+    --surface=<web|tui|desktop|cli>   App surface (default: "web") — tui (Ink) / desktop (Tauri) / cli (one-shot)
     --bare                        Minimal app (no @theokit/* deps)
     --preset=bot                  Layer the unattended-agent shape over the template
     --skip-install                Scaffold files only, skip package install
@@ -57,6 +57,7 @@ function showHelp(): void {
     npx create-theokit my-app
     npx create-theokit my-app --bare --skip-install
     npx create-theokit my-app --surface=tui
+    npx create-theokit my-app --surface=cli
     npx create-theokit my-app --preset=bot
     npx create-theokit my-app --surface=desktop
     npx create-theokit my-app --use-bun --biome
