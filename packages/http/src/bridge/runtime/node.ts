@@ -7,7 +7,6 @@
  * EC-1: Body converted via Readable.toWeb() for streaming (no full buffering).
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { Readable, type Duplex } from 'node:stream'
 
 import type { RuntimeAdapter } from './types.js'
@@ -149,16 +148,15 @@ export interface NodeServer {
 }
 
 export class BindError extends Error {
-  readonly code: 'EADDRINUSE' | 'EADDRNOTAVAIL' | string
+  /** `EADDRINUSE`, `EADDRNOTAVAIL` or another system error code. */
+  readonly code: string
   readonly host: string
   readonly port: number
   constructor(code: string, host: string, port: number, cause?: unknown) {
-    const what =
-      code === 'EADDRINUSE'
-        ? `port ${String(port)} is already in use on ${host}`
-        : code === 'EADDRNOTAVAIL'
-          ? `address ${host} is not available (port ${String(port)})`
-          : `cannot listen on ${host}:${String(port)} (${code})`
+    let what = `cannot listen on ${host}:${String(port)} (${code})`
+    if (code === 'EADDRINUSE') what = `port ${String(port)} is already in use on ${host}`
+    else if (code === 'EADDRNOTAVAIL')
+      what = `address ${host} is not available (port ${String(port)})`
     super(`Cannot bind: ${what}`, { cause })
     this.name = 'BindError'
     this.code = code
@@ -227,7 +225,7 @@ export function createNodeServer(
   const address = (): { host: string; port: number } | null => {
     const addr = server.address()
     if (addr === null || typeof addr === 'string') return null
-    const { address: host, port } = addr as AddressInfo
+    const { address: host, port } = addr
     return { host, port }
   }
 
