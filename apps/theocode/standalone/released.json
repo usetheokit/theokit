@@ -1,0 +1,5 @@
+{
+  "@theokit/agents": "16.11.0",
+  "@theokit/agents-pty": "0.2.1",
+  "@theokit/presenter": "0.15.0"
+}

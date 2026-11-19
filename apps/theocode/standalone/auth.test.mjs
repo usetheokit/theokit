@@ -1,6 +1,6 @@
 // Runs against the registry-installed `@theokit/agents`, never the repository's workspace copy.
 import assert from 'node:assert/strict'
-import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, sep } from 'node:path'
@@ -14,6 +14,8 @@ import {
   refreshOAuthTokens,
   persistOAuthTokens,
 } from '@theokit/agents/auth'
+
+import { deriveDependencies } from './sync-manifest.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const home = mkdtempSync(join(tmpdir(), 'theocode-standalone-'))
@@ -40,18 +42,6 @@ const tokenFetch = (calls) => async (url, init) => {
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'))
 
-/** Every manifest of TheoCode itself: the root and each `packages/*`. */
-const theocodeManifests = () => {
-  const root = join(here, '..')
-  const dirs = readdirSync(join(root, 'packages'), { withFileTypes: true }).filter((d) =>
-    d.isDirectory(),
-  )
-  return [
-    join(root, 'package.json'),
-    ...dirs.map((d) => join(root, 'packages', d.name, 'package.json')),
-  ]
-}
-
 describe('standalone install', () => {
   it('resolves @theokit/agents from this directory node_modules, not the workspace', () => {
     const require = createRequire(join(here, 'package.json'))
@@ -69,24 +59,16 @@ describe('standalone install', () => {
     }
   })
 
-  it("declares every @theokit/* package TheoCode's manifests use, at a registry version", () => {
-    const pins = readJson(join(here, 'package.json')).dependencies
-    const used = new Map()
-    for (const file of theocodeManifests()) {
-      const m = readJson(file)
-      for (const deps of [m.dependencies, m.devDependencies, m.peerDependencies]) {
-        for (const [name, spec] of Object.entries(deps ?? {})) {
-          if (name.startsWith('@theokit/')) used.set(name, [...(used.get(name) ?? []), spec])
-        }
-      }
-    }
-    assert.ok(used.has('@theokit/agents'))
-    for (const [name, specs] of used) {
-      assert.ok(pins[name], `${name} is used by TheoCode but not pinned here`)
-      assert.ok(!pins[name].startsWith('workspace:'), name)
-      for (const spec of specs.filter((x) => !x.startsWith('workspace:'))) {
-        assert.equal(pins[name], spec, `${name}: TheoCode declares ${spec}`)
-      }
+  it("installs exactly the dependencies TheoCode's manifests declare, at registry versions", () => {
+    const declared = readJson(join(here, 'package.json')).dependencies
+    assert.deepEqual(declared, deriveDependencies())
+    for (const name of [
+      '@theokit/agents',
+      '@theokit/agents-pty',
+      '@theokit/presenter',
+      '@theokit/sdk',
+    ]) {
+      assert.match(declared[name], /^\d+\.\d+\.\d+/, name)
     }
   })
 })
