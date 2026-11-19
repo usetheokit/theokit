@@ -169,9 +169,15 @@ export function getOrCreateReporting(
     const state = { created: false }
     const marked = { ...options, [CREATED]: () => (state.created = true) }
     const agent = await statics.getOrCreate(sessionId, marked as never)
+    // Creation is over: the SDK's own registry now owns the handle. Leave the in-flight map before
+    // the (slow) reporting so a later call cannot join this promise and receive a handle a direct
+    // SDK caller disposed meanwhile.
+    if (pending.get(sessionId) === p) pending.delete(sessionId)
     if (state.created) await reportWiring(listener, options, agent)
     return agent
-  })().finally(() => pending.delete(sessionId))
+  })().finally(() => {
+    if (pending.get(sessionId) === p) pending.delete(sessionId)
+  })
   pending.set(sessionId, p)
   return p
 }

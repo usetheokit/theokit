@@ -175,5 +175,39 @@ describe('onWired with the real SDK', () => {
       ])
       expect(mine.map((w) => w.withheldBuiltinTools)).toEqual([['write']])
     })
+
+    it('does not hand a disposed handle to a later listener call while reporting is pending', async () => {
+      const seen: CompiledWiring[] = []
+      const session = id('race-dispose')
+      // Hold the first call's wiring report open (agent.skills.list pending) so the window is deterministic.
+      let release!: () => void
+      const gate = new Promise<void>((r) => (release = r))
+      const statics = Agent as unknown as { create: (o: never) => Promise<any> }
+      const realCreate = statics.create
+      statics.create = async function (this: unknown, o: never) {
+        const ag = await realCreate.call(this, o)
+        Object.defineProperty(ag, 'skills', {
+          configurable: true,
+          value: { list: async () => (await gate, []) },
+        })
+        return ag
+      }
+      const first = getOrCreateReporting(Agent, session, opts(), (w) => seen.push(w))
+      while (Agent.registry.get(session) === undefined) await new Promise((r) => setTimeout(r, 0))
+      const doomed = Agent.registry.get(session) as unknown as { dispose(): Promise<void> }
+      await doomed.dispose()
+      statics.create = realCreate
+      const next = (await getOrCreateReporting(Agent, session, opts(), (w) => seen.push(w))) as {
+        dispose(): Promise<void>
+      }
+      expect(next).not.toBe(doomed)
+      expect(Agent.registry.get(session)).toBe(next)
+      const direct = await Agent.getOrCreate(session, opts() as never)
+      expect(direct).toBe(next)
+      release()
+      await first
+      expect(Agent.registry.get(session)).toBe(next)
+      await next.dispose()
+    })
   })
 })
