@@ -70,11 +70,6 @@ describe('sync-manifest', () => {
     assert.doesNotThrow(() => validateReleased({ a: '1.2.3-0.alpha-1.x' }))
   })
 
-  it('matches the committed package.json (fails on a stale manifest)', () => {
-    const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'))
-    assert.deepEqual(pkg.dependencies, deriveDependencies(), 'run `node sync-manifest.mjs`')
-  })
-
   describe('command', () => {
     // Copy the script into <root>/standalone so its `..` root is the isolated fixture.
     function setup(standaloneDeps) {

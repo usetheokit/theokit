@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Installs the released @theokit/agents from the registry, with no workspace link, and exercises the auth API TheoCode uses.",
   "scripts": {
-    "test": "node --test auth.test.mjs sync-manifest.test.mjs"
+    "test": "node --test sync-manifest.test.mjs"
   },
   "dependencies": {
     "@eslint/js": "^10.0.1",

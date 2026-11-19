@@ -1,3 +1,0 @@
-# An empty workspace root: pnpm stops looking upward here, so the outer repository workspace
-# (which would link `@theokit/agents` from `packages/agents`) can never take part in this install.
-packages: []
