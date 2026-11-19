@@ -2,13 +2,13 @@ import { closeSync, constants, existsSync, fchmodSync, mkdirSync, openSync, read
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
+import { readSessionMessages } from '@theokit/sdk'
 import { listSessions } from '@theokit/agents/session'
 
 import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { resolveInstance } from '../instance.js'
-import { readFullHistory } from './transcript-history.js'
 
 /**
  * `theoclaw sessions list|show|export` (OC-51): a read-only view over the chat transcripts the SDK
@@ -32,10 +32,18 @@ const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [
 
 /** The user and assistant turns of a session, read by the SDK; entries with no text are dropped. */
 async function readMessages(session: ChatSession): Promise<Message[]> {
-  const stored = await readFullHistory({
-    cwd: session.workspace,
-    transcript: session.transcript,
-  })
+  let stored: Awaited<ReturnType<typeof readSessionMessages>>
+  try {
+    stored = await readSessionMessages({
+      sessionId: session.id,
+      cwd: session.workspace,
+      sessionDir: session.sessionDir,
+    })
+  } catch {
+    // The SDK reader throws on content it does not know (an older transcript with string
+    // content); one such session must not take down `list` or `resume` for the others.
+    return []
+  }
   // The reader's `text` also renders tool calls and results; the CLI shows only what was said.
   return stored
     .map((entry) => ({
@@ -47,7 +55,7 @@ async function readMessages(session: ChatSession): Promise<Message[]> {
     .filter((entry) => entry.text !== '')
 }
 
-type ChatSession = ReturnType<typeof listSessions>[number] & { id: string; workspace: string }
+type ChatSession = ReturnType<typeof listSessions>[number] & { id: string; workspace: string; sessionDir: string }
 
 function listChatSessions(io: SessionsIo): ChatSession[] {
   const env: NodeJS.ProcessEnv = { ...io.env }
@@ -60,9 +68,10 @@ function listChatSessions(io: SessionsIo): ChatSession[] {
       { variable: 'THEOCLAW_WORKSPACE' },
     )
   }
-  return listSessions(workspace, join(workspace, '.theoclaw'))
+  const sessionDir = join(workspace, '.theoclaw')
+  return listSessions(workspace, sessionDir)
     .filter((entry) => entry.id !== undefined)
-    .map((entry) => ({ ...entry, id: entry.id!, workspace }))
+    .map((entry) => ({ ...entry, id: entry.id!, workspace, sessionDir }))
 }
 
 function matchSession(sessions: readonly ChatSession[], wanted: string): ChatSession[] {
