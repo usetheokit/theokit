@@ -127,6 +127,7 @@ export {
 } from './openai-compatible-routes.js'
 export {
   createToolInvokeRoute,
+  validateAgainstInputSchema,
   type ToolArgsValidator,
   type ToolCallVetoPort,
   type ToolInvokeRouteOptions,
@@ -273,4 +274,10 @@ export {
   type ForeignSurfaceInventoryInput,
 } from './foreign-surfaces.js'
 
+export {
+  runAgentTurn,
+  completeFromTurn,
+  type AgentTurnOutcome,
+  type RunAgentTurnOptions,
+} from './run-agent-turn.js'
 export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'
