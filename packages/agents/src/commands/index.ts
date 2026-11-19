@@ -40,4 +40,9 @@ export type {
 } from './shutdown.js'
 
 export { runHeadlessTurn, readHeadlessPrompt, EmptyPromptError } from './headless-turn.js'
-export type { HeadlessIo, HeadlessOutcome, HeadlessTurnOptions, HeadlessTurnResult } from './headless-turn.js'
+export type {
+  HeadlessIo,
+  HeadlessOutcome,
+  HeadlessTurnOptions,
+  HeadlessTurnResult,
+} from './headless-turn.js'

@@ -42,7 +42,7 @@ export class EmptyPromptError extends Error {
 }
 
 /**
- * The prompt of a one-shot run: the argument, stdin (`required` when there is no argument), or stdin
+ * The prompt of a one-shot run: the argument, stdin (`required`), or stdin
  * appended as a `<stdin>` block. Throws {@link EmptyPromptError} when nothing is left.
  */
 export function readHeadlessPrompt(input: {
@@ -77,6 +77,59 @@ function progressLine(event: AgentOutputEvent): string | undefined {
   return undefined
 }
 
+interface Collected {
+  readonly events: AgentOutputEvent[]
+  meta?: WireTurnMetadata
+  errorCode?: string
+  failed: boolean
+}
+
+function emit(event: AgentOutputEvent, io: HeadlessIo, json: boolean): void {
+  if (json) {
+    safe(io.out, `${JSON.stringify(event)}\n`)
+    return
+  }
+  const line = progressLine(event)
+  if (line !== undefined) safe(io.err, `${line}\n`)
+}
+
+async function collect(
+  chunks: AsyncIterable<WireChunk>,
+  io: HeadlessIo,
+  json: boolean,
+): Promise<Collected> {
+  const reader = createWireReader()
+  const state: Collected = { events: [], failed: false }
+  try {
+    for await (const chunk of chunks) {
+      state.meta = readTurnMetadata(chunk) ?? state.meta
+      for (const event of reader.read(chunk)) {
+        state.events.push(event)
+        if (event.type === 'error') {
+          state.failed = true
+          state.errorCode ??= event.code
+        }
+        emit(event, io, json)
+      }
+    }
+  } catch (e) {
+    state.failed = true
+    safe(io.err, `error: ${errorMessage(e)}\n`)
+  }
+  return state
+}
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
+
+function classify(state: Collected, finalText: string): HeadlessOutcome {
+  if (state.failed) return 'error'
+  if (state.meta?.stopReason !== undefined) return 'cut'
+  const hasTools = state.events.some((e) => e.type === 'tool-call')
+  return finalText === '' && !hasTools ? 'empty' : 'ok'
+}
+
 /**
  * Consume one turn's wire chunks into stdout/stderr output and an exit code. Never rejects: a
  * thrown stream is an `error` outcome. Precedence: error, then cut, then empty, else ok.
@@ -86,63 +139,30 @@ export async function runHeadlessTurn(
   options: HeadlessTurnOptions,
 ): Promise<HeadlessTurnResult> {
   const { io } = options
-  const reader = createWireReader()
-  const events: AgentOutputEvent[] = []
-  let meta: WireTurnMetadata | undefined
-  let errorCode: string | undefined
-  let failed = false
-
-  try {
-    for await (const chunk of chunks) {
-      const m = readTurnMetadata(chunk)
-      if (m !== undefined) meta = m
-      for (const event of reader.read(chunk)) {
-        events.push(event)
-        if (event.type === 'error') {
-          failed = true
-          errorCode ??= event.code
-        }
-        if (options.json === true) safe(io.out, `${JSON.stringify(event)}\n`)
-        else {
-          const line = progressLine(event)
-          if (line !== undefined) safe(io.err, `${line}\n`)
-        }
-      }
-    }
-  } catch (e) {
-    failed = true
-    safe(io.err, `error: ${e instanceof Error ? e.message : String(e)}\n`)
-  }
-
-  const finalText = finalMessageOf(events)
-  const stopReason = meta?.stopReason
-  const hasTools = events.some((e) => e.type === 'tool-call')
-  let outcome: HeadlessOutcome
-  if (failed) outcome = 'error'
-  else if (stopReason !== undefined) outcome = 'cut'
-  else if (finalText === '' && !hasTools) outcome = 'empty'
-  else outcome = 'ok'
+  const state = await collect(chunks, io, options.json === true)
+  const finalText = finalMessageOf(state.events)
+  const stopReason = state.meta?.stopReason
+  let outcome = classify(state, finalText)
 
   if (options.json !== true && finalText !== '') safe(io.out, `${finalText}\n`)
   if (outcome === 'cut') safe(io.err, `turn cut: ${stopReason}\n`)
   if (outcome === 'empty') safe(io.err, 'the turn produced no text and no tool calls\n')
 
-  if (options.outputLastMessage !== undefined) {
-    try {
-      await options.outputLastMessage(finalText)
-    } catch (e) {
-      outcome = 'error'
-      safe(io.err, `error: could not write the last message: ${e instanceof Error ? e.message : String(e)}\n`)
-    }
+  try {
+    await options.outputLastMessage?.(finalText)
+  } catch (e) {
+    outcome = 'error'
+    safe(io.err, `error: could not write the last message: ${errorMessage(e)}\n`)
   }
 
-  const exitCode = { ...DEFAULT_EXIT_CODES, ...options.exitCodes }[outcome]
+  const { errorCode } = state
+  const usage = state.meta?.usage
   return {
     finalText,
     outcome,
     ...(stopReason === undefined ? {} : { stopReason }),
     ...(errorCode === undefined ? {} : { errorCode }),
-    ...(meta?.usage === undefined ? {} : { usage: meta.usage }),
-    exitCode,
+    ...(usage === undefined ? {} : { usage }),
+    exitCode: { ...DEFAULT_EXIT_CODES, ...options.exitCodes }[outcome],
   }
 }
