@@ -60,6 +60,8 @@ export async function writeResponseToNode(
     if (!nodeRes.writableFinished) void reader.cancel().catch(() => undefined)
   }
   nodeRes.once('close', onClose)
+  // The client may have left while the handler was still working: 'close' already fired.
+  if (nodeRes.destroyed) onClose()
   try {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- intentional infinite loop with break
     while (true) {
