@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1367 export(s) across 26 entry point(s).
+1371 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -945,6 +945,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `expandCommandTemplate` | value |
 | `expandInstructionImports` | value |
 | `FILE_INLINE_CAP` | value |
+| `findFileMentions` | value |
 | `firstSettingsFile` | value |
 | `FOREIGN_KEY_DECISIONS` | value |
 | `frontmatterValue` | value |
@@ -966,6 +967,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `projectEnvStep` | value |
 | `readSettingsFile` | value |
 | `resolveAgentMemory` | value |
+| `resolveFileMentions` | value |
 | `resolveOperatorRoots` | value |
 | `resolveOutputStyle` | value |
 | `SETTINGS_LAYERS` | value |
@@ -993,6 +995,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `EnvOptOut` | type |
 | `EnvReachabilityAudit` | type |
 | `ExpandImportsInput` | type |
+| `FileMentionOptions` | type |
 | `InstructionBlock` | type |
 | `InstructionCut` | type |
 | `InstructionSource` | type |
@@ -1022,6 +1025,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProvenancePerKey` | type |
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
+| `ResolvedFileMentions` | type |
 | `Settings` | type |
 | `SettingsCandidate` | type |
 | `SettingsCandidates` | type |

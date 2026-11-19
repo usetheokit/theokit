@@ -148,6 +148,10 @@ import { assertBootstrapped } from '@theokit/agents/config'
 assertBootstrapped(bootstrap, 'openTranscriptStore')
 ```
 
+### `@file` mentions
+
+`resolveFileMentions(text, { cwd, perFileTokens?, totalTokens?, allowHome?, readFile? })` from `@theokit/agents/config` attaches the files a user message mentions with `@path`. `findFileMentions(text)` returns the `{ ref, index }` pairs and uses the same grammar as `expandCommandTemplate`: the `@` must start the text or follow whitespace, and a trailing `.` or `,` is punctuation. Paths resolve under `cwd` with `safePathJoin`, `assertNoSymlinkEscape` and `isForbiddenPath`; `~/` resolves under the home directory only with `allowHome: true`. Each file is capped at `perFileTokens` (default 2000, truncated with a marker) and the set at `totalTokens` (default 20000). The result is `{ message, attached, skipped }`; `skipped` carries `{ ref, reason }` with reason `forbidden`, `outside-root`, `not-found` or `budget` (`unreadable` is in the type but is not produced today), and the text of a skipped mention is left unchanged. Any other error, including a read error other than a missing file, is rethrown.
+
 ## Config keys set from the environment
 
 Declare which keys the environment may set, then build a layer for `LayeredConfig` from the variables that are set:
