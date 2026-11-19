@@ -77,4 +77,28 @@ describe('streamFromEmitter', () => {
     expect((await pending).done).toBe(true)
     expect(seen?.aborted).toBe(true)
   })
+
+  it('return after a custom isFinal event does not abort the producer', async () => {
+    let seen: AbortSignal | undefined
+    const it = streamFromEmitter<Ev>(
+      (emit, signal) => {
+        seen = signal
+        emit({ type: 'finished' })
+        return new Promise(() => {})
+      },
+      { isFinal: (e) => e.type === 'finished' },
+    )[Symbol.asyncIterator]()
+    await it.next()
+    await it.return?.()
+    expect(seen?.aborted).toBe(false)
+  })
+
+  it('return resolves every concurrent pending next', async () => {
+    const it = streamFromEmitter<Ev>(() => new Promise(() => {}))[Symbol.asyncIterator]()
+    const first = it.next()
+    const second = it.next()
+    await it.return?.()
+    expect((await first).done).toBe(true)
+    expect((await second).done).toBe(true)
+  })
 })

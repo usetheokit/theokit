@@ -31,12 +31,12 @@ export function streamFromEmitter<E extends { type: string }>(
       let closed = false
       let sawFinal = false
       let sawError = false
-      let wake: (() => void) | undefined
+      const waiters = new Set<() => void>()
 
       const notify = (): void => {
-        const w = wake
-        wake = undefined
-        w?.()
+        const pending = [...waiters]
+        waiters.clear()
+        for (const wake of pending) wake()
       }
       const close = (): void => {
         closed = true
@@ -78,7 +78,7 @@ export function streamFromEmitter<E extends { type: string }>(
             if (next !== undefined) return { done: false, value: next }
             if (closed) return { done: true, value: undefined }
             await new Promise<void>((resolve) => {
-              wake = resolve
+              waiters.add(resolve)
             })
           }
         },
