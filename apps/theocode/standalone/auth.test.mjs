@@ -1,4 +1,5 @@
 // Runs against the registry-installed `@theokit/agents`, never the repository's workspace copy.
+/* global Response */
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
