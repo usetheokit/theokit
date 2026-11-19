@@ -5,7 +5,7 @@ import {
   initialAgentStreamState,
 } from '@theokit/tui'
 
-import type { ControlClient, ControlFrame } from '../control-client/control-client.js'
+import { type ControlClient, type ControlFrame, nextArrival } from '../control-client/control-client.js'
 
 /** One line of the transcript: what the owner sent, what the assistant wrote, a tool it called. */
 export type TranscriptEntry =
@@ -83,11 +83,10 @@ export interface TurnInbox {
 
 export function createTurnInbox(): TurnInbox {
   let queue: { n: TuiNotice; seq: number }[] = []
-  let clock = 0
   let wake: (() => void) | undefined
   return {
     post(n) {
-      queue.push({ n, seq: ++clock })
+      queue.push({ n, seq: nextArrival() })
       wake?.()
       wake = undefined
     },
@@ -102,7 +101,7 @@ export function createTurnInbox(): TurnInbox {
         wake = resolve
       })
     },
-    stamp: () => ++clock,
+    stamp: nextArrival,
   }
 }
 
@@ -135,8 +134,9 @@ export async function* controlStream(
   const raise = (n: TuiNotice): void => notice({ ...n, after: mirror.events.length })
   const iterator = client.chat(text, session)[Symbol.asyncIterator]()
   try {
-    // Frames are pulled as soon as they come and stamped then, not when the consumer next asks for one, so a
-    // notice posted later is placed after every frame that had arrived by then, however late the stream resumes.
+    // Frames are pulled as soon as they come and ordered by the stamp the client took when the frame came off
+    // the socket (the delivery boundary), not by when this loop resumes, so a notice posted later is placed after
+    // every frame that had arrived by then, however late the stream resumes. A frame without a stamp gets one here.
     type Arrival =
       | { readonly seq: number; readonly result: IteratorResult<ControlFrame> }
       | { readonly seq: number; readonly error: unknown }
@@ -151,7 +151,7 @@ export async function* controlStream(
       try {
         for (;;) {
           const result = await iterator.next()
-          arrive({ seq: inbox.stamp(), result })
+          arrive({ seq: (result.done === true ? undefined : result.value.arrivedAt) ?? inbox.stamp(), result })
           if (result.done === true) return
         }
       } catch (error) {

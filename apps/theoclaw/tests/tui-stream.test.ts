@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 
 import { deferred, waitFor } from './fakes.js'
 
-import type { ControlClient, ControlFrame } from '../src/control-client/control-client.js'
+import { type ControlClient, type ControlFrame, nextArrival } from '../src/control-client/control-client.js'
 import {
   controlStream,
   createTurnInbox,
@@ -362,6 +362,61 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       { kind: 'event', event: { text: 'before' } },
       { kind: 'notice', text: 'queued' },
       { kind: 'event', event: { text: 'after' } },
+    ])
+  })
+
+  it('a frame that arrived before a notice posted in the same tick is placed before it', async () => {
+    const gate = deferred<void>()
+    let arrivedAt = 0
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'before' })
+        await gate.promise
+        yield { ...event({ type: 'text_delta', content: 'after' }), arrivedAt } as ControlFrame
+        yield DONE
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    const notices: TurnNotice[] = []
+    const stream = controlStream(client, 'hi', SESSION, (n) => notices.push(n), () => undefined, inbox)
+    const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
+    // The frame comes off the socket (stamped), then the notice is posted, before the consumer resumes.
+    arrivedAt = nextArrival()
+    gate.resolve()
+    inbox.post({ variant: 'warning', text: 'queued' })
+    for await (const e of stream) events.push(e)
+    const state = [...events, { type: 'done' } as AgentStreamEvent].reduce(
+      agentStreamReducer,
+      initialAgentStreamState,
+    )
+    expect(turnEntries(state.events, notices)).toMatchObject([
+      { kind: 'event', event: { text: 'beforeafter' } },
+      { kind: 'notice', text: 'queued' },
+    ])
+  })
+
+  it('an interrupted frame that arrived before a notice posted in the same tick keeps the warning first', async () => {
+    const gate = deferred<void>()
+    let arrivedAt = 0
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'part' })
+        await gate.promise
+        yield { type: 'interrupted', session: SESSION, arrivedAt } as ControlFrame
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    let handed: readonly TranscriptEntry[] | undefined
+    const stream = controlStream(client, 'hi', SESSION, () => undefined, () => undefined, inbox, (t) => (handed = t))
+    await stream.next()
+    arrivedAt = nextArrival()
+    gate.resolve()
+    inbox.post({ variant: 'warning', text: 'queued' })
+    for await (const e of stream) void e
+    expect(handed).toEqual([
+      { kind: 'assistant', text: 'part' },
+      { kind: 'notice', variant: 'warning', text: 'interrupted' },
+      { kind: 'notice', variant: 'warning', text: 'queued' },
     ])
   })
 
