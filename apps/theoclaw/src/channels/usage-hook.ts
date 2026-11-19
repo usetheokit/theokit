@@ -55,7 +55,10 @@ export function createUsageHook(options: UsageHookOptions = {}): UsageHook {
       name: HOOK_NAME,
       pre_inbound({ event }) {
         const command = parseChatCommand(event.text)
-        return command?.name === 'usage' ? answer(event, command.arg) : undefined
+        // A multi-line message was never this command: it stays an ordinary message.
+        return command?.name === 'usage' && !/[\r\n]/.test(command.arg)
+          ? answer(event, command.arg)
+          : undefined
       },
     },
     modeFor: (event) => modes.get(keyOf(event)) ?? 'off',

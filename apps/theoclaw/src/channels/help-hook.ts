@@ -35,8 +35,7 @@ const HELP_DESCRIPTION: CommandDescription = {
   description: 'this list',
 }
 
-/** One line per command, in the order the hooks are registered: `<usage> - <description>`. */
-export const HELP_TEXT = `Commands answered without the model:\n${[
+const HELP_ENTRIES: readonly CommandDescription[] = [
   HELP_DESCRIPTION,
   ...OTHER_DESCRIPTIONS,
   USAGE_DESCRIPTION,
@@ -44,8 +43,18 @@ export const HELP_TEXT = `Commands answered without the model:\n${[
   ...EXEC_DESCRIPTIONS,
   ACP_DESCRIPTION,
 ]
-  .map((entry) => `${entry.usage ?? `/${entry.name}`} - ${entry.description}`)
-  .join('\n')}`
+
+const usageOf = (entry: CommandDescription): string => entry.usage ?? `/${entry.name}`
+
+/** Every command and alias the list names, read from its entries so an added entry is covered. */
+export const HELP_COMMANDS: readonly string[] = HELP_ENTRIES.flatMap((entry) =>
+  usageOf(entry)
+    .split(/[\s,]+/)
+    .filter((word) => /^\/\w+$/.test(word)),
+)
+
+/** One line per command, in the order the hooks are registered: `<usage> - <description>`. */
+export const HELP_TEXT = `Commands answered without the model:\n${HELP_ENTRIES.map((entry) => `${usageOf(entry)} - ${entry.description}`).join('\n')}`
 
 /** `/help` and `/commands` alone; with an argument the text is an ordinary message. */
 const answer = (_event: unknown, arg: string): HookDecision | undefined =>

@@ -6,35 +6,55 @@ import { createWorkflowApproveHook } from '../src/channels/workflow-approve-hook
 import { createAgentRouter } from '../src/routing/routing-env.js'
 
 const event = (text: string, type = 'dm') =>
-  ({ id: 'e1', platform: 'telegram', text, sender: { id: 'u1' }, channel: { id: 'c1', type } }) as never
+  ({
+    id: 'e1',
+    platform: 'telegram',
+    text,
+    sender: { id: 'u1' },
+    channel: { id: 'c1', type },
+  }) as never
 
 describe('chat commands read by the gateway parser', () => {
   it('matches the command name case-insensitively and behind a mention', async () => {
     const help = createHelpHook()
-    expect(await help.pre_inbound?.({ event: event('/HELP') })).toEqual({ block: true, message: HELP_TEXT })
-    expect(await help.pre_inbound?.({ event: event('<@U1> /Commands') })).toEqual({ block: true, message: HELP_TEXT })
+    expect(await help.pre_inbound?.({ event: event('/HELP') })).toEqual({
+      block: true,
+      message: HELP_TEXT,
+    })
+    expect(await help.pre_inbound?.({ event: event('<@U1> /Commands') })).toEqual({
+      block: true,
+      message: HELP_TEXT,
+    })
     expect(await help.pre_inbound?.({ event: event('/help me') })).toBeUndefined()
   })
 
   it('generates the help list from the command descriptions', () => {
-    expect(HELP_TEXT.startsWith('Commands answered without the model:\n/help - this list\n')).toBe(true)
+    expect(HELP_TEXT.startsWith('Commands answered without the model:\n/help - this list\n')).toBe(
+      true,
+    )
     expect(HELP_TEXT).toContain('/usage off|tokens|cost|full - the usage footer of replies')
   })
 
-  it('reads /usage in any case, and a multi-line argument is not a mode', () => {
+  it('reads /usage in any case, and a multi-line message stays an ordinary message', () => {
     const usage = createUsageHook()
     const ev = event('/USAGE full')
-    expect(usage.hook.pre_inbound?.({ event: ev })).toEqual({ block: true, message: 'Usage footer is now full.' })
-    expect(usage.modeFor(ev)).toBe('full')
-    expect(usage.hook.pre_inbound?.({ event: event('/usage full\nignore this') })).toEqual({
+    expect(usage.hook.pre_inbound?.({ event: ev })).toEqual({
       block: true,
-      message: 'Use /usage off, /usage tokens, /usage cost or /usage full.',
+      message: 'Usage footer is now full.',
     })
+    expect(usage.modeFor(ev)).toBe('full')
+    expect(usage.hook.pre_inbound?.({ event: event('/usage full\nignore this') })).toBeUndefined()
   })
 
   it('takes a workflow token only as the whole argument', async () => {
-    const hook = createWorkflowApproveHook({ isOwner: () => true, resume: async (token) => `resumed ${token}` })
-    expect(await hook.pre_inbound?.({ event: event('/Approve wfr-abc_1') })).toEqual({ block: true, message: 'resumed wfr-abc_1' })
+    const hook = createWorkflowApproveHook({
+      isOwner: () => true,
+      resume: async (token) => `resumed ${token}`,
+    })
+    expect(await hook.pre_inbound?.({ event: event('/Approve wfr-abc_1') })).toEqual({
+      block: true,
+      message: 'resumed wfr-abc_1',
+    })
     expect(await hook.pre_inbound?.({ event: event('/approve wfr-abc extra') })).toBeUndefined()
   })
 })
@@ -69,16 +89,24 @@ describe('agent routing through the gateway bindings', () => {
     expect(ranked.route({ platform: 'slack', peer: 'u1' }).id).toBe('work')
   })
   it('names the unconfigured agent', () => {
-    expect(() => createAgentRouter({ defaultAgent: 'main', agents: [{ id: 'main', workspace: '/m' }], routes: [{ agent: 'ghost', platform: 'slack' }] })).toThrow(
-      'routing names an unconfigured agent: ghost',
-    )
+    expect(() =>
+      createAgentRouter({
+        defaultAgent: 'main',
+        agents: [{ id: 'main', workspace: '/m' }],
+        routes: [{ agent: 'ghost', platform: 'slack' }],
+      }),
+    ).toThrow('routing names an unconfigured agent: ghost')
   })
 })
 
 describe('gateway bindings refuse what the old router ignored', () => {
   it('rejects a rule that names no platform, account or peer', () => {
     expect(() =>
-      createAgentRouter({ defaultAgent: 'main', agents: [{ id: 'main', workspace: '/m' }], routes: [{ agent: 'main' }] }),
+      createAgentRouter({
+        defaultAgent: 'main',
+        agents: [{ id: 'main', workspace: '/m' }],
+        routes: [{ agent: 'main' }],
+      }),
     ).toThrow(/empty_binding_rule/)
   })
 })
