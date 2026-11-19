@@ -38,7 +38,7 @@ const compiled = new WeakMap<CustomTool, z.ZodType>()
 export const validateAgainstInputSchema: ToolArgsValidator = (tool, args) => {
   let schema = compiled.get(tool)
   if (schema === undefined) {
-    schema = z.fromJSONSchema(tool.inputSchema as Parameters<typeof z.fromJSONSchema>[0])
+    schema = z.fromJSONSchema(tool.inputSchema)
     compiled.set(tool, schema)
   }
   const parsed = schema.safeParse(args)
@@ -110,7 +110,8 @@ async function run(
   signal: AbortSignal,
 ): Promise<Response> {
   try {
-    const validate = options.validate === false ? undefined : (options.validate ?? validateAgainstInputSchema)
+    const validate =
+      options.validate === false ? undefined : (options.validate ?? validateAgainstInputSchema)
     const invalid = validate?.(call.tool, call.args)
     if (invalid !== undefined) return failure(400, 'invalid_args', invalid)
     // Typed as never undefined, but a JavaScript tool can return nothing: `null` keeps `result` in
