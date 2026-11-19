@@ -246,15 +246,26 @@ import { createOutbox, createQueueClient, createOutboxDispatcher } from "${jobsS
 
 const CONFIG_MODULES: string[] = ${JSON.stringify(configs)};
 
-// The effective config's \`jobs.backend\`: the environment override wins over the base, as in loadConfig.
+// Merge as loadConfig's deepMerge does: plain objects merge key by key, anything else is replaced.
+function mergeEffective(base, over) {
+  const isRec = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const out = { ...base };
+  for (const key of Object.keys(over)) {
+    if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+    out[key] = isRec(over[key]) && isRec(base[key]) ? mergeEffective(base[key], over[key]) : over[key];
+  }
+  return out;
+}
+
+// The effective config's \`jobs.backend\`: configs merged base first, as in loadConfig.
 async function loadBackend() {
-  let backend;
+  let merged = {};
   for (const spec of CONFIG_MODULES) {
     const mod = await import(spec);
     const cfg = mod.default?.default ?? mod.default;
-    if (cfg?.jobs?.backend !== undefined) backend = cfg.jobs.backend;
+    if (cfg !== null && typeof cfg === "object") merged = mergeEffective(merged, cfg);
   }
-  return backend;
+  return merged.jobs?.backend;
 }
 
 async function runCron(def: { handler: (ctx: unknown) => unknown }) {

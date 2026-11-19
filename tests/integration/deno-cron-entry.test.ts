@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join, relative, resolve } from 'node:path'
 
 import { translateCronToDeno } from '../../packages/theo/src/server/cron/adapter-translators.js'
 
@@ -90,28 +90,95 @@ describe('Deno import map for the cron entry configs', () => {
   })
 })
 
-describe('Deno import map built through the build wiring', () => {
-  it('keeps deno.json aliases and maps the env override config dependencies', async () => {
-    write('deno.json', JSON.stringify({ imports: { '@app/backend': './lib/backend.ts' } }))
-    write(
-      'theo.config.production.ts',
-      `import { backend } from '@app/backend'\nimport { z } from 'zod'\nexport default { jobs: { backend }, z }\n`,
-    )
-    write('lib/backend.ts', `import { Pool } from 'pg'\nexport const backend = new Pool()\n`)
-    vi.stubEnv('NODE_ENV', 'production')
-    const { buildDeno } = await import('../../packages/theo/src/adapters/deno-deploy.js')
-    const written = new Map<string, string>()
-    await buildDeno({ port: 3000, serverDir: 'server', agentsDir: 'agents' } as never, root, {
-      runNodeBuild: async () => {},
-      writeEntry: (path, content) => written.set(path, content),
-      ensureDir: () => {},
-      copyClient: () => {},
-    })
-    const emitted = JSON.parse(written.get(join(root, 'deno.json')) ?? '{}') as {
+/**
+ * Build the project the way `theo build --target deno-deploy` does (emitted import map and
+ * the cron entry), then load the entry resolving every bare import through the EMITTED map —
+ * what Deno does. `npm:` targets resolve to stubs in node_modules; theokit to the workspace.
+ */
+async function loadBuiltEntry(): Promise<void> {
+  const { buildDeno, readProjectSourcesFromDisk, bareSpecifiersOf } =
+    await import('../../packages/theo/src/adapters/deno-deploy.js')
+  const written = new Map<string, string>()
+  const cfg = { port: 3000, serverDir: 'server', agentsDir: 'agents' } as never
+  await buildDeno(cfg, root, {
+    runNodeBuild: async () => {},
+    writeEntry: (path, content) => written.set(path, content),
+    ensureDir: () => {},
+    copyClient: () => {},
+  })
+  const map = (
+    JSON.parse(written.get(join(root, 'deno.json')) ?? '{}') as {
       imports: Record<string, string>
     }
-    expect(emitted.imports['@app/backend']).toBe('./lib/backend.ts')
-    expect(emitted.imports.zod).toBe('npm:zod')
+  ).imports
+  const configs = ['theo.config.ts', 'theo.config.production.ts']
+    .filter((n) => existsSync(join(root, n)))
+    .map((n) => join(root, n))
+  const entry = join(root, '.theokit', 'crons-entry.ts')
+  write(
+    'server/crons/job.ts',
+    `export default { handler: async (ctx) => { ctx.queue.enqueue('a', {}); await ctx.queue.enqueueInTransaction({ tx: 1 }, 't', {}) } }\n`,
+  )
+  translateCronToDeno(
+    entry,
+    [
+      {
+        name: 'job',
+        filePath: 'server/crons/job.ts',
+        schedule: '* * * * *',
+        concurrency: 'forbid',
+      },
+    ],
+    { projectRoot: root, configPaths: configs },
+  )
+  // Every bare specifier the config modules reach must be in the emitted map.
+  for (const spec of bareSpecifiersOf(readProjectSourcesFromDisk(root, cfg))) {
+    expect(map[spec], `${spec} is mapped`).toBeDefined()
+  }
+  const resolveSpec = (spec: string): string => {
+    const target = map[spec]
+    if (target === undefined) return spec
+    if (target.startsWith('npm:')) return join(root, 'node_modules', spec, 'index.js')
+    return resolve(root, target)
+  }
+  const rewrite = (text: string): string =>
+    text.replace(/(from\s+['"])([^'".][^'"]*)(['"])/gu, (m, a, spec, c) =>
+      map[spec] === undefined ? m : `${a}${resolveSpec(spec)}${c}`,
+    )
+  for (const rel of [...configs.map((c) => relative(root, c)), 'lib/backend.ts']) {
+    if (existsSync(join(root, rel))) write(rel, rewrite(readFileSync(join(root, rel), 'utf8')))
+  }
+  const text = readFileSync(entry, 'utf8').replace('npm:theokit/server/jobs', JOBS)
+  const loaded = join(root, '.theokit', `built-${seq++}.ts`)
+  writeFileSync(loaded, text)
+  await import(/* @vite-ignore */ loaded)
+}
+
+describe('generated entry loaded through the build wiring', () => {
+  const stubPackage = (name: string): void =>
+    write(`node_modules/${name}/index.js`, `export const Pool = class { name = 'pg' }\n`)
+
+  it('resolves a deno.json alias and the override dependency, merging a partial backend override', async () => {
+    write('deno.json', JSON.stringify({ imports: { '@app/backend': './lib/backend.ts' } }))
+    stubPackage('pg')
+    write(
+      'lib/backend.ts',
+      `import { Pool } from 'pg'\nexport const pool = new Pool()\n` +
+        `export const backend = { name: 'aliased', async enqueue(input) { (globalThis.__calls ??= []).push({ backend: 'aliased', input }); return { jobId: 'j' } }, async enqueueInTransaction(client, input) { (globalThis.__calls ??= []).push({ backend: 'aliased-tx', client, input }); return { jobId: 'tx' } } }\n`,
+    )
+    write(
+      'theo.config.ts',
+      `import { backend } from '@app/backend'\nexport default { jobs: { backend } }\n`,
+    )
+    // The override supplies only `enqueue`; `enqueueInTransaction` and `name` come from the base.
+    write(
+      'theo.config.production.ts',
+      `export default { jobs: { backend: { async enqueue(input) { (globalThis.__calls ??= []).push({ backend: 'partial', input }); return { jobId: 'p' } } } } }\n`,
+    )
+    vi.stubEnv('NODE_ENV', 'production')
+    await loadBuiltEntry()
+    await callbacks.get('job')!()
+    expect(calls().map((c) => c.backend)).toEqual(['aliased-tx', 'partial'])
   })
 })
 

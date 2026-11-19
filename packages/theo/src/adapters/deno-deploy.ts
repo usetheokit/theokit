@@ -498,7 +498,8 @@ export function readProjectSourcesFromDisk(cwd: string, config: TheoConfig): str
   const nodeEnv = process.env.NODE_ENV
   const configs = ['theo.config.ts', ...(nodeEnv ? [`theo.config.${nodeEnv}.ts`] : [])]
   const seen = new Set<string>()
-  for (const name of configs) collectLocalSources(resolve(cwd, name), seen, texts)
+  const aliases = readLocalAliases(cwd)
+  for (const name of configs) collectLocalSources(resolve(cwd, name), seen, texts, aliases)
   return texts
 }
 
@@ -509,7 +510,12 @@ function localCandidates(base: string): string[] {
 }
 
 /** Read `file` and, recursively, the local modules it imports. Texts are appended to `out`. */
-function collectLocalSources(file: string, seen: Set<string>, out: string[]): void {
+function collectLocalSources(
+  file: string,
+  seen: Set<string>,
+  out: string[],
+  aliases: ReadonlyMap<string, string>,
+): void {
   if (seen.has(file) || !existsSync(file)) return
   seen.add(file)
   let text: string
@@ -519,11 +525,37 @@ function collectLocalSources(file: string, seen: Set<string>, out: string[]): vo
     return // a directory or unreadable candidate: not a module
   }
   out.push(text)
-  for (const match of text.matchAll(/(?:from|import)[\s(]*['"](\.{1,2}\/[^'"]*)['"]/gu)) {
-    const base = resolve(file, '..', match[1])
+  for (const match of text.matchAll(/(?:from|import)[\s(]*['"]([^'"]+)['"]/gu)) {
+    const base = localTarget(file, match[1], aliases)
+    if (base === undefined) continue
     const found = localCandidates(base).find((c) => existsSync(c) && statSync(c).isFile())
-    if (found !== undefined) collectLocalSources(found, seen, out)
+    if (found !== undefined) collectLocalSources(found, seen, out, aliases)
   }
+}
+
+/** The path a relative specifier or a local `deno.json` alias names, or undefined for a package. */
+function localTarget(
+  from: string,
+  specifier: string,
+  aliases: ReadonlyMap<string, string>,
+): string | undefined {
+  if (/^\.{1,2}\//u.test(specifier)) return resolve(from, '..', specifier)
+  for (const [key, target] of aliases) {
+    if (specifier === key) return target
+    if (key.endsWith('/') && specifier.startsWith(key)) return target + specifier.slice(key.length)
+  }
+  return undefined
+}
+
+/** The project's own `deno.json` import map entries that point at local files, as absolute paths. */
+function readLocalAliases(cwd: string): Map<string, string> {
+  const out = new Map<string, string>()
+  const imports = readDenoConfigFromDisk(cwd)?.imports ?? {}
+  for (const [key, value] of Object.entries(imports)) {
+    if (/^\.{1,2}\//u.test(value))
+      out.set(key, key.endsWith('/') ? `${resolve(cwd, value)}/` : resolve(cwd, value))
+  }
+  return out
 }
 
 function readDenoConfigFromDisk(cwd: string): DenoConfig | undefined {
