@@ -1,6 +1,6 @@
 import type { CustomTool } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
-import { z, type ZodType } from 'zod'
+import { z } from 'zod'
 
 import { ConfigurationError } from '../errors.js'
 
@@ -42,7 +42,7 @@ const DEFAULT_DESCRIPTION =
  * The schema must describe an object (tool inputs are objects); anything else throws `ConfigurationError`.
  */
 export function createResultCapture<T>(
-  schema: ZodType<T>,
+  schema: z.ZodType<T>,
   opts?: { name?: string; description?: string },
 ): ResultCapture<T> {
   const name = opts?.name ?? DEFAULT_NAME
