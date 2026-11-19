@@ -64,7 +64,8 @@ export function recordRefusal(
 
 /**
  * Remove and return the refusal for this run and tool. When the denial's own `message` is known,
- * only the entry whose marker it carries is taken, so an external denial (no marker) or another
+ * only the entry whose complete tagged veto message the denial ends with is taken, so an external
+ * denial (no marker, or one merely quoting it) or another
  * call's denial can never claim it. Without a message, the oldest entry is taken.
  */
 export function takeRefusal(
