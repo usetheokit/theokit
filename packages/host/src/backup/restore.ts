@@ -43,7 +43,7 @@ async function verify(path: string, sha256: string, size: number): Promise<void>
   }
 }
 
-/** Create `dir` privately and return the directories this call created, outermost first. */
+/** Create `dir` privately, recording each directory in `created` (outermost first) as soon as it exists. */
 async function mkdirTracked(dir: string, created: string[]): Promise<void> {
   const missing: string[] = []
   for (let d = dir; ; d = dirname(d)) {
@@ -57,8 +57,10 @@ async function mkdirTracked(dir: string, created: string[]): Promise<void> {
     missing.unshift(d)
     if (dirname(d) === d) break
   }
-  await mkdirPrivate(dir)
-  created.push(...missing)
+  for (const d of missing) {
+    await mkdirPrivate(d)
+    created.push(d)
+  }
 }
 
 /** Test seam: the rename used to place directories. */

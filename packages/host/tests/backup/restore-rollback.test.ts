@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 
 import { backup } from '../../src/backup/index.js'
-import { restoreWith } from '../../src/backup/restore.js'
+import { restore, restoreWith } from '../../src/backup/restore.js'
 
 const dirs: string[] = []
 afterEach(async () => {
@@ -68,5 +68,16 @@ it('removes target parent directories it created when a placement fails', async 
   await expect(
     restoreWith({ from: out, roots: { a: target } }, { rename: failing }),
   ).rejects.toThrow('injected')
+  expect([...(await readdir(base))].sort((x, y) => x.localeCompare(y))).toEqual(['a', 'out'])
+})
+
+it('removes parent directories created before a failure partway through creating them', async () => {
+  const base = await scratch()
+  await put(join(base, 'a'), 'f', 'new-a')
+  const out = join(base, 'out')
+  await backup({ roots: { a: join(base, 'a') }, out })
+  // The second parent's name is too long, so the first is created and the second fails.
+  const target = join(base, 'first', 'x'.repeat(300), 'ta')
+  await expect(restore({ from: out, roots: { a: target } })).rejects.toThrow()
   expect([...(await readdir(base))].sort((x, y) => x.localeCompare(y))).toEqual(['a', 'out'])
 })
