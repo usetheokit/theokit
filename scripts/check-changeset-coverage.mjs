@@ -280,6 +280,8 @@ for (const entry of existsSync(dir) ? readdirSync(dir) : []) {
 const needing = new Map()
 for (const d of touched) {
   const manifest = join('packages', d, 'package.json')
+  // A package deleted whole in this range has nothing left to publish or to name in a changeset.
+  if (!existsSync(join(ROOT, 'packages', d))) continue
   if (!existsSync(join(ROOT, manifest))) {
     unreadable(`packages/${d}/src changed and ${manifest} is absent.`)
   }
