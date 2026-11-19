@@ -55,7 +55,8 @@ describe('applySurface (M45)', () => {
     const p = JSON.parse(read('package.json'))
     expect(p.scripts.start).toBe('tsx cli/main.ts')
     expect(p.scripts.build).toBe('tsc --noEmit')
-    expect(p.dependencies['@theokit/agents']).toBeDefined()
+    // runHeadlessTurn ships from 16.13.0; 16.12.0 lacks it
+    expect(p.dependencies['@theokit/agents']).toBe('^16.13.0')
     expect(p.devDependencies.tsx).toBeDefined()
     expect(JSON.parse(read('tsconfig.json')).include).toContain('cli/**/*.ts')
   })

@@ -106,7 +106,8 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     fragment: 'cli',
     // `@theokit/agents/commands` holds `runHeadlessTurn` / `readHeadlessPrompt`. `ai` stays because
     // theokit's in-process agent runtime imports it at RUNTIME.
-    deps: { '@theokit/agents': '^16.12.0', ai: '^7.0.0' },
+    // 16.13.0 is the first release that exports them (16.12.0 does not).
+    deps: { '@theokit/agents': '^16.13.0', ai: '^7.0.0' },
     devDeps: { tsx: '^4.19.0' },
     scripts: {
       dev: 'tsx cli/main.ts',
