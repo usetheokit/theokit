@@ -1,3 +1,6 @@
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 import type { Skill } from '@theokit/sdk/skills'
@@ -124,6 +127,9 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
       hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
       ...(input.pluginWorkspace === undefined ? {} : { cwd: input.pluginWorkspace }),
       ...settingSourcesFor(input),
+      // With the `project` source on, the SDK adds the project config roots named by this list; the
+      // native `.theokit` root only, so `skillRoots` can name every root the SDK reads.
+      ...(projectSourceOn(input) ? { compatSources: [] } : {}),
     },
     ...(input.telemetry === undefined ? {} : { telemetry: input.telemetry }),
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
@@ -131,7 +137,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
   // `bundledDirs` rather than `skillsDir`: the SDK reads `skillsDir` only with the `project` setting
   // source, which would also load project hooks. It takes the first skill of a name, so workspace first.
-  const dirs = [input.skillsDir, input.userSkillsDir].filter((dir): dir is string => dir !== undefined)
+  const dirs = skillRoots(input)
   const custodian = input.custodian === true ? custodianSkills() : []
   const imported = input.imported?.setup.skills ?? []
   const withSkills: TheoClawAgentOptions<Model> = {
@@ -154,6 +160,29 @@ function settingSourcesFor(input: TheoClawAgentInput<string | ModelSelection>): 
   if (input.pluginWorkspace !== undefined) sources.push('plugins')
   if (input.approvedHooks !== undefined && input.approvedHooks.size > 0) sources.push('project')
   return sources.length === 0 ? {} : { settingSources: sources }
+}
+
+function projectSourceOn(input: TheoClawAgentInput<string | ModelSelection>): boolean {
+  return input.approvedHooks !== undefined && input.approvedHooks.size > 0
+}
+
+/**
+ * Every directory skills are discovered from, in precedence order (the SDK takes the first skill of a
+ * name): workspace, user, then, with the `project` source on, the project root `<cwd>/.theokit/skills`
+ * and each plugin's `skills` folder. The SDK, the `requires:` adapter and `skill_read` all use this one list.
+ */
+function skillRoots(input: TheoClawAgentInput<string | ModelSelection>): string[] {
+  const roots = [input.skillsDir, input.userSkillsDir].filter((dir): dir is string => dir !== undefined)
+  if (!projectSourceOn(input)) return roots
+  const config = join(input.pluginWorkspace ?? process.cwd(), '.theokit')
+  const plugins = join(config, 'plugins')
+  let bundles: string[] = []
+  try {
+    bundles = readdirSync(plugins, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => join(plugins, entry.name, 'skills'))
+  } catch {
+    // No plugins folder.
+  }
+  return [...roots, join(config, 'skills'), ...bundles]
 }
 
 /** `options` with the custom provider plugins after its own. */
@@ -203,9 +232,9 @@ function withImport<Model extends string | ModelSelection>(
 }
 
 /**
- * The directory settings. `skillsDir` names the workspace folder too, so that when the `project` source
- * is on the SDK does not also search its own project and plugin roots, ahead of ours, for skills this
- * code neither gates nor reads. Without `project` the SDK ignores it.
+ * The directory settings. `skillsDir` names the first root again, so that when the `project` source
+ * is on the SDK does not search its own project and plugin roots ahead of ours: `skillRoots` already
+ * lists them, in order, and the adapter and `skill_read` read the same list. Without `project` the SDK ignores it.
  */
 function dirSettings(dirs: string[]): Pick<TheoClawSkills, 'bundledDirs' | 'skillsDir'> {
   return { bundledDirs: dirs, ...(dirs[0] === undefined ? {} : { skillsDir: dirs[0] }) }

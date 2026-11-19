@@ -26,9 +26,14 @@ export function bundledSkills(): InlineSkill[] {
   ]
 }
 
-/** True when `bin` is an executable file in one of the PATH directories. */
+/**
+ * True when `bin` is an executable file in one of the PATH directories. The same rule as the SDK's own
+ * gate (which is not exported): a name with a path separator is never on PATH, and on Windows the
+ * `PATHEXT` extensions count.
+ */
 export function binaryOnPath(bin: string, pathValue: string = process.env.PATH ?? ''): boolean {
-  const extensions = process.platform === 'win32' ? ['', '.exe', '.cmd', '.bat'] : ['']
+  if (bin.length === 0 || /[\\/]/.test(bin)) return false
+  const extensions = process.platform === 'win32' ? ['', ...(process.env.PATHEXT ?? '.EXE;.CMD').split(';')] : ['']
   for (const directory of pathValue.split(delimiter)) {
     if (directory === '') continue
     for (const extension of extensions) {

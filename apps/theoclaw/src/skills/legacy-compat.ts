@@ -50,19 +50,21 @@ export async function discoverWinners(dirs: readonly string[]): Promise<SdkSkill
 export async function legacyRequiresSkills(winners: readonly SdkSkill[], warn: (message: string) => void = defaultWarn): Promise<InlineSkill[]> {
   const found: InlineSkill[] = []
   for (const skill of winners) {
-    if (skill.requiresBins !== undefined) continue
     let parsed: ReturnType<typeof readSkillFile>
     try {
       parsed = readSkillFile(await readFile(skill.source, 'utf8'))
     } catch {
       continue
     }
-    const requiresBins = (parsed?.fields.get('requires') ?? '').split(',').map((bin) => bin.trim()).filter((bin) => bin !== '')
-    if (parsed === undefined || requiresBins.length === 0) continue
+    // The key is deprecated whether or not it still supplies the binaries, so warn for it on its own.
+    const legacy = parsed?.fields.get('requires')
+    if (parsed === undefined || legacy === undefined) continue
     if (!warned.has(skill.source)) {
       warned.add(skill.source)
       warn(`[theoclaw] ${skill.source}: the "requires:" key is deprecated and will stop working in the next release; rename it to "requires-bins:"`)
     }
+    const requiresBins = legacy.split(',').map((bin) => bin.trim()).filter((bin) => bin !== '')
+    if (skill.requiresBins !== undefined || requiresBins.length === 0) continue
     found.push({ ...skill, instructions: parsed.body, requiresBins })
   }
   return found
