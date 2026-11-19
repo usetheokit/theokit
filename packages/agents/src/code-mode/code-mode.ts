@@ -22,7 +22,7 @@
  * throws). (b) is stopped by the injected sandbox (the restricted API is the ONLY surface the code
  * sees). If the app injects a weak sandbox, (b) is on the app — hence the vetted-sandbox requirement.
  */
-import type { CustomTool } from '@theokit/sdk'
+import type { CustomTool, Plugin, PluginContext } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /**
@@ -69,6 +69,13 @@ export interface CodeModeConfig {
     tool: string
     args: unknown
   }) => CodeModePermission | Promise<CodeModePermission>
+  /**
+   * `pre_tool_call` hooks of these plugins run before each script call, after `onPermissionRequest`;
+   * a block refuses the call with its message. A hook that throws refuses the call too (fail closed).
+   */
+  plugins?: readonly Plugin[]
+  /** Passed as `agentId` and `runId` in the hook context. */
+  hookContext?: { agentId: string; runId?: string }
   /** Tool name the model calls (default `run_code`). */
   name?: string
   /** Tool description surfaced to the model. */
@@ -119,6 +126,30 @@ export class CodeModeInvalidArgumentsError extends TheokitAgentError {
       isRetryable: false,
     })
   }
+}
+
+type PreToolCallHook = Parameters<PluginContext['on']>[1]
+
+/**
+ * The `pre_tool_call` handlers the plugins register. The SDK's own hook runner (`runPreToolCall`) is
+ * not published yet, so this reads them through the public `Plugin.register(ctx)` contract and runs
+ * them in registration order; the first block wins, as in the SDK loop. Only `general` plugins carry hooks.
+ */
+async function collectPreToolCallHooks(plugins: readonly Plugin[]): Promise<PreToolCallHook[]> {
+  const hooks: PreToolCallHook[] = []
+  const ctx = {
+    registerTool: () => undefined,
+    registerCommand: () => undefined,
+    injectMessage: () => undefined,
+    on: (hook: string, handler: PreToolCallHook) => {
+      if (hook === 'pre_tool_call' && typeof handler === 'function') hooks.push(handler)
+      return () => undefined
+    },
+  } as unknown as PluginContext
+  for (const plugin of plugins) {
+    if (plugin.kind === 'general') await plugin.register(ctx)
+  }
+  return hooks
 }
 
 /** The JSON Schema primitive types the argument check reads; any other `type` is the tool's job. */
@@ -246,6 +277,33 @@ export function createCodeMode(config: CodeModeConfig): {
     )
   }
 
+  // Registered on the first call, and a registration that fails refuses every call (fail closed).
+  const plugins = config.plugins ?? []
+  let hooks: Promise<PreToolCallHook[]> | undefined
+  const refuseByPlugins = async (tool: string, input: Record<string, unknown>): Promise<void> => {
+    if (plugins.length === 0) return
+    let message: string | undefined
+    try {
+      hooks ??= collectPreToolCallHooks(plugins)
+      for (const hook of await hooks) {
+        const decision = (await hook({
+          name: tool,
+          args: input,
+          agentId: config.hookContext?.agentId ?? 'code-mode',
+          runId: config.hookContext?.runId ?? '',
+        })) as { block?: unknown; message?: unknown } | undefined
+        if (decision?.block === true) {
+          message = typeof decision.message === 'string' ? decision.message : 'blocked by a plugin'
+          break
+        }
+      }
+    } catch (error) {
+      const why = error instanceof Error ? error.message : String(error)
+      throw new CodeModePermissionDeniedError(tool, `a plugin hook failed: ${why}`)
+    }
+    if (message !== undefined) throw new CodeModePermissionDeniedError(tool, message)
+  }
+
   // Assemble the restricted API: each declared tool becomes a permission-gated callable.
   const api: CodeModeApi = {}
   for (const tool of config.tools) {
@@ -253,6 +311,7 @@ export function createCodeMode(config: CodeModeConfig): {
       const input = checkArguments(tool, args)
       const decision = await config.onPermissionRequest({ tool: tool.name, args })
       if (!decision.granted) throw new CodeModePermissionDeniedError(tool.name, decision.reason)
+      await refuseByPlugins(tool.name, input)
       return options?.signal === undefined
         ? tool.handler(input)
         : tool.handler(input, { signal: options.signal })
