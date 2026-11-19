@@ -49,6 +49,10 @@ export default tseslint.config(
       'knowledge-base/references/**',
       'knowledge-base/tools/**',
       'pnpm-lock.yaml',
+      // A third-party package kept byte for byte as its upstream tag plus one patch, so the diff
+      // against that tag is the whole audit. Reformatting or fixing lint here would hide the patch.
+      // vendor/picomatch/README.md says why it exists and when it goes.
+      'vendor/**',
       'examples/**/dist/**',
       'my-test/**',
       // `apps/**` — workspace members that are PRODUCTS, not framework code, and each governs its
@@ -93,6 +97,8 @@ export default tseslint.config(
       'packages/agents/vitest.live.config.ts',
       'packages/agents-pty/tsup.config.ts',
       'packages/agents-pty/vitest.config.ts',
+      'packages/host/tsup.config.ts',
+      'packages/host/vitest.config.ts',
     ],
   },
 

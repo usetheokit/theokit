@@ -18,7 +18,7 @@ const i18n = defineI18n({
   defaultLocale: 'en',
   dictionaries: {
     en: { greet: 'Hello, {name}', nav: { home: 'Home' } },
-    pt: { greet: 'Olá, {name}', nav: { home: 'Início' } },
+    xx: { greet: 'Hi, {name}', nav: { home: 'Home-xx' } },
   },
 })
 
@@ -26,35 +26,35 @@ function Page(): ReturnType<typeof createElement> {
   const { t } = useI18n()
   return createElement('p', null, `${t('greet', { name: 'Ana' })} / ${t('nav.home')}`)
 }
-const render = (locale: 'en' | 'pt'): string =>
+const render = (locale: 'en' | 'xx'): string =>
   renderToStaticMarkup(createElement(I18nProvider, { i18n, locale }, createElement(Page)))
 
 describe('client i18n', () => {
   it('renders the same page in each language', () => {
     expect(render('en')).toBe('<p>Hello, Ana / Home</p>')
-    expect(render('pt')).toBe('<p>Olá, Ana / Início</p>')
+    expect(render('xx')).toBe('<p>Hi, Ana / Home-xx</p>')
   })
   it('falls back to the default locale, then the key', () => {
     const partial = defineI18n({
       defaultLocale: 'en',
-      dictionaries: { en: { a: 'A', b: 'B' }, pt: { a: 'A', b: 'B' } },
+      dictionaries: { en: { a: 'A', b: 'B' }, xx: { a: 'A', b: 'B' } },
     })
     // Runtime-only partial dictionary (the types forbid this; JSON loaded at runtime may not).
     const loose = defineI18n({
       defaultLocale: 'en',
-      dictionaries: { en: { a: 'A', b: 'B' }, pt: { a: 'Á' } } as never,
+      dictionaries: { en: { a: 'A', b: 'B' }, xx: { a: 'A-xx' } } as never,
     })
-    expect(partial.translate('pt', 'b')).toBe('B')
-    expect(loose.translate('pt', 'a' as never)).toBe('Á')
-    expect(loose.translate('pt', 'b' as never)).toBe('B')
+    expect(partial.translate('xx', 'b')).toBe('B')
+    expect(loose.translate('xx', 'a' as never)).toBe('A-xx')
+    expect(loose.translate('xx', 'b' as never)).toBe('B')
     expect(i18n.translate('en', 'missing' as never)).toBe('missing')
   })
   it('negotiates stored, then browser, then default', () => {
-    expect(negotiateLocale('pt', ['en'], ['en', 'pt'], 'en')).toBe('pt')
-    expect(negotiateLocale(null, ['pt-BR', 'en'], ['en', 'pt'], 'en')).toBe('pt')
-    expect(negotiateLocale(null, ['pt'], ['en', 'pt-BR'], 'en')).toBe('pt-BR')
-    expect(negotiateLocale('pt-PT', [], ['en', 'pt-BR'], 'en')).toBe('pt-BR')
-    expect(negotiateLocale('xx', ['fr'], ['en', 'pt'], 'en')).toBe('en')
+    expect(negotiateLocale('xx', ['en'], ['en', 'xx'], 'en')).toBe('xx')
+    expect(negotiateLocale(null, ['xx-YY', 'en'], ['en', 'xx'], 'en')).toBe('xx')
+    expect(negotiateLocale(null, ['xx'], ['en', 'xx-YY'], 'en')).toBe('xx-YY')
+    expect(negotiateLocale('xx-ZZ', [], ['en', 'xx-YY'], 'en')).toBe('xx-YY')
+    expect(negotiateLocale('xx', ['fr'], ['en', 'xx'], 'en')).toBe('en')
   })
   it('formats by locale', () => {
     expect(formatNumber('en', 1234.5)).toBe('1,234.5')
@@ -65,23 +65,23 @@ describe('client i18n', () => {
     expect(() => renderToStaticMarkup(createElement(Page))).toThrow(/I18nProvider/)
   })
   it('follows a locale prop that changes after mount; setLocale cannot override it', async () => {
-    let set: ((l: 'en' | 'pt') => void) | undefined
+    let set: ((l: 'en' | 'xx') => void) | undefined
     function Probe(): ReturnType<typeof createElement> {
-      const c = useI18n<'en' | 'pt'>()
+      const c = useI18n<'en' | 'xx'>()
       set = c.setLocale
       return createElement('p', null, c.t('nav.home'))
     }
     const el = document.createElement('div')
     const root = createRoot(el)
-    const mount = (locale: 'en' | 'pt'): ReturnType<typeof createElement> =>
+    const mount = (locale: 'en' | 'xx'): ReturnType<typeof createElement> =>
       createElement(I18nProvider, { i18n, locale }, createElement(Probe))
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     await act(async () => root.render(mount('en')))
     expect(el.textContent).toBe('Home')
-    await act(async () => root.render(mount('pt')))
-    expect(el.textContent).toBe('Início')
+    await act(async () => root.render(mount('xx')))
+    expect(el.textContent).toBe('Home-xx')
     await act(async () => set?.('en'))
-    expect(el.textContent).toBe('Início')
+    expect(el.textContent).toBe('Home-xx')
     await act(async () => root.unmount())
   })
 })

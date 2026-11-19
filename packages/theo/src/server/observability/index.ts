@@ -1,4 +1,5 @@
-export * from './logger.js'
+export { createLogger, warnOnce, logRequest } from './logger.js'
+export type { LogLevel, StructuredLog, TheoLogger, RequestLog, LoggerFn } from './logger.js'
 export * from './audit-log.js'
 export * from './suggest.js'
 

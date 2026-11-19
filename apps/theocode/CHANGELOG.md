@@ -16,7 +16,19 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Removed
+- **The unused `writeCredential` wrapper and `StoredOAuthCredential` type in `auth/credentials.ts`.** Sign-in already writes through the framework's `loginWithApiKey`; nothing called the wrapper, and `knip` flagged both.
+
+### Added
+- **A standalone consumer install (`standalone/`).** TheoCode's five manifests, with `@theokit/agents`, `@theokit/agents-pty` and `@theokit/presenter` pinned to their registry releases and no `workspace:*` left, its own `pnpm-workspace.yaml` and a committed `pnpm-lock.yaml`. `standalone/auth.test.mjs` imports `@theokit/agents/auth` from that install and exercises `loginWithApiKey`, `refreshOAuthTokens` and `ensureFreshCredential`; `tools/standalone-consumer.test.mjs` keeps the manifests in step with the real ones. (#2276)
+
+### Changed
+- **`AgentDefinitionLike` no longer declares `model?: string`.** The framework's `SubagentAgentDefinition` now takes `model` as `ModelSelection | 'inherit'`, so the string field no longer type-checked against `.subagents()`. `definitionFrom` never set it. Carrying a role's model is a separate migration. (#1858)
+- **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)
+- **`SessionStart` hooks run through the framework's `runHostHooks`.** The surface still fires them once per session with `THEOCODE_SESSION_ID`, behind the same approval check, and reports the same warnings; only the command runner is the framework's now, and the hook event names come from the framework's Claude Code dialect table. (#1922)
+
 ### Fixed
+- **A refresh endpoint that is down no longer fails the run.** After the retries, a transient refresh failure (network error, timeout, 5xx) returns the stored token, which is left untouched on disk; a permanent one such as a revoked grant still fails. Login, logout and the refresh itself now come from `@theokit/agents/auth`. (#1923)
 - **`doctor` now reports the wiring `buildChatAgent` publishes.** The build was not awaited, so the MCP, skills, hooks and AGENTS.md rows could describe an empty placeholder, and a build failure became an unhandled rejection. It is awaited, and a failure is a failed `wiring` check. (#1894)
 - **Session delete and fork now refuse the session `<cwd>/.theokit/tui-session` names.** An open but idle TUI session that was not the newest and had no writer lease could be deleted, although the refusal message said otherwise. `protectedSessions` now includes the TUI pointer. (#1905)
 - **The ACP entry now runs the same startup steps as the CLI and TUI.** `dist/acp-entry.mjs` skipped the project `.env`, `THEOCODE_HOME` / `home_dir`, the credential-store pointer and `CLAUDE_PROJECT_DIR`, so an ACP session could use a different session root and credential store. The steps now live in one function, `bootstrapSurface` in `@theocode/agent/bootstrap`, called by all three entries. (#1893)

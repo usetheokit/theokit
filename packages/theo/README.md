@@ -59,6 +59,36 @@ large and the choice is open — `docs/adr/0003` § *AMENDED 2026-09-21* records
 Write a `server/middleware/*.ts` middleware that returns a `Response` to answer the request, or
 returns nothing to continue. Use the Web path when you need code to run after the route.
 
+## Posting a file to a server action
+
+An action reads `multipart/form-data` through its Zod schema. `objectToFormData` (from `theokit/client`) is
+the matching encoder: dot paths for nested objects, a repeated key for arrays, `'true'`/`'false'` for booleans.
+
+```ts
+import { objectToFormData } from 'theokit/client'
+import { z } from 'zod'
+
+// server/actions/profile.ts — served at /api/__actions/profile/uploadAvatar
+import { action } from 'theokit/server'
+
+export const uploadAvatar = action()
+  .input(z.object({ title: z.string(), avatar: z.instanceof(File) }))
+  .accept('form')
+  .handler(async ({ input }) => ({ name: input.avatar.name }))
+  .build()
+
+// browser
+const schema = z.object({ title: z.string(), avatar: z.instanceof(File) })
+
+await fetch('/api/__actions/profile/uploadAvatar', {
+  method: 'POST',
+  headers: { 'X-Theo-Action': '1' }, // required by the default strict CSRF check
+  body: objectToFormData({ title: 'Me', avatar: input.files![0] }, schema),
+})
+```
+
+An array of objects, or an array of arrays, throws `FormDataEncodingError`, because the server cannot read it back.
+
 ## Authoring surfaces
 
 Every surface is a fluent builder whose `.build()` is a compile error while a required link is
@@ -85,7 +115,43 @@ export const GET = route()
 | `./client/core` | The framework-agnostic client (no React) |
 | `./react-query` | The TanStack Query adapter over `theoFetch` |
 | `./vite-plugin` | The plugin that makes all of the above work |
+| `./testing` | `startTestServer`: boot the app as a real process from a test |
 | `./boot`, `./adapters/web-shim`, `./adapters/ws-shim` | Runtime shims |
+
+## OIDC discovery
+
+`discoverOidcProvider(issuer)` from `theokit/server/auth` fetches and caches a provider's
+metadata. The issuer and every endpoint it returns (`authorization_endpoint`, `token_endpoint`,
+and `userinfo_endpoint`, `jwks_uri`, `end_session_endpoint` when present) must be https, or http
+on a loopback host (`localhost`, `[::1]`, `127.0.0.0/8`; never `0.0.0.0`). Endpoints need not
+share the issuer's host. Otherwise it throws `OidcInsecureEndpointError` (`code:
+'oidc_insecure_endpoint'`, with `field` and `url`), and the failure is not cached.
+`isSafeOidcUrl(url)` applies the same rule.
+
+## Testing
+
+`theokit/testing` starts the app's own `theokit dev` (or `theokit start`) on a free port and resolves
+once `/__theo/ready` answers. No stdout parsing, no `npx`, no hand-rolled process-group kill.
+
+```ts
+import { afterAll, beforeAll, expect, it } from 'vitest'
+import { startTestServer, type TestServer } from 'theokit/testing'
+
+let server: TestServer
+beforeAll(async () => {
+  server = await startTestServer({ cwd: process.cwd() }) // mode: 'dev' by default
+})
+afterAll(async () => {
+  await server.close()
+})
+
+it('is healthy', async () => {
+  expect((await fetch(`${server.origin}/__theo/health`)).status).toBe(200)
+})
+```
+
+If the child exits or the deadline (`timeoutMs`, default 60 s) passes, `startTestServer` throws
+`TestServerBootError` with the child's output. `mode: 'start'` expects a prior `theokit build`.
 
 ## Storage
 
@@ -174,6 +240,18 @@ try {
 The job commits or rolls back with the row, and workers cannot see it before the commit. It needs a
 backend with `enqueueInTransaction` (`PostgresJobBackend` has it); any other backend rejects with
 `TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction.
+
+`PostgresJobBackend` also moves pending jobs in the caller's transaction, skipping jobs a worker has
+leased: `defer(client, { name, where, until })` moves the jobs whose input matches `where` (top-level
+keys, compared as text) to `until` (a `Date` or `'infinity'`) and remembers the time each had;
+`restore(client, { name, where })` gives that time back; `reschedule(client, jobId, { availableAt })`
+sets one job's time, to bring it ahead of others.
+
+To take back a queued job in a transaction, call
+`ctx.queue.cancelInTransaction(client, 'process-task', { idempotencyKey })`. It removes the job
+only while no worker ever leased it and resolves `true` if it removed one; a leased job (even with
+an expired lease) or a failed one is left alone. A backend without `cancelInTransaction` rejects
+with `TransactionalCancelUnsupportedError`.
 
 `theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
 and a backend is set: it polls the backend, runs each job and backs off while the backend is

@@ -32,8 +32,67 @@ export function clearOidcCache(): void {
   cache.clear()
 }
 
+/** Thrown when the issuer or a discovered endpoint is neither https nor loopback. */
+export class OidcInsecureEndpointError extends Error {
+  readonly name = 'OidcInsecureEndpointError'
+  readonly code = 'oidc_insecure_endpoint'
+  /** 'issuer' or the metadata field name, e.g. 'token_endpoint' */
+  readonly field: string
+  readonly url: string
+
+  constructor(field: string, url: string, detail?: string) {
+    super(
+      detail ??
+        `OIDC ${field} must use HTTPS (received "${url}"). ` +
+          `Plain HTTP is allowed only for loopback hosts.`,
+    )
+    this.field = field
+    this.url = url
+  }
+}
+
 function isLoopback(host: string): boolean {
-  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1'
+  return (
+    host === 'localhost' ||
+    host === '[::1]' ||
+    host === '::1' ||
+    // 127.0.0.0/8. Never 0.0.0.0: a bind address, not a loopback destination.
+    /^127\.(?:\d{1,3})\.(?:\d{1,3})\.(?:\d{1,3})$/.test(host)
+  )
+}
+
+/** https always; http only for localhost, [::1], ::1 and 127.0.0.0/8. Never 0.0.0.0. */
+export function isSafeOidcUrl(url: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  if (parsed.protocol === 'https:') return true
+  return parsed.protocol === 'http:' && isLoopback(parsed.hostname)
+}
+
+const REQUIRED_ENDPOINTS = ['authorization_endpoint', 'token_endpoint'] as const
+const OPTIONAL_ENDPOINTS = ['userinfo_endpoint', 'jwks_uri', 'end_session_endpoint'] as const
+
+function assertSafeEndpoints(metadata: OidcMetadata): void {
+  for (const field of [...REQUIRED_ENDPOINTS, ...OPTIONAL_ENDPOINTS]) {
+    const value: unknown = metadata[field]
+    // Absent (undefined) differs from present-but-invalid (null, '', non-string): the latter is typed.
+    if (value === undefined) {
+      if ((REQUIRED_ENDPOINTS as readonly string[]).includes(field)) {
+        throw new Error(`OIDC metadata missing ${field} — provider response is invalid`)
+      }
+      continue
+    }
+    if (typeof value !== 'string' || !isSafeOidcUrl(value)) {
+      throw new OidcInsecureEndpointError(
+        field,
+        typeof value === 'string' ? value : JSON.stringify(value),
+      )
+    }
+  }
 }
 
 /**
@@ -41,17 +100,29 @@ function isLoopback(host: string): boolean {
  *
  * Throws when:
  *   - Issuer URL is malformed
- *   - Issuer is HTTP and not a loopback host (EC-7)
+ *   - Issuer is HTTP and not a loopback host (EC-7): OidcInsecureEndpointError, field 'issuer'
  *   - HTTP response is non-OK
  *   - Metadata lacks `authorization_endpoint` (sanity check)
+ *   - Any returned endpoint (`authorization_endpoint`, `token_endpoint`, and when present
+ *     `userinfo_endpoint`, `jwks_uri`, `end_session_endpoint`) is not https or loopback:
+ *     OidcInsecureEndpointError with the field name. Every endpoint this function returns is
+ *     https or loopback. Endpoints need not share the issuer's host.
  */
 export async function discoverOidcProvider(issuer: string | URL): Promise<OidcMetadata> {
   const issuerStr = typeof issuer === 'string' ? issuer : issuer.toString()
   // Validate protocol BEFORE checking cache — invalid issuers should never poison.
-  const url = new URL(issuerStr)
-  if (url.protocol !== 'https:' && !isLoopback(url.hostname)) {
-    throw new Error(
-      `OIDC issuer must use HTTPS (received "${url.protocol}//${url.hostname}…"). ` +
+  let url: URL | undefined
+  try {
+    url = new URL(issuerStr)
+  } catch {
+    url = undefined
+  }
+  if (!url || !isSafeOidcUrl(issuerStr)) {
+    const received = url ? `"${url.protocol}//${url.hostname}…"` : 'a malformed URL'
+    throw new OidcInsecureEndpointError(
+      'issuer',
+      issuerStr,
+      `OIDC issuer must use HTTPS (received ${received}). ` +
         `RFC 8414 §3 forbids plain HTTP except for loopback hosts.`,
     )
   }
@@ -69,9 +140,7 @@ export async function discoverOidcProvider(issuer: string | URL): Promise<OidcMe
       throw new Error(`OIDC discovery failed: ${res.status} ${res.statusText} at ${wellKnown}`)
     }
     const metadata = (await res.json()) as OidcMetadata
-    if (!metadata.authorization_endpoint) {
-      throw new Error('OIDC metadata missing authorization_endpoint — provider response is invalid')
-    }
+    assertSafeEndpoints(metadata)
     return metadata
   })()
   // Cache the promise; on rejection, remove so the next call retries.

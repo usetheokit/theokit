@@ -27,6 +27,7 @@ overrides:
   katex@<0.18.2: ^0.18.2
   mermaid@<11.16.1: ^11.16.1
   '@theokit/sdk': 5.17.0
+  picomatch@>=4.0.0 <=4.0.7: file:./vendor/picomatch
 
 patchedDependencies:
   '@vitest/utils@4.1.12':
@@ -99,7 +100,7 @@ importers:
         version: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-import:
         specifier: ^2.32.0
-        version: 2.32.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
+        version: 2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-n:
         specifier: ^17.24.0
         version: 17.24.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
@@ -123,7 +124,7 @@ importers:
         version: 56.0.1(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-unused-imports:
         specifier: ^4.4.1
-        version: 4.4.1(@typescript-eslint/eslint-plugin@8.70.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))
+        version: 4.4.1(@typescript-eslint/eslint-plugin@8.70.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))
       expect-type:
         specifier: ^1.3.0
         version: 1.3.0
@@ -599,6 +600,9 @@ importers:
       '@theokit/agents':
         specifier: workspace:*
         version: link:../../../../packages/agents
+      '@theokit/sdk':
+        specifier: 5.17.0
+        version: 5.17.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
       '@theokit/tui':
         specifier: ^0.80.0
         version: 0.80.0(@types/react@19.2.17)(lowlight@3.3.0)(react@19.2.7)
@@ -682,6 +686,18 @@ importers:
       cross-spawn:
         specifier: ^7.0.6
         version: 7.0.6
+
+  packages/host:
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(@swc/core@1.15.41(@swc/helpers@0.5.23))(jiti@2.7.0)(postcss@8.5.26)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.12
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@25.9.5)(@vitest/coverage-v8@4.1.12)(happy-dom@21.0.4)(jsdom@25.0.1)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(vite@7.3.7(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/http:
     dependencies:
@@ -794,8 +810,8 @@ importers:
         specifier: ^2.1.19
         version: 2.1.19(csstype@3.2.3)
       picomatch:
-        specifier: ^4.0.4
-        version: 4.0.5
+        specifier: file:../../vendor/picomatch
+        version: file:vendor/picomatch
       react:
         specifier: ^19.0.0
         version: 19.2.7
@@ -5487,6 +5503,7 @@ packages:
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
+    version: 6.5.0
     engines: {node: '>=12.0.0'}
     peerDependencies:
       picomatch: ^3 || ^4
@@ -7260,16 +7277,8 @@ packages:
     resolution: {integrity: sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA==}
     engines: {node: '>=8.6'}
 
-  picomatch@4.0.4:
-    resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
-    engines: {node: '>=12'}
-
-  picomatch@4.0.5:
-    resolution: {integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==}
-    engines: {node: '>=12'}
-
-  picomatch@4.0.7:
-    resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
+  picomatch@file:vendor/picomatch:
+    resolution: {directory: vendor/picomatch, type: directory}
     engines: {node: '>=12'}
 
   pidtree@0.6.1:
@@ -11588,6 +11597,23 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@typescript-eslint/eslint-plugin@8.70.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
+    dependencies:
+      '@eslint-community/regexpp': 4.12.2
+      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/scope-manager': 8.70.0
+      '@typescript-eslint/type-utils': 8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/utils': 8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/visitor-keys': 8.70.0
+      eslint: 9.39.4(jiti@2.7.0)
+      ignore: 7.0.6
+      natural-compare: 1.4.0
+      ts-api-utils: 2.5.0(typescript@5.9.3)
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
   '@typescript-eslint/eslint-plugin@8.70.0(@typescript-eslint/parser@8.70.0(eslint@10.10.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.10.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
@@ -11603,23 +11629,6 @@ snapshots:
       typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
-
-  '@typescript-eslint/eslint-plugin@8.70.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
-    dependencies:
-      '@eslint-community/regexpp': 4.12.2
-      '@typescript-eslint/parser': 8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/scope-manager': 8.70.0
-      '@typescript-eslint/type-utils': 8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/visitor-keys': 8.70.0
-      eslint: 9.39.4(jiti@2.7.0)
-      ignore: 7.0.6
-      natural-compare: 1.4.0
-      ts-api-utils: 2.5.0(typescript@5.9.3)
-      typescript: 5.9.3
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
 
   '@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
     dependencies:
@@ -11644,19 +11653,6 @@ snapshots:
       typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
-
-  '@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
-    dependencies:
-      '@typescript-eslint/scope-manager': 8.70.0
-      '@typescript-eslint/types': 8.70.0
-      '@typescript-eslint/typescript-estree': 8.70.0(typescript@5.9.3)
-      '@typescript-eslint/visitor-keys': 8.70.0
-      debug: 4.4.3
-      eslint: 9.39.4(jiti@2.7.0)
-      typescript: 5.9.3
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
 
   '@typescript-eslint/project-service@8.61.1(typescript@5.9.3)':
     dependencies:
@@ -11971,7 +11967,7 @@ snapshots:
       obug: 2.1.3
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.3)(@vitest/coverage-v8@4.1.12)(happy-dom@21.0.4)(jsdom@25.0.1)(msw@2.14.6(@types/node@22.20.3)(typescript@5.9.3))(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+      vitest: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@25.9.5)(@vitest/coverage-v8@4.1.12)(happy-dom@21.0.4)(jsdom@25.0.1)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(vite@7.3.7(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
 
   '@vitest/expect@4.1.12':
     dependencies:
@@ -12734,7 +12730,7 @@ snapshots:
       interpret: 3.1.1
       is-installed-globally: 1.0.0
       json5: 2.2.3
-      picomatch: 4.0.4
+      picomatch: file:vendor/picomatch
       prompts: 2.4.2
       rechoir: 0.8.0
       safe-regex: 2.1.1
@@ -12755,7 +12751,7 @@ snapshots:
       interpret: 3.1.1
       is-installed-globally: 1.0.0
       json5: 2.2.3
-      picomatch: 4.0.5
+      picomatch: file:vendor/picomatch
       prompts: 2.4.2
       rechoir: 0.8.0
       safe-regex: 2.1.1
@@ -13174,15 +13170,15 @@ snapshots:
       tinyglobby: 0.2.17
       unrs-resolver: 1.12.2
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.13.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
+  eslint-module-utils@2.13.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
-      '@typescript-eslint/parser': 8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
@@ -13196,7 +13192,7 @@ snapshots:
       eslint: 9.39.4(jiti@2.7.0)
       eslint-compat-utils: 0.5.1(eslint@9.39.4(jiti@2.7.0))
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -13207,7 +13203,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.13.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
+      eslint-module-utils: 2.13.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       hasown: 2.0.4
       is-core-module: 2.16.2
       is-glob: 4.0.3
@@ -13219,7 +13215,7 @@ snapshots:
       string.prototype.trimend: 1.0.10
       tsconfig-paths: 3.15.0
     optionalDependencies:
-      '@typescript-eslint/parser': 8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
     transitivePeerDependencies:
       - eslint-import-resolver-typescript
       - eslint-import-resolver-webpack
@@ -13320,11 +13316,11 @@ snapshots:
       semver: 7.8.4
       strip-indent: 3.0.0
 
-  eslint-plugin-unused-imports@4.4.1(@typescript-eslint/eslint-plugin@8.70.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-unused-imports@4.4.1(@typescript-eslint/eslint-plugin@8.70.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       eslint: 9.39.4(jiti@2.7.0)
     optionalDependencies:
-      '@typescript-eslint/eslint-plugin': 8.70.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/eslint-plugin': 8.70.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
 
   eslint-scope@8.4.0:
     dependencies:
@@ -13555,9 +13551,9 @@ snapshots:
     dependencies:
       walk-up-path: 4.0.0
 
-  fdir@6.5.0(picomatch@4.0.7):
+  fdir@6.5.0(picomatch@file:vendor/picomatch):
     optionalDependencies:
-      picomatch: 4.0.7
+      picomatch: file:vendor/picomatch
 
   fflate@0.8.3: {}
 
@@ -14508,7 +14504,7 @@ snapshots:
       minimist: 1.2.8
       oxc-resolver: 11.21.3
       picocolors: 1.1.1
-      picomatch: 4.0.5
+      picomatch: file:vendor/picomatch
       smol-toml: 1.8.0
       strip-json-comments: 5.0.3
       typescript: 5.9.3
@@ -14518,13 +14514,13 @@ snapshots:
 
   knip@6.36.0:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
+      fdir: 6.5.0(picomatch@file:vendor/picomatch)
       formatly: 0.7.0
       get-tsconfig: 4.14.3
       jiti: 2.7.0
       oxc-parser: 0.148.0
       oxc-resolver: 11.24.2
-      picomatch: 4.0.7
+      picomatch: file:vendor/picomatch
       smol-toml: 1.8.0
       strip-json-comments: 5.0.3
       tinyglobby: 0.2.17
@@ -15458,7 +15454,7 @@ snapshots:
       ansi-styles: 7.0.0
       cross-spawn: 7.0.6
       memorystream: 0.3.1
-      picomatch: 4.0.5
+      picomatch: file:vendor/picomatch
       pidtree: 1.0.0
       read-package-json-fast: 6.0.0
       shell-quote: 1.10.0
@@ -15829,11 +15825,7 @@ snapshots:
 
   picomatch@2.3.2: {}
 
-  picomatch@4.0.4: {}
-
-  picomatch@4.0.5: {}
-
-  picomatch@4.0.7: {}
+  picomatch@file:vendor/picomatch: {}
 
   pidtree@0.6.1: {}
 
@@ -16801,8 +16793,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@file:vendor/picomatch)
+      picomatch: file:vendor/picomatch
 
   tinyrainbow@3.1.0: {}
 
@@ -16862,7 +16854,7 @@ snapshots:
 
   ts-declaration-location@1.0.7(typescript@5.9.3):
     dependencies:
-      picomatch: 4.0.5
+      picomatch: file:vendor/picomatch
       typescript: 5.9.3
 
   ts-interface-checker@0.1.13: {}
@@ -17204,8 +17196,8 @@ snapshots:
   vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0):
     dependencies:
       esbuild: 0.28.2
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@file:vendor/picomatch)
+      picomatch: file:vendor/picomatch
       postcss: 8.5.26
       rollup: 4.62.4
       tinyglobby: 0.2.17
@@ -17220,8 +17212,8 @@ snapshots:
   vite@7.3.7(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0):
     dependencies:
       esbuild: 0.28.2
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@file:vendor/picomatch)
+      picomatch: file:vendor/picomatch
       postcss: 8.5.26
       rollup: 4.62.4
       tinyglobby: 0.2.17
@@ -17247,7 +17239,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.3
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: file:vendor/picomatch
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.3.0
@@ -17278,7 +17270,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.3
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: file:vendor/picomatch
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.3.0
@@ -17309,7 +17301,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.3
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: file:vendor/picomatch
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.3.0

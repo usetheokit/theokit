@@ -27,8 +27,7 @@ describe('defineI18n', () => {
     const component = (): void => {
       const { t } = i.useI18n()
       t('a')
-      // @ts-expect-error unknown key
-      t('bad.key')
+      expectTypeOf(t).parameter(0).toEqualTypeOf<'a'>()
     }
     expectTypeOf(component).toEqualTypeOf<() => void>()
   })

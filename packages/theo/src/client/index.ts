@@ -153,3 +153,6 @@ export type {
   I18nProviderProps,
   TranslateParams,
 } from './i18n.js'
+
+// The browser-side encoder that round-trips through the server's `formDataToObject`.
+export { objectToFormData, FormDataEncodingError } from './object-to-form-data.js'

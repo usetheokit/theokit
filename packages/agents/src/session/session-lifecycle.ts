@@ -20,7 +20,11 @@ import {
 // T2.2 follow-up — the bound lives in ONE place now. `SessionRegistryRemoverError` is re-exported
 // because it was already public from this module: moving a symbol must not remove it from the
 // surface, which would be a breaking change dressed as a refactor.
-import { awaitRegistryRemoval, SessionRegistryRemoverError } from './gc/registry-remover.js'
+import {
+  awaitRegistryRemoval,
+  DEFAULT_REGISTRY_TIMEOUT_MS,
+  SessionRegistryRemoverError,
+} from './gc/registry-remover.js'
 import { projectDirFor } from './project-index.js'
 import { sessionPointerPath } from './session-pointer.js'
 
@@ -146,14 +150,7 @@ export function listSessions(cwd: string, root: string = transcriptRoot()): Sess
     // classification is the SDK's and only the trailing `.jsonl` strip is ours — a much smaller
     // thing to get wrong than re-deriving the four artifact kinds, which is what the consumer that
     // motivated this module had done.
-    // The cast is the upstream `.d.ts` gap, named rather than hidden: `@theokit/sdk`'s
-    // `atomic-write.d.ts` re-exports four symbols and declares only one, so several persistence
-    // functions arrive typed as unresolved. They exist and work at runtime (measured). Filed
-    // separately; typing the call site keeps this module honest in the meantime.
-    const kind = (classifySessionArtifact as (n: string, d: boolean) => string | undefined)(
-      entry,
-      isDirectory,
-    )
+    const kind = classifySessionArtifact(entry, isDirectory)
     if (kind !== 'transcript') continue
     const id = sessionIdOf(path)
     found.push({
@@ -252,8 +249,7 @@ export function protectedTranscriptPaths(
   }
 
   for (const session of sessions) {
-    // Third instance of the same upstream `.d.ts` gap (see `listSessions`). The predicate is real
-    // and the negative test proves it fires — a live lease does refuse the delete.
+    // A live lease does refuse the delete; the negative test proves the predicate fires.
     const hasWriter = sessionHasWriter(session.transcript)
     if (hasWriter) protectedBy.set(session.transcript, 'active writer lease')
   }
@@ -321,6 +317,8 @@ export type RegistryOutcome =
   | 'unconfirmed'
   | 'failed'
   | 'not-attempted'
+  /** Only with `isListedInRegistry`: the id was still listed after the removal ran. */
+  | 'still-present'
 
 export interface DeleteSessionResult {
   /**
@@ -360,6 +358,70 @@ export interface DeleteSessionOptions {
    * timeout surfaces as `registryError` and the transcript is left alone.
    */
   readonly registryTimeoutMs?: number
+  /**
+   * Answers "is this id listed in the registry right now", e.g. `Agent.list` filtered by id. When
+   * given, `deleteSession` calls it before and after `removeFromRegistry` and derives
+   * `registryOutcome` from the two answers: listed after is `still-present`, not listed before is
+   * `nothing-to-remove`, listed before and not after is `removed`. A verifier that throws or
+   * exceeds `registryTimeoutMs` gives `unconfirmed` with the error in `registryError`; the
+   * transcript step still runs. Never called without `removeFromRegistry`.
+   */
+  readonly isListedInRegistry?: (sessionId: string) => Promise<boolean>
+}
+
+interface ListingRead {
+  readonly listed?: boolean
+  readonly error?: unknown
+}
+
+/** One verifier read that reports its failure instead of throwing; absent verifier reads nothing. */
+async function tryRead(
+  verify: ((sessionId: string) => Promise<boolean>) | undefined,
+  sessionId: string,
+  timeoutMs: number | undefined,
+): Promise<ListingRead> {
+  if (verify === undefined) return {}
+  try {
+    return { listed: await readListed(verify, sessionId, timeoutMs) }
+  } catch (error) {
+    return { error }
+  }
+}
+
+function classifyListings(
+  before: boolean | undefined,
+  after: boolean | undefined,
+): RegistryOutcome {
+  if (before === undefined || after === undefined) return 'unconfirmed'
+  if (after) return 'still-present'
+  return before ? 'removed' : 'nothing-to-remove'
+}
+
+/** Run one verifier read under the registry timeout; a timeout rejects with a verifier-specific error. */
+async function readListed(
+  verify: (sessionId: string) => Promise<boolean>,
+  sessionId: string,
+  timeoutMs: number | undefined = DEFAULT_REGISTRY_TIMEOUT_MS,
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const read = Promise.resolve().then(() => verify(sessionId))
+    if (!Number.isFinite(timeoutMs)) return await read
+    return await Promise.race([
+      read,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new TheokitAgentError(
+              `isListedInRegistry did not answer for session "${sessionId}" within ${String(timeoutMs)}ms.`,
+            ),
+          )
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
 }
 
 /**
@@ -409,6 +471,8 @@ export async function deleteSession(
   let registryOutcome: RegistryOutcome = 'not-attempted'
   let registryError: unknown
   if (options.removeFromRegistry !== undefined) {
+    const verify = options.isListedInRegistry
+    const before = await tryRead(verify, sessionId, options.registryTimeoutMs)
     try {
       // Awaiting is what the old refusal was reaching for. It rejected a thenable because the code
       // before it checked TRUTHINESS and reported a removal that had not happened; completion is
@@ -425,6 +489,16 @@ export async function deleteSession(
       if (outcome === false) registryOutcome = 'nothing-to-remove'
       else if (outcome === undefined) registryOutcome = 'unconfirmed'
       else registryOutcome = 'removed'
+      if (verify !== undefined) {
+        // The remover's own return value is replaced by the measured answer. A failed read on
+        // either side leaves nothing to measure, so it is `unconfirmed` with the error kept.
+        const after =
+          before.error === undefined
+            ? await tryRead(verify, sessionId, options.registryTimeoutMs)
+            : before
+        registryError = after.error
+        registryOutcome = classifyListings(before.listed, after.listed)
+      }
     } catch (error) {
       // The transcript is untouched, so the caller can retry after fixing the registry. Deleting it
       // here would trade a retryable state for an unrepairable one.

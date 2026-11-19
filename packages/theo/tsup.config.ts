@@ -6,6 +6,7 @@ export default defineConfig([
       index: 'src/index.ts',
       // M7-3: public programmatic boot subpath (theokit/boot) — convention-server fetch handler.
       'boot/index': 'src/server/boot.ts',
+      'testing/index': 'src/testing/index.ts',
       'server/index': 'src/server/index.ts',
       // T4.4 (architecture-cleanup) — subpath entrypoints per ADR-0001 v3.
       // Consumers should migrate to these; `theokit/server` keeps re-exporting
@@ -36,6 +37,8 @@ export default defineConfig([
       'client/index': 'src/client/index.ts',
       // M44 (ADR-0053) — React-FREE agent-client entry (node; no React in the bundle).
       'client/core': 'src/client/core.ts',
+      // Encoder module ships as its own file so its zod-free import graph is checkable in dist.
+      'client/object-to-form-data': 'src/client/object-to-form-data.ts',
       'react-query/index': 'src/client/react-query.ts',
       // The security-header seam the six Web deploy entries import at runtime
       // (usetheokit/theokit#410). A missing entry here is invisible until a

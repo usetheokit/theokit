@@ -149,9 +149,8 @@ export class TrustStore {
    *
    * ASYNC because both `withFileLock` and `atomicWriteJson` are. Measured, not assumed: the first
    * draft called them synchronously and `trust()` returned before the bytes landed, so an immediate
-   * `read()` saw an empty store. Same shape as the M71 pointer bug, and same cause — the SDK's
-   * `.d.ts` does not declare these, so nothing at compile time says they return a Promise
-   * (usetheokit/theokit-sdk#280).
+   * `read()` saw an empty store. Same shape as the M71 pointer bug, and same cause — they
+   * return a Promise, which the first draft missed.
    */
   async trust(record: TrustRecord): Promise<void> {
     // `ensureSecureDir`, not a bare `mkdirSync`: the mode argument is a NO-OP on a directory that
@@ -160,28 +159,21 @@ export class TrustStore {
     // this one did not, which left the directory holding the file that authorises command execution
     // at whatever the umask produced. Found by a consumer's test failing during migration.
     ensureSecureDir(this.file)
-    // The casts are the upstream `.d.ts` gap named in usetheokit/theokit-sdk#280: several
-    // persistence symbols are re-exported by the barrel and never declared, so they arrive
-    // unresolved. They exist and are async (measured). Naming the shape at the call site beats
-    // hiding it — and it is the same gap that let the first draft call them synchronously.
-    await (withFileLock as (f: string, fn: () => Promise<void>) => Promise<void>)(
-      this.file,
-      async () => {
-        const existing = existsSync(this.file) ? this.read() : []
-        // Compared on the CANONICAL path, not the string as written: otherwise `/repo` and `/repo/`
-        // accumulate as two records for one directory, and which one answers depends on iteration
-        // order rather than on what the user decided.
-        const key = canonicalDir(record.path)
-        const records = [...existing.filter((r) => canonicalDir(r.path) !== key), record]
-        await atomicWriteJson(this.file, {
-          version: 1,
-          records,
-        } satisfies TrustStoreFile)
-        // 0o600 at creation. The read-side check is what catches a mode loosened afterwards; setting
-        // it here is what makes the common path correct without the operator having to know.
-        chmodSync(this.file, 0o600)
-      },
-    )
+    await withFileLock(this.file, async () => {
+      const existing = existsSync(this.file) ? this.read() : []
+      // Compared on the CANONICAL path, not the string as written: otherwise `/repo` and `/repo/`
+      // accumulate as two records for one directory, and which one answers depends on iteration
+      // order rather than on what the user decided.
+      const key = canonicalDir(record.path)
+      const records = [...existing.filter((r) => canonicalDir(r.path) !== key), record]
+      await atomicWriteJson(this.file, {
+        version: 1,
+        records,
+      } satisfies TrustStoreFile)
+      // 0o600 at creation. The read-side check is what catches a mode loosened afterwards; setting
+      // it here is what makes the common path correct without the operator having to know.
+      chmodSync(this.file, 0o600)
+    })
   }
 
   /**
