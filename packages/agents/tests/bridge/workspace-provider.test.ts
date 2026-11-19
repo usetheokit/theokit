@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
@@ -116,6 +117,19 @@ describe('worktreeProvider', () => {
     await ws.release()
     expect(existsSync(ws.path)).toBe(false)
     expect(git('branch', '--list', 'task/retry').trim()).toBe('')
+  })
+
+  it('a retry after only the branch deletion failed deletes the branch', async () => {
+    const { repo, root, git } = setup()
+    const ws = await worktreeProvider(repo, root).acquire('half')
+    // a stale ref lock makes `branch -D` fail after the worktree removal succeeded
+    const lock = join(repo, '.git', 'refs', 'heads', 'task', 'half.lock')
+    writeFileSync(lock, '')
+    await expect(ws.release()).rejects.toBeInstanceOf(WorkspaceProviderError)
+    expect(existsSync(ws.path)).toBe(false)
+    rmSync(lock)
+    await ws.release()
+    expect(git('branch', '--list', 'task/half').trim()).toBe('')
   })
 
   it('a successful delegation runs in the workspace and releases it', async () => {

@@ -195,17 +195,28 @@ export function worktreeProvider(
   const prefix = options.branchPrefix ?? 'task/'
   const include = options.include ?? '.worktreeinclude'
 
-  async function remove(path: string, branch: string): Promise<void> {
+  /** `done` records finished steps, so a retry repeats only the step that failed. */
+  async function remove(
+    path: string,
+    branch: string,
+    done: { worktree: boolean; branch: boolean },
+  ): Promise<void> {
     const failures: unknown[] = []
-    try {
-      await git(repo, ['worktree', 'remove', '--force', path])
-    } catch (error) {
-      failures.push(error)
+    if (!done.worktree) {
+      try {
+        await git(repo, ['worktree', 'remove', '--force', path])
+        done.worktree = true
+      } catch (error) {
+        failures.push(error)
+      }
     }
-    try {
-      await git(repo, ['branch', '-D', branch])
-    } catch (error) {
-      failures.push(error)
+    if (!done.branch) {
+      try {
+        await git(repo, ['branch', '-D', branch])
+        done.branch = true
+      } catch (error) {
+        failures.push(error)
+      }
     }
     if (failures.length > 0) {
       throw new WorkspaceProviderError(
@@ -233,20 +244,19 @@ export function worktreeProvider(
         await copyIncluded(repo, path, include)
       } catch (error) {
         try {
-          await remove(path, branch)
+          await remove(path, branch, { worktree: false, branch: false })
         } catch (cleanup) {
           throw new AggregateError([error, cleanup], 'workspace setup and its cleanup both failed')
         }
         throw error
       }
-      let released = false
+      const done = { worktree: false, branch: false }
       return {
         path,
         branch,
         async release(releaseOptions) {
-          if (releaseOptions?.keep || released) return
-          await remove(path, branch)
-          released = true
+          if (releaseOptions?.keep) return
+          await remove(path, branch, done)
         },
       }
     },
