@@ -25,6 +25,10 @@
       "types": "./dist/backup/index.d.ts",
       "import": "./dist/backup/index.js"
     },
+    "./app-host": {
+      "types": "./dist/app-host/index.d.ts",
+      "import": "./dist/app-host/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

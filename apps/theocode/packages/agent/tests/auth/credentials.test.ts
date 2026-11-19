@@ -10,7 +10,7 @@
  *
  * `git show 47eced3 --stat`, the commit B-007 named as its fix, never touched this file.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -24,6 +24,7 @@ import {
   ensureAuthHome,
   installAuthHome,
   resolveCredentialForModel,
+  resolveFreshCredential,
 } from '../../src/auth/credentials.js'
 
 
@@ -142,4 +143,40 @@ describe('installAuthHome points the SDK at this product store', () => {
     expect(installAuthHome(env, '/home/u')).toBe('/somewhere/else')
     expect(env.THEOKIT_AUTH_HOME).toBe('/somewhere/else')
   })
+})
+
+describe('refreshing an expiring sign-in', () => {
+  function storeExpiredOAuth(): { env: Record<string, string | undefined>; before: string } {
+    const env: Record<string, string | undefined> = {}
+    mkdirSync(credentialHome(home, env), { recursive: true })
+    writeFileSync(
+      authFilePath(home, env),
+      JSON.stringify({
+        type: 'oauth',
+        provider: 'openai',
+        access: 'stored-access',
+        refresh: 'stored-refresh',
+        expires: 1,
+      }),
+      { mode: 0o600 },
+    )
+    return { env, before: readFileSync(authFilePath(home, env), 'utf8') }
+  }
+
+  it('test_a_transient_refresh_failure_keeps_the_stored_token', async () => {
+    const { env, before } = storeExpiredOAuth()
+    let calls = 0
+    const down = (async () => {
+      calls++
+      return new Response('unavailable', { status: 503 })
+    }) as unknown as typeof fetch
+
+    const got = await resolveFreshCredential({ env, home, fetch: down, now: () => 10_000_000 })
+
+    expect(calls, 'the refresh endpoint was never tried').toBeGreaterThan(0)
+    expect(got.apiKey).toBe('stored-access')
+    expect(readFileSync(authFilePath(home, env), 'utf8'), 'the stored token was changed').toBe(
+      before,
+    )
+  }, 20_000)
 })
