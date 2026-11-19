@@ -26,28 +26,6 @@ const write = (rel: string, content: string): void => {
   writeFileSync(join(root, rel), content)
 }
 
-/** Generate the entry, point its `npm:` specifier at the workspace source, load it. */
-async function loadEntry(configs: string[], handlerBody: string): Promise<void> {
-  write('server/crons/job.ts', `export default { handler: async (ctx) => { ${handlerBody} } }\n`)
-  const entry = join(root, '.theokit', 'crons-entry.ts')
-  translateCronToDeno(
-    entry,
-    [
-      {
-        name: 'job',
-        filePath: 'server/crons/job.ts',
-        schedule: '* * * * *',
-        concurrency: 'forbid',
-      },
-    ],
-    { projectRoot: root, configPaths: configs.map((c) => join(root, c)) },
-  )
-  const text = readFileSync(entry, 'utf8').replace('npm:theokit/server/jobs', JOBS)
-  const loaded = join(root, '.theokit', `loaded-${seq++}.ts`)
-  writeFileSync(loaded, text)
-  await import(/* @vite-ignore */ loaded)
-}
-
 const calls = (): { backend: string; input: Record<string, unknown>; client?: unknown }[] =>
   (globalThis as { __calls?: never[] }).__calls ?? []
 
@@ -95,7 +73,7 @@ describe('Deno import map for the cron entry configs', () => {
  * the cron entry), then load the entry resolving every bare import through the EMITTED map —
  * what Deno does. `npm:` targets resolve to stubs in node_modules; theokit to the workspace.
  */
-async function loadBuiltEntry(): Promise<void> {
+async function loadBuiltEntry(handlerBody: string): Promise<void> {
   const { buildDeno, readProjectSourcesFromDisk, bareSpecifiersOf } =
     await import('../../packages/theo/src/adapters/deno-deploy.js')
   const written = new Map<string, string>()
@@ -111,14 +89,12 @@ async function loadBuiltEntry(): Promise<void> {
       imports: Record<string, string>
     }
   ).imports
-  const configs = ['theo.config.ts', 'theo.config.production.ts']
+  // The files `loadConfig` merges: the base config and the NODE_ENV override, when present.
+  const configs = ['theo.config.ts', `theo.config.${process.env.NODE_ENV ?? ''}.ts`]
     .filter((n) => existsSync(join(root, n)))
     .map((n) => join(root, n))
   const entry = join(root, '.theokit', 'crons-entry.ts')
-  write(
-    'server/crons/job.ts',
-    `export default { handler: async (ctx) => { ctx.queue.enqueue('a', {}); await ctx.queue.enqueueInTransaction({ tx: 1 }, 't', {}) } }\n`,
-  )
+  write('server/crons/job.ts', `export default { handler: async (ctx) => { ${handlerBody} } }\n`)
   translateCronToDeno(
     entry,
     [
@@ -182,7 +158,9 @@ describe('generated entry loaded through the build wiring', () => {
       `export default { jobs: { backend: { async enqueue(input) { (globalThis.__calls ??= []).push({ backend: 'partial', input }); return { jobId: 'p' } } } } }\n`,
     )
     vi.stubEnv('NODE_ENV', 'production')
-    await loadBuiltEntry()
+    await loadBuiltEntry(
+      `ctx.queue.enqueue('a', {}); await ctx.queue.enqueueInTransaction({ tx: 1 }, 't', {})`,
+    )
     await callbacks.get('job')!()
     expect(calls().map((c) => c.backend)).toEqual(['aliased-tx', 'partial'])
   })
@@ -240,10 +218,7 @@ describe('generated Deno cron entry', () => {
   })
 
   it('enqueues buffered jobs on the configured backend after the handler succeeds', async () => {
-    await loadEntry(
-      ['theo.config.ts'],
-      `ctx.queue.enqueue('a', { n: 1 }); ctx.queue.enqueue('b', {})`,
-    )
+    await loadBuiltEntry(`ctx.queue.enqueue('a', { n: 1 }); ctx.queue.enqueue('b', {})`)
     await callbacks.get('job')!()
     expect(calls().map((c) => [c.backend, c.input.name])).toEqual([
       ['base', 'a'],
@@ -256,30 +231,26 @@ describe('generated Deno cron entry', () => {
       'theo.config.test.ts',
       `import { backend } from './backend-env.ts'\nexport default { jobs: { backend } }\n`,
     )
-    await loadEntry(['theo.config.ts', 'theo.config.test.ts'], `ctx.queue.enqueue('a', {})`)
+    await loadBuiltEntry(`ctx.queue.enqueue('a', {})`)
     await callbacks.get('job')!()
     expect(calls().map((c) => c.backend)).toEqual(['env'])
   })
 
   it('discards buffered jobs when the handler throws', async () => {
-    await loadEntry(['theo.config.ts'], `ctx.queue.enqueue('a', {}); throw new Error('boom')`)
+    await loadBuiltEntry(`ctx.queue.enqueue('a', {}); throw new Error('boom')`)
     await expect(callbacks.get('job')!()).rejects.toThrow('boom')
     expect(calls()).toEqual([])
   })
 
   it('propagates the trace id as a traceparent on enqueued jobs', async () => {
-    await loadEntry(
-      ['theo.config.ts'],
-      `globalThis.__trace = ctx.traceId; ctx.queue.enqueue('a', {})`,
-    )
+    await loadBuiltEntry(`globalThis.__trace = ctx.traceId; ctx.queue.enqueue('a', {})`)
     await callbacks.get('job')!()
     const trace = (globalThis as { __trace?: string }).__trace
     expect(calls()[0]?.input.traceparent).toMatch(new RegExp(`^00-${trace}-[0-9a-f]{16}-01$`))
   })
 
   it('forwards enqueueInTransaction to the configured backend immediately', async () => {
-    await loadEntry(
-      ['theo.config.ts'],
+    await loadBuiltEntry(
       `await ctx.queue.enqueueInTransaction({ tx: 1 }, 'a', {}); throw new Error('later')`,
     )
     await expect(callbacks.get('job')!()).rejects.toThrow('later')
@@ -289,7 +260,7 @@ describe('generated Deno cron entry', () => {
 
   it('runs without ctx.queue when no backend is configured', async () => {
     write('theo.config.ts', `export default {}\n`)
-    await loadEntry(['theo.config.ts'], `globalThis.__q = ctx.queue`)
+    await loadBuiltEntry(`globalThis.__q = ctx.queue`)
     await callbacks.get('job')!()
     expect((globalThis as { __q?: unknown }).__q).toBeUndefined()
   })
