@@ -266,7 +266,9 @@ describe('createA2ATool timeoutMs', () => {
         timeoutMs: 1000,
         fetchImpl: hung,
       })
-      const result = tool.handler({ message: 'hi' }).catch((e: unknown) => e)
+      const result = Promise.resolve(tool.handler({ message: 'hi' })).catch(
+        (e: unknown) => e,
+      )
       await vi.advanceTimersByTimeAsync(1000)
       const error = await result
       expect(error).toBeInstanceOf(A2ATimeoutError)
@@ -291,9 +293,9 @@ describe('createA2ATool timeoutMs', () => {
         fetchImpl: hung,
       })
       const controller = new AbortController()
-      const result = tool
-        .handler({ message: 'hi' }, { signal: controller.signal })
-        .catch((e: unknown) => e)
+      const result = Promise.resolve(
+        tool.handler({ message: 'hi' }, { signal: controller.signal }),
+      ).catch((e: unknown) => e)
       await vi.advanceTimersByTimeAsync(10)
       controller.abort(new Error('cancelled'))
       const error = await result
