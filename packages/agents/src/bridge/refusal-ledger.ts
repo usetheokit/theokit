@@ -14,11 +14,9 @@ interface Entry {
   refusal: ToolRefusal
   /** Unique marker appended to this veto's message. */
   token: string
-  /** The complete veto message (text + marker): a denial is this veto's only if it ends with it. */
+  /** The complete veto message (text + marker): a denial is this veto's only if it equals it. */
   tagged: string
 }
-/** The marker `recordRefusal` appends: it must be the last thing in a denial message. */
-const TRAILING_MARKER = /\[veto:([0-9a-f]{24})\]\s*$/
 const ledger = new Map<string, Map<string, Entry[]>>()
 /**
  * Bounds for runs that never reach the adapter's cleanup (a gate used directly as an SDK hook): the
@@ -66,9 +64,8 @@ export function recordRefusal(
 
 /**
  * Remove and return the refusal for this run and tool. When the denial's own `message` is known,
- * only the entry whose complete tagged veto message the denial ends with is taken, so an external
- * denial (no marker, or one merely quoting it) or another
- * call's denial can never claim it. Without a message, the oldest entry is taken.
+ * only the entry whose complete tagged veto message equals it is taken, so an external
+ * denial (no marker, or one merely quoting it) or another call's denial can never claim it. Without a message, the oldest entry is taken.
  */
 export function takeRefusal(
   runId: string,
@@ -80,16 +77,9 @@ export function takeRefusal(
   if (tools === undefined || queue === undefined) return undefined
   let at = 0
   if (denialMessage !== undefined) {
-    // Parse the one marker the framework appends last; a marker quoted or copied anywhere else
-    // (hook output, an earlier denial, an external denial's text) or a message holding several
-    // markers must not select an entry. The parsed token then has to match an entry exactly.
-    const parsed = TRAILING_MARKER.exec(denialMessage)
-    const token = parsed?.[1]
-    const text = denialMessage.trimEnd()
-    at =
-      token === undefined
-        ? -1
-        : queue.findIndex((e) => e.token === token && text.endsWith(e.tagged))
+    // The SDK reports a plugin veto's message verbatim, so only the exact tagged message selects an
+    // entry: a denial that merely ends with, quotes or copies a veto (an external denial) never does.
+    at = queue.findIndex((e) => e.tagged === denialMessage)
   }
   if (at < 0) return undefined
   const [taken] = queue.splice(at, 1)

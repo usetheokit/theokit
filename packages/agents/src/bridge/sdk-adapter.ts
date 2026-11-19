@@ -651,6 +651,7 @@ function refusalFromRunEvent(ev: unknown): PendingRefusal | undefined {
     toolName: typeof e.toolName === 'string' ? e.toolName : '',
     ...(typeof e.runId === 'string' ? { runId: e.runId } : {}),
     ...(typeof e.message === 'string' ? { message: e.message } : {}),
+    ...(typeof e.source === 'string' ? { source: e.source } : {}),
     fallback: { by, ...(typeof e.message === 'string' ? { reason: e.message } : {}) },
   }
 }
@@ -665,6 +666,8 @@ interface PendingRefusal {
   runId?: string
   fallback: ToolRefusal
   message?: string
+  /** The SDK's denial source: only a `plugin` denial can be a framework veto. */
+  source?: string
   resolved?: ToolRefusal
 }
 
@@ -673,7 +676,7 @@ function resolveRefusal(p: PendingRefusal, handleRunId: string | undefined): Too
   if (p.resolved !== undefined) return p.resolved
   const runId = p.runId ?? handleRunId
   p.resolved =
-    (runId !== undefined && p.message !== undefined
+    (runId !== undefined && p.message !== undefined && p.source === 'plugin'
       ? takeRefusal(runId, p.toolName, p.message)
       : undefined) ?? p.fallback
   return p.resolved

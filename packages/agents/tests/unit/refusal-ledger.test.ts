@@ -98,11 +98,10 @@ describe('refusal ledger', () => {
     const a2 = recordRefusal('r-m', 'Bash', { by: 'policy', reason: 'b' }, 'same')
     expect(a1).not.toBe(a2)
     expect(takeRefusal('r-m', 'Bash', 'external says no')).toBeUndefined()
-    expect(takeRefusal('r-m', 'Bash', `Plugin blocked: ${a2}`)).toEqual({
+    expect(takeRefusal('r-m', 'Bash', a2)).toEqual({
       by: 'policy',
       reason: 'b',
     })
-    expect(takeRefusal('r-m', 'Bash', a2)).toBeUndefined()
     expect(takeRefusal('r-m', 'Bash', a1)).toEqual({ by: 'human', reason: 'a' })
   })
 
@@ -139,7 +138,7 @@ describe('refusal ledger', () => {
     const veto = recordRefusal('r-ext', 'Bash', { by: 'human', reason: 'real' }, 'blocked')
     expect(takeRefusal('r-ext', 'Bash', `external: ${veto} (and more text)`)).toBeUndefined()
     expect(takeRefusal('r-ext', 'Bash', veto.slice(veto.indexOf('[veto:')))).toBeUndefined()
-    expect(takeRefusal('r-ext', 'Bash', `Plugin blocked: ${veto}`)).toEqual({
+    expect(takeRefusal('r-ext', 'Bash', veto)).toEqual({
       by: 'human',
       reason: 'real',
     })
@@ -149,22 +148,18 @@ describe('refusal ledger', () => {
     const v1 = recordRefusal('r-il', 'Bash', { by: 'human', reason: 'one' }, 'same')
     const v2 = recordRefusal('r-il', 'Bash', { by: 'policy', reason: 'two' }, 'same')
     expect(takeRefusal('r-il', 'Bash', `ext quoting ${v1} then more`)).toBeUndefined()
-    expect(takeRefusal('r-il', 'Bash', `blocked: ${v2}`)).toEqual({ by: 'policy', reason: 'two' })
+    expect(takeRefusal('r-il', 'Bash', `external denial ending with ${v1}`)).toBeUndefined()
+    expect(takeRefusal('r-il', 'Bash', v2)).toEqual({ by: 'policy', reason: 'two' })
     expect(takeRefusal('r-il', 'Bash', 'plain external')).toBeUndefined()
-    expect(takeRefusal('r-il', 'Bash', `blocked: ${v1}`)).toEqual({ by: 'human', reason: 'one' })
+    expect(takeRefusal('r-il', 'Bash', v1)).toEqual({ by: 'human', reason: 'one' })
   })
 
-  it('a denial carrying several markers is matched only by its trailing one', () => {
+  it('a denial carrying several markers is matched only when it is exactly one veto', () => {
     const v1 = recordRefusal('r-multi', 'Bash', { by: 'human', reason: 'one' }, 'same')
     const v2 = recordRefusal('r-multi', 'Bash', { by: 'policy', reason: 'two' }, 'same')
-    expect(takeRefusal('r-multi', 'Bash', `${v2} then ${v1}`)).toEqual({
-      by: 'human',
-      reason: 'one',
-    })
-    expect(takeRefusal('r-multi', 'Bash', `${v1} then ${v2}`)).toEqual({
-      by: 'policy',
-      reason: 'two',
-    })
+    expect(takeRefusal('r-multi', 'Bash', `${v2} then ${v1}`)).toBeUndefined()
+    expect(takeRefusal('r-multi', 'Bash', v1)).toEqual({ by: 'human', reason: 'one' })
+    expect(takeRefusal('r-multi', 'Bash', v2)).toEqual({ by: 'policy', reason: 'two' })
   })
 
   it('a retained run keeps every entry past the per-run bound', () => {

@@ -256,6 +256,21 @@ describe('permission_denied → typed refusal on the tool result', () => {
     expect(byCall.c4).toMatchObject({ by: 'human', reason: 'person said no' })
   })
 
+  it('an external denial ending with a copied framework veto does not consume it', async () => {
+    h.handleId = 'sdk-run-6'
+    const m1 = recordRefusal('sdk-run-6', 'Bash', { by: 'human', reason: 'person said no' }, 'x')
+    h.onSend = (o) => {
+      o.onRunEvent?.(denied('c1', 'plugin', `external, quoting: ${m1}`))
+      o.onRunEvent?.(denied('c2', 'plugin', m1))
+    }
+    const out = await drain(
+      ['c1', 'c2'].map((id) => toolDone(id, { stdout: '', stderr: 'x', exitCode: 126 })),
+    )
+    const byCall = Object.fromEntries(results(out).map((r) => [r.callId, r.refusal]))
+    expect(byCall.c1).toMatchObject({ by: 'plugin' })
+    expect(byCall.c2).toMatchObject({ by: 'human', reason: 'person said no' })
+  })
+
   it('entries a run left unmatched are dropped when it ends', async () => {
     recordRefusal('sdk-run-3', 'Bash', { by: 'policy' }, 'm')
     h.onSend = (o) => {
