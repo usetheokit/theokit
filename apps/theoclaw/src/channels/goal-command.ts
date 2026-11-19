@@ -1,6 +1,7 @@
 import type { GoalRunOptions, TurnAgent } from '../agent-port.js'
 import { describeError, TheoClawConfigError } from '../control-plane/errors.js'
 import { requireModel } from '../control-plane/settings.js'
+import type { ChatCommand } from '@theokit/gateway'
 
 /** The variable that caps one goal's tokens (B-397 FR-008). */
 export const GOAL_BUDGET_VARIABLE = 'THEOCLAW_GOAL_TOKEN_BUDGET'
@@ -10,6 +11,13 @@ const DEFAULT_TOKEN_BUDGET = 20_000
 
 /** The one line a bare `/goal` answers with; nothing runs. */
 export const GOAL_USAGE_REPLY = 'Usage: /goal <what you want done>'
+
+/** What `/help` says about `/goal`. */
+export const GOAL_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
+  name: 'goal',
+  usage: '/goal <what you want done>',
+  description: 'run a goal to its end',
+}
 
 /** The text after the status when the goal loop gave no final answer. */
 const NO_FINAL_ANSWER = 'the goal ended with no final answer.'

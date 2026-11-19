@@ -7,7 +7,8 @@ import type { GatewayContext, MessageEvent, PlatformName, SendResult } from '@th
 import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
 import { createUsageHook } from '../src/channels/usage-hook.js'
 import { createAcpCommandHook, createAcpSessions } from '../src/channels/acp-command.js'
-import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
+import { CHAT_COMMANDS } from '../src/channels/info-commands.js'
+import { createHelpHook, HELP_COMMANDS, HELP_ENTRIES, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { readAckReaction, showTyping } from '../src/channels/typing.js'
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent } from './fakes.js'
@@ -70,6 +71,17 @@ describe('/help (OC-105)', () => {
     expect(await decide('/commands')).toEqual({ block: true, message: HELP_TEXT })
     expect(await decide('/helpful')).toBeUndefined()
     expect(await decide('please /help')).toBeUndefined()
+  })
+})
+
+describe('every registered command has a help line', () => {
+  it('lists each chat command, the reset and goal commands, and the help commands themselves', () => {
+    const names = [...CHAT_COMMANDS.map((c) => c.name), 'new', 'reset', 'goal', 'help', 'commands']
+    for (const name of names) expect(HELP_COMMANDS, name).toContain(`/${name}`)
+  })
+
+  it('builds the text from the same entries the commands list reads', () => {
+    for (const entry of HELP_ENTRIES) expect(HELP_TEXT).toContain(`${entry.usage ?? `/${entry.name}`} - ${entry.description}`)
   })
 })
 

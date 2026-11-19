@@ -13,7 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- `@theokit/gateway` is raised to 0.22.0. Chat commands (`/help`, `/usage`, `/activation`, `/approve`, `/deny`, `/elevated`, `/acp`) are now read with the gateway's `parseChatCommand`, so the command name is matched case-insensitively. Agent routes are chosen by the gateway's `createAgentBindings`. The owner policy, pairing store and session keys stay in TheoClaw: the gateway's versions word replies differently and key `main` and linked-peer sessions differently, which would change what users see and orphan stored history (#1831). The command parser and `helpText` (`@theokit/gateway` 0.22.0, changeset 8e54100) and `createAgentBindings` (6a80cc5) are the parts taken from the installed 0.22.0 release; the gateway's escaping, pairing, access-policy and session-strategy blockers (theokit-gateways#384, #385, #408-#410, #414) are not used here, as their closure and release could not be confirmed.
+- `@theokit/gateway` is raised to 0.22.0. Chat commands (`/help`, `/usage`, `/activation`, `/approve`, `/deny`, `/elevated`, `/acp`) are now read with the gateway's `parseChatCommand`, so the command name is matched case-insensitively. Agent routes are chosen by the gateway's `createAgentBindings`. The owner policy, pairing store and session keys stay in TheoClaw: the gateway's versions word replies differently and key `main` and linked-peer sessions differently, which would change what users see and orphan stored history (#1831).
 
 ### Fixed
 
