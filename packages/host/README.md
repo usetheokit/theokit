@@ -45,6 +45,16 @@ config.fix(config.audit(config.path(process.env, homedir())))
 
 `MY_AGENT_PROFILE=work` selects `my-agent-work.env`. A missing file named by `MY_AGENT_CONFIG` throws `InstanceConfigError`; a missing default file makes `load` return `undefined`. `write` creates the file 0600 and a directory it creates 0700, replaces atomically, refuses an existing file without `force`, refuses undeclared keys and values with `"`, `\` or a line break, and runs each key's `parse` first. Errors name keys and paths, never values. `audit` reports a file or app-owned directory open beyond its owner; `fix` applies `chmod` and returns the findings it fixed.
 
+**Hot reload.** `config.watch(path, env, { debounceMs?, validate?, onEvent })` watches the file's directory (so an editor's rename-over is seen), debounces 250 ms by default, and returns `{ close() }`; the watcher and timer are unref'd. A changed key declared `hot` is applied to `env` unless the caller set that variable; every other changed key is listed in `restartRequired`. A file whose hot key fails its `parse`, or that `validate(candidate)` refuses by throwing, gives `refused` and keeps the running values. A watcher error closes the watcher and reports `{ kind: 'watch-failed', cause }`. Events (`applied`, `unchanged`, `refused`, `watch-failed`) name keys, never values. `config.reload(path, env, previous)` is the single step and returns `{ result, accepted }`. Pair it with `restartSelf`:
+
+```ts
+config.watch(path, process.env, {
+  onEvent: (event) => {
+    if (event.kind === 'applied' && event.restartRequired.length > 0) void restartSelf({ startEnv: originalEnv })
+  },
+})
+```
+
 ## `@theokit/host/service`
 
 Install an agent app as a login service and restart it through its supervisor. Linux (`systemd --user`) and macOS (launchd LaunchAgent) exist today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
