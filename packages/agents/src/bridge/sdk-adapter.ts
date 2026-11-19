@@ -25,7 +25,7 @@ import type { AgentStreamEvent } from './agent-stream-events.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
-import { type SdkMessage } from './event-translator.js'
+import { type SdkMessage, type SdkMessageLike } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
@@ -859,11 +859,10 @@ export interface SdkTurnHandle {
     cost?: { amountUsd?: number }
   }>
   /**
-   * Yields SDK messages that feed `translateSdkEvent` directly. Typed `any` so a handle whose stream
-   * yields other values (or an SDK `SDKMessage`) stays assignable without a cast.
+   * Yields SDK messages that feed `translateSdkEvent` directly, no cast. {@link SdkMessageLike} has
+   * no index signature, so an `@theokit/sdk` `SDKMessage` stream is assignable.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  stream?(): AsyncIterable<any>
+  stream?(): AsyncIterable<SdkMessageLike>
   /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
   cancel?(): unknown
 }
