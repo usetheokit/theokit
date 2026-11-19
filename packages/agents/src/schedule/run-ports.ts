@@ -19,11 +19,13 @@ export function agentRunPort(
     withAgent(async (agent) => {
       const turn = await agent.send(prompt, { ...options.sendOptions, signal })
       if (turn.stream) {
-        for await (const _event of turn.stream()) void _event
+        for await (const event of turn.stream()) if (event === undefined) continue
       }
       const outcome = await turn.wait()
       if (outcome.status === 'error' || outcome.error) {
-        const named = outcome.error?.code ?? outcome.error?.message ?? 'unknown'
+        // The SDK's error carries a `code` that the declared handle type omits.
+        const err = outcome.error as { message: string; code?: string } | undefined
+        const named = err?.code ?? err?.message ?? 'unknown'
         return { ok: false as const, error: `run ended with error: ${named}` }
       }
       if (outcome.status === 'cancelled') {
@@ -56,6 +58,7 @@ export function fileTransientJob(options: {
       prompt: async () => {
         let text: string
         try {
+          // eslint-disable-next-line security/detect-non-literal-fs-filename -- the caller names the file
           text = await readFile(file, 'utf8')
         } catch (err) {
           if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined

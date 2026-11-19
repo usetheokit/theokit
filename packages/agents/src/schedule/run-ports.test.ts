@@ -33,7 +33,10 @@ describe('agentRunPort', () => {
 
   it('a run that ends error maps to ok false naming the error code', async () => {
     const b = boundary(async () =>
-      waits({ status: 'error', error: { message: 'boom', code: 'rate_limited' } }),
+      waits({
+        status: 'error',
+        error: { message: 'boom', code: 'rate_limited' } as { message: string },
+      }),
     )
     const r = await agentRunPort(b.withAgent)('p', signal)
     expect(r.ok).toBe(false)
