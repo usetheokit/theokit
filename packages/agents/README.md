@@ -422,8 +422,8 @@ interface SdkTurnHandle {
   wait(): Promise<{ result?: string; status?: string; error?: { code?: string; message: string }
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number } }>
-  stream?(): AsyncIterable<SdkMessageLike>
-  cancel?(): Promise<void>
+  stream?(): AsyncIterable<any> // yields SDK messages; feeds translateSdkEvent without a cast
+  cancel?(): unknown
 }
 ```
 

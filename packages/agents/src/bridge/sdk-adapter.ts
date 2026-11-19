@@ -858,8 +858,14 @@ export interface SdkTurnHandle {
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number }
   }>
-  stream?(): AsyncIterable<SdkMessageLike>
-  cancel?(): Promise<void>
+  /**
+   * Yields SDK messages that feed `translateSdkEvent` directly. Typed `any` so a handle whose stream
+   * yields other values (or an SDK `SDKMessage`) stays assignable without a cast.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  stream?(): AsyncIterable<any>
+  /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
+  cancel?(): unknown
 }
 
 /**
