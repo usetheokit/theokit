@@ -9,10 +9,11 @@ import { scratch } from './storage-helpers.js'
 
 describe('containedPath', () => {
   it.each([
-    ['posix', path.posix, '/base/dir'],
-    ['win32', path.win32, 'C:\\base\\dir'],
-  ] as const)('refuses escaping entries on %s paths', (_name, impl, base) => {
-    for (const entry of ['../x', 'a/../../x', '/x', 'C:/x', '\\x', '..\\x', 'C:\\x', '', 'a//b', './a', 'a\0b']) {
+    ['posix', path.posix, '/base/dir', []],
+    ['win32', path.win32, 'C:\\base\\dir', ['C:/x', 'C:x', 'C:\\x']],
+  ] as const)('refuses escaping entries on %s paths', (_name, impl, base, extra) => {
+    const entries = ['../x', 'a/../../x', '/x', '\\x', '..\\x', '', 'a//b', './a', 'a\0b', ...extra]
+    for (const entry of entries) {
       expect(() => containedPath(base, entry, impl), entry).toThrow(BackupError)
     }
     expect(containedPath(base, 'a/b.txt', impl)).toBe(impl.join(base, 'a', 'b.txt'))
@@ -24,7 +25,7 @@ function entry(type: number, name: string, body?: Buffer): Buffer {
   const head = Buffer.alloc(3)
   head[0] = type
   head.writeUInt16BE(bytes.length, 1)
-  const parts = [head, bytes]
+  const parts: Buffer[] = [head, bytes]
   if (body !== undefined) {
     const size = Buffer.alloc(8)
     size.writeBigUInt64BE(BigInt(body.length))

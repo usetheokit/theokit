@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, randomBytes, type DecipherGCM } from 'node:crypto'
 import { open } from 'node:fs/promises'
 
 import { BackupError } from './errors.js'
@@ -89,7 +89,7 @@ export async function* openSealed(
     }
     let start = HEADER_BYTES
     let end = size - 1
-    let decipher: ReturnType<typeof createDecipheriv> | undefined
+    let decipher: DecipherGCM | undefined
     if (key !== undefined) {
       if (size < HEADER_BYTES + IV_BYTES + TAG_BYTES) {
         throw new BackupError(`${path} is truncated`, { path })

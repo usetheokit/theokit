@@ -56,7 +56,7 @@ async function archives(root: string): Promise<string[]> {
     if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw new BackupError(`cannot read storage ${root}`, { path: root, cause })
   })
-  return names.filter((n) => ARCHIVE.test(n)).sort()
+  return names.filter((n) => ARCHIVE.test(n)).sort((x, y) => x.localeCompare(y))
 }
 
 /**
@@ -202,7 +202,7 @@ export function createStorageRegistry(options: {
           sizeBytes += (await stat(path.join(entry.root, file))).size
         }
         const free = await statfs(entry.root).then(
-          (s) => Number(s.bavail) * Number(s.bsize),
+          (s) => s.bavail * s.bsize,
           () => undefined,
         )
         return { ok: true, sizeBytes, ...(free === undefined ? {} : { freeBytes: free }) }
@@ -215,7 +215,7 @@ export function createStorageRegistry(options: {
     async list() {
       const locations = await read()
       return Object.keys(locations)
-        .sort()
+        .sort((x, y) => x.localeCompare(y))
         .map((name) => ({
           name,
           root: locations[name].root,

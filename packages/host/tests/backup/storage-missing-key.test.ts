@@ -16,7 +16,7 @@ it('rejects store and fetchLatest when an encrypted entry has no key', async () 
   const parsed = JSON.parse(await readFile(file, 'utf8')) as {
     locations: Record<string, { key?: string }>
   }
-  delete parsed.locations['a'].key
+  delete parsed.locations.a.key
   await writeFile(file, JSON.stringify(parsed))
 
   const root = join(base, 'stores/a')

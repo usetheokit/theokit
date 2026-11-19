@@ -8,7 +8,7 @@ import { makeBackup, scratch } from './storage-helpers.js'
 
 async function tree(dir: string, prefix = ''): Promise<Record<string, string>> {
   const out: Record<string, string> = {}
-  for (const name of (await readdir(dir)).sort()) {
+  for (const name of (await readdir(dir)).sort((x, y) => x.localeCompare(y))) {
     const rel = `${prefix}${name}`
     if ((await stat(join(dir, name))).isDirectory()) {
       out[`${rel}/`] = ''

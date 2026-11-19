@@ -45,7 +45,7 @@ function entryHeader(type: number, name: string, size?: number): Buffer {
   const head = Buffer.alloc(3)
   head[0] = type
   head.writeUInt16BE(bytes.length, 1)
-  const parts = [head, bytes]
+  const parts: Buffer[] = [head, bytes]
   if (size !== undefined) {
     const length = Buffer.alloc(8)
     length.writeBigUInt64BE(BigInt(size))
@@ -56,7 +56,7 @@ function entryHeader(type: number, name: string, size?: number): Buffer {
 
 async function* walk(base: string, relative: string): AsyncGenerator<Buffer> {
   const dir = relative === '' ? base : path.join(base, ...relative.split('/'))
-  for (const name of (await readdir(dir)).sort()) {
+  for (const name of (await readdir(dir)).sort((x, y) => x.localeCompare(y))) {
     const rel = relative === '' ? name : `${relative}/${name}`
     const file = path.join(dir, name)
     const info = await lstat(file)
