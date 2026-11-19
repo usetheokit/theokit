@@ -296,6 +296,29 @@ function chatIdRefusal(body: Uint8Array): Response | undefined {
   }
 }
 
+/**
+ * The request, its body reader changed so that cancelling it past the bound does not wait: the
+ * 413 is answered at once, and a cancel that stalls or rejects reaches neither the answer nor the caller.
+ */
+function withoutCancelWait(request: Request): Request {
+  const stream = request.body
+  if (stream === null) return request
+  return {
+    body: {
+      getReader: () => {
+        const reader = stream.getReader()
+        return {
+          read: () => reader.read(),
+          cancel: () => {
+            reader.cancel().catch(ignore)
+            return Promise.resolve()
+          },
+        }
+      },
+    },
+  } as unknown as Request
+}
+
 /** An authorized chat post: its body read within the bound, then handed to `chat`. */
 async function boundedChat(
   request: Request,
@@ -304,7 +327,7 @@ async function boundedChat(
   scope = '',
 ): Promise<Response> {
   // The post's body, read up to `MAX_MESSAGE_BYTES`: `undefined` past it, `null` when the client left.
-  const body = await readCappedBody(request, MAX_MESSAGE_BYTES).catch((error: unknown) => {
+  const body = await readCappedBody(withoutCancelWait(request), MAX_MESSAGE_BYTES).catch((error: unknown) => {
     if (error instanceof BodyTooLargeError) return undefined
     // A client that leaves mid-upload errors the body stream: answer, since the listener would
     // otherwise log "request failed" and write a 500 to a socket that is already gone.

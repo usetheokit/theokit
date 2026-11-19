@@ -37,7 +37,7 @@ describe('createGoogleChatRoute', () => {
     expect(await response.json()).toEqual({ error: 'keys' })
   })
 
-  it('refuses a body over 1 MiB with 413 through the router, without calling the adapter', async () => {
+  it('refuses a body over 1 MiB with 413', async () => {
     let called = false
     const route = createGoogleChatRoute({
       handleRequest: async () => {
