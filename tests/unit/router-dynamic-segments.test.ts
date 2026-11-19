@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { scanRoutes } from '../../packages/theo/src/router/scan.js'
-import { generateRouteManifest } from '../../packages/theo/src/router/generate.js'
 
 /**
  * T2.1 — file-system PAGE routing must recognize dynamic segments [param] and
@@ -162,10 +161,14 @@ describe('generateRouteManifest repeated dynamic folder names', () => {
       const decls = [...out.matchAll(/^(?:const|import) (Page__id_\w*)\b/gm)].map((m) => m[1])
       expect(decls).toHaveLength(2)
       expect(new Set(decls).size).toBe(2)
+      const routesSrc = out.slice(out.indexOf('export const routes'))
       for (const dir of ['tasks', 'plans']) {
-        const line = out.split('\n').find((l) => l.includes(`${dir}/[id]/page.tsx`))
-        expect(line).toBeDefined()
-        expect(decls.some((d) => line!.includes(d))).toBe(true)
+        const importLine = out.split('\n').find((l) => l.includes(`${dir}/[id]/page.tsx`))
+        const imported = decls.find((d) => importLine?.includes(`${d} `))
+        expect(imported).toBeDefined()
+        const fromRoute = routesSrc.slice(routesSrc.indexOf(`path: '${dir}'`))
+        const used = /React\.createElement\((Page__id_\w*)\)/.exec(fromRoute)?.[1]
+        expect(used).toBe(imported)
       }
       expect(out).toContain("'/tasks/:id'")
       expect(out).toContain("'/plans/:id'")
