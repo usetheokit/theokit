@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1340 export(s) across 25 entry point(s).
+1354 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -25,13 +25,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `Agent` | value |
 | `AGENT_BRAND` | value |
 | `AgentBuilder` | value |
+| `agentCardPath` | value |
 | `AgentConfigCapability` | value |
 | `AgentDefinitionError` | value |
 | `AgentDisposedError` | value |
 | `AgentRunError` | value |
 | `AgentRunner` | value |
 | `AgentRunnerBuilder` | value |
-| `agentCardPath` | value |
 | `agentsPlugin` | value |
 | `applyCapabilities` | value |
 | `applyPosture` | value |
@@ -402,6 +402,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PartialToolCallEvent` | type |
 | `PermissionsPluginOptions` | type |
 | `PiiOptions` | type |
+| `PlainAgentCardInput` | type |
 | `PluginsSettings` | type |
 | `PolicyHandler` | type |
 | `PreCompactionHandler` | type |
@@ -673,6 +674,15 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
 
+## `@theokit/agents/control`
+
+| Symbol | Kind |
+|---|---|
+| `createSessionStore` | value |
+| `SessionOutcome` | type |
+| `SessionStore` | type |
+| `SessionStoreOptions` | type |
+
 ## `@theokit/agents/testing`
 
 | Symbol | Kind |
@@ -886,7 +896,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PermissionStoreOptions` | type |
 | `PlanOnlyContext` | type |
 | `PlanOnlyGateOptions` | type |
-| `PlainAgentCardInput` | type |
 | `PromptHooks` | type |
 | `ResolveCredentialInput` | type |
 | `ResolveCredentialOptions` | type |
