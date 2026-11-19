@@ -1,11 +1,18 @@
 import { type CommandDefinition, defineCommand, routeCommand } from '@theokit/agents/commands'
-import type { GatewayHook } from '@theokit/gateway'
+import type { ChatCommand, GatewayHook } from '@theokit/gateway'
 
 /** The commands answered from what the process knows, never by the model (OC-105), routed by the agents command router. */
 export const INFO_COMMANDS = [
   defineCommand({ name: 'status', description: 'the model and surface of this chat' }),
   defineCommand({ name: 'model', description: 'the model this chat runs' }),
 ]
+
+/** What `/help` says about the commands above, in one line. */
+export const INFO_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
+  name: 'status',
+  usage: INFO_COMMANDS.map((command) => `/${command.name}`).join(', '),
+  description: INFO_COMMANDS[0]!.description,
+}
 
 /** Every chat command WebChat answers itself; the first two are also answered on channels. */
 export const CHAT_COMMANDS = [

@@ -66,3 +66,10 @@ describe('gateway bindings refuse what the old router ignored', () => {
     ).toThrow(/empty_binding_rule/)
   })
 })
+
+describe('help lists what each handler describes', () => {
+  it('takes the /think levels from the level list the handler enforces', async () => {
+    const { THINKING_LEVELS } = await import('../src/agent/failover.js')
+    expect(HELP_TEXT).toContain(`/think ${THINKING_LEVELS.join('|')} - `)
+  })
+})

@@ -1,5 +1,5 @@
 import { channelRendering } from '@theokit/gateway'
-import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent, PlatformName, SendResult } from '@theokit/gateway'
+import type { BasePlatformAdapter, ChatCommand, GatewayContext, GatewayHandler, MessageEvent, PlatformName, SendResult } from '@theokit/gateway'
 import { ChatPresenter, fromSdkMessage } from '@theokit/presenter'
 import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
@@ -36,6 +36,17 @@ export const RESET_FAILED_REPLY = 'I could not start a new conversation; this on
  * word-boundary match would also reset on `/new chat` (FR-008); and the reset needs the session,
  * which this handler already holds.
  */
+/** What `/help` says about the commands this handler answers. */
+export const REPLY_DESCRIPTIONS: readonly Pick<ChatCommand, 'name' | 'usage' | 'description'>[] = [
+  { name: 'new', usage: '/new, /reset', description: 'start a new conversation' },
+  { name: 'steer', usage: '/steer <text>', description: 'redirect the turn that is running' },
+  {
+    name: 'think',
+    usage: `/think ${THINKING_LEVELS.join('|')}`,
+    description: 'the thinking level of this session (only these four)',
+  },
+]
+
 const RESET_COMMANDS: ReadonlySet<string> = new Set(['/new', '/reset'])
 
 /** `/steer <text>`: redirect the turn already running; the text after the command is what is injected. */
