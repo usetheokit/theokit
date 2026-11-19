@@ -94,8 +94,10 @@ describe('fromRunTimelineEvent', () => {
   })
 
   it('accepts the SDK RunTimelineEvent type', () => {
-    const accept = (e: RunTimelineEvent) => fromRunTimelineEvent(e, createRunTimelineState())
-    expect(typeof accept).toBe('function')
+    const event: RunTimelineEvent = { kind: 'delta', update: { type: 'text-delta', text: 'Hi' } }
+    const out = fromRunTimelineEvent(event, createRunTimelineState())
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ type: 'text' })
   })
 
   it('keeps several id-less tool calls visible', () => {
