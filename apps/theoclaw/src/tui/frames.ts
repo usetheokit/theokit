@@ -161,6 +161,9 @@ export async function* controlStream(
     for (;;) {
       if (arrivals.length === 0)
         await Promise.race([new Promise<void>((resolve) => (wakeFrames = resolve)), inbox.wait()])
+      // A notice woke the loop: a frame stamped before it may still be on its way through the iterator's promises,
+      // so let those settle before taking, or the notice would be placed ahead of a frame that arrived first.
+      if (arrivals.length === 0) await new Promise<void>((resolve) => setTimeout(resolve, 0))
       const arrival = arrivals[0]
       for (const n of inbox.take(arrival?.seq)) {
         local = addNotice(local, n.variant, n.text)
