@@ -80,7 +80,8 @@ async function taskProcesses(powershell: PowerShell, label: string): Promise<str
     '$ids -join ","',
   ].join('\n')
   const found = await powershell(script)
-  if (found.code !== 0) throw new ServiceCommandError('process discovery', found.code, found.stderr.trim())
+  if (found.code !== 0)
+    throw new ServiceCommandError('process discovery', found.code, found.stderr.trim())
   return ids(found.stdout)
 }
 

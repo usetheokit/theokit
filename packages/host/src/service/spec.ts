@@ -54,11 +54,15 @@ function assertNoTrailingBackslash(field: string, value: string): void {
 
 function assertAbsolute(field: string, value: string, windows: boolean): void {
   assertNoLineBreak(field, value)
-  if (!(windows ? win32.isAbsolute(value) : isAbsolute(value))) throw new ServiceDefinitionError(field, 'must be an absolute path')
+  if (!(windows ? win32.isAbsolute(value) : isAbsolute(value)))
+    throw new ServiceDefinitionError(field, 'must be an absolute path')
 }
 
 /** Check every field of a spec; throws ServiceDefinitionError naming the field, never the value. */
-export function validateSpec(spec: ServiceSpec, options: { readonly windows?: boolean } = {}): void {
+export function validateSpec(
+  spec: ServiceSpec,
+  options: { readonly windows?: boolean } = {},
+): void {
   const windows = options.windows === true
   assertLabel(spec.label)
   if (spec.description !== undefined) {
