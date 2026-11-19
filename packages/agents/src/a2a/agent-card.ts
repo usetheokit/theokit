@@ -73,7 +73,7 @@ export function buildAgentCard(
   opts?: BuildAgentCardOptions,
 ): AgentCard {
   const options = opts ?? (input as PlainAgentCardInput)
-  const entry = input as AgentManifestEntry & PlainAgentCardInput
+  const entry: Omit<PlainAgentCardInput, 'baseUrl'> = input
   const skills =
     'tools' in input
       ? input.tools.map((t) => ({ id: t.name, name: t.name, description: t.description }))
