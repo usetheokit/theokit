@@ -16,7 +16,7 @@ const KEY_BYTES = 32
 export interface SealOptions {
   readonly encrypted: boolean
   /** Base64 of the 32-byte key. Required when `encrypted` is true; never put in an error. */
-  readonly key?: string | undefined
+  readonly key?: string
 }
 
 /** The key of an encrypted location; a missing or malformed key is a refusal, never plaintext. */

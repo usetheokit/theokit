@@ -117,7 +117,11 @@ export function createStorageRegistry(options: {
       throw new BackupError(`no storage location named "${name}"`)
     }
     const entry = locations[name]
-    return { entry, seal: { encrypted: entry.encrypted, key: entry.key } }
+    const sealOptions: SealOptions = {
+      encrypted: entry.encrypted,
+      ...(entry.key === undefined ? {} : { key: entry.key }),
+    }
+    return { entry, seal: sealOptions }
   }
 
   return {
