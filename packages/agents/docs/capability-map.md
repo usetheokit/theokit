@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1263 export(s) across 25 entry point(s).
+1266 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -75,6 +75,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createGoalSignal` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createResultCapture` | value |
 | `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
@@ -150,6 +151,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `mcpServerInfo` | value |
 | `McpServersCapability` | value |
 | `mcpToolApprovals` | value |
+| `NoResultSubmittedError` | value |
 | `MemoryAdapterError` | value |
 | `MemoryCapability` | value |
 | `ModelCapability` | value |
@@ -404,6 +406,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `RefreshModelCatalogResult` | type |
 | `ResolvedCompatSource` | type |
 | `ResultCapture` | type |
+| `ResultCapture` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
 | `RunEvent` | type |
@@ -491,7 +494,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createApiErrorHandler` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
-| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -526,7 +528,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `McpFileError` | value |
 | `mcpRegistry` | value |
 | `mcpToolApprovals` | value |
-| `NoResultSubmittedError` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
 | `readCappedBody` | value |
@@ -613,7 +614,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
 | `ResolvedCompatSource` | type |
-| `ResultCapture` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
 | `Scorer` | type |
@@ -1365,6 +1365,7 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `checks` | value |
 | `diagnose` | value |
 | `DiagnosticBundleError` | value |
 | `installDiagnosticSink` | value |
@@ -1372,10 +1373,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `secretPresence` | value |
 | `writeDiagnosticBundle` | value |
 | `Check` | type |
+| `CredentialState` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |
 | `InstallDiagnosticSinkOptions` | type |
 | `SecretPresence` | type |
+| `SettingsFileReport` | type |
 | `WriteDiagnosticBundleOptions` | type |
 
 ## `@theokit/agents/usage`
