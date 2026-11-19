@@ -61,15 +61,15 @@ describe('typing indicator (OC-106)', () => {
 })
 
 describe('/help (OC-105)', () => {
-  it('answers with the command list and blocks the message from the model', () => {
+  it('answers with the command list and blocks the message from the model', async () => {
     const hook = createHelpHook()
     const decide = (text: string) =>
       hook.pre_inbound?.({ event: messageEvent('telegram', text) } as never)
-    expect(decide('/help')).toEqual({ block: true, message: HELP_TEXT })
-    expect(decide('/help@mybot')).toEqual({ block: true, message: HELP_TEXT })
-    expect(decide('/commands')).toEqual({ block: true, message: HELP_TEXT })
-    expect(decide('/helpful')).toBeUndefined()
-    expect(decide('please /help')).toBeUndefined()
+    expect(await decide('/help')).toEqual({ block: true, message: HELP_TEXT })
+    expect(await decide('/help@mybot')).toEqual({ block: true, message: HELP_TEXT })
+    expect(await decide('/commands')).toEqual({ block: true, message: HELP_TEXT })
+    expect(await decide('/helpful')).toBeUndefined()
+    expect(await decide('please /help')).toBeUndefined()
   })
 })
 
