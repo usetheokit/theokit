@@ -5,6 +5,7 @@
  */
 import type { Run, SDKAgent, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
 import { describe, expectTypeOf, it } from 'vitest'
+import { z } from 'zod'
 
 import {
   isDeltaTimelineEvent,
@@ -17,6 +18,7 @@ import {
   type SdkTurnOutcome,
   type SdkRun,
   type SdkRunAgent,
+  type toAgentFactory,
   translateSdkEvent,
   translateTimelineEvent,
   createToolSeen,
@@ -110,9 +112,31 @@ describe('SdkRunAgent vs TheoClaw TurnAgent', () => {
   it('a complete real SDKAgent is assignable to SdkRunAgent and SdkAgentHandle', () => {
     expectTypeOf<SDKAgent>().toExtend<SdkRunAgent>()
     expectTypeOf<SDKAgent>().toExtend<SdkAgentHandle>()
-    expectTypeOf<SDKAgent['generate']>().toExtend<NonNullable<SdkRunAgent['generate']>>()
     expectTypeOf<SDKAgent['dispose']>().toExtend<SdkRunAgent['dispose']>()
     expectTypeOf<SDKAgent['agentId']>().toExtend<SdkRunAgent['agentId']>()
     expectTypeOf<ReturnType<SDKAgent['send']>>().toExtend<Promise<SdkRun>>()
+  })
+
+  it('toAgentFactory serves handles whose send resolves the strict run', () => {
+    type Served = Awaited<ReturnType<ReturnType<typeof toAgentFactory>>>
+    expectTypeOf<Served>().toEqualTypeOf<SdkRunAgent>()
+    type Turn = Awaited<ReturnType<Served['send']>>
+    expectTypeOf<Turn['stream']>().toEqualTypeOf<() => AsyncIterable<SdkStreamMessage>>()
+    expectTypeOf<Turn['cancel']>().toEqualTypeOf<() => Promise<void>>()
+    expectTypeOf<Turn['events']>().toEqualTypeOf<() => AsyncIterable<SdkTimelineEvent>>()
+  })
+
+  it('generate keeps the SDK generic signature: inferred output, invalid options rejected', () => {
+    expectTypeOf<NonNullable<SdkRunAgent['generate']>>().toEqualTypeOf<SDKAgent['generate']>()
+    const check = async (agent: SdkRunAgent): Promise<void> => {
+      const schema = z.object({ n: z.number() })
+      const res = await agent.generate?.('x', { output: schema })
+      expectTypeOf(res?.object).toEqualTypeOf<{ n: number } | undefined>()
+      // @ts-expect-error `output` must be a Zod schema
+      await agent.generate?.('x', { output: {} })
+      // @ts-expect-error `output` is required
+      await agent.generate?.('x', {})
+    }
+    expectTypeOf(check).toBeFunction()
   })
 })

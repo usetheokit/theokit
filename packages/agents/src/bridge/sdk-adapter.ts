@@ -12,7 +12,7 @@ import type { ToolRefusal } from '@theokit/presenter'
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SDKAgent, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
@@ -852,9 +852,9 @@ async function* streamSdkAgent(
 export interface SdkTurnHandle {
   /** The SDK run id, when the handle has one (`Run.id`). */
   readonly id?: string
-  wait: () => Promise<SdkTurnOutcome>
-  /** The SDK's raw message stream (`Run.stream()`), preserved as-is. */
-  stream?: () => AsyncIterable<SdkStreamMessage>
+  wait: () => Promise<Omit<SdkTurnOutcome, 'error'> & { error?: { message: string } }>
+  /** The SDK's raw message stream (`Run.stream()`); an injected double may yield anything. */
+  stream?: () => AsyncIterable<unknown>
   /** The SDK's ordered timeline (`Run.events()`): messages and deltas interleaved. */
   events?: () => AsyncIterable<SdkTimelineEvent>
   /** Cancel the run; stops the stream and in-flight tool calls. */
@@ -894,7 +894,7 @@ export interface SdkRun extends SdkTurnHandle {
 /** Per-turn options: the SDK's own `SendOptions`. */
 export type SdkSendOptions = SendOptions
 
-export interface SdkAgentHandle {
+export interface SdkAgentHandle<R extends SdkTurnHandle = SdkTurnHandle> {
   readonly agentId: string
   /**
    * B-062 — a tool-using run that returns schema-validated output.
@@ -921,10 +921,7 @@ export interface SdkAgentHandle {
    * decision about what a redaction means to a schema, and inventing one would be the gate that
    * reports without gating this module already refuses to build.
    */
-  // `options` is `any` on purpose: the SDK's `generate` is generic over a Zod schema
-  // (`GenerateOptions<T>`), which no non-generic parameter type can accept contravariantly.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  generate?(message: string, options: any): Promise<unknown>
+  readonly generate?: SDKAgent['generate']
   readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.
@@ -941,7 +938,7 @@ export interface SdkAgentHandle {
    * `as never` absorbed the difference. It is literally the divergence the facade's docstring
    * described, met again while trying to remove it.
    */
-  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
+  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<R>
   dispose: () => Promise<void>
 }
 
@@ -950,9 +947,7 @@ export interface SdkAgentHandle {
  * and reads priced outcomes (TheoClaw) needs. A real SDK agent satisfies it; `SdkAgentHandle` stays
  * the lenient shape for injected doubles.
  */
-export type SdkRunAgent = Omit<SdkAgentHandle, 'send'> & {
-  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkRun>
-}
+export type SdkRunAgent = SdkAgentHandle<SdkRun>
 
 /**
  * #12 — bridge a builder/`defineAgent` {@link TheokitAgentDefinition} to a real `SDKAgent` FACTORY,
@@ -978,10 +973,10 @@ export function toAgentFactory(
     /** Withhold the SDK default `shell`, which `approvals` does not gate. */
     withholdBuiltinShell?: boolean
   },
-): (sessionId: string) => Promise<SdkAgentHandle> {
+): (sessionId: string) => Promise<SdkRunAgent> {
   const overrides = opts.overrides ?? {}
   const projectPerSession = resolveProjection(def, overrides)
-  return async (sessionId: string): Promise<SdkAgentHandle> => {
+  return async (sessionId: string): Promise<SdkRunAgent> => {
     // OBJECT shape: returns the projection already built. THUNK shape: projects now, for this session.
     const { compiled, model, reasoningEffort, runContext } = await projectPerSession(sessionId)
     const rt = await loadSdkRuntime()
@@ -1006,7 +1001,7 @@ export function toAgentFactory(
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     })
     return withGuardrails(
-      withStepCeiling(agent as unknown as SdkAgentHandle, compiled.maxIterations),
+      withStepCeiling(agent as unknown as SdkRunAgent, compiled.maxIterations),
       compiled.guardrails,
     )
   }

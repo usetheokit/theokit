@@ -59,7 +59,7 @@ describe('the served handle offers a schema-validated, tool-using run', () => {
       ],
     ] as const) {
       expect(typeof wrapped.generate, `${name} dropped it`).toBe('function')
-      await wrapped.generate?.('x', { output: {} })
+      await wrapped.generate?.('x', { output: {} as never })
     }
     expect(generate).toHaveBeenCalledTimes(2)
   })
