@@ -111,4 +111,23 @@ describe('@theokit/agents released auth APIs', () => {
       refresh: 'rotated-refresh',
     })
   })
+
+  it('every TheoCode manifest declares the released range, and no stale standalone lockfile remains', () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '../../../..')
+    for (const p of [
+      'package.json',
+      'packages/agent/package.json',
+      'packages/cli/package.json',
+      'packages/shared/package.json',
+      'packages/tui/package.json',
+    ]) {
+      const m = JSON.parse(readFileSync(join(root, p), 'utf8')) as Record<
+        string,
+        Record<string, string> | undefined
+      >
+      const spec = m.dependencies?.['@theokit/agents'] ?? m.devDependencies?.['@theokit/agents']
+      expect(spec, p).toBe('^16.11.0')
+    }
+    expect(existsSync(join(root, 'pnpm-lock.yaml'))).toBe(false)
+  })
 })
