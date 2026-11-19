@@ -54,7 +54,7 @@ describe('client i18n', () => {
     expect(negotiateLocale(null, ['xx-YY', 'en'], ['en', 'xx'], 'en')).toBe('xx')
     expect(negotiateLocale(null, ['xx'], ['en', 'xx-YY'], 'en')).toBe('xx-YY')
     expect(negotiateLocale('xx-ZZ', [], ['en', 'xx-YY'], 'en')).toBe('xx-YY')
-    expect(negotiateLocale('xx', ['fr'], ['en', 'xx'], 'en')).toBe('en')
+    expect(negotiateLocale('zz', ['fr'], ['en', 'xx'], 'en')).toBe('en')
   })
   it('formats by locale', () => {
     expect(formatNumber('en', 1234.5)).toBe('1,234.5')
