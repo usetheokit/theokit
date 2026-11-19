@@ -252,6 +252,24 @@ function unpublishable(named, packages, isIgnored) {
  */
 const packages = workspacePackages()
 const isIgnored = ignoredMatcher()
+
+/**
+ * A package whose directory this range deletes whole, by name, read from the base revision. Its
+ * removal is still a change to a published package, so a changeset must name it.
+ */
+const removed = new Map()
+const mergeBase = git(['merge-base', base, 'HEAD']).trim()
+for (const d of touched) {
+  if (existsSync(join(ROOT, 'packages', d))) continue
+  const manifest = `packages/${d}/package.json`
+  let pkg
+  try {
+    pkg = JSON.parse(git(['show', `${mergeBase}:${manifest}`]))
+  } catch (err) {
+    unreadable(`${manifest} at ${mergeBase} could not be read as JSON — ${err.message}`)
+  }
+  if (typeof pkg.name === 'string') removed.set(pkg.name, { private: pkg.private === true, dir: d })
+}
 const declared = new Set()
 const refused = []
 const dir = join(ROOT, '.changeset')
@@ -267,7 +285,7 @@ for (const entry of existsSync(dir) ? readdirSync(dir) : []) {
   }
   const named = namedPackages(entry, front[1])
   for (const name of named) {
-    if (!packages.has(name)) {
+    if (!packages.has(name) && !removed.has(name)) {
       unreadable(`.changeset/${entry} names ${name}, which no workspace package declares.`)
     }
     declared.add(name)
@@ -280,6 +298,7 @@ for (const entry of existsSync(dir) ? readdirSync(dir) : []) {
 const needing = new Map()
 for (const d of touched) {
   const manifest = join('packages', d, 'package.json')
+  if (!existsSync(join(ROOT, 'packages', d))) continue
   if (!existsSync(join(ROOT, manifest))) {
     unreadable(`packages/${d}/src changed and ${manifest} is absent.`)
   }
@@ -288,6 +307,10 @@ for (const d of touched) {
   // release consumes.
   if (pkg.private === true || isIgnored(pkg.name)) continue
   needing.set(pkg.name, d)
+}
+
+for (const [name, { private: isPrivate, dir: d }] of removed) {
+  if (!isPrivate && !isIgnored(name)) needing.set(name, d)
 }
 
 const uncovered = [...needing].filter(([name]) => !declared.has(name))
