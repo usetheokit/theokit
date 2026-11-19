@@ -41,15 +41,11 @@ describe('sessionKeyFor', () => {
   })
 
   it('keys a thread with a topic by topic', () => {
-    expect(sessionKeyFor(event({ type: 'thread', channel: 'g1', topicId: 't9' }), DEFAULT)).toBe(
-      'telegram-tpc-g1-t9',
-    )
+    expect(sessionKeyFor(event({ type: 'thread', channel: 'g1', topicId: 't9' }), DEFAULT)).toBe('telegram-tpc-g1-t9')
   })
 
   it('keys a thread without a topic as its group', () => {
-    expect(sessionKeyFor(event({ type: 'thread', channel: 'g1', sender: 'alice' }), DEFAULT)).toBe(
-      'telegram-grp-g1',
-    )
+    expect(sessionKeyFor(event({ type: 'thread', channel: 'g1', sender: 'alice' }), DEFAULT)).toBe('telegram-grp-g1')
   })
 
   it('keys a dm per channel and sender by default', () => {
@@ -70,39 +66,24 @@ describe('sessionKeyFor', () => {
         ['discord:222', 'paulo'],
       ]),
     }
-    expect(sessionKeyFor(event({ platform: 'telegram', sender: '111' }), settings)).toBe(
-      'peer-paulo',
-    )
-    expect(sessionKeyFor(event({ platform: 'discord', sender: '222' }), settings)).toBe(
-      'peer-paulo',
-    )
+    expect(sessionKeyFor(event({ platform: 'telegram', sender: '111' }), settings)).toBe('peer-paulo')
+    expect(sessionKeyFor(event({ platform: 'discord', sender: '222' }), settings)).toBe('peer-paulo')
   })
 
   it('keys an unlinked sender under per-peer per channel and sender', () => {
-    const settings: SessionKeySettings = {
-      dmScope: 'per-peer',
-      peerLinks: new Map([['telegram:111', 'paulo']]),
-    }
-    expect(sessionKeyFor(event({ platform: 'discord', sender: '111' }), settings)).toBe(
-      'discord-dm-111',
-    )
+    const settings: SessionKeySettings = { dmScope: 'per-peer', peerLinks: new Map([['telegram:111', 'paulo']]) }
+    expect(sessionKeyFor(event({ platform: 'discord', sender: '111' }), settings)).toBe('discord-dm-111')
   })
 
   it('adds the account label under per-account-channel-peer', () => {
-    const settings: SessionKeySettings = {
-      dmScope: 'per-account-channel-peer',
-      peerLinks: new Map(),
-      accountLabel: 'work',
-    }
+    const settings: SessionKeySettings = { dmScope: 'per-account-channel-peer', peerLinks: new Map(), accountLabel: 'work' }
     expect(sessionKeyFor(event({ sender: 'u1' }), settings)).toBe('telegram-dm-work-u1')
   })
 
   it('escapes dashes and underscores in every id segment', () => {
     expect(sessionKeyFor(event({ sender: 'a-b' }), DEFAULT)).toBe('telegram-dm-a_db')
     expect(sessionKeyFor(event({ sender: 'a_b' }), DEFAULT)).toBe('telegram-dm-a__b')
-    expect(sessionKeyFor(event({ type: 'thread', channel: 'g-1', topicId: 't_2' }), DEFAULT)).toBe(
-      'telegram-tpc-g_d1-t__2',
-    )
+    expect(sessionKeyFor(event({ type: 'thread', channel: 'g-1', topicId: 't_2' }), DEFAULT)).toBe('telegram-tpc-g_d1-t__2')
   })
 
   // CWE-706: a key selects a long-lived agent and its stored history, so two ids must never share one.
@@ -111,38 +92,19 @@ describe('sessionKeyFor', () => {
       [{ sender: 'a-b' }, { sender: 'a_b' }],
       [{ sender: '-_' }, { sender: '_-' }],
       [{ sender: 'a_d' }, { sender: 'a-' }],
-      [
-        { type: 'group', channel: 'g-1' },
-        { type: 'group', channel: 'g_1' },
-      ],
-      [
-        { type: 'thread', channel: 'g', topicId: 't-1' },
-        { type: 'thread', channel: 'g', topicId: 't_1' },
-      ],
-      [
-        { type: 'thread', channel: 'g-t', topicId: '1' },
-        { type: 'thread', channel: 'g', topicId: 't-1' },
-      ],
+      [{ type: 'group', channel: 'g-1' }, { type: 'group', channel: 'g_1' }],
+      [{ type: 'thread', channel: 'g', topicId: 't-1' }, { type: 'thread', channel: 'g', topicId: 't_1' }],
+      [{ type: 'thread', channel: 'g-t', topicId: '1' }, { type: 'thread', channel: 'g', topicId: 't-1' }],
     ]
     for (const [left, right] of pairs) {
       expect(sessionKeyFor(event(left), DEFAULT)).not.toBe(sessionKeyFor(event(right), DEFAULT))
     }
-    const labelled = (accountLabel: string): SessionKeySettings => ({
-      dmScope: 'per-account-channel-peer',
-      peerLinks: new Map(),
-      accountLabel,
-    })
-    expect(sessionKeyFor(event(), labelled('a-b'))).not.toBe(
-      sessionKeyFor(event(), labelled('a_b')),
-    )
+    const labelled = (accountLabel: string): SessionKeySettings => ({ dmScope: 'per-account-channel-peer', peerLinks: new Map(), accountLabel })
+    expect(sessionKeyFor(event(), labelled('a-b'))).not.toBe(sessionKeyFor(event(), labelled('a_b')))
   })
 
   it('never keys an account-labelled dm like a thread', () => {
-    const settings: SessionKeySettings = {
-      dmScope: 'per-account-channel-peer',
-      peerLinks: new Map(),
-      accountLabel: 'tpc',
-    }
+    const settings: SessionKeySettings = { dmScope: 'per-account-channel-peer', peerLinks: new Map(), accountLabel: 'tpc' }
     const dm = sessionKeyFor(event({ sender: 'u1' }), settings)
     const thread = sessionKeyFor(event({ type: 'thread', channel: 'dm', topicId: 'u1' }), settings)
     expect(dm).not.toBe(thread)
@@ -174,20 +136,12 @@ describe('createSessionRouter', () => {
 
 describe('parity with the gateway scopedStrategy (why the keys stay in TheoClaw)', () => {
   const peerLinks = new Map([['telegram:u1', 'ann']])
-  const mine = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) =>
-    sessionKeyFor(event(shape), { dmScope, peerLinks })
-  const gateway = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) =>
-    scopedStrategy({ dmScope, peerLinks })(event(shape))
+  const mine = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) => sessionKeyFor(event(shape), { dmScope, peerLinks })
+  const gateway = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) => scopedStrategy({ dmScope, peerLinks })(event(shape))
 
   it('agrees where a key has no scope-specific form, escaping `-` and `_` the same way', () => {
-    for (const shape of [
-      { sender: 'a-b_c' },
-      { type: 'group' as const, channel: 'g-1_x' },
-      { type: 'thread' as const, topicId: 't-1' },
-    ]) {
-      expect(gateway('per-channel-peer', shape), JSON.stringify(shape)).toBe(
-        mine('per-channel-peer', shape),
-      )
+    for (const shape of [{ sender: 'a-b_c' }, { type: 'group' as const, channel: 'g-1_x' }, { type: 'thread' as const, topicId: 't-1' }]) {
+      expect(gateway('per-channel-peer', shape), JSON.stringify(shape)).toBe(mine('per-channel-peer', shape))
     }
   })
 
