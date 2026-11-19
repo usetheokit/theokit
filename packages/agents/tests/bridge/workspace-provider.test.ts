@@ -61,7 +61,6 @@ describe('worktreeProvider', () => {
     expect(existsSync(ws.path)).toBe(true)
     expect(git('branch', '--list', 'task/k')).toContain('task/k')
   })
-
 })
 
 const spec = { name: 'w', compiled: applyCapabilities([new ModelCapability('m')]) }
