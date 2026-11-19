@@ -1,12 +1,4 @@
-import {
-  mkdtempSync,
-  writeFileSync,
-  statSync,
-  mkdirSync,
-  readdirSync,
-  chmodSync,
-  existsSync,
-} from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -32,9 +24,9 @@ describe('load', () => {
     writeFileSync(f, 'DEMO_A="file"\nDEMO_B="fb"\nOTHER="o"\n')
     const env: NodeJS.ProcessEnv = { DEMO_CONFIG: f, DEMO_A: 'env' }
     expect(cfg.load(env, d)).toBe(f)
-    expect(env['DEMO_A']).toBe('env')
-    expect(env['DEMO_B']).toBe('fb')
-    expect(env['OTHER']).toBeUndefined()
+    expect(env.DEMO_A).toBe('env')
+    expect(env.DEMO_B).toBe('fb')
+    expect(env.OTHER).toBeUndefined()
   })
   it('missing explicit file throws naming the variable', () => {
     const d = mk()

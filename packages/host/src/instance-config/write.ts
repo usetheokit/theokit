@@ -10,10 +10,12 @@ import {
 } from 'node:fs'
 import { open } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
+
 import { InstanceConfigError } from './errors.js'
+
 import type { InstanceKey } from './index.js'
 
-const KEY = /^[A-Za-z_][A-Za-z0-9_]*$/
+const KEY = /^[A-Za-z_]\w*$/
 
 export function assertWritable(key: string, value: string): void {
   if (/["\\\r\n]/.test(value)) {
@@ -47,7 +49,7 @@ export async function writeInstanceConfig(
       throw new InstanceConfigError('instance_config_unknown_key', `${key} is not a declared key`)
     }
     assertWritable(key, value)
-    const parse = keys[key]?.parse
+    const parse = keys[key].parse
     if (parse !== undefined) {
       try {
         parse(value)
@@ -99,7 +101,8 @@ export async function writeInstanceConfig(
     }
   } catch (error) {
     try {
-      if (lstatSync(tmp)) unlinkSync(tmp)
+      lstatSync(tmp)
+      unlinkSync(tmp)
     } catch {
       // temporary file already gone
     }

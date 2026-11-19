@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+
 import { InstanceConfigError } from './errors.js'
 
 const NAME = /^[a-z0-9-]+$/
@@ -40,7 +41,7 @@ export function resolveConfigPath(
       },
     )
   }
-  const xdg = env['XDG_CONFIG_HOME']
+  const xdg = env.XDG_CONFIG_HOME
   const base = xdg !== undefined && xdg !== '' ? xdg : join(homeDir, '.config')
   const file = profile !== undefined && profile !== '' ? `${app}-${profile}.env` : `${app}.env`
   return { path: join(base, app, file), explicit: false, variable: pathVariable }

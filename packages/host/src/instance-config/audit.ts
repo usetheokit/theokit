@@ -1,5 +1,6 @@
 import { chmodSync, statSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
+
 import type { AuditFinding } from './index.js'
 
 function modeOf(path: string): number | undefined {

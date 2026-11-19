@@ -1,12 +1,4 @@
-import {
-  mkdtempSync,
-  writeFileSync,
-  statSync,
-  mkdirSync,
-  readdirSync,
-  chmodSync,
-  existsSync,
-} from 'node:fs'
+import { mkdtempSync, writeFileSync, statSync, readdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -35,7 +27,7 @@ describe('write', () => {
     expect(statSync(join(d, 'demo')).mode & 0o777).toBe(0o700)
     const env: NodeJS.ProcessEnv = { DEMO_CONFIG: f }
     cfg.load(env, d)
-    expect(env['DEMO_A']).toBe('v 1')
+    expect(env.DEMO_A).toBe('v 1')
     expect(readdirSync(join(d, 'demo'))).toEqual(['demo.env'])
   })
   it('existing file without force throws, no temp file', async () => {
@@ -51,7 +43,9 @@ describe('write', () => {
   it('refuses quote values without echoing them', async () => {
     const d = mk()
     const f = join(d, 'c.env')
-    const err = await cfg.write(f, { DEMO_A: 'sec"ret' }, { force: false }).catch((e) => e)
+    const err = await cfg
+      .write(f, { DEMO_A: 'sec"ret' }, { force: false })
+      .catch((e: unknown) => e as InstanceConfigError)
     expect(err).toBeInstanceOf(InstanceConfigError)
     expect(err.message).toContain('DEMO_A')
     expect(err.message).not.toContain('sec"ret')

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { parseEnv } from 'node:util'
+
 import { InstanceConfigError } from './errors.js'
 import type { ResolvedPath } from './path.js'
 
