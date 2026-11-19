@@ -99,10 +99,7 @@ describe('runAgentTurn', () => {
     controller.abort()
     // A delta right after the abort, before the promise settles, is dropped.
     sent.onDelta?.({ update: { type: 'text-delta', text: 'late' } })
-    const outcome = await Promise.race([
-      pending,
-      new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), 50)),
-    ])
+    const outcome = await Promise.race([pending, macrotask().then(() => 'timeout' as const)])
     expect(outcome).toMatchObject({ ok: false, code: 'turn_cancelled' })
     expect(cancelled).toBe(true)
     expect(returned).toBe(true)

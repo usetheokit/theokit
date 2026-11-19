@@ -75,7 +75,12 @@ function finishedOutcome(result: Awaited<ReturnType<SdkTurnHandle['wait']>>): Ag
   }
 }
 
-/** Cancel the run and close the iterator, waiting at most one macrotask on either. */
+/** Resolves after `hops` microtask turns: a bound on waiting that never reaches a macrotask. */
+async function microtasks(hops: number): Promise<void> {
+  for (let i = 0; i < hops; i++) await Promise.resolve()
+}
+
+/** Cancel the run and close the iterator, waiting on neither past a few microtask turns. */
 async function cancelRun(
   run: SdkTurnHandle | undefined,
   iterator?: AsyncIterator<unknown>,
@@ -99,7 +104,7 @@ async function cancelRun(
         .then(ignore, keep),
     )
   }
-  await Promise.race([Promise.all(settling), new Promise((resolve) => setImmediate(resolve))])
+  await Promise.race([Promise.all(settling), microtasks(20)])
   return {
     ok: false,
     code: 'turn_cancelled',

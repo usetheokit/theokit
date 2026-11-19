@@ -361,6 +361,9 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // equivalent: it is Node-only by definition, the same boundary as the
       // CLI harness above.
       'packages/theo/src/server/agent/node-acp-transport.ts',
+      // ACP command resolution (#1800): node:fs (X_OK + isFile) and node:path (absolute PATH
+      // entries) to refuse a command before the transport spawns it; Node-only like the transport.
+      'packages/theo/src/server/agent/resolve-agent-command.ts',
       // Node-adapter scope (#122): decorator-controller dispatch. Scans
       // `<serverDir>/controllers/**` from disk (node:fs/node:path) and writes
       // a Web Response into a Node ServerResponse — the same dev-server /
