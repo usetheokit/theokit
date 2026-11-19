@@ -105,6 +105,14 @@ process.exitCode = result.exitCode
 
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
 
+## Stability tiers: experimental exports
+
+Every export without an `@experimental` tag on its own declaration is stable. `@theokit/agents/testing` is a utility subpath for your own tests (not a test-only seam), and its tier is stable except for the legacy snake_case mock stream listed below. The list below is checked against `public-surface-baseline.json` by `tests/unit/experimental-exports.test.ts`.
+
+<!-- experimental-exports:start -->
+- `@theokit/agents/testing`: `MockAgentStreamOptions`, `MockResponse`, `MockStreamEvent`, `createMockAgentStream`
+<!-- experimental-exports:end -->
+
 ## Testing: the live-suite guard
 
 A live (real-model) suite must not skip green in CI when the provider key is missing. `@theokit/agents/testing` exports `assertProviderKeyWhenRequired`, `requireProviderKeySetup`, `LIVE_KEY_NAMES` and `MissingProviderKeyError`: when `THEOKIT_LIVE_REQUIRED=1` and none of the key variables is set (whitespace-only counts as unset), the run fails with an error that names the variables, never a value. Without the flag it returns, so a local run keeps its skip.
