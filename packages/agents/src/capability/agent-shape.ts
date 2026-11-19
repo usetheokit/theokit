@@ -1,4 +1,8 @@
+import { Tool, type CustomTool } from '@theokit/sdk'
+import { z } from 'zod'
+
 import type { CompiledTool } from '../bridge/agent-compiler.js'
+import { ConfigurationError } from '../errors.js'
 import type { ReasoningEffort } from '../types.js'
 
 import { applyCapabilities, type Capability, type ProvenanceEntry } from './capability.js'
@@ -74,4 +78,52 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
     ...(draft.reasoningEffort !== undefined && { reasoningEffort: draft.reasoningEffort }),
   }
   return Object.freeze(shape)
+}
+
+/**
+ * True for a live Zod schema, classic or Zod Mini (both carry the core `$ZodType` trait).
+ *
+ * `instanceof` asks Zod itself rather than the property names a JSON Schema may also carry. Zod's
+ * check reads `_zod.traits.has(...)`, which throws on an arbitrary object whose `_zod.traits` is not
+ * a Set, so a throw means "not a Zod schema".
+ */
+function isLiveZodSchema(schema: object): boolean {
+  // A JSON-Schema object can forge the trait Set, `def` and `run`, but not an instance of its own
+  // constructor: Zod stamps `_zod.constr` with the class that built the schema. A plain object
+  // literal has none, so it is never mistaken for a live schema.
+  const constr = (schema as { _zod?: { constr?: unknown } })._zod?.constr
+  if (typeof constr !== 'function' || constr === Object) return false
+  try {
+    return schema instanceof constr && schema instanceof z.core.$ZodType
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The shape's tools as the SDK `CustomTool` an app holds, with no cast at the call site.
+ *
+ * A tool whose `inputSchema` is a live Zod schema (decorator `@Tool({ input })`) is lowered through
+ * the SDK's `Tool.create`, the same path the SDK adapter uses. Any other object `inputSchema` is
+ * already SDK-ready and the tool is returned as it is. Only a non-object schema (string, `null`,
+ * `undefined`, array) cannot be a `CustomTool` and is rejected with a typed error.
+ */
+export function shapeToolsAsCustomTools(shape: AgentShape): readonly CustomTool[] {
+  return shape.tools.map((tool) => {
+    const schema: unknown = tool.inputSchema
+    if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
+      throw new ConfigurationError(
+        `shapeToolsAsCustomTools: tool "${tool.name}" has no object inputSchema (a Zod schema or a JSON-Schema object is required)`,
+      )
+    }
+    if (isLiveZodSchema(schema)) {
+      return Tool.create({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: schema,
+        handler: tool.handler as CustomTool['handler'],
+      } as never)
+    }
+    return tool as unknown as CustomTool
+  })
 }

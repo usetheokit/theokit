@@ -110,7 +110,7 @@ describe('device pairing', () => {
     const dir = stateDir()
     const lines: string[] = []
     const pairing = createDevicePairing({ dir, write: (line) => lines.push(line) })
-    mkdirSync(join(dir, 'devices.json.tmp'))
+    mkdirSync(join(dir, 'devices.json'))
     const requested = pairing.request(pairing.issueSetupCode(), 'laptop', DEVICE_TOKEN)
     if (!requested.ok) throw new Error('request refused')
     expect(await pairing.approve(requested.id)).toEqual({ ok: false, reason: 'write_failed' })

@@ -95,7 +95,7 @@ export interface AgentRuntime {
   /** Build the HTTP routes for one compiled agent. `@theokit/agents` exports this by name. */
   generateAgentRoutes(input: {
     walkResult: { route: string }
-    compiledOptions: unknown
+    compiledOptions?: unknown
     createRun: (
       message: string,
       sessionId: string,
