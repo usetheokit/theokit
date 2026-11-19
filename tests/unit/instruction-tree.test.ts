@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -887,5 +887,39 @@ describe('loadInstructionTree as-listed order and per-file cap', () => {
     })
     expect(tree.count).toBe(1)
     expect(warnings.some((w) => w.includes('SOUL.md'))).toBe(true)
+  })
+
+  it('as-listed orders blocks across a root by the list, nested directories included', () => {
+    write('B.md', 'b')
+    mkdirSync(join(root, 'nested'))
+    write('nested/A.md', 'a')
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      fileNames: ['A.md', 'B.md'],
+      order: 'as-listed',
+    })
+    expect(tree.blocks.map((b) => b.path)).toEqual(['nested/A.md', 'B.md'])
+  })
+
+  it.skipIf(process.getuid?.() === 0)('warns when a listed file cannot be read (EACCES)', () => {
+    write('SOUL.md', 's')
+    write('USER.md', 'u')
+    chmodSync(join(root, 'SOUL.md'), 0o000)
+    warnings.length = 0
+    try {
+      const tree = loadInstructionTree({
+        cwd: root,
+        roots: ['.'],
+        budget,
+        fileNames: ['SOUL.md', 'USER.md'],
+        onWarn,
+      })
+      expect(tree.count).toBe(1)
+      expect(warnings.some((w) => w.includes('SOUL.md'))).toBe(true)
+    } finally {
+      chmodSync(join(root, 'SOUL.md'), 0o644)
+    }
   })
 })

@@ -5,7 +5,7 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import type { Stats } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { basename, join, relative, resolve } from 'node:path'
 
 // Imported from the SDK directly, not from this package's own barrel: these files now LIVE in
 // `@theokit/agents`, so `from '@theokit/agents'` would be a package self-reference (and a cycle
@@ -374,7 +374,16 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
 
   let truncated = false
   for (const root of input.roots) {
+    const start = blocks.length
     truncated = visit(resolve(cwd, root), 0)
+    // `as-listed` orders the blocks of the whole root by the array, nested directories included:
+    // the walk is per directory, so a nested `A.md` would otherwise follow a root `B.md`.
+    if (input.order === 'as-listed') {
+      const listed = input.fileNames as readonly string[]
+      const rank = (block: InstructionBlock): number => listed.indexOf(basename(block.path))
+      const sorted = blocks.splice(start).sort((a, b) => rank(a) - rank(b))
+      blocks.push(...sorted)
+    }
     if (truncated) break
   }
 
