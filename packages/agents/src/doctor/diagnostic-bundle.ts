@@ -76,14 +76,16 @@ export async function writeDiagnosticBundle(
   for (const [index, file] of options.files.entries()) {
     // Never show a name that holds a secret; fall back to the position.
     const nameLeaks = secrets.some((s) => file.name.includes(s))
-    const label = (text: string) => [nameLeaks ? '' : `${text} "${file.name}"`, `${text} #${index}`]
+    // Most to least informative; the name alone comes before the position.
+    const candidates = (wording: (l: string) => string) => [
+      ...(nameLeaks ? [] : [wording(`file "${file.name}"`), `"${file.name}"`]),
+      wording(`file #${index}`),
+    ]
     if (Buffer.byteLength(file.name, 'utf8') > NAME_BYTES) {
       throw new DiagnosticBundleError(
         'name_too_long',
         safeMessage(
-          label('file')
-            .filter(Boolean)
-            .map((l) => `Diagnostic bundle ${l} is longer than ${NAME_BYTES} bytes.`),
+          candidates((l) => `Diagnostic bundle ${l} is longer than ${NAME_BYTES} bytes.`),
           secrets,
         ),
       )
@@ -97,9 +99,7 @@ export async function writeDiagnosticBundle(
       throw new DiagnosticBundleError(
         'secret_survived',
         safeMessage(
-          label('file')
-            .filter(Boolean)
-            .map((l) => `Diagnostic bundle refused: a configured secret survived in ${l}.`),
+          candidates((l) => `Diagnostic bundle refused: a configured secret survived in ${l}.`),
           secrets,
         ),
       )

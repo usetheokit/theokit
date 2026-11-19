@@ -74,6 +74,16 @@ describe('writeDiagnosticBundle', () => {
     expect((err as Error).message).not.toContain('xxx')
   })
 
+  it('the message still names the file when only its fixed wording holds the secret', async () => {
+    const err = await writeDiagnosticBundle({
+      out: join(dir(), 'b.tar.gz'),
+      files: [{ name: 'report.txt', content: 'Diagnostic' }],
+      secrets: ['Diagnostic'],
+    }).catch((e: unknown) => e)
+    expect((err as Error).message).toContain('report.txt')
+    expect((err as Error).message).not.toContain('Diagnostic')
+  })
+
   it('a secret that encoding introduces (U+FFFD from a lone surrogate) is refused', async () => {
     const out = join(dir(), 'b.tar.gz')
     await expect(
