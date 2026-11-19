@@ -67,8 +67,5 @@
     "daemon",
     "agents",
     "node"
-  ],
-  "dependencies": {
-    "@theokit/sdk": "^5.17.0"
-  }
+  ]
 }
