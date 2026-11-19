@@ -223,9 +223,7 @@ function doneFromOutcome(
 ): AgentStreamEvent {
   if (out.usage === undefined) return { ...done, result: out.result ?? done.result }
   const usage = doneUsage(out.usage)
-  // A run that reports only a total keeps it.
-  if (usage.totalTokens === 0 && out.usage.totalTokens !== undefined) {
-    usage.totalTokens = out.usage.totalTokens
-  }
+  // The total the run reported wins over the one derived from input + output.
+  if (out.usage.totalTokens !== undefined) usage.totalTokens = out.usage.totalTokens
   return { ...done, result: out.result ?? done.result, usage }
 }

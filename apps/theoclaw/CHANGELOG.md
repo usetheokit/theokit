@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The webchat run (`create-run.ts`) builds its failed-turn `error` and usage-enriched `done` as the typed `AgentStreamEvent` / `DoneEvent` from `@theokit/agents`. No change to the wire output. (#2342)
+
 ### Fixed
 
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).

@@ -7,6 +7,8 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
+const outcome = vi.hoisted(() => ({ usage: {} as Record<string, number> }))
+
 vi.mock('@theokit/sdk', () => ({
   Agent: {
     getOrCreate: () =>
@@ -17,7 +19,7 @@ vi.mock('@theokit/sdk', () => ({
             wait: () =>
               Promise.resolve({
                 result: 'a BANANA reply',
-                usage: { inputTokens: 30, outputTokens: 12 },
+                usage: outcome.usage,
                 status: 'finished',
               }),
           }),
@@ -43,7 +45,20 @@ const redactor: Guardrail = {
 }
 
 describe('a guarded typed turn', () => {
+  it('test_keeps_the_reported_total_when_the_usage_is_partial', async () => {
+    outcome.usage = { inputTokens: 30, totalTokens: 42 }
+    const def = { name: 's', model: 'test/model', system: 'x', guardrails: [redactor] } as never
+    const handle = await toTypedAgentFactory(def, { apiKey: 'key', approvals: APPROVALS })('s2')
+    const turn = await handle.send('hi')
+    const events: AgentStreamEvent[] = []
+    for await (const e of turn.stream?.() ?? []) events.push(e)
+    const done = events.at(-1)
+    if (done?.type !== 'done') throw new Error('no done event')
+    expect(done.usage).toMatchObject({ inputTokens: 30, totalTokens: 42 })
+  })
+
   it('test_ends_with_a_done_event_holding_the_guarded_result_and_usage', async () => {
+    outcome.usage = { inputTokens: 30, outputTokens: 12 }
     const def = { name: 's', model: 'test/model', system: 'x', guardrails: [redactor] } as never
     const handle = await toTypedAgentFactory(def, { apiKey: 'key', approvals: APPROVALS })('s1')
     const turn = await handle.send('hi')
