@@ -261,6 +261,20 @@ masks) and a map of variable name to store kind, never a value. References are r
 `SecretStore` (`kind`, `matches`, `read`) in `stores`, with `...builtinSecretStores` to keep the built-in
 ones. The cause of a failure from your own store is not kept, since it could carry the value.
 
+## Turning a pushed event stream into an iterable
+
+`streamFromEmitter(start, { signal, isFinal, onError })` from `@theokit/agents/bridge` returns an
+`AsyncIterable` for a producer that pushes events to a callback. `return()` aborts the producer's signal
+at once, unless a final event (`done` or `error` by default) was already seen. A rejecting producer
+yields the `onError` event, unless an error event already went out.
+
+```ts
+generateAgentRoutes({
+  createRun: (m, s, signal) =>
+    streamFromEmitter((emit, sig) => runAgentTurn(/* ... */ emit, sig), { signal }),
+})
+```
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
