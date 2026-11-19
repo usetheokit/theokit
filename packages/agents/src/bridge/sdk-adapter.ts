@@ -17,7 +17,7 @@ import type { RetryOptions } from '@theokit/sdk/retry'
 import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
-import { withResolvedSkills } from '../skills-resolver.js'
+import { resolveEnabledSkills } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
@@ -933,9 +933,9 @@ export function toAgentFactory(
     const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
     // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream).
     const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
-    // A function-valued selection must reach the SDK as a static `enabled` list, or it would list every
-    // discovered skill (`createSdkAgentStream`'s callers resolve it the same way before streaming).
-    const created = await withResolvedSkills(compiled, runContext)
+    // `read: 'advertised'` only: a function-valued selection must reach the SDK as a static `enabled` list so
+    // the listing and `skill_read` agree. The default `'inline'` path is left exactly as it was.
+    const created = compiled.skillsRead === 'advertised' ? await withResolvedSkills(compiled, runContext) : compiled
     const { options: m8 } = assembleM8CreateOptions(created)
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
@@ -984,3 +984,15 @@ export function toAgentFactory(
  * The runner moderates the stream as it flows. The served turn's `stream()` (B-414) yields the
  * guarded completed reply as one message, or nothing on a block, so a block is not mid-token.
  */
+
+/** Fold a function-valued selection into a static `skills.enabled`; a static list is untouched. */
+async function withResolvedSkills(
+  compiled: CompiledAgentOptions,
+  runContext: Record<string, unknown> | undefined,
+): Promise<CompiledAgentOptions> {
+  if (!compiled.skillsResolver) return compiled
+  const enabled = await resolveEnabledSkills(compiled.skillsResolver, runContext ?? {})
+  return enabled === undefined
+    ? compiled
+    : { ...compiled, skills: { ...compiled.skills, enabled, autoInject: true } }
+}

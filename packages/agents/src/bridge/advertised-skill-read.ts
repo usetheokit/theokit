@@ -26,13 +26,6 @@ interface WireRuntime {
   defineSkillReadTool?: (source: readonly InlineSkill[] | ReadSource) => unknown
 }
 
-/** Same extension set the SDK tries: bare name, plus `PATHEXT` on Windows. */
-function executableExtensions(): string[] {
-  return process.platform === 'win32'
-    ? ['', ...(process.env.PATHEXT ?? '.EXE;.CMD').split(';')]
-    : ['']
-}
-
 function isExecutable(file: string): boolean {
   try {
     accessSync(file, constants.X_OK)
@@ -47,10 +40,13 @@ function binaryOnPath(bin: string): boolean {
   return (process.env.PATH ?? '')
     .split(delimiter)
     .filter((d) => d.length > 0)
-    .some((d) => executableExtensions().some((ext) => isExecutable(join(d, bin + ext))))
+    .some((d) => isExecutable(join(d, bin)))
 }
 
-/** The SDK's own disclosure rule for the `<skills>` block: hidden and unrunnable skills are not offered. */
+/**
+ * The SDK's own disclosure rule for the `<skills>` block (hidden and unrunnable skills are not offered). The SDK
+ * exposes no API for it, so it is mirrored; the real-SDK cases in skill-read-autowire.test.ts pin the manager it reads.
+ */
 function isDisclosed(skill: Skill | InlineSkill): boolean {
   const s = skill as { disableModelInvocation?: boolean; requiresBins?: string[] }
   return s.disableModelInvocation !== true && (s.requiresBins ?? []).every(binaryOnPath)
