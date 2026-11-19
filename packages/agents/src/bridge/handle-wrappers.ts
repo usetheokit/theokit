@@ -11,20 +11,12 @@
  *
  * @internal
  */
-import type { SDKUserMessage } from '@theokit/sdk'
+import type { SDKMessage, SDKUserMessage } from '@theokit/sdk'
 
 import type { Guardrail } from '../guardrails/index.js'
 import { GuardrailViolationError, runInputGuards, runOutputGuards } from '../guardrails/index.js'
 
-import type {
-  SdkAgentHandle,
-  SdkRun,
-  SdkRunAgent,
-  SdkSendOptions,
-  SdkStreamMessage,
-  SdkTurnHandle,
-} from './sdk-adapter.js'
-import type { SdkTimelineEvent } from './sdk-timeline.js'
+import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
 
 /**
  * theokit#363 — carry the declared step ceiling onto the handle {@link toAgentFactory} serves.
@@ -37,10 +29,10 @@ import type { SdkTimelineEvent } from './sdk-timeline.js'
  * The caller's own `maxIterations` WINS (spread last): a host asking for a different ceiling on one
  * turn is the per-run override this layer already honors for `model` and `reasoningEffort`.
  */
-export function withStepCeiling<R extends SdkTurnHandle>(
-  handle: SdkAgentHandle<R>,
+export function withStepCeiling(
+  handle: SdkAgentHandle,
   maxIterations: number | undefined,
-): SdkAgentHandle<R> {
+): SdkAgentHandle {
   // Nothing declared ⇒ the original handle, untouched — no wrapper, no key, the SDK default stands.
   if (maxIterations === undefined) return handle
   return {
@@ -55,14 +47,6 @@ export function withStepCeiling<R extends SdkTurnHandle>(
 }
 
 export function withGuardrails(
-  handle: SdkRunAgent,
-  guardrails: readonly Guardrail[] | undefined,
-): SdkRunAgent
-export function withGuardrails(
-  handle: SdkAgentHandle,
-  guardrails: readonly Guardrail[] | undefined,
-): SdkAgentHandle
-export function withGuardrails(
   handle: SdkAgentHandle,
   guardrails: readonly Guardrail[] | undefined,
 ): SdkAgentHandle {
@@ -75,14 +59,17 @@ export function withGuardrails(
     },
     dispose: () => handle.dispose(),
     ...forwardedMembers(handle),
-    send: async (msg: string | SDKUserMessage, sendOpts?: SdkSendOptions): Promise<SdkRun> => {
+    send: async (
+      msg: string | SDKUserMessage,
+      sendOpts?: SdkSendOptions,
+    ): Promise<SdkTurnHandle> => {
       // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
       // not merely annotate it afterwards.
       const guarded =
         typeof msg === 'string'
           ? await runInputGuards(msg, guardrails)
           : { ...msg, text: await runInputGuards(msg.text, guardrails) }
-      return guardTurn(await handle.send(guarded, sendOpts), guardrails)
+      return guardTurn(await handle.send(guarded, sendOpts), guardrails, handle.agentId)
     },
   }
 }
@@ -129,65 +116,68 @@ function forwardedMembers(
  * includes a guard defect such as `MalformedGuardrailResultError` (a `redact` with no text): a guard
  * written wrong is not a guard refusing (B-457).
  */
-function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkRun {
-  let outcome: ReturnType<SdkRun['wait']> | undefined
-  const guardedOutcome = (): ReturnType<SdkRun['wait']> =>
-    (outcome ??= turn.wait().then(async (out) => {
-      // A real SDK run always carries a status; a double that omits one settled as it returned.
-      const settled = { ...out, status: out.status ?? 'finished' }
-      return out.result === undefined
-        ? settled
-        : { ...settled, result: await runOutputGuards(out.result, guardrails) }
-    }))
+function guardTurn(
+  turn: SdkTurnHandle,
+  guardrails: readonly Guardrail[],
+  agentId: string,
+): SdkTurnHandle {
+  // The ids every SDK message carries: the inner run's id when it has one, else empty (honest).
+  const ids = { agent_id: agentId, run_id: turn.id ?? '' }
+  let outcome: ReturnType<SdkTurnHandle['wait']> | undefined
+  const guardedOutcome = (): ReturnType<SdkTurnHandle['wait']> =>
+    (outcome ??= turn
+      .wait()
+      .then(async (out) =>
+        out.result === undefined
+          ? out
+          : { ...out, result: await runOutputGuards(out.result, guardrails) },
+      ))
   const cancelTurn = turn.cancel
-  // The synthesized messages are the SDK's shape less the agent and run ids this layer never sees.
-  async function* guardedStream(): AsyncGenerator {
-    // The inner stream is read only to learn that it carried an error event. Its text may hold
-    // what a guard would redact, so none of it is forwarded: one fixed terminal status is.
-    let streamedError = false
-    if (turn.stream !== undefined) {
-      for await (const event of turn.stream()) {
-        if (
-          typeof event === 'object' &&
-          event !== null &&
-          (event as { type?: unknown }).type === 'error'
-        ) {
-          streamedError = true
-        }
-      }
-    }
-    if (streamedError) yield errorStatus('run error')
-    let out: Awaited<ReturnType<SdkTurnHandle['wait']>>
-    try {
-      out = await guardedOutcome()
-    } catch (err) {
-      if (!(err instanceof GuardrailViolationError)) throw err
-      yield errorStatus(err.message)
-      return
-    }
-    if (out.result !== undefined) {
-      yield { type: 'assistant', message: { content: [{ type: 'text', text: out.result }] } }
-    }
-    // `'run error'` when the run gave no message: the eval runner's own `run <status>` fallback.
-    if (out.status === 'error') yield errorStatus(out.error?.message ?? 'run error')
-  }
-  async function* guardedEvents(): AsyncGenerator<SdkTimelineEvent> {
-    for await (const message of guardedStream()) {
-      yield { kind: 'message', message } as SdkTimelineEvent
-    }
-  }
   return {
+    ...(turn.id === undefined ? {} : { id: turn.id }),
     wait: guardedOutcome,
     // Cancellation must reach the inner run: a guarded turn that dropped it could not be aborted.
-    cancel: async () => {
-      await cancelTurn?.call(turn)
+    ...(typeof cancelTurn === 'function' ? { cancel: () => cancelTurn.call(turn) } : {}),
+    async *stream() {
+      // The inner stream is read only to learn that it carried an error event. Its text may hold
+      // what a guard would redact, so none of it is forwarded: one fixed terminal status is.
+      let streamedError = false
+      if (turn.stream !== undefined) {
+        for await (const event of turn.stream()) {
+          // Untrusted at runtime: an injected stream may yield null or a primitive.
+          if (
+            typeof event === 'object' &&
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            event !== null &&
+            (event as { type?: unknown }).type === 'error'
+          ) {
+            streamedError = true
+          }
+        }
+      }
+      if (streamedError) yield errorStatus('run error', ids)
+      let out: Awaited<ReturnType<SdkTurnHandle['wait']>>
+      try {
+        out = await guardedOutcome()
+      } catch (err) {
+        if (!(err instanceof GuardrailViolationError)) throw err
+        yield errorStatus(err.message, ids)
+        return
+      }
+      if (out.result !== undefined) {
+        yield {
+          type: 'assistant',
+          ...ids,
+          message: { role: 'assistant', content: [{ type: 'text', text: out.result }] },
+        } satisfies SDKMessage
+      }
+      // `'run error'` when the run gave no message: the eval runner's own `run <status>` fallback.
+      if (out.status === 'error') yield errorStatus(out.error?.message ?? 'run error', ids)
     },
-    stream: () => guardedStream() as AsyncIterable<SdkStreamMessage>,
-    events: guardedEvents,
   }
 }
 
-/** The SDK's terminal message for a failed run, less the agent and run ids this layer never sees. */
-function errorStatus(message: string): { type: 'status'; status: 'ERROR'; message: string } {
-  return { type: 'status', status: 'ERROR', message }
+/** The SDK's terminal message for a failed run, carrying the agent and run ids the SDK stamps. */
+function errorStatus(message: string, ids: { agent_id: string; run_id: string }): SDKMessage {
+  return { type: 'status', ...ids, status: 'ERROR', message }
 }
