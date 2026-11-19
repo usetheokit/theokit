@@ -130,6 +130,11 @@ function appendObject(
 /**
  * Encode `values` as FormData so that `formDataToObject(result, schema)` returns the same values.
  * Throws FormDataEncodingError for a shape the decoder cannot read back (an array of objects).
+ *
+ * Known limitation: an array emits one entry per item, so an empty array and an omitted optional
+ * array both emit nothing. `formDataToObject` always returns `[]` for an array schema, so an
+ * omitted optional array decodes as `[]`, not `undefined`. Telling them apart needs a decoder
+ * change, which is outside this encoder.
  */
 export function objectToFormData(values: Record<string, unknown>, schema: object): FormData {
   const fd = new FormData()
