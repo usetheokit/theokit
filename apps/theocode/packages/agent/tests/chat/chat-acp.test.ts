@@ -107,7 +107,7 @@ describe('#1893 — the ACP entry runs the shared bootstrap', () => {
     const { tmpdir } = await import('node:os')
     const { join } = await import('node:path')
     const dir = mkdtempSync(join(tmpdir(), 'acp-boot-'))
-    const keys = ['THEOCODE_HOME', 'THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'CLAUDE_PROJECT_DIR']
+    const keys = ['THEOCODE_HOME', 'THEOKIT_HOME', 'THEOKIT_AUTH_HOME']
     const saved = keys.map((k) => [k, process.env[k]] as const)
     vi.clearAllMocks()
     vi.resetModules()
@@ -123,7 +123,6 @@ describe('#1893 — the ACP entry runs the shared bootstrap', () => {
       await import('../../src/chat/chat-acp.js')
       expect(seen.THEOKIT_HOME).toBe(dir)
       expect(seen.THEOKIT_AUTH_HOME).toMatch(/\.theocode$/)
-      expect(seen.CLAUDE_PROJECT_DIR).toBe(process.cwd())
     } finally {
       for (const [k, v] of saved) {
         if (v === undefined) delete process.env[k]

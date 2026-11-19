@@ -1,6 +1,5 @@
 import { installAuthHome } from '../auth/index.js'
 import { installConfiguredHome, loadProjectEnv, resolveEffectiveConfig } from '../config/index.js'
-import { installClaudeProjectDir } from '../hooks/index.js'
 
 export interface BootstrapSurfaceOptions {
   readonly env: Record<string, string | undefined>
@@ -29,6 +28,4 @@ export function bootstrapSurface(opts: BootstrapSurfaceOptions): void {
   })
   // `installAuthHome` (not `ensureAuthHome`): this must WRITE the variable (B-034).
   installAuthHome(env, home)
-  // Hooks need CLAUDE_PROJECT_DIR — see `claude-project-dir.ts`.
-  installClaudeProjectDir(env, cwd)
 }

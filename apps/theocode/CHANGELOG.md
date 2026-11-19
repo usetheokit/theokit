@@ -20,6 +20,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 - **`AgentDefinitionLike` no longer declares `model?: string`.** The framework's `SubagentAgentDefinition` now takes `model` as `ModelSelection | 'inherit'`, so the string field no longer type-checked against `.subagents()`. `definitionFrom` never set it. Carrying a role's model is a separate migration. (#1858)
 - **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)
 - **`SessionStart` hooks run through the framework's `runHostHooks`.** The surface still fires them once per session with `THEOCODE_SESSION_ID`, behind the same approval check, and reports the same warnings; only the command runner is the framework's now, and the hook event names come from the framework's Claude Code dialect table. (#1922)
+- **`CLAUDE_PROJECT_DIR` is now supplied by the framework (`projectDirEnv`) to each hook process** instead of being exported into the whole process at boot. It is set to the project directory for hooks, even if the variable was already set. (#1922)
 
 ### Fixed
 - **`doctor` now reports the wiring `buildChatAgent` publishes.** The build was not awaited, so the MCP, skills, hooks and AGENTS.md rows could describe an empty placeholder, and a build failure became an unhandled rejection. It is awaited, and a failure is a failed `wiring` check. (#1894)

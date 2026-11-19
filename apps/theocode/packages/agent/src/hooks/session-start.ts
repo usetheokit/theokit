@@ -146,6 +146,7 @@ export async function runSessionStartHooks(input: RunSessionStartInput): Promise
         fingerprint: () => 'approved',
         cwd: input.cwd,
         env,
+        projectDirEnv: 'CLAUDE_PROJECT_DIR',
         onWarn: (message) => {
           runnerWarning = message
         },

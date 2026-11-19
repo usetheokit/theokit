@@ -123,6 +123,8 @@ export function buildHookHandlers(
     trusted: opts.trusted,
     approved: opts.approved,
     continuationBudget: DEFAULT_CONTINUATION_BUDGET,
+    // Claude Code hooks reach project files through `$CLAUDE_PROJECT_DIR`; the framework supplies it.
+    projectDirEnv: 'CLAUDE_PROJECT_DIR',
     ...(opts.onVeto !== undefined && { onVeto: opts.onVeto }),
     ...(opts.onWarn !== undefined && { onWarn: opts.onWarn }),
     // The trap, closed. The framework passes the TRANSLATED identity; the store knows the ORIGINAL.
