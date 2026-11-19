@@ -165,6 +165,10 @@ export function getOrCreateReporting(
   const running = pending.get(sessionId)
   if (running) return running
   observeCreate(statics)
+  const self: { p?: Promise<unknown> } = {}
+  const leave = (): void => {
+    if (pending.get(sessionId) === self.p) pending.delete(sessionId)
+  }
   const p = (async () => {
     const state = { created: false }
     const marked = { ...options, [CREATED]: () => (state.created = true) }
@@ -172,12 +176,11 @@ export function getOrCreateReporting(
     // Creation is over: the SDK's own registry now owns the handle. Leave the in-flight map before
     // the (slow) reporting so a later call cannot join this promise and receive a handle a direct
     // SDK caller disposed meanwhile.
-    if (pending.get(sessionId) === p) pending.delete(sessionId)
+    leave()
     if (state.created) await reportWiring(listener, options, agent)
     return agent
-  })().finally(() => {
-    if (pending.get(sessionId) === p) pending.delete(sessionId)
-  })
+  })().finally(leave)
+  self.p = p
   pending.set(sessionId, p)
   return p
 }
