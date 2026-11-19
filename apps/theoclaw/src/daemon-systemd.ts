@@ -1,5 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+
+import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
 import type { DaemonBackend, DaemonIo } from './daemon-common.js'
@@ -58,14 +60,8 @@ export function unitFor(input: UnitInput): string {
 }
 
 /** Write `text` to `path` through a temporary file and a rename, so the unit is never half written. */
-function replaceUnit(path: string, text: string): void {
-  const temporary = `${path}.${process.pid}.tmp`
-  try {
-    writeFileSync(temporary, text)
-    renameSync(temporary, path)
-  } finally {
-    rmSync(temporary, { force: true })
-  }
+async function replaceUnit(path: string, text: string): Promise<void> {
+  await replaceFileAtomic(path, text, { mode: 0o644 })
 }
 
 async function systemctl(runner: Runner, ...args: string[]): Promise<RunResult> {
@@ -88,7 +84,7 @@ export const systemdBackend: DaemonBackend = {
     const text = unitFor({ label, nodePath: io.nodePath, entryPath: io.entry, configPath, profile, workingDirectory })
     mkdirSync(dirname(unit), { recursive: true })
     const previous = existsSync(unit) ? readFileSync(unit, 'utf8') : undefined
-    replaceUnit(unit, text)
+    await replaceUnit(unit, text)
     // `enable --now` leaves a running unit as it is, so a reinstall restarts it onto the new unit file.
     for (const args of [['daemon-reload'], ['enable', '--now', `${label}.service`], ['restart', `${label}.service`]]) {
       const result = await systemctl(runner, ...args)
@@ -96,7 +92,7 @@ export const systemdBackend: DaemonBackend = {
         io.stderr.write(`theoclaw daemon: systemctl --user ${args.join(' ')} failed: ${result.stderr.trim()}\n`)
         // A reinstall puts the working unit back; a first install leaves no unit behind.
         if (previous === undefined) rmSync(unit, { force: true })
-        else replaceUnit(unit, previous)
+        else await replaceUnit(unit, previous)
         await systemctl(runner, 'daemon-reload')
         return 1
       }

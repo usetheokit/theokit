@@ -1,7 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { mkdirSync, readFileSync } from 'node:fs'
-import { open, rename } from 'node:fs/promises'
 import { join } from 'node:path'
+
+import { atomicWriteJson } from '@theokit/sdk/persistence'
 
 import { MIN_BEARER_TOKEN_LENGTH } from './bearer.js'
 import { describeError, TheoClawConfigError } from './errors.js'
@@ -113,15 +114,7 @@ function load(path: string): Device[] {
 }
 
 async function persist(path: string, devices: readonly Device[]): Promise<void> {
-  const temporary = `${path}.tmp`
-  const handle = await open(temporary, 'w', 0o600)
-  try {
-    await handle.chmod(0o600)
-    await handle.writeFile(`${JSON.stringify({ devices }, null, 2)}\n`)
-  } finally {
-    await handle.close()
-  }
-  await rename(temporary, path)
+  await atomicWriteJson(path, { devices }, { mode: 0o600 })
 }
 
 export function createDevicePairing(options: DevicePairingOptions): DevicePairing {
