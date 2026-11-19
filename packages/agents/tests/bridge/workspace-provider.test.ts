@@ -126,7 +126,7 @@ describe('worktreeProvider', () => {
     expect(git('branch', '--list', 'task/*').trim()).toBe('')
   })
 
-  it('a primitive task error survives a failing cleanup in an AggregateError', async () => {
+  it('a primitive task error and a failing cleanup are both reachable', async () => {
     const { repo, root } = setup()
     const p = worktreeProvider(repo, root)
     const provider = {
@@ -149,12 +149,12 @@ describe('worktreeProvider', () => {
         throw 'plain string'
       },
     }).catch((e: unknown) => e)
-    expect(err).toBeInstanceOf(AggregateError)
-    expect(String((err as AggregateError).errors[0])).toContain('plain string')
-    expect((err as AggregateError).errors[1]).toBeInstanceOf(WorkspaceProviderError)
+    // `delegate` wraps what the stream throws, so the primitive is the wrapper's cause.
+    expect(String(err)).toContain('plain string')
+    expect((err as { cleanupError: unknown }).cleanupError).toBeInstanceOf(WorkspaceProviderError)
   })
 
-  it('a frozen task error survives a failing cleanup in an AggregateError', async () => {
+  it('a frozen task error and a failing cleanup are both reachable', async () => {
     const { repo, root } = setup()
     const p = worktreeProvider(repo, root)
     const frozen = Object.freeze(new Error('frozen'))
@@ -177,8 +177,8 @@ describe('worktreeProvider', () => {
         throw frozen as Error
       },
     }).catch((e: unknown) => e)
-    expect(err).toBeInstanceOf(AggregateError)
-    expect(String((err as AggregateError).errors[0])).toContain('frozen')
+    expect(String(err)).toContain('frozen')
+    expect((err as { cleanupError: unknown }).cleanupError).toBeInstanceOf(Error)
   })
 
   describe('.worktreeinclude copier', () => {
