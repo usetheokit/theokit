@@ -122,6 +122,13 @@ function isLegacyLive(plan: TranscriptGCPlan, candidate: Candidate, liveIds: str
   )
 }
 
+/** True when a transcript other than `except` still exists on disk under either name of `id`. */
+function hasOtherTranscript(plan: TranscriptGCPlan, id: string, except: string): boolean {
+  return [transcriptPath(plan.root, plan.cwd, id), legacyTranscriptPath(plan.root, plan.cwd, id)]
+    .filter((path) => path !== except)
+    .some((path) => existsSync(path))
+}
+
 interface CollectContext {
   plan: TranscriptGCPlan
   apply: boolean
@@ -160,7 +167,8 @@ async function collectCandidate(ctx: CollectContext, candidate: Candidate): Prom
         candidate.id !== undefined &&
         id === candidate.id &&
         ctx.registered.has(id) &&
-        !protectedIds().has(id)
+        !protectedIds().has(id) &&
+        !hasOtherTranscript(plan, id, candidate.transcript)
           ? ctx.remove(id)
           : undefined,
     },

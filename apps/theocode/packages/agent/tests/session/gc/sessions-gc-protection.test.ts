@@ -211,6 +211,23 @@ describe('a fork is collected under its own identity', () => {
     expect(plan.candidates.map((c) => c.id)).toEqual(['the-fork'])
   })
 
+  it('test_an_old_legacy_transcript_keeps_the_registry_entry_while_the_current_one_is_protected', async () => {
+    // The archived session's current transcript is the most recent (protected); its older
+    // legacy-named transcript is a candidate under the SAME id. Removing it must not drop the entry.
+    const current = writeTranscript(fx, 'arch', 1)
+    const legacy = writeTranscript(fx, 'arch', 90, { legacy: true })
+    const removed: string[] = []
+
+    await run(true, {
+      listRegistry: async () => [{ agentId: 'arch', archived: true }],
+      removeFromRegistry: (id: string) => void removed.push(id),
+    })
+
+    expect(existsSync(current)).toBe(true)
+    expect(existsSync(legacy)).toBe(false)
+    expect(removed, 'the entry of a session whose transcript survives was removed').toEqual([])
+  })
+
   it('test_an_unregistered_fork_is_reported_by_path_not_as_its_source', async () => {
     writeTranscript(fx, 'newest', 1)
     writeTranscript(fx, 'source-live', 2)
