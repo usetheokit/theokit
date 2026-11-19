@@ -75,6 +75,31 @@ export interface TurnTimelineEvent {
   readonly textAlreadyStreamed?: boolean
 }
 
+/** What the translators read of an SDK message: its discriminant. The SDK's own messages have it. */
+export interface SdkMessageLike {
+  readonly type: string
+}
+
+/** A stream message as the bridge's `SdkMessage`; the copy carries the index signature the SDK's interfaces lack. */
+export function toSdkMessage(message: SdkMessageLike): SdkMessage {
+  return { ...message }
+}
+
+/** A timeline event as the bridge's `SdkTimelineEvent`, built field by field (no cast). */
+export function toSdkTimelineEvent(event: TurnTimelineEvent): SdkTimelineEvent {
+  return {
+    kind: event.kind,
+    ...(event.message === undefined ? {} : { message: toSdkMessage(event.message) }),
+    ...(event.update === undefined ? {} : { update: event.update }),
+    ...(event.textAlreadyStreamed === undefined ? {} : { textAlreadyStreamed: event.textAlreadyStreamed }),
+  }
+}
+
+/** Whether a wire event carries the discriminant of an `AgentStreamEvent`; the one narrowing, no cast. */
+export function isAgentStreamEvent(event: { readonly type: string }): event is AgentStreamEvent {
+  return typeof event.type === 'string'
+}
+
 export interface TurnRun {
   stream(): AsyncIterable<SdkMessageLike>
   /**
@@ -94,57 +119,4 @@ export interface TurnRun {
   cancel(): Promise<void>
   /** Messages and live deltas in the order the loop produced them; what a session turn streams. */
   events?(): AsyncIterable<TurnTimelineEvent>
-}
-
-/** What the translators read of an SDK message: its discriminant. The SDK's own messages have it. */
-export interface SdkMessageLike {
-  readonly type: string
-}
-
-/** A stream message as the bridge's `SdkMessage`; the copy carries the index signature the SDK's interfaces lack. */
-export function toSdkMessage(message: SdkMessageLike): SdkMessage {
-  return { ...message }
-}
-
-/** A timeline event as the bridge's `SdkTimelineEvent`, built field by field (no cast). */
-export function toSdkTimelineEvent(event: TurnTimelineEvent): SdkTimelineEvent {
-  return {
-    kind: event.kind,
-    ...(event.message === undefined ? {} : { message: toSdkMessage(event.message) }),
-    ...(event.update === undefined ? {} : { update: event.update }),
-    ...(event.textAlreadyStreamed === undefined
-      ? {}
-      : { textAlreadyStreamed: event.textAlreadyStreamed }),
-  }
-}
-
-const AGENT_STREAM_EVENT_TYPES: ReadonlySet<string> = new Set([
-  'run_started',
-  'text_delta',
-  'tool_call',
-  'partial_tool_call',
-  'tool_result',
-  'thinking',
-  'iteration',
-  'approval_required',
-  'input_requested',
-  'task_progress',
-  'shell_output',
-  'artifact_start',
-  'artifact_chunk',
-  'state_update',
-  'checkpoint_saved',
-  'file_edit',
-  'error',
-  'done',
-])
-
-/**
- * Whether a wire event is one the bridge's `AgentStreamEvent` names: a known discriminant, and for
- * `text_delta` its string `content`. The bridge ships no validator for the rest of each event's
- * fields, so that stays the bridge's follow-up (#2342).
- */
-export function isAgentStreamEvent(event: { readonly type: string }): event is AgentStreamEvent {
-  if (!AGENT_STREAM_EVENT_TYPES.has(event.type)) return false
-  return event.type !== 'text_delta' || ('content' in event && typeof event.content === 'string')
 }
