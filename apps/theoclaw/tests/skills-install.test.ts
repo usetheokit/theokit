@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
-import { SkillRegistry } from '../src/skills/registry.js'
+import { discoverSkills } from '@theokit/sdk/skills'
 import { harness, scratchDir } from './support/cli-harness.js'
 
 let server: Server | undefined
@@ -85,9 +85,9 @@ describe('theoclaw skills install', () => {
     const r = await run(['skills', 'install', 'summarize'], base, ws)
     expect(r.code).toBe(0)
     expect(r.out).toBe(`Installed summarize@1.10.0 -> ${join(ws, 'skills', 'summarize')}\n`)
-    expect(
-      new SkillRegistry({ workspaceDir: join(ws, 'skills') }).resolve('summarize'),
-    ).toBeDefined()
+    expect((await discoverSkills(join(ws, 'skills'))).map((skill) => skill.name)).toEqual([
+      'summarize',
+    ])
     const origin = JSON.parse(readFileSync(join(ws, 'skills/summarize/.origin.json'), 'utf8'))
     expect(origin).toMatchObject({ registry: base, name: 'summarize', version: '1.10.0' })
     expect(origin.sha256).toMatch(/^[0-9a-f]{64}$/)

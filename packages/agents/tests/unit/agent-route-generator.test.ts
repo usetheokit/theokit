@@ -85,6 +85,39 @@ describe('agent-route-generator', () => {
     }
   })
 
+  it('the chat route answers the same stream with and without compiledOptions', async () => {
+    const { walk, compiled } = setupAgent()
+    const createRun = async function* (): AsyncGenerator<StreamEvent> {
+      yield { type: 'run_started', runId: 'run-1', agentName: 'support' }
+      yield { type: 'text_delta', content: 'Hello!' }
+    }
+    const ask = async (compiledOptions?: typeof compiled) => {
+      const [chat] = generateAgentRoutes({
+        walkResult: walk,
+        ...(compiledOptions ? { compiledOptions } : {}),
+        createRun: () => createRun(),
+      })
+      const res = await chat.handler(
+        new Request('http://localhost/api/agents/support/chat', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ message: 'Hi', sessionId: 's1' }),
+        }),
+      )
+      // `streamAgentResponse` mints a fresh `textId` UUID per request; mask it, compare the rest.
+      const body = (await res.text()).replace(
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+        '<uuid>',
+      )
+      return { status: res.status, body }
+    }
+    const withOptions = await ask(compiled)
+    const without = await ask()
+    expect(without.status).toBe(200)
+    expect(without.body).toContain('Hello!')
+    expect(without).toEqual(withOptions)
+  })
+
   it('test_chat_route_streams_events', async () => {
     const { walk, compiled } = setupAgent()
 

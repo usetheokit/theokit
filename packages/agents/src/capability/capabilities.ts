@@ -1,7 +1,8 @@
-import type { InlineSkill } from '@theokit/sdk'
+import type { CustomTool, InlineSkill } from '@theokit/sdk'
 
 import type { CompiledTool } from '../bridge/agent-compiler.js'
 import { compileSkillsSelection } from '../bridge/define-agent.js'
+import { toCompiledTool } from '../bridge/tool-conversion.js'
 import { ConfigurationError } from '../errors.js'
 
 import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capability.js'
@@ -49,8 +50,13 @@ export class ModelCapability implements Capability {
 export class ToolsCapability implements Capability {
   readonly name = 'tools'
   readonly #tools: readonly CompiledTool[]
-  constructor(tools: readonly CompiledTool[]) {
-    this.#tools = tools
+  /**
+   * Takes the SDK `CustomTool` an app already holds as well as the internal `CompiledTool`. The two
+   * share no runtime discriminant, so every entry goes through `toCompiledTool`: a thin wrapper that
+   * forwards `(input, ctx)` and copies symbol metadata, which is a no-op for an already-compiled tool.
+   */
+  constructor(tools: readonly (CustomTool | CompiledTool)[]) {
+    this.#tools = tools.map((t) => toCompiledTool(t as CustomTool))
   }
   apply(draft: CompiledAgentOptionsDraft): void {
     draft.tools.push(...this.#tools)

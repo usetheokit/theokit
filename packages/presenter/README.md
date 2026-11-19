@@ -64,6 +64,21 @@ for (const message of sdkMessages) {
 not from `status`, because the SDK reports every finished call as `completed`. An absent or non-numeric
 exit code is not a failure.
 
+`fromRunTimelineEvent` is the door for `run.events()`, the SDK's one ordered timeline of messages and
+token deltas. It drops text a message repeats (`textAlreadyStreamed`), repeated reasoning and repeated
+tool lifecycle points, and holds a tool result until the other report can mark it failed. Keep one
+state per run and flush it when the timeline ends:
+
+```typescript
+import { createRunTimelineState, flushRunTimeline, fromRunTimelineEvent } from '@theokit/presenter'
+
+const state = createRunTimelineState()
+for await (const item of run.events()) {
+  for (const event of fromRunTimelineEvent(item, state)) render(event)
+}
+for (const event of flushRunTimeline(state)) render(event)
+```
+
 `fromWireChunk` is the other door — from the transport wire into the canonical event, which is what
 a client-side surface receives. `createWireReader()` wraps it with the state a stream needs: it keeps
 the call-name map and attaches the `data-error-code` code (`WIRE_ERROR_CODE_PART`) to the next `error` event. `fromInteractionUpdate` covers interactive runs.
@@ -113,6 +128,10 @@ When both exit-code spellings are present and differ, `exitCode` wins. A missing
 ## Pending approvals
 
 `pendingApprovals(messages)` returns every outstanding approval across wire messages, in order, as `PendingApproval { approvalId, toolCallId, toolName, input, question?, timeoutMs? }`. With nothing outstanding it returns one shared empty array. `readPendingApproval(part)` reads a single part. A part in `approval-requested` without a string `approval.id` is skipped, never settled by its `toolCallId`, because `approve()` could not settle it.
+
+## Turn metadata
+
+`readTurnMetadata(chunk)` (from `@theokit/presenter/wire`) reads a `finish` chunk's `messageMetadata` as a `WireTurnMetadata { usage?, cost?, durationMs?, stopReason?, model? }`. Fields of the wrong type are dropped rather than thrown on, and an unknown `stopReason` is dropped. It returns `undefined` for any other chunk or a finish without object metadata. A `stopReason` of `'step_limit'` or `'no_progress'` means the turn was cut, not finished.
 
 ## Refused tool calls
 

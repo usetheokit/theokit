@@ -1,5 +1,30 @@
 # create-theo
 
+## 3.1.6
+
+### Patch Changes
+
+- The scaffold's pins now match what this release publishes, so a project created from it
+  installs the version just cut rather than the previous one:
+
+  - @theokit/agents: ^16.11.0 -> ^16.12.0
+
+## 3.1.5
+
+### Patch Changes
+
+- The scaffold's pins now match what this release publishes, so a project created from it
+  installs the version just cut rather than the previous one:
+
+  - @theokit/agents: ^16.10.0 -> ^16.11.0
+
+## 3.1.4
+
+### Patch Changes
+
+- cca3a1c: The `theokit-gateways` skill in the default template now shows the `{ agent, platform }` form of `handleChannelWebhook`.
+- 6163d3a: `theokit/server/webhook` now exports `verifyHmacSha256`, `decodeBase64Signature` and `decodeHexSignature` (and the `DecodeSignature` and `DecodeResult` types), so a webhook source the package does not ship can reuse the framework's constant-time, rotation-aware HMAC check. The `theokit-gateways` scaffold skill shows a custom verifier built on it.
+
 ## 3.1.3
 
 ### Patch Changes

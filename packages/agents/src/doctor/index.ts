@@ -16,3 +16,5 @@ export type { DiagnosticDestination, InstallDiagnosticSinkOptions } from './diag
 
 export { checks } from './checks.js'
 export type { CredentialState, SettingsFileReport } from './checks.js'
+export { writeDiagnosticBundle, DiagnosticBundleError } from './diagnostic-bundle.js'
+export type { WriteDiagnosticBundleOptions } from './diagnostic-bundle.js'
