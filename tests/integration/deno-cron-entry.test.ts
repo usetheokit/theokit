@@ -68,10 +68,35 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
 })
 
+describe('Deno import map for the cron entry configs', () => {
+  it('maps bare packages imported by a module the env override config reaches', async () => {
+    write(
+      'theo.config.production.ts',
+      `import { backend } from './lib/backend.js'\nexport default { jobs: { backend } }\n`,
+    )
+    write('lib/backend.ts', `import { Pool } from 'pg'\nexport const backend = new Pool()\n`)
+    vi.stubEnv('NODE_ENV', 'production')
+    const { readProjectSourcesFromDisk, bareSpecifiersOf } =
+      await import('../../packages/theo/src/adapters/deno-deploy.js')
+    const sources = readProjectSourcesFromDisk(root, {
+      serverDir: 'server',
+      agentsDir: 'agents',
+    } as never)
+    expect(bareSpecifiersOf(sources)).toContain('pg')
+  })
+})
+
 describe('generated Deno cron entry', () => {
+  it('pins the jobs import to the given theokit version', () => {
+    const entry = join(root, '.theokit', 'crons-entry.ts')
+    translateCronToDeno(entry, [], { theokitVersion: '1.2.3' })
+    expect(readFileSync(entry, 'utf8')).toContain('"npm:theokit@1.2.3/server/jobs"')
+  })
+
   it('enqueues buffered jobs on the configured backend after the handler succeeds', async () => {
     await loadEntry(
       ['theo.config.ts'],

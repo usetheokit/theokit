@@ -38,6 +38,7 @@ import { emitOpenApi } from '../../vite-plugin/openapi-emit/emit.js'
 import { loadRoutesForOpenApi } from '../../vite-plugin/openapi-emit/load-routes.js'
 import { cleanBuildOutput } from '../cleanup/cleanup.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
+import { cliVersion } from '../version.js'
 
 import { describeServicesManifest } from './build/describe-services-manifest.js'
 import { describeControllerArtifacts, emitControllerArtifacts } from './build/emit-controllers.js'
@@ -323,6 +324,7 @@ async function emitCronArtifacts(opts: {
         translateCronToDeno(resolve(opts.distDir, 'crons-entry.ts'), manifestEntries, {
           projectRoot: opts.cwd,
           configPaths: denoCronConfigPaths(opts.cwd),
+          theokitVersion: cliVersion(),
         })
         console.log(`  ✓ Cron → ${opts.distDir}/crons-entry.ts (Deno.cron)`)
         break

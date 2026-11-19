@@ -57,7 +57,10 @@ export default defineCron('${name}', { schedule: '${schedule}', handler: () => {
   )
 }
 
-const runBuild = (args: string[] = []): { stdout: string; exitCode: number } => {
+const runBuild = (
+  args: string[] = [],
+  extraEnv: Record<string, string> = {},
+): { stdout: string; exitCode: number } => {
   try {
     // T5a.2 prerequisite: THEOKIT_SKIP_NATIVE_PREFLIGHT=1 tells the CLI to
     // skip the native-binding ABI check. Test fixtures don't install
@@ -73,7 +76,7 @@ const runBuild = (args: string[] = []): { stdout: string; exitCode: number } => 
       cwd: projectDir,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, THEOKIT_SKIP_NATIVE_PREFLIGHT: '1' },
+      env: { ...process.env, THEOKIT_SKIP_NATIVE_PREFLIGHT: '1', ...extraEnv },
     })
     return { stdout, exitCode: 0 }
   } catch (err) {
@@ -162,6 +165,21 @@ describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
     // cron+job artifacts must be present).
     const { stdout } = runBuild(['--target=bun'])
     expect(stdout.toLowerCase()).toMatch(/cron.*skip|cron.*not supported|warn/)
+  })
+
+  it('build --target=deno-deploy wires the NODE_ENV override and a version-pinned theokit into the cron entry', () => {
+    writeConfig()
+    writeCron('foo', '* * * * *')
+    writeFileSync(join(projectDir, 'theo.config.production.ts'), `export default { port: 3001 }\n`)
+    runBuild(['--target=deno-deploy'], { NODE_ENV: 'production' })
+    const entry = readFileSync(join(projectDir, '.theokit/crons-entry.ts'), 'utf8')
+    const version = (
+      JSON.parse(readFileSync(resolve(REPO, 'packages/theo/package.json'), 'utf8')) as {
+        version: string
+      }
+    ).version
+    expect(entry).toContain('["../theo.config.ts","../theo.config.production.ts"]')
+    expect(entry).toContain(`"npm:theokit@${version}/server/jobs"`)
   })
 
   // EC-105: existing vercel.json fields preserved

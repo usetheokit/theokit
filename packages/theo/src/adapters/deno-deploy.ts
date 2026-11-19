@@ -8,6 +8,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { resolve } from 'node:path'
@@ -470,7 +471,7 @@ export function renderDenoConfig(opts: {
  * must resolve is what the DEPLOYED code imports, and a specifier reachable only from a test
  * or a build script never runs on the platform.
  */
-function readProjectSourcesFromDisk(cwd: string, config: TheoConfig): string[] {
+export function readProjectSourcesFromDisk(cwd: string, config: TheoConfig): string[] {
   // No fallback: `config/schema.ts` gives both a zod `.default()`, so a parsed config always
   // carries them — and the defaults are `server`/`agents`, so the `src/`-prefixed guesses this
   // line used to hold would have read the wrong directories on any project that took them.
@@ -486,13 +487,37 @@ function readProjectSourcesFromDisk(cwd: string, config: TheoConfig): string[] {
       texts.push(readFileSync(resolve(entry.parentPath, entry.name), 'utf8'))
     }
   }
-  const themeConfig = resolve(cwd, 'theo.config.ts')
-  if (existsSync(themeConfig)) texts.push(readFileSync(themeConfig, 'utf8'))
-  // The environment override is imported by the generated cron entry, so its bare imports need mapping too.
+  // The base config, the NODE_ENV override the generated cron entry also imports, and every local
+  // module they reach: a backend file the config imports can itself import a bare package.
   const nodeEnv = process.env.NODE_ENV
-  const envConfig = nodeEnv ? resolve(cwd, `theo.config.${nodeEnv}.ts`) : undefined
-  if (envConfig && existsSync(envConfig)) texts.push(readFileSync(envConfig, 'utf8'))
+  const configs = ['theo.config.ts', ...(nodeEnv ? [`theo.config.${nodeEnv}.ts`] : [])]
+  const seen = new Set<string>()
+  for (const name of configs) collectLocalSources(resolve(cwd, name), seen, texts)
   return texts
+}
+
+/** Candidate files a relative specifier can name, mirroring sloppy-imports (`.js` → `.ts`, index files). */
+function localCandidates(base: string): string[] {
+  const stem = base.replace(/\.(?:m?js|jsx)$/u, '')
+  return [base, `${stem}.ts`, `${stem}.mts`, `${stem}.tsx`, `${base}.ts`, resolve(base, 'index.ts')]
+}
+
+/** Read `file` and, recursively, the local modules it imports. Texts are appended to `out`. */
+function collectLocalSources(file: string, seen: Set<string>, out: string[]): void {
+  if (seen.has(file) || !existsSync(file)) return
+  seen.add(file)
+  let text: string
+  try {
+    text = readFileSync(file, 'utf8')
+  } catch {
+    return // a directory or unreadable candidate: not a module
+  }
+  out.push(text)
+  for (const match of text.matchAll(/(?:from|import)[\s(]*['"](\.{1,2}\/[^'"]*)['"]/gu)) {
+    const base = resolve(file, '..', match[1])
+    const found = localCandidates(base).find((c) => existsSync(c) && statSync(c).isFile())
+    if (found !== undefined) collectLocalSources(found, seen, out)
+  }
 }
 
 function readDenoConfigFromDisk(cwd: string): DenoConfig | undefined {
