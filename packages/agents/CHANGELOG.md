@@ -1,5 +1,19 @@
 # @theokit/agents
 
+## 16.13.0
+
+### Minor Changes
+
+- c476d68: Add `delegationPortFromAgentFactory` to `@theokit/agents/bridge`: a `DelegationPort` that runs a fresh agent per task, cancels its run when the delegating signal aborts, and disposes the agent in every case. The `DelegationPort` doc no longer claims an SDK `SubAgent` satisfies it.
+- 64e2c77: `loadInstructionTree` gains `order: 'as-listed'` (blocks follow the `fileNames` array; a predicate throws a `ConfigurationError`) and `budget.maxCharsPerFile` (cuts each file with a `[truncated]` marker and flags the block `truncated`). A file that fails to read for any reason other than `ENOENT`, or a directory named like an instruction file, now goes to `onWarn`.
+- 3159920: `generateAgentRoutes` no longer requires `compiledOptions` in its context. The generator never read it, so an agent built outside the decorator compiler can mount its chat route without inventing one.
+- 5e016b1: Add `streamFromEmitter` to `@theokit/agents/bridge`: it turns a producer that pushes events to a callback into an abortable `AsyncIterable`, for `generateAgentRoutes` and `streamAgentResponse`. `return()` aborts the producer at once unless a final event was already seen.
+
+### Patch Changes
+
+- Updated dependencies [6e1791d]
+  - @theokit/presenter@0.16.0
+
 ## 16.12.0
 
 ### Minor Changes

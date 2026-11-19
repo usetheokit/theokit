@@ -1,5 +1,11 @@
 # @theokit/presenter
 
+## 0.16.0
+
+### Minor Changes
+
+- 6e1791d: Add `fromRunTimelineEvent`, `createRunTimelineState` and `flushRunTimeline`: the door from the SDK's `run.events()` timeline into `AgentOutputEvent`. Streamed text and reasoning are not repeated, tool lifecycle points are deduplicated by id, and a tool result is held until the other report can mark it failed.
+
 ## 0.15.0
 
 ### Minor Changes
