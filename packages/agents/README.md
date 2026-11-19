@@ -278,7 +278,8 @@ and use one signal per concurrent goal. `toolName` and `description` rename or r
 `git worktree add -b task/<id> <root>/<id>`. Pass it as `isolation` to `delegate` (or on the
 `SubAgentSpec`; the option wins): `delegate` acquires a workspace, runs with `cwd` set to it and
 releases it afterwards, on failure too. If the release fails, the task's error is still the one
-thrown, with the cleanup failure on its `cleanupError`. A `streamFactory` you supply does not read `cwd`.
+thrown, with the cleanup failure on its `cleanupError`; when the error cannot carry a property (a
+primitive, or a frozen or non-extensible object), an `AggregateError` holding both is thrown instead. A `streamFactory` you supply does not read `cwd`.
 Task ids must match `^[A-Za-z0-9][A-Za-z0-9._-]*$` and may not contain `..`; anything else throws
 `WorkspaceProviderError`. Used directly, `workspace.release({ keep: true })` leaves the worktree and branch.
 

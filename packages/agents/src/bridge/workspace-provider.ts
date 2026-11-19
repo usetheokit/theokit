@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { constants } from 'node:fs'
-import { lstat, mkdir, open, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -100,7 +100,7 @@ async function copyEntry(
  * Copies one file through open descriptors instead of paths. Both ends are opened with O_NOFOLLOW
  * (a link swapped in at the last component fails), and after each open the descriptor is compared
  * with the path's current realpath, so a directory swapped for a symlink since the checks above is
- * caught before any byte is read or written. Nothing is truncated until the destination is verified.
+ * caught before any byte is read or written. The destination is replaced by renaming a fresh file, never truncated in place.
  */
 async function copyFileAnchored(
   source: string,
@@ -132,13 +132,21 @@ async function copyFileAnchored(
   const from = await open_(source, constants.O_RDONLY)
   try {
     await verify(from, source, roots.repo)
-    const to = await open_(dest, constants.O_WRONLY | constants.O_CREAT)
+    // Write a new workspace-owned file and rename it over the destination: truncating `dest` in
+    // place would also truncate any file it is a hard link to (possibly outside the workspace).
+    const temp = `${dest}.worktreeinclude-${crypto.randomUUID()}`
+    const to = await open_(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL)
     try {
-      await verify(to, dest, roots.workspace)
-      await to.truncate(0)
-      await to.writeFile(await from.readFile())
-    } finally {
-      await to.close()
+      try {
+        await verify(to, temp, roots.workspace)
+        await to.writeFile(await from.readFile())
+      } finally {
+        await to.close()
+      }
+      await rename(temp, dest)
+    } catch (error) {
+      await rm(temp, { force: true })
+      throw error
     }
   } finally {
     await from.close()
@@ -165,8 +173,8 @@ async function copyIncluded(repo: string, workspace: string, include: string): P
     const line = raw.trim()
     if (!line || line.startsWith('#')) continue
     const src = resolve(repo, line)
-    const dest = resolve(workspace, line)
-    if (isAbsolute(line) || !inside(resolve(repo), src) || !inside(resolve(workspace), dest)) {
+    const dest = resolve(workspaceReal, line)
+    if (isAbsolute(line) || !inside(resolve(repo), src) || !inside(workspaceReal, dest)) {
       throw new WorkspaceProviderError(`${include}: "${line}" is outside the repository`)
     }
     try {

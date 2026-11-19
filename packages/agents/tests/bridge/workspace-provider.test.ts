@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -297,7 +298,7 @@ describe('worktreeProvider', () => {
       expect(readdirSync(outside)).toEqual([])
     })
 
-    it('does not write through a destination file that is a symlink', async () => {
+    it('replaces a destination that is a symlink instead of writing through it', async () => {
       const outside = mkdtempSync(join(tmpdir(), 'outside-'))
       writeFileSync(join(outside, 'target'), 'orig')
       const { repo, root } = withInclude('.env\n', (r) => writeFileSync(join(r, '.env'), 'new'))
@@ -306,10 +307,36 @@ describe('worktreeProvider', () => {
         `#!/bin/sh\nln -s ${join(outside, 'target')} .env\n`,
         { mode: 0o755 },
       )
-      await expect(worktreeProvider(repo, root).acquire('df')).rejects.toBeInstanceOf(
-        WorkspaceProviderError,
-      )
+      const ws = await worktreeProvider(repo, root).acquire('df')
       expect(readFileSync(join(outside, 'target'), 'utf8')).toBe('orig')
+      expect(lstatSync(join(ws.path, '.env')).isSymbolicLink()).toBe(false)
+      expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe('new')
+    })
+
+    it('does not truncate a destination that is a hard link to a file outside', async () => {
+      const outside = mkdtempSync(join(tmpdir(), 'outside-'))
+      writeFileSync(join(outside, 'target'), 'orig')
+      const { repo, root } = withInclude('.env\n', (r) => writeFileSync(join(r, '.env'), 'new'))
+      writeFileSync(
+        join(repo, '.git', 'hooks', 'post-checkout'),
+        `#!/bin/sh\nln ${join(outside, 'target')} .env\n`,
+        { mode: 0o755 },
+      )
+      const ws = await worktreeProvider(repo, root).acquire('hl')
+      expect(readFileSync(join(outside, 'target'), 'utf8')).toBe('orig')
+      expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe('new')
+    })
+
+    it('copies into a worktree root reached through a symlink', async () => {
+      const { repo, root } = withInclude('ignored\n', (r) => {
+        mkdirSync(join(r, 'ignored', 'sub'), { recursive: true })
+        writeFileSync(join(r, 'ignored', 'sub', 'f'), 'x')
+      })
+      const link = join(root, '..', 'wt-link')
+      mkdirSync(root, { recursive: true })
+      symlinkSync(root, link)
+      const ws = await worktreeProvider(repo, link).acquire('sl')
+      expect(readFileSync(join(ws.path, 'ignored', 'sub', 'f'), 'utf8')).toBe('x')
     })
 
     it('copies a nested directory of plain files', async () => {
