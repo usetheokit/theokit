@@ -46,7 +46,7 @@ describe('skill registry (OC-70..72, OC-74)', () => {
     expect(new SkillRegistry({ workspaceDir: dir, path: empty }).offered().map((s) => s.name)).toContain('needy')
   })
 
-  it('exposes only the offered skills (binary requirements met) as SDK inline skills', () => {
+  it('exposes the built-in offered skill as an SDK inline skill', () => {
     expect(new SkillRegistry({ path: '' }).inlineSkills().map((s) => s.name)).toEqual(['summarize-text'])
   })
 })
