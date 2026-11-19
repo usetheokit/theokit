@@ -95,35 +95,56 @@ export function toSdkTimelineEvent(event: TurnTimelineEvent): SdkTimelineEvent {
   }
 }
 
-const STREAM_EVENT_TYPES: ReadonlySet<string> = new Set<AgentStreamEvent['type']>([
-  'run_started',
-  'text_delta',
-  'tool_call',
-  'partial_tool_call',
-  'tool_result',
-  'thinking',
-  'iteration',
-  'approval_required',
-  'input_requested',
-  'task_progress',
-  'shell_output',
-  'artifact_start',
-  'artifact_chunk',
-  'state_update',
-  'checkpoint_saved',
-  'file_edit',
-  'error',
-  'done',
-])
+type FieldKind = 'string' | 'number' | 'boolean' | 'object' | 'defined'
+
+/** The required fields of each `AgentStreamEvent` variant and the kind of each; optional fields are not checked. */
+const REQUIRED_FIELDS: Readonly<Record<AgentStreamEvent['type'], Readonly<Record<string, FieldKind>>>> = {
+  run_started: { runId: 'string', agentName: 'string' },
+  text_delta: { content: 'string' },
+  tool_call: { callId: 'string', toolName: 'string' },
+  partial_tool_call: { callId: 'string', toolName: 'string' },
+  tool_result: { callId: 'string', toolName: 'string', output: 'string', durationMs: 'number', isError: 'boolean' },
+  thinking: { content: 'string' },
+  iteration: { step: 'number' },
+  approval_required: {
+    callId: 'string',
+    toolName: 'string',
+    question: 'string',
+    callbackUrl: 'string',
+    timeoutMs: 'number',
+  },
+  input_requested: { requestId: 'string' },
+  task_progress: {},
+  shell_output: { event: 'object' },
+  artifact_start: { artifactId: 'string', mimeType: 'string' },
+  artifact_chunk: { artifactId: 'string', chunk: 'string', isLast: 'boolean' },
+  state_update: { channel: 'string' },
+  checkpoint_saved: { checkpointId: 'string', step: 'number', resumeToken: 'string' },
+  file_edit: { file: 'string', format: 'string' },
+  error: { code: 'string', message: 'string', retryable: 'boolean' },
+  done: { result: 'string', usage: 'object', durationMs: 'number' },
+}
+
+function hasKind(value: unknown, kind: FieldKind): boolean {
+  if (kind === 'defined') return value !== undefined
+  if (kind === 'object') return typeof value === 'object' && value !== null
+  return typeof value === kind
+}
+
+function isVariantType(type: string): type is AgentStreamEvent['type'] {
+  return Object.hasOwn(REQUIRED_FIELDS, type)
+}
 
 /**
- * Whether a wire event is an `AgentStreamEvent`: its discriminant is one of the union's, and a
- * `text_delta` carries its string `content`. The one narrowing, no cast.
+ * Whether a wire event is an `AgentStreamEvent`: its discriminant is one of the union's and every
+ * required field of that variant is present with its kind. The one narrowing, no cast.
  */
 export function isAgentStreamEvent(event: { readonly type: string }): event is AgentStreamEvent {
-  if (!STREAM_EVENT_TYPES.has(event.type)) return false
-  if (event.type === 'text_delta') return 'content' in event && typeof event.content === 'string'
-  return true
+  if (!isVariantType(event.type)) return false
+  const fields = Object.entries(event)
+  return Object.entries(REQUIRED_FIELDS[event.type]).every(([name, kind]) =>
+    hasKind(fields.find(([key]) => key === name)?.[1], kind),
+  )
 }
 
 export interface TurnRun {

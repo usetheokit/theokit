@@ -12,6 +12,7 @@ export interface EventMask {
  * Every string in `value`, nested objects and arrays included, masked; the shape is kept. Walked,
  * not round-tripped through JSON, so the escaping of what a client receives does not change.
  */
+function maskValue<T>(value: T, secrets: readonly string[]): T
 function maskValue(value: unknown, secrets: readonly string[]): unknown {
   if (typeof value === 'string') return maskSecrets(value, secrets)
   if (Array.isArray(value)) return value.map((item) => maskValue(item, secrets))
@@ -19,13 +20,6 @@ function maskValue(value: unknown, secrets: readonly string[]): unknown {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, maskValue(item, secrets)]))
   }
   return value
-}
-
-/** One event with every string in it masked; each own field is masked, so the event keeps its shape. */
-function maskEvent(event: TurnEvent, secrets: readonly string[]): TurnEvent {
-  const masked: TurnEvent = { ...event }
-  for (const key of Object.keys(masked)) masked[key] = maskValue(masked[key], secrets)
-  return masked
 }
 
 /**
@@ -48,7 +42,7 @@ export function createEventMask(secrets: readonly string[], emit: (event: TurnEv
         return
       }
       flush()
-      emit(maskEvent(event, secrets))
+      emit(maskValue(event, secrets))
     },
     flush,
   }

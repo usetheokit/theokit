@@ -584,41 +584,91 @@ describe('typed SDK usage (#2317)', () => {
   })
 })
 
+const THINKING = { type: 'thinking', text: 'hmm' }
+const ASSISTANT = { type: 'assistant', message: { content: [{ type: 'text', text: 'one ' }] } }
+const ASSISTANT_DONE = { type: 'assistant', message: { content: [{ type: 'text', text: 'done' }] } }
+
+/** A typed timeline: a live delta, a thinking message, then the completed text marked as already streamed. */
+const TIMELINE: readonly TurnTimelineEvent[] = [
+  { kind: 'delta', update: { type: 'text-delta', text: 'one ' } },
+  { kind: 'message', message: THINKING },
+  {
+    kind: 'message',
+    message: ASSISTANT,
+    textAlreadyStreamed: true,
+  },
+  { kind: 'delta', update: { type: 'text-delta', text: 'two' } },
+]
+
+const TIMELINE_EXPECTED: readonly TurnEvent[] = [
+  { type: 'text_delta', content: 'one ' },
+  { type: 'thinking', content: 'hmm' },
+  { type: 'text_delta', content: 'two' },
+]
+
+function timelineRun(): TurnRun {
+  return {
+    async *stream() {},
+    async *events() {
+      yield* TIMELINE
+    },
+    wait: async () => ({ status: 'finished' }),
+    cancel: async () => undefined,
+  }
+}
+
 describe('the typed conversions of the port (#2317)', () => {
   it('copies a message and a timeline event into the bridge types', () => {
     expect(toSdkMessage({ type: 'status' })).toEqual({ type: 'status' })
-    expect(toSdkTimelineEvent({ kind: 'delta', update: { type: 'text-delta', text: 'x' } })).toEqual({
+    expect(
+      toSdkTimelineEvent({ kind: 'delta', update: { type: 'text-delta', text: 'x' } }),
+    ).toEqual({
       kind: 'delta',
       update: { type: 'text-delta', text: 'x' },
     })
-    expect(toSdkTimelineEvent({ kind: 'message', message: { type: 'status' }, textAlreadyStreamed: true })).toEqual({
+    expect(
+      toSdkTimelineEvent({
+        kind: 'message',
+        message: { type: 'status' },
+        textAlreadyStreamed: true,
+      }),
+    ).toEqual({
       kind: 'message',
       message: { type: 'status' },
       textAlreadyStreamed: true,
     })
   })
 
-  it('narrows a wire event to an AgentStreamEvent by its discriminant and required fields', () => {
-    const withContent = { type: 'text_delta', content: 'a' }
-    expect(isAgentStreamEvent(withContent)).toBe(true)
-    expect(isAgentStreamEvent({ type: 'done' })).toBe(true)
-    expect(isAgentStreamEvent({ type: 'text_delta' })).toBe(false)
-    expect(isAgentStreamEvent({ type: 'not_an_event' })).toBe(false)
+  it('accepts only events whose required fields have their kinds', () => {
+    const wire = <T extends { readonly type: string }>(event: T): { readonly type: string } => event
+    const textDelta = { type: 'text_delta', content: 'a' }
+    const done = {
+      type: 'done',
+      result: 'r',
+      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+      durationMs: 4,
+    }
+    const toolCall = { type: 'tool_call', callId: 'c1', toolName: 'bash', input: {} }
+    expect(isAgentStreamEvent(wire(textDelta))).toBe(true)
+    expect(isAgentStreamEvent(wire(done))).toBe(true)
+    expect(isAgentStreamEvent(wire(toolCall))).toBe(true)
+    expect(isAgentStreamEvent(wire({ type: 'task_progress' }))).toBe(true)
+    // malformed variants
+    expect(isAgentStreamEvent(wire({ type: 'text_delta' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'done' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ ...done, durationMs: '4' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ ...done, usage: null }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'tool_call', toolName: 'bash' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ ...toolCall, callId: 1 }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'error', code: 'x', message: 'm' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'toString' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'not_an_event' }))).toBe(false)
   })
 
-  it('translates typed timeline events in order through a turn', async () => {
-    const run: TurnRun = {
-      async *stream() {},
-      async *events() {
-        yield { kind: 'delta', update: { type: 'text-delta', text: 'one ' } }
-        yield { kind: 'delta', update: { type: 'text-delta', text: 'two' } }
-      },
-      wait: async () => ({ status: 'finished' }),
-      cancel: async () => undefined,
-    }
+  it('translates a typed timeline (deltas and messages) in order through a session turn', async () => {
     const events: TurnEvent[] = []
     const outcome = await runSessionTurn(
-      { send: async () => run },
+      { send: async () => timelineRun() },
       {
         message: 'hi',
         runId: 'r1',
@@ -629,18 +679,38 @@ describe('the typed conversions of the port (#2317)', () => {
       },
     )
     expect(outcome).toEqual({ ok: true })
-    expect(
-      events
-        .filter((e) => e.type === 'text_delta')
-        .map((e) => e['content'])
-        .join(''),
-    ).toBe('one two')
+    expect(events).toEqual(TIMELINE_EXPECTED)
   })
 
-  it('keeps the event type through masking', () => {
+  it('keeps the event type and the other fields through masking', () => {
     const out: TurnEvent[] = []
     const mask = createEventMask(['sekret'], (event) => out.push(event))
-    mask.emit({ type: 'tool_result', result: 'a sekret b' })
-    expect(out).toEqual([{ type: 'tool_result', result: 'a [redacted] b' }])
+    mask.emit({ type: 'tool_result', callId: 'c1', output: 'a sekret b', isError: false })
+    expect(out).toEqual([
+      { type: 'tool_result', callId: 'c1', output: 'a [redacted] b', isError: false },
+    ])
+  })
+})
+
+describe('typed messages through the sessionless turn (#2317)', () => {
+  it('translates the typed stream messages in order', async () => {
+    const run: TurnRun = {
+      async *stream() {
+        yield THINKING
+        yield ASSISTANT_DONE
+      },
+      wait: async () => ({ status: 'finished' }),
+      cancel: async () => undefined,
+    }
+    const events: TurnEvent[] = []
+    const outcome = await runTheoClawTurn({
+      withAgent: (work) => work({ send: async () => run }),
+      message: 'hi',
+      runId: 'r1',
+      emit: (event) => events.push(event),
+    })
+    expect(outcome).toEqual({ ok: true })
+    expect(events.map((e) => e.type)).toEqual(['thinking', 'text_delta'])
+    expect(events.map((e) => e['content'])).toEqual(['hmm', 'done'])
   })
 })
