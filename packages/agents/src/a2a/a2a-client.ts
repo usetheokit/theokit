@@ -238,7 +238,7 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
       const controller = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
       let onAbort: (() => void) | undefined
-      const bound = new Promise<never>((_, reject) => {
+      const bound = new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => {
           const err = new A2ATimeoutError(name, timeoutMs)
           controller.abort(err)
@@ -247,7 +247,9 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
         if (caller) {
           onAbort = () => {
             controller.abort(caller.reason)
-            reject(caller.reason)
+            reject(
+              caller.reason instanceof Error ? caller.reason : new Error(String(caller.reason)),
+            )
           }
           if (caller.aborted) onAbort()
           else caller.addEventListener('abort', onAbort, { once: true })

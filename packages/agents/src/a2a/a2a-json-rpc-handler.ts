@@ -265,19 +265,16 @@ async function handle(
     if (open === 0) slots.taken -= 1
   }
   let responded = false
+  const turnStarted = () => responded
   const tracked: A2AJsonRpcHandlerOptions = {
     ...options,
-    respond: (text, signal) => {
+    respond: async (text, signal) => {
       responded = true
-      let turn: Promise<string>
       try {
-        turn = Promise.resolve(options.respond(text, signal))
-      } catch (error) {
+        return await options.respond(text, signal)
+      } finally {
         release()
-        throw error
       }
-      void turn.then(release, release)
-      return turn
     },
   }
   try {
@@ -288,7 +285,7 @@ async function handle(
     return await runTurn(tracked, parsed.id, parsed.text, deadline)
   } finally {
     // No turn started: its half of the slot is never held.
-    if (!responded) release()
+    if (!turnStarted()) release()
     release()
   }
 }
