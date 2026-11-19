@@ -116,7 +116,9 @@ describe('createApprovalGate', () => {
       ask: () => Promise.reject(new Error('x')),
       onError,
     })
-    expect((await failing.decide(ctx('ls'))).allowed).toBe(false)
+    const denied = await failing.decide(ctx('ls'))
+    expect(denied.allowed).toBe(false)
+    expect(denied.reason).toMatch(/ask/)
     expect(onError).toHaveBeenCalledWith(expect.any(Error), 'ask')
     vi.spyOn(store, 'grant').mockImplementation(() => {
       throw new Error('disk')
@@ -174,7 +176,9 @@ describe('createApprovalGate', () => {
       ledger,
       onError,
     })
-    expect(await gate.decide(ctx('ls'))).toMatchObject({ allowed: true, by: 'person' })
+    const d = await gate.decide(ctx('ls'))
+    expect(d).toMatchObject({ allowed: true, by: 'person' })
+    expect(d.reason).toMatch(/ledger/)
     expect(onError).toHaveBeenCalledWith(expect.any(Error), 'ledger')
   })
 
