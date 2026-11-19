@@ -48,11 +48,15 @@ interface WalkAccumulator {
 function allocName(node: RouteNode, seg: string, prefix: string, acc: WalkAccumulator): string {
   const base = safeVarName(seg, prefix)
   let name = base
-  for (let i = 2; acc.used.has(name); i++) name = `${base}_${i}`
+  let n = 2
+  while (acc.used.has(name)) {
+    name = `${base}_${n}`
+    n += 1
+  }
   acc.used.add(name)
-  let perNode = acc.names.get(node)
-  if (!perNode) acc.names.set(node, (perNode = new Map()))
+  const perNode = acc.names.get(node) ?? new Map<string, string>()
   perNode.set(prefix, name)
+  acc.names.set(node, perNode)
   return name
 }
 

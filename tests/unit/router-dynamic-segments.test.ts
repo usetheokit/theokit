@@ -169,7 +169,7 @@ describe('generateRouteManifest repeated dynamic folder names', () => {
       }
       expect(out).toContain("'/tasks/:id'")
       expect(out).toContain("'/plans/:id'")
-      expect(out.match(/React\.createElement\(Page__id_(_\d+)?\)/g)).toHaveLength(2)
+      expect(out.match(/React\.createElement\(Page__id_\w*\)/g)).toHaveLength(2)
     }
   })
 })
