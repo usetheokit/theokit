@@ -53,7 +53,7 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool; `timeoutMs` bounds the call and rejects with `A2ATimeoutError` (`A2A call to "<name>" failed: no answer within <ms> ms`), composed with the caller's signal. `createA2AJsonRpcHandler` serves `message/send`; `maxInFlight` caps concurrent turns and answers 503 with `retry-after` (`retryAfterSeconds`, default 5) before the body is read. A slot is held until `respond` settles, even after the handler's own deadline answered. Both options are off by default |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics: `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
+| `./doctor` | Environment diagnostics: `credentialShape(value, { minLength? })` names a malformed credential (`edge_whitespace`, `inner_whitespace`, `quote_or_backslash`, `control_character`, `placeholder`, `too_short`) or returns `ok`, and `describeCredentialDefect` words it without echoing the value; `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
 | `./usage` | Token and cost accounting: `usageFromRun`, `formatUsd` and `InMemoryUsageStorage`. See the note below the table. |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
@@ -106,6 +106,14 @@ process.exitCode = result.exitCode
 `grantGate(store, classify)` (from `./auth`) vetoes a governed call that has no standing grant and never asks anyone. `createApprovalGate({ store, key, waived?, reviewer?, ask?, timeoutMs?, ledger?, onError? })` is the chain in front of it: a session waiver, a saved approval in the same `PermissionStore`, an optional reviewer (`'allow' | 'deny' | 'ask'`), then the person via `ask` (`'once'`, `'always'` which is saved with `store.grant`, or `'deny'`; `{ answer, by }` records who). No `ask` means a refusal (`nobody can approve it`); a timeout is a denial named in the decision's `reason` (it does not call `onError`); a throwing reviewer defers to the person, a throwing asker denies, and each is reported through `onError(error, stage)` and named in `reason`. `decide(ctx)` returns `{ allowed, reason, by }`; `plugin` applies it as a `pre_tool_call` veto. `createJsonlLedger(dir)` is an append-only `activity.jsonl` (mode 0600) with `read()`; pass it as `ledger` to get one receipt per decision.
 
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
+
+## Stability tiers: experimental exports
+
+Every export without an `@experimental` tag on its own declaration is stable. `@theokit/agents/testing` is a utility subpath for your own tests (not a test-only seam), and its tier is stable except for the legacy snake_case mock stream listed below. The list below is checked against `public-surface-baseline.json` by `tests/unit/experimental-exports.test.ts`.
+
+<!-- experimental-exports:start -->
+- `@theokit/agents/testing`: `MockAgentStreamOptions`, `MockResponse`, `MockStreamEvent`, `createMockAgentStream`
+<!-- experimental-exports:end -->
 
 ## Testing: the live-suite guard
 
@@ -374,6 +382,15 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Reading a run's final answer as an object
+
+`createResultCapture(schema)` returns a `submit_result` tool whose input schema is your zod object schema. Add
+`cap.tool` to the agent, tell it to finish by calling the tool, then read `cap.result()` after `run.wait()`. A
+submission that fails validation goes back to the model as a tool error naming the issue paths, so it can fix
+it; the last valid submission wins. `result()` throws `NoResultSubmittedError` when none was valid, and
+`submitted()` tells you beforehand. The schema must be an object schema; `name` and `description` rename or
+reword the tool.
 
 ## Scheduled jobs: file or PostgreSQL
 
