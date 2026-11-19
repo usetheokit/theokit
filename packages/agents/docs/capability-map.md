@@ -72,6 +72,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
 | `createDraft` | value |
+| `createGoalSignal` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
 | `createSdkAgentStream` | value |
@@ -321,6 +322,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `GoalOptions` | type |
 | `GoalResult` | type |
 | `GoalRunnerDeps` | type |
+| `GoalSignal` | type |
+| `GoalSignalStatus` | type |
 | `Guardrail` | type |
 | `GuardrailAction` | type |
 | `GuardrailPhase` | type |
