@@ -91,32 +91,39 @@ export function toSdkTimelineEvent(event: TurnTimelineEvent): SdkTimelineEvent {
     kind: event.kind,
     ...(event.message === undefined ? {} : { message: toSdkMessage(event.message) }),
     ...(event.update === undefined ? {} : { update: event.update }),
-    ...(event.textAlreadyStreamed === undefined ? {} : { textAlreadyStreamed: event.textAlreadyStreamed }),
+    ...(event.textAlreadyStreamed === undefined
+      ? {}
+      : { textAlreadyStreamed: event.textAlreadyStreamed }),
   }
 }
 
-/** Whether a wire event carries the discriminant of an `AgentStreamEvent`; the one narrowing, no cast. */
-export function isAgentStreamEvent(event: { readonly type: string }): event is AgentStreamEvent {
-  return typeof event.type === 'string'
-}
+const AGENT_STREAM_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'run_started',
+  'text_delta',
+  'tool_call',
+  'partial_tool_call',
+  'tool_result',
+  'thinking',
+  'iteration',
+  'approval_required',
+  'input_requested',
+  'task_progress',
+  'shell_output',
+  'artifact_start',
+  'artifact_chunk',
+  'state_update',
+  'checkpoint_saved',
+  'file_edit',
+  'error',
+  'done',
+])
 
-export interface TurnRun {
-  stream(): AsyncIterable<SdkMessageLike>
-  /**
-   * How the run ended; a failed one may carry the SDK's error code. `result` is the final answer,
-   * which a `delegate_all` worker hands back to its parent (B-386). `usage` and `cost` are the SDK
-   * run's token counts and priced amount, which every finished turn reports (B-400, plan D1); an
-   * `amountUsd` the SDK left undefined means the run was not priced, never that it was free.
-   */
-  wait(): Promise<{
-    readonly status: string
-    readonly result?: string
-    readonly error?: { readonly code?: string }
-    readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number }
-    readonly cost?: { readonly amountUsd?: number | undefined }
-  }>
-  /** Move the run to cancelled and stop its in-flight tool calls; the SDK `Run` always has it (plan D2). */
-  cancel(): Promise<void>
-  /** Messages and live deltas in the order the loop produced them; what a session turn streams. */
-  events?(): AsyncIterable<TurnTimelineEvent>
+/**
+ * Whether a wire event is one the bridge's `AgentStreamEvent` names: a known discriminant, and for
+ * `text_delta` its string `content`. The bridge ships no validator for the rest of each event's
+ * fields, so that stays the bridge's follow-up (#2342).
+ */
+export function isAgentStreamEvent(event: { readonly type: string }): event is AgentStreamEvent {
+  if (!AGENT_STREAM_EVENT_TYPES.has(event.type)) return false
+  return event.type !== 'text_delta' || ('content' in event && typeof event.content === 'string')
 }
