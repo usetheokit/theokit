@@ -45,17 +45,20 @@ describe('readBearerToken', () => {
   it('returns a good token', () => {
     expect(readBearerToken({ TOK: T }, 'TOK')).toBe(T)
   })
-  it.each([` ${'a'.repeat(32)}`, 'a'.repeat(31)])('refuses a bad value without echoing it', (v) => {
-    try {
-      readBearerToken({ TOK: v }, 'TOK')
-      expect.unreachable()
-    } catch (e) {
-      expect(e).toBeInstanceOf(GuardConfigError)
-      expect((e as GuardConfigError).variable).toBe('TOK')
-      expect((e as Error).message).toContain('TOK')
-      expect((e as Error).message).not.toContain(v)
-    }
-  })
+  it.each([` ${'a'.repeat(32)}`, `${'a'.repeat(32)}\n`, 'a'.repeat(31)])(
+    'refuses a bad value without echoing it',
+    (v) => {
+      try {
+        readBearerToken({ TOK: v }, 'TOK')
+        expect.unreachable()
+      } catch (e) {
+        expect(e).toBeInstanceOf(GuardConfigError)
+        expect((e as GuardConfigError).variable).toBe('TOK')
+        expect((e as Error).message).toContain('TOK')
+        expect((e as Error).message).not.toContain(v)
+      }
+    },
+  )
   it('honours minLength and refuses one below 16', () => {
     expect(readBearerToken({ TOK: 'a'.repeat(16) }, 'TOK', { minLength: 16 })).toBe('a'.repeat(16))
     expect(() => readBearerToken({}, 'TOK', { minLength: 15 })).toThrow(GuardConfigError)

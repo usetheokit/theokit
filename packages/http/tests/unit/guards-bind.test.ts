@@ -38,8 +38,13 @@ describe('resolveBindAddress', () => {
     } catch (e) {
       expect(e).toBeInstanceOf(BindRefusedError)
       expect((e as BindRefusedError).address).toBe('0.0.0.0')
+      expect((e as Error).message).toContain('0.0.0.0')
       expect((e as Error).message).toContain('APP_PUBLIC')
     }
+  })
+  it('accepts an explicit loopback host without consent', () => {
+    expect(resolveBindAddress({ APP_HOST: 'localhost' }, opts)).toBe('localhost')
+    expect(resolveBindAddress({ APP_HOST: '127.5.6.7' }, opts)).toBe('127.5.6.7')
   })
   it('returns it with consent', () => {
     expect(resolveBindAddress({ APP_HOST: '0.0.0.0', APP_PUBLIC: 'yes' }, opts)).toBe('0.0.0.0')
