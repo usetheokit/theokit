@@ -55,3 +55,18 @@ it('puts the first target back when the second root fails to place', async () =>
     'tb',
   ])
 })
+
+it('removes target parent directories it created when a placement fails', async () => {
+  const base = await scratch()
+  await put(join(base, 'a'), 'f', 'new-a')
+  const out = join(base, 'out')
+  await backup({ roots: { a: join(base, 'a') }, out })
+  const target = join(base, 'deep', 'er', 'ta')
+  const failing = async (): Promise<void> => {
+    throw new Error('injected rename failure')
+  }
+  await expect(
+    restoreWith({ from: out, roots: { a: target } }, { rename: failing }),
+  ).rejects.toThrow('injected')
+  expect([...(await readdir(base))].sort((x, y) => x.localeCompare(y))).toEqual(['a', 'out'])
+})

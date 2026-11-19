@@ -1,4 +1,4 @@
-import { copyFile, chmod, lstat, rename, rm } from 'node:fs/promises'
+import { copyFile, chmod, lstat, rename, rm, rmdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { withLock, type BackupLock } from './backup.js'
@@ -43,6 +43,24 @@ async function verify(path: string, sha256: string, size: number): Promise<void>
   }
 }
 
+/** Create `dir` privately and return the directories this call created, outermost first. */
+async function mkdirTracked(dir: string, created: string[]): Promise<void> {
+  const missing: string[] = []
+  for (let d = dir; ; d = dirname(d)) {
+    if (
+      await lstat(d).then(
+        () => true,
+        () => false,
+      )
+    )
+      break
+    missing.unshift(d)
+    if (dirname(d) === d) break
+  }
+  await mkdirPrivate(dir)
+  created.push(...missing)
+}
+
 /** Test seam: the rename used to place directories. */
 export interface RestoreFs {
   readonly rename: (from: string, to: string) => Promise<void>
@@ -70,10 +88,11 @@ export async function restoreWith(options: RestoreOptions, fs: RestoreFs): Promi
     const stages = new Map<string, string>()
     const previous = new Map<string, string>()
     const placed: string[] = []
+    const createdParents: string[] = []
     try {
       for (const name of manifest.roots) {
         const target = options.roots[name]
-        await mkdirPrivate(dirname(target))
+        await mkdirTracked(dirname(target), createdParents)
         const stage = tempSibling(target, 'restore')
         stages.set(name, stage)
         await mkdirPrivate(stage)
@@ -120,6 +139,10 @@ export async function restoreWith(options: RestoreOptions, fs: RestoreFs): Promi
       }
       for (const stage of stages.values())
         await rm(stage, { recursive: true, force: true }).catch(() => undefined)
+      // Remove, innermost first, the parent directories this restore created; a non-empty one stays.
+      const innermostFirst = [...createdParents]
+      innermostFirst.reverse()
+      for (const dir of innermostFirst) await rmdir(dir).catch(() => undefined)
       if (problems.length > 0) {
         throw new BackupError(
           `restore failed and rollback was incomplete; previous directories remain beside their targets: ${String(error)}`,
