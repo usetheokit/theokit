@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import ts from 'typescript'
 import { tmpdir } from 'node:os'
+import { createHandlerQueue } from '../../packages/theo/src/server/jobs/queue-client.js'
 
 import {
   translateCronToAws,
@@ -244,5 +245,166 @@ describe('Deno cron context queue', () => {
       .getPreEmitDiagnostics(program, program.getSourceFile(file))
       .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
     expect(errors).toEqual([])
+  })
+
+  it('imports theokit through an npm: specifier Deno can resolve', () => {
+    const entry = join(root, 'crons-npm-entry.ts')
+    translateCronToDeno(entry, [cron('q', '* * * * *')], { configImport: '../theo.config.ts' })
+    expect(readFileSync(entry, 'utf8')).toContain('from "npm:theokit/server/jobs"')
+  })
+})
+
+/** Run the generated Deno entry under Node: Deno.cron is captured, imports come from `modules`. */
+function runDenoEntry(
+  content: string,
+  modules: Record<string, unknown>,
+  env: string | undefined,
+): Map<string, () => Promise<void>> {
+  const js = ts.transpileModule(content, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  const crons = new Map<string, () => Promise<void>>()
+  const deno = {
+    cron: (name: string, _schedule: string, fn: () => Promise<void>) => crons.set(name, fn),
+    env: { get: (k: string) => (k === 'NODE_ENV' ? env : undefined) },
+  }
+  const require = (id: string): unknown => {
+    if (!(id in modules)) throw new Error(`unexpected import ${id}`)
+    return modules[id]
+  }
+  new Function('require', 'exports', 'Deno', js)(require, {}, deno)
+  return crons
+}
+
+describe('generated Deno cron entry, executed', () => {
+  const backendOf = (calls: unknown[], extra: Record<string, unknown> = {}) => ({
+    name: 'fake',
+    enqueue: (e: unknown) => {
+      calls.push(e)
+      return Promise.resolve({ jobId: 'j1' })
+    },
+    ...extra,
+  })
+
+  const generate = (envConfigImports?: Record<string, string>): string => {
+    const entry = join(root, 'run-entry.ts')
+    translateCronToDeno(entry, [cron('probe', '* * * * *')], {
+      configImport: '../theo.config.ts',
+      envConfigImports,
+    })
+    return readFileSync(entry, 'utf8')
+  }
+  const base = (modules: Record<string, unknown>) => ({
+    'npm:theokit/server/jobs': { createHandlerQueue },
+    ...modules,
+  })
+
+  it('flushes enqueued jobs to the configured backend with a trace id', async () => {
+    const calls: Array<{ name: string; traceparent?: string }> = []
+    const crons = runDenoEntry(
+      generate(),
+      base({
+        '../theo.config.ts': { default: { jobs: { backend: backendOf(calls) } } },
+        '../server/crons/probe.ts': {
+          default: { handler: (ctx: any) => ctx.queue.enqueue('next', { a: 1 }) },
+        },
+      }),
+      undefined,
+    )
+    await crons.get('probe')!()
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.name).toBe('next')
+    expect(calls[0]!.traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/)
+  })
+
+  it('propagates the run trace id into the enqueued job traceparent', async () => {
+    const calls: Array<{ traceparent?: string }> = []
+    let traceId = ''
+    const crons = runDenoEntry(
+      generate(),
+      base({
+        '../theo.config.ts': { default: { jobs: { backend: backendOf(calls) } } },
+        '../server/crons/probe.ts': {
+          default: {
+            handler: (ctx: any) => {
+              traceId = ctx.traceId
+              ctx.queue.enqueue('next', {})
+            },
+          },
+        },
+      }),
+      undefined,
+    )
+    await crons.get('probe')!()
+    expect(calls[0]!.traceparent!.split('-')[1]).toBe(traceId)
+  })
+
+  it('discards buffered jobs when the handler throws', async () => {
+    const calls: unknown[] = []
+    const crons = runDenoEntry(
+      generate(),
+      base({
+        '../theo.config.ts': { default: { jobs: { backend: backendOf(calls) } } },
+        '../server/crons/probe.ts': {
+          default: {
+            handler: (ctx: any) => {
+              ctx.queue.enqueue('next', {})
+              throw new Error('boom')
+            },
+          },
+        },
+      }),
+      undefined,
+    )
+    await expect(crons.get('probe')!()).rejects.toThrow('boom')
+    expect(calls).toEqual([])
+  })
+
+  it('forwards enqueueInTransaction to the backend with the caller client', async () => {
+    const txCalls: Array<{ client: unknown; entry: { name: string; traceparent?: string } }> = []
+    const backend = backendOf([], {
+      enqueueInTransaction: (client: unknown, entry: { name: string }) => {
+        txCalls.push({ client, entry })
+        return Promise.resolve({ jobId: 'tx1' })
+      },
+    })
+    const client = { tx: true }
+    let result: unknown
+    const crons = runDenoEntry(
+      generate(),
+      base({
+        '../theo.config.ts': { default: { jobs: { backend } } },
+        '../server/crons/probe.ts': {
+          default: {
+            handler: async (ctx: any) => {
+              result = await ctx.queue.enqueueInTransaction(client, 'resume', { id: 1 })
+            },
+          },
+        },
+      }),
+      undefined,
+    )
+    await crons.get('probe')!()
+    expect(result).toEqual({ jobId: 'tx1' })
+    expect(txCalls[0]!.client).toBe(client)
+    expect(txCalls[0]!.entry.name).toBe('resume')
+    expect(txCalls[0]!.entry.traceparent).toBeDefined()
+  })
+
+  it('lets the NODE_ENV override config supply the backend', async () => {
+    const baseCalls: unknown[] = []
+    const prodCalls: unknown[] = []
+    const modules = base({
+      '../theo.config.ts': { default: { jobs: { backend: backendOf(baseCalls) } } },
+      '../theo.config.production.ts': { default: { jobs: { backend: backendOf(prodCalls) } } },
+      '../server/crons/probe.ts': {
+        default: { handler: (ctx: any) => ctx.queue.enqueue('next', {}) },
+      },
+    })
+    const content = generate({ production: '../theo.config.production.ts' })
+    await runDenoEntry(content, modules, 'production').get('probe')!()
+    await runDenoEntry(content, modules, 'development').get('probe')!()
+    expect(prodCalls).toHaveLength(1)
+    expect(baseCalls).toHaveLength(1)
   })
 })

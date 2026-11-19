@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
 
 // T1.1 (architecture-medium-deferrals) — nodeAdapter no longer static-imported.
@@ -315,6 +315,7 @@ async function emitCronArtifacts(opts: {
       case 'deno-deploy':
         translateCronToDeno(resolve(opts.distDir, 'crons-entry.ts'), manifestEntries, {
           configImport: denoConfigImport(opts.cwd, opts.distDir),
+          envConfigImports: denoEnvConfigImports(opts.cwd, opts.distDir),
         })
         console.log(`  ✓ Cron → ${opts.distDir}/crons-entry.ts (Deno.cron)`)
         break
@@ -330,7 +331,20 @@ async function emitCronArtifacts(opts: {
 
 /** Import specifier of theo.config.ts as seen from the Deno cron entry, or undefined without one. */
 function denoConfigImport(cwd: string, distDir: string): string | undefined {
-  const config = resolve(cwd, 'theo.config.ts')
+  return denoImportOf(resolve(cwd, 'theo.config.ts'), distDir)
+}
+
+/** `theo.config.<env>.ts` overrides next to theo.config.ts, keyed by env, for the Deno cron entry. */
+function denoEnvConfigImports(cwd: string, distDir: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const file of readdirSync(cwd)) {
+    const m = /^theo\.config\.([^.]+)\.ts$/.exec(file)
+    if (m?.[1] !== undefined) out[m[1]] = denoImportOf(resolve(cwd, file), distDir) as string
+  }
+  return out
+}
+
+function denoImportOf(config: string, distDir: string): string | undefined {
   if (!existsSync(config)) return undefined
   const rel = relative(resolve(distDir), config).split(sep).join('/')
   return rel.startsWith('.') ? rel : `./${rel}`
