@@ -99,9 +99,10 @@ export async function createControlClient(options: {
   }
   ws.on('message', (data) => {
     try {
-      const text = Array.isArray(data)
-        ? Buffer.concat(data).toString('utf8')
-        : Buffer.from(data).toString('utf8')
+      let text: string
+      if (Array.isArray(data)) text = Buffer.concat(data).toString('utf8')
+      else if (Buffer.isBuffer(data)) text = data.toString('utf8')
+      else text = Buffer.from(data).toString('utf8')
       const frame = JSON.parse(text) as Partial<ControlServerFrame> | null
       if (typeof frame === 'object' && frame !== null && typeof frame.type === 'string') {
         queue.push(frame as ControlServerFrame)
