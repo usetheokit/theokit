@@ -989,7 +989,11 @@ export function toAgentFactory(
   }
 }
 
-type ServedConfig = { send: SdkAgentHandle['send']; max: unknown; guards: unknown }
+interface ServedConfig {
+  send: SdkAgentHandle['send']
+  max: unknown
+  guards: unknown
+}
 const served = new WeakMap<object, ServedConfig>()
 
 /**
