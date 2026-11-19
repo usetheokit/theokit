@@ -266,9 +266,7 @@ describe('createA2ATool timeoutMs', () => {
         timeoutMs: 1000,
         fetchImpl: hung,
       })
-      const result = Promise.resolve(tool.handler({ message: 'hi' })).catch(
-        (e: unknown) => e,
-      )
+      const result = Promise.resolve(tool.handler({ message: 'hi' })).catch((e: unknown) => e)
       await vi.advanceTimersByTimeAsync(1000)
       const error = await result
       expect(error).toBeInstanceOf(A2ATimeoutError)
