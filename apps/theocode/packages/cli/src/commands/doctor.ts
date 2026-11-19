@@ -1,4 +1,5 @@
 /**
+import { exitAfterDrain } from '@theokit/agents/commands'/**
  * B-081 — `theocode doctor`.
  *
  * Reports the RESOLVED state, not the config files: the gap between what config asks for and what
@@ -9,6 +10,7 @@
  * Exits non-zero on a failure so it is usable in a script, and never prints a credential value.
  */
 import process from 'node:process'
+import { exitAfterDrain } from '@theokit/agents/commands'
 import { homedir } from 'node:os'
 import { existsSync, readFileSync } from 'node:fs'
 
@@ -210,5 +212,5 @@ export async function doctorCommand(opts: {
   // `result.exitCode`, not `result.failed ? 1 : 0`. The framework's diagnosis computes it, and it
   // carries a case the local version could not express: an EMPTY check list exits non-zero, because
   // "no checks ran" is a different fact from "everything passed" — and the boolean collapsed them.
-  process.exit(result.exitCode)
+  exitAfterDrain(result.exitCode)
 }

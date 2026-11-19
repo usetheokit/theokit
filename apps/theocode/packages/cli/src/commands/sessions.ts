@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { exitAfterDrain } from '@theokit/agents/commands'
 import type { ExecSessions } from '../runtime/index.js'
 
 async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
@@ -12,7 +13,8 @@ async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
     })
   } catch (err) {
     process.stderr.write(`[sessions gc] ${err instanceof Error ? err.message : String(err)}\n`)
-    process.exit(1)
+    exitAfterDrain(1)
+    return
   }
   const result = await runAllProjectsOnDisk(plan, { apply: args.apply })
   if (args.json) {
@@ -22,7 +24,7 @@ async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
   } else {
     for (const l of formatReport(plan, result)) process.stderr.write(`${l}\n`)
   }
-  process.exit(plan.errors.length + result.errors.length > 0 ? 1 : 0)
+  exitAfterDrain(plan.errors.length + result.errors.length > 0 ? 1 : 0)
 }
 
 function humanReport(
@@ -63,7 +65,7 @@ async function gcForCurrentProject(args: ExecSessions): Promise<void> {
   } else {
     for (const l of humanReport(plan, result)) process.stderr.write(`${l}\n`)
   }
-  process.exit(result.errors.length > 0 ? 1 : 0)
+  exitAfterDrain(result.errors.length > 0 ? 1 : 0)
 }
 
 /**
@@ -117,13 +119,14 @@ async function runTargeted(args: ExecSessions, ops: SessionOps, say: Say): Promi
     )
     // #125 — a delete that left the entry behind must reach the exit code. A script deleting in a
     // loop has no other way to learn that nothing was deleted.
-    if (report.failed) process.exit(1)
+    if (report.failed) exitAfterDrain(1)
     return
   }
   const r = await ops.forkSession(target, `${target}-fork-${String(process.pid)}`)
   if (!r.copied) {
     process.stderr.write(`[sessions fork] no transcript for ${target}\n`)
-    process.exit(1)
+    exitAfterDrain(1)
+    return
   }
   // MEASURED (B-074): a fork copies the TRANSCRIPT; the agent registry only learns the id when
   // something opens it. The TUI hides this because `/fork` immediately points the live session at
@@ -151,7 +154,7 @@ async function sessionOperation(args: ExecSessions): Promise<void> {
     process.stderr.write(
       `[sessions ${args.action}] ${err instanceof Error ? err.message : String(err)}\n`,
     )
-    process.exit(1)
+    exitAfterDrain(1)
   }
 }
 

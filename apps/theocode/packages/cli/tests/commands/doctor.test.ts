@@ -199,16 +199,19 @@ describe('#1894 — doctor reports the wiring buildChatAgent publishes', () => {
     vi.spyOn(process.stdout, 'write').mockImplementation((c) => ((out += String(c)), true))
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     let code: number | undefined
-    vi.spyOn(process, 'exit').mockImplementation(((c?: number) => {
-      code = c
-      throw new Error('exit')
-    }) as never)
+    // The command ends through the framework's exitAfterDrain: it records the code and lets the
+    // loop drain, so the code is read from process.exitCode rather than from a thrown process.exit.
+    const priorExitCode = process.exitCode
+    process.exitCode = undefined
+    vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
     try {
       process.chdir(project)
       await doctorCommand({ json: true })
     } catch (e) {
       if ((e as Error).message !== 'exit') throw e
     } finally {
+      code = typeof process.exitCode === 'number' ? process.exitCode : undefined
+      process.exitCode = priorExitCode
       process.chdir(before)
       vi.unstubAllEnvs()
     }
@@ -243,16 +246,19 @@ describe('#1894 — doctor reports the wiring buildChatAgent publishes', () => {
     let out = ''
     let code: number | undefined
     vi.spyOn(process.stdout, 'write').mockImplementation((c) => ((out += String(c)), true))
-    vi.spyOn(process, 'exit').mockImplementation(((c?: number) => {
-      code = c
-      throw new Error('exit')
-    }) as never)
+    // The command ends through the framework's exitAfterDrain: it records the code and lets the
+    // loop drain, so the code is read from process.exitCode rather than from a thrown process.exit.
+    const priorExitCode = process.exitCode
+    process.exitCode = undefined
+    vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
     try {
       process.chdir(project)
       await doctor({ json: true })
     } catch (e) {
       if ((e as Error).message !== 'exit') throw e
     } finally {
+      code = typeof process.exitCode === 'number' ? process.exitCode : undefined
+      process.exitCode = priorExitCode
       process.chdir(before)
       await new Promise((r) => setTimeout(r, 10))
       process.off('unhandledRejection', unhandled)
