@@ -1,5 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -27,4 +34,24 @@ it('copies a gitignored file listed in .worktreeinclude and nothing else', async
   expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe('KEY=1')
   expect(existsSync(join(ws.path, 'secret.txt'))).toBe(false)
   await ws.release()
+})
+
+it('refuses a symlink inside a listed directory and cleans the worktree up', async () => {
+  const base = mkdtempSync(join(tmpdir(), 'wti-'))
+  const repo = join(base, 'repo')
+  mkdirSync(join(repo, 'cfg'), { recursive: true })
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- test fixture uses the system git
+  const git = (...a: string[]) => execFileSync('git', a, { cwd: repo, stdio: 'pipe' })
+  git('init', '-q', '-b', 'main')
+  git('config', 'user.email', 't@t.t')
+  git('config', 'user.name', 't')
+  writeFileSync(join(repo, '.gitignore'), 'cfg/\n')
+  writeFileSync(join(repo, '.worktreeinclude'), 'cfg\n')
+  symlinkSync(base, join(repo, 'cfg', 'link'))
+  writeFileSync(join(repo, 'a.txt'), 'a')
+  git('add', '.')
+  git('commit', '-qm', 'init')
+
+  await expect(worktreeProvider(repo, join(base, 'wt')).acquire('a')).rejects.toThrow(/symlink/)
+  expect(existsSync(join(base, 'wt', 'a'))).toBe(false)
 })

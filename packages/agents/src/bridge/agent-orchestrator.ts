@@ -252,14 +252,12 @@ export async function delegate(
     try {
       await workspace.release()
     } catch (cleanupError) {
-      // The task's own failure stays the thrown error; the cleanup failure rides along.
-      if (typeof error === 'object' && error !== null) {
-        Object.defineProperty(error, 'cleanupError', {
-          value: cleanupError,
-          configurable: true,
-          writable: true,
-        })
-      }
+      // Both failures stay reachable, for any thrown value (a frozen error or a primitive cannot
+      // carry an extra property).
+      throw new AggregateError(
+        [error, cleanupError],
+        'delegation failed and releasing its workspace also failed',
+      )
     }
     throw error
   }

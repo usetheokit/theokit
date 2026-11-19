@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { cp, lstat, mkdir, readFile, realpath } from 'node:fs/promises'
+import { copyFile, lstat, mkdir, readdir, readFile, realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -50,10 +50,41 @@ function inside(root: string, target: string): boolean {
 }
 
 /**
+ * Copies `src` to `dest`, entry by entry. A symlink anywhere in the source is refused (its target
+ * could be outside the repository), and so is a destination that is, or sits under, a link leaving
+ * the workspace (a tracked symlink in the checkout would otherwise redirect the copy).
+ */
+async function copyEntry(src: string, dest: string, workspaceReal: string): Promise<void> {
+  const info = await lstat(src)
+  if (info.isSymbolicLink()) {
+    throw new WorkspaceProviderError(`${src} is a symlink, which .worktreeinclude does not copy`)
+  }
+  await mkdir(dirname(dest), { recursive: true })
+  if (!inside(workspaceReal, await realpath(dirname(dest)))) {
+    throw new WorkspaceProviderError(`${dest} would be written outside the workspace`)
+  }
+  if (info.isDirectory()) {
+    await mkdir(dest, { recursive: true })
+    for (const name of await readdir(src)) {
+      await copyEntry(join(src, name), join(dest, name), workspaceReal)
+    }
+    return
+  }
+  try {
+    if ((await lstat(dest)).isSymbolicLink()) {
+      throw new WorkspaceProviderError(`${dest} is a symlink in the workspace; refusing to write`)
+    }
+  } catch (error) {
+    if (error instanceof WorkspaceProviderError) throw error
+  }
+  await copyFile(src, dest)
+}
+
+/**
  * Copies the paths listed in `<repo>/<include>` into the new worktree. One literal, repository-
  * relative path per line (files or directories); blank lines and `#` comments are skipped. A path
- * that leaves the repository (lexically or through a symlink) is refused. A missing include file
- * or a listed path that does not exist is skipped.
+ * that leaves the repository (lexically or through a symlink) is refused, as is any symlink inside
+ * a listed directory. A missing include file or a listed path that does not exist is skipped.
  */
 async function copyIncluded(repo: string, workspace: string, include: string): Promise<void> {
   let text: string
@@ -64,6 +95,7 @@ async function copyIncluded(repo: string, workspace: string, include: string): P
     throw error
   }
   const repoReal = await realpath(repo)
+  const workspaceReal = await realpath(workspace)
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim()
     if (!line || line.startsWith('#')) continue
@@ -77,11 +109,10 @@ async function copyIncluded(repo: string, workspace: string, include: string): P
     } catch {
       continue
     }
-    if (!inside(repoReal, await realpath(src))) {
+    if (!inside(repoReal, await realpath(dirname(src)))) {
       throw new WorkspaceProviderError(`${include}: "${line}" resolves outside the repository`)
     }
-    await mkdir(dirname(dest), { recursive: true })
-    await cp(src, dest, { recursive: true, force: true, verbatimSymlinks: true })
+    await copyEntry(src, dest, workspaceReal)
   }
 }
 
