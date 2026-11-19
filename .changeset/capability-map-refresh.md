@@ -2,4 +2,4 @@
 '@theokit/agents': patch
 ---
 
-Regenerate `docs/capability-map.md` so the published capability inventory matches the current package exports.
+Add a coverage test that every published export entry has a section in `docs/capability-map.md`. The committed map was regenerated from the built packages and is current.

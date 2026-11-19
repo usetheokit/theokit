@@ -57,6 +57,13 @@ describe('the committed capability map is what the package implies', () => {
     )
   })
 
+  it('test_the_map_has_a_heading_for_every_declared_export_specifier', () => {
+    const missing = declaredEntries()
+      .map((e) => e.specifier)
+      .filter((spec) => !rendered.includes(`## \`${spec}\``))
+    expect(missing, 'declared exports with no section in the capability map').toEqual([])
+  })
+
   /**
    * The map re-exports the SDK, so its content is a function of which SDK is installed — and the
    * `dep-check / suite at the bottom of every declared range` leg installs this package's declared
