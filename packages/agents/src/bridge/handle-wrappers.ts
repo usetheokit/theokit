@@ -14,6 +14,7 @@
 import type { Guardrail } from '../guardrails/index.js'
 import { GuardrailViolationError, runInputGuards, runOutputGuards } from '../guardrails/index.js'
 
+import type { AgentStreamEvent } from './agent-stream-events.js'
 import { type SdkMessage, translateSdkEvent } from './event-translator.js'
 import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
 
@@ -171,12 +172,58 @@ export function withTypedStream(handle: SdkAgentHandle<SdkMessage>): SdkAgentHan
           ? {}
           : {
               stream: async function* () {
+                let terminal = false
+                let failed = false
                 for await (const message of source.call(turn)) {
-                  yield* translateSdkEvent(message, message.run_id ?? '')
+                  for (const event of translateSdkEvent(message, message.run_id ?? '')) {
+                    if (event.type === 'error') failed = true
+                    if (event.type !== 'done') {
+                      yield event
+                      continue
+                    }
+                    terminal = true
+                    yield doneFromOutcome(event, await turn.wait())
+                  }
+                }
+                // A guarded turn's stream ends after its text without a FINISHED status; the typed
+                // contract still owes the reader a terminal event, built from the run outcome.
+                if (!terminal && !failed) {
+                  const out = await turn.wait()
+                  if (out.status === 'error') {
+                    yield {
+                      type: 'error',
+                      code: 'AGENT_ERROR',
+                      message: out.error?.message ?? 'run error',
+                      retryable: false,
+                    }
+                  } else {
+                    yield doneFromOutcome(
+                      {
+                        type: 'done',
+                        result: '',
+                        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+                        durationMs: 0,
+                      },
+                      out,
+                    )
+                  }
                 }
               },
             }),
       }
     },
+  }
+}
+
+/** A `done` event carrying what the run reported: its result text and token total. */
+function doneFromOutcome(
+  done: Extract<AgentStreamEvent, { type: 'done' }>,
+  out: Awaited<ReturnType<SdkTurnHandle['wait']>>,
+): AgentStreamEvent {
+  const total = out.usage?.totalTokens
+  return {
+    ...done,
+    result: out.result ?? done.result,
+    usage: { ...done.usage, totalTokens: total ?? done.usage.totalTokens },
   }
 }
