@@ -317,6 +317,22 @@ answers `continue` until the agent calls the tool with `complete` (`done`) or `b
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
 
+## Scheduled jobs: file or PostgreSQL
+
+`createScheduler` keeps its jobs in a `JobStore` from `@theokit/agents/tools`. Pick the file store for one host with a disk, or the PostgreSQL store when there are several replicas or no durable disk. The PostgreSQL store takes a ready pool (a `pg` `Pool` has the `query` it needs), so this package adds no driver.
+
+```ts
+import { copyJobs, createJobStore, createPostgresJobStore } from '@theokit/agents/tools'
+
+const files = createJobStore('.theoclaw/schedules.json')
+const db = await createPostgresJobStore(pool, { table: 'schedule_jobs' }) // /^[a-z_][a-z0-9_]{0,62}$/
+
+await copyJobs(files, db, { force: false }) // throws JobCopyError naming the count if `db` holds jobs
+```
+
+Reads come from the jobs loaded when the store opened, and writes run one after another; replicas do not see each other's later changes until they reopen the store. A malformed row raises `ScheduleStoreError` naming the table and job id. `copyJobs` writes through the target's atomic `putMany` (one statement for PostgreSQL, one file rewrite for the file store), so a failure leaves the target unchanged; a custom `JobStore` without `putMany` raises `JobCopyUnsupportedError` before anything is written.
+
+
 ## Running scheduled prompts
 
 `createScheduler` needs a `RunPort`. `agentRunPort(withAgent)` is the stock one: it runs each prompt on the

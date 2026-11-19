@@ -1009,6 +1009,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `catastrophicShellReason` | value |
 | `commandDenialReason` | value |
 | `ContextMatchError` | value |
+| `copyJobs` | value |
 | `createApplyPatchTool` | value |
 | `createBraveWebSearchAdapter` | value |
 | `createCurrentTimeTool` | value |
@@ -1023,6 +1024,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createJobStore` | value |
 | `createListDirTool` | value |
 | `createPlanModeTool` | value |
+| `createPostgresJobStore` | value |
 | `createQuestionTool` | value |
 | `createReadFileTool` | value |
 | `createRunVitestTool` | value |
@@ -1055,6 +1057,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `injectGuidance` | value |
 | `isBlockedIp` | value |
 | `isCommandAllowed` | value |
+| `JobCopyError` | value |
+| `JobCopyUnsupportedError` | value |
 | `ReadTracker` | value |
 | `ReasoningTools` | value |
 | `RedirectBlockedError` | value |
@@ -1118,6 +1122,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ScreenedFetchOptions` | type |
 | `SessionArtifactStore` | type |
 | `SessionArtifactStoreOptions` | type |
+| `SqlPool` | type |
 | `SynthesizedAudio` | type |
 | `TaskRegistry` | type |
 | `TaskToolOptions` | type |
