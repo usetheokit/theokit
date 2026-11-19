@@ -1,6 +1,7 @@
 import type { InteractionUpdate } from '@theokit/sdk'
 
 import type { AgentOutputEvent } from '../agent-output-event.js'
+
 import { fromInteractionUpdate, fromSdkMessage, type SdkMessage } from './from-sdk.js'
 
 /** Structural copy of the SDK's RunTimelineEvent, so this module needs no value import from the SDK. */
@@ -10,6 +11,8 @@ export interface RunTimelineEventLike {
   readonly update?: unknown
   readonly textAlreadyStreamed?: boolean
 }
+
+const TOOL_RESULT = 'tool-result'
 
 interface PendingResult {
   readonly ids: readonly string[]
@@ -39,7 +42,7 @@ function idsOf(event: AgentOutputEvent, raw: unknown): string[] {
 }
 
 function isToolLifecycle(e: AgentOutputEvent): boolean {
-  return e.type === 'tool-call' || e.type === 'tool-result' || e.type === 'partial-tool-call'
+  return e.type === 'tool-call' || e.type === TOOL_RESULT || e.type === 'partial-tool-call'
 }
 
 /** A second report of a held result can only add a failure; the held output text is kept. */
@@ -48,10 +51,16 @@ function mergeIntoPending(
   ids: readonly string[],
   state: RunTimelineState,
 ): void {
-  if (e.type !== 'tool-result' || !e.isError) return
+  if (e.type !== TOOL_RESULT || !e.isError) return
   const held = state.pending.find((p) => p.ids.some((id) => ids.includes(id)))
-  if (held?.event.type !== 'tool-result') return
+  if (held?.event.type !== TOOL_RESULT) return
   held.event = { ...held.event, isError: true }
+}
+
+function bucketFor(e: AgentOutputEvent, state: RunTimelineState): Set<string> | undefined {
+  if (e.type === 'tool-call') return state.started
+  if (e.type === TOOL_RESULT) return state.completed
+  return undefined
 }
 
 function dedupe(
@@ -69,12 +78,7 @@ function dedupe(
       // The coarse thinking message repeats the deltas that already crossed.
       return !state.sawThinkingDelta
     }
-    const bucket =
-      e.type === 'tool-call'
-        ? state.started
-        : e.type === 'tool-result'
-          ? state.completed
-          : undefined
+    const bucket = bucketFor(e, state)
     if (bucket === undefined) return true
     const ids = idsOf(e, raw)
     if (ids.length === 0) return true
@@ -83,7 +87,7 @@ function dedupe(
       return false
     }
     for (const id of ids) bucket.add(id)
-    if (e.type === 'tool-result') {
+    if (e.type === TOOL_RESULT) {
       state.pending.push({ ids, event: e })
       return false
     }
