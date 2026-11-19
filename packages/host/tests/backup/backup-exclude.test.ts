@@ -50,6 +50,9 @@ it('fails when an excluded database cannot be opened for its header check', asyn
   try {
     await expect(
       backup({ roots: { a }, out, exclude: (_root, rel) => rel === 'db' }),
+    ).rejects.toThrow(/cannot inspect excluded database/)
+    await expect(
+      backup({ roots: { a }, out, exclude: (_root, rel) => rel === 'db' }),
     ).rejects.toBeInstanceOf(BackupError)
   } finally {
     await chmod(join(a, 'db'), 0o600)

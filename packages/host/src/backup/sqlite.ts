@@ -1,4 +1,5 @@
 import { closeSync, openSync, readSync } from 'node:fs'
+import { createRequire } from 'node:module'
 
 import { BackupError } from './errors.js'
 
@@ -30,7 +31,7 @@ interface SqliteModule {
 
 /** A consistent snapshot of `from` at `to`, without sidecars, through the asynchronous `node:sqlite` backup API. */
 export async function snapshotSQLite(from: string, to: string): Promise<void> {
-  const sqlite = (await import('node:sqlite')) as unknown as SqliteModule
+  const sqlite = createRequire(import.meta.url)('node:sqlite') as SqliteModule
   if (typeof sqlite.backup !== 'function') {
     throw new BackupError('backing up a SQLite database needs Node 22.16 or later', { path: from })
   }

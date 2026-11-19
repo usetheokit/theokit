@@ -10,7 +10,7 @@ export type BackupRoots = Readonly<Record<string, string>>
 const ROOT_NAME = /^[a-z0-9-]+$/
 
 /** True when `child` is `parent` or lies inside it. A sibling sharing a name prefix is not inside. */
-export function within(child: string, parent: string): boolean {
+function within(child: string, parent: string): boolean {
   return child === parent || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`)
 }
 
