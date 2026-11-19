@@ -24,12 +24,18 @@ describe('createResultCapture', () => {
     expect(cap.submitted()).toBe(false)
   })
 
-  it('result() throws NoResultSubmittedError when the tool was never called', async () => {
+  it('result() throws NoResultSubmittedError when the tool was never called', () => {
     const cap = createResultCapture(schema, { name: 'report' })
-    await call(cap, {}).catch(() => undefined)
+    expect(cap.submitted()).toBe(false)
     expect(() => cap.result()).toThrow(NoResultSubmittedError)
     expect(() => cap.result()).toThrow(/report/)
-    expect(() => cap.result()).toThrow(/1 invalid/)
+    expect(() => cap.result()).toThrow(/0 invalid/)
+  })
+
+  it('the error counts the invalid submissions that were rejected', async () => {
+    const cap = createResultCapture(schema)
+    await call(cap, {}).catch(() => undefined)
+    expect(() => cap.result()).toThrow(/1 invalid submission /)
   })
 
   it('a later valid submission replaces an earlier one', async () => {
