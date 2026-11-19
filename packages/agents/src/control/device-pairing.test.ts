@@ -126,7 +126,8 @@ describe('createDevicePairing edge cases', () => {
     const seen: string[] = []
     pairing.onRevoke((id) => seen.push(id))
     expect(await pairing.revoke('phone')).toBe(true)
-    expect(seen.sort()).toEqual([a, b].sort())
+    expect(new Set(seen)).toEqual(new Set([a, b]))
+    expect(seen).toHaveLength(2)
     expect(pairing.accepts(`Bearer ${CRED}a`)).toBe(false)
     expect(pairing.accepts(`Bearer ${CRED}c`)).toBe(true)
   })
