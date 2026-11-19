@@ -32,4 +32,9 @@ describe('@theokit/agents-pty', () => {
     // A wrapper would compare unequal here, and a wrapper is what the old entry's docblock refused.
     expect(pty.PtyInteractiveBackend).toBe(upstream.PtyInteractiveBackend)
   })
+
+  it('adds the per-session owner on top', () => {
+    expect(typeof pty.createPtyOwner).toBe('function')
+    expect(typeof pty.PtyOwnerConfigError).toBe('function')
+  })
 })

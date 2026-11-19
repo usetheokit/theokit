@@ -59,6 +59,36 @@ large and the choice is open — `docs/adr/0003` § *AMENDED 2026-09-21* records
 Write a `server/middleware/*.ts` middleware that returns a `Response` to answer the request, or
 returns nothing to continue. Use the Web path when you need code to run after the route.
 
+## Posting a file to a server action
+
+An action reads `multipart/form-data` through its Zod schema. `objectToFormData` (from `theokit/client`) is
+the matching encoder: dot paths for nested objects, a repeated key for arrays, `'true'`/`'false'` for booleans.
+
+```ts
+import { objectToFormData } from 'theokit/client'
+import { z } from 'zod'
+
+// server/actions/profile.ts — served at /api/__actions/profile/uploadAvatar
+import { action } from 'theokit/server'
+
+export const uploadAvatar = action()
+  .input(z.object({ title: z.string(), avatar: z.instanceof(File) }))
+  .accept('form')
+  .handler(async ({ input }) => ({ name: input.avatar.name }))
+  .build()
+
+// browser
+const schema = z.object({ title: z.string(), avatar: z.instanceof(File) })
+
+await fetch('/api/__actions/profile/uploadAvatar', {
+  method: 'POST',
+  headers: { 'X-Theo-Action': '1' }, // required by the default strict CSRF check
+  body: objectToFormData({ title: 'Me', avatar: input.files![0] }, schema),
+})
+```
+
+An array of objects, or an array of arrays, throws `FormDataEncodingError`, because the server cannot read it back.
+
 ## Authoring surfaces
 
 Every surface is a fluent builder whose `.build()` is a compile error while a required link is
@@ -210,6 +240,12 @@ try {
 The job commits or rolls back with the row, and workers cannot see it before the commit. It needs a
 backend with `enqueueInTransaction` (`PostgresJobBackend` has it); any other backend rejects with
 `TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction.
+
+`PostgresJobBackend` also moves pending jobs in the caller's transaction, skipping jobs a worker has
+leased: `defer(client, { name, where, until })` moves the jobs whose input matches `where` (top-level
+keys, compared as text) to `until` (a `Date` or `'infinity'`) and remembers the time each had;
+`restore(client, { name, where })` gives that time back; `reschedule(client, jobId, { availableAt })`
+sets one job's time, to bring it ahead of others.
 
 To take back a queued job in a transaction, call
 `ctx.queue.cancelInTransaction(client, 'process-task', { idempotencyKey })`. It removes the job

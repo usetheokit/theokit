@@ -25,6 +25,10 @@
       "types": "./dist/service.d.ts",
       "import": "./dist/service.js"
     },
+    "./app-host": {
+      "types": "./dist/app-host/index.d.ts",
+      "import": "./dist/app-host/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
