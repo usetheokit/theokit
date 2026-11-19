@@ -236,10 +236,6 @@ fingerprint gate as `buildHookHandlers`, ignores specs of other events, and retu
 without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
 is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
 
-## Code mode and plugin hooks
-
-`createCodeMode` (from `@theokit/agents/code-mode`) runs each `api.<name>(input)` call of a script through `onPermissionRequest`. Pass `plugins` to also run their `pre_tool_call` hooks on every script call, after `onPermissionRequest`, so a path veto or approval gate that guards normal calls guards code mode too. A hook that returns `{ block: true, message }` refuses the call with that message; a hook that throws refuses it as well, and the handler never runs. `hookContext: { agentId, runId? }` becomes the `agentId` and `runId` of the hook context. Without `plugins` nothing changes.
-
 ## Ending a goal loop with a tool
 
 `createGoalSignal()` returns an `update_goal` tool and a judge that read the same state. Add `signal.tool`
