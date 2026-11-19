@@ -2,7 +2,7 @@
 
 Every public symbol this package publishes, and the exact specifier to import it from.
 
-**Generated — do not edit.** `npx tsx scripts/capability-map.mts` rewrites it, and
+**Generated — do not edit.** `pnpm exec tsx scripts/capability-map.mts` rewrites it, and
 `tests/unit/capability-map-is-current.test.ts` fails when the committed copy has drifted. A
 hand-edited map is a second copy of the export list, and the copy is the one that goes stale.
 
@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1255 export(s) across 25 entry point(s).
+1260 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -136,7 +136,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `listSubagentNames` | value |
 | `loadMcpJson` | value |
 | `loadMcpScopes` | value |
-| `loadMcpServersFile` | value |
 | `loadPersonalMcpServers` | value |
 | `loadSubagentDefinition` | value |
 | `loopStrategyConfigSchema` | value |
@@ -147,7 +146,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `MCP_PROTOCOL_VERSION` | value |
 | `McpFileError` | value |
 | `mcpRegistry` | value |
-| `mcpSecretValues` | value |
 | `mcpServerInfo` | value |
 | `McpServersCapability` | value |
 | `mcpToolApprovals` | value |
@@ -197,6 +195,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `setDiagnosticsSink` | value |
 | `setOnce` | value |
 | `SettingSourcesCapability` | value |
+| `shapeToolsAsCustomTools` | value |
 | `shouldAutoApprove` | value |
 | `SkillsCapability` | value |
 | `SkillsOptionsCapability` | value |
@@ -368,7 +367,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `McpServerConfig` | type |
 | `McpServerInfo` | type |
 | `McpServersMap` | type |
-| `McpServersPolicy` | type |
 | `McpStdioServerConfig` | type |
 | `McpToolDescriptor` | type |
 | `MemoryAdapterErrorCode` | type |
@@ -519,12 +517,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `isToolResult` | value |
 | `loadMcpJson` | value |
 | `loadMcpScopes` | value |
-| `loadMcpServersFile` | value |
 | `loadPersonalMcpServers` | value |
 | `MAX_REQUEST_BODY_BYTES` | value |
 | `McpFileError` | value |
 | `mcpRegistry` | value |
-| `mcpSecretValues` | value |
 | `mcpToolApprovals` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
@@ -602,7 +598,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `McpRequestContext` | type |
 | `McpScopesResult` | type |
 | `McpSelection` | type |
-| `McpServersPolicy` | type |
 | `OpenAIChatMessage` | type |
 | `OpenAIChatRequest` | type |
 | `OpenAICompatibleRoutesOptions` | type |
@@ -780,6 +775,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `assertSecureModes` | value |
 | `authFilePath` | value |
 | `AuthProvider` | value |
+| `builtinSecretStores` | value |
 | `CODEX_CLIENT_ID_ENV_VAR` | value |
 | `CODEX_PROVIDER` | value |
 | `createPlanOnlyGate` | value |
@@ -814,6 +810,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveAgentCredential` | value |
 | `resolveCredential` | value |
 | `resolveOperatorApiKey` | value |
+| `resolveSecretRefs` | value |
+| `SecretReferenceError` | value |
 | `writeCredential` | value |
 | `AgentCredentialInput` | type |
 | `AuthMethod` | type |
@@ -845,6 +843,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ResolveCredentialOptions` | type |
 | `ResolvedCredential` | type |
 | `RunCredentialHelperOptions` | type |
+| `SecretStore` | type |
 | `SourceOrigin` | type |
 | `StoredCredential` | type |
 | `StoredOAuthCredential` | type |
@@ -1360,15 +1359,21 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `checks` | value |
 | `diagnose` | value |
+| `DiagnosticBundleError` | value |
 | `installDiagnosticSink` | value |
 | `renderDiagnosis` | value |
 | `secretPresence` | value |
+| `writeDiagnosticBundle` | value |
 | `Check` | type |
+| `CredentialState` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |
 | `InstallDiagnosticSinkOptions` | type |
 | `SecretPresence` | type |
+| `SettingsFileReport` | type |
+| `WriteDiagnosticBundleOptions` | type |
 
 ## `@theokit/agents/usage`
 

@@ -32,7 +32,7 @@
  * Dropping unbuilt entries would write a map missing a whole subpath, and `--check` would then agree
  * with it. A gate that passes because the input was incomplete is worse than one that fails.
  *
- * Usage: npx tsx scripts/capability-map.mts [--check]
+ * Usage: pnpm exec tsx scripts/capability-map.mts [--check]
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -151,7 +151,7 @@ export function renderCapabilityMap(entries: Entry[], symbols: Map<string, Symbo
     '',
     'Every public symbol this package publishes, and the exact specifier to import it from.',
     '',
-    '**Generated — do not edit.** `npx tsx scripts/capability-map.mts` rewrites it, and',
+    '**Generated — do not edit.** `pnpm exec tsx scripts/capability-map.mts` rewrites it, and',
     '`tests/unit/capability-map-is-current.test.ts` fails when the committed copy has drifted. A',
     'hand-edited map is a second copy of the export list, and the copy is the one that goes stale.',
     '',

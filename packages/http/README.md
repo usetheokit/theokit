@@ -285,6 +285,27 @@ await node.close({ force: true }) // memoized; force ends open and upgraded sock
 - `listen` rejects with `BindError` (`code`, `host`, `port`); after binding, server errors go to `onError(error, 'server')`.
 - `close()` is memoized: concurrent calls share one promise, and the first call decides whether it is forced.
 
+### Trusted proxy identity
+
+When a reverse proxy authenticates the user (Tailscale serve, Caddy, nginx with auth) and forwards the identity in a header, believe it only from the proxy's address:
+
+```ts
+import { createNodeServer, trustedIdentity, peerAddress } from '@theokit/http/runtime/node'
+
+const node = createNodeServer(
+  (request) => new Response(`hello ${trustedIdentity(request) ?? 'anonymous'}`),
+  { trustedProxy: { identityHeader: 'tailscale-user-login', addresses: ['127.0.0.1', '::1'] } },
+)
+```
+
+Caddy: `reverse_proxy 127.0.0.1:3000 { header_up X-Auth-User {http.auth.user.id} }` with `identityHeader: 'x-auth-user'`.
+
+- A request from an allowlisted peer with a non-empty identity header gets `trustedIdentity(request)`; from any other peer it is `undefined`, and the identity header is removed.
+- `x-theokit-peer` and `x-theokit-trusted-identity` supplied by a client are always removed; `peerAddress(request)` is the socket address.
+- `x-forwarded-proto` is honoured only from an allowlisted peer; otherwise the URL protocol is `http:`.
+- `identityHeader` must match `[a-z0-9-]+` and not be `authorization`; `addresses` must be non-empty (`::ffff:` is ignored, case is ignored). Invalid options throw a `TypeError` naming the option.
+- `onUpgrade` receives the raw `IncomingMessage`; use `request.socket.remoteAddress` there.
+
 ## `registerControllers` (low-level)
 
 For advanced use without the Vite plugin:
