@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1251 export(s) across 25 entry point(s).
+1245 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -25,7 +25,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `Agent` | value |
 | `AGENT_BRAND` | value |
 | `AgentBuilder` | value |
-| `agentCardPath` | value |
 | `AgentConfigCapability` | value |
 | `AgentDefinitionError` | value |
 | `AgentDisposedError` | value |
@@ -203,6 +202,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `streamAgentResponse` | value |
 | `streamAgentTurnInProcess` | value |
 | `streamAgentUIMessages` | value |
+| `streamFromEmitter` | value |
 | `StreamObjectError` | value |
 | `StructuredOutputError` | value |
 | `SubAgent` | value |
@@ -381,7 +381,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PartialToolCallEvent` | type |
 | `PermissionsPluginOptions` | type |
 | `PiiOptions` | type |
-| `PlainAgentCardInput` | type |
 | `PluginsSettings` | type |
 | `PolicyHandler` | type |
 | `PreCompactionHandler` | type |
@@ -426,6 +425,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `StreamAgentTurnDeps` | type |
 | `StreamAgentTurnInProcessInput` | type |
 | `StreamEvent` | type |
+| `StreamFromEmitterOptions` | type |
 | `StructuredOutputErrorCode` | type |
 | `SubagentDefinition` | type |
 | `Summarize` | type |
@@ -530,6 +530,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `shouldAutoApprove` | value |
 | `streamAgentResponse` | value |
 | `streamAgentUIMessages` | value |
+| `streamFromEmitter` | value |
 | `toAgentFactory` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
@@ -617,6 +618,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ShouldAutoApproveOptions` | type |
 | `StateUpdateEvent` | type |
 | `StreamEvent` | type |
+| `StreamFromEmitterOptions` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
 | `ToolArgsValidator` | type |
@@ -1272,19 +1274,11 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
-| `agentCardPath` | value |
-| `buildAgentCard` | value |
 | `createA2AJsonRpcHandler` | value |
 | `createA2ATool` | value |
-| `wellKnownCardPath` | value |
 | `A2AAuth` | type |
-| `A2ACapabilities` | type |
 | `A2AJsonRpcHandlerOptions` | type |
-| `A2ASkill` | type |
 | `A2AToolConfig` | type |
-| `AgentCard` | type |
-| `BuildAgentCardOptions` | type |
-| `PlainAgentCardInput` | type |
 
 ## `@theokit/agents/evals`
 
