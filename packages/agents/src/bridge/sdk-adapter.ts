@@ -989,19 +989,35 @@ export function toAgentFactory(
   }
 }
 
-const served = new WeakMap<object, { max: unknown; guards: unknown; handle: SdkAgentHandle }>()
+type ServedConfig = { send: SdkAgentHandle['send']; max: unknown; guards: unknown }
+const served = new WeakMap<object, ServedConfig>()
 
-/** The SDK's own handle when nothing wraps it; otherwise ONE wrapper per shared handle and config. */
+/**
+ * The SDK's own handle, always: a declared step ceiling or guardrails are installed on it as its
+ * `send`, so every served caller gets the object `Agent.registry.get(id)` returns. The original
+ * `send` is kept once, and the latest declared config wraps it (never a wrapper of a wrapper).
+ */
 function servedHandle(
   agent: SdkAgentHandle,
   max: number | undefined,
   guards: Parameters<typeof withGuardrails>[1],
 ): SdkAgentHandle {
   const known = served.get(agent)
-  if (known !== undefined && known.max === max && known.guards === guards) return known.handle
-  const handle = withGuardrails(withStepCeiling(agent, max), guards)
-  if (handle !== agent) served.set(agent, { max, guards, handle })
-  return handle
+  if (known !== undefined && known.max === max && known.guards === guards) return agent
+  const send = known?.send ?? agent.send.bind(agent)
+  if (known === undefined && max === undefined && (guards === undefined || guards.length === 0)) {
+    return agent
+  }
+  const base = { agentId: agent.agentId, dispose: () => agent.dispose(), send } as SdkAgentHandle
+  const wrapped = withGuardrails(withStepCeiling(base, max), guards)
+  Object.defineProperty(agent, 'send', {
+    value: wrapped.send,
+    configurable: true,
+    writable: true,
+    enumerable: false,
+  })
+  served.set(agent, { send, max, guards })
+  return agent
 }
 
 /**

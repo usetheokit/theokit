@@ -212,7 +212,11 @@ describe('the real adapter entry points', () => {
     const a = await make(id)
     const b = await make(id)
     expect(b).toBe(a)
+    expect(a).toBe(Agent.registry.get(id))
     await a.dispose()
+    expect(Agent.registry.get(id)).toBe(a)
+    await b.dispose()
+    await b.dispose()
     expect(Agent.registry.get(id)).toBeUndefined()
   })
 
