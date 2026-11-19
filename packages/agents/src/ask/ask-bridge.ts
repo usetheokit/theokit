@@ -212,7 +212,15 @@ export function createAskBridge(): AskBridge {
         const current = listeners.get(threadId)
         if (current === undefined) {
           entryFail(threadId, new QuestionAbandonedError(threadId, 'the surface detached'))
-        } else current.notify({ id, threadId, question })
+        } else {
+          try {
+            current.notify({ id, threadId, question })
+          } catch (error) {
+            // A throwing surface must not leave the question open: clear it, reject the ask and
+            // tell observers, so the thread is not stuck rejecting every later ask as concurrent.
+            entryFail(threadId, error instanceof Error ? error : new Error(String(error)))
+          }
+        }
       }
       return promise
     },

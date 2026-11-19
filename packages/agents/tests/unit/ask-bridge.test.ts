@@ -280,6 +280,20 @@ describe('ask / pending and onChange', () => {
     await first.catch(() => undefined)
   })
 
+  it('a throwing listener rejects the ask, clears pending and notifies observers', async () => {
+    const bridge = createAskBridge()
+    bridge.setListener('t', () => {
+      throw new Error('surface broke')
+    })
+    const seen: Array<PendingQuestion | undefined> = []
+    bridge.onChange((id) => seen.push(bridge.pending(id)))
+    await expect(bridge.ask('t', 'q')).rejects.toThrow('surface broke')
+    expect(bridge.pending('t')).toBeUndefined()
+    expect(seen.at(-1)).toBeUndefined()
+    expect(seen.length).toBe(2)
+    await expect(bridge.ask('t', 'again')).rejects.toThrow('surface broke')
+  })
+
   it('an onChange disposer stops further calls', async () => {
     const { bridge } = setup()
     const a = vi.fn()
