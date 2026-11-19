@@ -16,23 +16,29 @@ function fromBaseline(): Record<string, string[]> {
     const exp = Object.entries(names)
       .filter(([, v]) => v.tier === 'experimental')
       .map(([n]) => n)
-      .sort()
+      .sort((a, b) => a.localeCompare(b))
     if (exp.length > 0) out[entry] = exp
   }
   return out
 }
 
 function fromReadme(): Record<string, string[]> {
-  const m = /<!-- experimental-exports:start -->([\s\S]*?)<!-- experimental-exports:end -->/.exec(
-    read('README.md'),
-  )
-  if (!m) throw new Error('README.md has no experimental-exports section')
+  const text = read('README.md')
+  const start = '<!-- experimental-exports:start -->'
+  const a = text.indexOf(start)
+  const b = text.indexOf('<!-- experimental-exports:end -->')
+  if (a < 0 || b < a) throw new Error('README.md has no experimental-exports section')
   const out: Record<string, string[]> = {}
-  for (const line of (m[1] ?? '').split('\n')) {
-    const l = /^- `@theokit\/agents(\/[^`]*)?`: (.+)$/.exec(line.trim())
-    if (!l) continue
-    const names = [...(l[2] ?? '').matchAll(/`([^`]+)`/g)].map((x) => x[1] as string).sort()
-    out[l[1] ? `.${l[1]}` : '.'] = names
+  const prefix = '- `@theokit/agents'
+  for (const raw of text.slice(a + start.length, b).split('\n')) {
+    const line = raw.trim()
+    if (!line.startsWith(prefix)) continue
+    const [head = '', list = ''] = line.slice(prefix.length).split('`: ')
+    const sub = head.replace(/`$/, '')
+    out[sub === '' ? '.' : `.${sub}`] = list
+      .split('`')
+      .filter((_, k) => k % 2 === 1)
+      .sort((x, y) => x.localeCompare(y))
   }
   return out
 }
