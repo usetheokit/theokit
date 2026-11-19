@@ -859,7 +859,7 @@ export interface SdkTurnHandle {
   }>
   stream?: () => AsyncIterable<unknown>
   /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
-  cancel?: () => Promise<unknown> | unknown
+  cancel?: () => unknown
 }
 
 /** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
