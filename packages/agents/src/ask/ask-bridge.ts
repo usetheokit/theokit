@@ -168,6 +168,10 @@ export function createAskBridge(): AskBridge {
     emit(threadId)
   }
 
+  const entryFail = (threadId: string, error: Error): void => {
+    pendingByThread.get(threadId)?.fail(error)
+  }
+
   return {
     ask(threadId, question) {
       if (pendingByThread.has(threadId)) {
@@ -203,7 +207,13 @@ export function createAskBridge(): AskBridge {
       emit(threadId)
       // An observer may have answered or abandoned the question while reentering the bridge; the
       // surface must not be shown a prompt that can no longer be answered.
-      if (pendingByThread.get(threadId)?.id === id) listener.notify({ id, threadId, question })
+      if (pendingByThread.get(threadId)?.id === id) {
+        // An observer may also have swapped the thread's listener; the current one gets the prompt.
+        const current = listeners.get(threadId)
+        if (current === undefined) {
+          entryFail(threadId, new QuestionAbandonedError(threadId, 'the surface detached'))
+        } else current.notify({ id, threadId, question })
+      }
       return promise
     },
 
@@ -220,10 +230,12 @@ export function createAskBridge(): AskBridge {
       const entry = pendingByThread.get(threadId)
       // Cleanup runs at the end of every turn, and most turns asked nothing.
       if (entry === undefined) return false
+      // Surface cleanup runs before the change is emitted: an observer may start a replacement
+      // question on this thread, and the old question's cleanup must not clear it.
+      listeners.get(threadId)?.onAbandon?.(threadId)
       entry.fail(
         new QuestionAbandonedError(threadId, 'the run was cancelled or the surface detached'),
       )
-      listeners.get(threadId)?.onAbandon?.(threadId)
       return true
     },
 

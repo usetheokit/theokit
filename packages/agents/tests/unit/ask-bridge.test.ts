@@ -305,4 +305,42 @@ describe('ask / pending and onChange', () => {
     expect(listener).not.toHaveBeenCalled()
     expect(bridge.pending('t')).toBeUndefined()
   })
+
+  it('shows the question to the listener an observer swapped in', async () => {
+    const bridge = createAskBridge()
+    const old = vi.fn()
+    const fresh = vi.fn()
+    const dispose = bridge.setListener('t', old)
+    const off = bridge.onChange(() => {
+      off()
+      dispose()
+      bridge.setListener('t', fresh)
+    })
+    const p = bridge.ask('t', 'q')
+    expect(old).not.toHaveBeenCalled()
+    expect(fresh).toHaveBeenCalledTimes(1)
+    bridge.answer(fresh.mock.calls[0]![0].id, 'a')
+    await expect(p).resolves.toBe('a')
+  })
+
+  it('abandon cleanup cannot clear a question an observer started', async () => {
+    const bridge = createAskBridge()
+    let shown: string | undefined
+    bridge.setListener('t', (q) => (shown = q.question), {
+      onAbandon: () => {
+        shown = undefined
+      },
+    })
+    const first = bridge.ask('t', 'one').catch(() => undefined)
+    let restarted = false
+    bridge.onChange((threadId) => {
+      if (restarted || bridge.pending(threadId) !== undefined) return
+      restarted = true
+      void bridge.ask(threadId, 'two')
+    })
+    bridge.abandon('t')
+    await first
+    expect(bridge.pending('t')?.question).toBe('two')
+    expect(shown).toBe('two')
+  })
 })
