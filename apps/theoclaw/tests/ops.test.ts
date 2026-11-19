@@ -190,8 +190,14 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     const { h, path } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
     chmodSync(path, 0o644)
     const checks = doctorChecks(h.io)
-    expect(checks.find((check) => check.name === 'config')).toEqual({ name: 'config', status: 'ok', detail: path })
-    expect(checks.some((check) => check.status === 'warn' && check.name === 'security audit')).toBe(true)
+    expect(checks.find((check) => check.name === 'config')).toEqual({
+      name: 'config',
+      status: 'ok',
+      detail: path,
+    })
+    expect(
+      checks.some((check) => check.status === 'warn' && check.name === 'security audit'),
+    ).toBe(true)
     expect(checks.some((check) => check.status === 'fail')).toBe(false)
     // a warning alone leaves the exit at 0
     expect(await runCli(['doctor'], h.io)).toBe(0)

@@ -59,7 +59,8 @@ function repair(io: DoctorIo): string[] {
       mkdirSync(stateDir, { recursive: true, mode: 0o700 })
       lines.push('fixed THEOCLAW_STATE_DIR: created the state directory')
     } catch (error) {
-      lines.push(`THEOCLAW_STATE_DIR: cannot create the state directory: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`)
+      const code = (error as NodeJS.ErrnoException).code ?? 'unknown error'
+      lines.push(`THEOCLAW_STATE_DIR: cannot create the state directory: ${code}`)
     }
   }
   return lines
@@ -83,7 +84,8 @@ export function doctorChecks(io: DoctorIo): Check[] {
     requireModel(env)
     checks.push({ name: 'model', status: 'ok', detail: 'the model settings are complete' })
   } catch (error) {
-    const detail = error instanceof TheoClawConfigError ? error.message : 'the model settings cannot be read'
+    const detail =
+      error instanceof TheoClawConfigError ? error.message : 'the model settings cannot be read'
     checks.push({ name: 'model', status: 'fail', detail })
   }
   const stateDir = (env.THEOCLAW_STATE_DIR ?? '').trim()
@@ -94,13 +96,16 @@ export function doctorChecks(io: DoctorIo): Check[] {
   for (const key of KEYS) {
     const value = env[key]
     const defect = value === undefined || value.trim() === '' ? undefined : credentialDefect(value)
-    if (defect !== undefined) checks.push({ name: 'credential', status: 'fail', detail: `${key} ${defect}` })
+    if (defect !== undefined) {
+      checks.push({ name: 'credential', status: 'fail', detail: `${key} ${defect}` })
+    }
   }
   const violations = checkPolicy(env, path)
   for (const detail of violations) checks.push({ name: 'policy', status: 'fail', detail })
   try {
     for (const finding of auditConfiguration(io.env, io.homeDir)) {
-      checks.push({ name: 'security audit', status: 'warn', detail: `${finding.id}: ${finding.message}` })
+      const detail = `${finding.id}: ${finding.message}`
+      checks.push({ name: 'security audit', status: 'warn', detail })
     }
   } catch {
     // an unreadable configuration is reported by the config check
