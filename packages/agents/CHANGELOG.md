@@ -1,5 +1,34 @@
 # @theokit/agents
 
+## 16.11.0
+
+### Minor Changes
+
+- 526f9eb: `@theokit/agents/auth` now exports `loginWithApiKey` (infers the provider from the key prefix, refuses a contradicting provider and an existing credential without `overwrite`, throws `CredentialExistsError`), `logout`, and two `AuthProvider` options: `requestTimeoutMs` aborts a hanging refresh request, and `onTransientFailure: 'use-stored'` returns the stored credential when the refresh endpoint stays unreachable.
+- 566a2e3: `installDiagnosticSink` takes an `envVar` option, so an app can read its own variable name instead of `THEOKIT_DIAGNOSTICS`. An empty `envVar` throws a `ConfigurationError`.
+- 44a869b: `loadOutputStyle` now also matches a style by its frontmatter `name` (a file-name match wins within a directory; two files claiming one name throw `OutputStyleError`), and the new `applyOutputStyle(base, style)` composes a style with a base prompt.
+- 26108a3: Added `parseDottedOverrides` and `DottedOverrideError` to `@theokit/agents/config`: turns `-c a.b=value` pairs into a config layer, refusing prototype-pollution segments and pairs that build incompatible shapes, with coercion keyed by the full dotted path.
+
+### Patch Changes
+
+- ca51b39: Regenerate the committed capability map so it lists `applyOutputStyle` and `parseDottedOverrides`; the drift test no longer fails.
+
+## 16.10.0
+
+### Minor Changes
+
+- 8f1f165: A tool result the SDK reported as `permission_denied` now carries a typed `refusal` (`ToolRefusal`: `by`, `reason?`). `@theokit/presenter` adds `ToolRefusal`, `AgentToolResultEvent.refusal` and the transient `WIRE_TOOL_REFUSAL_PART` (`data-tool-refusal`); `readMessageStream` sets `refusal` on the tool part. `@theokit/agents` maps the SDK `source` (`file_hook` → `hook`; `plugin`, `fork_whitelist` → `plugin`) onto `ToolResultEvent.refusal`. The message the model reads is unchanged.
+
+### Patch Changes
+
+- 5b6e883: Dropped the casts written for the old SDK `.d.ts` gap and the hand-copied hook-approval and hook-context types; they now come from `@theokit/sdk`, and a build-time check fails if the SDK adds a compat surface the gate does not know.
+- c46c058: `@theokit/presenter` now exports `pendingApprovals`, `readPendingApproval` and `PendingApproval`, the one projection of outstanding approvals off the wire thread. `@theokit/agents` imports it instead of keeping a private copy; `PendingApproval` is still exported from `@theokit/agents/client`.
+- Updated dependencies [5f102db]
+- Updated dependencies [c46c058]
+- Updated dependencies [8d53eb9]
+- Updated dependencies [8f1f165]
+  - @theokit/presenter@0.15.0
+
 ## 16.9.0
 
 ### Minor Changes
