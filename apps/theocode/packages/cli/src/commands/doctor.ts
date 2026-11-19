@@ -1,5 +1,4 @@
 /**
-import { exitAfterDrain } from '@theokit/agents/commands'/**
  * B-081 — `theocode doctor`.
  *
  * Reports the RESOLVED state, not the config files: the gap between what config asks for and what

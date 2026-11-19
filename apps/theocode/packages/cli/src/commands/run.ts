@@ -22,12 +22,13 @@ import {
   type TurnFailureHooks,
 } from '@theocode/shared/turn-failure-reporting'
 
-function readPrompt(args: ExecRun): string {
+function readPrompt(args: ExecRun): string | undefined {
   if (args.stdinBehavior === 'required' || args.stdinBehavior === 'forced') {
     const lido = readFileSync(0, 'utf8').trim()
     if (lido.length === 0) {
       process.stderr.write('No prompt provided\n')
-      process.exit(1)
+      exitAfterDrain(1)
+      return undefined
     }
     return lido
   }
@@ -212,6 +213,7 @@ function printHeadlessApprovalNotice(decision: Parameters<typeof headlessApprova
 
 export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<void> {
   const prompt = readPrompt(args)
+  if (prompt === undefined) return
 
   const { streamAgentTurnInProcess } = await import('@theokit/agents')
   const { headlessPolicy, mod, apiKey, shellTimeoutMs } = await resolveRunTarget(args)
