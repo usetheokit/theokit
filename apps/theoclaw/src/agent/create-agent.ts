@@ -32,6 +32,8 @@ export interface TheoClawLocalOptions {
 /** The `SkillsSettings` fields TheoClaw sets. */
 export interface TheoClawSkills {
   readonly bundledDirs: string[]
+  /** The first directory again: with the `project` source on the SDK reads `skillsDir` instead of its own project and plugin skill roots. */
+  readonly skillsDir?: string
   readonly inline: InlineSkill[]
 }
 
@@ -134,7 +136,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
   const imported = input.imported?.setup.skills ?? []
   const withSkills: TheoClawAgentOptions<Model> = {
     ...withTools,
-    skills: { bundledDirs: dirs, inline: mergeByName(imported, custodian, bundledSkills()) },
+    skills: { ...dirSettings(dirs), inline: mergeByName(imported, custodian, bundledSkills()) },
     skillsRefresh: () => resolveSkills(dirs, imported, custodian),
   }
   const importedOptions = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
@@ -200,6 +202,15 @@ function withImport<Model extends string | ModelSelection>(
   }
 }
 
+/**
+ * The directory settings. `skillsDir` names the workspace folder too, so that when the `project` source
+ * is on the SDK does not also search its own project and plugin roots, ahead of ours, for skills this
+ * code neither gates nor reads. Without `project` the SDK ignores it.
+ */
+function dirSettings(dirs: string[]): Pick<TheoClawSkills, 'bundledDirs' | 'skillsDir'> {
+  return { bundledDirs: dirs, ...(dirs[0] === undefined ? {} : { skillsDir: dirs[0] }) }
+}
+
 /** Later lists win a name; the SDK also lets an inline skill beat a discovered one, which `resolveSkills` guards against. */
 function mergeByName(...lists: ReadonlyArray<readonly InlineSkill[]>): InlineSkill[] {
   const byName = new Map<string, InlineSkill>()
@@ -216,7 +227,7 @@ async function resolveSkills(dirs: string[], imported: readonly InlineSkill[], c
   const winners = await discoverWinners(dirs)
   const names = new Set(winners.map((skill) => skill.name))
   const ours = mergeByName(imported, custodian, bundledSkills()).filter((skill) => !names.has(skill.name))
-  return { bundledDirs: dirs, inline: [...ours, ...(await legacyRequiresSkills(winners))] }
+  return { ...dirSettings(dirs), inline: [...ours, ...(await legacyRequiresSkills(winners))] }
 }
 
 /** Every agent gets `skill_read`, so the model can read a body the prompt block lists by name only. */

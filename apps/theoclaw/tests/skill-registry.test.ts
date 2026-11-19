@@ -26,7 +26,7 @@ afterEach(async () => {
   for (const stub of stubs.splice(0)) await stub.close()
 })
 
-type Extra = { userSkillsDir?: string; custodian?: boolean; imported?: { setup: ImportedSetup; mcp: boolean } }
+type Extra = { approvedHooks?: ReadonlySet<string>; pluginWorkspace?: string; userSkillsDir?: string; custodian?: boolean; imported?: { setup: ImportedSetup; mcp: boolean } }
 
 /** What the model is sent in the first request of one turn, with the real SDK reading `skillsDir` (and the rest). */
 async function firstRequest(skillsDir: string, extra: Extra = {}): Promise<string> {
@@ -68,6 +68,35 @@ describe('skills through the SDK (OC-70..72, OC-74)', () => {
     const text = await firstRequest(dirWith({}))
     expect(text).toContain('summarize-text')
     expect(text).toContain('git-helper')
+  })
+
+  it('offers git-helper only while git is on PATH', async () => {
+    const path = process.env.PATH
+    const empty = mkdtempSync(join(tmpdir(), 'nobin-'))
+    try {
+      process.env.PATH = empty
+      const without = await firstRequest(dirWith({}))
+      expect(without).toContain('summarize-text')
+      expect(without).not.toContain('git-helper')
+    } finally {
+      process.env.PATH = path
+    }
+    const restore = withBin('git')
+    try {
+      expect(await firstRequest(dirWith({}))).toContain('git-helper')
+    } finally {
+      restore()
+    }
+  })
+
+  it('with the project source on, the SDK reads only our folders: a project skill cannot shadow the workspace one', async () => {
+    const cwd = dirWith({})
+    mkdirSync(join(cwd, '.theokit', 'skills', 'dup'), { recursive: true })
+    writeFileSync(join(cwd, '.theokit', 'skills', 'dup', 'SKILL.md'), skillFile('dup', 'p').replace('dup skill', 'PROJECT-DESCRIPTION'))
+    const workspace = dirWith({ dup: skillFile('dup', 'w').replace('dup skill', 'WORKSPACE-DESCRIPTION') })
+    const text = await firstRequest(workspace, { approvedHooks: new Set(['fingerprint']), pluginWorkspace: cwd })
+    expect(text).toContain('WORKSPACE-DESCRIPTION')
+    expect(text).not.toContain('PROJECT-DESCRIPTION')
   })
 
   it('offers a requires-bins skill only while its binary is on PATH', async () => {
