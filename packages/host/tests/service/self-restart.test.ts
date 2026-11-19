@@ -9,6 +9,7 @@ import {
   isSupervised,
   UnsupportedPlatformError,
   restartSelf,
+  restartSelfAsync,
   runCommand,
   waitForPredecessor,
 } from '../../src/service/index.js'
@@ -87,6 +88,24 @@ describe('restartSelf', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(seen).toHaveLength(1)
     expect((seen[0]?.cause as NodeJS.ErrnoException).code).toBe('ENOENT')
+  })
+
+  it('restartSelfAsync rejects with the real spawn error as cause', async () => {
+    const error = await restartSelfAsync({
+      startEnv: {},
+      env: {},
+      platform: 'linux',
+      spawn: (_c, _a, o) => spawn('/nonexistent/x', [], o),
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(RestartError)
+    expect((error as RestartError).cause).toBeInstanceOf(Error)
+    expect(((error as RestartError).cause as NodeJS.ErrnoException).code).toBe('ENOENT')
+  })
+
+  it('restartSelfAsync resolves with the pid on success', async () => {
+    await expect(
+      restartSelfAsync({ startEnv: {}, env: {}, platform: 'linux', spawn: () => fakeChild(7) }),
+    ).resolves.toEqual({ kind: 'spawned', pid: 7 })
   })
 
   it('refuses an unsupported platform before spawning', () => {

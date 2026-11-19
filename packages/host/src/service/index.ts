@@ -16,6 +16,7 @@ export {
   RESTART_EXIT_CODE,
   isSupervised,
   restartSelf,
+  restartSelfAsync,
   waitForPredecessor,
   type RestartSelfOptions,
 } from './self-restart.js'

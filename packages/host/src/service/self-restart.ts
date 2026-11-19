@@ -31,6 +31,7 @@ interface SuccessorProcess {
   readonly pid?: number
   unref(): void
   once(event: 'error', listener: (error: Error) => void): unknown
+  once(event: 'spawn', listener: () => void): unknown
 }
 
 export interface RestartSelfOptions {
@@ -84,13 +85,44 @@ export function restartSelf(
     options.onSpawnError?.(new RestartError('could not start the successor process', { cause }))
   })
   if (child.pid === undefined) {
+    // The real error is not known yet; it goes to onSpawnError. No synthetic cause is made up.
     throw new RestartError(
-      'could not start the successor process: spawn returned no pid (the spawn error goes to onSpawnError)',
-      { cause: new Error(`spawn ${process.execPath} returned no pid`) },
+      'could not start the successor process: spawn returned no pid (use restartSelfAsync to get the spawn error as the cause)',
     )
   }
   child.unref()
   return { kind: 'spawned', pid: child.pid }
+}
+
+/**
+ * Like `restartSelf`, but waits for Node's `spawn` event, so a failed spawn rejects with a
+ * RestartError whose `cause` is the actual error from the child's `error` event.
+ */
+export async function restartSelfAsync(
+  options: Omit<RestartSelfOptions, 'onSpawnError'>,
+): Promise<{ kind: 'exit'; code: number } | { kind: 'spawned'; pid: number }> {
+  let early: RestartError | undefined
+  let notify: ((error: RestartError) => void) | undefined
+  const onSpawnError = (error: RestartError): void => {
+    early = error
+    notify?.(error)
+  }
+  let result: ReturnType<typeof restartSelf>
+  try {
+    result = restartSelf({ ...options, onSpawnError })
+  } catch (error) {
+    // No pid: the spawn error arrives on the next tick.
+    if (error instanceof RestartError && error.cause === undefined) {
+      throw (
+        early ??
+        (await new Promise<RestartError>((resolve) => {
+          notify = resolve
+        }))
+      )
+    }
+    throw error
+  }
+  return result
 }
 
 function alive(pid: number): boolean {
