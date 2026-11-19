@@ -37,6 +37,11 @@ function refuse(socket: Duplex, status: number, reason: string): void {
   socket.destroy()
 }
 
+function rawToText(data: Buffer | ArrayBuffer | Buffer[]): string {
+  if (Array.isArray(data)) return Buffer.concat(data).toString('utf8')
+  return Buffer.isBuffer(data) ? data.toString('utf8') : Buffer.from(data).toString('utf8')
+}
+
 function loadWs(): { WebSocketServer: typeof WebSocketServer } {
   try {
     return createRequire(import.meta.url)('ws') as { WebSocketServer: typeof WebSocketServer }
@@ -99,7 +104,7 @@ export function attachControlSocket(
     }
 
     ws.on('message', (data, isBinary) => {
-      const frame = isBinary ? undefined : parseControlFrame(data.toString())
+      const frame = isBinary ? undefined : parseControlFrame(rawToText(data))
       if (frame === undefined) {
         send({ type: 'error', code: 'bad_frame' })
         return
