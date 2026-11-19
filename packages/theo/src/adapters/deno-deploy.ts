@@ -540,10 +540,16 @@ function localTarget(
   aliases: ReadonlyMap<string, string>,
 ): string | undefined {
   if (/^\.{1,2}\//u.test(specifier)) return resolve(from, '..', specifier)
-  for (const [key, target] of aliases) {
-    if (specifier === key) return target
-    if (key.endsWith('/') && specifier.startsWith(key)) return target + specifier.slice(key.length)
+  // Import-map precedence: an exact key wins, otherwise the longest matching `/` prefix.
+  const exact = aliases.get(specifier)
+  if (exact !== undefined) return exact
+  let best: string | undefined
+  for (const key of aliases.keys()) {
+    if (key.endsWith('/') && specifier.startsWith(key) && key.length > (best?.length ?? 0)) {
+      best = key
+    }
   }
+  if (best !== undefined) return (aliases.get(best) ?? '') + specifier.slice(best.length)
   return undefined
 }
 

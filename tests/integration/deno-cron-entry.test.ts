@@ -148,7 +148,13 @@ async function loadBuiltEntry(): Promise<void> {
   for (const rel of [...configs.map((c) => relative(root, c)), 'lib/backend.ts']) {
     if (existsSync(join(root, rel))) write(rel, rewrite(readFileSync(join(root, rel), 'utf8')))
   }
-  const text = readFileSync(entry, 'utf8').replace('npm:theokit/server/jobs', JOBS)
+  // The entry itself is resolved by the same map: its `npm:theokit…/server/jobs` import is the
+  // one specifier mapped to the workspace source instead of a stub package.
+  const text = rewrite(readFileSync(entry, 'utf8')).replace(
+    /npm:theokit[^"'/]*\/server\/jobs/u,
+    JOBS,
+  )
+  expect(text).not.toMatch(/from\s+['"]npm:/u)
   const loaded = join(root, '.theokit', `built-${seq++}.ts`)
   writeFileSync(loaded, text)
   await import(/* @vite-ignore */ loaded)
@@ -179,6 +185,35 @@ describe('generated entry loaded through the build wiring', () => {
     await loadBuiltEntry()
     await callbacks.get('job')!()
     expect(calls().map((c) => c.backend)).toEqual(['aliased-tx', 'partial'])
+  })
+})
+
+describe('local alias precedence while reading config dependencies', () => {
+  it('uses the exact alias over an earlier prefix, and the longest of overlapping prefixes', async () => {
+    write(
+      'deno.json',
+      JSON.stringify({
+        imports: {
+          '@app/': './lib/',
+          '@app/deep/': './lib/deep/',
+          '@app/backend': './lib/real.ts',
+        },
+      }),
+    )
+    write('lib/backend.ts', `import { wrong } from 'wrong-pkg'\n`)
+    write('lib/real.ts', `import { Pool } from 'pg'\nexport const x = Pool\n`)
+    write('lib/deep/x.ts', `import { d } from 'deep-pkg'\n`)
+    write('lib/x.ts', `import { w } from 'shallow-pkg'\n`)
+    write('theo.config.ts', `import '@app/backend'\nimport '@app/deep/x'\nexport default {}\n`)
+    const { readProjectSourcesFromDisk, bareSpecifiersOf } =
+      await import('../../packages/theo/src/adapters/deno-deploy.js')
+    const found = bareSpecifiersOf(
+      readProjectSourcesFromDisk(root, { serverDir: 'server', agentsDir: 'agents' } as never),
+    )
+    expect(found).toContain('pg')
+    expect(found).toContain('deep-pkg')
+    expect(found).not.toContain('wrong-pkg')
+    expect(found).not.toContain('shallow-pkg')
   })
 })
 
