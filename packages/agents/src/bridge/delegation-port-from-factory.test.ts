@@ -131,17 +131,16 @@ describe('delegationPortFromAgentFactory', () => {
       return w.agent
     })
     const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: port }] })
-    const out = JSON.parse(
-      await tool.handler(
-        {
-          tasks: [
-            { agent: 'worker', task: 'one' },
-            { agent: 'worker', task: 'two' },
-          ],
-        },
-        {},
-      ),
-    ) as { results: { ok: boolean; response: string }[] }
+    const raw = await tool.handler(
+      {
+        tasks: [
+          { agent: 'worker', task: 'one' },
+          { agent: 'worker', task: 'two' },
+        ],
+      },
+      {},
+    )
+    const out = JSON.parse(raw as string) as { results: { ok: boolean; response: string }[] }
     expect(out.results.map((r) => [r.ok, r.response])).toEqual([
       [true, 'done'],
       [true, 'done'],
