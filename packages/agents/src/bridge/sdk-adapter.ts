@@ -848,7 +848,7 @@ async function* streamSdkAgent(
 export interface SdkTurnHandle<M = AgentStreamEvent> {
   wait: () => Promise<{
     result?: string
-    usage?: { totalTokens?: number }
+    usage?: SdkRunUsage & { totalTokens?: number }
     status?: string
     error?: { message: string }
   }>

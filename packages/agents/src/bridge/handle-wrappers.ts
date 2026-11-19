@@ -16,6 +16,7 @@ import { GuardrailViolationError, runInputGuards, runOutputGuards } from '../gua
 
 import type { AgentStreamEvent } from './agent-stream-events.js'
 import { type SdkMessage, translateSdkEvent } from './event-translator.js'
+import { doneUsage } from './sdk-adapter-create-options.js'
 import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
 
 /**
@@ -215,15 +216,16 @@ export function withTypedStream(handle: SdkAgentHandle<SdkMessage>): SdkAgentHan
   }
 }
 
-/** A `done` event carrying what the run reported: its result text and token total. */
+/** A `done` event carrying what the run reported: its result text and token usage. */
 function doneFromOutcome(
   done: Extract<AgentStreamEvent, { type: 'done' }>,
   out: Awaited<ReturnType<SdkTurnHandle['wait']>>,
 ): AgentStreamEvent {
-  const total = out.usage?.totalTokens
-  return {
-    ...done,
-    result: out.result ?? done.result,
-    usage: { ...done.usage, totalTokens: total ?? done.usage.totalTokens },
+  if (out.usage === undefined) return { ...done, result: out.result ?? done.result }
+  const usage = doneUsage(out.usage)
+  // A run that reports only a total keeps it.
+  if (usage.totalTokens === 0 && out.usage.totalTokens !== undefined) {
+    usage.totalTokens = out.usage.totalTokens
   }
+  return { ...done, result: out.result ?? done.result, usage }
 }

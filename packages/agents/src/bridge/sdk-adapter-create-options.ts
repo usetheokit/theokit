@@ -547,7 +547,7 @@ export type SdkRunUsage = Partial<
  * through the loop into DelegationResult (passthrough — ADR D1). Split out of
  * {@link realUsageDone} to keep its complexity within budget (G6).
  */
-function doneUsage(sdkUsage: SdkRunUsage | undefined): DoneEvent['usage'] {
+export function doneUsage(sdkUsage: SdkRunUsage | undefined): DoneEvent['usage'] {
   const usage = sdkUsage ?? {}
   const inputTokens = countOrZero(usage.inputTokens)
   const outputTokens = countOrZero(usage.outputTokens)

@@ -17,7 +17,7 @@ vi.mock('@theokit/sdk', () => ({
             wait: () =>
               Promise.resolve({
                 result: 'a BANANA reply',
-                usage: { totalTokens: 42 },
+                usage: { inputTokens: 30, outputTokens: 12 },
                 status: 'finished',
               }),
           }),
@@ -54,6 +54,6 @@ describe('a guarded typed turn', () => {
     const done = events[1]
     if (done?.type !== 'done') throw new Error('no done event')
     expect(done.result).toBe('a [REDACTED] reply')
-    expect(done.usage.totalTokens).toBe(42)
+    expect(done.usage).toMatchObject({ inputTokens: 30, outputTokens: 12, totalTokens: 42 })
   })
 })

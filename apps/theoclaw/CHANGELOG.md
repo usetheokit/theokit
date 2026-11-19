@@ -11,10 +11,6 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-
-- The agent event type TheoClaw reads is now the typed `AgentStreamEvent` union from `@theokit/agents`, so a WebChat turn's events and its `done` carry their declared fields. The local slash-command reply ends with a complete `done` (the reply text, zero usage), and the failed-turn `error` and the usage-enriched `done` are built as typed events. No change to the wire output. (#2342)
-
 ### Fixed
 
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
