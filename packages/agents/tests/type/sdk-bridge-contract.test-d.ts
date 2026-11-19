@@ -50,15 +50,16 @@ describe('the bridge types', () => {
 })
 
 describe('existing handle contracts still compile', () => {
-  it('accepts a handle whose stream yields unknown and a generate call with extra option keys', () => {
-    const turn: SdkTurnHandle = {
-      wait: async () => ({}),
-      stream: async function* (): AsyncGenerator {
-        yield 1
-      },
-    }
+  it('accepts a generate call with extra option keys', () => {
     const handle = {} as SdkAgentHandle
     void handle.generate?.('m', { output: 1, extra: true })
-    expectTypeOf(turn).toMatchTypeOf<SdkTurnHandle>()
+    expectTypeOf(handle.generate).not.toBeAny()
+  })
+
+  it('passes a streamed message to the translator without a cast', async () => {
+    const turn = {} as SdkTurnHandle
+    for await (const message of turn.stream?.() ?? []) {
+      expectTypeOf(translateSdkEvent(message, 'r')).toEqualTypeOf<AgentStreamEvent[]>()
+    }
   })
 })

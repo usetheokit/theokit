@@ -858,8 +858,7 @@ export interface SdkTurnHandle {
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number }
   }>
-  // `unknown` stays in the union so a handle that yielded `AsyncIterable<unknown>` keeps compiling.
-  stream?(): AsyncIterable<SdkMessageLike> | AsyncIterable<unknown>
+  stream?(): AsyncIterable<SdkMessageLike>
   cancel?(): Promise<void>
 }
 
