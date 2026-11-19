@@ -11,10 +11,6 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-
-- The local slash-command reply in WebChat now ends with a complete typed `done` (the reply text, zero usage, zero duration). (#2350)
-
 ### Fixed
 
 - The configuration file, the daemon unit and plist files, the pairing, device, exec-approval, MCP relay grant, visitor grant and relay state and mailbox files are written through `@theokit/sdk/persistence`, so two writers in one process no longer share a `<pid>.tmp` temporary name.
