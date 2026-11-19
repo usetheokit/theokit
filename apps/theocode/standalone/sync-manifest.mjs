@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'))
-const EXACT_VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
+const NUM = '(0|[1-9]\\d*)'
+const PRE = '(0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)'
+const EXACT_VERSION = new RegExp(`^${NUM}\\.${NUM}\\.${NUM}(-${PRE}(\\.${PRE})*)?$`)
 
 // A pin must be an exact published version: a range or tag would make the lockfile move on its own.
 export function validateReleased(released) {
