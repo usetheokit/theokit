@@ -279,9 +279,7 @@ describe('permission_denied → typed refusal on the tool result', () => {
     }
     h.messages = [toolDone('c1', { stdout: 'ok', stderr: '', exitCode: 0 })]
     const factory = createSdkAgentStream(trAgent, [], 'test-key', { model: 'openai/gpt-4o-mini' })
-    const it = factory('hi', 's1')[Symbol.asyncIterator]()
-    await it.next()
-    await it.return(undefined) // consumer cancels; the detached SDK run keeps going
+    for await (const _ev of factory('hi', 's1')) break // consumer cancels; the SDK run keeps going
     // The still-running SDK run vetoes twice more; its late denial takes only one of them.
     const m1 = recordRefusal('sdk-run-7', 'Bash', { by: 'human', reason: 'a' }, 'x')
     recordRefusal('sdk-run-7', 'Bash', { by: 'human', reason: 'b' }, 'x')
