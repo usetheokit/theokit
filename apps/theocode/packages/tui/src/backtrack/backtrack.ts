@@ -81,7 +81,7 @@ export async function confirmBacktrack(
   const newId = `tui-${randomUUID()}`
   deps.setRotating(true)
   try {
-    let out: ReturnType<typeof forkSessionBeforeUserTurn>
+    let out: Awaited<ReturnType<typeof forkSessionBeforeUserTurn>>
     try {
       out = await Promise.resolve().then(() =>
         forkSessionBeforeUserTurn(currentSessionId(), newId, rewindNth),

@@ -91,7 +91,7 @@ export async function sessionsGcCommand(options: SessionsGcOptions = {}): Promis
   readonly lines: readonly string[]
   readonly failed: number
 }> {
-  const plan = planTranscriptGC({
+  const plan = await planTranscriptGC({
     cwd: options.cwd ?? process.cwd(),
     keepLast: options.keepLast ?? DEFAULTS.keepLast,
     maxAgeDays: options.maxAgeDays ?? DEFAULTS.maxAgeDays,
