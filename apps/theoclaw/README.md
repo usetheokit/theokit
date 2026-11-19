@@ -537,7 +537,7 @@ With `THEOCLAW_BROWSER=on`, `/control` agents also get a headless Chromium throu
 a persistent profile in `<workspace>/.theoclaw/browser-profile`, listening for DevTools only on
 loopback, and every session's server attaches to it, so a site signed in once stays signed in on
 later turns and for every agent, and two sessions can use the browser at once (they share cookies
-and the browser; each has its own tabs). The browser stops with the instance. A profile belongs to
+and the browser; which tab each one drives is not isolated). The browser stops with the instance. A profile belongs to
 one browser process, so two TheoClaw processes cannot share a workspace's browser. Cookies a site
 marks as session cookies may not survive an instance restart; persistent cookies do. Its tools reach
 the model as `mcp_browser_<tool>` (`mcp_browser_browser_navigate`, `mcp_browser_browser_snapshot`

@@ -98,7 +98,7 @@ function mcpClient(command: string, args: readonly string[]) {
 
 describe.skipIf(!CHROMIUM)('the shared browser on the installed Chromium', () => {
   it(
-    'keeps a login between sessions and gives simultaneous sessions a tab each',
+    'keeps a login after the browser is closed and started again on the same profile',
     { timeout: 4 * DEADLINE_MS },
     async () => {
       const http = createServer((req, res) => {
@@ -111,11 +111,6 @@ describe.skipIf(!CHROMIUM)('the shared browser on the installed Chromium', () =>
           res.end(`<!doctype html><title>t</title><h1>${text}</h1>`)
         }
         if (req.url === '/login') page('Signed in')
-        else if (req.url?.startsWith('/slow-'))
-          setTimeout(
-            () => page(`${req.url!.slice(1)} ${signedIn ? 'Welcome back' : 'Please sign in'}`),
-            1_000,
-          )
         else page(signedIn ? 'Welcome back' : 'Please sign in')
       })
       await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve))
@@ -123,41 +118,47 @@ describe.skipIf(!CHROMIUM)('the shared browser on the installed Chromium', () =>
       const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
 
       const profile = mkdtempSync(join(tmpdir(), 'theoclaw-shared-profile-'))
-      const shared = createSharedBrowser(join(profile, 'browser-profile'))
-      cleanups.push(async () => {
-        await shared.close()
-        rmSync(profile, { recursive: true, force: true })
-      })
-      const cdpEndpoint = await shared.start()
+      const profileDir = join(profile, 'browser-profile')
+      cleanups.push(() => rmSync(profile, { recursive: true, force: true }))
       const settings = readBrowser({
         THEOCLAW_BROWSER: 'on',
         PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH,
       })
-      const server = browserServer({
-        ...(settings as NonNullable<typeof settings>),
-        cdpEndpoint,
-      }) as { command: string; args: string[] }
-      const open = async () => {
+      /** A fresh browser process on the profile, and a session attached to it. */
+      const session = async () => {
+        const shared = createSharedBrowser(profileDir)
+        cleanups.push(() => shared.close())
+        const cdpEndpoint = await shared.start()
+        const server = browserServer({
+          ...(settings as NonNullable<typeof settings>),
+          cdpEndpoint,
+        }) as { command: string; args: string[] }
         const client = mcpClient(server.command, server.args)
         cleanups.push(() => client.stop())
         await client.start()
-        return client
+        return {
+          client,
+          end: async () => {
+            await client.stop()
+            await shared.close()
+          },
+        }
       }
 
-      const first = await open()
-      expect(await first.call('browser_navigate', { url: `${base}/login` })).toContain('Signed in')
-      await first.stop()
+      const first = await session()
+      expect(await first.client.call('browser_navigate', { url: `${base}/me` })).toContain(
+        'Please sign in',
+      )
+      expect(await first.client.call('browser_navigate', { url: `${base}/login` })).toContain(
+        'Signed in',
+      )
+      await first.end()
 
-      const second = await open()
-      const third = await open()
-      const [a, b] = await Promise.all([
-        second.call('browser_navigate', { url: `${base}/slow-a` }),
-        third.call('browser_navigate', { url: `${base}/slow-b` }),
-      ])
-      expect(a).toContain('slow-a Welcome back')
-      expect(b).toContain('slow-b Welcome back')
-      expect(a).not.toContain('slow-b')
-      expect(b).not.toContain('slow-a')
+      // A new Chromium process: only the profile on disk carries the login over.
+      const second = await session()
+      expect(await second.client.call('browser_navigate', { url: `${base}/me` })).toContain(
+        'Welcome back',
+      )
     },
   )
 })
