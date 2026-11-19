@@ -35,9 +35,14 @@ export function createJsonlLedger(
   return {
     async append(record: ApprovalRecord): Promise<void> {
       await mkdir(dir, { recursive: true })
+      // `mode` only applies at creation, so tighten a pre-existing wider file BEFORE writing to it:
+      // the new receipt must never sit in a file others can read, and a failed chmod writes nothing.
+      try {
+        await chmod(path, 0o600)
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause
+      }
       await appendFile(path, `${JSON.stringify(record)}\n`, { mode: 0o600 })
-      // `mode` only applies at creation; a pre-existing wider file is tightened.
-      await chmod(path, 0o600)
     },
     async read(): Promise<ApprovalRecord[]> {
       let text: string
