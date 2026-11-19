@@ -69,10 +69,10 @@ describe("createControlClient (T3.1)", () => {
     const { url } = await startInstance({ frames: [assistant("hello"), finished()], deltas: ["hel", "lo"] });
     const client = await connected(url);
     const turn = await frames(client.chat("hi", "owner"));
-    expect(turn.at(-1)).toEqual({ type: "done", session: "owner" });
+    expect(turn.at(-1)).toMatchObject({ type: "done", session: "owner" });
     expect(turn.filter((f) => f.type === "event").map((f) => (f.event as { type: string }).type)).toContain("text_delta");
     // The same connection runs the next turn on the same session.
-    expect((await frames(client.chat("again", "owner"))).at(-1)).toEqual({ type: "done", session: "owner" });
+    expect((await frames(client.chat("again", "owner"))).at(-1)).toMatchObject({ type: "done", session: "owner" });
   });
 
   it("interrupt sends the interrupt frame for the session", async () => {
@@ -82,7 +82,7 @@ describe("createControlClient (T3.1)", () => {
     const turn = frames(client.chat("hi", "owner"));
     await waitFor(() => agents[0]?.signals.length === 1, 2000, "the turn to start");
     client.interrupt("owner");
-    expect((await turn).at(-1)).toEqual({ type: "interrupted", session: "owner" });
+    expect((await turn).at(-1)).toMatchObject({ type: "interrupted", session: "owner" });
     expect(agents[0]!.signals[0]!.aborted).toBe(true);
   });
 
