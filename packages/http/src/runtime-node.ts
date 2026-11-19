@@ -3,8 +3,7 @@ export {
   nodeIncomingToRequest,
   writeResponseToNode,
   createNodeAdapter,
-  createNodeServer,
-  BindError,
 } from './bridge/runtime/node.js'
+export { createNodeServer, BindError } from './bridge/runtime/node-server.js'
 export type { RuntimeAdapter, ServerHandle } from './bridge/runtime/types.js'
-export type { NodeServer, NodeServerOptions } from './bridge/runtime/node.js'
+export type { NodeServer, NodeServerOptions } from './bridge/runtime/node-server.js'

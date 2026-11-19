@@ -285,6 +285,14 @@ await node.close({ force: true }) // memoized; force ends open and upgraded sock
 - `listen` rejects with `BindError` (`code`, `host`, `port`); after binding, server errors go to `onError(error, 'server')`.
 - `close()` is memoized: concurrent calls share one promise, and the first call decides whether it is forced.
 
+
+The server lives in `src/bridge/runtime/node-server.ts`; the request/response conversion and `createNodeAdapter` stay in `node.ts`. Its integration tests run with:
+
+```sh
+pnpm exec vitest run tests/integration/node-server-*.test.ts
+```
+
+They cover bind errors, memoized and forced close, client-disconnect aborts and upgrade handling.
 ## `registerControllers` (low-level)
 
 For advanced use without the Vite plugin:
