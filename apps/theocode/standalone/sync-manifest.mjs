@@ -64,6 +64,23 @@ export function deriveDependencies({
   return Object.fromEntries(Object.entries(out).sort(([a], [b]) => a.localeCompare(b)))
 }
 
+// The specifiers the lockfile recorded for this consumer's root importer, as { name: specifier }.
+export function lockfileSpecifiers(text) {
+  const block = text.split(/^packages:/m)[0]
+  const out = {}
+  const re = /^ {6}'?([^'\n:]+)'?:\n {8}specifier: (.+)$/gm
+  for (const m of block.matchAll(re)) out[m[1]] = m[2].trim().replace(/^'|'$/g, '')
+  return out
+}
+
+// Names whose manifest spec differs from the lockfile (or is missing on one side).
+export function lockfileDrift(deps, lockText) {
+  const locked = lockfileSpecifiers(lockText)
+  return [...new Set([...Object.keys(deps), ...Object.keys(locked)])]
+    .filter((name) => deps[name] !== locked[name])
+    .sort()
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const path = join(here, 'package.json')
   const pkg = readJson(path)
@@ -78,6 +95,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (JSON.stringify(pkg.dependencies) !== JSON.stringify(next.dependencies)) {
       console.error(
         'standalone/package.json is out of date: run `node sync-manifest.mjs`, then `pnpm install`, and commit package.json, pnpm-lock.yaml and, if you changed a pin, released.json',
+      )
+      process.exit(1)
+    }
+    const lockPath = join(here, 'pnpm-lock.yaml')
+    const drift = existsSync(lockPath)
+      ? lockfileDrift(pkg.dependencies, readFileSync(lockPath, 'utf8'))
+      : ['(pnpm-lock.yaml missing)']
+    if (drift.length > 0) {
+      console.error(
+        `standalone/pnpm-lock.yaml is out of date for ${drift.join(', ')}: run \`pnpm install\` and commit pnpm-lock.yaml`,
       )
       process.exit(1)
     }

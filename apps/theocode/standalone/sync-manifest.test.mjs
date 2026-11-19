@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { after, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { deriveDependencies, validateReleased } from './sync-manifest.mjs'
+import { deriveDependencies, lockfileDrift, validateReleased } from './sync-manifest.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const tmp = mkdtempSync(join(tmpdir(), 'sync-manifest-'))
@@ -93,6 +101,10 @@ describe('sync-manifest', () => {
       const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
       assert.equal(pkg.name, 'x')
       assert.deepEqual(pkg.dependencies, { '@theokit/agents': '1.2.3', zod: '^4.0.0' })
+      writeFileSync(
+        join(dir, 'pnpm-lock.yaml'),
+        "importers:\n\n  .:\n    dependencies:\n      '@theokit/agents':\n        specifier: 1.2.3\n        version: 1.2.3\n      zod:\n        specifier: ^4.0.0\n        version: 4.0.0\n\npackages:\n",
+      )
       assert.equal(run(dir, '--check').status, 0)
     })
 
@@ -114,6 +126,73 @@ describe('sync-manifest', () => {
       for (const f of ['released.json', 'package.json', 'pnpm-lock.yaml'])
         assert.ok(r.stderr.includes(f), `stderr names ${f}`)
       assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before)
+    })
+  })
+
+  describe('real manifests', () => {
+    const realRoot = join(here, '..')
+    const read = (p) => readFileSync(p, 'utf8')
+    // A copy of TheoCode's real manifests plus this consumer's real files, laid out like the repo.
+    function realCopy() {
+      const root = join(tmp, `real-${n++}`)
+      mkdirSync(join(root, 'packages'), { recursive: true })
+      copyFileSync(join(realRoot, 'package.json'), join(root, 'package.json'))
+      for (const d of readdirSync(join(realRoot, 'packages'), { withFileTypes: true })) {
+        if (!d.isDirectory()) continue
+        mkdirSync(join(root, 'packages', d.name))
+        copyFileSync(
+          join(realRoot, 'packages', d.name, 'package.json'),
+          join(root, 'packages', d.name, 'package.json'),
+        )
+      }
+      const dir = join(root, 'standalone')
+      mkdirSync(dir)
+      for (const f of ['sync-manifest.mjs', 'released.json', 'package.json', 'pnpm-lock.yaml'])
+        copyFileSync(join(here, f), join(dir, f))
+      return dir
+    }
+    const run = (dir, ...args) =>
+      spawnSync(process.execPath, [join(dir, 'sync-manifest.mjs'), ...args], { encoding: 'utf8' })
+
+    it('derives exactly the committed package.json and lockfile specifiers', () => {
+      const deps = deriveDependencies()
+      assert.deepEqual(deps, JSON.parse(read(join(here, 'package.json'))).dependencies)
+      assert.deepEqual(lockfileDrift(deps, read(join(here, 'pnpm-lock.yaml'))), [])
+    })
+
+    it('pins every workspace framework dependency to released.json', () => {
+      const released = JSON.parse(read(join(here, 'released.json')))
+      const deps = deriveDependencies()
+      for (const [name, version] of Object.entries(released)) assert.equal(deps[name], version)
+    })
+
+    it('--check passes on a copy of the real inputs', () => {
+      assert.equal(run(realCopy(), '--check').status, 0)
+    })
+
+    it('--check detects a moved release pin, and regeneration alone leaves the lockfile stale', () => {
+      const dir = realCopy()
+      const released = JSON.parse(read(join(dir, 'released.json')))
+      released['@theokit/agents-pty'] = '0.2.0'
+      writeFileSync(join(dir, 'released.json'), JSON.stringify(released))
+      const drifted = run(dir, '--check')
+      assert.equal(drifted.status, 1)
+      assert.match(drifted.stderr, /package\.json is out of date/)
+      assert.equal(run(dir).status, 0)
+      const stale = run(dir, '--check')
+      assert.equal(stale.status, 1)
+      assert.match(stale.stderr, /pnpm-lock\.yaml is out of date for @theokit\/agents-pty/)
+    })
+
+    it('--check detects a hand-edited package.json and a missing lockfile', () => {
+      const dir = realCopy()
+      const pkg = JSON.parse(read(join(dir, 'package.json')))
+      pkg.dependencies.zod = '^3.0.0'
+      writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg))
+      assert.equal(run(dir, '--check').status, 1)
+      const dir2 = realCopy()
+      rmSync(join(dir2, 'pnpm-lock.yaml'))
+      assert.match(run(dir2, '--check').stderr, /pnpm-lock\.yaml is out of date/)
     })
   })
 })

@@ -22,9 +22,15 @@ To move a release pin, or after changing a TheoCode manifest:
 
 1. Edit `released.json` (exact versions only; the script rejects ranges).
 2. Run `node sync-manifest.mjs` to regenerate `package.json`.
-3. Run `pnpm install` to update `pnpm-lock.yaml`.
+3. Run `pnpm install --no-frozen-lockfile` to update `pnpm-lock.yaml` (plain `pnpm install` is frozen on CI and refuses).
 4. Commit `released.json`, `package.json` and `pnpm-lock.yaml` together.
 
-`node sync-manifest.mjs --check` fails on drift against the real manifests; `sync-manifest.test.mjs` verifies the
-script's behaviour (regeneration, `--check`, pin validation) on isolated fixtures and does not read the real
-manifests.
+`node sync-manifest.mjs --check` fails on drift against the real manifests, and when `pnpm-lock.yaml`'s
+specifiers differ from `package.json`. `sync-manifest.test.mjs` verifies the script on isolated fixtures and on
+copies of the real TheoCode manifests, `released.json`, `package.json` and lockfile (pin move, hand edit,
+missing lockfile).
+
+Verified end to end in a temporary copy: moving `@theokit/agents-pty` to `0.2.0` made `--check` fail;
+`node sync-manifest.mjs` fixed `package.json` but `--check` still failed on the lockfile;
+`pnpm install --no-frozen-lockfile` regenerated it, after which `--check` and
+`pnpm install --frozen-lockfile` passed.
