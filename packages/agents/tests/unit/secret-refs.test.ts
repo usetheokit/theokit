@@ -119,6 +119,29 @@ describe('resolveSecretRefs', () => {
     }
   })
 
+  it('a builtin failure never retains stderr or other text from the underlying error', async () => {
+    const leaked = 'stderr-secret-qrs'
+    const dir = tmp()
+    const bin = join(dir, 'op')
+    writeFileSync(bin, `#!/bin/sh\necho ${leaked} >&2\nexit 1\n`)
+    chmodSync(bin, 0o755)
+    const error = (await resolveSecretRefs(
+      { K: 'op://v/i/f', PATH: `${dir}:${process.env.PATH ?? ''}` },
+      [builtinSecretStores[2]!],
+    ).catch((e: unknown) => e)) as SecretReferenceError
+    expect(error).toBeInstanceOf(SecretReferenceError)
+    const seen = JSON.stringify(Object.getOwnPropertyNames(error.cause ?? {}))
+    const chain: unknown[] = []
+    for (let c: unknown = error; c instanceof Error; c = c.cause) chain.push(c)
+    for (const c of chain) {
+      const e = c as Error
+      expect(e.message).not.toContain(leaked)
+      expect(e.stack ?? '').not.toContain(leaked)
+      expect(JSON.stringify(e, Object.getOwnPropertyNames(e))).not.toContain(leaked)
+    }
+    expect(seen).not.toContain(leaked)
+  })
+
   it('a builtin failure keeps the underlying error as the cause', async () => {
     const error = (await resolveSecretRefs({ K: 'secretref:file:/nonexistent/zzz' }).catch(
       (e: unknown) => e,

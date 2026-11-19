@@ -24,32 +24,27 @@ class BuiltinStoreFailure extends Error {
   override readonly name = 'BuiltinStoreFailure'
 }
 
-const MAX_SCAN_DEPTH = 6
-
-/** True when any string reachable from `thing` (message, stack, own properties, causes) contains a sensitive value. */
-function carriesAny(
-  thing: unknown,
-  sensitive: readonly string[],
-  depth = 0,
-  seen = new Set<unknown>(),
-): boolean {
-  if (typeof thing === 'string') return sensitive.some((value) => thing.includes(value))
-  if (thing === null || typeof thing !== 'object') return false
-  if (seen.has(thing)) return false
-  // Past the depth limit the object cannot be vouched for, so treat it as unsafe.
-  if (depth > MAX_SCAN_DEPTH) return true
-  seen.add(thing)
-  const probes: unknown[] = []
-  if (thing instanceof Error) probes.push(thing.name, thing.message, thing.stack)
-  for (const key of Reflect.ownKeys(thing)) {
-    // V8 keeps `stack` as an engine accessor; its text is already probed above.
-    if (thing instanceof Error && key === 'stack') continue
-    const descriptor = Object.getOwnPropertyDescriptor(thing, key)
-    // A getter could run caller code or hide a value; do not call it.
-    if (descriptor && !('value' in descriptor)) return true
-    probes.push(descriptor?.value)
+/**
+ * What may be kept of an underlying I/O error. The original is never retained: an `execFile`
+ * error carries the child's stderr and stdout, and any error may carry request or path text, none
+ * of which can be shown free of a secret. Only short scalar diagnostic fields survive, copied
+ * onto a fresh error with fixed text.
+ */
+function sanitizeCause(cause: unknown): Error {
+  const safe = new Error('underlying failure (details withheld)')
+  if (cause === null || typeof cause !== 'object') return safe
+  for (const key of ['code', 'errno', 'syscall', 'signal', 'killed'] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(cause, key)
+    const value: unknown = descriptor && 'value' in descriptor ? descriptor.value : undefined
+    if (
+      (typeof value === 'string' && /^[A-Z0-9_]{1,40}$/i.test(value)) ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      Object.assign(safe, { [key]: value })
+    }
   }
-  return probes.some((probe) => carriesAny(probe, sensitive, depth + 1, seen))
+  return safe
 }
 
 export class SecretReferenceError extends TheokitAgentError {
@@ -99,7 +94,7 @@ const fileStore: SecretStore = {
       // eslint-disable-next-line security/detect-non-literal-fs-filename -- the path is the operator's reference
       return trimNewline(await readFile(reference.slice(`${PREFIX}file:`.length), 'utf8'))
     } catch (cause) {
-      throw new BuiltinStoreFailure('file could not be read', { cause })
+      throw new BuiltinStoreFailure('file could not be read', { cause: sanitizeCause(cause) })
     }
   },
 }
@@ -123,7 +118,8 @@ const opStore: SecretStore = {
         ['read', '--no-newline', reference],
         { timeout: OP_TIMEOUT_MS, env: childEnv },
         (error, stdout) => {
-          if (error) reject(new BuiltinStoreFailure('1Password CLI failed', { cause: error }))
+          if (error)
+            reject(new BuiltinStoreFailure('1Password CLI failed', { cause: sanitizeCause(error) }))
           else resolve(trimNewline(stdout))
         },
       )
@@ -147,7 +143,7 @@ const vaultStore: SecretStore = {
         headers: { 'X-Vault-Token': token },
       })
     } catch (cause) {
-      throw new BuiltinStoreFailure('Vault request failed', { cause })
+      throw new BuiltinStoreFailure('Vault request failed', { cause: sanitizeCause(cause) })
     }
     if (!response.ok) throw new BuiltinStoreFailure(`Vault answered ${response.status}`)
     let body: { data?: { data?: Record<string, unknown> } & Record<string, unknown> }
@@ -214,22 +210,16 @@ export async function resolveSecretRefs(
     try {
       value = await store.read(reference, env)
     } catch (error) {
-      // Only our own fixed-text failures are safe to quote. The original error is kept as the
-      // cause only for built-in stores, and only when nothing reachable from it carries a resolved
-      // value or another variable's value (a token, a key); otherwise it is dropped.
+      // Only our own fixed-text failures are quoted and kept as the cause; their underlying
+      // error is already reduced to scalar diagnostics. A caller store's error is dropped, as the
+      // resolver cannot know what value it carries.
       const known = error instanceof BuiltinStoreFailure
       const detail = known ? `: ${error.message}` : ''
-      const sensitive = [...values, ...Object.values(env)].filter(
-        (v): v is string => typeof v === 'string' && v !== '' && v.trim() !== reference,
-      )
-      // A caller store may throw the very value it was reading, which the resolver cannot know,
-      // so only a built-in failure (fixed text, underlying I/O error) can be vouched for.
-      const keep = known && !carriesAny(error, sensitive)
       throw new SecretReferenceError(
         `${name}: secret reference (${store.kind}) could not be resolved${detail}`,
         name,
         store.kind,
-        keep ? { cause: error } : undefined,
+        known ? { cause: error } : undefined,
       )
     }
     if (typeof value !== 'string' || value === '') {
