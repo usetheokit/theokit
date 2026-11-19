@@ -286,6 +286,20 @@ answers `continue` until the agent calls the tool with `complete` (`done`) or `b
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
 
+## Running scheduled prompts
+
+`createScheduler` needs a `RunPort`. `agentRunPort(withAgent)` is the stock one: it runs each prompt on the
+agent `withAgent` hands it, sends with the scheduler's signal, drains and waits, and returns
+`{ ok: false, error }` for a run that ends `error` or `cancelled` or has no result. `withAgent` owns disposal.
+
+```ts
+import { agentRunPort, createScheduler, fileTransientJob } from '@theokit/agents/tools'
+
+const scheduler = createScheduler({ store, deliver, run: agentRunPort(withAgent) })
+const { job, transient } = fileTransientJob({ id: 'heartbeat', cron: '*/30 * * * *', target, file: 'HEARTBEAT.md' })
+await scheduler.add(job, transient) // an absent or blank file means no run; other read errors reject
+```
+
 ## Secret references in configuration
 
 `resolveSecretRefs(env, stores?)` from `@theokit/agents/auth` replaces every value that names a secret
