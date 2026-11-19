@@ -935,7 +935,10 @@ export function toAgentFactory(
     const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
     // `read: 'advertised'` only: a function-valued selection must reach the SDK as a static `enabled` list so
     // the listing and `skill_read` agree. The default `'inline'` path is left exactly as it was.
-    const created = compiled.skillsRead === 'advertised' ? await withResolvedSkills(compiled, runContext) : compiled
+    const created =
+      compiled.skillsRead === 'advertised'
+        ? await withResolvedSkills(compiled, runContext)
+        : compiled
     const { options: m8 } = assembleM8CreateOptions(created)
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
