@@ -6,6 +6,7 @@
  *
  * Flow: @Agent decorator → compileAgent() → createSdkAgentStream() → SDK Agent.create() → Run.stream()
  */
+import type { ToolRefusal } from '@theokit/presenter'
 // M96 — the rationale below, and the `prettier-ignore`, exist for lint budget: this file sits at the
 // `max-lines` ceiling (500 lines of code) and the break prettier would make in this import costs
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
@@ -632,17 +633,38 @@ function resolveCreateOptions(
   return { m8, extra }
 }
 
+/** SDK `permission_denied` `source` → who refused. `file_hook` is a hook; the rest are plugin vetoes. */
+function refusalFromRunEvent(ev: unknown): { callId: string; refusal: ToolRefusal } | undefined {
+  if (typeof ev !== 'object' || ev === null) return undefined
+  const e = ev as { type?: unknown; toolCallId?: unknown; source?: unknown; message?: unknown }
+  if (e.type !== 'permission_denied' || typeof e.toolCallId !== 'string' || e.toolCallId === '') {
+    return undefined
+  }
+  const by = e.source === 'file_hook' ? 'hook' : 'plugin'
+  return {
+    callId: e.toolCallId,
+    refusal: { by, ...(typeof e.message === 'string' ? { reason: e.message } : {}) },
+  }
+}
+
 function buildSendOptions(
   overrides: RuntimeOverrides,
   factoryOpts: { disableTools?: boolean } | undefined,
   compiled: CompiledAgentOptions,
+  refusals: Map<string, ToolRefusal>,
 ): SendOptions {
   const sendOptions: SendOptions = {}
   if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
   applyStepCeiling(sendOptions, compiled.maxIterations)
-  // theokit#132 — set only when supplied: an `onRunEvent: undefined` riding along would still
-  // change what the SDK receives on the non-opted-in path.
-  if (overrides.onRunEvent !== undefined) sendOptions.onRunEvent = overrides.onRunEvent
+  // theokit#132 — the caller's sink still receives every event unchanged. The adapter also listens
+  // for `permission_denied` (the SDK's structural refusal signal) so the matching tool result can
+  // carry a typed refusal; an exit code of 126 alone is not evidence of one.
+  const callerSink = overrides.onRunEvent
+  sendOptions.onRunEvent = (ev) => {
+    const found = refusalFromRunEvent(ev)
+    if (found !== undefined) refusals.set(found.callId, found.refusal)
+    return callerSink?.(ev)
+  }
   return sendOptions
 }
 
@@ -660,6 +682,7 @@ async function* streamTimeline(
   runId: string,
   state: { sawError: boolean; lastEventType: string },
   outcome: TurnOutcome | undefined,
+  refusals: ReadonlyMap<string, ToolRefusal>,
 ): AsyncGenerator<StreamEvent> {
   const run = (await sendPromise) as {
     events: () => AsyncGenerator<SdkTimelineEvent>
@@ -671,7 +694,12 @@ async function* streamTimeline(
       // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
       if (event.type === 'done') continue
       state.lastEventType = event.type
-      yield event
+      const callId = (event as { callId?: unknown }).callId
+      const refusal =
+        event.type === 'tool_result' && typeof callId === 'string'
+          ? refusals.get(callId)
+          : undefined
+      yield refusal !== undefined ? { ...event, refusal } : event
     }
   }
   for await (const ev of run.events()) {
@@ -763,12 +791,13 @@ async function* streamSdkAgent(
     // model order, and `textAlreadyStreamed` tells us which text is a repeat instead of leaving us
     // to compare content. `state` survives only to carry the two facts the tail block below needs.
     const state = { sawError: false, lastEventType: '' }
-    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled)
+    const refusals = new Map<string, ToolRefusal>()
+    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled, refusals)
     const sendPromise = agent.send(buildSendInput(message, overrides), sendOptions)
     // The generator is opened lazily so consumption starts only when the caller pulls — the loop is
     // detached inside the SDK (`setTimeout(() => void driveLoop())`), so the run handle is available
     // long before the turn finishes and the timeline streams live.
-    const timeline = () => streamTimeline(sendPromise, runId, state, opts.outcome)
+    const timeline = () => streamTimeline(sendPromise, runId, state, opts.outcome, refusals)
     for await (const event of applyTextTransforms(timeline(), {
       parseThinkTags,
       stripToolDialect,

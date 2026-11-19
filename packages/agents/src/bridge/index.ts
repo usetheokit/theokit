@@ -57,6 +57,11 @@ export {
 } from './agent-route-generator.js'
 
 export {
+  delegationPortFromAgentFactory,
+  type DelegationPortFromAgentFactoryOptions,
+} from './delegation-port-from-factory.js'
+
+export {
   createSdkAgentStream,
   toAgentFactory,
   type SdkAgentHandle,
@@ -257,3 +262,4 @@ export * from './setting-sources-gate.js'
 
 // #1866 — the compiled wiring reported through `onWired`.
 export type { CompiledWiring } from './compiled-wiring.js'
+export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'

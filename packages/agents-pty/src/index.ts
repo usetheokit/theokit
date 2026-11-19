@@ -37,3 +37,6 @@ export {
 } from '@theokit/sdk-pty'
 
 export type { PtyInteractiveBackendOptions } from '@theokit/sdk-pty'
+
+export { createPtyOwner, PtyOwnerConfigError } from './pty-owner.js'
+export type { OwnedPtyBackend, PtyOwner, PtyOwnerOptions } from './pty-owner.js'

@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
 import { createWebchatRoutes } from '../src/webchat/routes.js'
-import { isGranted, visitorsPath } from '../src/webchat/visitors.js'
+import { isGranted, visitorsCommand, visitorsPath } from '../src/webchat/visitors.js'
 import { TRUSTED_IDENTITY_HEADER } from '../src/control-plane/trusted-proxy.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
 
@@ -20,10 +20,27 @@ describe('visitor grants', () => {
     expect(await runCli(['visitors', 'grant', 'Ann@Example.com', '--for', '1h'], { ...v.io, env })).toBe(0)
     const file = visitorsPath(env)
     expect(isGranted(file, 'ann@example.com')).toBe(true)
+    expect(statSync(file).mode & 0o777).toBe(0o600)
     expect(isGranted(file, 'ann@example.com', Date.now() + 2 * 3_600_000)).toBe(false)
     expect(isGranted(file, 'bob@example.com')).toBe(false)
     await runCli(['visitors', 'revoke', 'ann@example.com'], { ...v.io, env })
     expect(isGranted(file, 'ann@example.com')).toBe(false)
+  })
+
+  it('keeps every change when grant and revoke commands run at once', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'visitors-'))
+    const v = harness()
+    const io = { env: { THEOCLAW_STATE_DIR: dir }, homeDir: v.io.homeDir, stdout: v.io.stdout }
+    const file = visitorsPath(io.env)
+    await visitorsCommand(['grant', 'ann@example.com', '--for', '1h'], io)
+    await Promise.all([
+      visitorsCommand(['revoke', 'ann@example.com'], io),
+      visitorsCommand(['grant', 'bob@example.com', '--for', '1h'], io),
+      visitorsCommand(['grant', 'cy@example.com', '--for', '1h'], io),
+    ])
+    expect(isGranted(file, 'ann@example.com')).toBe(false)
+    expect(isGranted(file, 'bob@example.com')).toBe(true)
+    expect(isGranted(file, 'cy@example.com')).toBe(true)
   })
 
   it('opens the chat post before expiry and refuses it after', async () => {
