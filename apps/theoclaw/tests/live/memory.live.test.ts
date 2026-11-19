@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions } from '@theokit/sdk'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createChannelAgentFactory } from '../../src/control-plane/agent-factory.js'
 import { MemoryStore } from '../../src/memory/memory-store.js'
@@ -22,14 +22,23 @@ import type { SessionAgent } from '../../src/sessions/session-agents.js'
 const LIVE = process.env.THEOCLAW_LIVE === '1'
 const TURN_TIMEOUT_MS = 180_000
 
-const word = (): string => Array.from({ length: 8 }, () => String.fromCharCode(97 + randomInt(26))).join('')
+// A pronounceable made-up name plus digits: unpredictable (about 1e10 values), and a model copies it
+// verbatim because it reads as a name, where a random letter string gets "corrected".
+const CONSONANTS = 'bdfghklmnprstvz'
+const VOWELS = 'aeiou'
+const pickCity = (): string => {
+  const syllable = (): string => `${CONSONANTS[randomInt(CONSONANTS.length)]}${VOWELS[randomInt(VOWELS.length)]}`
+  const name = `${syllable()}${syllable()}${syllable()}${syllable()}`
+  return `${name[0]?.toUpperCase()}${name.slice(1)}-${randomInt(1000, 10000)}`
+}
+const lower = (text: string): string => text.toLowerCase()
 
 describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', () => {
   it(
     'session_search finds a Telegram session from the control surface, and the reviewer fact is recalled',
     async () => {
       const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-live-'))
-      const city = word()
+      const city = pickCity()
       const env = { ...process.env, THEOCLAW_WORKSPACE: workspace, THEOCLAW_TRANSCRIPTS: 'on', THEOCLAW_MEMORY: 'on', THEOCLAW_OWNERS: 'telegram:u,line:u' }
       const { sessions, withAgent, memory } = chatSessions({
         env,
@@ -38,7 +47,7 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
       })
       const telegram = { platform: 'telegram', sender: { id: 'u' }, channel: { type: 'dm', id: 'u' } } as never
       await withAgent(telegram, async (lease) => {
-        const run = await lease.agent.send(`Please remember: my home city is called ${city}. Reply "ok".`)
+        const run = await lease.agent.send(`Please remember: my home city is called ${city} (a made-up name, keep it exactly). Reply "ok".`)
         for await (const message of run.stream()) void message
         await run.wait()
         lease.release()
@@ -48,7 +57,7 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
 
       const store = new MemoryStore(join(workspace, '.theoclaw', 'memory'))
       // A fact the forked reviewer saved with a real model call.
-      expect(store.facts().join(' ')).toContain(city)
+      expect(lower(store.facts().join(' '))).toContain(lower(city))
 
       // A fresh session on another surface recalls the fact from its prompt alone: it has no tool.
       const other = chatSessions({
@@ -66,9 +75,11 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
       })
       await other.memory?.idle()
       await other.sessions.disposeAll()
-      expect(recalled).toContain(city)
+      expect(lower(recalled)).toContain(lower(city))
 
       // A different surface (the control agent) asks session_search through a real model.
+      // Spying on the real store keeps `this` intact (MemoryStore has private fields).
+      const searchSpy = vi.spyOn(store, 'search')
       const control = await createChannelAgentFactory(env, (options) =>
         Agent.create({ ...options, tools: [sessionSearchTool(store)] } as never),
       )()
@@ -76,7 +87,9 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
         'Use session_search to look up what my home city is called, and answer with just the name.',
       )
       for await (const message of run.stream()) void message
-      expect((await run.wait()).result ?? '').toContain(city)
+      expect(lower((await run.wait()).result ?? '')).toContain(lower(city))
+      // The answer came through the tool, not a guess.
+      expect(searchSpy).toHaveBeenCalled()
     },
     TURN_TIMEOUT_MS,
   )

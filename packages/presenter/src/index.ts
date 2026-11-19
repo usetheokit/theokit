@@ -19,6 +19,8 @@ export * from './presenters/terminal.js'
 export * from './presenters/json.js'
 
 export {
+  contentChunkFromEvent,
+  finalMessageOf,
   foldTurnLifecycle,
   type ContentChunk,
   type LifecycleItem,
@@ -29,3 +31,8 @@ export {
 export * from './source/wire-reader.js'
 export * from './tool-kinds/tool-kinds.js'
 export * from './tool-result/read-tool-result.js'
+export {
+  pendingApprovals,
+  readPendingApproval,
+  type PendingApproval,
+} from './approvals/pending-approvals.js'

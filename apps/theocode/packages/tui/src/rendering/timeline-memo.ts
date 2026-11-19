@@ -1,3 +1,4 @@
+import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
 import {
   messagesToAgentEvents,
   type AgentEvent,
@@ -7,7 +8,6 @@ import {
 
 export type TimelineDeps = MessagesToEventsOptions
 
-const CONTINUATION_MARK = '[[theokit:goal-continuation]]'
 const COLLAPSED_CONTINUATION = '↻ continuing the goal…'
 
 export function prepareThread(messages: readonly UIMessageLike[]): UIMessageLike[] {
@@ -17,7 +17,7 @@ export function prepareThread(messages: readonly UIMessageLike[]): UIMessageLike
       .filter((pt) => pt.type === 'text')
       .map((pt) => pt.text ?? '')
       .join('')
-    if (!text.startsWith(CONTINUATION_MARK)) return m
+    if (!text.startsWith(GOAL_CONTINUATION_MARKER)) return m
     return { ...m, parts: [{ type: 'text', text: COLLAPSED_CONTINUATION }] }
   })
 }

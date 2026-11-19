@@ -17,7 +17,12 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { foldTurnLifecycle, type LifecycleVocabulary } from '../src/turn-lifecycle.js'
+import {
+  contentChunkFromEvent,
+  finalMessageOf,
+  foldTurnLifecycle,
+  type LifecycleVocabulary,
+} from '../src/turn-lifecycle.js'
 
 /** A caller's dialect. Deliberately not the Codex one — the framework must not know it. */
 const DIALECT: LifecycleVocabulary<string> = {
@@ -150,5 +155,79 @@ describe('foldTurnLifecycle — nothing is observed after the turn closes', () =
     turn.finish({ status: 'ok' })
 
     expect(turn.observe({ kind: 'tool-call', id: 'x', name: 'late' })).toEqual([])
+  })
+})
+
+describe('foldTurnLifecycle — message boundary and failed tools', () => {
+  const run = (options?: { messageBoundary?: 'tool-call' | 'none' }) => {
+    const turn = foldTurnLifecycle(DIALECT, 't', options)
+    const out = [
+      ...turn.observe({ kind: 'text', delta: "I'll read the file." }),
+      ...turn.observe({ kind: 'tool-call', id: 'c1', name: 'read' }),
+      ...turn.observe({ kind: 'tool-result', id: 'c1', name: 'read' }),
+      ...turn.observe({ kind: 'text', delta: 'The answer.' }),
+      ...turn.finish({ status: 'ok' }),
+    ]
+    return out
+  }
+
+  it('with messageBoundary tool-call, a preamble and an answer become two message items', () => {
+    expect(run({ messageBoundary: 'tool-call' })).toEqual([
+      "item-:message_0:I'll read the file.",
+      'item+:c1:read',
+      'item-:c1:read',
+      'item-:message_1:The answer.',
+      'turn:done:null',
+    ])
+  })
+
+  it('without options the fold keeps one concatenated message', () => {
+    expect(run()).toEqual([
+      'item+:c1:read',
+      'item-:c1:read',
+      "item-:message:I'll read the file.The answer.",
+      'turn:done:null',
+    ])
+  })
+
+  it('a failed tool result closes its item with isError true', () => {
+    const seen: unknown[] = []
+    const turn = foldTurnLifecycle({ ...DIALECT, itemCompleted: (i) => (seen.push(i), 'x') }, 't')
+    turn.observe({ kind: 'tool-result', id: 'c', name: 'n', isError: true })
+    turn.observe({ kind: 'tool-result', id: 'd', name: 'n' })
+    expect(seen).toEqual([
+      { id: 'c', kind: 'n', isError: true },
+      { id: 'd', kind: 'n' },
+    ])
+  })
+
+  it('contentChunkFromEvent maps tool-result isError and returns null for status events', () => {
+    const failed = {
+      type: 'tool-result',
+      callId: 'c',
+      name: 'n',
+      result: 1,
+      isError: true,
+    } as const
+    expect(contentChunkFromEvent(failed)).toEqual({
+      kind: 'tool-result',
+      id: 'c',
+      name: 'n',
+      isError: true,
+    })
+    const text = { type: 'text', text: 'hi' } as const
+    expect(contentChunkFromEvent(text)).toEqual({ kind: 'text', delta: 'hi' })
+    expect(contentChunkFromEvent({ type: 'status', status: 'active' })).toBeNull()
+  })
+
+  it('finalMessageOf returns the text after the last tool call', () => {
+    expect(
+      finalMessageOf([
+        { type: 'text', text: 'pre ' },
+        { type: 'tool-call', callId: 'c', name: 'n', input: {} },
+        { type: 'text', text: ' The answer. ' },
+      ]),
+    ).toBe('The answer.')
+    expect(finalMessageOf([{ type: 'text', text: ' only ' }])).toBe('only')
   })
 })

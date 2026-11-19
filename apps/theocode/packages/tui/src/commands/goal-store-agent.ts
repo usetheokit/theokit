@@ -1,5 +1,7 @@
 import { readTurnUsage, type UIMessageLike } from '@theokit/tui'
 
+import { noteTurnStart } from '../persistence/fork-session.js'
+
 interface StoreSnapshot {
   status: 'idle' | 'streaming' | 'done' | 'error'
   thread: readonly UIMessageLike[]
@@ -47,6 +49,8 @@ export function createStoreGoalAgent(deps: StoreGoalAgentDeps): {
   return {
     async send(prompt: string) {
       const baselineLen = deps.snapshot().thread.length
+      // Autonomous turns bypass handleSubmit: invalidate any fork still copying before sending.
+      noteTurnStart()
       deps.send(prompt)
       return {
         wait: async (): Promise<WaitResult> => {

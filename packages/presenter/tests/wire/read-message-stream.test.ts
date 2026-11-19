@@ -298,3 +298,33 @@ describe('finish carries messageMetadata onto the message', () => {
     expect(last?.metadata).toEqual(usage)
   })
 })
+
+describe('readMessageStream — tool refusal', () => {
+  const call = { type: 'tool-input-available', toolCallId: 'c1', toolName: 'Bash', input: {} }
+  it('puts refusal on the matching tool part and adds no part of its own', async () => {
+    const out = await collect([
+      { type: 'start' },
+      call,
+      {
+        type: 'data-tool-refusal',
+        data: { toolCallId: 'c1', by: 'hook', reason: 'r' },
+        transient: true,
+      },
+      { type: 'tool-output-error', toolCallId: 'c1', errorText: 'e' },
+    ])
+    const parts = out.at(-1)!.parts
+    expect(parts).toHaveLength(1)
+    expect(parts[0]).toMatchObject({ state: 'output-error', refusal: { by: 'hook', reason: 'r' } })
+  })
+
+  it('ignores a malformed refusal and one for another call', async () => {
+    const out = await collect([
+      { type: 'start' },
+      call,
+      { type: 'data-tool-refusal', data: { toolCallId: 'c1', by: 'bogus' }, transient: true },
+      { type: 'data-tool-refusal', data: { toolCallId: 'other', by: 'plugin' }, transient: true },
+      { type: 'tool-output-error', toolCallId: 'c1', errorText: 'e' },
+    ])
+    expect(out.at(-1)!.parts[0]).not.toHaveProperty('refusal')
+  })
+})

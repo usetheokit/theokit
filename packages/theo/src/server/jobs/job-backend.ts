@@ -112,6 +112,18 @@ export interface JobBackend {
   enqueueInTransaction?(client: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }>
 
   /**
+   * Optional: remove the job `(name, idempotencyKey)` through `client`, a connection inside the
+   * caller's transaction, while no worker ever leased it. Resolves `true` when it removed one and
+   * `false` when there was none or a worker has leased it (even with an expired lease) or it
+   * failed, because a run may be going on for it (usetheokit/theokit#2118). A backend whose jobs
+   * live elsewhere leaves it out, as with `enqueueInTransaction`.
+   */
+  cancelInTransaction?(
+    client: PoolLike,
+    input: { name: string; idempotencyKey: string },
+  ): Promise<boolean>
+
+  /**
    * Optional: resolve when the backend's store answers, reject when it does not. `GET /__theo/ready`
    * calls it under `theokit start` and `theokit dev`, so an unreachable job store answers 503
    * (usetheokit/theokit#1071). A backend with nothing remote to reach leaves it out.
