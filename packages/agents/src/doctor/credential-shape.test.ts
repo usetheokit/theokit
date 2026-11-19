@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  credentialShape,
-  describeCredentialDefect,
-  type CredentialDefect,
-} from './index.js'
+import { credentialShape, describeCredentialDefect, type CredentialDefect } from './index.js'
 
 const CASES: ReadonlyArray<readonly [CredentialDefect, string]> = [
   ['edge_whitespace', 'sk-abcdefgh12345\n'],
