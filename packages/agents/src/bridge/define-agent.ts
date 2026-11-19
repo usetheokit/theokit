@@ -29,6 +29,7 @@ import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
 import type { CodePlugin } from './code-plugins.js'
+import { type CompiledWiring, WIRED_HOOKS, WIRED_LISTENER } from './compiled-wiring.js'
 import type { HookHandlers } from './hook-handlers.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
 import {
@@ -123,6 +124,12 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    */
   skills?: SkillsSelection
   /**
+   * Which skills `skill_read` serves. `'inline'` (default): inline skills only. `'advertised'`: also
+   * skills enabled by name and discovered through `settingSources` / `compatSources`, after the trust
+   * gate — exactly what the `<skills>` block lists.
+   */
+  skillsRead?: 'inline' | 'advertised'
+  /**
    * Subagents this agent carries, registered by name — `AgentOptions.agents` in the SDK.
    *
    * #825 — distinct from what `settingSources` discovers, and that distinction is the whole reason it
@@ -208,6 +215,11 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * under this name — the plugin is the TRANSPORT, this is the contract callers write against.
    */
   hooks?: HookHandlers | Readonly<Record<string, unknown>>
+  /**
+   * Called once per `Agent.create`, after the options are final, with the wiring read from those
+   * options. A throwing listener is warned about and does not fail the build.
+   */
+  onWired?: (wiring: CompiledWiring) => void
   /**
    * MCP servers available to the agent — the builder-chain equivalent of the `@MCP` class
    * decorator. Each key is a server name; the value is the server configuration. Forwarded
@@ -306,6 +318,7 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
     // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
     ...compileSkillsSelection(def.skills),
+    ...(def.skillsRead !== undefined ? { skillsRead: def.skillsRead } : {}),
     // #825 — the author's own subagents, carried verbatim. Absent ⇒ no key, so an agent that
     // declares none is indistinguishable from one written before the field existed, and the SDK
     // goes on discovering from `settingSources` exactly as it did.
@@ -375,7 +388,7 @@ function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly Code
   const entries = Object.entries(map ?? {}).filter(([, h]) => typeof h === 'function')
   const explicit = def.plugins ?? []
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && def.onWired === undefined) {
     return def.plugins !== undefined ? { plugins: def.plugins } : {}
   }
 
@@ -385,6 +398,9 @@ function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly Code
     name: 'theokit-builder-hooks',
     version: '1.0.0',
     kind: 'general' as const,
+    [WIRED_HOOKS]: entries.map(([event]) => ({ event })),
+    // The listener rides on the plugin so it survives every clone of the compiled options.
+    [WIRED_LISTENER]: def.onWired,
     register(ctx: { on: (hook: string, handler: (c: never) => unknown) => void }): void {
       for (const [hookName, handler] of entries) {
         ctx.on(hookName, handler as (c: never) => unknown)

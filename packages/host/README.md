@@ -21,9 +21,43 @@ try {
 }
 ```
 
+## `defineInstanceConfig`
+
+Declare an app's per-user config file (`@theokit/host/instance-config`) and get its path, load, write and audit.
+
+```ts
+import { defineInstanceConfig } from '@theokit/host/instance-config'
+import { homedir } from 'node:os'
+
+const config = defineInstanceConfig({
+  app: 'my-agent',
+  keys: {
+    MY_AGENT_MODEL_KEY: { secret: true },
+    MY_AGENT_PORT: { parse: (raw) => Number.parseInt(raw, 10) },
+  },
+})
+
+config.path(process.env, homedir()) // $MY_AGENT_CONFIG, else $XDG_CONFIG_HOME or ~/.config/my-agent/my-agent.env
+config.load(process.env, homedir()) // copies keys the environment does not hold; the environment wins
+await config.write(config.path(process.env, homedir()), { MY_AGENT_PORT: '8080' }, { force: false })
+config.fix(config.audit(config.path(process.env, homedir())))
+```
+
+`MY_AGENT_PROFILE=work` selects `my-agent-work.env`. A missing file named by `MY_AGENT_CONFIG` throws `InstanceConfigError`; a missing default file makes `load` return `undefined`. `write` creates the file 0600 and a directory it creates 0700, replaces atomically, refuses an existing file without `force`, refuses undeclared keys and values with `"`, `\` or a line break, and runs each key's `parse` first. Errors name keys and paths, never values. `audit` reports a file or app-owned directory open beyond its owner; `fix` applies `chmod` and returns the findings it fixed.
+
+**Hot reload.** `config.watch(path, env, { debounceMs?, validate?, onEvent })` watches the file's directory (so an editor's rename-over is seen), debounces 250 ms by default, and returns `{ close() }`; the watcher and timer are unref'd. A changed key declared `hot` is applied to `env` unless the caller set that variable; every other changed key is listed in `restartRequired`. A file whose hot key fails its `parse`, or that `validate(candidate)` refuses by throwing, gives `refused` and keeps the running values. A watcher error closes the watcher and reports `{ kind: 'watch-failed', cause }`. Events (`applied`, `unchanged`, `refused`, `watch-failed`) name keys, never values. `config.reload(path, env, previous)` is the single step and returns `{ result, accepted }`. Pair it with `restartSelf`:
+
+```ts
+config.watch(path, process.env, {
+  onEvent: (event) => {
+    if (event.kind === 'applied' && event.restartRequired.length > 0) void restartSelf({ startEnv: originalEnv })
+  },
+})
+```
+
 ## `@theokit/host/service`
 
-Install an agent app as a login service and restart it through its supervisor. Only Linux (`systemd --user`) exists today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
+Install an agent app as a login service and restart it through its supervisor. Linux (`systemd --user`), macOS (launchd LaunchAgent) and Windows (Task Scheduler) exist today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
 
 ```ts
 import { serviceBackend, isSupervised, restartSelf, waitForPredecessor } from '@theokit/host/service'
@@ -41,7 +75,17 @@ console.log(await backend.status('my-agent')) // 'running' | 'stopped' | 'not-in
 
 - `install` writes the unit atomically. If a `systemctl` step fails it throws `ServiceCommandError` (with `command` and `exitCode`), puts the previous unit back (or removes the file on a first install) and runs `daemon-reload`.
 - A value the unit cannot hold (a line break, a bad label) throws `ServiceDefinitionError` naming the field, never the value. `%` is doubled everywhere and `$` in `ExecStart=`, per systemd.syntax(7).
+- macOS: `serviceBackend('darwin', { uid: process.getuid(), logFile })` writes `~/Library/LaunchAgents/<label>.plist` and runs `launchctl bootout` (a missing service is no error) then `launchctl bootstrap gui/<uid>`. `install` without `uid` throws `ServiceDefinitionError`. stdout and stderr go to `logFile`, default `~/Library/Logs/<label>.log`. A failing `bootstrap` removes the plist and throws `ServiceCommandError`. `KeepAlive` restarts the agent only after a non-zero exit, so `restartSelf` (exit code 75) restarts it and a clean stop stays stopped. `uninstall` keeps the plist when `bootout` fails and `launchctl print` does not say the service is absent (exit 113). `restart` runs `launchctl kickstart -k gui/<uid>/<label>`. `launchdPlist(spec, { logFile })` returns the XML-escaped plist text.
 - The unit stops at logout unless lingering is on: run `loginctl enable-linger <user>` to keep it running.
+
+### Windows (Task Scheduler)
+
+`serviceBackend('win32')` registers a logon-triggered scheduled task named by `label` (least privilege, no time limit, restart after failure every minute) from a UTF-16 XML file kept in a fresh private temporary directory and removed afterwards. `scheduledTaskXml(spec, { user })` returns the definition.
+
+- **A task carries no environment.** `install` with a non-empty `spec.env` throws `ServiceDefinitionError`: pass the values as `args` instead. Every argument is quoted per the `CommandLineToArgvW` rules.
+- The task runs as `USERDOMAIN\USERNAME` from `options.env`; without `USERNAME`, `install` throws `ServiceDefinitionError`. `command` and `workingDirectory` must be Windows absolute paths.
+- A failing `/Create` or `/Run` deletes the task and throws `ServiceCommandError`.
+- State is read through `Get-ScheduledTask` (`schtasks` output is localised). `uninstall` stops the task's process tree, then deletes the task; a failed `/Delete` counts as success only when PowerShell confirms the task is absent. `definitionPath` returns the task name.
 
 Restart from inside the app:
 
@@ -82,6 +126,27 @@ await restore({ from: '/srv/backups/2026-11-19', roots })
 - SQLite files (found by header) are snapshotted with the `node:sqlite` backup API, without their `-wal`, `-shm` and `-journal` files.
 - `restore` checks every file against the manifest before writing, refuses manifest paths that leave their root, stages each root beside its target, checks the bytes again, then renames into place. An existing target is kept aside and put back if a later root fails to place.
 - The lock protects cooperating writers only; the renames of several roots are not crash-atomic.
+
+### Storage locations
+
+Keep backups in named places, optionally encrypted at rest with AES-256-GCM.
+
+```ts
+import { createStorageRegistry } from '@theokit/host/backup'
+
+const storage = createStorageRegistry({ file: '/srv/app/config/storage.json', defaultRoot: '/srv/app/backups' })
+await storage.init('offsite', { root: '/mnt/shared/backups', encrypted: true }) // names: [a-z0-9][a-z0-9_-]{0,63}
+const archive = await storage.store('offsite', '/srv/backups/2026-11-19') // verifies the manifest first
+await storage.fetchLatest('offsite', '/srv/restore-from') // into must be absent or empty; then `restore`
+await storage.test('offsite') // writes, reads back, decrypts and removes a probe
+```
+
+- **The key lives in the registry file** (`file`, mode 0600, written atomically) as base64, next to the location it belongs to. Lose that file and an encrypted archive cannot be opened; copy it somewhere safe. No error or returned value holds it.
+- An encrypted entry with no valid key makes `store`, `fetchLatest` and `test` fail with `BackupError`; plaintext is never used instead.
+- An archive is one file (`backup-<time>-<id>.tcbk`, 0600): `TCBK`, a version byte, a mode byte, then a length-prefixed stream of directories and files, read and written through streams so memory does not grow with the backup. A wrong key, a changed byte or a foreign file rejects with `BackupError`.
+- `fetchLatest` unpacks into a private staging directory beside `into`, checks the manifest, then renames it into place; on any failure nothing is left behind. Entries that are absolute, hold `..` or a backslash, or are repeated are refused.
+- `test` reports `sizeBytes` (the archives held) and `freeBytes` when the file system tells.
+- Registry updates are not locked across processes.
 
 ## `createAppHost` (`@theokit/host/app-host`)
 

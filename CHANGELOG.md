@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `@theokit/host`: `@theokit/host/backup` keeps backups in named storage locations, optionally encrypted with AES-256-GCM (`createStorageRegistry`).
+
 ### Fixed
 
 - `theokit`: the route manifest gives each page, layout, error, loading and not-found component a unique identifier, so `tasks/[id]/page.tsx` and `plans/[id]/page.tsx` build together.
@@ -27,6 +31,11 @@ own `CHANGELOG.md`.
 
 - `@theokit/agents`: `createGoalSignal()` gives `GoalRunner` an `update_goal` tool and a matching judge, so a goal loop ends when the agent reports `complete` or `blocked`.
 - `@theokit/agents`: `.subagents()` accepts `model` (a `ModelSelection` or `'inherit'`) and `mcpServers` on a registered subagent, so a discovered definition keeps its declared model and MCP servers.
+
+## [@theokit/agents 16.12.0] - 2026-11-19
+
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
 
 ## [@theokit/agents 16.11.0, create-theokit 3.1.5] - 2026-11-19
 
