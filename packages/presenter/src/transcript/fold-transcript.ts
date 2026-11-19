@@ -15,6 +15,8 @@ export interface TranscriptItem {
   readonly id: string
   readonly kind: 'message' | 'reasoning' | 'tool' | 'error'
   readonly text?: string
+  /** Set on a message that a later `tool-call` closed: further text opens a new message. */
+  readonly closed?: boolean
   readonly tool?: TranscriptTool
 }
 
@@ -41,29 +43,37 @@ function appendText(
 ): TranscriptState {
   if (text === '') return state
   const last = state.items.at(-1)
-  if (last?.kind === kind) {
+  if (last?.kind === kind && last.closed !== true) {
     const items = [...state.items.slice(0, -1), { ...last, text: (last.text ?? '') + text }]
     return streaming(state, items)
   }
   return streaming(state, [...state.items, { id: `${kind}_${state.items.length}`, kind, text }])
 }
 
-function sameValue(a: unknown, b: unknown): boolean {
+const MAX_COMPARE_DEPTH = 32
+
+function isPlain(v: object): boolean {
+  if (Array.isArray(v)) return true
+  const proto: unknown = Object.getPrototypeOf(v)
+  return proto === Object.prototype || proto === null
+}
+
+/** Structural equality for plain objects and arrays only; anything else (Date, Map, cycles) is equal only if identical. */
+function sameValue(a: unknown, b: unknown, depth = 0): boolean {
   if (Object.is(a, b)) return true
   if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  if (depth >= MAX_COMPARE_DEPTH || !isPlain(a) || !isPlain(b)) return false
   if (Array.isArray(a) !== Array.isArray(b)) return false
   const ka = Object.keys(a)
-  const kb = Object.keys(b)
-  if (ka.length !== kb.length) return false
+  if (ka.length !== Object.keys(b).length) return false
+  const ra = a as Record<string, unknown>
   const rb = b as Record<string, unknown>
-  return ka.every(
-    (k) => Object.hasOwn(rb, k) && sameValue((a as Record<string, unknown>)[k], rb[k]),
-  )
+  return ka.every((k) => Object.hasOwn(rb, k) && sameValue(ra[k], rb[k], depth + 1))
 }
 
 /**
- * Create or update the card for `callId`. `closesMessage` (a `tool-call`) moves an existing card behind
- * a message that is still open, so text that follows opens a new message. An update that changes
+ * Create or update the card for `callId`, keeping its position. `closesMessage` (a `tool-call`) marks a
+ * still-open last message closed, so text that follows opens a new message. An update that changes
  * nothing returns `state` itself.
  */
 function upsertTool(
@@ -76,15 +86,16 @@ function upsertTool(
   const prev = index === -1 ? undefined : state.items[index]?.tool
   const next = update(prev)
   if (next === undefined) return state
-  const moves = closesMessage && index !== -1 && state.items.at(-1)?.kind === 'message'
-  if (prev && !moves && sameValue(prev, next)) return state
+  const last = state.items.at(-1)
+  const closes = closesMessage && index !== -1 && last?.kind === 'message' && last.closed !== true
+  if (prev && !closes && sameValue(prev, next)) return state
   const item: TranscriptItem = { id: callId, kind: 'tool', tool: next }
   if (index === -1) return streaming(state, [...state.items, item])
-  if (moves) return streaming(state, [...state.items.filter((_, i) => i !== index), item])
-  return streaming(
-    state,
-    state.items.map((it, i) => (i === index ? item : it)),
-  )
+  const items = state.items.map((it, i) => {
+    if (i === index) return item
+    return closes && it === last ? { ...it, closed: true } : it
+  })
+  return streaming(state, items)
 }
 
 function failOpenTools(items: readonly TranscriptItem[]): readonly TranscriptItem[] {

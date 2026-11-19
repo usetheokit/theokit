@@ -76,10 +76,46 @@ describe('foldTranscript', () => {
   it('a repeated tool-call closes the open message, so later text opens a new one', () => {
     const s = fold([call(), { type: 'text', text: 'a' }, call(), { type: 'text', text: 'b' }])
     expect(s.items.map((i) => [i.kind, i.text])).toEqual([
-      ['message', 'a'],
       ['tool', undefined],
+      ['message', 'a'],
       ['message', 'b'],
     ])
+  })
+
+  it('a repeated tool-call keeps the first card between the messages around it', () => {
+    const s = fold([
+      { type: 'text', text: 'A' },
+      call(),
+      { type: 'text', text: 'B' },
+      call(),
+      { type: 'text', text: 'C' },
+    ])
+    expect(s.items.map((i) => [i.kind, i.text])).toEqual([
+      ['message', 'A'],
+      ['tool', undefined],
+      ['message', 'B'],
+      ['message', 'C'],
+    ])
+  })
+
+  it('tool inputs that are not plain data are changed unless identical, and cycles do not recurse', () => {
+    const at = (input: unknown): AgentOutputEvent => ({
+      type: 'tool-call',
+      callId: 'c1',
+      name: 'x',
+      input,
+    })
+    const d = fold([at(new Date(1))])
+    expect(foldTranscript(d, at(new Date(2))).items[0]?.tool?.input).toEqual(new Date(2))
+    expect(foldTranscript(fold([at(new Map([[1, 1]]))]), at(new Map([[2, 2]])))).not.toBe(d)
+    const mk = () => {
+      const o: Record<string, unknown> = {}
+      o.self = o
+      return o
+    }
+    const c = fold([at(mk())])
+    expect(() => foldTranscript(c, at(mk()))).not.toThrow()
+    expect(foldTranscript(c, at(mk()))).not.toBe(c)
   })
 
   it('identical repeated tool events return the same state object', () => {
