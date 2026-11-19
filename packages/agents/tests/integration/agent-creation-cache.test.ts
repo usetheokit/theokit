@@ -10,10 +10,12 @@ import { join } from 'node:path'
 import { Agent } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { defineAgent } from '../../src/bridge/define-agent.js'
+import { toAgentFactory } from '../../src/bridge/sdk-adapter.js'
+import { streamAgentTurnInProcess } from '../../src/in-process-turn.js'
 import {
   getOrCreateReporting,
   acquireSharedAgent,
-  leaseSharedAgent,
   releaseSharedAgent,
   type CompiledWiring,
 } from '../../src/bridge/compiled-wiring.js'
@@ -141,11 +143,28 @@ describe('getOrCreateReporting against the real SDK', () => {
     expect(Agent.registry.get(id)).toBeUndefined()
   })
 
-  it('a served owner disposing does not dispose a handle a stream still holds', async () => {
+  const served = (id: string) =>
+    acquireSharedAgent(Agent, id, opts(), undefined, 'served') as Promise<{
+      dispose(): Promise<void>
+    }>
+
+  it('repeated served disposal never consumes a stream hold', async () => {
     const id = nextId()
-    const served = leaseSharedAgent(await acquire(id))
+    const owner = await served(id)
     const stream = await acquire(id)
-    await served.dispose()
+    expect(stream).toBe(owner)
+    await owner.dispose()
+    await owner.dispose()
+    await owner.dispose()
+    expect(Agent.registry.get(id)).toBe(stream)
+    await releaseSharedAgent(stream)
+    expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  it('a direct SDK dispose of the registry handle cannot drop a stream hold', async () => {
+    const id = nextId()
+    const stream = await acquire(id)
+    await Agent.registry.get(id)?.dispose()
     expect(Agent.registry.get(id)).toBe(stream)
     await releaseSharedAgent(stream)
     expect(Agent.registry.get(id)).toBeUndefined()
@@ -160,27 +179,77 @@ describe('getOrCreateReporting against the real SDK', () => {
     expect(second).not.toBe(first)
     expect(Agent.registry.get(id)).toBe(second)
   })
+})
 
-  it('two served acquisitions of one live session share the registry handle', async () => {
+describe('the real adapter entry points', () => {
+  const key = 'theo_test_creation_cache'
+  const approvals = { kind: 'owned-by-surface', reason: 'test' } as const
+  const factory = (extra: Record<string, unknown> = {}) =>
+    toAgentFactory(defineAgent({ model: 'openai/gpt-4o-mini', ...extra }), {
+      apiKey: key,
+      approvals,
+      overrides: { cwd },
+    })
+  const stream = (id: string) =>
+    streamAgentTurnInProcess(
+      { default: { tools: [], agents: {}, model: 'openai/gpt-4o-mini' } },
+      key,
+      {
+        message: 'Return only: BANANA',
+        sessionId: id,
+      } as never,
+    )[Symbol.asyncIterator]()
+
+  it('two toAgentFactory calls return the registry handle', async () => {
     const id = nextId()
-    const a = leaseSharedAgent(await acquire(id))
-    const b = leaseSharedAgent(await acquire(id))
+    const make = factory()
+    const [a, b] = await Promise.all([make(id), make(id)])
     expect(b).toBe(a)
     expect(a).toBe(Agent.registry.get(id))
     await a.dispose()
-    expect(Agent.registry.get(id)).toBe(b)
-    await b.dispose()
+    await a.dispose()
     expect(Agent.registry.get(id)).toBeUndefined()
   })
 
-  it('overlapping served and stream callers: the stream finishing first keeps the served handle', async () => {
+  it.each([
+    [
+      'guardrails',
+      { guardrails: [{ name: 'g', checkOutput: () => ({ action: 'allow' as const }) }] },
+    ],
+    ['maxIterations', { maxIterations: 3 }],
+  ])('two toAgentFactory calls share one handle with %s', async (_n, extra) => {
     const id = nextId()
-    const served = leaseSharedAgent(await acquire(id))
-    const stream = await acquire(id)
-    expect(stream).toBe(served)
-    await releaseSharedAgent(stream)
-    expect(Agent.registry.get(id)).toBe(served)
-    await served.dispose()
+    const make = factory(extra)
+    const a = await make(id)
+    const b = await make(id)
+    expect(b).toBe(a)
+    await a.dispose()
     expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  it('a stream finishing first leaves a served handle live, and vice versa', async () => {
+    const id = nextId()
+    const servedHandle = await factory()(id)
+    const it1 = stream(id)
+    await it1.next()
+    expect(Agent.registry.get(id)).toBe(servedHandle)
+    while (!(await it1.next()).done) {
+      /* drain */
+    }
+    expect(Agent.registry.get(id)).toBe(servedHandle)
+    await servedHandle.dispose()
+    expect(Agent.registry.get(id)).toBeUndefined()
+
+    const id2 = nextId()
+    const it2 = stream(id2)
+    const drain = async () => {
+      while (!(await it2.next()).done) {
+        /* drain */
+      }
+    }
+    const [, served2] = await Promise.all([drain(), factory()(id2)])
+    expect(Agent.registry.get(id2)).toBe(served2)
+    await served2.dispose()
+    expect(Agent.registry.get(id2)).toBeUndefined()
   })
 })

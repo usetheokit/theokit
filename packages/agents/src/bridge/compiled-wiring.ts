@@ -133,7 +133,10 @@ export async function getOrCreateReporting(
 }
 
 interface Hold {
-  count: number
+  /** Stream callers still using the handle; each releases exactly its own via `releaseSharedAgent`. */
+  streams: number
+  /** Served owners share ONE hold: they all hold the registry handle itself, so they are one owner. */
+  served: boolean
   sdk: object
   id: string
   dispose: () => Promise<void>
@@ -159,59 +162,77 @@ function inLane<T>(sdk: object, id: string, fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Concurrent callers for one session share the SDK's cached handle, and `dispose()` evicts it from
- * the live cache. Resolving and holding happen in one lane with releasing, so a handle obtained here
- * can never be disposed by another caller's last release before this caller holds it. Only the last
- * release disposes.
+ * Callers for one session share the SDK's cached handle, and `dispose()` evicts it from the live
+ * cache. Resolving and holding happen in one lane with releasing, so a handle obtained here can
+ * never be disposed by another caller's last release before this caller holds it.
+ *
+ * `kind: 'stream'` (default): the caller releases with {@link releaseSharedAgent}; holds are counted.
+ * `kind: 'served'`: the caller keeps the SDK's own handle (identity preserved, same object as
+ * `Agent.registry.get(id)`), whose `dispose()` is replaced by a release of the single served hold.
+ * Repeated `dispose()` is a no-op, and never touches a stream's hold. Only the last hold disposes.
  */
 export function acquireSharedAgent(
   sdk: unknown,
   sessionId: string,
   options: Record<string, unknown>,
   listener: ((wiring: CompiledWiring) => void) | undefined,
+  kind: 'stream' | 'served' = 'stream',
 ): Promise<unknown> {
   return inLane(sdk as object, sessionId, async () => {
     const agent = (await getOrCreateReporting(sdk, sessionId, options, listener)) as object
-    const hold = holders.get(agent)
-    if (hold !== undefined) hold.count++
-    else {
+    let hold = holders.get(agent)
+    if (hold === undefined) {
       const target = agent as { dispose(): Promise<void> }
-      const real = target.dispose.bind(target)
-      holders.set(agent, { count: 1, sdk: sdk as object, id: sessionId, dispose: real })
-      // One handle per id (the SDK's own cached one): `dispose()` on it releases a hold.
-      Object.defineProperty(agent, 'dispose', {
-        value: () => releaseSharedAgent(target),
-        configurable: true,
-        writable: true,
-        enumerable: false,
-      })
+      hold = {
+        streams: 0,
+        served: false,
+        sdk: sdk as object,
+        id: sessionId,
+        dispose: target.dispose.bind(target),
+      }
+      holders.set(agent, hold)
+      // The handle's own `dispose()` (whoever calls it) can only drop the served hold.
+      setDispose(agent, () => releaseServed(target))
     }
+    if (kind === 'served') hold.served = true
+    else hold.streams++
     return agent
   })
 }
 
-/** Drop one hold; dispose the agent only when no other caller still holds it. */
+function setDispose(agent: object, value: () => Promise<void>): void {
+  Object.defineProperty(agent, 'dispose', {
+    value,
+    configurable: true,
+    writable: true,
+    enumerable: false,
+  })
+}
+
+async function settle(agent: object, hold: Hold): Promise<void> {
+  if (hold.streams > 0 || hold.served) return
+  holders.delete(agent)
+  // Back to the real disposal, so a later `dispose()` on this handle cannot loop through us.
+  setDispose(agent, hold.dispose)
+  await hold.dispose()
+}
+
+function releaseServed(agent: object): Promise<void> {
+  const hold = holders.get(agent)
+  if (hold === undefined) return Promise.resolve()
+  return inLane(hold.sdk, hold.id, async () => {
+    if (!hold.served) return
+    hold.served = false
+    await settle(agent, hold)
+  })
+}
+
+/** Drop one stream hold; dispose the agent only when no other caller still holds it. */
 export function releaseSharedAgent(agent: { dispose(): Promise<void> }): Promise<void> {
   const hold = holders.get(agent)
   if (hold === undefined) return agent.dispose()
   return inLane(hold.sdk, hold.id, async () => {
-    if (--hold.count > 0) return
-    holders.delete(agent)
-    // Back to the real disposal, so a later `dispose()` on this handle cannot loop through us.
-    Object.defineProperty(agent, 'dispose', {
-      value: hold.dispose,
-      configurable: true,
-      writable: true,
-      enumerable: false,
-    })
-    await hold.dispose()
+    if (hold.streams > 0) hold.streams--
+    await settle(agent, hold)
   })
-}
-
-/**
- * The served owner's handle IS the shared agent (same identity as `Agent.registry.get(id)`): the
- * acquisition already made `dispose()` release one hold instead of disposing for other callers.
- */
-export function leaseSharedAgent<T extends { dispose(): Promise<void> }>(agent: T): T {
-  return agent
 }

@@ -25,7 +25,6 @@ import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import {
   BUILD_WIRED_SKILL_READERS,
   acquireSharedAgent,
-  leaseSharedAgent,
   releaseSharedAgent,
 } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
@@ -979,16 +978,30 @@ export function toAgentFactory(
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     }
     // The owner's `dispose()` releases its hold; a stream sharing the handle keeps it alive.
-    const agent = leaseSharedAgent(
-      (await acquireSharedAgent(
-        rt.Agent,
-        sessionId,
-        createOptions,
-        compiled.onWired,
-      )) as SdkAgentHandle,
-    )
-    return withGuardrails(withStepCeiling(agent, compiled.maxIterations), compiled.guardrails)
+    const agent = (await acquireSharedAgent(
+      rt.Agent,
+      sessionId,
+      createOptions,
+      compiled.onWired,
+      'served',
+    )) as SdkAgentHandle
+    return servedHandle(agent, compiled.maxIterations, compiled.guardrails)
   }
+}
+
+const served = new WeakMap<object, { max: unknown; guards: unknown; handle: SdkAgentHandle }>()
+
+/** The SDK's own handle when nothing wraps it; otherwise ONE wrapper per shared handle and config. */
+function servedHandle(
+  agent: SdkAgentHandle,
+  max: number | undefined,
+  guards: Parameters<typeof withGuardrails>[1],
+): SdkAgentHandle {
+  const known = served.get(agent)
+  if (known !== undefined && known.max === max && known.guards === guards) return known.handle
+  const handle = withGuardrails(withStepCeiling(agent, max), guards)
+  if (handle !== agent) served.set(agent, { max, guards, handle })
+  return handle
 }
 
 /**
