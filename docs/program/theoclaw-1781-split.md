@@ -13,4 +13,4 @@ is not part of that scope moves to a follow-up.
   from #1781. A maintainer must file it, link it from #1781, and replace this
   entry with the real issue number.
 - Related: #2353 (this cleanup), #2366 (out-of-scope requests from the #2353
-  review).
+  review), #2375 (the same out-of-scope requests, filed again by a later review).
