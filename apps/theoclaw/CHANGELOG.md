@@ -13,10 +13,13 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The TUI folds a turn's text and tool status with `@theokit/tui`'s `useAgentStream` instead of its own reducer; `tui/frames.ts` keeps only the control-frame adapter and its interrupted/error notices (#1785).
 - Skills load through the SDK's `SkillsSettings` (`bundledDirs`: workspace, user, then the bundled `skills/` folder) instead of a TheoClaw loader. A skill's binaries now come from the `requires-bins:` key, as in every other TheoKit app. The old `requires:` key still works for one release and logs a deprecation warning naming the file.
 
 ### Fixed
 
+- `/sessions` now lists through the SDK listing (async, newest first), so a transcript whose first line is malformed is identified by a later record. (#1943)
+- Trigger delivery ids use the framework `SeenIds`, WebChat reads its body with `readCappedBody`, and the Google Chat route no longer caps the body a second time after the webhook router (#1781).
 - The configuration file, the daemon unit and plist files, the pairing, device, exec-approval, MCP relay grant, visitor grant and relay state and mailbox files are written through `@theokit/sdk/persistence`, so two writers in one process no longer share a `<pid>.tmp` temporary name.
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
 - CodeQL alerts (#1726): the capture proxy forwards only `http:` URLs, `skills publish` and the control client accept only http(s) and ws(s) addresses, and `sessions share` creates its file without following a planted link.

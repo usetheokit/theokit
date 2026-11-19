@@ -32,6 +32,7 @@ async function answerLine(
     })
   }
   const response = await respond(body)
+  if (response.status === 202) return null
   const payload: unknown = await response.json()
   return JSON.stringify(payload)
 }
