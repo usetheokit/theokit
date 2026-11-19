@@ -22,10 +22,11 @@ request for it; no second issue is opened.
 
 - Host and presenter files on the TheoClaw branch are inherited from
   `workspace`. They are not TheoClaw changes and are not removed there.
-- `@theokit/host` now also exports `createHostLifecycle` (ordered start with
-  rollback, reverse-order stop), covered by `packages/host/tests/lifecycle.test.ts`.
-  The presenter run-timeline adapter is covered by
+- Delivered on `workspace`: the `@theokit/host` scaffold (#1786) and the
+  presenter run-timeline adapter `fromRunTimelineEvent` (#1942), covered by
   `packages/presenter/tests/from-run-timeline.test.ts`.
-- Linking #2366 and this document from #1781 is a GitHub issue edit; `gh` is
-  not available in the factory sandbox, so the owner must add both links on
-  #1781. That is the only open step.
+- Remaining: further host utilities and presenter enhancements, tracked in
+  #2366 on branch `factory/2366`. They are not part of this document's change.
+- Open: add links to #2366 and to this document on #1781. This is a GitHub
+  issue edit that the factory sandbox cannot make (`gh` is unavailable), so
+  the owner must do it.
