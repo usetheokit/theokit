@@ -342,8 +342,7 @@ describe('planProjectsGC protection edge cases', () => {
     const hidden = '/work-app' // encodes to the same directory, is alive, and appears in no list
     transcript('new', 1)
     const active = transcript('active', 300) // header names CWD; only hidden's registry lists it
-    const listRegistry = (cwd: string) =>
-      Promise.resolve(cwd === hidden ? [{ id: 'active' }] : [])
+    const listRegistry = (cwd: string) => Promise.resolve(cwd === hidden ? [{ id: 'active' }] : [])
     const undeclared = await plan({ candidateCwdsComplete: undefined, listRegistry })
     expect(undeclared.candidates.map((c) => c.target)).not.toContain(active)
     expect(undeclared.candidates).toEqual([])
