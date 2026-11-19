@@ -56,11 +56,28 @@ function trimTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url
 }
 
-/** Build an A2A agent card from a manifest entry. */
+/** The plain form: just what the card reads, for an agent built without a manifest entry. */
+export interface PlainAgentCardInput extends BuildAgentCardOptions {
+  name: string
+  route: string
+  /** Defaults to false. */
+  stream?: boolean
+  skills?: A2ASkill[]
+}
+
+/** Build an A2A agent card from a manifest entry, or from a plain `{ name, route, baseUrl }` object. */
+export function buildAgentCard(entry: AgentManifestEntry, options: BuildAgentCardOptions): AgentCard
+export function buildAgentCard(card: PlainAgentCardInput): AgentCard
 export function buildAgentCard(
-  entry: AgentManifestEntry,
-  options: BuildAgentCardOptions,
+  input: AgentManifestEntry | PlainAgentCardInput,
+  opts?: BuildAgentCardOptions,
 ): AgentCard {
+  const options = opts ?? (input as PlainAgentCardInput)
+  const entry = input as AgentManifestEntry & PlainAgentCardInput
+  const skills =
+    'tools' in input
+      ? input.tools.map((t) => ({ id: t.name, name: t.name, description: t.description }))
+      : (entry.skills ?? [])
   const base = trimTrailingSlash(options.baseUrl)
   return {
     name: entry.name,
@@ -68,13 +85,13 @@ export function buildAgentCard(
     url: `${base}${entry.route}`,
     version: '1.0',
     capabilities: {
-      streaming: entry.stream,
+      streaming: entry.stream ?? false,
       pushNotifications: false,
       stateTransitionHistory: false,
     },
     defaultInputModes: ['text'],
     defaultOutputModes: ['text'],
-    skills: entry.tools.map((t) => ({ id: t.name, name: t.name, description: t.description })),
+    skills,
     ...(options.securitySchemes ? { securitySchemes: options.securitySchemes } : {}),
     ...(options.security ? { security: options.security } : {}),
   }
@@ -84,3 +101,6 @@ export function buildAgentCard(
 export function wellKnownCardPath(agentName: string): string {
   return `/.well-known/${agentName}/agent-card.json`
 }
+
+/** Alias of `wellKnownCardPath`. */
+export const agentCardPath = wellKnownCardPath

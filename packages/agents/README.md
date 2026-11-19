@@ -49,7 +49,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./hooks` | The lifecycle-hook engine and its fingerprint gate; `parseClaudeHooks` reads the Claude Code hook dialect (see below) |
 | `./ask` | The human-in-the-loop rendezvous — ask a question, settle it, abandon it safely |
 | `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable |
-| `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
+| `./a2a` | `createA2ATool` (call a remote agent over HTTP as a tool), `buildAgentCard` |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
 | `./doctor` | Environment diagnostics. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
@@ -168,6 +168,17 @@ never subtractive.
 **Credentials answer two questions.** Which credential to use, and where it came from. The second
 matters more than it looks: without provenance, "why is it calling Anthropic?" has no answer in the
 data, and a user cannot tell an explicit choice from a precedence fallback.
+
+## Publishing an A2A agent card
+
+`buildAgentCard` takes a manifest entry, or just a name and route when the agent was not built through the decorators:
+
+```ts
+import { buildAgentCard, agentCardPath } from '@theokit/agents/a2a'
+
+const card = buildAgentCard({ name: 'my-agent', route: '/a2a', baseUrl: 'https://app.example.com' })
+const path = agentCardPath('my-agent') // /.well-known/my-agent/agent-card.json
+```
 
 ## Handing a conversation to another agent
 

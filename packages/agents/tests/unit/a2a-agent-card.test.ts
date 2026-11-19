@@ -80,3 +80,31 @@ describe('buildAgentCard', () => {
     expect(wellKnownCardPath('support-agent')).toBe('/.well-known/support-agent/agent-card.json')
   })
 })
+
+describe('buildAgentCard plain form', () => {
+  it('a card built from name and route equals the card built from a manifest entry with the same values', () => {
+    const manifest = buildAgentCard(
+      { ...entry, stream: false, tools: [] },
+      { baseUrl: 'https://a.example/', description: 'd' },
+    )
+    const plain = buildAgentCard({
+      name: entry.name,
+      route: entry.route,
+      baseUrl: 'https://a.example/',
+      description: 'd',
+    })
+    expect(plain).toEqual(manifest)
+  })
+
+  it('carries skills and security options', () => {
+    const card = buildAgentCard({
+      name: 'x',
+      route: '/x',
+      baseUrl: 'https://a.example',
+      skills: [{ id: 's', name: 's', description: 'S' }],
+      security: [{ b: [] }],
+    })
+    expect(card.skills).toHaveLength(1)
+    expect(card.security).toEqual([{ b: [] }])
+  })
+})
