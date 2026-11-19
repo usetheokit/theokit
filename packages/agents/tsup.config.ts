@@ -70,6 +70,7 @@ export default defineConfig({
     '@theokit/sdk',
     '@theokit/sdk-tools',
     'quickjs-emscripten-core',
+    'ws',
     'zod',
   ],
 })
