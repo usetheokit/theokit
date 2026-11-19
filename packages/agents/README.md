@@ -815,6 +815,29 @@ Listed after the removal is `still-present`; not listed before is `nothing-to-re
 after is `removed`. A verifier that throws or exceeds `registryTimeoutMs` gives `unconfirmed` with the error in
 `registryError`, and the transcript step still runs. Without a verifier nothing changes.
 
+### Planning a GC across every project
+
+`planProjectsGC({ projectsRoot, keepLast, maxAgeDays })` is the read-only plan for reclaiming disk across every
+project under `projectsRoot(root)`, where `planTranscriptGC` covers one `cwd`. It never deletes anything; applying a
+plan is a separate step. Each candidate is `{ project, kind, target, sessionId?, ageDays }`, with `kind` one of
+`transcript`, `writer-lock`, `lock-directory`, `temp` or `registry`.
+
+- A project whose liveness is `undetermined` is kept whole.
+- The newest `keepLast` transcripts survive, and in a live project so do the newest one, the session the pointer
+  names, every non-archived registry entry, anything `protectedIds(cwd)` names and anything with a live writer.
+- Locks whose transcript is gone, atomic-write temp files and registry entries whose transcript is gone are planned
+  once they are older than `maxAgeDays`. Temp files are recognised by `classifySessionArtifact`, so an editor's
+  `notes.txt.tmp` or `.foo.swp` is never a candidate. A registry entry with no `lastModified` is kept.
+- An entry whose `mtime` cannot be read is never collected. A failed pointer or registry read skips that project and
+  adds to `errors`.
+- Several cwds can share one project directory (the encoding is lossy). Every cwd the transcripts record is consulted,
+  and `candidateCwds()` adds known workspaces that encode to the project, so a colliding cwd with no transcript of
+  its own is protected too. Planning a project needs `candidateCwds` listing every cwd of the app that could share the directory AND `candidateCwdsComplete: true`, the caller's declaration that the list is complete (a colliding cwd known only to its own registry cannot be discovered from disk); without both a project (live or dead: a dead verdict can rest on headers alone) is kept whole and the reason is in `kept`. Any project, live or dead,
+  holding a transcript whose header cannot be read or names no cwd of the project is kept whole.
+- `keepLast` or `maxAgeDays` below 1 throws `GCFloorError`.
+
+The plan also reports `touchedProjects`, `liveCwds` and `countByKind`. `listRegistry` defaults to `Agent.list`.
+
 ## Refused tool calls
 
 When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
