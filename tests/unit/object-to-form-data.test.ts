@@ -54,11 +54,20 @@ describe('objectToFormData', () => {
     expect(new Uint8Array(await got.arrayBuffer())).toEqual(bytes)
   })
 
-  it('encodes a FileList-like as one entry per file', () => {
+  it('encodes a FileList-like as one entry per file', async () => {
     const s = z.object({ files: z.array(z.instanceof(File)) })
     const list = { 0: new File(['a'], 'a.txt'), 1: new File(['b'], 'b.txt'), length: 2 }
     const fd = objectToFormData({ files: list }, s)
-    expect(fd.getAll('files')).toHaveLength(2)
+    const got = fd.getAll('files') as File[]
+    expect(got).toHaveLength(2)
+    expect(got.map((f) => f.name)).toEqual(['a.txt', 'b.txt'])
+    expect(await Promise.all(got.map((f) => f.text()))).toEqual(['a', 'b'])
+  })
+
+  it('walks the schema, not the values: keys absent from the schema are omitted', () => {
+    const s = z.object({ a: z.string(), nested: z.object({ b: z.string() }) })
+    const fd = objectToFormData({ a: 'x', extra: 'nope', nested: { b: 'y', extraDeep: 'nope' } }, s)
+    expect(Array.from(fd.keys()).sort()).toEqual(['a', 'nested.b'])
   })
 
   it('refuses an array of objects, naming the field', () => {
