@@ -1,7 +1,11 @@
-import { hookSpecSchema } from '@theokit/agents/hooks'
-import { z } from 'zod'
+import { CLAUDE_HOOK_EVENT_ALIASES, hookSpecSchema } from '@theokit/agents/hooks'
 
-import { HOOK_EVENTS, type HookEvent, type HookSpec } from './hooks-spec.js'
+import {
+  DEFAULT_HOOK_TIMEOUT_MS,
+  HOOK_EVENTS,
+  type HookEvent,
+  type HookSpec,
+} from './hooks-spec.js'
 import { HookError } from './hook-error.js'
 
 /**
@@ -27,25 +31,46 @@ import { HookError } from './hook-error.js'
 
 const EVENTS = HOOK_EVENTS
 
-const DEFAULT_TIMEOUT_MS = 5_000
+// Shape and command validation are the framework's (`hookSpecSchema`); what stays here is our
+// event spelling, our 5 s default, and the wording of the error an operator reads.
+const OWN_KEYS = new Set(['event', 'command', 'matcher', 'timeout_ms'])
 
-const hookSchema = z
-  .object({
-    event: z.string(),
-    // The framework's rule: no control characters (they are hidden in the approval prompt).
-    command: hookSpecSchema.shape.command,
-    matcher: z.string().optional(),
-    timeout_ms: z.number().int().positive().optional(),
+function readEntry(entry: unknown, i: number): { record: Record<string, unknown>; event: string } {
+  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    throw new HookError(`hooks[${String(i)}]: expected an object [entry]`)
+  }
+  const record = entry as Record<string, unknown>
+  const stray = Object.keys(record).find((k) => !OWN_KEYS.has(k))
+  if (stray !== undefined) {
+    throw new HookError(`hooks[${String(i)}]: Unrecognized key: "${stray}" [${stray}]`)
+  }
+  const event = record['event']
+  if (typeof event !== 'string') {
+    throw new HookError(`hooks[${String(i)}]: event must be a string [event]`)
+  }
+  requireKnownEvent(event, i)
+  return { record, event }
+}
+
+function validateShape(entry: unknown, i: number): HookSpec {
+  const { record, event } = readEntry(entry, i)
+  const parsed = hookSpecSchema.safeParse({
+    ...record,
+    event: CLAUDE_HOOK_EVENT_ALIASES[event],
+    timeout_ms: record['timeout_ms'] ?? DEFAULT_HOOK_TIMEOUT_MS,
   })
-  .strict()
-
-function validateShape(entry: unknown, i: number): z.infer<typeof hookSchema> {
-  try {
-    return hookSchema.parse(entry)
-  } catch (err) {
-    const issue = err instanceof z.ZodError ? err.issues[0] : undefined
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]
     const where = issue?.path.length ? issue.path.join('.') : 'entry'
-    throw new HookError(`hooks[${String(i)}]: ${issue?.message ?? String(err)} [${where}]`)
+    throw new HookError(`hooks[${String(i)}]: ${issue?.message ?? 'invalid hook'} [${where}]`)
+  }
+  const { command, matcher, timeout_ms } = parsed.data
+  requireCompilableMatcher(matcher, i)
+  return {
+    event: event as HookEvent,
+    command,
+    ...(matcher !== undefined ? { matcher } : {}),
+    timeout_ms,
   }
 }
 
@@ -65,21 +90,9 @@ function requireCompilableMatcher(matcher: string | undefined, i: number): void 
   }
 }
 
-function umHook(entry: unknown, i: number): HookSpec {
-  const parsed = validateShape(entry, i)
-  requireKnownEvent(parsed.event, i)
-  requireCompilableMatcher(parsed.matcher, i)
-  return {
-    event: parsed.event as HookEvent,
-    command: parsed.command,
-    ...(parsed.matcher !== undefined ? { matcher: parsed.matcher } : {}),
-    timeout_ms: parsed.timeout_ms ?? DEFAULT_TIMEOUT_MS,
-  }
-}
-
 export function parseHooks(raw: unknown): HookSpec[] {
   if (raw === undefined || raw === null) return []
   if (!Array.isArray(raw)) throw new HookError('hooks: expected an array of hook entries')
 
-  return raw.map((entry, i) => umHook(entry, i))
+  return raw.map((entry, i) => validateShape(entry, i))
 }

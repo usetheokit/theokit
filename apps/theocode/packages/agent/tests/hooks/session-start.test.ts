@@ -233,11 +233,40 @@ describe('the framework runner is the one that runs it', () => {
         cwd,
         sessionId: 'tui-1',
         approved: () => false,
-        warn: () => undefined,
-      } as Parameters<typeof runSessionStartHooks>[0])
+        onWarn: () => undefined,
+      })
       expect(spy).not.toHaveBeenCalled()
     } finally {
       spy.mockClear()
     }
+  })
+
+  it('test_a_hook_killed_by_a_signal_keeps_its_stderr_in_the_warning', async () => {
+    const warns: string[] = []
+    await runSessionStartHooks({
+      specs: [spec('echo diagnostic-from-hook >&2; kill -TERM $$')],
+      cwd,
+      sessionId: 'tui-1',
+      approved: () => true,
+      onWarn: (m) => warns.push(m),
+    })
+    expect(warns.join(' ')).toContain('could not run')
+    expect(warns.join(' ')).toContain('diagnostic-from-hook')
+  })
+
+  it('test_an_error_the_framework_caught_keeps_its_message_in_the_warning', async () => {
+    vi.mocked(frameworkHooks.runHostHooks).mockImplementationOnce(async (_e, specs, options) => {
+      options.onWarn?.('hook "x" on on_session_start failed: spawn EBOOM')
+      return [{ spec: specs[0] as never, status: 'failed' }]
+    })
+    const warns: string[] = []
+    await runSessionStartHooks({
+      specs: [spec('true')],
+      cwd,
+      sessionId: 'tui-1',
+      approved: () => true,
+      onWarn: (m) => warns.push(m),
+    })
+    expect(warns.join(' ')).toContain('spawn EBOOM')
   })
 })

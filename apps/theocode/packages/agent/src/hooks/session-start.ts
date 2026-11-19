@@ -64,7 +64,20 @@ export function sessionStartSpecs(input: {
   }
 }
 
-function reportOutcome(outcome: HostHookOutcome, warn: (message: string) => void): void {
+function failureDetail(
+  result: HostHookOutcome['result'],
+  runnerWarning: string | undefined,
+): string | undefined {
+  const stderr = result?.stderr.trim() ?? ''
+  if (stderr.length > 0) return stderr
+  return /failed: (.*)$/s.exec(runnerWarning ?? '')?.[1]
+}
+
+function reportOutcome(
+  outcome: HostHookOutcome,
+  warn: (message: string) => void,
+  runnerWarning: string | undefined,
+): void {
   const { spec, result } = outcome
   if (outcome.status === 'ran') return
   if (outcome.status === 'timed-out') {
@@ -76,7 +89,10 @@ function reportOutcome(outcome: HostHookOutcome, warn: (message: string) => void
         (detail.length > 0 ? ` — ${detail}` : ''),
     )
   } else {
-    warn(`SessionStart hook "${spec.command}" could not run`)
+    // Killed by a signal or never started (`exitCode` null), or the runner threw (no result): keep
+    // what the process wrote, or the error the framework caught, instead of a bare "could not run".
+    const detail = failureDetail(result, runnerWarning)
+    warn(`SessionStart hook "${spec.command}" could not run${detail ? `: ${detail}` : ''}`)
   }
 }
 
@@ -122,6 +138,7 @@ export async function runSessionStartHooks(input: RunSessionStartInput): Promise
     const env: Record<string, string> = {}
     for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
     env[SESSION_ENV] = input.sessionId
+    let runnerWarning: string | undefined
     try {
       const [outcome] = await runHostHooks('on_session_start', [framework], {
         trusted: true,
@@ -129,8 +146,11 @@ export async function runSessionStartHooks(input: RunSessionStartInput): Promise
         fingerprint: () => 'approved',
         cwd: input.cwd,
         env,
+        onWarn: (message) => {
+          runnerWarning = message
+        },
       })
-      if (outcome !== undefined) reportOutcome(outcome, warn)
+      if (outcome !== undefined) reportOutcome(outcome, warn, runnerWarning)
     } catch (err) {
       warn(`SessionStart hook "${spec.command}" could not run: ${(err as Error).message}`)
     }
