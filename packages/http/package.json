@@ -44,6 +44,10 @@
       "types": "./dist/css-resource.d.ts",
       "import": "./dist/css-resource.js"
     },
+    "./guards": {
+      "types": "./dist/guards-entry.d.ts",
+      "import": "./dist/guards-entry.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
