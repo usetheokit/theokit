@@ -236,6 +236,17 @@ fingerprint gate as `buildHookHandlers`, ignores specs of other events, and retu
 without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
 is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
 
+## Hooks for a child agent
+
+`hooksForChild(handlers, { forward?, childLabel? })` from `@theokit/agents/hooks` turns the parent's
+`HookHandlers` into an SDK `Plugin` for a child you build yourself (`Agent.create`, a squad member,
+a reviewer), so the parent's `pre_tool_call` veto also covers the child. The parent handler gets the
+child's real `agentId` and `runId`. By default only `pre_tool_call` is forwarded; pass
+`forward: ['pre_tool_call', 'post_tool_call', 'transform_tool_result']` to add the others.
+`childLabel` is added to the hook context as `childLabel`. A `pre_tool_call` that throws refuses the
+call. It returns `undefined` when no forwarded handler exists, so spread it conditionally:
+`plugins: [...(p ? [p] : [])]`.
+
 ## Ending a goal loop with a tool
 
 `createGoalSignal()` returns an `update_goal` tool and a judge that read the same state. Add `signal.tool`

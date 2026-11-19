@@ -1218,6 +1218,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `hookFingerprint` | value |
 | `HookSpecError` | value |
 | `hookSpecSchema` | value |
+| `hooksForChild` | value |
 | `hooksPlugin` | value |
 | `inheritHooks` | value |
 | `MAX_OUTPUT_BYTES` | value |
@@ -1235,6 +1236,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `HookRunInput` | type |
 | `HookRunResult` | type |
 | `HookSpec` | type |
+| `HooksForChildOptions` | type |
 | `HostHookOutcome` | type |
 | `ParsedClaudeHooks` | type |
 
