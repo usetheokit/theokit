@@ -146,6 +146,19 @@ const res = await fetch('http://localhost:3000/agents/support', {
 const headers = agentRequestHeaders(AGENT_ACTION_HEADERS, { authorization: `Bearer ${token}` })
 ```
 
+## Mounting a chat route for an agent built elsewhere
+
+`generateAgentRoutes` needs only the route and a `createRun`; `compiledOptions` is optional and never read.
+
+```ts
+import { generateAgentRoutes } from '@theokit/agents/bridge'
+
+const routes = generateAgentRoutes({
+  walkResult: { route: '/api/agents/support' },
+  createRun: (message, sessionId, signal) => runMyAgent(message, sessionId, signal),
+})
+```
+
 ## The shapes worth knowing before you start
 
 **Tool scope is bound once, not per tool.** `bindToolScope({ projectRoot, writeRoot, sandbox })`
@@ -212,6 +225,21 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
+
+## Delegating to a fresh agent per task
+
+`delegationPortFromAgentFactory(create, { sendOptions })` (from `@theokit/agents/bridge`) returns a
+`DelegationPort` that builds an agent with `create` for each task, sends the task, cancels the run when
+the delegating signal aborts, and disposes the agent after success, failure or cancellation. A run that
+streamed an error or did not end `finished` rejects with a `DelegationError`; guardrail and delegation
+errors pass through unchanged.
+
+```ts
+import { delegationPortFromAgentFactory } from '@theokit/agents/bridge'
+
+const worker = delegationPortFromAgentFactory(() => createWorkerAgent())
+const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: worker }] })
+```
 
 ## Registering subagents
 
@@ -359,6 +387,16 @@ This package has no colour at all — a grep for `color`, `chalk` or `theme` acr
 nothing, the one apparent hit being `ansi` inside `stateTransitionHistory`. It produces text and tool
 calls; a palette here would be configuration nothing could act on. The toolkit reads no theme file
 either, so naming an owner would repeat the mistake the `keybindings.json` row already made.
+
+### Instruction tree: `as-listed` order and `maxCharsPerFile`
+
+`loadInstructionTree({ order: 'as-listed', fileNames: ['SOUL.md', 'IDENTITY.md'] })` returns blocks in
+the order of the `fileNames` array within each root. It is only valid with an array; a predicate
+throws a `ConfigurationError` naming `order` and `fileNames`.
+
+`budget.maxCharsPerFile` cuts each file at that many characters and appends a `[truncated]` line; the
+block carries `truncated: true`. It applies before `maxChars`, so one runaway file cannot push the
+others out. A file that fails to read for any reason except `ENOENT` is reported to `onWarn`.
 
 ### `CLAUDE.md`
 
