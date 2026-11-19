@@ -20,8 +20,9 @@ import type { DelegationResult } from './delegation-types.js'
  * scoring loop — the layer's highest-value piece — had ZERO adoption in a product that runs an
  * explicit review pass: it was unreachable from the primitives that product actually holds.
  *
- * An SDK `SubAgent` or `Squad` satisfies this by having `run`. So does a test double, which is why
- * the loop is now testable without a compiler, a class or an LLM.
+ * Anything with a matching `run` satisfies this: `delegationPortFromAgentFactory` builds one that runs
+ * a fresh agent per task. An SDK `SubAgent.create` result does not (it is a `CustomTool`). A test
+ * double does too, which is why the loop is testable without a compiler, a class or an LLM.
  */
 export interface DelegationPort {
   /**
