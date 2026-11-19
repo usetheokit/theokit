@@ -1,5 +1,12 @@
 # @theokit/presenter
 
+## 0.14.0
+
+### Minor Changes
+
+- 3811739: Add the `@theokit/presenter/diff` subpath: one unified-diff model (`parseUnifiedDiff`, `foldDiffLines`, `segmentWords`, `pairIntraLines`, `DiffParseError`) for both UI kits. The root entry stays dependency-free.
+- 8d43d6a: Add `TOOL_KINDS` and `toolKindOf`: one exact-match table of known tool names (the TUI's measured list plus the SDK builtins `shell`, `memory_search`, `memory_get`) giving each tool's kind and target input keys.
+
 ## 0.13.0
 
 ### Minor Changes

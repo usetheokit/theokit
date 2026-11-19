@@ -1,5 +1,28 @@
 # theo
 
+## 0.82.0
+
+### Minor Changes
+
+- 8d830b1: Breaking: remove the test-only reset helpers from every published entry. They stay in their source modules for this repository's tests.
+
+  - `theokit/server`: `_resetMiddlewareCacheForTests`, `_resetUninvocableWarningsForTests`, `_resetRouteScanCacheForTests`, `_resetKeyCacheForTests`, `_resetWarnOnceForTests`, `_resetCacheEngine`, `_resetEnvCache`
+  - `theokit/server/auth`: `_resetKeyCacheForTests`
+  - `theokit/server/http`: `_resetMiddlewareCacheForTests`, `_resetUninvocableWarningsForTests`
+  - `theokit/server/observability`: `_resetWarnOnceForTests`
+  - `theokit/server/scan`: `_resetRouteScanCacheForTests`
+
+- 0b31263: Add `theokit/testing` with `startTestServer`, which boots the app's own `theokit dev` or `theokit start` on a free port for an app's end-to-end tests, and `TestServerBootError`.
+
+### Patch Changes
+
+- Updated dependencies [4e4d1fa]
+- Updated dependencies [36444c2]
+- Updated dependencies [3811739]
+- Updated dependencies [8d43d6a]
+  - @theokit/agents@16.9.0
+  - @theokit/presenter@0.14.0
+
 ## 0.81.0
 
 ### Minor Changes
@@ -491,8 +514,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                    [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                    were found and every /api/agents/* route will 404.
+                                                      [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                      were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 

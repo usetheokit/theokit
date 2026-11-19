@@ -12,6 +12,7 @@ import { forkSession } from '@theocode/agent/session'
 import { createChatTransport } from './chat-transport.js'
 import { credential } from './credential-helpers.js'
 import { loadCustomCommands } from '../commands/index.js'
+import type { ForkResult } from '../persistence/fork-session.js'
 import { forkCurrentSessionWith } from '../persistence/index.js'
 import { createTuiSession, type TuiSession } from './tui-session.js'
 import { persistSessionId } from '../persistence/index.js'
@@ -27,7 +28,7 @@ export interface TuiRoot {
   readonly customCommands: ReturnType<typeof loadCustomCommands>
   readonly customCommandNames: ReadonlySet<string>
   readonly resetSession: () => void
-  readonly sessionFork: () => { newId: string; copied: boolean }
+  readonly sessionFork: () => Promise<ForkResult>
   readonly pointToSession: (id: string) => void
   /** B-055 — install the surface's veto renderer; queued vetoes are replayed into it. */
   readonly onHookVeto: (listen: (veto: { tool: string; reason: string }) => void) => void

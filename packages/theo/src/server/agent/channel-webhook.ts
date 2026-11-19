@@ -96,7 +96,9 @@ async function handleSubscribe(
 }
 
 /**
- * Handle one channel webhook request. Returns:
+ * Handle one channel webhook request. `target` is either the request path (parsed as
+ * `/api/agents/<name>/channels/<platform>/webhook`) or an explicit `{ agent, platform }` for an app
+ * that serves the webhook on its own route. Returns:
  *   404 UNKNOWN_PLATFORM — no validator configured for `<platform>`
  *   400 BAD_REQUEST      — path is not a channel webhook, or the body is not JSON
  *   401 INVALID_SIGNATURE — the platform signature check failed (negative case)
@@ -106,10 +108,10 @@ async function handleSubscribe(
  */
 export async function handleChannelWebhook(
   request: Request,
-  urlPath: string,
+  target: string | { readonly agent: string; readonly platform: string },
   config: ChannelWebhookConfig,
 ): Promise<Response> {
-  const parsed = parseChannelPath(urlPath)
+  const parsed = typeof target === 'string' ? parseChannelPath(target) : target
   if (parsed === null) {
     return jsonError(
       400,
