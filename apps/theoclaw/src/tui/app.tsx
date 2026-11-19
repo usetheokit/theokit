@@ -15,7 +15,7 @@ import { Text, useInput } from 'ink'
 import { type ReactElement, useRef, useState } from 'react'
 
 import type { ControlClient } from '../control-client/control-client.js'
-import { controlStream, nextSessionId, type TuiNotice, type TurnNotice, turnEntries } from './frames.js'
+import { controlStream, nextSessionId, type PendingNotice, type TuiNotice, type TurnNotice, turnEntries } from './frames.js'
 
 export interface TheoClawTuiProps {
   /** The connection to the running instance; the TUI builds no agent (plan D1). */
@@ -36,13 +36,16 @@ const COMMANDS: readonly ChatComposerCommand[] = [
 type Item =
   | { readonly kind: 'user'; readonly text: string }
   | ({ readonly kind: 'notice' } & TuiNotice)
-  | { readonly kind: 'turn'; readonly id: number; readonly source: AgentStreamSource; readonly notices: readonly TurnNotice[] }
+  | { readonly kind: 'turn'; readonly id: number; readonly source: AgentStreamSource; readonly notices: readonly PendingNotice[] }
 
-function Turn({ source, notices }: { readonly source: AgentStreamSource; readonly notices: readonly TurnNotice[] }): ReactElement {
+function Turn({ source, notices }: { readonly source: AgentStreamSource; readonly notices: readonly PendingNotice[] }): ReactElement {
   const { events } = useAgentStream(source)
+  // A notice added by the app has no place yet: it takes the place the turn has reached when first drawn.
+  const placed = useRef<number[]>([])
+  const resolved = notices.map((n, index): TurnNotice => ({ ...n, after: n.after ?? (placed.current[index] ??= events.length) }))
   return (
     <>
-      {turnEntries(events, notices).map((entry, index) => {
+      {turnEntries(events, resolved).map((entry, index) => {
         if (entry.kind === 'notice') return <Notice key={`n${index}`} variant={entry.variant}>{entry.text}</Notice>
         const { event } = entry
         if (event.kind === 'message') return <ChatMessage key={event.id} role={event.role}>{event.text}</ChatMessage>
@@ -82,9 +85,16 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
     if (running.current) client.interrupt(session)
   }
 
-  const notice = (n: TuiNotice): void => setItems((current) => [...current, { kind: 'notice', ...n }])
-
   const turns = useRef(0)
+  // While a turn runs a notice joins that turn, so later output of the turn stays below it.
+  const notice = (n: TuiNotice): void => {
+    const id = running.current ? turns.current : undefined
+    setItems((current) =>
+      id === undefined
+        ? [...current, { kind: 'notice', ...n }]
+        : current.map((item) => (item.kind === 'turn' && item.id === id ? { ...item, notices: [...item.notices, n] } : item)),
+    )
+  }
 
   const send = (text: string): void => {
     turns.current += 1

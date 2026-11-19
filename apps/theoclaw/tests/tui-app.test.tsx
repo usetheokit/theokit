@@ -187,6 +187,34 @@ describe("theoclaw-tui (T4.2)", () => {
     await waitFor(() => instance.agents[0]!.cancels === 1, 2000, "the instance to cancel the original turn");
   });
 
+  it("the owner's message is drawn apart from the assistant's text", async () => {
+    const instance = await startInstance(() => ({ frames: [assistant("reply text"), finished()] }));
+    const tui = await renderTui(instance);
+    await tui.type("question text", ENTER);
+    await tui.until((f) => f.includes("reply text"), "the reply");
+    const lines = tui.screen().split("\n");
+    const asked = lines.findIndex((l) => l.includes("question text"));
+    const replied = lines.findIndex((l) => l.includes("reply text"));
+    expect(asked).toBeGreaterThanOrEqual(0);
+    expect(replied).toBeGreaterThan(asked);
+    expect(lines[asked]).not.toContain("reply text");
+  });
+
+  it("a notice added while a turn runs keeps the turn running and stays below the text already drawn", async () => {
+    const hold = deferred<void>();
+    const instance = await startInstance(() => ({ frames: [assistant("Hello"), finished()], deltas: ["Hel"], afterDeltas: hold.promise }));
+    const tui = await renderTui(instance);
+    await tui.type("hi", ENTER);
+    await tui.until((f) => f.includes("Hel"), "the first delta");
+    await tui.type("/new", ENTER, ENTER);
+    await tui.until((f) => f.includes("press Esc first"), "the refusal");
+    expect(tui.screen()).toContain("esc to interrupt");
+    hold.resolve();
+    await waitFor(() => !tui.screen().includes("esc to interrupt"), 3000, "the turn to end");
+    const lines = tui.screen().split("\n");
+    expect(lines.findIndex((l) => l.includes("Hel"))).toBeLessThan(lines.findIndex((l) => l.includes("press Esc first")));
+  });
+
   it("partial assistant text is drawn before the turn ends", async () => {
     const hold = deferred<void>();
     const instance = await startInstance(() => ({ frames: [assistant("Hello"), finished()], deltas: ["Hel"], afterDeltas: hold.promise }));

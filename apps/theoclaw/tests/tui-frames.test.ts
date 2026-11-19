@@ -94,11 +94,12 @@ describe("controlStream: tool cards", () => {
   it("ignores a result whose call id matches no card", async () => {
     const { state } = await run([
       event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
+      event({ type: "tool_result", callId: "c1", isError: false }),
       event({ type: "tool_result", callId: "missing", isError: true }),
       DONE,
     ]);
     expect(state.events).toHaveLength(1);
-    expect(state.events[0]).toMatchObject({ name: "ReadFile" });
+    expect(state.events[0]).toMatchObject({ name: "ReadFile", status: "success" });
   });
 });
 

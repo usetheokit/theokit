@@ -13,6 +13,11 @@ export interface TurnNotice extends TuiNotice {
   readonly after: number
 }
 
+/** A notice for a running turn; without `after` it sits wherever the turn has reached when it is first drawn. */
+export interface PendingNotice extends TuiNotice {
+  readonly after?: number
+}
+
 /** One row of a turn: a folded framework event, or a notice at the place it was raised. */
 export type TurnEntry =
   | { readonly kind: 'event'; readonly event: AgentEvent }
