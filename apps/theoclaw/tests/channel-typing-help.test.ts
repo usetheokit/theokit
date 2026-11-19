@@ -80,6 +80,23 @@ describe('every registered command has a help line', () => {
     for (const name of names) expect(HELP_COMMANDS, name).toContain(`/${name}`)
   })
 
+  it('lists exactly the commands the handlers answer, so a new handler needs a help line', () => {
+    const answered = [
+      ...CHAT_COMMANDS.map((c) => `/${c.name}`),
+      '/new',
+      '/reset',
+      '/goal',
+      '/help',
+      '/usage',
+      '/activation',
+      '/approve',
+      '/deny',
+      '/elevated',
+      '/acp',
+    ]
+    expect([...HELP_COMMANDS].sort()).toEqual([...new Set(answered)].sort())
+  })
+
   it('registers each listed command with the gateway hook, which lets the other handlers answer it', async () => {
     const hook = createHelpHook()
     for (const command of HELP_COMMANDS.filter((c) => c !== '/help')) {
