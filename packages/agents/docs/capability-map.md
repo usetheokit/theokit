@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1350 export(s) across 26 entry point(s).
+1371 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -77,6 +77,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createGoalSignal` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -164,6 +165,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `moderateOutputStream` | value |
 | `NetworkError` | value |
 | `noopReflectionStrategy` | value |
+| `NoResultSubmittedError` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
 | `parseModelId` | value |
@@ -419,6 +421,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `RefreshModelCatalogOptions` | type |
 | `RefreshModelCatalogResult` | type |
 | `ResolvedCompatSource` | type |
+| `ResultCapture` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
 | `RunAgentTurnOptions` | type |
@@ -510,6 +513,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createApiErrorHandler` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -549,6 +553,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `mcpRegistry` | value |
 | `mcpSecretValues` | value |
 | `mcpToolApprovals` | value |
+| `NoResultSubmittedError` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
 | `readCappedBody` | value |
@@ -644,6 +649,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
 | `ResolvedCompatSource` | type |
+| `ResultCapture` | type |
 | `RunAgentTurnOptions` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
@@ -678,7 +684,12 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `attachControlSocket` | value |
 | `createSessionStore` | value |
+| `AgentTurnUsage` | type |
+| `ControlClientFrame` | type |
+| `ControlServerFrame` | type |
+| `ControlSocketOptions` | type |
 | `SessionOutcome` | type |
 | `SessionStore` | type |
 | `SessionStoreOptions` | type |
@@ -1260,6 +1271,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `LivenessBudgetError` | value |
 | `loadOrCreateSessionId` | value |
 | `persistSessionId` | value |
+| `planProjectsGC` | value |
 | `planTranscriptGC` | value |
 | `projectDirFor` | value |
 | `projectDirMatches` | value |
@@ -1285,6 +1297,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `GCKept` | type |
 | `Liveness` | type |
 | `LivenessVerdict` | type |
+| `PlanProjectsGCOptions` | type |
+| `ProjectsGCCandidate` | type |
+| `ProjectsGCFs` | type |
+| `ProjectsGCKind` | type |
+| `ProjectsGCPlan` | type |
+| `ProjectsGCRegistryEntry` | type |
 | `ReadThreadHistoryOptions` | type |
 | `RegistryOutcome` | type |
 | `RunTranscriptGCResult` | type |
@@ -1455,6 +1473,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `checks` | value |
+| `credentialShape` | value |
+| `describeCredentialDefect` | value |
 | `diagnose` | value |
 | `DiagnosticBundleError` | value |
 | `installDiagnosticSink` | value |
@@ -1462,6 +1482,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `secretPresence` | value |
 | `writeDiagnosticBundle` | value |
 | `Check` | type |
+| `CredentialDefect` | type |
 | `CredentialState` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |

@@ -53,7 +53,7 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool; `timeoutMs` bounds the call and rejects with `A2ATimeoutError` (`A2A call to "<name>" failed: no answer within <ms> ms`), composed with the caller's signal. `createA2AJsonRpcHandler` serves `message/send`; `maxInFlight` caps concurrent turns and answers 503 with `retry-after` (`retryAfterSeconds`, default 5) before the body is read. A slot is held until `respond` settles, even after the handler's own deadline answered. Both options are off by default |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics: `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
+| `./doctor` | Environment diagnostics: `credentialShape(value, { minLength? })` names a malformed credential (`edge_whitespace`, `inner_whitespace`, `quote_or_backslash`, `control_character`, `placeholder`, `too_short`) or returns `ok`, and `describeCredentialDefect` words it without echoing the value; `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
@@ -104,6 +104,14 @@ process.exitCode = result.exitCode
 `grantGate(store, classify)` (from `./auth`) vetoes a governed call that has no standing grant and never asks anyone. `createApprovalGate({ store, key, waived?, reviewer?, ask?, timeoutMs?, ledger?, onError? })` is the chain in front of it: a session waiver, a saved approval in the same `PermissionStore`, an optional reviewer (`'allow' | 'deny' | 'ask'`), then the person via `ask` (`'once'`, `'always'` which is saved with `store.grant`, or `'deny'`; `{ answer, by }` records who). No `ask` means a refusal (`nobody can approve it`); a timeout is a denial named in the decision's `reason` (it does not call `onError`); a throwing reviewer defers to the person, a throwing asker denies, and each is reported through `onError(error, stage)` and named in `reason`. `decide(ctx)` returns `{ allowed, reason, by }`; `plugin` applies it as a `pre_tool_call` veto. `createJsonlLedger(dir)` is an append-only `activity.jsonl` (mode 0600) with `read()`; pass it as `ledger` to get one receipt per decision.
 
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
+
+## Stability tiers: experimental exports
+
+Every export without an `@experimental` tag on its own declaration is stable. `@theokit/agents/testing` is a utility subpath for your own tests (not a test-only seam), and its tier is stable except for the legacy snake_case mock stream listed below. The list below is checked against `public-surface-baseline.json` by `tests/unit/experimental-exports.test.ts`.
+
+<!-- experimental-exports:start -->
+- `@theokit/agents/testing`: `MockAgentStreamOptions`, `MockResponse`, `MockStreamEvent`, `createMockAgentStream`
+<!-- experimental-exports:end -->
 
 ## Testing: the live-suite guard
 
@@ -376,6 +384,15 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Reading a run's final answer as an object
+
+`createResultCapture(schema)` returns a `submit_result` tool whose input schema is your zod object schema. Add
+`cap.tool` to the agent, tell it to finish by calling the tool, then read `cap.result()` after `run.wait()`. A
+submission that fails validation goes back to the model as a tool error naming the issue paths, so it can fix
+it; the last valid submission wins. `result()` throws `NoResultSubmittedError` when none was valid, and
+`submitted()` tells you beforehand. The schema must be an object schema; `name` and `description` rename or
+reword the tool.
 
 ## Scheduled jobs: file or PostgreSQL
 
@@ -819,6 +836,64 @@ Listed after the removal is `still-present`; not listed before is `nothing-to-re
 after is `removed`. A verifier that throws or exceeds `registryTimeoutMs` gives `unconfirmed` with the error in
 `registryError`, and the transcript step still runs. Without a verifier nothing changes.
 
+### Planning a GC across every project
+
+`planProjectsGC({ projectsRoot, keepLast, maxAgeDays })` is the read-only plan for reclaiming disk across every
+project under `projectsRoot(root)`, where `planTranscriptGC` covers one `cwd`. It never deletes anything; applying a
+plan is a separate step. Each candidate is `{ project, kind, target, sessionId?, ageDays }`, with `kind` one of
+`transcript`, `writer-lock`, `lock-directory`, `temp` or `registry`.
+
+- A project whose liveness is `undetermined` is kept whole.
+- The newest `keepLast` transcripts survive, and in a live project so do the newest one, the session the pointer
+  names, every non-archived registry entry, anything `protectedIds(cwd)` names and anything with a live writer.
+- Locks whose transcript is gone, atomic-write temp files and registry entries whose transcript is gone are planned
+  once they are older than `maxAgeDays`. Temp files are recognised by `classifySessionArtifact`, so an editor's
+  `notes.txt.tmp` or `.foo.swp` is never a candidate. A registry entry with no `lastModified` is kept.
+- An entry whose `mtime` cannot be read is never collected. A failed pointer or registry read skips that project and
+  adds to `errors`.
+- Several cwds can share one project directory (the encoding is lossy). Every cwd the transcripts record is consulted,
+  and `candidateCwds()` adds known workspaces that encode to the project, so a colliding cwd with no transcript of
+  its own is protected too. Planning a project needs `candidateCwds` listing every cwd of the app that could share the directory AND `candidateCwdsComplete: true`, the caller's declaration that the list is complete (a colliding cwd known only to its own registry cannot be discovered from disk); without both a project (live or dead: a dead verdict can rest on headers alone) is kept whole and the reason is in `kept`. Any project, live or dead,
+  holding a transcript whose header cannot be read or names no cwd of the project is kept whole.
+- `keepLast` or `maxAgeDays` below 1 throws `GCFloorError`.
+
+The plan also reports `touchedProjects`, `liveCwds` and `countByKind`. `listRegistry` defaults to `Agent.list`.
+
 ## Refused tool calls
 
 When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
+
+## Serving sessions over a WebSocket
+
+`attachControlSocket(server, { authorize, sessions, path?, maxPayloadBytes?, log? })` (from
+`@theokit/agents/control`) attaches to an existing `node:http` server and serves a session store to a
+remote surface. It needs the optional peer `ws`, loaded when you call it.
+
+```ts
+import { attachControlSocket, createSessionStore } from '@theokit/agents/control'
+
+const sessions = createSessionStore({ build: () => createMyAgent() })
+const control = attachControlSocket(server, {
+  authorize: (header) => header === `Bearer ${token}`, // or { revoked: (cb) => ... }
+  sessions,
+})
+await control.close() // removes the upgrade listener, terminates sockets
+```
+
+An upgrade is refused before any agent exists: `404` for another path (default `/control`), `401` when
+`authorize(authorization)` returns `false` (or throws). Returning `{ revoked(cb) }` closes the socket
+(1008) when `cb` is called. A frame above `maxPayloadBytes` (default 65 536) closes the socket with 1009.
+
+Frames are JSON text. Client to server:
+
+| Frame | Meaning |
+| --- | --- |
+| `{ type: 'chat', message, session? }` | One turn. One chat at a time per socket (`error` `busy` otherwise). Without `session`, a private session per socket is used and responses omit `session`. |
+| `{ type: 'interrupt', session }` | Cancel the session's running turn. |
+| `{ type: 'steer', session, message }` | Inject a message into the running turn. |
+
+Server to client: `event` (`{ event, session? }`), `done` (`{ session?, usage? }`), `interrupted`,
+`interrupt_ok`, `steer_ok`, `no_turn` (each with `session`), and `error` (`{ code, session? }`). `code` is
+`bad_frame` for an unparsable or unknown frame (the socket stays open), or the store's refusal
+(`busy`, `bad_session`, `turn_failed`, `turn_cancelled`). `interrupted` for a sessionless chat carries the
+private session id. When a socket closes, the turns it started are cancelled.
