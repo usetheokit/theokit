@@ -6,6 +6,7 @@
  * `validate` (D4), and the handler runs only when neither refuses.
  */
 import type { CustomTool } from '@theokit/sdk'
+import { z } from 'zod'
 
 import { MAX_REQUEST_BODY_BYTES, readCappedJson } from './read-capped-body.js'
 
@@ -24,8 +25,28 @@ export interface ToolInvokeRouteOptions {
   /** The tools a request may name; any other name answers 404. */
   readonly tools: readonly CustomTool[]
   readonly veto?: ToolCallVetoPort
-  /** Without one, `args` reach the handler as sent. */
-  readonly validate?: ToolArgsValidator
+  /** Default: `validateAgainstInputSchema`. `false` turns validation off, explicitly. */
+  readonly validate?: ToolArgsValidator | false
+}
+
+const compiled = new WeakMap<CustomTool, z.ZodType>()
+
+/**
+ * Checks `args` against the tool's own `inputSchema` (compiled once per tool). The first issue is
+ * `<path>: <message>`, `(root)` for the object itself. A schema that does not compile throws.
+ */
+export const validateAgainstInputSchema: ToolArgsValidator = (tool, args) => {
+  let schema = compiled.get(tool)
+  if (schema === undefined) {
+    schema = z.fromJSONSchema(tool.inputSchema as Parameters<typeof z.fromJSONSchema>[0])
+    compiled.set(tool, schema)
+  }
+  const parsed = schema.safeParse(args)
+  if (parsed.success) return undefined
+  const issue = parsed.error.issues[0]
+  if (issue === undefined) return 'invalid arguments'
+  const path = issue.path.map(String).join('.')
+  return `${path === '' ? '(root)' : path}: ${issue.message}`
 }
 
 interface ToolCall {
@@ -89,7 +110,8 @@ async function run(
   signal: AbortSignal,
 ): Promise<Response> {
   try {
-    const invalid = options.validate?.(call.tool, call.args)
+    const validate = options.validate === false ? undefined : (options.validate ?? validateAgainstInputSchema)
+    const invalid = validate?.(call.tool, call.args)
     if (invalid !== undefined) return failure(400, 'invalid_args', invalid)
     // Typed as never undefined, but a JavaScript tool can return nothing: `null` keeps `result` in
     // the body, which `Response.json` would otherwise drop.

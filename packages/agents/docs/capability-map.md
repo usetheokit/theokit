@@ -232,6 +232,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `UnsupportedRunOperationError` | value |
 | `UnsupportedTaskOperationError` | value |
 | `UntrustedSettingSourceError` | value |
+| `validateAgainstInputSchema` | value |
 | `verifyLayerOrdering` | value |
 | `wellKnownCardPath` | value |
 | `WindowBudgetExceededError` | value |
@@ -533,6 +534,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
 | `UntrustedSettingSourceError` | value |
+| `validateAgainstInputSchema` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
 | `WRITE_SCOPED_TOOLS` | value |
