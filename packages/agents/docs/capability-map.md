@@ -31,6 +31,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AgentRunError` | value |
 | `AgentRunner` | value |
 | `AgentRunnerBuilder` | value |
+| `agentCardPath` | value |
 | `agentsPlugin` | value |
 | `applyCapabilities` | value |
 | `applyPosture` | value |
@@ -885,6 +886,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PermissionStoreOptions` | type |
 | `PlanOnlyContext` | type |
 | `PlanOnlyGateOptions` | type |
+| `PlainAgentCardInput` | type |
 | `PromptHooks` | type |
 | `ResolveCredentialInput` | type |
 | `ResolveCredentialOptions` | type |
@@ -1356,11 +1358,19 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `A2ATimeoutError` | value |
+| `agentCardPath` | value |
+| `buildAgentCard` | value |
 | `createA2AJsonRpcHandler` | value |
 | `createA2ATool` | value |
+| `wellKnownCardPath` | value |
 | `A2AAuth` | type |
+| `A2ACapabilities` | type |
 | `A2AJsonRpcHandlerOptions` | type |
+| `A2ASkill` | type |
 | `A2AToolConfig` | type |
+| `AgentCard` | type |
+| `BuildAgentCardOptions` | type |
+| `PlainAgentCardInput` | type |
 
 ## `@theokit/agents/evals`
 
