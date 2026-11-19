@@ -124,8 +124,9 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
     // Cancellation must reach the inner run: a guarded turn that dropped it could not be aborted.
     ...(typeof cancelTurn === 'function' ? { cancel: () => cancelTurn.call(turn) } : {}),
     async *stream() {
-      // The inner stream is read for its error events only; anything else it carries is unguarded
-      // output and stays unseen. A run can stream an error and still resolve `finished`.
+      // The inner stream is read only to learn that it carried an error event. Its text may hold
+      // what a guard would redact, so none of it is forwarded: one fixed terminal status is.
+      let streamedError = false
       if (turn.stream !== undefined) {
         for await (const event of turn.stream()) {
           if (
@@ -133,10 +134,11 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
             event !== null &&
             (event as { type?: unknown }).type === 'error'
           ) {
-            yield event
+            streamedError = true
           }
         }
       }
+      if (streamedError) yield errorStatus('run error')
       let out: Awaited<ReturnType<SdkTurnHandle['wait']>>
       try {
         out = await guardedOutcome()

@@ -198,8 +198,18 @@ describe('delegationPortFromAgentFactory', () => {
       .run('t')
       .catch((e: unknown) => e)
     expect(error).toBeInstanceOf(DelegationError)
-    expect((error as Error).message).toContain('boom: bad')
+    expect((error as Error).message).toContain('run error')
+    expect((error as Error).message).not.toContain('boom')
     expect(w.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('a guarded stream never carries the text of an inner error event', async () => {
+    const w = fake({ events: [{ type: 'error', code: 'boom', message: 'secret-token-123' }] })
+    const turn = await withGuardrails(w.agent, [passing]).send('t')
+    const seen: unknown[] = []
+    for await (const event of turn.stream!()) seen.push(event)
+    expect(JSON.stringify(seen)).not.toContain('secret-token-123')
+    expect(seen).toContainEqual(expect.objectContaining({ type: 'status', status: 'ERROR' }))
   })
 
   it('the task and sendOptions reach agent.send, and the delegation signal wins', async () => {
