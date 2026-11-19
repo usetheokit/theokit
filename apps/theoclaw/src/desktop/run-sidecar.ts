@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { type AgentStreamEvent, presentUIMessageStream } from '@theokit/agents/bridge'
+import { type AgentStreamEvent, presentUIMessageStream, toAgentStreamEvent } from '@theokit/agents/bridge'
 
 import { type ControlClient, type ControlFrame, createControlClient } from '../control-client/control-client.js'
 import { type ControlClientSettings, readControlClientSettings } from '../control-client/settings.js'
@@ -25,7 +25,7 @@ async function* eventsOf(
   ending: { code?: string },
 ): AsyncGenerator<AgentStreamEvent> {
   for await (const frame of frames) {
-    if (frame.type === 'event') yield frame.event as AgentStreamEvent
+    if (frame.type === 'event') yield toAgentStreamEvent(frame.event)
     else if (frame.type === 'error') ending.code = frame.code
   }
 }

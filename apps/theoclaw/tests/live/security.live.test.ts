@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } fr
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { type SdkMessage, translateSdkEvent } from '@theokit/agents/bridge'
+import { translateSdkEvent } from '@theokit/agents/bridge'
 import { afterAll, describe, expect, it } from 'vitest'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../../src/agent/create-agent.js'
@@ -106,7 +106,7 @@ async function controlTurn(page: string, token: string, plans: string[]): Promis
   const events: TurnEvent[] = []
   try {
     const run = await agent.send(PROMPT)
-    for await (const message of run.stream()) events.push(...translateSdkEvent(message as unknown as SdkMessage, `control-${budget.count()}`))
+    for await (const message of run.stream()) events.push(...translateSdkEvent(message, `control-${budget.count()}`))
     await run.wait()
   } finally {
     await agent[Symbol.asyncDispose]()

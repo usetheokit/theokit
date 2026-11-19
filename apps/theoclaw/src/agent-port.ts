@@ -1,3 +1,6 @@
+import type { SdkMessageLike, SdkTimelineEvent } from '@theokit/agents/bridge'
+import type { InteractionUpdate } from '@theokit/sdk'
+
 /**
  * What TheoClaw needs of an agent, for both the chat replies and the `/control` turns: one
  * container builds the agents of both, so the port is declared once.
@@ -37,7 +40,7 @@ export interface TurnAgent {
       /** `steer` injects the text into the turn already running (the advisor, OC-118). */
       readonly queueMode?: 'followup' | 'steer' | 'collect'
       /** Called with each `InteractionUpdate` as the model writes; `text-delta` carries the reply's text. */
-      readonly onDelta?: (args: { readonly update: { readonly type: string } }) => void
+      readonly onDelta?: (args: { readonly update: InteractionUpdate }) => void
     },
   ): Promise<TurnRun>
   /**
@@ -65,12 +68,10 @@ export interface GoalRunResult {
  * same reason as the stream element: the bridge's `SdkTimelineEvent` carries `SdkMessage`, whose
  * index signature the SDK's own event type does not declare.
  */
-export interface TurnTimelineEvent {
-  readonly kind: 'message' | 'delta'
-}
+export type TurnTimelineEvent = SdkTimelineEvent
 
 export interface TurnRun {
-  stream(): AsyncIterable<{ readonly type: string }>
+  stream(): AsyncIterable<SdkMessageLike>
   /**
    * How the run ended; a failed one may carry the SDK's error code. `result` is the final answer,
    * which a `delegate_all` worker hands back to its parent (B-386). `usage` and `cost` are the SDK

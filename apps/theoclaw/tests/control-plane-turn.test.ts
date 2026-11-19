@@ -1,4 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
+import type { SdkTimelineEvent } from '@theokit/agents/bridge'
+import type { SDKAgent, SDKMessage } from '@theokit/sdk'
 
 import type {
   TurnAgent as ReplyTurnAgent,
@@ -533,5 +535,44 @@ describe('the turn streams the reply as the model writes it', () => {
     expect(text.map((e) => (e as unknown as { content: string }).content).join('')).toBe(
       'Once upon a time',
     )
+  })
+})
+
+describe('typed SDK usage (#2317)', () => {
+  it('takes the SDK agent and its run as the port, with no cast', () => {
+    expectTypeOf<SDKAgent>().toExtend<TurnAgent>()
+    expectTypeOf<Awaited<ReturnType<SDKAgent['send']>>>().toExtend<TurnRun>()
+  })
+
+  it('translates a typed SDK message and a typed timeline event without a cast', async () => {
+    const message: SDKMessage = {
+      type: 'assistant',
+      agent_id: 'a',
+      run_id: 'r',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'typed' }] },
+    }
+    const timeline: SdkTimelineEvent = {
+      kind: 'delta',
+      update: { type: 'text-delta', text: 'ty' },
+    }
+    const run: TurnRun = {
+      async *stream() {
+        yield message
+      },
+      async *events() {
+        yield timeline
+      },
+      wait: async () => ({ status: 'finished' }),
+      cancel: async () => undefined,
+    }
+    const events: TurnEvent[] = []
+    const outcome = await runTheoClawTurn({
+      withAgent: (work) => work({ send: async () => run }),
+      message: 'hi',
+      runId: 'r1',
+      emit: (event) => events.push(event),
+    })
+    expect(outcome).toEqual({ ok: true })
+    expect(events.map((e) => e['content'])).toContain('typed')
   })
 })

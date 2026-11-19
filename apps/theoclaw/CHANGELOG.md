@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The agent port (`TurnAgent`, `TurnRun`, `TurnTimelineEvent`) uses the SDK's typed messages, `InteractionUpdate` and the bridge's `SdkTimelineEvent`, so the control-plane turns and the desktop sidecar no longer cast SDK messages or events (#2317, follow-up of #1802).
+
 ### Fixed
 
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).

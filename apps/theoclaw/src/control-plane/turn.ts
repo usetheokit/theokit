@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
 import {
-  type SdkMessage,
+  type SdkMessageLike,
   translateInteractionUpdate,
   translateSdkEvent,
 } from '@theokit/agents/bridge'
+
+import type { InteractionUpdate } from '@theokit/sdk'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
@@ -126,7 +128,7 @@ function nextOrAbort(
  * the code of the first error among them, if any.
  */
 function emitMessage(
-  message: { readonly type: string },
+  message: SdkMessageLike,
   options: TurnOptions,
   delta: DeltaState,
 ): string | undefined {
@@ -134,7 +136,7 @@ function emitMessage(
   // The step's finished `assistant` message repeats text its deltas already sent.
   const textStreamed = message.type === 'assistant' && delta.streamed
   if (message.type === 'assistant') delta.streamed = false
-  for (const event of translateSdkEvent(message as SdkMessage, options.runId)) {
+  for (const event of translateSdkEvent(message, options.runId)) {
     if (options.signal?.aborted === true) break
     if (textStreamed && event.type === 'text_delta') continue
     if (event.type === 'error') streamedError ??= describeStreamedError(event)
@@ -205,12 +207,10 @@ async function runWith(
 ): Promise<TurnOutcome> {
   const delta: DeltaState = { streamed: false }
   // Text and thinking reach the surface as the model writes them; tool events keep their stream path.
-  const onDelta = ({ update }: { readonly update: { readonly type: string } }): void => {
+  const onDelta = ({ update }: { readonly update: InteractionUpdate }): void => {
     if (options.signal?.aborted === true) return
     if (update.type !== 'text-delta' && update.type !== 'thinking-delta') return
-    for (const event of translateInteractionUpdate(
-      update as Parameters<typeof translateInteractionUpdate>[0],
-    )) {
+    for (const event of translateInteractionUpdate(update)) {
       if (event.type === 'text_delta') delta.streamed = true
       options.emit(event)
     }
