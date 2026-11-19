@@ -336,4 +336,65 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       expect(entries.filter((entry) => entry.kind === 'event')).toHaveLength(state.events.length)
     }
   })
+
+  it('a notice posted in the same tick a frame resolved is placed after that frame', async () => {
+    const gate = deferred<void>()
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'before' })
+        await gate.promise
+        yield event({ type: 'text_delta', content: 'after' })
+        yield DONE
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    const notices: TurnNotice[] = []
+    const stream = controlStream(client, 'hi', SESSION, (n) => notices.push(n), () => undefined, inbox)
+    const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
+    // The frame's promise resolves and the notice is posted before the stream's continuation runs.
+    gate.resolve()
+    inbox.post({ variant: 'warning', text: 'queued' })
+    for await (const e of stream) events.push(e)
+    const state = [...events, { type: 'done' } as AgentStreamEvent].reduce(
+      agentStreamReducer,
+      initialAgentStreamState,
+    )
+    expect(turnEntries(state.events, notices)).toMatchObject([
+      { kind: 'event', event: { text: 'beforeafter' } },
+      { kind: 'notice', text: 'queued' },
+    ])
+  })
+
+  it('a notice posted while the interrupted frame waits for the consumer stays in the frozen transcript, after the warning', async () => {
+    const gate = deferred<void>()
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'part' })
+        await gate.promise
+        yield { type: 'interrupted', session: SESSION } as ControlFrame
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    let handed: readonly TranscriptEntry[] | undefined
+    const stream = controlStream(
+      client,
+      'hi',
+      SESSION,
+      () => undefined,
+      () => undefined,
+      inbox,
+      (t) => (handed = t),
+    )
+    await stream.next()
+    gate.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    inbox.post({ variant: 'warning', text: 'queued' })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    for await (const e of stream) void e
+    expect(handed).toEqual([
+      { kind: 'assistant', text: 'part' },
+      { kind: 'notice', variant: 'warning', text: 'interrupted' },
+      { kind: 'notice', variant: 'warning', text: 'queued' },
+    ])
+  })
 })
