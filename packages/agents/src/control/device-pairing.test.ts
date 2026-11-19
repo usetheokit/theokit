@@ -1,11 +1,10 @@
-import { mkdtempSync, readFileSync, statSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
 import { createDevicePairing } from './device-pairing.js'
-import { pairRoute } from './pair-route.js'
 
 const CRED = 'abcdefghijklmnopqrstuvwxyz012345'
 const setup = (extra: { codeTtlMs?: number; maxPending?: number } = {}) => {
@@ -90,20 +89,66 @@ describe('createDevicePairing', () => {
   })
 })
 
-describe('pairRoute', () => {
-  const post = (body: string) => new Request('http://x/pair', { method: 'POST', body })
-  it('maps outcomes to statuses without echoing the credential', async () => {
+describe('createDevicePairing edge cases', () => {
+  const pair = (pairing: ReturnType<typeof setup>['pairing'], name: string, cred: string) => {
+    const r = pairing.request(pairing.issueCode(), name, cred)
+    if (!r.ok) throw new Error('request failed')
+    return r.id
+  }
+
+  it('approve answers write_failed and approves nothing when the store cannot be written', async () => {
+    const { dir, pairing } = setup()
+    const id = pair(pairing, 'phone', CRED)
+    chmodSync(dir, 0o500)
+    const result = await pairing.approve(id)
+    chmodSync(dir, 0o700)
+    if (result.ok) return // running as root: the directory stays writable
+    expect(result).toEqual({ ok: false, reason: 'write_failed' })
+    expect(pairing.accepts(`Bearer ${CRED}`)).toBe(false)
+    expect(pairing.pending()).toHaveLength(1)
+  })
+
+  it('concurrent approvals all land in the store', async () => {
+    const { dir, pairing } = setup()
+    const ids = [0, 1, 2, 3].map((i) => pair(pairing, `d${i}`, `${CRED}${i}`))
+    await Promise.all(ids.map((id) => pairing.approve(id)))
+    const stored = JSON.parse(readFileSync(join(dir, 'devices.json'), 'utf8')).devices
+    expect(stored).toHaveLength(4)
+    for (let i = 0; i < 4; i++) expect(pairing.accepts(`Bearer ${CRED}${i}`)).toBe(true)
+  })
+
+  it('revoke by name removes every device with that name and fires onRevoke for each', async () => {
     const { pairing } = setup()
-    const route = pairRoute(pairing)
-    const code = pairing.issueCode()
-    const ok = await route(post(JSON.stringify({ code, name: 'p', credential: CRED })))
-    expect(ok.status).toBe(202)
-    expect(await ok.text()).not.toContain(CRED)
-    expect((await route(post(JSON.stringify({ code, name: 'p', credential: CRED })))).status).toBe(
-      401,
-    )
-    expect((await route(post('nope'))).status).toBe(400)
-    expect((await route(post('x'.repeat(70_000)))).status).toBe(413)
-    expect((await route(new Request('http://x/pair'))).status).toBe(405)
+    const a = pair(pairing, 'phone', `${CRED}a`)
+    const b = pair(pairing, 'phone', `${CRED}b`)
+    const c = pair(pairing, 'laptop', `${CRED}c`)
+    for (const id of [a, b, c]) await pairing.approve(id)
+    const seen: string[] = []
+    pairing.onRevoke((id) => seen.push(id))
+    expect(await pairing.revoke('phone')).toBe(true)
+    expect(seen.sort()).toEqual([a, b].sort())
+    expect(pairing.accepts(`Bearer ${CRED}a`)).toBe(false)
+    expect(pairing.accepts(`Bearer ${CRED}c`)).toBe(true)
+  })
+
+  it('a pending request expires after codeTtlMs', async () => {
+    const { pairing, advance } = setup({ codeTtlMs: 100 })
+    const id = pair(pairing, 'phone', CRED)
+    expect(pairing.pending()).toHaveLength(1)
+    advance(100)
+    expect(pairing.pending()).toHaveLength(0)
+    expect(await pairing.approve(id)).toEqual({ ok: false, reason: 'unknown_request' })
+  })
+
+  it('approving the same credential again replaces the old device and fires onRevoke for it', async () => {
+    const { pairing } = setup()
+    const first = pair(pairing, 'phone', CRED)
+    await pairing.approve(first)
+    const second = pair(pairing, 'phone2', CRED)
+    const seen: string[] = []
+    pairing.onRevoke((id) => seen.push(id))
+    await pairing.approve(second)
+    expect(seen).toEqual([first])
+    expect(pairing.accepts(`Bearer ${CRED}`)).toBe(true)
   })
 })

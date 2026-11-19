@@ -17,9 +17,13 @@ function readBody(text: string): { code: string; name: string; credential: strin
   } catch {
     return undefined
   }
-  const { code, name, credential } = (
-    typeof parsed === 'object' && parsed !== null ? parsed : {}
-  ) as Record<string, unknown>
+  const fields = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as Record<
+    string,
+    unknown
+  >
+  // `token` is the wire name TheoClaw clients send; `credential` is accepted as an alias.
+  const { code, name } = fields
+  const credential = fields.token ?? fields.credential
   return typeof code === 'string' && typeof name === 'string' && typeof credential === 'string'
     ? { code, name, credential }
     : undefined
@@ -47,7 +51,8 @@ async function readBounded(request: Request): Promise<string | undefined> {
 }
 
 /**
- * An HTTP handler for the device's side of pairing: `POST` with `{ code, name, credential }`.
+ * An HTTP handler for the device's side of pairing: `POST` with `{ code, name, token }` (`credential` is accepted
+ * as an alias for `token`).
  * Answers `202 { id }` (waiting for the owner; the credential opens nothing yet), `401` for an
  * unknown, spent or expired code, `400` for a bad body, name or credential, `413` over 64 KiB,
  * `429` while too many requests wait, `405` for another method. No answer echoes the credential.

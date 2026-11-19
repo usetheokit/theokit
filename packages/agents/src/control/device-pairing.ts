@@ -41,7 +41,7 @@ export interface DevicePairing {
   revoke(name: string): Promise<boolean>
   /** True for an `Authorization: Bearer ...` header carrying an approved device's credential. */
   accepts(authorization: string | undefined): boolean
-  /** Called with the id of each device removed by `revoke`, after the store is written. */
+  /** Called with the id of each device removed by `revoke` or replaced by an approval with the same credential, after the store is written. */
   onRevoke(listener: (id: string) => void): () => void
 }
 
@@ -129,6 +129,9 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
       return false
     }
   }
+  const notify = (id: string): void => {
+    for (const listener of [...listeners]) listener(id)
+  }
   const serialized = <T>(task: () => Promise<T>): Promise<T> => {
     const result = writes.then(task)
     writes = result.catch(() => undefined)
@@ -172,10 +175,13 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
         if (device === undefined) return { ok: false, reason: 'unknown_request' } as const
         const entry: Device = { id: device.id, name: device.name, digest: device.digest }
         // Approved only once the file holds it, so a device is never approved in memory alone.
+        const replaced = approved.filter((d) => d.digest === entry.digest)
         const next = [...approved.filter((d) => d.digest !== entry.digest), entry]
         if (!(await save(next))) return { ok: false, reason: 'write_failed' } as const
         approved = next
         waiting.delete(id)
+        // A device replaced by the same credential loses its sockets like a revoked one.
+        for (const old of replaced) notify(old.id)
         return { ok: true, name: entry.name } as const
       })
     },
@@ -190,7 +196,7 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
         const next = approved.filter((d) => d.name !== name)
         if (!(await save(next))) return false
         approved = next
-        for (const device of removed) for (const listener of [...listeners]) listener(device.id)
+        for (const device of removed) notify(device.id)
         return true
       })
     },

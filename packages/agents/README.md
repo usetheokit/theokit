@@ -798,12 +798,12 @@ After `close()`, `run` answers `turn_failed`.
 import { createDevicePairing, pairRoute } from '@theokit/agents/control'
 
 const pairing = createDevicePairing({ dir: stateDir })
-const handlePair = pairRoute(pairing) // POST { code, name, credential } -> 202 { id } | 400 | 401 | 413 | 429
+const handlePair = pairRoute(pairing) // POST { code, name, token } -> 202 { id } | 400 | 401 | 413 | 429
 pairing.onRevoke((id) => closeSocketsOf(id)) // e.g. close with code 1008
-await pairing.revoke('my-phone') // removes every approved device with that name
+await pairing.revoke('my-phone') // removes every approved device with that name (names are not unique)
 ```
 
-`revoke(name)` calls each `onRevoke` listener with the id of every removed device, after the store is written.
+`revoke(name)` calls each `onRevoke` listener with the id of every removed device, after the store is written. Device names are not unique: two devices approved under the same name are revoked together. Approving a request whose credential matches an already approved device replaces that device silently, and its id is passed to `onRevoke` so its sockets close. The route reads `{ code, name, token }` (`credential` is accepted as an alias for `token`).
 
 ## Sessions
 
