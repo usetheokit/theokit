@@ -5,19 +5,28 @@ import { join } from 'node:path'
 import { PtyInteractiveBackend } from '@theokit/agents-pty'
 import { InteractiveBackend } from '@theokit/agents/interactive'
 import type { StartInteractiveOptions, StartInteractiveResult, WriteStdinOptions, WriteStdinResult } from '@theokit/agents/interactive'
-import { interactiveWrapCommand } from '@theokit/agents/sandbox'
+import { allowlistedEnv, interactiveWrapCommand } from '@theokit/agents/sandbox'
 import type { BwrapDetection } from '@theokit/agents/sandbox'
 
-import { keptEnv } from './acp-transport.js'
 import type { ToolSettings } from './tool-settings.js'
 
 function quote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
 }
 
+/** The shell inherits the framework allowlist, minus the temp and XDG directories: they point outside the tool root. */
+export function shellEnv(env: Readonly<Record<string, string | undefined>>): Record<string, string> {
+  const kept: Record<string, string> = {}
+  for (const [name, value] of Object.entries(allowlistedEnv(env))) {
+    if (name === 'TMPDIR' || name.startsWith('XDG_')) continue
+    kept[name] = value
+  }
+  return kept
+}
+
 /** `env -i` with the kept variables and `HOME` in the tool root, then the command in `sh -c`. */
 function scrubbed(command: string, toolRoot: string, env: Readonly<Record<string, string | undefined>>): string {
-  const kept = Object.entries({ ...keptEnv(env), HOME: toolRoot }).map(([name, value]) => `${name}=${quote(value)}`)
+  const kept = Object.entries({ ...shellEnv(env), HOME: toolRoot }).map(([name, value]) => `${name}=${quote(value)}`)
   return `/usr/bin/env -i ${kept.join(' ')} /bin/sh -c ${quote(command)}`
 }
 
