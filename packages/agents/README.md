@@ -409,7 +409,9 @@ in a shared home file must not break every project on the machine.
 ```ts
 // @theokit/agents/bridge
 translateSdkEvent(msg: SdkMessageLike, runId: string): AgentStreamEvent[]   // SdkMessageLike = { readonly type: string }
-// a message typed with the open `SdkMessage` index signature keeps returning the open `StreamEvent[]`
+// Compatibility overloads: a message typed with the open `SdkMessage` index signature keeps returning
+// the open `StreamEvent[]`, and `ReturnType<typeof translateSdkEvent>` stays `StreamEvent[]`, so existing
+// callers compile unchanged. An `SdkMessageLike` input (an `@theokit/sdk` `SDKMessage`) gets `AgentStreamEvent[]`.
 translateInteractionUpdate(update: InteractionUpdate): AgentStreamEvent[]
 
 interface SdkSendOptions {
@@ -422,7 +424,7 @@ interface SdkTurnHandle {
   wait(): Promise<{ result?: string; status?: string; error?: { code?: string; message: string }
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number } }>
-  stream?(): AsyncIterable<any> // yields SDK messages; feeds translateSdkEvent without a cast
+  stream?(): AsyncIterable<SdkMessageLike | number> // SDK messages feed translateSdkEvent; `number` keeps handles that yield bare values compiling
   cancel?(): unknown
 }
 ```
