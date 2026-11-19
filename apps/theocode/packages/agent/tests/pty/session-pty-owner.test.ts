@@ -16,7 +16,7 @@ import { createSessionPtyOwner } from '../../src/pty/session-pty-owner.js'
 /** A backend that records whether it was killed, so ownership transitions are observable. */
 function fakeBackend() {
   const killAll = vi.fn()
-  return { killAll, activeSessionCount: () => 1, dispose: vi.fn(), start: vi.fn(), write: vi.fn() } as never
+  return { killAll, dispose: vi.fn(), start: vi.fn(), write: vi.fn() } as never
 }
 
 function owner(initialMode: 'read-only' | 'workspace-write' | 'danger-full-access') {
