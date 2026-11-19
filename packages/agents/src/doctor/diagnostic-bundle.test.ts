@@ -125,7 +125,11 @@ describe('writeDiagnosticBundle', () => {
   it('a name over 100 bytes throws name_too_long', async () => {
     const out = join(dir(), 'b.tar.gz')
     await expect(
-      writeDiagnosticBundle({ out, files: [{ name: '\u00e9'.repeat(51), content: 'x' }], secrets: [] }),
+      writeDiagnosticBundle({
+        out,
+        files: [{ name: '\u00e9'.repeat(51), content: 'x' }],
+        secrets: [],
+      }),
     ).rejects.toMatchObject({ reason: 'name_too_long' })
     await writeDiagnosticBundle({
       out,
