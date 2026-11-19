@@ -17,7 +17,6 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Changed
-- **The standalone consumer's prerequisite files are added on their own.** `apps/theocode/standalone/` gets `auth.test.mjs`, an empty `pnpm-workspace.yaml` (so the repository workspace never joins its install), `released.json` (exact release pins), `package.json` and `pnpm-lock.yaml`. The auth test checks the manifest against `released.json` and no longer imports the manifest-sync script. (#2327)
 - **`AgentDefinitionLike` no longer declares `model?: string`.** The framework's `SubagentAgentDefinition` now takes `model` as `ModelSelection | 'inherit'`, so the string field no longer type-checked against `.subagents()`. `definitionFrom` never set it. Carrying a role's model is a separate migration. (#1858)
 - **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)
 
