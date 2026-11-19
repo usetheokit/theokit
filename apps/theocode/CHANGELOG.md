@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Changed
+- **`@theokit/agents` is consumed from the registry at `^16.11.0`**, the release carrying the #1867 login and refresh APIs, instead of `workspace:*`. The standalone `pnpm-lock.yaml` is not regenerated: it cannot be resolved without the monorepo workspace (`@theokit/agents-pty` and `@theokit/presenter` are still `workspace:*`). (#2243)
 - **`AgentDefinitionLike` no longer declares `model?: string`.** The framework's `SubagentAgentDefinition` now takes `model` as `ModelSelection | 'inherit'`, so the string field no longer type-checked against `.subagents()`. `definitionFrom` never set it. Carrying a role's model is a separate migration. (#1858)
 - **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)
 

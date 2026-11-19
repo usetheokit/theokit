@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@theokit/agents": "workspace:*",
+    "@theokit/agents": "^16.11.0",
     "@theokit/agents-pty": "workspace:*",
     "@theokit/sdk": "5.17.0",
     "@types/node": "^22.0.0",
