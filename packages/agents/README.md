@@ -105,6 +105,14 @@ process.exitCode = result.exitCode
 
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
 
+## Stability tiers: experimental exports
+
+Every export without an `@experimental` tag on its own declaration is stable. `@theokit/agents/testing` is a utility subpath for your own tests (not a test-only seam), and its tier is stable except for the legacy snake_case mock stream listed below. The list below is checked against `public-surface-baseline.json` by `tests/unit/experimental-exports.test.ts`.
+
+<!-- experimental-exports:start -->
+- `@theokit/agents/testing`: `MockAgentStreamOptions`, `MockResponse`, `MockStreamEvent`, `createMockAgentStream`
+<!-- experimental-exports:end -->
+
 ## Testing: the live-suite guard
 
 A live (real-model) suite must not skip green in CI when the provider key is missing. `@theokit/agents/testing` exports `assertProviderKeyWhenRequired`, `requireProviderKeySetup`, `LIVE_KEY_NAMES` and `MissingProviderKeyError`: when `THEOKIT_LIVE_REQUIRED=1` and none of the key variables is set (whitespace-only counts as unset), the run fails with an error that names the variables, never a value. Without the flag it returns, so a local run keeps its skip.
@@ -139,6 +147,10 @@ await bootstrap.run({ env: process.env, cwd: process.cwd(), home: homedir() })
 import { assertBootstrapped } from '@theokit/agents/config'
 assertBootstrapped(bootstrap, 'openTranscriptStore')
 ```
+
+### `@file` mentions
+
+`resolveFileMentions(text, { cwd, perFileTokens?, totalTokens?, allowHome?, readFile? })` from `@theokit/agents/config` attaches the files a user message mentions with `@path`. `findFileMentions(text)` returns the `{ ref, index }` pairs and uses the same grammar as `expandCommandTemplate`: the `@` must start the text or follow whitespace, and a trailing `.` or `,` is punctuation. Paths resolve under `cwd` with `safePathJoin`, `assertNoSymlinkEscape` and `isForbiddenPath`; `~/` resolves under the home directory only with `allowHome: true`. Each file is capped at `perFileTokens` (default 2000, truncated with a marker) and the set at `totalTokens` (default 20000). The result is `{ message, attached, skipped }`; `skipped` carries `{ ref, reason }` with reason `forbidden`, `outside-root`, `not-found` or `budget` (`unreadable` is in the type but is not produced today), and the text of a skipped mention is left unchanged. Any other error, including a read error other than a missing file, is rethrown.
 
 ## Config keys set from the environment
 
@@ -387,6 +399,15 @@ Task ids must match `^[A-Za-z0-9][A-Za-z0-9._-]*$` and may not contain `..`; any
 Gitignored files are not in a fresh worktree. List them in `.worktreeinclude` at the repo root (one
 literal repo-relative file or directory per line, `#` comments allowed; the `include` option renames
 the file) and they are copied in. A path that escapes the repository is refused.
+
+## Reading a run's final answer as an object
+
+`createResultCapture(schema)` returns a `submit_result` tool whose input schema is your zod object schema. Add
+`cap.tool` to the agent, tell it to finish by calling the tool, then read `cap.result()` after `run.wait()`. A
+submission that fails validation goes back to the model as a tool error naming the issue paths, so it can fix
+it; the last valid submission wins. `result()` throws `NoResultSubmittedError` when none was valid, and
+`submitted()` tells you beforehand. The schema must be an object schema; `name` and `description` rename or
+reword the tool.
 
 ## Scheduled jobs: file or PostgreSQL
 
