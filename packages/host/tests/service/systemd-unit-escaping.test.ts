@@ -32,6 +32,11 @@ describe('systemdUnit', () => {
     expect(() => systemdUnit({ ...base, args: ['a\nb'] })).toThrow(/args\[0\]/)
   })
 
+  it('keeps an empty argument as a quoted word', () => {
+    const unit = systemdUnit({ ...base, args: ['a', '', 'b'] })
+    expect(unit).toContain('ExecStart=/usr/bin/node a "" b')
+  })
+
   it('refuses a bad label and a relative path', () => {
     expect(() => systemdUnit({ ...base, label: 'a/b' })).toThrow(ServiceDefinitionError)
     expect(() => systemdUnit({ ...base, command: 'node' })).toThrow(/command/)

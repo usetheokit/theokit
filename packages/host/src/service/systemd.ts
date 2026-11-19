@@ -25,6 +25,8 @@ function specifiers(value: string): string {
  * doubled. `$` is doubled only in ExecStart=, the directive here that expands variables.
  */
 function quoted(value: string, variables: boolean): string {
+  // An empty word would vanish from the line, and systemd would drop the argument.
+  if (value === '') return '""'
   const escaped = variables ? specifiers(value).replaceAll('$', '$$$$') : specifiers(value)
   return /[\s"\\]/.test(escaped)
     ? `"${escaped.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
@@ -90,8 +92,8 @@ export function createSystemdBackend(options: ServiceBackendOptions = {}): Servi
       try {
         // `enable --now` leaves a running unit as it is, so the restart moves it onto the new file.
         await systemctl(['daemon-reload'])
-        await systemctl(['enable', '--now', unit])
-        await systemctl(['restart', unit])
+        await systemctl(['enable', '--now', '--', unit])
+        await systemctl(['restart', '--', unit])
       } catch (error) {
         try {
           if (previous === undefined) rmSync(path, { force: true })
@@ -108,15 +110,24 @@ export function createSystemdBackend(options: ServiceBackendOptions = {}): Servi
 
     async uninstall(label) {
       const path = definitionPath({ label })
-      // A unit that is not loaded has nothing to disable; the file and the reload are what matter.
-      await runner('systemctl', ['--user', 'disable', '--now', `${label}.service`])
+      const unit = `${label}.service`
+      const installed = existsSync(path)
+      const disabled = await runner('systemctl', ['--user', 'disable', '--now', '--', unit])
+      // A unit with no file has nothing to disable; with a file, a failure means it may still run.
+      if (installed && disabled.code !== 0) {
+        throw new ServiceCommandError(
+          `systemctl --user disable --now -- ${unit}`,
+          disabled.code,
+          disabled.stderr.trim(),
+        )
+      }
       rmSync(path, { force: true })
       await systemctl(['daemon-reload'])
     },
 
     async status(label) {
       if (!existsSync(definitionPath({ label }))) return 'not-installed'
-      const result = await runner('systemctl', ['--user', 'is-active', `${label}.service`])
+      const result = await runner('systemctl', ['--user', 'is-active', '--', `${label}.service`])
       const answer = result.stdout.trim()
       let state: ServiceState = 'unknown'
       if (answer === 'active') state = 'running'
@@ -126,7 +137,7 @@ export function createSystemdBackend(options: ServiceBackendOptions = {}): Servi
 
     async restart(label) {
       assertLabel(label)
-      await systemctl(['restart', `${label}.service`])
+      await systemctl(['restart', '--', `${label}.service`])
     },
   }
 }

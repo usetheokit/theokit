@@ -88,11 +88,43 @@ describe('systemd backend', () => {
     await backend.restart('a')
     await backend.uninstall('a')
     expect(existsSync(backend.definitionPath({ label: 'a' }))).toBe(false)
-    expect(calls).toContain('disable --now a.service')
+    expect(calls).toContain('disable --now -- a.service')
   })
 
   it('refuses an unsupported platform by name', () => {
     expect(() => serviceBackend('aix')).toThrow(UnsupportedPlatformError)
     expect(() => serviceBackend('aix')).toThrow(/aix/)
+  })
+
+  it('puts -- before the unit name so a leading-hyphen label is not an option', async () => {
+    const homeDir = home()
+    const { runner, calls } = fake()
+    const backend = serviceBackend('linux', { homeDir, runner })
+    await backend.install(spec('-x'))
+    await backend.restart('-x')
+    await backend.status('-x')
+    await backend.uninstall('-x')
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        'enable --now -- -x.service',
+        'restart -- -x.service',
+        'is-active -- -x.service',
+        'disable --now -- -x.service',
+      ]),
+    )
+  })
+
+  it('keeps the unit file and throws when disable fails on an installed service', async () => {
+    const homeDir = home()
+    const backend = serviceBackend('linux', { homeDir, runner: fake().runner })
+    await backend.install(spec('a'))
+    const failing = serviceBackend('linux', { homeDir, runner: fake('disable').runner })
+    await expect(failing.uninstall('a')).rejects.toBeInstanceOf(ServiceCommandError)
+    expect(existsSync(backend.definitionPath({ label: 'a' }))).toBe(true)
+  })
+
+  it('tolerates a failed disable when there is no unit file', async () => {
+    const backend = serviceBackend('linux', { homeDir: home(), runner: fake('disable').runner })
+    await expect(backend.uninstall('ghost')).resolves.toBeUndefined()
   })
 })

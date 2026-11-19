@@ -1,6 +1,6 @@
 import { spawn, type SpawnOptions } from 'node:child_process'
 
-import { RestartError } from './errors.js'
+import { RestartError, UnsupportedPlatformError } from './errors.js'
 
 /**
  * Under a supervisor a detached child would die with the unit's control group (systemd) or be
@@ -27,6 +27,13 @@ export function isSupervised(
   return false
 }
 
+interface SuccessorProcess {
+  readonly pid?: number
+  unref(): void
+  once(event: 'spawn', listener: () => void): unknown
+  once(event: 'error', listener: (error: Error) => void): unknown
+}
+
 export interface RestartSelfOptions {
   /** The environment the first process was started with; the successor gets it. */
   readonly startEnv: Readonly<Record<string, string | undefined>>
@@ -35,49 +42,49 @@ export interface RestartSelfOptions {
     command: string,
     args: readonly string[],
     options: SpawnOptions,
-  ) => {
-    pid?: number
-    unref(): void
-    on(event: 'error', listener: (error: Error) => void): unknown
-  }
+  ) => SuccessorProcess
   readonly env?: NodeJS.ProcessEnv
   readonly platform?: NodeJS.Platform
 }
 
 /**
- * Under a supervisor returns `{ kind: 'exit', code: 75 }` and the caller exits with it. Otherwise
- * starts a detached successor that waits for this process (see `waitForPredecessor`).
- * Throws RestartError, with the spawn error as `cause`, when the successor cannot be started.
+ * Under a supervisor resolves `{ kind: 'exit', code: 75 }` and the caller exits with it. Otherwise
+ * starts a detached successor that waits for this process (see `waitForPredecessor`) and resolves
+ * once it has started. Node reports a failed spawn through the child's `error` event, after the
+ * call returns, so the result is a Promise: it rejects with RestartError whose `cause` is the
+ * spawn error. A platform that is neither linux nor darwin rejects with UnsupportedPlatformError.
  */
-export function restartSelf(
+export async function restartSelf(
   options: RestartSelfOptions,
-): { kind: 'exit'; code: number } | { kind: 'spawned'; pid: number } {
-  if (isSupervised(options.env, options.platform)) return { kind: 'exit', code: RESTART_EXIT_CODE }
+): Promise<{ kind: 'exit'; code: number } | { kind: 'spawned'; pid: number }> {
+  const platform = options.platform ?? process.platform
+  if (platform !== 'linux' && platform !== 'darwin') throw new UnsupportedPlatformError(platform)
+  if (isSupervised(options.env, platform)) return { kind: 'exit', code: RESTART_EXIT_CODE }
   const env: NodeJS.ProcessEnv = {
     ...options.startEnv,
     [RESTART_AFTER_PID_VARIABLE]: String(process.pid),
   }
-  const start = options.spawn ?? spawn
-  let child: ReturnType<NonNullable<RestartSelfOptions['spawn']>>
-  try {
-    child = start(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
-      env,
-      detached: true,
-      stdio: 'inherit',
-    })
-  } catch (cause) {
-    throw new RestartError('could not start the successor process', { cause })
-  }
-  // Spawn failures that Node reports through the event come after this call returns; keep them
-  // from becoming an unhandled 'error' event on the caller's process.
-  child.on('error', () => undefined)
-  if (child.pid === undefined) {
-    throw new RestartError('could not start the successor process: spawn returned no pid', {
-      cause: new Error(`spawn ${process.execPath} did not start`),
-    })
-  }
-  child.unref()
-  return { kind: 'spawned', pid: child.pid }
+  const start: NonNullable<RestartSelfOptions['spawn']> = options.spawn ?? spawn
+  return new Promise((resolve, reject) => {
+    const failed = (cause: unknown): void => {
+      reject(new RestartError('could not start the successor process', { cause }))
+    }
+    try {
+      const child = start(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
+        env,
+        detached: true,
+        stdio: 'inherit',
+      })
+      child.once('error', failed)
+      child.once('spawn', () => {
+        child.unref()
+        if (child.pid === undefined) failed(new Error('spawn reported no pid'))
+        else resolve({ kind: 'spawned', pid: child.pid })
+      })
+    } catch (cause) {
+      failed(cause)
+    }
+  })
 }
 
 function alive(pid: number): boolean {

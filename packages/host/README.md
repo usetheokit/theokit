@@ -50,11 +50,11 @@ Restart from inside the app:
 ```ts
 await waitForPredecessor(process.env) // first thing in a successor: waits for the old pid to exit
 // later, when a setting that needs a restart changes:
-const next = restartSelf({ startEnv: originalEnv })
+const next = await restartSelf({ startEnv: originalEnv })
 if (next.kind === 'exit') process.exit(next.code) // 75: the supervisor starts the app again
 ```
 
-`isSupervised` is true for `INVOCATION_ID` on Linux and for `XPC_SERVICE_NAME` other than `0` on macOS. Otherwise `restartSelf` spawns a detached successor (it gets `THEOKIT_HOST_RESTART_AFTER_PID`) and returns its pid; if the spawn fails it throws `RestartError` with the cause. `restartSelf` is synchronous, so a spawn error Node reports only later through the child's `error` event is not seen; a child that got no pid is reported.
+`isSupervised` is true for `INVOCATION_ID` on Linux and for `XPC_SERVICE_NAME` other than `0` on macOS. Otherwise `restartSelf` spawns a detached successor (it gets `THEOKIT_HOST_RESTART_AFTER_PID`) and returns its pid; if the spawn fails it rejects with `RestartError` with the cause. `restartSelf` returns a Promise because Node reports a failed spawn through the child's `error` event; it resolves once the successor has started. On a platform other than Linux or macOS it rejects with `UnsupportedPlatformError`.
 
 ## License
 

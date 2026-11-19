@@ -1,9 +1,13 @@
+import { spawn } from 'node:child_process'
+import { EventEmitter } from 'node:events'
+
 import { describe, expect, it } from 'vitest'
 
 import {
   RESTART_EXIT_CODE,
   RestartError,
   isSupervised,
+  UnsupportedPlatformError,
   restartSelf,
   runCommand,
   waitForPredecessor,
@@ -24,56 +28,87 @@ describe('isSupervised', () => {
   })
 })
 
+function fakeChild(pid: number | undefined, outcome: 'spawn' | Error) {
+  const child = Object.assign(new EventEmitter(), { pid, unref() {} })
+  queueMicrotask(() => {
+    if (outcome === 'spawn') child.emit('spawn')
+    else child.emit('error', outcome)
+  })
+  return child
+}
+
 describe('restartSelf', () => {
-  it('exits with 75 under a supervisor', () => {
-    expect(restartSelf({ startEnv: {}, env: { INVOCATION_ID: 'x' }, platform: 'linux' })).toEqual({
-      kind: 'exit',
-      code: RESTART_EXIT_CODE,
-    })
+  it('exits with 75 under a supervisor', async () => {
+    await expect(
+      restartSelf({ startEnv: {}, env: { INVOCATION_ID: 'x' }, platform: 'linux' }),
+    ).resolves.toEqual({ kind: 'exit', code: RESTART_EXIT_CODE })
   })
 
-  it('spawns a successor with the predecessor pid', () => {
+  it('spawns a successor with the predecessor pid', async () => {
     let seen: Record<string, string | undefined> = {}
-    const result = restartSelf({
+    const result = await restartSelf({
       startEnv: { A: '1' },
       env: {},
       platform: 'linux',
       spawn: (_c, _a, o) => {
         seen = o.env ?? {}
-        return { pid: 42, unref() {}, on() {} }
+        return fakeChild(42, 'spawn')
       },
     })
     expect(result).toEqual({ kind: 'spawned', pid: 42 })
     expect(seen).toMatchObject({ A: '1', THEOKIT_HOST_RESTART_AFTER_PID: String(process.pid) })
   })
 
-  it('throws RestartError with the spawn cause', () => {
-    const cause = new Error('EAGAIN')
-    try {
-      restartSelf({
-        startEnv: {},
-        env: {},
-        platform: 'linux',
-        spawn: () => {
-          throw cause
-        },
-      })
-      expect.unreachable()
-    } catch (error) {
-      expect(error).toBeInstanceOf(RestartError)
-      expect((error as RestartError).cause).toBe(cause)
-    }
+  it('rejects with RestartError whose cause is the error event', async () => {
+    const cause = new Error('spawn ENOENT')
+    const error = await restartSelf({
+      startEnv: {},
+      env: {},
+      platform: 'linux',
+      spawn: () => fakeChild(undefined, cause),
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(RestartError)
+    expect((error as RestartError).cause).toBe(cause)
   })
 
-  it('throws RestartError when no pid comes back', () => {
-    expect(() =>
-      restartSelf({
-        startEnv: {},
-        env: {},
-        platform: 'linux',
-        spawn: () => ({ unref() {}, on() {} }),
-      }),
-    ).toThrow(RestartError)
+  it('rejects with RestartError whose cause is a throw from spawn', async () => {
+    const cause = new Error('EAGAIN')
+    const error = await restartSelf({
+      startEnv: {},
+      env: {},
+      platform: 'linux',
+      spawn: () => {
+        throw cause
+      },
+    }).catch((e: unknown) => e)
+    expect((error as RestartError).cause).toBe(cause)
+  })
+
+  it('reports a real spawn failure with its cause', async () => {
+    const error = await restartSelf({
+      startEnv: {},
+      env: {},
+      platform: 'linux',
+      spawn: (_c, _a, o) => spawn('/nonexistent/x', [], o),
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(RestartError)
+    expect(((error as RestartError).cause as NodeJS.ErrnoException).code).toBe('ENOENT')
+  })
+
+  it('refuses an unsupported platform before spawning', async () => {
+    let spawned = false
+    const error = await restartSelf({
+      startEnv: {},
+      env: {},
+      platform: 'win32',
+      spawn: () => {
+        spawned = true
+        return fakeChild(1, 'spawn')
+      },
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(UnsupportedPlatformError)
+    expect((error as Error).message).toContain('win32')
+    expect(spawned).toBe(false)
   })
 })
 
