@@ -1,5 +1,14 @@
 # @theokit/presenter
 
+## 0.15.0
+
+### Minor Changes
+
+- 5f102db: Mark the `@theokit/sdk` and `zod` peers optional so the UI kits can import the root entry, which loads neither at runtime. Only `@theokit/presenter/wire` needs `zod`.
+- c46c058: `@theokit/presenter` now exports `pendingApprovals`, `readPendingApproval` and `PendingApproval`, the one projection of outstanding approvals off the wire thread. `@theokit/agents` imports it instead of keeping a private copy; `PendingApproval` is still exported from `@theokit/agents/client`.
+- 8d53eb9: `foldTurnLifecycle` takes `messageBoundary: 'tool-call'` to emit the preamble before a tool call as its own message item, and a failed tool result closes its item with `isError`. New `contentChunkFromEvent` and `finalMessageOf` convert canonical events and return the text after the last tool call.
+- 8f1f165: A tool result the SDK reported as `permission_denied` now carries a typed `refusal` (`ToolRefusal`: `by`, `reason?`). `@theokit/presenter` adds `ToolRefusal`, `AgentToolResultEvent.refusal` and the transient `WIRE_TOOL_REFUSAL_PART` (`data-tool-refusal`); `readMessageStream` sets `refusal` on the tool part. `@theokit/agents` maps the SDK `source` (`file_hook` → `hook`; `plugin`, `fork_whitelist` → `plugin`) onto `ToolResultEvent.refusal`. The message the model reads is unchanged.
+
 ## 0.14.0
 
 ### Minor Changes
