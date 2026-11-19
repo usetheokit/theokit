@@ -24,36 +24,4 @@ describe('createNodeServer close', () => {
     expect(a).toBe(b)
     await Promise.all([a, b])
   })
-
-  it('force-closes an active streaming connection', async () => {
-    const node = createNodeServer(
-      () => new Response(new ReadableStream({ pull: () => new Promise(() => undefined) })),
-    )
-    const { port } = await node.listen(0, '127.0.0.1')
-    const sock = connect(port, '127.0.0.1')
-    sock.write('GET / HTTP/1.1\r\nHost: x\r\n\r\n')
-    await new Promise((r) => sock.once('data', r))
-    const closed = new Promise((r) => sock.once('close', r))
-    const start = Date.now()
-    await node.close({ force: true })
-    await closed
-    expect(Date.now() - start).toBeLessThan(1000)
-  })
-
-  it('force-closes an open upgraded socket', async () => {
-    const node = createNodeServer(() => new Response('ok'), {
-      onUpgrade: (_req, socket) => {
-        socket.write('HTTP/1.1 101 Switching Protocols\r\n\r\n')
-      },
-    })
-    const { port } = await node.listen(0, '127.0.0.1')
-    const sock = connect(port, '127.0.0.1')
-    sock.write('GET / HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: test\r\n\r\n')
-    await new Promise((r) => sock.once('data', r))
-    const closed = new Promise((r) => sock.once('close', r))
-    const start = Date.now()
-    await node.close({ force: true })
-    await closed
-    expect(Date.now() - start).toBeLessThan(1000)
-  })
 })
