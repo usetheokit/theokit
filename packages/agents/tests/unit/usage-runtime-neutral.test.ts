@@ -111,4 +111,15 @@ describe('unpriced runs', () => {
       unpricedRuns: 1,
     })
   })
+
+  it('excludes a nonzero costUsd on an explicitly unpriced record from totalCostUsd', async () => {
+    const storage = new InMemoryUsageStorage()
+    await storage.record(llm(0.01))
+    await storage.record({ ...llm(5), priced: false })
+    await expect(storage.getUsage({})).resolves.toMatchObject({
+      totalCostUsd: 0.01,
+      runs: 2,
+      unpricedRuns: 1,
+    })
+  })
 })

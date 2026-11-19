@@ -62,12 +62,14 @@ export function usageFromRun(
 export function formatUsd(amount: number): string {
   if (!Number.isFinite(amount)) return String(amount)
   if (amount === 0) return '0'
-  const magnitude = Math.floor(Math.log10(Math.abs(amount)))
-  const decimals = Math.min(100, Math.max(0, 5 - magnitude))
-  const fixed = amount.toFixed(decimals)
-  if (!fixed.includes('.')) return fixed
-  let end = fixed.length
-  while (fixed[end - 1] === '0') end -= 1
-  if (fixed[end - 1] === '.') end -= 1
-  return fixed.slice(0, end)
+  const [mantissa = '', exponentText = '0'] = Math.abs(amount).toExponential(5).split('e')
+  const exponent = Number(exponentText)
+  const digits = mantissa.replace('.', '')
+  const pointAt = 1 + exponent // digits before the decimal point
+  let text: string
+  if (pointAt <= 0) text = `0.${'0'.repeat(-pointAt)}${digits}`
+  else if (pointAt >= digits.length) text = digits + '0'.repeat(pointAt - digits.length)
+  else text = `${digits.slice(0, pointAt)}.${digits.slice(pointAt)}`
+  if (text.includes('.')) text = text.replace(/0+$/, '').replace(/\.$/, '')
+  return amount < 0 ? `-${text}` : text
 }

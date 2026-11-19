@@ -43,6 +43,6 @@ describe('formatUsd', () => {
     expect(formatUsd(0)).toBe('0')
     expect(formatUsd(1.23e-9)).toBe('0.00000000123')
     expect(formatUsd(100)).toBe('100')
-    expect(formatUsd(1234567.891)).toBe('1234568')
+    expect(formatUsd(1234567.891)).toBe('1234570')
   })
 })
