@@ -14,6 +14,7 @@ import {
 const dirs: string[] = []
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 const tmp = (): string => {
@@ -23,6 +24,16 @@ const tmp = (): string => {
 }
 
 describe('resolveSecretRefs', () => {
+  it('runs op with the inherited process environment', async () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'op'), '#!/bin/sh\nprintf "%s" "$OP_TEST_INHERITED"\n')
+    chmodSync(join(dir, 'op'), 0o755)
+    vi.stubEnv('PATH', `${dir}:${process.env.PATH ?? ''}`)
+    vi.stubEnv('OP_TEST_INHERITED', 'inherited-token')
+    const result = await resolveSecretRefs({ KEY: 'op://v/i/f' })
+    expect(result.env.KEY).toBe('inherited-token')
+  })
+
   it('each builtin store resolves its reference', async () => {
     const dir = tmp()
     writeFileSync(join(dir, 'secret.txt'), 'from-file\n')

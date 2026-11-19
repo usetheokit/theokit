@@ -81,9 +81,14 @@ const opStore: SecretStore = {
   matches: (reference) => reference.startsWith('op://'),
   read: (reference, env) =>
     new Promise((resolve, reject) => {
-      const childEnv = Object.fromEntries(
-        Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-      )
+      // The CLI needs the process's own PATH, HOME and 1Password auth variables; the supplied
+      // configuration is layered on top.
+      const childEnv = {
+        ...process.env,
+        ...Object.fromEntries(
+          Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+        ),
+      }
       execFile(
         // eslint-disable-next-line sonarjs/no-os-command-from-path -- `op` is the 1Password CLI, looked up on the caller's PATH by design
         'op',
