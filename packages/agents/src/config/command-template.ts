@@ -28,6 +28,7 @@
  */
 import { ConfigurationError } from '../errors.js'
 
+import { REFERENCE_REGEX } from './file-mentions.js'
 import { currentOperatorPolicy } from './operator-policy.js'
 
 /**
@@ -95,25 +96,13 @@ const PLACEHOLDER_REGEX = /(\\)?\$(ARGUMENTS\b|\d+)/g
  * side of this product — substituting a root for a plugin that cannot be loaded would answer a
  * question nobody can ask yet, and would have to invent the layout it points into.
  */
-/**
- * Shell segments and file references in ONE alternation, matched left to right in a single scan.
- * Named groups say which branch matched. Shell comes first so `` !`grep @foo` `` is one segment
- * rather than a segment plus a reference.
- *
- * **Both branches carry `(?<!\S)`, and for a while only the `@file` one did.** The contract is that
- * an inline command is recognised when `!` starts a line or follows whitespace; when it follows
- * another character the placeholder stays literal and the command does NOT run. Without the guard on
- * this branch, `` KEY=!`echo boom` `` executed — measured, both segments ran.
- *
- * That was the one place this module did MORE than its contract allows, which is a different kind of
- * defect from the rest: every other divergence is something that fails to happen, and this was
- * something that happened, from a markdown file loaded out of a working directory.
- *
- * Pinned by `tests/unit/an-inline-command-needs-a-boundary.test.ts`, which keeps three positive
- * cases alongside the negative one — a "fix" that stopped recognising inline commands entirely would
- * satisfy the negative and destroy the feature.
+/*
+ * Shell segments and file references are matched in ONE scan by `REFERENCE_REGEX`, owned by
+ * `./file-mentions.ts` so `resolveFileMentions` shares the `@` grammar. Both branches carry
+ * `(?<!\S)`: `` KEY=!`echo boom` `` must stay literal and must not run (pinned by
+ * `tests/unit/an-inline-command-needs-a-boundary.test.ts`). Shell comes first so
+ * `` !`grep @foo` `` is one segment.
  */
-const REFERENCE_REGEX = /(?<!\S)!`(?<cmd>[^`]+)`|(?<!\S)@(?<file>[^\s`,]*[^\s`,.])/g
 /** One argument = a quoted run or a bare run. `[Image N]` is one token, as the surfaces emit it. */
 /**
  * A ```` ```! ```` fence — the spec's multi-line command block.
