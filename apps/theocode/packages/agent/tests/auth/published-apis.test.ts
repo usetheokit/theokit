@@ -4,7 +4,17 @@
  * `@theokit/agents/auth` entry point, the way a consumer would, and check that the package that
  * resolved is the released one rather than a local source tree.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -129,5 +139,34 @@ describe('@theokit/agents released auth APIs', () => {
       expect(spec, p).toBe('^16.11.0')
     }
     expect(existsSync(join(root, 'pnpm-lock.yaml'))).toBe(false)
+  })
+
+  it('a consumer outside the repository can import and call the released package', () => {
+    // A directory with its own node_modules and no link to this working tree: the package is the
+    // released one that resolved here, reached the way an installed dependency would be.
+    const pkgDir = realpathSync(
+      join(dirname(fileURLToPath(import.meta.resolve('@theokit/agents/auth'))), '..'),
+    )
+    mkdirSync(join(home, 'consumer/node_modules/@theokit'), { recursive: true })
+    symlinkSync(pkgDir, join(home, 'consumer/node_modules/@theokit/agents'), 'dir')
+    writeFileSync(join(home, 'consumer/package.json'), '{"type":"module"}')
+    writeFileSync(
+      join(home, 'consumer/main.mjs'),
+      `import { loginWithApiKey, readAuthFile, refreshOAuthTokens } from '@theokit/agents/auth'
+const store = { home: process.argv[2], dirName: '.c', fileName: 'auth.json' }
+loginWithApiKey('sk-consumer', store, { provider: 'openai', env: {} })
+const t = await refreshOAuthTokens(
+  { provider: 'openai', authorizeEndpoint: 'x', tokenEndpoint: 'https://t', clientId: 'c', scopes: [], redirectUri: 'r' },
+  'r1',
+  { fetch: async () => new Response(JSON.stringify({ access_token: 'a2', refresh_token: 'r2', expires_in: 60 })), now: () => 0 },
+)
+console.log(JSON.stringify({ key: readAuthFile(store, {}).api_key, access: t.access }))
+`,
+    )
+    const out = execFileSync('node', [join(home, 'consumer/main.mjs'), join(home, 'store')], {
+      cwd: join(home, 'consumer'),
+      encoding: 'utf8',
+    })
+    expect(JSON.parse(out)).toEqual({ key: 'sk-consumer', access: 'a2' })
   })
 })
