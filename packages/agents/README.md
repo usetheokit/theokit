@@ -120,6 +120,15 @@ const layer = parseDottedOverrides(['model=x', 'limits.turns=3'], {
 })
 ```
 
+### Trim policy per instruction source
+
+`composeInstructions(base, sources, { maxChars })` from `@theokit/agents/config` walks `sources` from the last
+entry. Each source may carry `trim`: `{ kind: 'drop' }` (default, the original behaviour), `keep-head` (cut the end),
+`keep-tail` (cut the start) or `{ kind: 'blocks-from-start', separator }` (drop whole blocks from the start, never
+cutting inside one). A source with a policy is trimmed as far as it allows before the walk moves on. Sources are
+never re-split unless their own policy is `blocks-from-start`. The result's `cuts` lists `{ name, from, to }` for
+every source that lost characters (`to` is 0 when dropped); it is empty when everything fit.
+
 ## Calling an agent route without `HttpTransport`
 
 An agent route's CSRF gate answers `403 CSRF_FAILED` unless the request carries `X-Theo-Action: 1`.
