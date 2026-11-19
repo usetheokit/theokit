@@ -81,7 +81,8 @@ type Candidate = TranscriptGCPlan['candidates'][number]
  * A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
  * first row. Each candidate therefore gets its OWN identity: the registered session (archived or
  * not) whose transcript file this is, under either naming convention. A fork with no registry
- * entry has no identity, and is reported by its transcript path rather than as its source.
+ * entry has no identity. The listing omits archived sessions, so such a fork may still own an
+ * unlisted registry entry: it is withheld rather than deleted as an orphan.
  * Legacy names sanitise ids (`a.b` and `a-b` share a file), so one transcript can match several
  * identities; which entry it belongs to is then unknowable and the candidate is withheld.
  */
@@ -95,25 +96,21 @@ function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): 
       ),
     ),
   ]
-  const ambiguous: Candidate[] = []
+  const withheld: { id: string | undefined; reason: string }[] = []
   const candidates = planned.candidates.flatMap((c) => {
     const ids = identitiesOf(c)
-    if (ids.length > 1) {
-      ambiguous.push(c)
-      return []
-    }
-    return [{ ...c, id: ids[0] }]
+    if (ids.length === 1) return [{ ...c, id: ids[0] }]
+    const reason =
+      ids.length > 1
+        ? 'transcript name matches more than one registered session — owner unknown'
+        : 'transcript belongs to no listed session (a fork, possibly of an archived entry) — owner unknown'
+    withheld.push({ id: c.id, reason })
+    return []
   })
   return {
     ...planned,
     candidates,
-    kept: [
-      ...planned.kept,
-      ...ambiguous.map((c) => ({
-        id: c.id,
-        reason: 'transcript name matches more than one registered session — owner unknown',
-      })),
-    ],
+    kept: [...planned.kept, ...withheld],
   }
 }
 
@@ -129,6 +126,8 @@ interface CollectContext {
   apply: boolean
   protectedIds: () => ReadonlyMap<string, string>
   remove: (id: string) => unknown
+  /** Ids the registry listing for THIS project returned; only these may be removed from it. */
+  registered: ReadonlySet<string>
   liveIds: () => string[]
   acc: { removed: string[]; orphaned: string[]; errors: RunTranscriptGCResult['errors'][number][] }
 }
@@ -147,27 +146,21 @@ async function collectCandidate(ctx: CollectContext, candidate: Candidate): Prom
       return
     }
   }
-  // The framework needs an id to run; an identity-less fork gets a stand-in that is never sent to
-  // the registry, and its collection is reported by path.
-  const stand = candidate.id ?? '\u0000unregistered'
+  // `Agent.delete` removes by id with no project constraint, so an id the listing for this project
+  // did not return is an orphan transcript only: the registry is never asked about it.
   const res = await runTranscriptGC(
-    { ...plan, candidates: [{ ...candidate, id: stand }] },
+    { ...plan, candidates: [candidate] },
     {
       apply: ctx.apply,
       protectedIds,
       removeFromRegistry: (id) =>
-        candidate.id !== undefined && id === candidate.id && !protectedIds().has(id)
+        id === candidate.id && ctx.registered.has(id) && !protectedIds().has(id)
           ? ctx.remove(id)
           : undefined,
     },
   )
-  if (candidate.id === undefined) {
-    if (res.removed.length > 0) acc.orphaned.push(candidate.transcript)
-    acc.errors.push(...res.errors.map((e) => ({ id: undefined, message: e.message })))
-  } else {
-    acc.removed.push(...res.removed)
-    acc.errors.push(...res.errors)
-  }
+  acc.removed.push(...res.removed)
+  acc.errors.push(...res.errors)
   acc.orphaned.push(...res.orphaned)
 }
 
@@ -202,6 +195,7 @@ export async function planAndRunCurrentProjectGC(
     plan,
     apply: opts.apply,
     protectedIds,
+    registered: new Set(everyone.map((a) => a.agentId)),
     remove: opts.removeFromRegistry ?? ((id: string) => Agent.delete(id)),
     liveIds: () => liveSessionIds(cwd, registryIds),
     acc: { removed: [], orphaned: [], errors: [] },

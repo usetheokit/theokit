@@ -110,8 +110,9 @@ describe('runSessionGC', () => {
 
     const { result } = await runSessionGC({ apply: true, registered: [], delete: del })
 
-    // An UNREGISTERED old session is the control: a registered one is protected by design.
-    expect(del).toHaveBeenCalledWith(OLD)
+    // An UNREGISTERED old session is the control: a registered one is protected by design. Its id is
+    // not in this project's listing, so the registry (which deletes by id, project-blind) is not asked.
+    expect(del).not.toHaveBeenCalled()
     expect(result.removed).toContain(OLD)
     expect(result.errors).toHaveLength(0)
     expect(existsSync(old)).toBe(false)

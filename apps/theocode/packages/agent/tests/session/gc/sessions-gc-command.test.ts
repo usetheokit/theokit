@@ -121,6 +121,7 @@ describe('the report', () => {
     writeTranscript(fx, 'registered-old', 90)
     writeTranscript(fx, 'plain-old', 80)
     const { plan, result } = await run(true, {
+      listRegistry: async () => [{ agentId: 'registered-old', archived: true }],
       removeFromRegistry: (id: string) => {
         if (id === 'registered-old') throw new Error('registry down')
       },
@@ -153,7 +154,7 @@ describe('a fork of a registered session', () => {
     const removed: string[] = []
 
     const { plan } = await run(true, {
-      listRegistry: async () => [{ agentId: 'source-live' }],
+      listRegistry: async () => [{ agentId: 'source-live' }, { agentId: 'the-fork', archived: true }],
       removeFromRegistry: (id: string) => void removed.push(id),
     })
 
@@ -172,13 +173,16 @@ describe('a fork of a registered session', () => {
     const removed: string[] = []
 
     await run(true, {
-      listRegistry: async () => [{ agentId: 'source-archived', archived: true }],
+      listRegistry: async () => [
+        { agentId: 'source-archived', archived: true },
+        { agentId: 'the-fork', archived: true },
+      ],
       removeFromRegistry: (id: string) => void removed.push(id),
     })
 
     expect(existsSync(fork)).toBe(false)
     expect(existsSync(source)).toBe(true)
-    expect(removed, 'the protected source lost its registry entry').toEqual([])
+    expect(removed, 'the protected source lost its registry entry').toEqual(['the-fork'])
   })
 })
 
@@ -206,19 +210,38 @@ describe('a fork is collected under its own identity', () => {
     expect(plan.candidates.map((c) => c.id)).toEqual(['the-fork'])
   })
 
-  it('test_an_unregistered_fork_is_reported_by_path_not_as_its_source', async () => {
+  it('test_a_fork_absent_from_the_listing_is_withheld_not_deleted_as_an_orphan', async () => {
+    // The production listing omits archived sessions, so a fork the listing does not return may still
+    // own a registry entry. It is kept, and nothing is sent to the registry.
     writeTranscript(fx, 'newest', 1)
     writeTranscript(fx, 'source-live', 2)
     const fork = writeTranscript(fx, 'the-fork', 90, { content: forkOf('source-live') })
+    const removed: string[] = []
 
     const { plan, result } = await run(true, {
       listRegistry: async () => [{ agentId: 'source-live' }],
+      removeFromRegistry: (id: string) => void removed.push(id),
     })
 
+    expect(existsSync(fork)).toBe(true)
     expect(result.removed).toEqual([])
-    expect(result.orphaned).toEqual([fork])
-    expect(result.errors).toEqual([])
-    expect(humanReport(plan, result).join('\n')).not.toContain('source-live')
+    expect(removed).toEqual([])
+    expect(plan.kept.map((k) => k.reason).join('\n')).toContain('owner unknown')
+  })
+
+  it('test_a_readable_orphan_absent_from_the_listing_never_reaches_the_registry', async () => {
+    // `Agent.delete` has no project constraint: an id from another project must not be removed.
+    writeTranscript(fx, 'newest', 1)
+    const orphan = writeTranscript(fx, 'orphan-id', 90)
+    const removed: string[] = []
+
+    await run(true, {
+      listRegistry: async () => [],
+      removeFromRegistry: (id: string) => void removed.push(id),
+    })
+
+    expect(existsSync(orphan)).toBe(false)
+    expect(removed).toEqual([])
   })
 
   it('test_a_legacy_name_shared_by_two_registered_ids_is_withheld_not_guessed', async () => {
@@ -247,6 +270,7 @@ describe('a fork is collected under its own identity', () => {
     const legacy = writeTranscript(fx, 'late-legacy', 90, { legacy: true })
 
     await run(true, {
+      listRegistry: async () => [{ agentId: 'trigger', archived: true }],
       removeFromRegistry: (id: string) => {
         if (id === 'trigger') writePointer(fx, 'late-legacy')
       },
@@ -267,10 +291,15 @@ describe('a source that becomes protected between plan and apply', () => {
       content: `${JSON.stringify({ type: 'user', sessionId: 'source-old' })}\n`,
     })
     const removed: string[] = []
-    const dry = await run(false)
-    expect(dry.plan.candidates.map((c) => c.id)).toEqual(['trigger', 'source-old', undefined])
+    const listRegistry = async () => [
+      { agentId: 'trigger', archived: true },
+      { agentId: 'the-fork', archived: true },
+    ]
+    const dry = await run(false, { listRegistry })
+    expect(dry.plan.candidates.map((c) => c.id)).toEqual(['trigger', 'source-old', 'the-fork'])
 
     await run(true, {
+      listRegistry,
       removeFromRegistry: async (id: string) => {
         removed.push(id)
         if (id === 'trigger') await claim(source)
@@ -283,7 +312,7 @@ describe('a source that becomes protected between plan and apply', () => {
 
   it('test_a_fork_does_not_remove_a_source_the_pointer_claimed_after_planning', async () => {
     const removed = await applyWith(() => writePointer(fx, 'source-old'))
-    expect(removed).toEqual(['trigger'])
+    expect(removed).toEqual(['trigger', 'the-fork'])
   })
 
   it('test_a_fork_does_not_remove_a_source_leased_after_planning', async () => {
@@ -292,7 +321,7 @@ describe('a source that becomes protected between plan and apply', () => {
       const removed = await applyWith(async (source) => {
         lease = await acquireSessionWriter(source)
       })
-      expect(removed).toEqual(['trigger'])
+      expect(removed).toEqual(['trigger', 'the-fork'])
     } finally {
       await (lease as { release?: () => Promise<void> } | undefined)?.release?.()
     }
