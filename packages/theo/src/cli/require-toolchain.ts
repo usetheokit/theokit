@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** Build-time packages `theokit` loads for the CLI only; they are optional peers, not dependencies (`tsx` stays a dependency: `theokit start` loads TypeScript source). */
-export const CLI_TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'typescript'] as const
+const CLI_TOOLCHAIN = ['vite', '@vitejs/plugin-react', 'typescript'] as const
 
 /** Throw a clear error naming the first toolchain package the app does not have installed. */
 export function requireToolchain(
