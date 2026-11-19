@@ -239,3 +239,56 @@ describe('Second-review regressions (M52)', () => {
     expect(() => setOnce(d, 'model', 'openai/gpt-5.4', 'later')).not.toThrow()
   })
 })
+
+describe('ToolsCapability with an SDK CustomTool', () => {
+  it('a CustomTool given to ToolsCapability keeps its handler context', async () => {
+    const context = { projectRoot: '/p' }
+    let seen: unknown
+    const custom = {
+      name: 'probe',
+      description: 'd',
+      inputSchema: { type: 'object' },
+      handler: (_input: Record<string, unknown>, ctx?: { context?: unknown }) => {
+        seen = ctx?.context
+        return 'ok'
+      },
+    } as never
+    const viaCapability = applyCapabilities([new ToolsCapability([custom])]).tools[0]
+    const viaDefine = compileAgentDefinition(defineAgent({ model: 'a/b', tools: [custom] }))
+      .tools[0]
+    await viaCapability?.handler({}, { context })
+    expect(seen).toBe(context)
+    seen = undefined
+    await viaDefine?.handler({}, { context })
+    expect(seen).toBe(context)
+  })
+
+  it("mixed inputs keep a compiled tool's receiver and extra properties", async () => {
+    const compiled = {
+      name: 'c',
+      description: 'd',
+      inputSchema: {},
+      extra: 42,
+      tag: 'self',
+      handler(this: { tag: string }) {
+        return this.tag
+      },
+    }
+    const sdk = { ...compiled, name: 's', handler: () => 'sdk' } as never
+    const tools = applyCapabilities([new ToolsCapability([compiled as never, sdk])]).tools
+    expect(await tools[0]?.handler({})).toBe('self')
+    expect((tools[0] as unknown as { extra: number }).extra).toBe(42)
+    expect(await tools[1]?.handler({})).toBe('sdk')
+  })
+
+  it('keeps non-enumerable symbol metadata and inherited fields of a CustomTool', () => {
+    const SINK = Symbol.for('theokit.subagent.inheritCredentials')
+    const sink = () => undefined
+    const proto = { name: 'inh', description: 'd', inputSchema: {}, handler: () => 'ok' }
+    const tool = Object.create(proto) as Record<symbol, unknown>
+    Object.defineProperty(tool, SINK, { value: sink, enumerable: false })
+    const out = applyCapabilities([new ToolsCapability([tool as never])]).tools[0]
+    expect(out?.name).toBe('inh')
+    expect((out as unknown as Record<symbol, unknown>)[SINK]).toBe(sink)
+  })
+})

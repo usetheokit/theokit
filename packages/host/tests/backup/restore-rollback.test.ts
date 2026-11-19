@@ -1,0 +1,83 @@
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { afterEach, expect, it } from 'vitest'
+
+import { backup } from '../../src/backup/index.js'
+import { restore, restoreWith } from '../../src/backup/restore.js'
+
+const dirs: string[] = []
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true })
+})
+
+async function scratch(): Promise<string> {
+  const d = await mkdtemp(join(tmpdir(), 'host-backup-'))
+  dirs.push(d)
+  return d
+}
+
+async function put(root: string, rel: string, data: string | Buffer): Promise<void> {
+  const file = join(root, rel)
+  await mkdir(join(file, '..'), { recursive: true })
+  await writeFile(file, data)
+}
+
+it('puts the first target back when the second root fails to place', async () => {
+  const base = await scratch()
+  await put(join(base, 'a'), 'f', 'new-a')
+  await put(join(base, 'b'), 'f', 'new-b')
+  const out = join(base, 'out')
+  await backup({ roots: { a: join(base, 'a'), b: join(base, 'b') }, out })
+  const ta = join(base, 'ta')
+  const tb = join(base, 'tb')
+  await put(ta, 'old', 'old-a')
+  await put(tb, 'old', 'old-b')
+
+  // Placing a root is two renames (target aside, stage into place): fail the fourth call.
+  let calls = 0
+  const failing = async (from: string, to: string): Promise<void> => {
+    calls += 1
+    if (calls === 4) throw new Error('injected rename failure')
+    await rename(from, to)
+  }
+  await expect(
+    restoreWith({ from: out, roots: { a: ta, b: tb } }, { rename: failing }),
+  ).rejects.toThrow('injected')
+  expect(await readFile(join(ta, 'old'), 'utf8')).toBe('old-a')
+  expect(await readFile(join(tb, 'old'), 'utf8')).toBe('old-b')
+  expect([...(await readdir(base))].sort((x, y) => x.localeCompare(y))).toEqual([
+    'a',
+    'b',
+    'out',
+    'ta',
+    'tb',
+  ])
+})
+
+it('removes target parent directories it created when a placement fails', async () => {
+  const base = await scratch()
+  await put(join(base, 'a'), 'f', 'new-a')
+  const out = join(base, 'out')
+  await backup({ roots: { a: join(base, 'a') }, out })
+  const target = join(base, 'deep', 'er', 'ta')
+  const failing = async (): Promise<void> => {
+    throw new Error('injected rename failure')
+  }
+  await expect(
+    restoreWith({ from: out, roots: { a: target } }, { rename: failing }),
+  ).rejects.toThrow('injected')
+  expect([...(await readdir(base))].sort((x, y) => x.localeCompare(y))).toEqual(['a', 'out'])
+})
+
+it('removes parent directories created before a failure partway through creating them', async () => {
+  const base = await scratch()
+  await put(join(base, 'a'), 'f', 'new-a')
+  const out = join(base, 'out')
+  await backup({ roots: { a: join(base, 'a') }, out })
+  // The second parent's name is too long, so the first is created and the second fails.
+  const target = join(base, 'first', 'x'.repeat(300), 'ta')
+  await expect(restore({ from: out, roots: { a: target } })).rejects.toThrow()
+  expect([...(await readdir(base))].sort((x, y) => x.localeCompare(y))).toEqual(['a', 'out'])
+})
