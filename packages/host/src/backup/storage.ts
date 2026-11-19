@@ -23,9 +23,7 @@ export interface StorageRegistry {
   fetchLatest(name: string, into: string): Promise<void>
   test(
     name: string,
-  ): Promise<
-    { ok: true; sizeBytes: number; freeBytes?: number } | { ok: false; reason: string }
-  >
+  ): Promise<{ ok: true; sizeBytes: number; freeBytes?: number } | { ok: false; reason: string }>
   list(): Promise<readonly (StorageLocation & { name: string })[]>
 }
 
@@ -81,21 +79,21 @@ export function createStorageRegistry(options: {
     } catch (cause) {
       throw new BackupError(`${options.file} is not valid JSON`, { path: options.file, cause })
     }
-    const locations = isRecord(value) ? value['locations'] : undefined
+    const locations = isRecord(value) ? value.locations : undefined
     if (!isRecord(locations)) {
       throw new BackupError(`${options.file} is not a storage registry`, { path: options.file })
     }
     const out: Record<string, Entry> = {}
     for (const [name, raw] of Object.entries(locations)) {
-      if (!isRecord(raw) || typeof raw['root'] !== 'string' || typeof raw['encrypted'] !== 'boolean') {
+      if (!isRecord(raw) || typeof raw.root !== 'string' || typeof raw.encrypted !== 'boolean') {
         throw new BackupError(`${options.file} holds a malformed location "${name}"`, {
           path: options.file,
         })
       }
       out[name] = {
-        root: raw['root'],
-        encrypted: raw['encrypted'],
-        ...(typeof raw['key'] === 'string' ? { key: raw['key'] } : {}),
+        root: raw.root,
+        encrypted: raw.encrypted,
+        ...(typeof raw.key === 'string' ? { key: raw.key } : {}),
       }
     }
     return out
@@ -103,9 +101,13 @@ export function createStorageRegistry(options: {
 
   async function write(locations: Record<string, Entry>): Promise<void> {
     await mkdirPrivate(path.dirname(options.file))
-    await replaceFileAtomic(options.file, `${JSON.stringify({ version: 1, locations }, null, 2)}\n`, {
-      mode: 0o600,
-    })
+    await replaceFileAtomic(
+      options.file,
+      `${JSON.stringify({ version: 1, locations }, null, 2)}\n`,
+      {
+        mode: 0o600,
+      },
+    )
   }
 
   async function get(name: string): Promise<{ entry: Entry; seal: SealOptions }> {
@@ -145,7 +147,10 @@ export function createStorageRegistry(options: {
         await rm(partial, { force: true }).catch(() => undefined)
         throw error instanceof BackupError
           ? error
-          : new BackupError(`cannot store the backup in "${name}"`, { path: entry.root, cause: error })
+          : new BackupError(`cannot store the backup in "${name}"`, {
+              path: entry.root,
+              cause: error,
+            })
       }
       return final
     },
@@ -175,7 +180,10 @@ export function createStorageRegistry(options: {
         await rm(staging, { recursive: true, force: true }).catch(() => undefined)
         throw error instanceof BackupError
           ? error
-          : new BackupError(`cannot fetch the backup from "${name}"`, { path: target, cause: error })
+          : new BackupError(`cannot fetch the backup from "${name}"`, {
+              path: target,
+              cause: error,
+            })
       }
     },
 

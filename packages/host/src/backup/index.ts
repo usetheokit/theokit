@@ -3,8 +3,4 @@ export { restore, type RestoreOptions } from './restore.js'
 export { BackupError } from './errors.js'
 export type { BackupManifest, ManifestEntry } from './manifest.js'
 export type { BackupRoots } from './paths.js'
-export {
-  createStorageRegistry,
-  type StorageLocation,
-  type StorageRegistry,
-} from './storage.js'
+export { createStorageRegistry, type StorageLocation, type StorageRegistry } from './storage.js'

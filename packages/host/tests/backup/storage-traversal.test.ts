@@ -39,22 +39,25 @@ async function* from(...chunks: Buffer[]): AsyncGenerator<Buffer> {
 }
 
 describe('unpackInto', () => {
-  it.each(['../x', '/etc/x', 'a/../../x'])('refuses the entry %s and writes nothing outside', async (name) => {
-    const base = await scratch()
-    const target = path.join(base, 'target')
-    await mkdir(target)
-    await expect(
-      unpackInto(from(entry(2, name, Buffer.from('x')), Buffer.from([0])), target),
-    ).rejects.toBeInstanceOf(BackupError)
-    expect(await readdir(base)).toEqual(['target'])
-    expect(await readdir(target)).toEqual([])
-  })
+  it.each(['../x', '/etc/x', 'a/../../x'])(
+    'refuses the entry %s and writes nothing outside',
+    async (name) => {
+      const base = await scratch()
+      const target = path.join(base, 'target')
+      await mkdir(target)
+      await expect(
+        unpackInto(from(entry(2, name, Buffer.from('x')), Buffer.from([0])), target),
+      ).rejects.toBeInstanceOf(BackupError)
+      expect(await readdir(base)).toEqual(['target'])
+      expect(await readdir(target)).toEqual([])
+    },
+  )
 
   it('refuses a duplicate entry', async () => {
     const base = await scratch()
     const dup = entry(2, 'a', Buffer.from('1'))
-    await expect(
-      unpackInto(from(dup, dup, Buffer.from([0])), base),
-    ).rejects.toBeInstanceOf(BackupError)
+    await expect(unpackInto(from(dup, dup, Buffer.from([0])), base)).rejects.toBeInstanceOf(
+      BackupError,
+    )
   })
 })

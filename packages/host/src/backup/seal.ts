@@ -63,10 +63,7 @@ export async function* seal(
  * The plain bytes of an archive file. Authentication of an encrypted archive completes at its end,
  * so the caller must drain the stream and treat everything as unverified until it finishes.
  */
-export async function* openSealed(
-  path: string,
-  options: SealOptions,
-): AsyncGenerator<Buffer> {
+export async function* openSealed(path: string, options: SealOptions): AsyncGenerator<Buffer> {
   const key = keyOf(options)
   const handle = await open(path, 'r').catch((cause: unknown) => {
     throw new BackupError(`cannot read archive ${path}`, { path, cause })
