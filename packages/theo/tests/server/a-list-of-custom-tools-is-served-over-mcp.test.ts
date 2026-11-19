@@ -121,7 +121,9 @@ describe('handleMcpToolsHttp', () => {
       ).result.protocolVersion
     expect(await v('2025-03-26')).toBe('2025-03-26')
     expect(await v('1999-01-01')).toBe('2025-06-18')
-    expect(await v('2024-11-05', { protocolVersions: ['2024-11-05'] })).toBe('2024-11-05')
+    const custom = { protocolVersions: ['2030-01-01', '2029-01-01'] }
+    expect(await v('2029-01-01', custom)).toBe('2029-01-01')
+    expect(await v('2025-06-18', custom)).toBe('2030-01-01')
   })
 
   it('sets isError false on success and true for a throwing tool', async () => {

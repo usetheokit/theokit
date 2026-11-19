@@ -83,6 +83,9 @@ describe('the agent aux dispatcher — production parity for card/mcp/list-appro
     expect(await note!.text()).toBe('')
     const bad = await dispatchAuxRoute(req(path, 'POST'), path, deps)
     expect(bad!.status).toBe(400)
+    const badBody = (await bad!.json()) as { id: unknown; error: { code: number } }
+    expect(badBody.error.code).toBe(-32700)
+    expect(badBody.id).toBeNull()
     const batch = await dispatchAuxRoute(req(path, 'POST', []), path, deps)
     expect(batch!.status).toBe(400)
     expect(((await batch!.json()) as { error: { code: number } }).error.code).toBe(-32600)
