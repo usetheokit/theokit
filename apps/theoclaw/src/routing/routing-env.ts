@@ -1,8 +1,57 @@
 import { isAbsolute } from 'node:path'
 
+import { createAgentBindings } from '@theokit/gateway'
+import type { AgentBindingRule, MessageEvent } from '@theokit/gateway'
+
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { clawRouting } from './claws.js'
-import { createAgentRouter, type AgentProfile, type AgentRoute, type AgentRouter } from './agent-routes.js'
+
+/** One binding rule: a platform, or one peer (sender) of it, to an agent. The most specific rule wins. */
+export interface AgentRoute {
+  readonly agent: string
+  readonly platform?: string
+  readonly peer?: string
+}
+
+export interface AgentProfile {
+  readonly id: string
+  /** The agent's own workspace directory. */
+  readonly workspace: string
+}
+
+export interface AgentRouter {
+  /** The profile of the agent that must answer a message from `peer` on `platform`. */
+  route(message: { readonly platform: string; readonly peer?: string }): AgentProfile
+}
+
+/**
+ * The gateway's bindings choose the agent; a route names the sender, so the question is asked of a
+ * direct message from that sender, as a group message's peer would be its channel instead.
+ */
+export function createAgentRouter(config: {
+  readonly defaultAgent: string
+  readonly agents: readonly AgentProfile[]
+  readonly routes: readonly AgentRoute[]
+}): AgentRouter {
+  const profiles = new Map(config.agents.map((profile) => [profile.id, profile]))
+  let bindings: ReturnType<typeof createAgentBindings>
+  try {
+    bindings = createAgentBindings({
+      defaultAgent: config.defaultAgent,
+      agents: config.agents.map((agent) => agent.id),
+      rules: config.routes as readonly AgentBindingRule[],
+    })
+  } catch (error) {
+    const agent = (error as { detail?: unknown }).detail
+    throw new Error(`routing names an unconfigured agent: ${typeof agent === 'string' ? agent : (error as Error).message}`)
+  }
+  return {
+    route({ platform, peer }) {
+      const event = { platform, sender: { id: peer ?? '' }, channel: { id: '', type: 'dm' } } as unknown as MessageEvent
+      return profiles.get(bindings.agentFor(event))!
+    },
+  }
+}
 
 type Env = Readonly<Record<string, string | undefined>>
 

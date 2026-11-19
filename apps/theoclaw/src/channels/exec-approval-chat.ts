@@ -1,3 +1,4 @@
+import { parseChatCommand } from '@theokit/gateway'
 import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
 
 import type { ExecApprovalOptions, PersonReply } from '../tools/exec-approval.js'
@@ -8,10 +9,6 @@ export const ELEVATED_VARIABLE = 'THEOCLAW_ELEVATED'
 export const EXEC_APPROVAL_TIMEOUT_MS = 120_000
 
 const HOOK_NAME = 'theoclaw-exec-approval-chat'
-const MENTION = '(?:(?:<@[^>]+>|@\\S+)\\s+)?'
-const APPROVE_COMMAND = new RegExp(`^${MENTION}/approve(?:@\\S+)?(?:\\s+(always))?$`)
-const DENY_COMMAND = new RegExp(`^${MENTION}/deny(?:@\\S+)?$`)
-const ELEVATED_COMMAND = new RegExp(`^${MENTION}/elevated(?:@\\S+)?(?:\\s+(.*))?$`)
 /** The id of a session's agent is `theoclaw-<session key>-g<generation>` (`agentIdFor`). */
 const AGENT_ID = /^theoclaw-(.+)-g\d+$/
 
@@ -91,16 +88,16 @@ export function createChatExecApproval(options: ChatExecApprovalOptions): ChatEx
   }
 
   const decide = (event: MessageEvent): HookDecision | undefined => {
-    const text = event.text.trim()
+    const command = parseChatCommand(event.text)
     const key = keyOf(event)
     latest.set(key, event)
-    const approve = APPROVE_COMMAND.exec(text)
-    const deny = DENY_COMMAND.test(text)
-    const elevate = ELEVATED_COMMAND.exec(text)
-    if (approve === null && !deny && elevate === null) return undefined
+    const approve = command?.name === 'approve' && (command.arg === '' || command.arg === 'always')
+    const deny = command?.name === 'deny' && command.arg === ''
+    const elevate = command?.name === 'elevated'
+    if (!approve && !deny && !elevate) return undefined
     if (!isOwner(event)) return { block: true, message: 'Only an owner can do that.' }
-    if (elevate !== null) {
-      const value = (elevate[1] ?? '').trim().toLowerCase()
+    if (elevate) {
+      const value = command.arg.trim().toLowerCase()
       if (value === 'on' || value === 'off') settings.set(key, value === 'on')
       else if (value !== '') return { block: true, message: 'Use /elevated on or /elevated off.' }
       return {
@@ -110,7 +107,7 @@ export function createChatExecApproval(options: ChatExecApprovalOptions): ChatEx
     }
     const waiting = pending.get(key)
     if (waiting === undefined) return { block: true, message: 'Nothing is waiting for approval.' }
-    waiting.answer({ answer: deny ? 'deny' : approve?.[1] === 'always' ? 'always' : 'once', by: `${event.platform}:${event.sender.id}` })
+    waiting.answer({ answer: deny ? 'deny' : command?.arg === 'always' ? 'always' : 'once', by: `${event.platform}:${event.sender.id}` })
     return { block: true, message: deny ? 'Denied.' : 'Approved.' }
   }
 

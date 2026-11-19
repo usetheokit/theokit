@@ -1,3 +1,4 @@
+import { parseChatCommand } from '@theokit/gateway'
 import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
 
 import { sessionKeyFor } from '../sessions/session-key.js'
@@ -18,8 +19,6 @@ export interface UsageHook {
 }
 
 const HOOK_NAME = 'theoclaw-usage'
-/** Behind an optional leading mention and with Telegram's optional `@botname`, as `/activation`. */
-const USAGE_COMMAND = /^(?:(?:<@[^>]+>|@\S+)\s+)?\/usage(?:@\S+)?(?:\s+(.*))?$/
 const USAGE_TEXT = 'Use /usage off, /usage tokens, /usage cost or /usage full.'
 const MODES: ReadonlySet<string> = new Set<UsageMode>(['off', 'tokens', 'cost', 'full'])
 
@@ -49,8 +48,8 @@ export function createUsageHook(options: UsageHookOptions = {}): UsageHook {
     hook: {
       name: HOOK_NAME,
       pre_inbound({ event }) {
-        const command = USAGE_COMMAND.exec(event.text.trim())
-        return command === null ? undefined : answer(event, command[1])
+        const command = parseChatCommand(event.text)
+        return command?.name === 'usage' ? answer(event, command.arg) : undefined
       },
     },
     modeFor: (event) => modes.get(keyOf(event)) ?? 'off',

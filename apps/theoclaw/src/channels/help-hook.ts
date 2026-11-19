@@ -1,6 +1,5 @@
+import { parseChatCommand } from '@theokit/gateway'
 import type { GatewayHook } from '@theokit/gateway'
-
-const HELP_COMMAND = /^(?:(?:<@[^>]+>|@\S+)\s+)?\/(?:help|commands)(?:@\S+)?$/
 
 /** The commands a chat answers itself, never passing them to the model (OC-105). */
 /** Every command the list names; a test sends each through its real handler. */
@@ -28,7 +27,9 @@ export function createHelpHook(): GatewayHook {
   return {
     name: 'theoclaw-help',
     pre_inbound({ event }) {
-      return HELP_COMMAND.test(event.text.trim()) ? { block: true, message: HELP_TEXT } : undefined
+      const command = parseChatCommand(event.text)
+      const isHelp = command !== undefined && command.arg === '' && (command.name === 'help' || command.name === 'commands')
+      return isHelp ? { block: true, message: HELP_TEXT } : undefined
     },
   }
 }

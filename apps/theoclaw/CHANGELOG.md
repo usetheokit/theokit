@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `@theokit/gateway` is raised to 0.22.0. Chat commands (`/help`, `/usage`, `/activation`, `/approve`, `/deny`, `/elevated`, `/acp`) are now read with the gateway's `parseChatCommand`, so the command name is matched case-insensitively. Agent routes are chosen by the gateway's `createAgentBindings`. The owner policy, pairing store and session keys stay in TheoClaw: the gateway's versions word replies differently and key `main` and linked-peer sessions differently, which would change what users see and orphan stored history (#1831).
+
 ### Fixed
 
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
