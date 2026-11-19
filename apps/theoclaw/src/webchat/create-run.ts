@@ -19,27 +19,22 @@ const DONE: IteratorReturnResult<undefined> = { done: true, value: undefined }
  * The run's `done` with the turn's usage record (FR-003): the token counts and cost the run
  * reported, the cost left out when the run was unpriced, and the model.
  */
-function withUsage(done: DoneEvent, usage: TurnUsage): DoneEvent {
+function withUsage(done: StreamEvent, usage: TurnUsage): DoneEvent {
   const { inputTokens, outputTokens } = usage
+  // A runner's `done` may carry less than the typed event; the missing fields are filled so the
+  // event that leaves is always a complete `DoneEvent`.
+  const prior = typeof done.usage === 'object' && done.usage !== null ? done.usage : {}
   const enriched: DoneEvent = {
     ...done,
-    usage: { ...done.usage, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
+    type: 'done',
+    result: typeof done.result === 'string' ? done.result : '',
+    durationMs: typeof done.durationMs === 'number' ? done.durationMs : 0,
+    usage: { ...prior, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
     model: usage.model,
   }
   if (usage.costUsd === undefined) delete enriched.cost
   else enriched.cost = usage.costUsd
   return enriched
-}
-
-/** A `done` that carries the typed terminal fields; one that lacks them is passed on unenriched. */
-function isTypedDone(event: StreamEvent): event is StreamEvent & DoneEvent {
-  return (
-    event.type === 'done' &&
-    typeof event.result === 'string' &&
-    typeof event.durationMs === 'number' &&
-    typeof event.usage === 'object' &&
-    event.usage !== null
-  )
 }
 
 /**
@@ -81,7 +76,7 @@ function startTurn(
   }
   const release = (usage?: TurnUsage): void => {
     if (held === undefined) return
-    queue.push(usage === undefined || !isTypedDone(held.done) ? held.done : { ...withUsage(held.done, usage) }, ...held.after)
+    queue.push(usage === undefined ? held.done : { ...withUsage(held.done, usage) }, ...held.after)
     held = undefined
     notify()
   }
