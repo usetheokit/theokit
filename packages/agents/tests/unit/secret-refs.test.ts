@@ -142,6 +142,26 @@ describe('resolveSecretRefs', () => {
     expect(seen).not.toContain(leaked)
   })
 
+  it('a secret in a code, syscall or signal field of a builtin failure is not copied', async () => {
+    const leaked = 'TOKEN123'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.reject(
+          Object.assign(new Error('x'), { code: leaked, syscall: leaked, signal: leaked }),
+        ),
+      ),
+    )
+    const error = (await resolveSecretRefs({
+      K: 'secretref:vault:secret/a#f',
+      VAULT_ADDR: 'http://v',
+      VAULT_TOKEN: 't',
+    }).catch((e: unknown) => e)) as SecretReferenceError
+    for (let c: unknown = error; c instanceof Error; c = c.cause) {
+      expect(JSON.stringify(c, Object.getOwnPropertyNames(c))).not.toContain(leaked)
+    }
+  })
+
   it('a builtin failure keeps the underlying error as the cause', async () => {
     const error = (await resolveSecretRefs({ K: 'secretref:file:/nonexistent/zzz' }).catch(
       (e: unknown) => e,

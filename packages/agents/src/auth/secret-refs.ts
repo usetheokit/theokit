@@ -24,25 +24,42 @@ class BuiltinStoreFailure extends Error {
   override readonly name = 'BuiltinStoreFailure'
 }
 
+const SAFE_FIELDS: Readonly<Record<string, readonly unknown[]>> = {
+  code: [
+    'ENOENT',
+    'EACCES',
+    'EPERM',
+    'EISDIR',
+    'ENOTDIR',
+    'EMFILE',
+    'ECONNREFUSED',
+    'ECONNRESET',
+    'ENOTFOUND',
+    'ETIMEDOUT',
+    'EAI_AGAIN',
+    1,
+    2,
+    127,
+  ],
+  syscall: ['open', 'read', 'spawn op', 'connect', 'getaddrinfo'],
+  signal: ['SIGTERM', 'SIGKILL'],
+  killed: [true, false],
+}
+
 /**
  * What may be kept of an underlying I/O error. The original is never retained: an `execFile`
  * error carries the child's stderr and stdout, and any error may carry request or path text, none
- * of which can be shown free of a secret. Only short scalar diagnostic fields survive, copied
+ * of which can be shown free of a secret. Only diagnostic fields with a value from a fixed list survive, copied
  * onto a fresh error with fixed text.
  */
 function sanitizeCause(cause: unknown): Error {
   const safe = new Error('underlying failure (details withheld)')
   if (cause === null || typeof cause !== 'object') return safe
-  for (const key of ['code', 'errno', 'syscall', 'signal', 'killed'] as const) {
+  for (const [key, allowed] of Object.entries(SAFE_FIELDS)) {
     const descriptor = Object.getOwnPropertyDescriptor(cause, key)
     const value: unknown = descriptor && 'value' in descriptor ? descriptor.value : undefined
-    if (
-      (typeof value === 'string' && /^[A-Z0-9_]{1,40}$/i.test(value)) ||
-      typeof value === 'number' ||
-      typeof value === 'boolean'
-    ) {
-      Object.assign(safe, { [key]: value })
-    }
+    // Only values from a fixed list are copied; any other string could be a secret.
+    if (allowed.some((known) => known === value)) Object.assign(safe, { [key]: value })
   }
   return safe
 }
