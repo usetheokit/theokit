@@ -108,7 +108,7 @@ export const launchdBackend: DaemonBackend = {
     const path = plistPath(label, io.homeDir)
     const logFile = logPath(label, io.homeDir)
     mkdirSync(join(logFile, '..'), { recursive: true })
-    writeAtomically(
+    await writeAtomically(
       path,
       plistFor({ ...target, nodePath: io.nodePath, entryPath: io.entry, logFile }),
     )
