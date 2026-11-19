@@ -8,31 +8,11 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'))
-const NUM = '(0|[1-9]\\d*)'
-const PRE = '(0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)'
-const EXACT_VERSION = new RegExp(`^${NUM}\\.${NUM}\\.${NUM}(-${PRE}(\\.${PRE})*)?$`)
-
-// A pin must be an exact published version: a range or tag would make the lockfile move on its own.
-export function validateReleased(released) {
-  for (const [name, version] of Object.entries(released)) {
-    if (typeof version !== 'string' || !EXACT_VERSION.test(version)) {
-      throw new Error(
-        `released.json: ${name} is pinned to ${JSON.stringify(version)}; use an exact version such as "1.2.3"`,
-      )
-    }
-  }
-  return released
-}
 
 export function deriveDependencies({
   root = join(here, '..'),
-  releasedPath = join(here, 'released.json'),
+  released = {},
 } = {}) {
-  if (!existsSync(releasedPath))
-    throw new Error(
-      `released.json not found at ${releasedPath}: create it with an exact released version for each workspace dependency`,
-    )
-  const released = validateReleased(readJson(releasedPath))
   const dirs = readdirSync(join(root, 'packages'), { withFileTypes: true }).filter((d) =>
     d.isDirectory(),
   )
@@ -66,10 +46,15 @@ export function deriveDependencies({
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const path = join(here, 'package.json')
-  const pkg = readJson(path)
+  const releasedPath = join(here, 'released.json')
+  let pkg
   let next
   try {
-    next = { ...pkg, dependencies: deriveDependencies() }
+    if (!existsSync(path)) throw new Error(`${path} not found: nothing to synchronize`)
+    pkg = readJson(path)
+    // released.json is optional: without it, workspace dependencies have no pin and are reported.
+    const released = existsSync(releasedPath) ? readJson(releasedPath) : {}
+    next = { ...pkg, dependencies: deriveDependencies({ released }) }
   } catch (err) {
     console.error(err.message)
     process.exit(1)

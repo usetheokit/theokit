@@ -1,6 +1,6 @@
 # Standalone consumer
 
-Maintainer tooling for the standalone consumer's release pins. The consumer itself (auth test,
+Maintainer tooling for the standalone consumer's release pins. The consumer itself (auth test, `package.json`,
 `pnpm-workspace.yaml`, `released.json`, lockfile) is a prerequisite tracked in #2327; the commands below
 need those files in place.
 
@@ -20,11 +20,11 @@ left out. Never edit the dependencies in `package.json` by hand.
 
 To move a release pin, or after changing a TheoCode manifest:
 
-1. Edit `released.json` (exact versions only; the script rejects ranges).
+1. Edit `released.json` (use exact versions).
 2. Run `node sync-manifest.mjs` to regenerate `package.json`.
 3. Run `pnpm install` to update `pnpm-lock.yaml`.
 4. Commit `released.json`, `package.json` and `pnpm-lock.yaml` together.
 
 `node sync-manifest.mjs --check` fails on drift against the real manifests; `sync-manifest.test.mjs` verifies the
-script's behaviour (regeneration, `--check`, pin validation) on isolated fixtures and does not read the real
+script's behaviour (regeneration, `--check`, missing pins) on isolated fixtures and does not read the real
 manifests.

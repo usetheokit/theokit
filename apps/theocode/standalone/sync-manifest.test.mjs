@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { after, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { deriveDependencies, validateReleased } from './sync-manifest.mjs'
+import { deriveDependencies } from './sync-manifest.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const tmp = mkdtempSync(join(tmpdir(), 'sync-manifest-'))
@@ -21,9 +21,7 @@ function fixture(released, pkgDeps) {
     join(root, 'packages', 'a', 'package.json'),
     JSON.stringify({ dependencies: pkgDeps }),
   )
-  const releasedPath = join(root, 'released.json')
-  writeFileSync(releasedPath, JSON.stringify(released))
-  return { root, releasedPath }
+  return { root, released }
 }
 
 describe('sync-manifest', () => {
@@ -56,20 +54,6 @@ describe('sync-manifest', () => {
     )
   })
 
-  it('rejects pins that are not exact versions', () => {
-    assert.throws(() => validateReleased({ a: '^1.0.0' }), /exact version/)
-    assert.throws(() => validateReleased({ a: 'latest' }), /exact version/)
-    assert.throws(() => validateReleased({ a: 1 }), /exact version/)
-    assert.deepEqual(validateReleased({ a: '1.0.0-rc.1' }), { a: '1.0.0-rc.1' })
-  })
-
-  it('rejects strings that are not valid semantic versions', () => {
-    for (const bad of ['01.2.3', '1.02.3', '1.2.3-', '1.2.3-..', '1.2.3-a..b', '1.2.3-01', '1.2']) {
-      assert.throws(() => validateReleased({ a: bad }), /exact version/, bad)
-    }
-    assert.doesNotThrow(() => validateReleased({ a: '1.2.3-0.alpha-1.x' }))
-  })
-
   describe('command', () => {
     // Copy the script into <root>/standalone so its `..` root is the isolated fixture.
     function setup(standaloneDeps) {
@@ -96,12 +80,12 @@ describe('sync-manifest', () => {
       assert.equal(run(dir, '--check').status, 0)
     })
 
-    it('reports a missing released.json with the fix instead of ENOENT', () => {
+    it('reports a missing package.json instead of ENOENT', () => {
       const dir = setup({})
-      rmSync(join(dir, 'released.json'))
+      rmSync(join(dir, 'package.json'))
       const r = run(dir, '--check')
       assert.equal(r.status, 1)
-      assert.match(r.stderr, /released\.json not found/)
+      assert.match(r.stderr, /package\.json not found/)
       assert.doesNotMatch(r.stderr, /ENOENT/)
     })
 

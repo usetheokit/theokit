@@ -17,7 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Changed
-- **The standalone consumer's release procedure is stated once.** `standalone/README.md` said both "edit `package.json`" and "run `sync-manifest.mjs`" to move a pin; it now says edit `released.json`, run `node sync-manifest.mjs`, `pnpm install`, and commit all three files. `sync-manifest.mjs` rejects pins that are not exact versions and names the manifest and fix when a pin is missing. (#2280)
+- **The standalone consumer's release procedure is stated once.** `standalone/README.md` said both "edit `package.json`" and "run `sync-manifest.mjs`" to move a pin; it now says edit `released.json`, run `node sync-manifest.mjs`, `pnpm install`, and commit all three files. `sync-manifest.mjs` names the manifest and fix when a pin is missing. (#2280)
 - **`AgentDefinitionLike` no longer declares `model?: string`.** The framework's `SubagentAgentDefinition` now takes `model` as `ModelSelection | 'inherit'`, so the string field no longer type-checked against `.subagents()`. `definitionFrom` never set it. Carrying a role's model is a separate migration. (#1858)
 - **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)
 
