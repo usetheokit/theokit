@@ -100,7 +100,8 @@ describe('worktreeProvider', () => {
         throw taskError
       },
     }).catch((e: unknown) => e)
-    expect(err).toBe(taskError)
+    expect((err as Error).message).toContain('task failed')
+    expect((err as { cause?: unknown }).cause).toBe(taskError)
     expect((err as { cleanupError: unknown }).cleanupError).toBeInstanceOf(WorkspaceProviderError)
   })
 
