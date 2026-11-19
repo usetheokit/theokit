@@ -173,7 +173,9 @@ describe('sync-manifest', () => {
     it('--check detects a moved release pin, and regeneration alone leaves the lockfile stale', () => {
       const dir = realCopy()
       const released = JSON.parse(read(join(dir, 'released.json')))
-      released['@theokit/agents-pty'] = '0.2.0'
+      // Any exact version other than the current pin moves it, so this keeps holding after release updates.
+      const [major, minor, patch] = released['@theokit/agents-pty'].split(/[.-]/).map(Number)
+      released['@theokit/agents-pty'] = `${major}.${minor}.${patch + 1}`
       writeFileSync(join(dir, 'released.json'), JSON.stringify(released))
       const drifted = run(dir, '--check')
       assert.equal(drifted.status, 1)
