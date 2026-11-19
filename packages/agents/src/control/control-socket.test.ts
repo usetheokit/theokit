@@ -128,7 +128,11 @@ describe('attachControlSocket', () => {
 
   it('closing a socket cancels its running session turns', async () => {
     const f = fakeAgent(true)
-    const { url, build } = await start({}, true, vi.fn(async () => f.agent))
+    const { url, build } = await start(
+      {},
+      true,
+      vi.fn(async () => f.agent),
+    )
     const ws = await connect(`${url}/control`)
     ws.send(JSON.stringify({ type: 'chat', message: 'hi', session: 's1' }))
     await vi.waitFor(() => expect(build).toHaveBeenCalled())

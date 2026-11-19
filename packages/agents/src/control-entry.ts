@@ -5,10 +5,7 @@ export {
   type SessionStore,
   type SessionStoreOptions,
 } from './control/session-store.js'
-export {
-  attachControlSocket,
-  type ControlSocketOptions,
-} from './control/control-socket.js'
+export { attachControlSocket, type ControlSocketOptions } from './control/control-socket.js'
 export {
   type AgentTurnUsage,
   type ControlClientFrame,

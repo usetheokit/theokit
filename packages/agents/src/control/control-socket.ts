@@ -80,7 +80,9 @@ export function attachControlSocket(
         const outcome = await sessions.run(
           session ?? privateSession,
           message,
-          (event) => send({ type: 'event', event, ...tag }),
+          (event) => {
+            send({ type: 'event', event, ...tag })
+          },
           owner,
         )
         if (outcome.ok) {
@@ -113,8 +115,12 @@ export function attachControlSocket(
         })
       }
     })
-    ws.on('close', () => sessions.cancelOwnedBy(owner))
-    ws.on('error', (error) => log(`control socket: ${error.message}`))
+    ws.on('close', () => {
+      sessions.cancelOwnedBy(owner)
+    })
+    ws.on('error', (error) => {
+      log(`control socket: ${error.message}`)
+    })
   }
 
   function onUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
@@ -136,7 +142,10 @@ export function attachControlSocket(
       return
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
-      if (typeof verdict === 'object') verdict.revoked(() => ws.close(POLICY_VIOLATION, 'revoked'))
+      if (typeof verdict === 'object')
+        verdict.revoked(() => {
+          ws.close(POLICY_VIOLATION, 'revoked')
+        })
       serve(ws)
     })
   }
@@ -148,7 +157,9 @@ export function attachControlSocket(
       server.off('upgrade', onUpgrade)
       for (const client of wss.clients) client.terminate()
       return new Promise<void>((resolve) => {
-        wss.close(() => resolve())
+        wss.close(() => {
+          resolve()
+        })
       })
     },
   }
