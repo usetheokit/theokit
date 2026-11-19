@@ -1346,11 +1346,14 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `credentialShape` | value |
+| `describeCredentialDefect` | value |
 | `diagnose` | value |
 | `installDiagnosticSink` | value |
 | `renderDiagnosis` | value |
 | `secretPresence` | value |
 | `Check` | type |
+| `CredentialDefect` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |
 | `InstallDiagnosticSinkOptions` | type |
