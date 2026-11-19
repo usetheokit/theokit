@@ -99,6 +99,12 @@ export interface PlanProjectsGCOptions {
    * registries are per cwd and cannot be enumerated from disk, so completeness is the caller's declaration.
    */
   readonly candidateCwds?: () => readonly string[]
+  /**
+   * The caller's explicit declaration that `candidateCwds` names EVERY cwd that could share a project
+   * directory. Registries cannot be enumerated from disk, so a list alone proves nothing: without
+   * `true` here a live project is kept whole, whatever `candidateCwds` returns.
+   */
+  readonly candidateCwdsComplete?: boolean
   readonly fs?: ProjectsGCFs
 }
 
@@ -338,11 +344,11 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       // The encoding is many-to-one and registries cannot be enumerated: a colliding live cwd may
       // appear in no header and no verdict, only in its own registry. Registry coverage is complete
       // only when the caller declares the cwds it knows; otherwise the project is kept whole.
-      if (options.candidateCwds === undefined) {
+      if (options.candidateCwds === undefined || options.candidateCwdsComplete !== true) {
         kept.push({
           project,
           reason:
-            'live project: registry coverage of every cwd sharing this directory cannot be established without candidateCwds; project kept whole',
+            'live project: registry coverage of every cwd sharing this directory cannot be established without candidateCwds and candidateCwdsComplete: true; project kept whole',
         })
         continue
       }

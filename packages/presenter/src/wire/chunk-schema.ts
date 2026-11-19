@@ -148,4 +148,5 @@ export {
   WIRE_CHUNK_TYPES,
   WIRE_DATA_PART_PREFIX,
   WIRE_ERROR_CODE_PART,
+  WIRE_TOOL_REFUSAL_PART,
 } from './constants.js'

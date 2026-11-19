@@ -2,6 +2,8 @@ import { appendFileSync } from 'node:fs'
 
 import { setDiagnosticsSink } from '@theokit/sdk'
 
+import { ConfigurationError } from '../errors.js'
+
 /**
  * M84 — route the SDK's diagnostics somewhere, from an env var.
  *
@@ -20,6 +22,8 @@ export type DiagnosticDestination =
 export interface InstallDiagnosticSinkOptions {
   /** The environment to read. Injected so a test never depends on the ambient one. */
   readonly env?: Readonly<Record<string, string | undefined>>
+  /** The variable to read. Default 'THEOKIT_DIAGNOSTICS'. Must be a non-empty name. */
+  readonly envVar?: string
   /** Where a write failure is reported. */
   readonly onWarn?: (message: string) => void
   /**
@@ -37,7 +41,7 @@ export interface InstallDiagnosticSinkOptions {
 const STDERR_VALUES = new Set(['1', 'true', 'stderr', 'yes'])
 
 /**
- * Install the diagnostics sink from `THEOKIT_DIAGNOSTICS`.
+ * Install the diagnostics sink from `THEOKIT_DIAGNOSTICS` (or the variable named by `envVar`).
  *
  * Returns where it went, rather than logging it: a function that announces itself on stdout would
  * corrupt the output of any command whose result is piped.
@@ -47,7 +51,11 @@ export function installDiagnosticSink(
 ): DiagnosticDestination {
   const env = options.env ?? process.env
   const install = options.install ?? setDiagnosticsSink
-  const raw = env.THEOKIT_DIAGNOSTICS
+  const envVar = options.envVar ?? 'THEOKIT_DIAGNOSTICS'
+  if (envVar === '') {
+    throw new ConfigurationError('installDiagnosticSink: envVar must be a non-empty variable name')
+  }
+  const raw = env[envVar]
   if (raw === undefined || raw === '') return { kind: 'off' }
 
   if (STDERR_VALUES.has(raw.toLowerCase())) {

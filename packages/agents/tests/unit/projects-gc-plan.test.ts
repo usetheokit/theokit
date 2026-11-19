@@ -63,6 +63,7 @@ function plan(extra: Partial<Parameters<typeof planProjectsGC>[0]> = {}) {
     now: NOW,
     classify: alive(),
     candidateCwds: () => [CWD],
+    candidateCwdsComplete: true,
     listRegistry: () => Promise.resolve([]),
     ...extra,
   })
@@ -288,6 +289,7 @@ describe('planProjectsGC protection edge cases', () => {
       maxAgeDays: 7,
       now: NOW,
       candidateCwds: () => [CWD],
+      candidateCwdsComplete: true,
       fs: {
         ...real,
         stat: (p) => {
@@ -336,6 +338,18 @@ describe('planProjectsGC protection edge cases', () => {
     expect(result.touchedProjects).toEqual([])
   })
 
+  it('a live cwd discovered only through its registry keeps the project whole unless coverage is declared', async () => {
+    const hidden = '/work-app' // encodes to the same directory, is alive, and appears in no list
+    transcript('new', 1)
+    const active = transcript('active', 300) // header names CWD; only hidden's registry lists it
+    const listRegistry = (cwd: string) =>
+      Promise.resolve(cwd === hidden ? [{ id: 'active' }] : [])
+    const undeclared = await plan({ candidateCwdsComplete: undefined, listRegistry })
+    expect(undeclared.candidates.map((c) => c.target)).not.toContain(active)
+    expect(undeclared.candidates).toEqual([])
+    expect(undeclared.kept.some((k) => k.reason.includes('candidateCwdsComplete'))).toBe(true)
+  })
+
   it('a dead project with a malformed transcript header is kept whole', async () => {
     transcript('new', 1)
     transcript('old', 100)
@@ -373,6 +387,7 @@ describe('planProjectsGC protection edge cases', () => {
     const asked: string[] = []
     const result = await plan({
       candidateCwds: () => [other, '/elsewhere'],
+      candidateCwdsComplete: true,
       listRegistry: (cwd) => {
         asked.push(cwd)
         return Promise.resolve(cwd === other ? [{ id: 'registered' }] : [])

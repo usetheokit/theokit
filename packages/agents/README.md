@@ -52,7 +52,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics |
+| `./doctor` | Environment diagnostics. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
 | `./usage` | Token and cost accounting |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
@@ -75,6 +75,10 @@ await registry.dispatch('/exit', { exit: () => process.exit(0) })
 `parseClaudeHooks(raw, { aliases? })` (from `./hooks`) turns the `hooks` object of a Claude Code `.claude/settings.json` (`{ "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "...", "timeout": 5 }] }] }`) into `{ specs, dropped }`. Each group is flattened to one spec per command, `timeout` seconds become `timeout_ms`, and a `"*"` matcher becomes no matcher. Every spec is validated with `hookSpecSchema`, so a command with control characters is refused. Anything skipped (unknown event, non-command hook, non-object group or entry, invalid spec) gets one line in `dropped`. Events map through `CLAUDE_HOOK_EVENT_ALIASES` (`PreToolUse` to `pre_tool_call`, `PostToolUse` to `transform_tool_result`, `Stop` to `post_assistant_reply`, `SessionStart` to `on_session_start`); pass `aliases` to override, and map a name to `null` for an event this engine does not deliver. Fingerprints are computed on the translated spec, so `HookApprovalStore` works unchanged. `buildHookHandlers({ projectDirEnv: 'CLAUDE_PROJECT_DIR' })` sets that variable to `cwd` in each hook process.
 
 `AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
+
+`loginWithApiKey(key, store, { provider?, overwrite?, env? })` (from `./auth`) trims the key, infers the provider from its prefix when none is given, and writes the credential file, returning `{ provider, path }`. It throws `CredentialError` for an empty key or an unknown prefix without a provider, `ProviderPrefixMismatchError` when the declared provider contradicts the prefix, and `CredentialExistsError` (`code: 'credential_exists'`, names the path) when a file exists and `overwrite` is not set. `logout(store, env?)` removes the file and returns whether there was one; a concurrent removal returns `false`.
+
+`AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
 
 ## One bootstrap for every entry
 
@@ -100,6 +104,31 @@ import { assertBootstrapped } from '@theokit/agents/config'
 assertBootstrapped(bootstrap, 'openTranscriptStore')
 ```
 
+### `-c a.b=value` overrides
+
+`parseDottedOverrides(pairs, { coerce? })` from `@theokit/agents/config` turns argv pairs into the
+`command-line` layer. Pairs split at the first `=`, keys at `.`; `a.b=1` and `a.c=2` build one nested object.
+`__proto__`, `constructor` and `prototype` (in any position), empty segments, a pair without `=`, and pairs that
+build incompatible shapes (`a=1` with `a.b=2`, in either order) throw `DottedOverrideError`
+(`dotted_override_invalid`, not retryable), naming the pair. Values stay strings unless `coerce(path, raw)` returns
+otherwise; `path` is the full dotted key, so `profiles.x.memory` is not coerced like `memory`. The flag name and argv
+parsing stay in your app.
+
+```ts
+const layer = parseDottedOverrides(['model=x', 'limits.turns=3'], {
+  coerce: (path, raw) => (path === 'limits.turns' ? Number(raw) : raw),
+})
+```
+
+### Trim policy per instruction source
+
+`composeInstructions(base, sources, { maxChars })` from `@theokit/agents/config` walks `sources` from the last
+entry. Each source may carry `trim`: `{ kind: 'drop' }` (default, the original behaviour), `keep-head` (cut the end),
+`keep-tail` (cut the start) or `{ kind: 'blocks-from-start', separator }` (drop whole blocks from the start, never
+cutting inside one). A source with a policy is trimmed as far as it allows before the walk moves on. Sources are
+never re-split unless their own policy is `blocks-from-start`. The result's `cuts` lists `{ name, from, to }` for
+every source that lost characters (`to` is 0 when dropped); it is empty when everything fit.
+
 ## Calling an agent route without `HttpTransport`
 
 An agent route's CSRF gate answers `403 CSRF_FAILED` unless the request carries `X-Theo-Action: 1`.
@@ -117,6 +146,19 @@ const res = await fetch('http://localhost:3000/agents/support', {
 const headers = agentRequestHeaders(AGENT_ACTION_HEADERS, { authorization: `Bearer ${token}` })
 ```
 
+## Mounting a chat route for an agent built elsewhere
+
+`generateAgentRoutes` needs only the route and a `createRun`; `compiledOptions` is optional and never read.
+
+```ts
+import { generateAgentRoutes } from '@theokit/agents/bridge'
+
+const routes = generateAgentRoutes({
+  walkResult: { route: '/api/agents/support' },
+  createRun: (message, sessionId, signal) => runMyAgent(message, sessionId, signal),
+})
+```
+
 ## The shapes worth knowing before you start
 
 **Tool scope is bound once, not per tool.** `bindToolScope({ projectRoot, writeRoot, sandbox })`
@@ -127,6 +169,9 @@ without one would be an unconfined shell, and making it unrepresentable is cheap
 the builder, the *posture* decides whether auto-approval is even permissible (it carries the sandbox
 posture as evidence, so "auto-approve without confinement" cannot be expressed), and the *resolver*
 settles an individual request. `./ask` is the inverse channel — the agent asking you.
+A surface reads the open question with `bridge.pending(threadId)` (a read, not a second listener)
+and learns of changes with `bridge.onChange(fn)`, which fires after a question is asked, answered,
+abandoned or failed and returns its own disposer.
 
 **Sessions are deleted carefully or not at all.** `./session` refuses to collect a transcript that a
 live writer holds, floors both `keepLast` and `maxAgeDays`, and plans before it applies. When your
@@ -181,6 +226,25 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
+## Delegating to a fresh agent per task
+
+`delegationPortFromAgentFactory(create, { sendOptions })` (from `@theokit/agents/bridge`) returns a
+`DelegationPort` that builds an agent with `create` for each task, sends the task, cancels the run when
+the delegating signal aborts, and disposes the agent after success, failure or cancellation. A run that
+streamed an error or did not end `finished` rejects with a `DelegationError`; guardrail and delegation
+errors pass through unchanged.
+
+```ts
+import { delegationPortFromAgentFactory } from '@theokit/agents/bridge'
+
+const worker = delegationPortFromAgentFactory(() => createWorkerAgent())
+const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: worker }] })
+```
+
+## Registering subagents
+
+`AgentBuilder.subagents()` (and `defineAgent({ subagents })`) takes `description` and `prompt` (required), plus optional `tools`, `model` (a `ModelSelection`, or `'inherit'`/absent for the parent's model) and `mcpServers` (names or inline configs, as the SDK takes them). All are passed to the SDK unchanged. `sandbox` and `memory` are not accepted: apply memory with `applySubagentMemory` before registering.
+
 ## Withholding SDK builtin tools
 
 `AgentBuilder.withholdBuiltinTools(['shell'])` keeps the named SDK builtin tools (`shell`,
@@ -199,6 +263,28 @@ fingerprint gate as `buildHookHandlers`, ignores specs of other events, and retu
 `HostHookOutcome` per spec (`ran`, `not-approved`, `failed`, `timed-out` or `could-not-start`)
 without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
 is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
+
+## Ending a goal loop with a tool
+
+`createGoalSignal()` returns an `update_goal` tool and a judge that read the same state. Add `signal.tool`
+to the agent that works on the goal and pass `{ judge: signal.judge }` as the `GoalRunner` deps: the judge
+answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
+no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
+and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Turning a pushed event stream into an iterable
+
+`streamFromEmitter(start, { signal, isFinal, onError })` from `@theokit/agents/bridge` returns an
+`AsyncIterable` for a producer that pushes events to a callback. `return()` aborts the producer's signal
+at once, unless a final event (`done` or `error` by default) was already seen. A rejecting producer
+yields the `onError` event, unless an error event already went out.
+
+```ts
+generateAgentRoutes({
+  createRun: (m, s, signal) =>
+    streamFromEmitter((emit, sig) => runAgentTurn(/* ... */ emit, sig), { signal }),
+})
+```
 
 ## What changed recently
 
@@ -230,6 +316,8 @@ configuration that had no effect.
 | `themes/*.json` | **out of scope HERE** — read by the consumer, like `keybindings.json`. `apps/theocode` resolves `~/.claude/themes/` in `apps/theocode/packages/tui/src/theme/custom-theme.ts`; this package and `@theokit/tui` read neither |
 | `~/.claude.json` — OAuth state, UI toggles | **out of scope** — a CLI's own state |
 | `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers` |
+
+**Output styles.** `loadOutputStyle({ name, cwd, homeDir })` matches a style by its file name (without `.md`) or by its frontmatter `name`. The project directory is searched before the home directory; within one directory a file-name match wins over another file's frontmatter name, and two files claiming the same frontmatter name throw `OutputStyleError` naming both paths. A named style with no match throws `OutputStyleError`. `applyOutputStyle(base, style)` (from `@theokit/agents/config`) returns `base` unchanged when there is no style, `` `${base}\n\n${style.content}` `` when `keepCodingInstructions` is true, and `style.content` otherwise.
 
 
 ### Out of scope, and who owns it instead
@@ -299,6 +387,16 @@ This package has no colour at all — a grep for `color`, `chalk` or `theme` acr
 nothing, the one apparent hit being `ansi` inside `stateTransitionHistory`. It produces text and tool
 calls; a palette here would be configuration nothing could act on. The toolkit reads no theme file
 either, so naming an owner would repeat the mistake the `keybindings.json` row already made.
+
+### Instruction tree: `as-listed` order and `maxCharsPerFile`
+
+`loadInstructionTree({ order: 'as-listed', fileNames: ['SOUL.md', 'IDENTITY.md'] })` returns blocks in
+the order of the `fileNames` array within each root. It is only valid with an array; a predicate
+throws a `ConfigurationError` naming `order` and `fileNames`.
+
+`budget.maxCharsPerFile` cuts each file at that many characters and appends a `[truncated]` line; the
+block carries `truncated: true`. It applies before `maxChars`, so one runaway file cannot push the
+others out. A file that fails to read for any reason except `ENOENT` is reported to `onWarn`.
 
 ### `CLAUDE.md`
 
@@ -493,6 +591,22 @@ See `LICENSE`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
 
+`deleteSession(id, { cwd, removeFromRegistry })` reports `registryOutcome: 'unconfirmed'` with the SDK's
+`Agent.delete`, because that returns `Promise<void>`. Pass `isListedInRegistry` to have it measure instead.
+It is called before and after the removal:
+
+```ts
+await deleteSession(id, {
+  cwd,
+  removeFromRegistry: (sessionId) => Agent.delete(sessionId),
+  isListedInRegistry: async (sessionId) => (await Agent.list({ runtime: 'local', cwd })).items.some((a) => a.agentId === sessionId),
+})
+```
+
+Listed after the removal is `still-present`; not listed before is `nothing-to-remove`; listed before and not
+after is `removed`. A verifier that throws or exceeds `registryTimeoutMs` gives `unconfirmed` with the error in
+`registryError`, and the transcript step still runs. Without a verifier nothing changes.
+
 ### Planning a GC across every project
 
 `planProjectsGC({ projectsRoot, keepLast, maxAgeDays })` is the read-only plan for reclaiming disk across every
@@ -510,9 +624,12 @@ plan is a separate step. Each candidate is `{ project, kind, target, sessionId?,
   adds to `errors`.
 - Several cwds can share one project directory (the encoding is lossy). Every cwd the transcripts record is consulted,
   and `candidateCwds()` adds known workspaces that encode to the project, so a colliding cwd with no transcript of
-  its own is protected too. `candidateCwds` is required to plan a live project, and must list every cwd of the app that could share the directory (a colliding cwd known only to its
-  own registry cannot be discovered otherwise); without it a live project is kept whole. Any project, live or dead,
+  its own is protected too. Planning a live project needs `candidateCwds` listing every cwd of the app that could share the directory AND `candidateCwdsComplete: true`, the caller's declaration that the list is complete (a colliding cwd known only to its own registry cannot be discovered from disk); without both a live project is kept whole and the reason is in `kept`. Any project, live or dead,
   holding a transcript whose header cannot be read or names no cwd of the project is kept whole.
 - `keepLast` or `maxAgeDays` below 1 throws `GCFloorError`.
 
 The plan also reports `touchedProjects`, `liveCwds` and `countByKind`. `listRegistry` defaults to `Agent.list`.
+
+## Refused tool calls
+
+When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
