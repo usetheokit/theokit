@@ -30,15 +30,6 @@ export type SdkMessage =
     }
 
 type MessageOf<T extends SdkMessage['type']> = Extract<SdkMessage, { type: T }>
-/** A content block read defensively: a runtime payload can still miss what the declared type promises. */
-interface DefensiveBlock {
-  type: string
-  text?: string
-  id?: string
-  name?: string
-  input?: unknown
-}
-
 /** `message.content` of an assistant message, read untrusted (absent ⇒ `undefined`). */
 function contentOf(msg: object): unknown {
   const message: unknown = Reflect.get(msg, 'message')
@@ -115,23 +106,27 @@ function translateSystemEvent(msg: MessageOf<'system'>, runId: string): AgentStr
 
 function translateAssistantEvent(msg: MessageOf<'assistant'>): AgentStreamEvent[] {
   const events: AgentStreamEvent[] = []
-  // Real SDKAssistantMessage: content lives at msg.message.content. Read defensively — a runtime
-  // payload can still be malformed even though the declared type says otherwise.
+  // Real SDKAssistantMessage: content lives at msg.message.content. Each element is validated, not
+  // assumed: a runtime payload can still be malformed even though the declared type says otherwise.
   const content = contentOf(msg)
   if (!Array.isArray(content)) return events
 
-  for (const b of content as DefensiveBlock[]) {
-    if (b.type === 'text' && b.text) {
-      events.push({ type: 'text_delta', content: b.text })
-    }
-    if (b.type === 'tool_use') {
+  const blocks: unknown[] = content
+  for (const block of blocks) {
+    if (typeof block !== 'object' || block === null) continue
+    const type: unknown = Reflect.get(block, 'type')
+    if (type === 'text') {
+      const text: unknown = Reflect.get(block, 'text')
+      if (typeof text === 'string' && text !== '')
+        events.push({ type: 'text_delta', content: text })
+    } else if (type === 'tool_use') {
       events.push({
         type: 'tool_call',
         // #138 — an empty id is honest: dedup treats it as "I cannot identify this" and prefers a
         // visible double render to a silent suppression.
-        callId: b.id ?? '',
-        toolName: b.name ?? 'unknown',
-        input: b.input ?? {},
+        callId: asString(Reflect.get(block, 'id'), ''),
+        toolName: asString(Reflect.get(block, 'name'), 'unknown'),
+        input: Reflect.get(block, 'input') ?? {},
       })
     }
   }

@@ -483,3 +483,23 @@ describe('unknown events warn instead of vanishing (#141)', () => {
     expect(warnings).toEqual([])
   })
 })
+
+describe('translateSdkEvent: assistant content is validated, not assumed', () => {
+  it('skips malformed blocks and reads the well-formed ones', () => {
+    const malformed: SdkMessage = { type: 'assistant', message: { content: [] } }
+    const content: unknown[] = [
+      null,
+      'text',
+      7,
+      { type: 'text', text: 42 },
+      { type: 'text', text: 'ok' },
+      { type: 'tool_use' },
+    ]
+    // A runtime payload the declared type forbids: assigned past the type, as a real wire would.
+    Object.assign(malformed, { message: { role: 'assistant', content } })
+    expect(translateSdkEvent(malformed, RUN)).toEqual([
+      { type: 'text_delta', content: 'ok' },
+      { type: 'tool_call', callId: '', toolName: 'unknown', input: {} },
+    ])
+  })
+})

@@ -25,7 +25,7 @@ import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import type { SdkMessage } from './event-translator.js'
-import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
+import { withGuardrails, withStepCeiling, withTypedStream } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
 import type { SdkRunUsage } from './sdk-adapter-create-options.js'
@@ -974,6 +974,20 @@ export function toAgentFactory(
       compiled.guardrails,
     )
   }
+}
+
+/**
+ * {@link toAgentFactory} with the typed bridge contract: the handle's `stream()` yields
+ * `AgentStreamEvent` (via `withTypedStream`) instead of the SDK messages ACP reads. Same projection,
+ * guards and step ceiling; only the stream's vocabulary differs. Use `toAgentFactory` for a host that
+ * dispatches on SDK messages (ACP), and this for a consumer that wants framework events.
+ */
+export function toTypedAgentFactory(
+  def: DefinitionOrThunk,
+  opts: Parameters<typeof toAgentFactory>[1],
+): (sessionId: string) => Promise<SdkAgentHandle> {
+  const served = toAgentFactory(def, opts)
+  return async (sessionId: string) => withTypedStream(await served(sessionId))
 }
 
 /**

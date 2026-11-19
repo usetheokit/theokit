@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1245 export(s) across 25 entry point(s).
+1249 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -221,6 +221,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolsCapability` | value |
 | `Toolset` | value |
 | `ToolsetError` | value |
+| `toTypedAgentFactory` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
@@ -240,6 +241,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `withEphemeralAgent` | value |
 | `WithheldBuiltinToolsCapability` | value |
 | `withPreCompaction` | value |
+| `withTypedStream` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `A2ACapabilities` | type |
 | `A2ASkill` | type |
@@ -532,12 +534,14 @@ Measured against `@theokit/sdk@5.17.0`.
 | `streamAgentUIMessages` | value |
 | `streamFromEmitter` | value |
 | `toAgentFactory` | value |
+| `toTypedAgentFactory` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
 | `UntrustedSettingSourceError` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
+| `withTypedStream` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `AfterToolCallContext` | type |
 | `AgentDefinition` | type |
