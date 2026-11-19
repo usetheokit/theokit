@@ -261,3 +261,8 @@ export type { McpScopesResult } from './mcp-scopes.js'
 export * from './setting-sources-gate.js'
 
 export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'
+export {
+  createResultCapture,
+  NoResultSubmittedError,
+  type ResultCapture,
+} from './result-capture.js'

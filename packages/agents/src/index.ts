@@ -18,11 +18,6 @@ export type { ApprovalRequest, HitlDecision } from './bridge/hitl-plugin.js'
 export { ConfigurationError } from './errors.js'
 export * from './capability/index.js'
 export * from './bridge/index.js'
-export {
-  createResultCapture,
-  NoResultSubmittedError,
-  type ResultCapture,
-} from './bridge/result-capture.js'
 export * from './loop/index.js'
 export * from './guardrails/index.js'
 export * from './a2a/agent-card.js'
