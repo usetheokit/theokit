@@ -13,3 +13,6 @@ pnpm test
 TheoCode itself links `@theokit/agents` with `workspace:*`; the pin here (`16.11.0`) is the release
 that TheoCode's workspace copy is checked against. To move it, edit `package.json`, run
 `pnpm install`, and commit the new `pnpm-lock.yaml`.
+
+`auth.test.mjs` reads TheoCode's own manifests (root and `packages/*`) and fails if an `@theokit/*`
+package they use is missing from this `package.json`, or if a registry version they declare differs.
