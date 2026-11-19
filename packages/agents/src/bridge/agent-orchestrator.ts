@@ -252,19 +252,33 @@ export async function delegate(
     try {
       await workspace.release()
     } catch (cleanupError) {
-      // The task's own failure stays the thrown error; the cleanup failure rides along.
-      if (typeof error === 'object' && error !== null) {
-        Object.defineProperty(error, 'cleanupError', {
-          value: cleanupError,
-          configurable: true,
-          writable: true,
-        })
+      // The task's own failure stays the thrown error with the cleanup failure attached; when it
+      // cannot carry a property (primitive, frozen / non-extensible), both ride in an AggregateError.
+      if (!attachCleanupError(error, cleanupError)) {
+        throw new AggregateError(
+          [error, cleanupError],
+          'delegation and its workspace cleanup both failed',
+        )
       }
     }
     throw error
   }
   await workspace.release()
   return result
+}
+
+function attachCleanupError(error: unknown, cleanupError: unknown): boolean {
+  if ((typeof error !== 'object' && typeof error !== 'function') || error === null) return false
+  try {
+    Object.defineProperty(error, 'cleanupError', {
+      value: cleanupError,
+      configurable: true,
+      writable: true,
+    })
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function delegateIn(

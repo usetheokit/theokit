@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { cp, lstat, mkdir, readFile, realpath } from 'node:fs/promises'
+import { copyFile, lstat, mkdir, readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -50,6 +50,47 @@ function inside(root: string, target: string): boolean {
 }
 
 /**
+ * Copies `src` to `dest`, entry by entry. A symlink (the listed path or one nested in a directory)
+ * is followed only when its target stays inside the repository; the destination's parent must
+ * resolve inside the workspace and the destination itself must not be a symlink.
+ */
+async function copyEntry(
+  src: string,
+  dest: string,
+  roots: { repo: string; workspace: string },
+  label: string,
+): Promise<void> {
+  const info = await lstat(src)
+  let source = src
+  if (info.isSymbolicLink()) {
+    try {
+      source = await realpath(src)
+    } catch {
+      return // dangling link: nothing to copy
+    }
+    if (!inside(roots.repo, source)) {
+      throw new WorkspaceProviderError(`${label} resolves outside the repository`)
+    }
+  }
+  await mkdir(dirname(dest), { recursive: true })
+  if (!inside(roots.workspace, await realpath(dirname(dest)))) {
+    throw new WorkspaceProviderError(`${label} would be written outside the workspace`)
+  }
+  const existing = await lstat(dest).catch(() => undefined)
+  if (existing?.isSymbolicLink()) {
+    throw new WorkspaceProviderError(`${label} would be written through a symlink`)
+  }
+  if ((await stat(source)).isDirectory()) {
+    await mkdir(dest, { recursive: true })
+    for (const name of await readdir(source)) {
+      await copyEntry(join(source, name), join(dest, name), roots, `${label}/${name}`)
+    }
+    return
+  }
+  await copyFile(source, dest)
+}
+
+/**
  * Copies the paths listed in `<repo>/<include>` into the new worktree. One literal, repository-
  * relative path per line (files or directories); blank lines and `#` comments are skipped. A path
  * that leaves the repository (lexically or through a symlink) is refused. A missing include file
@@ -64,6 +105,7 @@ async function copyIncluded(repo: string, workspace: string, include: string): P
     throw error
   }
   const repoReal = await realpath(repo)
+  const workspaceReal = await realpath(workspace)
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim()
     if (!line || line.startsWith('#')) continue
@@ -77,11 +119,12 @@ async function copyIncluded(repo: string, workspace: string, include: string): P
     } catch {
       continue
     }
-    if (!inside(repoReal, await realpath(src))) {
-      throw new WorkspaceProviderError(`${include}: "${line}" resolves outside the repository`)
-    }
-    await mkdir(dirname(dest), { recursive: true })
-    await cp(src, dest, { recursive: true, force: true, verbatimSymlinks: true })
+    await copyEntry(
+      src,
+      dest,
+      { repo: repoReal, workspace: workspaceReal },
+      `${include}: "${line}"`,
+    )
   }
 }
 
