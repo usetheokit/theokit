@@ -40,14 +40,27 @@ export class SecretReferenceError extends TheokitAgentError {
 const PREFIX = 'secretref:'
 const OP_TIMEOUT_MS = 15_000
 const trimNewline = (value: string): string => {
-  if (value.endsWith('\n')) value = value.slice(0, -1)
-  return value.endsWith('\r') ? value.slice(0, -1) : value
+  if (value.endsWith('\r\n')) return value.slice(0, -2)
+  return value.endsWith('\n') ? value.slice(0, -1) : value
+}
+
+const readOwn = (env: Env, name: string): string | undefined =>
+  Object.hasOwn(env, name) ? env[name] : undefined
+
+const setOwn = (target: Record<string, unknown>, name: string, value: unknown): void => {
+  Object.defineProperty(target, name, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  })
 }
 
 const envStore: SecretStore = {
   kind: 'env',
   matches: (reference) => reference.startsWith(`${PREFIX}env:`),
-  read: (reference, env) => Promise.resolve(env[reference.slice(`${PREFIX}env:`.length)] ?? ''),
+  read: (reference, env) =>
+    Promise.resolve(readOwn(env, reference.slice(`${PREFIX}env:`.length)) ?? ''),
 }
 
 const fileStore: SecretStore = {
@@ -123,6 +136,26 @@ export const builtinSecretStores: readonly SecretStore[] = [
   vaultStore,
 ]
 
+function findStore(
+  stores: readonly SecretStore[],
+  reference: string,
+  variable: string,
+): SecretStore | undefined {
+  for (const candidate of stores) {
+    try {
+      if (candidate.matches(reference)) return candidate
+    } catch {
+      // A caller's exception may carry the value; name only the variable and the store.
+      throw new SecretReferenceError(
+        `${variable}: secret store (${candidate.kind}) failed while matching the reference`,
+        variable,
+        candidate.kind,
+      )
+    }
+  }
+  return undefined
+}
+
 /**
  * Replaces every value of `env` that is a reference to a store with the value read from it.
  * References are read from the input `env` and are not resolved recursively. A failure throws
@@ -142,7 +175,7 @@ export async function resolveSecretRefs(
   for (const [name, raw] of Object.entries(env)) {
     if (raw === undefined) continue
     const reference = raw.trim()
-    const store = stores.find((candidate) => candidate.matches(reference))
+    const store = findStore(stores, reference, name)
     if (store === undefined) continue
     let value: string
     try {
@@ -166,9 +199,9 @@ export async function resolveSecretRefs(
         store.kind,
       )
     }
-    out[name] = value
+    setOwn(out, name, value)
     values.push(value)
-    refs[name] = store.kind
+    setOwn(refs, name, store.kind)
   }
   return { env: out, values, refs }
 }

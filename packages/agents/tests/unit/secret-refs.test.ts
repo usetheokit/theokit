@@ -108,4 +108,40 @@ describe('resolveSecretRefs', () => {
     expect(result.refs).toEqual({ A: 'env' })
     expect(JSON.stringify(result.refs)).not.toContain('s3cret')
   })
+
+  it('keeps a lone trailing carriage return and strips only a trailing CRLF', async () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'lone'), 'abc\r')
+    writeFileSync(join(dir, 'crlf'), 'abc\r\n')
+    const result = await resolveSecretRefs({
+      A: `secretref:file:${join(dir, 'lone')}`,
+      B: `secretref:file:${join(dir, 'crlf')}`,
+    })
+    expect(result.env.A).toBe('abc\r')
+    expect(result.env.B).toBe('abc')
+  })
+
+  it('records a variable named __proto__ in refs and env as an own property', async () => {
+    const env = JSON.parse('{"__proto__":"secretref:env:S","S":"v"}') as Record<string, string>
+    const result = await resolveSecretRefs(env)
+    expect(Object.hasOwn(result.refs, '__proto__')).toBe(true)
+    expect(Object.getOwnPropertyDescriptor(result.refs, '__proto__')?.value).toBe('env')
+    expect(Object.getOwnPropertyDescriptor(result.env, '__proto__')?.value).toBe('v')
+  })
+
+  it('a store whose matches throws becomes a SecretReferenceError without the cause', async () => {
+    const store: SecretStore = {
+      kind: 'bad',
+      matches: () => {
+        throw new Error('leak hunter2')
+      },
+      read: async () => 'x',
+    }
+    const error = await resolveSecretRefs({ T: 'anything' }, [store]).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(SecretReferenceError)
+    const e = error as SecretReferenceError
+    expect(e).toMatchObject({ variable: 'T', store: 'bad' })
+    expect(e.message).not.toContain('hunter2')
+    expect(e.cause).toBeUndefined()
+  })
 })
