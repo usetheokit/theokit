@@ -783,3 +783,38 @@ after is `removed`. A verifier that throws or exceeds `registryTimeoutMs` gives 
 ## Refused tool calls
 
 When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
+
+## Serving sessions over a WebSocket
+
+`attachControlSocket(server, { authorize, sessions, path?, maxPayloadBytes?, log? })` (from
+`@theokit/agents/control`) attaches to an existing `node:http` server and serves a session store to a
+remote surface. It needs the optional peer `ws`, loaded when you call it.
+
+```ts
+import { attachControlSocket, createSessionStore } from '@theokit/agents/control'
+
+const sessions = createSessionStore({ build: () => createMyAgent() })
+const control = attachControlSocket(server, {
+  authorize: (header) => header === `Bearer ${token}`, // or { revoked: (cb) => ... }
+  sessions,
+})
+await control.close() // removes the upgrade listener, terminates sockets
+```
+
+An upgrade is refused before any agent exists: `404` for another path (default `/control`), `401` when
+`authorize(authorization)` returns `false` (or throws). Returning `{ revoked(cb) }` closes the socket
+(1008) when `cb` is called. A frame above `maxPayloadBytes` (default 65 536) closes the socket with 1009.
+
+Frames are JSON text. Client to server:
+
+| Frame | Meaning |
+| --- | --- |
+| `{ type: 'chat', message, session? }` | One turn. One chat at a time per socket (`error` `busy` otherwise). Without `session`, a private session per socket is used and responses omit `session`. |
+| `{ type: 'interrupt', session }` | Cancel the session's running turn. |
+| `{ type: 'steer', session, message }` | Inject a message into the running turn. |
+
+Server to client: `event` (`{ event, session? }`), `done` (`{ session?, usage? }`), `interrupted`,
+`interrupt_ok`, `steer_ok`, `no_turn` (each with `session`), and `error` (`{ code, session? }`). `code` is
+`bad_frame` for an unparsable or unknown frame (the socket stays open), or the store's refusal
+(`busy`, `bad_session`, `turn_failed`, `turn_cancelled`). `interrupted` for a sessionless chat carries the
+private session id. When a socket closes, the turns it started are cancelled.
