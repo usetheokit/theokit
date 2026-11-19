@@ -19,6 +19,7 @@ export function containedPath(base: string, entry: string, impl: PathImpl = path
     entry === '' ||
     entry.includes('\0') ||
     entry.includes('\\') ||
+    (impl.sep === '\\' && entry.includes(':')) ||
     impl.isAbsolute(entry) ||
     parts.some((part) => part === '' || part === '.' || part === '..')
   ) {

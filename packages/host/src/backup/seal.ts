@@ -5,7 +5,7 @@ import { BackupError } from './errors.js'
 
 /** Archive file: `TCBK`, version byte, mode byte, then (mode 1) a 12-byte IV, the body, a 16-byte GCM tag. */
 const MAGIC = Buffer.from('TCBK')
-export const FORMAT_VERSION = 1
+const FORMAT_VERSION = 1
 const MODE_PLAIN = 0
 const MODE_GCM = 1
 const HEADER_BYTES = MAGIC.length + 2

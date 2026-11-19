@@ -112,8 +112,11 @@ export function createStorageRegistry(options: {
 
   async function get(name: string): Promise<{ entry: Entry; seal: SealOptions }> {
     checkName(name)
-    const entry = (await read())[name]
-    if (entry === undefined) throw new BackupError(`no storage location named "${name}"`)
+    const locations = await read()
+    if (!Object.hasOwn(locations, name)) {
+      throw new BackupError(`no storage location named "${name}"`)
+    }
+    const entry = locations[name]
     return { entry, seal: { encrypted: entry.encrypted, key: entry.key } }
   }
 
@@ -121,7 +124,7 @@ export function createStorageRegistry(options: {
     async init(name, init) {
       checkName(name)
       const locations = await read()
-      if (locations[name] !== undefined) {
+      if (Object.hasOwn(locations, name)) {
         throw new BackupError(`storage location "${name}" already exists`)
       }
       const root = path.resolve(init.root ?? path.join(options.defaultRoot, name))
