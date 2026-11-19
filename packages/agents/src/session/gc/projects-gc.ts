@@ -380,7 +380,7 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
             for (const [id, reason] of options.protectedIds?.(member) ?? []) {
               protect(id, member, reason)
             }
-            for (const [path, reason] of protectedTranscriptPaths(member, root)) {
+            for (const [path, reason] of await protectedTranscriptPaths(member, root)) {
               if (!protectedBy.has(path)) protectedBy.set(path, reason)
             }
           } catch (error) {
