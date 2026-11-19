@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1320 export(s) across 25 entry point(s).
+1342 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -143,6 +143,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `listSubagentNames` | value |
 | `loadMcpJson` | value |
 | `loadMcpScopes` | value |
+| `loadMcpServersFile` | value |
 | `loadPersonalMcpServers` | value |
 | `loadSubagentDefinition` | value |
 | `loopStrategyConfigSchema` | value |
@@ -153,6 +154,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `MCP_PROTOCOL_VERSION` | value |
 | `McpFileError` | value |
 | `mcpRegistry` | value |
+| `mcpSecretValues` | value |
 | `mcpServerInfo` | value |
 | `McpServersCapability` | value |
 | `mcpToolApprovals` | value |
@@ -382,6 +384,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `McpServerConfig` | type |
 | `McpServerInfo` | type |
 | `McpServersMap` | type |
+| `McpServersPolicy` | type |
 | `McpStdioServerConfig` | type |
 | `McpToolDescriptor` | type |
 | `MemoryAdapterErrorCode` | type |
@@ -539,10 +542,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `isToolResult` | value |
 | `loadMcpJson` | value |
 | `loadMcpScopes` | value |
+| `loadMcpServersFile` | value |
 | `loadPersonalMcpServers` | value |
 | `MAX_REQUEST_BODY_BYTES` | value |
 | `McpFileError` | value |
 | `mcpRegistry` | value |
+| `mcpSecretValues` | value |
 | `mcpToolApprovals` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
@@ -628,6 +633,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `McpRequestContext` | type |
 | `McpScopesResult` | type |
 | `McpSelection` | type |
+| `McpServersPolicy` | type |
 | `OpenAIChatMessage` | type |
 | `OpenAIChatRequest` | type |
 | `OpenAICompatibleRoutesOptions` | type |
@@ -900,10 +906,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `applyOutputStyle` | value |
 | `applySubagentMemory` | value |
 | `assertBootstrapped` | value |
+| `auditEnvKnobs` | value |
 | `blockAppliesTo` | value |
 | `BootstrapNotRunError` | value |
 | `BootstrapStepError` | value |
 | `CLAUDE_SETTINGS_KEYS` | value |
+| `coerceEnvValue` | value |
 | `composeInstructions` | value |
 | `contextPressure` | value |
 | `ContextPressureThresholdError` | value |
@@ -912,6 +920,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `defineAppBootstrap` | value |
 | `DottedOverrideError` | value |
 | `effectiveContextWindow` | value |
+| `envKnob` | value |
+| `envLayerFrom` | value |
 | `expandCommandTemplate` | value |
 | `expandInstructionImports` | value |
 | `FILE_INLINE_CAP` | value |
@@ -958,6 +968,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CustomCommand` | type |
 | `CustomCommandsResult` | type |
 | `DeclaredLayer` | type |
+| `EnvKnob` | type |
+| `EnvKnobKind` | type |
+| `EnvOptOut` | type |
+| `EnvReachabilityAudit` | type |
 | `ExpandImportsInput` | type |
 | `InstructionBlock` | type |
 | `InstructionCut` | type |
@@ -1282,6 +1296,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `HOOK_EVENTS` | value |
 | `HookApprovalStore` | value |
 | `hookFingerprint` | value |
+| `hooksForChild` | value |
 | `HookSpecError` | value |
 | `hookSpecSchema` | value |
 | `hooksPlugin` | value |
@@ -1300,6 +1315,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `HookIdentity` | type |
 | `HookRunInput` | type |
 | `HookRunResult` | type |
+| `HooksForChildOptions` | type |
 | `HookSpec` | type |
 | `HostHookOutcome` | type |
 | `ParsedClaudeHooks` | type |
@@ -1341,6 +1357,7 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `A2ATimeoutError` | value |
 | `createA2AJsonRpcHandler` | value |
 | `createA2ATool` | value |
 | `A2AAuth` | type |
