@@ -7,7 +7,7 @@ import type { GatewayContext, MessageEvent, PlatformName, SendResult } from '@th
 import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
 import { createUsageHook } from '../src/channels/usage-hook.js'
 import { createAcpCommandHook, createAcpSessions } from '../src/channels/acp-command.js'
-import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
+import { createHelpHook, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { readAckReaction, showTyping } from '../src/channels/typing.js'
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent } from './fakes.js'
@@ -25,6 +25,9 @@ class TypingAdapter extends FakeAdapter {
 function ctxFor(event: MessageEvent, log: string[]): GatewayContext {
   return { event, reply: async (text) => (log.push(`reply:${text}`), { ok: true, messageId: 'm' }) }
 }
+
+/** Every command and alias the help names; each is sent through its real handler. */
+const HELP_COMMANDS = ['/status', '/model', '/new', '/reset', '/goal', '/steer', '/think', '/compact', '/usage', '/activation', '/approve', '/deny', '/elevated', '/acp'] as const
 
 describe('typing indicator (OC-106)', () => {
   it('shows while the turn runs and stops before the lease is released, then the reply is sent', async () => {

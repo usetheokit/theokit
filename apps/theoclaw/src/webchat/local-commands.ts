@@ -1,18 +1,9 @@
-import type { ChatCommand } from '@theokit/gateway'
-
 import { commandOf, CHAT_COMMANDS, infoReply } from '../channels/info-commands.js'
 import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
 import { STEER_USAGE_REPLY } from '../channels/reply-handler.js'
 import type { TurnRunner } from '../control-plane/turn.js'
 
 /** What WebChat's own commands act on, for one chat. Absent members make that command an ordinary message. */
-/** What `/help` says about `/stop`. */
-export const STOP_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
-  name: 'stop',
-  usage: '/stop',
-  description: 'stop the turn that is running (WebChat)',
-}
-
 export interface LocalCommandContext {
   readonly model: string | undefined
   /** `/think <level>`: sets the chat's thinking level. */

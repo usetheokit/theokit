@@ -1,14 +1,6 @@
-import type { ChatCommand } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
 
 import { TheoClawConfigError, describeError } from '../control-plane/errors.js'
-
-/** What `/help` says about `/compact`. */
-export const COMPACT_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
-  name: 'compact',
-  usage: '/compact',
-  description: 'summarize the conversation so far to free context (THEOCLAW_COMPACT_AT does it on its own)',
-}
 
 /** The variable that compacts a session after a turn whose prompt reached this many tokens (OC-53). */
 export const COMPACT_AT_VARIABLE = 'THEOCLAW_COMPACT_AT'
