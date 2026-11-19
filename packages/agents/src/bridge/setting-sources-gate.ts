@@ -201,12 +201,12 @@ export type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skil
 // and this gate does not know fails the build instead of being dropped.
 const _covers: readonly CompatSurface[] = [] as readonly SdkCompatSurface[]
 
-export /**
+/**
  * The folders of a foreign root each surface feeds. A `Record` over `CompatSurface`, so a surface
  * added to the union cannot be left without an entry — and this is the one declaration both the gate
  * and the foreign-surface inventory read.
  */
-const SURFACE_FOLDERS: Readonly<Record<CompatSurface, readonly string[]>> = {
+export const SURFACE_FOLDERS: Readonly<Record<CompatSurface, readonly string[]>> = {
   commands: ['commands'],
   context: ['rules'],
   hooks: [],
@@ -229,8 +229,7 @@ const UNADMITTED_FOLDERS: readonly string[] = ['workflows']
 
 /** Every folder of the foreign root this layer knows about. */
 export const FOREIGN_FOLDERS: readonly string[] = [
-  ...Object.values(SURFACE_FOLDERS).flat(),
-  ...UNADMITTED_FOLDERS,
+  ...new Set([...Object.values(SURFACE_FOLDERS).flat(), ...UNADMITTED_FOLDERS]),
 ]
 
 /**

@@ -127,6 +127,7 @@ describe('the foreign surface inventory follows the gate', () => {
     for (const surface of EVERY_SURFACE) {
       for (const dir of SURFACE_FOLDERS[surface]) expect(surfaceOfFolder(dir)).toBe(surface)
     }
+    expect(new Set(FOREIGN_FOLDERS).size).toBe(FOREIGN_FOLDERS.length)
     expect(FOREIGN_FOLDERS).toContain('workflows')
     expect(surfaceOfFolder('workflows')).toBeUndefined()
   })
