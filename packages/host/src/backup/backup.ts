@@ -83,7 +83,13 @@ export async function backup(options: BackupOptions): Promise<BackupManifest> {
         const excluded = (rel: string): boolean => {
           if (options.exclude?.(name, rel) === true) return true
           const base = sidecarOf(rel)
-          return base !== undefined && options.exclude?.(name, base) === true
+          if (base === undefined || options.exclude?.(name, base) !== true) return false
+          // Only a real SQLite database has sidecars; `notes-journal` beside `notes` is an ordinary file.
+          try {
+            return isSQLite(join(dir, base))
+          } catch {
+            return false
+          }
         }
         const listed = await listFiles(dir, excluded)
         const listedSet = new Set(listed)

@@ -53,3 +53,18 @@ it('leaves the sidecars of an excluded database out, with a WAL writer open', as
   expect(existsSync(join(out, 'data/secret.db-wal'))).toBe(false)
   expect(existsSync(join(out, 'data/secret.db-shm'))).toBe(false)
 })
+
+it('keeps an ordinary file whose name looks like a sidecar of an excluded file', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  const base = await scratch()
+  const src = join(base, 'src')
+  mkdirSync(src)
+  writeFileSync(join(src, 'notes'), 'plain')
+  writeFileSync(join(src, 'notes-journal'), 'keep me')
+  const manifest = await backup({
+    roots: { data: src },
+    out: join(base, 'out'),
+    exclude: (_root, rel) => rel === 'notes',
+  })
+  expect(manifest.files.map((f) => f.path)).toEqual(['data/notes-journal'])
+})
