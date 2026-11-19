@@ -192,7 +192,7 @@ AgentBuilder.create()
 ```
 
 - `tools`: tool names handed to `Agent.create`, with `withheldBuiltinTools` removed. SDK default builtins are not enumerated.
-- `skills.listed` / `skills.readable`: the skills the created agent resolved (`agent.skills.list()`, so a withheld project source or an unknown name is absent), and the inline ones among them that a `skill_read` wired by this build serves. A `skill_read` you supply yourself reports none as readable. The listener runs only when the call created the agent, not on a cache hit, a resume, or a concurrent call that shared another's creation.
+- `skills.listed` / `skills.readable`: the skills the created agent resolved (`agent.skills.list()`, so a withheld project source or an unknown name is absent; SDK 5.17 discovers no user skills and lists an inline skill only when it is also in `skills.enabled`), and, separately, the inline skills a `skill_read` wired by this build serves. A `skill_read` you supply yourself reports none as readable. The listener runs only when the call created the agent, not on a cache hit, a resume, or a concurrent call that shared another's creation.
 - `mcpServers`, `subagents`, `settingSources` (`project` / `user`), `withheldBuiltinTools`.
 - `hooks`: events registered through `.hooks()`. Hooks inside your own plugins are opaque and not listed.
 

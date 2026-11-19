@@ -10,7 +10,7 @@ export interface CompiledWiring {
   /** Tool names handed to `Agent.create`, with withheld builtins removed. SDK defaults are not enumerated. */
   readonly tools: readonly string[]
   readonly skills: {
-    /** Skills the created agent resolved (`agent.skills.list()`): project and user skills only when their source was granted. */
+    /** Skills the created agent resolved (`agent.skills.list()`): a disk skill appears only when its source is granted and it exists; an inline skill only when also named in `skills.enabled`. */
     readonly listed: readonly string[]
     /** Inline skills a `skill_read` tool wired by this build serves. A caller-supplied `skill_read` is opaque, so it reports none. */
     readonly readable: readonly string[]
@@ -92,7 +92,7 @@ async function readCompiledWiring(
     tools: names(tools),
     skills: {
       listed,
-      readable: reader !== undefined ? names(skills?.inline).filter((n) => listed.includes(n)) : [],
+      readable: reader !== undefined ? names(skills?.inline) : [],
     },
     mcpServers: Object.keys((options.mcpServers as object | undefined) ?? {}),
     hooks: hooksOf(options),

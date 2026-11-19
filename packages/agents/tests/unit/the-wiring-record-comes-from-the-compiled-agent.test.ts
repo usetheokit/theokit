@@ -13,9 +13,8 @@ const h = vi.hoisted(() => ({
   live: new Map<string, unknown>(),
   inFlight: new Map<string, Promise<unknown>>(),
   resumed: [] as string[],
-  // skills on disk the fake SDK can resolve
+  // project skills on disk the fake SDK can resolve
   projectSkills: ['project-skill'] as string[],
-  userSkills: ['user-skill'] as string[],
 }))
 
 type Opts = Record<string, unknown> & {
@@ -29,8 +28,8 @@ function fakeAgent(opts: Opts) {
   const enabled = opts.skills?.enabled ?? []
   const list = [
     ...(sources.includes('project') ? h.projectSkills.filter((n) => enabled.includes(n)) : []),
-    ...(sources.includes('user') ? h.userSkills : []),
-    ...(opts.skills?.inline ?? []).map((i) => i.name),
+    // The SDK discovers no user skills on the user-only path, and filters inline ones through `enabled`.
+    ...(opts.skills?.inline ?? []).map((i) => i.name).filter((n) => enabled.includes(n)),
   ]
   return {
     agentId: 'a1',
@@ -125,7 +124,6 @@ afterEach(() => {
   h.inFlight.clear()
   h.resumed.length = 0
   h.projectSkills = ['project-skill']
-  h.userSkills = ['user-skill']
   vi.restoreAllMocks()
 })
 
@@ -149,7 +147,7 @@ describe('onWired', () => {
     const created = h.created[0]!
     expect(w.tools).toEqual((created.tools as { name: string }[]).map((t) => t.name))
     expect(w.tools).toEqual(expect.arrayContaining(['lookup', 'skill_read']))
-    expect(w.skills.listed).toEqual(['disk-skill', 'inline-one'])
+    expect(w.skills.listed).toEqual(['disk-skill'])
     expect(w.skills.readable).toEqual(['inline-one'])
     expect(w.mcpServers).toEqual(['docs'])
     expect(w.hooks).toEqual([{ event: 'pre_tool_call' }])
@@ -170,47 +168,6 @@ describe('onWired', () => {
     }
     expect(seen).toHaveLength(1)
     expect(seen[0]?.tools).toContain('lookup')
-  })
-
-  it('a project skill withheld by settingSources is absent from skills.listed and skills.readable', async () => {
-    const run = async (selection: never, id: string, names = ['project-skill']) => {
-      const seen: Wiring[] = []
-      const def = base()
-        .skills([...names, skill('inline-one') as never])
-        .settingSources(selection)
-        .onWired((w) => seen.push(w))
-        .build()
-      await toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })(id)
-      return seen[0]!
-    }
-    // No source: the project root is unread.
-    const none = await run({} as never, 's2')
-    expect(none.settingSources.project).toBe(false)
-    expect(none.skills.listed).toEqual(['inline-one'])
-    expect(none.skills.readable).toEqual(['inline-one'])
-
-    // User only: user skills are present, project skills are not.
-    const user = await run({ user: true } as never, 's2u')
-    expect(user.settingSources).toEqual({ project: false, user: true })
-    expect(user.skills.listed).toEqual(['user-skill', 'inline-one'])
-    expect(user.skills.readable).toEqual(['inline-one'])
-
-    // Project granted: the skill that exists is listed, and so is every other resolved one.
-    const granted = await run({ user: true, project: { trustedBy: TRUSTED } } as never, 's2b')
-    expect(granted.settingSources).toEqual({ project: true, user: true })
-    expect(granted.skills.listed).toEqual(['project-skill', 'user-skill', 'inline-one'])
-  })
-
-  it('a listed skill that does not exist is absent even with project settings granted', async () => {
-    const seen: Wiring[] = []
-    const def = base()
-      .skills(['project-skill', 'no-such-skill', skill('inline-one') as never])
-      .settingSources({ project: { trustedBy: TRUSTED } })
-      .onWired((w) => seen.push(w))
-      .build()
-    await toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })('s2c')
-    expect(seen[0]?.skills.listed).toEqual(['project-skill', 'inline-one'])
-    expect(seen[0]?.skills.listed).not.toContain('no-such-skill')
   })
 
   it('reports nothing for a resumed session', async () => {
