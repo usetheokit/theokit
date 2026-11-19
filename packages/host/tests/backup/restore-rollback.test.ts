@@ -30,7 +30,7 @@ it('puts the first target back when the second root fails to place', async () =>
   ).rejects.toThrow('injected')
   expect(await readFile(join(ta, 'old'), 'utf8')).toBe('old-a')
   expect(await readFile(join(tb, 'old'), 'utf8')).toBe('old-b')
-  expect((await readdir(base)).toSorted((x, y) => x.localeCompare(y))).toEqual([
+  expect([...(await readdir(base))].sort((x, y) => x.localeCompare(y))).toEqual([
     'a',
     'b',
     'out',

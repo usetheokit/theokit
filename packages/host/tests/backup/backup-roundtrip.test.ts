@@ -21,13 +21,13 @@ it('backs up two roots and restores them byte for byte', async () => {
     onFileCopied: (p) => copied.push(p),
   })
   expect(manifest.roots).toEqual(['alpha', 'beta'])
-  expect(manifest.files.map((f) => f.path).toSorted((x, y) => x.localeCompare(y))).toEqual([
+  expect(manifest.files.map((f) => f.path).sort((x, y) => x.localeCompare(y))).toEqual([
     'alpha/deep/er/y.bin',
     'alpha/x.txt',
     'beta/z.txt',
   ])
-  expect(copied.toSorted((x, y) => x.localeCompare(y))).toEqual(
-    manifest.files.map((f) => f.path).toSorted((x, y) => x.localeCompare(y)),
+  expect([...copied].sort((x, y) => x.localeCompare(y))).toEqual(
+    manifest.files.map((f) => f.path).sort((x, y) => x.localeCompare(y)),
   )
 
   const ta = join(base, 'ta')
