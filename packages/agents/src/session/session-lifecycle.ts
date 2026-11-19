@@ -530,6 +530,11 @@ export async function deleteSession(
   }
 
   let transcriptRemoved = false
+  // Still listed after the removal: unlinking now would leave an entry pointing at a deleted
+  // transcript, the unrepairable direction. Keep the file so the caller can retry.
+  if (registryOutcome === 'still-present') {
+    return { registryOutcome, transcriptRemoved, registryError }
+  }
   try {
     rmSync(transcriptPath(root, options.cwd, sessionId))
     transcriptRemoved = true

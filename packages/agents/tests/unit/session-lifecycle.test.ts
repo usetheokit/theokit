@@ -483,6 +483,9 @@ describe('deleteSession with a verifier', () => {
       isListedInRegistry: v.isListedInRegistry,
     })
     expect(result.registryOutcome).toBe('still-present')
+    // The entry is still listed, so the transcript must survive: deleting it would orphan the entry.
+    expect(result.transcriptRemoved).toBe(false)
+    expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(true)
   })
 
   it('deleteSession with a verifier reports nothing-to-remove for an id that was never listed', async () => {
