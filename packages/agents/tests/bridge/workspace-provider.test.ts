@@ -106,6 +106,18 @@ describe('worktreeProvider', () => {
     expect((err as { cleanupError: unknown }).cleanupError).toBeInstanceOf(WorkspaceProviderError)
   })
 
+  it('a release that failed can be retried', async () => {
+    const { repo, root, git } = setup()
+    const ws = await worktreeProvider(repo, root).acquire('retry')
+    // a second worktree on the same branch name is impossible, so make removal fail by locking it
+    git('worktree', 'lock', ws.path)
+    await expect(ws.release()).rejects.toBeInstanceOf(WorkspaceProviderError)
+    git('worktree', 'unlock', ws.path)
+    await ws.release()
+    expect(existsSync(ws.path)).toBe(false)
+    expect(git('branch', '--list', 'task/retry').trim()).toBe('')
+  })
+
   it('a successful delegation runs in the workspace and releases it', async () => {
     const { repo, root, git } = setup()
     const p = worktreeProvider(repo, root)
@@ -269,6 +281,21 @@ describe('worktreeProvider', () => {
         WorkspaceProviderError,
       )
       expect(readdirSync(outside)).toEqual([])
+    })
+
+    it('does not write through a destination file that is a symlink', async () => {
+      const outside = mkdtempSync(join(tmpdir(), 'outside-'))
+      writeFileSync(join(outside, 'target'), 'orig')
+      const { repo, root } = withInclude('.env\n', (r) => writeFileSync(join(r, '.env'), 'new'))
+      writeFileSync(
+        join(repo, '.git', 'hooks', 'post-checkout'),
+        `#!/bin/sh\nln -s ${join(outside, 'target')} .env\n`,
+        { mode: 0o755 },
+      )
+      await expect(worktreeProvider(repo, root).acquire('df')).rejects.toBeInstanceOf(
+        WorkspaceProviderError,
+      )
+      expect(readFileSync(join(outside, 'target'), 'utf8')).toBe('orig')
     })
 
     it('copies a nested directory of plain files', async () => {

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
-import { copyFile, lstat, mkdir, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { lstat, mkdir, open, readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -85,10 +86,6 @@ async function copyEntry(
     throw new WorkspaceProviderError(`${label} resolves outside the repository`)
   }
   await ensureDirInside(roots.workspace, dirname(dest), label)
-  const existing = await lstat(dest).catch(() => undefined)
-  if (existing?.isSymbolicLink()) {
-    throw new WorkspaceProviderError(`${label} would be written through a symlink`)
-  }
   if ((await stat(source)).isDirectory()) {
     await ensureDirInside(roots.workspace, dest, label)
     for (const name of await readdir(source)) {
@@ -96,7 +93,56 @@ async function copyEntry(
     }
     return
   }
-  await copyFile(source, dest)
+  await copyFileAnchored(source, dest, roots, label)
+}
+
+/**
+ * Copies one file through open descriptors instead of paths. Both ends are opened with O_NOFOLLOW
+ * (a link swapped in at the last component fails), and after each open the descriptor is compared
+ * with the path's current realpath, so a directory swapped for a symlink since the checks above is
+ * caught before any byte is read or written. Nothing is truncated until the destination is verified.
+ */
+async function copyFileAnchored(
+  source: string,
+  dest: string,
+  roots: { repo: string; workspace: string },
+  label: string,
+): Promise<void> {
+  const refused = () => new WorkspaceProviderError(`${label} changed while it was being copied`)
+  const verify = async (
+    fd: { stat(): Promise<{ ino: number; dev: number }> },
+    path: string,
+    root: string,
+  ) => {
+    const [here, now] = await Promise.all([fd.stat(), stat(await realpath(path))])
+    if (!inside(root, await realpath(path)) || here.ino !== now.ino || here.dev !== now.dev) {
+      throw refused()
+    }
+  }
+  const open_ = async (path: string, flags: number) => {
+    try {
+      return await open(path, flags | constants.O_NOFOLLOW, 0o600)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
+        throw new WorkspaceProviderError(`${label} would be written through a symlink`)
+      }
+      throw error
+    }
+  }
+  const from = await open_(source, constants.O_RDONLY)
+  try {
+    await verify(from, source, roots.repo)
+    const to = await open_(dest, constants.O_WRONLY | constants.O_CREAT)
+    try {
+      await verify(to, dest, roots.workspace)
+      await to.truncate(0)
+      await to.writeFile(await from.readFile())
+    } finally {
+      await to.close()
+    }
+  } finally {
+    await from.close()
+  }
 }
 
 /**
@@ -199,8 +245,8 @@ export function worktreeProvider(
         branch,
         async release(releaseOptions) {
           if (releaseOptions?.keep || released) return
-          released = true
           await remove(path, branch)
+          released = true
         },
       }
     },
