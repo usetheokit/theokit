@@ -1,13 +1,10 @@
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-
 import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
-import { discoverSkills, type Skill } from '@theokit/sdk/skills'
+import type { Skill } from '@theokit/sdk/skills'
 
 import { custodianSkills } from '../skills/custodian.js'
-import { legacyRequiresSkills } from '../skills/legacy-compat.js'
-import { BUNDLED_SKILLS_DIR } from '../skills/registry.js'
+import { discoverWinners, legacyRequiresSkills } from '../skills/legacy-compat.js'
+import { binaryOnPath, bundledSkills } from '../skills/registry.js'
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
@@ -56,7 +53,7 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
    */
   readonly systemPrompt: string
   /**
-   * The SDK's `SkillsSettings`: `bundledDirs` (workspace, then user, then bundled; the SDK takes the
+   * The SDK's `SkillsSettings`: `bundledDirs` (workspace, then user; the SDK takes the
    * first skill of a name) and `inline` (custodian, import, legacy `requires:` skills).
    */
   readonly skills?: TheoClawSkills
@@ -65,7 +62,7 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
    * `withSdkSkills`), so a skill installed into the workspace after a session opened is offered on
    * that session's next turn, and `skill_read` reads the same fresh list (OC-72).
    */
-  readonly skillsRefresh?: () => TheoClawSkills
+  readonly skillsRefresh?: () => Promise<TheoClawSkills>
   /**
    * Only on a `/control` agent: its browser server with `THEOCLAW_BROWSER=on`, the servers its
    * external tools file names, and an import's servers with `THEOCLAW_IMPORTED_MCP` on; never on
@@ -130,17 +127,18 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
-  // The SDK takes the first skill of a name, so the workspace comes before the user's, before ours.
   // `bundledDirs` rather than `skillsDir`: the SDK reads `skillsDir` only with the `project` setting
-  // source, which would also load project hooks.
-  const bundledDirs = [input.skillsDir, input.userSkillsDir, BUNDLED_SKILLS_DIR].filter((dir): dir is string => dir !== undefined)
-  const gather = (): TheoClawSkills => ({
-    bundledDirs,
-    inline: [...(input.custodian === true ? custodianSkills() : []), ...legacyRequiresSkills(bundledDirs)],
-  })
-  const withSkills: TheoClawAgentOptions<Model> = { ...withTools, skills: gather(), skillsRefresh: gather }
-  const imported = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
-  const skilled = withSkillRead(withProviders(imported, input.providers))
+  // source, which would also load project hooks. It takes the first skill of a name, so workspace first.
+  const dirs = [input.skillsDir, input.userSkillsDir].filter((dir): dir is string => dir !== undefined)
+  const custodian = input.custodian === true ? custodianSkills() : []
+  const imported = input.imported?.setup.skills ?? []
+  const withSkills: TheoClawAgentOptions<Model> = {
+    ...withTools,
+    skills: { bundledDirs: dirs, inline: mergeByName(imported, custodian, bundledSkills()) },
+    skillsRefresh: () => resolveSkills(dirs, imported, custodian),
+  }
+  const importedOptions = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
+  const skilled = withSkillRead(withProviders(importedOptions, input.providers))
   const suffix = input.toolOptions?.systemPromptSuffix
   return suffix === undefined || suffix === '' ? skilled : { ...skilled, systemPrompt: `${skilled.systemPrompt}\n\n${suffix}` }
 }
@@ -184,8 +182,7 @@ function importedPrompt(setup: ImportedSetup): string {
 }
 
 /**
- * `options` plus what the import gives a `/control` agent (FR-008): the system prompt, the skills
- * inline with a `skill_read` tool, and the MCP servers only when they are on. Memory stays off and
+ * `options` plus what the import gives a `/control` agent (FR-008): the system prompt and the MCP servers only when they are on. Memory stays off and
  * `shell` withheld, as for every agent.
  */
 function withImport<Model extends string | ModelSelection>(
@@ -193,33 +190,47 @@ function withImport<Model extends string | ModelSelection>(
   imported: AgentImport,
 ): TheoClawAgentOptions<Model> {
   const { setup, mcp } = imported
-  const hasSkills = setup.skills.length > 0
   const hasServers = mcp && Object.keys(setup.mcpServers).length > 0
   return {
     ...options,
     systemPrompt: importedPrompt(setup),
-    ...(hasSkills
-      ? {
-          skills: withImported(setup.skills, options.skills),
-          ...(options.skillsRefresh === undefined ? {} : { skillsRefresh: () => withImported(setup.skills, options.skillsRefresh?.()) }),
-        }
-      : {}),
     // The browser server and the external tools file's servers keep their names: an imported
     // server with one of them does not replace it.
     ...(hasServers ? { mcpServers: { ...setup.mcpServers, ...options.mcpServers } } : {}),
   }
 }
 
-/** Every agent with skills gets `skill_read`, so the model can read a body the prompt block lists by name only. */
+/** Later lists win a name; the SDK also lets an inline skill beat a discovered one, which `resolveSkills` guards against. */
+function mergeByName(...lists: ReadonlyArray<readonly InlineSkill[]>): InlineSkill[] {
+  const byName = new Map<string, InlineSkill>()
+  for (const skill of lists.flat()) byName.set(skill.name, skill)
+  return [...byName.values()]
+}
+
+/**
+ * The skills settings for one turn. A skill folder's skill, as the SDK discovers it (so a skill the SDK
+ * rejects does not count), beats an imported, custodian or bundled skill of the same name; a folder
+ * skill that still says `requires:` goes inline with its binaries. Rebuilt on every turn (OC-72).
+ */
+async function resolveSkills(dirs: string[], imported: readonly InlineSkill[], custodian: readonly InlineSkill[]): Promise<TheoClawSkills> {
+  const winners = await discoverWinners(dirs)
+  const names = new Set(winners.map((skill) => skill.name))
+  const ours = mergeByName(imported, custodian, bundledSkills()).filter((skill) => !names.has(skill.name))
+  return { bundledDirs: dirs, inline: [...ours, ...(await legacyRequiresSkills(winners))] }
+}
+
+/** Every agent gets `skill_read`, so the model can read a body the prompt block lists by name only. */
 function withSkillRead<Model extends string | ModelSelection>(options: TheoClawAgentOptions<Model>): TheoClawAgentOptions<Model> {
-  if (options.skills === undefined) return options
+  const refresh = options.skillsRefresh
+  if (refresh === undefined) return options
   // A function source is re-evaluated on every call, so skill_read stays in step with the refreshed list.
-  const readable = async (): Promise<Skill[]> => {
-    const settings = options.skillsRefresh?.() ?? options.skills
-    const byName = new Map<string, Skill>()
-    for (const skill of settings?.inline ?? []) byName.set(skill.name, skill)
-    for (const dir of settings?.bundledDirs ?? []) for (const skill of await discoverSkills(dir)) if (!byName.has(skill.name)) byName.set(skill.name, skill)
-    return [...byName.values()]
+  // It reads only what the model is offered: no skill hidden from it, none whose binary is missing.
+  const readable = async (): Promise<Array<InlineSkill | Skill>> => {
+    const settings = await refresh()
+    const byName = new Map<string, InlineSkill | Skill>()
+    for (const skill of await discoverWinners(settings.bundledDirs)) byName.set(skill.name, skill)
+    for (const skill of settings.inline) byName.set(skill.name, skill)
+    return [...byName.values()].filter((skill) => skill.disableModelInvocation !== true && (skill.requiresBins ?? []).every((bin) => binaryOnPath(bin)))
   }
   return { ...options, tools: [...(options.tools ?? []), SkillReadTool.create(readable)] }
 }
@@ -232,25 +243,15 @@ function withSkillRead<Model extends string | ModelSelection>(options: TheoClawA
  * turn without recreating the session or losing its history.
  */
 export function withSdkSkills<T extends { skills?: unknown }>(options: T): Omit<T, 'skillsRefresh'> {
-  const { skillsRefresh, ...rest } = options as T & { skillsRefresh?: () => TheoClawSkills }
-  return skillsRefresh === undefined ? rest : { ...rest, skills: (): TheoClawSkills => skillsRefresh() }
-}
-
-/**
- * `skills` plus the imported ones. An inline skill beats a discovered one of the same name, so an
- * imported skill that has a folder of that name in a skills directory is left out: the folder wins.
- */
-function withImported(imported: readonly InlineSkill[], skills: TheoClawSkills | undefined): TheoClawSkills {
-  const dirs = skills?.bundledDirs ?? []
-  const names = new Set(skills?.inline.map((skill) => skill.name))
-  const kept = imported.filter((skill) => !names.has(skill.name) && !dirs.some((dir) => existsSync(join(dir, skill.name, 'SKILL.md'))))
-  return { bundledDirs: dirs, inline: [...kept, ...(skills?.inline ?? [])] }
+  const { skillsRefresh, ...rest } = options as T & { skillsRefresh?: () => Promise<TheoClawSkills> }
+  return skillsRefresh === undefined ? rest : { ...rest, skills: skillsRefresh }
 }
 
 /** Create the agent those options describe, through the SDK. */
-export function createTheoClawAgent<Model extends string | ModelSelection>(
+export async function createTheoClawAgent<Model extends string | ModelSelection>(
   options: TheoClawAgentOptions<Model>,
 ): Promise<SDKAgent> {
+  const skills = options.skillsRefresh === undefined ? options.skills : await options.skillsRefresh()
   return Agent.create({
     model: options.model,
     apiKey: options.apiKey,
@@ -260,7 +261,7 @@ export function createTheoClawAgent<Model extends string | ModelSelection>(
     ...(options.tools === undefined ? {} : { tools: options.tools }),
     ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
     systemPrompt: options.systemPrompt,
-    ...(options.skills === undefined ? {} : { skills: options.skills }),
+    ...(skills === undefined ? {} : { skills }),
     ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
     ...(options.telemetry === undefined ? {} : { telemetry: { ...options.telemetry } }),
     ...(options.thinking === undefined ? {} : { thinking: options.thinking }),

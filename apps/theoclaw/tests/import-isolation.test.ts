@@ -11,7 +11,6 @@ import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { importedMcpPaths, importedMcpSecrets } from '../src/migration/import-start.js'
 import type { ImportedSetup } from '../src/migration/import-store.js'
 import { FakeAgent } from './fakes.js'
-import { BUNDLED_SKILLS_DIR } from '../src/skills/registry.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { CONTROL_TOKEN, enforced, notEnforced, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
 import type { ToolStart } from './tool-start-fixtures.js'
@@ -187,9 +186,8 @@ describe('the workers of a /control agent that carries an import', () => {
     expect(built).toHaveLength(2)
     const worker = built[1]!
     expect(worker.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
-    // Only the built-in skills every agent carries (#1692, now a bundled folder); never the custodian ones, which are the /control agent's alone (#1577).
-    expect(worker.skills?.inline).toEqual([])
-    expect(worker.skills?.bundledDirs).toContain(BUNDLED_SKILLS_DIR)
+    // Only the built-in skills every agent carries (#1692); never the custodian ones, which are the /control agent's alone (#1577).
+    expect(worker.skills?.inline.map((skill) => skill.name).sort()).toEqual(['git-helper', 'summarize-text'])
     expect(worker).not.toHaveProperty('mcpServers')
     expect(worker.tools?.map((tool) => tool.name)).not.toContain('delegate_all')
   })

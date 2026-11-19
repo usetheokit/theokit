@@ -1,7 +1,7 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 
-import { type InlineSkill, Skill } from '@theokit/sdk'
+import type { InlineSkill } from '@theokit/sdk'
+import { discoverSkills, type Skill as SdkSkill } from '@theokit/sdk/skills'
 
 /**
  * One release of compatibility for the old `requires: a, b` frontmatter key. The SDK reads only
@@ -35,41 +35,35 @@ const defaultWarn = (message: string): void => {
   process.stderr.write(`${message}\n`)
 }
 
-/** Inline skills for the skills in `dirs` (highest precedence first) that still use `requires:`. */
-export function legacyRequiresSkills(dirs: readonly string[], warn: (message: string) => void = defaultWarn): InlineSkill[] {
-  const seen = new Set<string>()
+/** The valid skills in `dirs` as the SDK discovers them: the first directory to hold a name wins. */
+export async function discoverWinners(dirs: readonly string[]): Promise<SdkSkill[]> {
+  const winners = new Map<string, SdkSkill>()
+  for (const dir of dirs) for (const skill of await discoverSkills(dir)) if (!winners.has(skill.name)) winners.set(skill.name, skill)
+  return [...winners.values()]
+}
+
+/**
+ * Inline skills for the SDK-discovered `winners` whose file still says `requires:`. Each keeps
+ * everything the SDK parsed (`disable-model-invocation` and the rest) and adds `requiresBins`, so the
+ * SDK's own PATH gate applies; the file is read, never changed.
+ */
+export async function legacyRequiresSkills(winners: readonly SdkSkill[], warn: (message: string) => void = defaultWarn): Promise<InlineSkill[]> {
   const found: InlineSkill[] = []
-  for (const dir of dirs) {
-    let children: string[]
+  for (const skill of winners) {
+    if (skill.requiresBins !== undefined) continue
+    let parsed: ReturnType<typeof readSkillFile>
     try {
-      children = readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+      parsed = readSkillFile(await readFile(skill.source, 'utf8'))
     } catch {
       continue
     }
-    for (const child of children) {
-      const file = join(dir, child, 'SKILL.md')
-      let text: string
-      try {
-        text = readFileSync(file, 'utf8')
-      } catch {
-        continue
-      }
-      const parsed = readSkillFile(text)
-      if (parsed === undefined) continue
-      const { fields, body } = parsed
-      const name = fields.get('name') || child
-      const first = !seen.has(name)
-      seen.add(name)
-      const legacy = fields.get('requires')
-      const description = fields.get('description')
-      if (!first || legacy === undefined || fields.has('requires-bins') || description === undefined || description === '') continue
-      if (!warned.has(file)) {
-        warned.add(file)
-        warn(`[theoclaw] ${file}: the "requires:" key is deprecated and will stop working in the next release; rename it to "requires-bins:"`)
-      }
-      const requiresBins = legacy.split(',').map((bin) => bin.trim()).filter((bin) => bin !== '')
-      found.push({ ...Skill.create({ name, description, instructions: body }), requiresBins })
+    const requiresBins = (parsed?.fields.get('requires') ?? '').split(',').map((bin) => bin.trim()).filter((bin) => bin !== '')
+    if (parsed === undefined || requiresBins.length === 0) continue
+    if (!warned.has(skill.source)) {
+      warned.add(skill.source)
+      warn(`[theoclaw] ${skill.source}: the "requires:" key is deprecated and will stop working in the next release; rename it to "requires-bins:"`)
     }
+    found.push({ ...skill, instructions: parsed.body, requiresBins })
   }
   return found
 }

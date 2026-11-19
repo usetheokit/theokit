@@ -1,13 +1,12 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Agent } from '@theokit/sdk'
-import { theoClawAgentOptions, withSdkSkills } from '../src/agent/create-agent.js'
-import { legacyRequiresSkills } from '../src/skills/legacy-compat.js'
-import { BUNDLED_SKILLS_DIR } from '../src/skills/registry.js'
+import type { ImportedSetup } from '../src/migration/import-store.js'
+import { theoClawAgentOptions, withSdkSkills, type TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import { startModelStub, type ModelStub } from './model-stub.js'
 
 const skillFile = (name: string, body: string, key = '', bins = '') =>
@@ -27,11 +26,13 @@ afterEach(async () => {
   for (const stub of stubs.splice(0)) await stub.close()
 })
 
-/** What the model is told about the skills: the text of the first request of one turn. */
-async function firstRequest(skillsDir: string, userSkillsDir?: string): Promise<string> {
+type Extra = { userSkillsDir?: string; custodian?: boolean; imported?: { setup: ImportedSetup; mcp: boolean } }
+
+/** What the model is sent in the first request of one turn, with the real SDK reading `skillsDir` (and the rest). */
+async function firstRequest(skillsDir: string, extra: Extra = {}): Promise<string> {
   const stub = await startModelStub([{ text: 'ok' }])
   stubs.push(stub)
-  const options = theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', skillsDir, ...(userSkillsDir === undefined ? {} : { userSkillsDir }) })
+  const options = theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', skillsDir, ...extra })
   const agent = await Agent.create(withSdkSkills(options) as never)
   try {
     await (await agent.send('hello')).wait()
@@ -41,56 +42,110 @@ async function firstRequest(skillsDir: string, userSkillsDir?: string): Promise<
   return JSON.stringify(stub.requests[0])
 }
 
+async function skillRead(options: TheoClawAgentOptions, name: string): Promise<string> {
+  const tool = options.tools?.find((t) => t.name === 'skill_read')
+  return JSON.stringify(await (tool?.handler as unknown as (input: unknown, ctx: unknown) => unknown)({ name }, {}))
+}
+
+const importOf = (...skills: Array<{ name: string; description: string; instructions: string }>): { setup: ImportedSetup; mcp: boolean } => ({
+  setup: { instructions: '', memory: '', mcpServers: {}, skills } as unknown as ImportedSetup,
+  mcp: false,
+})
+
+function withBin(bin: string): () => void {
+  const dir = mkdtempSync(join(tmpdir(), 'bin-'))
+  writeFileSync(join(dir, bin), '#!/bin/sh\n')
+  chmodSync(join(dir, bin), 0o755)
+  const path = process.env.PATH
+  process.env.PATH = `${dir}${delimiter}${path ?? ''}`
+  return () => {
+    process.env.PATH = path
+  }
+}
+
 describe('skills through the SDK (OC-70..72, OC-74)', () => {
-  it('offers the bundled skills, and git-helper declares its binary with requires-bins', async () => {
+  it('offers the bundled skills', async () => {
     const text = await firstRequest(dirWith({}))
     expect(text).toContain('summarize-text')
     expect(text).toContain('git-helper')
   })
 
-  it('does not offer a skill whose requires-bins binary is absent, and offers it once present', async () => {
-    const bin = mkdtempSync(join(tmpdir(), 'bin-'))
+  it('offers a requires-bins skill only while its binary is on PATH', async () => {
     const dir = dirWith({ needy: skillFile('needy', 'x', 'requires-bins', 'theoclaw-fake-bin') })
     expect(await firstRequest(dir)).not.toContain('needy skill')
-
-    writeFileSync(join(bin, 'theoclaw-fake-bin'), '#!/bin/sh\n')
-    chmodSync(join(bin, 'theoclaw-fake-bin'), 0o755)
-    const path = process.env.PATH
-    process.env.PATH = `${bin}${process.platform === 'win32' ? ';' : ':'}${path ?? ''}`
+    const restore = withBin('theoclaw-fake-bin')
     try {
       expect(await firstRequest(dir)).toContain('needy skill')
     } finally {
-      process.env.PATH = path
+      restore()
     }
   })
 
   it('lets a workspace skill override a bundled one, and a user skill sit between them', async () => {
     const workspace = dirWith({ 'summarize-text': skillFile('summarize-text', 'w').replace('summarize-text skill', 'WORKSPACE-DESCRIPTION') })
     const user = dirWith({ 'summarize-text': skillFile('summarize-text', 'u').replace('summarize-text skill', 'USER-DESCRIPTION'), 'git-helper': skillFile('git-helper', 'u').replace('git-helper skill', 'USER-GIT') })
-    const text = await firstRequest(workspace, user)
+    const text = await firstRequest(workspace, { userSkillsDir: user })
     expect(text).toContain('WORKSPACE-DESCRIPTION')
     expect(text).not.toContain('USER-DESCRIPTION')
     expect(text).toContain('USER-GIT')
+    expect(text).not.toContain('Inspect repository state')
   })
 
-  it('still gates a skill that uses the old requires: key, and warns naming the file', async () => {
-    const dir = dirWith({ old: skillFile('old', 'x', 'requires', 'theoclaw-no-such-bin'), fine: skillFile('fine', 'x', 'requires-bins', 'sh') })
-    const warnings: string[] = []
-    const skills = legacyRequiresSkills([dir], (message) => warnings.push(message))
-    expect(skills.map((s) => [s.name, s.requiresBins])).toEqual([['old', ['theoclaw-no-such-bin']]])
-    expect(warnings).toHaveLength(1)
-    expect(warnings[0]).toContain(join(dir, 'old', 'SKILL.md'))
-    expect(warnings[0]).toContain('requires-bins')
-    // Warned once per file, however many turns.
-    legacyRequiresSkills([dir], (message) => warnings.push(message))
-    expect(warnings).toHaveLength(1)
-
-    const text = await firstRequest(dir)
-    expect(text).not.toContain('old skill')
-    expect(text).toContain('fine skill')
+  it('keeps a skill with the old requires: key working: offered with its binary, hidden without, warned by file', async () => {
+    const dir = dirWith({ old: skillFile('old', 'x', 'requires', 'theoclaw-legacy-bin') })
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      expect(await firstRequest(dir)).not.toContain('old skill')
+      const restore = withBin('theoclaw-legacy-bin')
+      try {
+        expect(await firstRequest(dir)).toContain('old skill')
+      } finally {
+        restore()
+      }
+      const warnings = warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('deprecated'))
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]).toContain(join(dir, 'old', 'SKILL.md'))
+      expect(warnings[0]).toContain('requires-bins')
+    } finally {
+      warn.mockRestore()
+    }
   })
 
-  it('exposes the bundled folder shipped with the package', () => {
-    expect(BUNDLED_SKILLS_DIR.endsWith('skills')).toBe(true)
+  it('keeps what the SDK parsed from a legacy skill: disable-model-invocation still hides it', async () => {
+    const restore = withBin('theoclaw-hidden-bin')
+    try {
+      const file = skillFile('quiet', 'x', 'requires', 'theoclaw-hidden-bin').replace('---\nname', '---\ndisable-model-invocation: true\nname')
+      expect(await firstRequest(dirWith({ quiet: file }))).not.toContain('quiet skill')
+    } finally {
+      restore()
+    }
+  })
+
+  it('decides a name clash on the skills the SDK accepts: an invalid workspace skill does not hide a legacy user skill from its gate', async () => {
+    const workspace = dirWith({ dup: '---\nname: dup\n---\nno description, so the SDK skips it\n' })
+    const user = dirWith({ dup: skillFile('dup', 'x', 'requires', 'theoclaw-no-such-bin') })
+    expect(await firstRequest(workspace, { userSkillsDir: user })).not.toContain('dup skill')
+  })
+
+  it('matches an import against the declared skill name, not the folder name', async () => {
+    const workspace = dirWith({ other: skillFile('dup', 'workspace body') })
+    const options = theoClawAgentOptions({ model: 'm', apiKey: 'stub-key', skillsDir: workspace, imported: importOf({ name: 'dup', description: 'imported', instructions: 'imported body' }) })
+    expect(await skillRead(options, 'dup')).toContain('workspace body')
+    const invalid = dirWith({ dup: '---\nname: dup\n---\nbroken\n' })
+    const kept = theoClawAgentOptions({ model: 'm', apiKey: 'stub-key', skillsDir: invalid, imported: importOf({ name: 'dup', description: 'imported', instructions: 'imported body' }) })
+    expect(await skillRead(kept, 'dup')).toContain('imported body')
+  })
+
+  it('lets a workspace skill replace a custodian skill of the same name', async () => {
+    const text = await firstRequest(dirWith({ 'diagnose-gateway': skillFile('diagnose-gateway', 'x').replace('diagnose-gateway skill', 'WORKSPACE-DIAGNOSE') }), { custodian: true })
+    expect(text).toContain('WORKSPACE-DIAGNOSE')
+  })
+
+  it('has skill_read refuse a skill whose binary is missing', async () => {
+    const dir = dirWith({ needy: skillFile('needy', 'NEEDY-BODY', 'requires-bins', 'theoclaw-fake-bin'), ok: skillFile('ok', 'OK-BODY') })
+    const options = theoClawAgentOptions({ model: 'm', apiKey: 'stub-key', skillsDir: dir })
+    expect(await skillRead(options, 'ok')).toContain('OK-BODY')
+    expect(await skillRead(options, 'needy')).not.toContain('NEEDY-BODY')
+    expect(await skillRead(options, 'nope')).not.toContain('needy')
   })
 })

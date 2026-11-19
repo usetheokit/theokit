@@ -145,7 +145,7 @@ describe('an import reaching the agents', () => {
     expect({ ...withImport.options[0], tools: undefined, skillsRefresh: undefined }).toEqual({ ...without.options[0], tools: undefined, skillsRefresh: undefined })
     expect({ ...withImport.options[0], tools: undefined, skills: undefined, skillsRefresh: undefined }).toEqual({ ...theoClawAgentOptions({ model: 'openrouter/m', apiKey: 'router-key' }), tools: undefined, skills: undefined, skillsRefresh: undefined })
     expect(withImport.options[0]?.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
-    expect(withImport.options[0]?.skills?.inline).toEqual([])
+    expect(withImport.options[0]?.skills?.inline.map((skill) => skill.name).sort()).toEqual(['git-helper', 'summarize-text'])
     expect(withImport.options[0]).not.toHaveProperty('mcpServers')
   })
 
