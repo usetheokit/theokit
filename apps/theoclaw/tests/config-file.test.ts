@@ -99,7 +99,7 @@ describe('the configuration file', () => {
     const dir = scratchDir()
     const results = await Promise.allSettled([
       writeConfiguration(join(dir, 'theoclaw.env'), { THEOCLAW_MODEL: 'first' }, { force: false }),
-      writeConfiguration(join(dir, '.', 'theoclaw.env'), { THEOCLAW_MODEL: 'second' }, { force: false }),
+      writeConfiguration(`${dir}/./theoclaw.env`, { THEOCLAW_MODEL: 'second' }, { force: false }),
     ])
     expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected'])
     expect(readFileSync(join(dir, 'theoclaw.env'), 'utf8')).toBe('THEOCLAW_MODEL="first"\n')
