@@ -48,13 +48,11 @@ function runParse(key: string, parse: InstanceKey['parse'], value: string): void
   if (parse === undefined) return
   try {
     parse(value)
-  } catch (error) {
+  } catch {
+    // The parser's error may quote the raw value, so it is neither attached nor read.
     throw new InstanceConfigError(
       'instance_config_invalid_value',
       `the value of ${key} was refused by its parser`,
-      {
-        cause: error,
-      },
     )
   }
 }

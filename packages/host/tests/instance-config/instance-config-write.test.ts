@@ -62,6 +62,25 @@ describe('write', () => {
     )
     expect(readdirSync(d)).toEqual([])
   })
+  it('does not leak the secret through a parser error or its cause', async () => {
+    const secret = 'tok-SECRET-123'
+    const leaky = defineInstanceConfig({
+      app: 'demo',
+      keys: {
+        DEMO_B: {
+          parse: (r) => {
+            throw new Error(`cannot parse ${r}`)
+          },
+        },
+      },
+    })
+    const err = await leaky
+      .write(join(mk(), 'c.env'), { DEMO_B: secret }, { force: false })
+      .catch((e: unknown) => e as InstanceConfigError)
+    expect(err).toBeInstanceOf(InstanceConfigError)
+    expect(err.message).not.toContain(secret)
+    expect(err.cause).toBeUndefined()
+  })
   it('concurrent writers do not collide', async () => {
     const d = mk()
     const f = join(d, 'c.env')
