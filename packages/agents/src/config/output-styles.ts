@@ -24,7 +24,7 @@
  * which. An absent REQUEST is different and returns `undefined` — not configuring a style is the
  * ordinary case, not an error.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
@@ -81,10 +81,68 @@ export interface LoadOutputStyleInput {
   readonly homeDir?: string
 }
 
+/** Parse one style file into an {@link OutputStyle} carrying the requested name. */
+function readStyle(name: string, path: string): OutputStyle {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- path comes from the style directories searched by the caller
+  const raw = readFileSync(path, 'utf8')
+  // `undefined` means the file carries NO frontmatter, which is a legitimate style — a body with
+  // no keys is the simplest one somebody can write, so the whole file becomes the body.
+  const parsed = splitFrontmatter(raw)
+  const body = parsed === undefined ? raw : parsed.body
+  const description =
+    parsed === undefined ? undefined : frontmatterValue(parsed.frontmatter, 'description')
+  return {
+    name,
+    content: body.trim(),
+    ...(description === undefined ? {} : { description }),
+    keepCodingInstructions:
+      parsed !== undefined &&
+      frontmatterValue(parsed.frontmatter, 'keep-coding-instructions') === 'true',
+  }
+}
+
+/**
+ * The one `.md` file in `dir` whose frontmatter `name` equals `name`. A missing directory has no
+ * match; any other read failure propagates.
+ *
+ * @throws OutputStyleError when two files claim the same frontmatter name.
+ */
+function findByFrontmatterName(dir: string, name: string): string | undefined {
+  let entries: string[]
+  try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed convention under the caller's root
+    entries = readdirSync(dir).filter((f) => f.endsWith('.md'))
+    entries.sort((a, b) => a.localeCompare(b))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+  const matches: string[] = []
+  for (const file of entries) {
+    const path = join(dir, file)
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- entry of the directory just listed
+    const parsed = splitFrontmatter(readFileSync(path, 'utf8'))
+    if (parsed !== undefined && frontmatterValue(parsed.frontmatter, 'name') === name) {
+      matches.push(path)
+    }
+  }
+  if (matches.length > 1) {
+    throw new OutputStyleError(
+      `output style "${name}" is claimed by more than one file in ${dir}: ${matches.join(', ')}. ` +
+        `Give each style a distinct frontmatter name.`,
+    )
+  }
+  return matches[0]
+}
+
 /**
  * The named style, or `undefined` when none was requested.
  *
- * @throws OutputStyleError when a style IS named and no file backs it, listing the directories that
+ * A style matches by file name (without `.md`) or by its frontmatter `name`; within one directory a
+ * file-name match wins.
+ *
+ * @throws OutputStyleError when a style IS named and no file backs it, or two files in one directory
+ * claim the same frontmatter name. The first lists the directories that
  * were searched.
  */
 export function loadOutputStyle(input: LoadOutputStyleInput): OutputStyle | undefined {
@@ -99,26 +157,11 @@ export function loadOutputStyle(input: LoadOutputStyleInput): OutputStyle | unde
   ]
 
   for (const dir of searched) {
-    const path = join(dir, `${input.name}.md`)
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- the directory is built from the caller's own project/home root and a fixed convention; the basename is the style NAME from settings, which is why it is validated below rather than interpolated blindly
-    if (!existsSync(path)) continue
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path, existence-checked on the line above
-    const raw = readFileSync(path, 'utf8')
-    // `undefined` means the file carries NO frontmatter, which is a legitimate style — a body with
-    // no keys is the simplest one somebody can write. Treating it as a parse failure would refuse
-    // the minimal case, so the whole file becomes the body and every key takes its default.
-    const parsed = splitFrontmatter(raw)
-    const body = parsed === undefined ? raw : parsed.body
-    const description =
-      parsed === undefined ? undefined : frontmatterValue(parsed.frontmatter, 'description')
-    return {
-      name: input.name,
-      content: body.trim(),
-      ...(description === undefined ? {} : { description }),
-      keepCodingInstructions:
-        parsed !== undefined &&
-        frontmatterValue(parsed.frontmatter, 'keep-coding-instructions') === 'true',
-    }
+    const byFile = join(dir, `${input.name}.md`)
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- the directory is built from the caller's own project/home root and a fixed convention
+    if (existsSync(byFile)) return readStyle(input.name, byFile)
+    const byFrontmatter = findByFrontmatterName(dir, input.name)
+    if (byFrontmatter !== undefined) return readStyle(input.name, byFrontmatter)
   }
 
   throw new OutputStyleError(
@@ -150,4 +193,13 @@ export function resolveOutputStyle(input: {
 }): OutputStyle | undefined {
   const settings = loadSettings(input)
   return loadOutputStyle({ ...input, name: settings.values.outputStyle })
+}
+
+/**
+ * Compose a loaded style with a base prompt. No style returns `base` untouched; a style with
+ * `keepCodingInstructions` is appended to it; any other style replaces it.
+ */
+export function applyOutputStyle(base: string, style: OutputStyle | undefined): string {
+  if (style === undefined) return base
+  return style.keepCodingInstructions ? `${base}\n\n${style.content}` : style.content
 }

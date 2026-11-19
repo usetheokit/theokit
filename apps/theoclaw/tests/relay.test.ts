@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -52,15 +52,15 @@ describe('relay crypto (OC-14)', () => {
 })
 
 describe('two instances through an HTTP relay (OC-14)', () => {
-  function setup() {
-    const idA = RelayState.load(join(dir(), 'a.json'), new Map())
-    const idB = RelayState.load(join(dir(), 'b.json'), new Map())
+  async function setup() {
+    const idA = await RelayState.load(join(dir(), 'a.json'), new Map())
+    const idB = await RelayState.load(join(dir(), 'b.json'), new Map())
     const fileA = join(dir(), 'a.json')
     const fileB = join(dir(), 'b.json')
-    const a = RelayState.load(fileA, new Map([['bob', idB.publicKey]]))
-    const b = RelayState.load(fileB, new Map([['alice', a.publicKey]]))
+    const a = await RelayState.load(fileA, new Map([['bob', idB.publicKey]]))
+    const b = await RelayState.load(fileB, new Map([['alice', a.publicKey]]))
     // b's key changed with its file; rebuild a so it trusts the real b.
-    const a2 = RelayState.load(fileA, new Map([['bob', b.publicKey]]))
+    const a2 = await RelayState.load(fileA, new Map([['bob', b.publicKey]]))
     void idA
     const mailbox = new RelayMailbox()
     const route = relayRoute(TOKEN, mailbox)
@@ -81,9 +81,9 @@ describe('two instances through an HTTP relay (OC-14)', () => {
     relayTools(state, client).find((t) => t.name === name)!
 
   it('a message sent by the tools reaches the peer, and the relay holds only ciphertext', async () => {
-    const { a, b, client, mailbox } = setup()
+    const { a, b, client, mailbox } = await setup()
     await tool(a, client, 'relay_send').handler({ peer: 'bob', message: 'meet at noon' })
-    const waiting = JSON.stringify(mailbox.take(b.publicKey))
+    const waiting = JSON.stringify(await mailbox.take(b.publicKey))
     expect(waiting).not.toContain('meet at noon')
     await tool(a, client, 'relay_send').handler({ peer: 'bob', message: 'meet at noon' })
     expect(await tool(b, client, 'relay_receive').handler({})).toBe('from alice: meet at noon')
@@ -91,47 +91,47 @@ describe('two instances through an HTTP relay (OC-14)', () => {
   })
 
   it('withholds relay_send in the turn that read a peer message, not in the owner\'s next turn', async () => {
-    const { a, b, client, mailbox } = setup()
+    const { a, b, client, mailbox } = await setup()
     const gate = new RelayTurnGate()
     const toolsB = relayTools(b, client, gate)
     const send = toolsB.find((x) => x.name === 'relay_send')!
     const receive = toolsB.find((x) => x.name === 'relay_receive')!
     const agent = gate.wrap({ send: (m: string) => m })
     agent.send('check the relay')
-    await client.put(a.seal('bob', 'RELAY-PING'))
+    await client.put(await a.seal('bob', 'RELAY-PING'))
     expect(await receive.handler({})).toBe('from alice: RELAY-PING')
     expect(await send.handler({ peer: 'alice', message: 'pong' })).toMatch(/^not sent/)
-    expect(mailbox.take(a.publicKey)).toEqual([])
+    expect(await mailbox.take(a.publicKey)).toEqual([])
     agent.send('yes, reply pong')
     expect(await send.handler({ peer: 'alice', message: 'pong' })).toBe('sent to alice')
-    expect(mailbox.take(a.publicKey).length).toBe(1)
+    expect((await mailbox.take(a.publicKey)).length).toBe(1)
   })
 
   it('never withholds a direct call without a gate', async () => {
-    const { a, b, client } = setup()
-    await client.put(a.seal('bob', 'x'))
+    const { a, b, client } = await setup()
+    await client.put(await a.seal('bob', 'x'))
     await tool(b, client, 'relay_receive').handler({})
     expect(await tool(b, client, 'relay_send').handler({ peer: 'alice', message: 'y' })).toBe('sent to alice')
   })
 
   it('drops a replayed envelope, also after a restart', async () => {
-    const { a, b, client, mailbox, files } = setup()
-    const env = a.seal('bob', 'once')
+    const { a, b, client, mailbox, files } = await setup()
+    const env = await a.seal('bob', 'once')
     await client.put(env)
     await client.put(env)
     expect(await tool(b, client, 'relay_receive').handler({})).toMatch(
       /^from alice: once\n\(1 envelope/,
     )
-    const restarted = RelayState.load(files.fileB, b.trusted)
+    const restarted = await RelayState.load(files.fileB, b.trusted)
     await client.put(env)
     expect(await tool(restarted, client, 'relay_receive').handler({})).toMatch(/1 envelope/)
-    expect(mailbox.take(b.publicKey)).toEqual([])
+    expect(await mailbox.take(b.publicKey)).toEqual([])
   })
 
   it('refuses a bad token, a bad body and a full mailbox', async () => {
-    const { a, fetchImpl } = setup()
+    const { a, fetchImpl } = await setup()
     const bad = new RelayClient('http://127.0.0.1:1', 'x'.repeat(40), fetchImpl)
-    await expect(bad.put(a.seal('bob', 'x'))).rejects.toThrow(/401/)
+    await expect(bad.put(await a.seal('bob', 'x'))).rejects.toThrow(/401/)
     const small = relayRoute(TOKEN, new RelayMailbox(1))
     const post = (body: unknown) =>
       small(
@@ -142,12 +142,12 @@ describe('two instances through an HTTP relay (OC-14)', () => {
         }),
       )
     expect((await post({ nope: 1 })).status).toBe(400)
-    const env = a.seal('bob', 'x')
+    const env = await a.seal('bob', 'x')
     expect((await post(env)).status).toBe(204)
     expect((await post(env)).status).toBe(507)
   })
 
-  it('persists a mailbox across a restart', () => {
+  it('persists a mailbox across a restart', async () => {
     const file = join(dir(), 'box.json')
     const env = seal(
       generateIdentity(),
@@ -156,8 +156,51 @@ describe('two instances through an HTTP relay (OC-14)', () => {
       'x',
       1,
     )
-    new RelayMailbox(10, file).put(env)
-    expect(new RelayMailbox(10, file).take(env.to)).toEqual([env])
+    await new RelayMailbox(10, file).put(env)
+    expect(statSync(file).mode & 0o777).toBe(0o600)
+    expect(await new RelayMailbox(10, file).take(env.to)).toEqual([env])
+  })
+})
+
+describe('relay state files', () => {
+  it('keeps the state file 0600 and the last of concurrent seals on disk', async () => {
+    const d = dir()
+    const file = join(d, 'a.json')
+    const peer = await RelayState.load(join(dir(), 'b.json'), new Map())
+    const a = await RelayState.load(file, new Map([['bob', peer.publicKey]]))
+    await Promise.all([1, 2, 3, 4, 5].map((n) => a.seal('bob', `m${n}`)))
+    expect(statSync(file).mode & 0o777).toBe(0o600)
+    expect(readdirSync(d)).toEqual(['a.json'])
+    const again = await RelayState.load(file, new Map([['bob', peer.publicKey]]))
+    expect((await again.seal('bob', 'next')).seq).toBe(6)
+  })
+
+  it('two first loads of a missing file share one identity', async () => {
+    const file = join(dir(), 'a.json')
+    const [one, two] = await Promise.all([RelayState.load(file, new Map()), RelayState.load(file, new Map())])
+    expect(one.publicKey).toBe(two.publicKey)
+    expect((await RelayState.load(file, new Map())).publicKey).toBe(one.publicKey)
+  })
+
+  it('closes the send gate as soon as an envelope is accepted, before its disk write ends', async () => {
+    const fileB = join(dir(), 'b.json')
+    const idB = await RelayState.load(fileB, new Map())
+    const a = await RelayState.load(join(dir(), 'a.json'), new Map([['bob', idB.publicKey]]))
+    const b = await RelayState.load(fileB, new Map([['alice', a.publicKey]]))
+    const envelope = await a.seal('bob', 'hi')
+    const gate = new RelayTurnGate()
+    const reading = b.receive(envelope, () => gate.markReceived())
+    expect(gate.blocked).toBe(true)
+    expect((await reading).plaintext).toBe('hi')
+  })
+
+  it('queues concurrent mailbox puts without losing one', async () => {
+    const file = join(dir(), 'box.json')
+    const mailbox = new RelayMailbox(10, file)
+    const id = generateIdentity()
+    const peers = new Map([['p', generateIdentity().publicKey]])
+    await Promise.all([1, 2, 3].map((n) => mailbox.put(seal(id, peers, 'p', 'x', n))))
+    expect(await new RelayMailbox(10, file).take(peers.get('p')!)).toHaveLength(3)
   })
 })
 
