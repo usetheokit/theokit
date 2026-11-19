@@ -876,3 +876,23 @@ Server to client: `event` (`{ event, session? }`), `done` (`{ session?, usage? }
 `bad_frame` for an unparsable or unknown frame (the socket stays open), or the store's refusal
 (`busy`, `bad_session`, `turn_failed`, `turn_cancelled`). `interrupted` for a sessionless chat carries the
 private session id. When a socket closes, the turns it started are cancelled.
+
+### Client
+
+`createControlClient({ url, authorization })` (from `@theokit/agents/control`, also needs `ws`) opens a
+socket with the `authorization` header value you pass (include any `Bearer ` prefix). One chat runs at a time per client.
+
+```ts
+import { createControlClient } from '@theokit/agents/control'
+
+const client = await createControlClient({ url: 'ws://127.0.0.1:8080/control', authorization: `Bearer ${token}` })
+for await (const frame of client.chat('hello', 'main')) {
+  if (frame.type === 'event') render(frame.event) // ends after done, interrupted or error
+}
+client.interrupt('main') // or client.steer('main', 'use the other file')
+await client.close()
+```
+
+A URL that is not `ws://` or `wss://`, a refused upgrade (`HTTP <status>`) and a closed connection reject
+with `ControlConnectionError`; its message never contains the credential. A 1009 close reports the
+frame limit.
