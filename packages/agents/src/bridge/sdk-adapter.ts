@@ -858,7 +858,8 @@ export interface SdkTurnHandle {
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number }
   }>
-  stream?(): AsyncIterable<SdkMessageLike>
+  // `unknown` stays in the union so a handle that yielded `AsyncIterable<unknown>` keeps compiling.
+  stream?(): AsyncIterable<SdkMessageLike> | AsyncIterable<unknown>
   cancel?(): Promise<void>
 }
 
@@ -903,7 +904,8 @@ export interface SdkAgentHandle {
    */
   // Method syntax on purpose: its parameters are bivariant, so the SDK's `generate` (whose `output`
   // is a Zod schema, narrower than `unknown`) is assignable without a cast.
-  generate?(message: string, options: { output: unknown }): Promise<unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `any` values are what let an interface-typed SDK `GenerateOptions` match an index signature
+  generate?(message: string, options: { output: unknown; [key: string]: any }): Promise<unknown>
   readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.

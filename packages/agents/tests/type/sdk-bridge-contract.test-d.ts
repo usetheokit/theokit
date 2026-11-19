@@ -48,3 +48,17 @@ describe('the bridge types', () => {
     expectTypeOf<Record<string, unknown>>().toMatchTypeOf<SdkSendOptions>()
   })
 })
+
+describe('existing handle contracts still compile', () => {
+  it('accepts a handle whose stream yields unknown and a generate call with extra option keys', () => {
+    const turn: SdkTurnHandle = {
+      wait: async () => ({}),
+      stream: async function* (): AsyncGenerator {
+        yield 1
+      },
+    }
+    const handle = {} as SdkAgentHandle
+    void handle.generate?.('m', { output: 1, extra: true })
+    expectTypeOf(turn).toMatchTypeOf<SdkTurnHandle>()
+  })
+})

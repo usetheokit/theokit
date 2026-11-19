@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- WebChat compiles against the typed `AgentStreamEvent` that `@theokit/agents` `translateSdkEvent` now returns: the turn queue spreads each event into the open `StreamEvent` wire shape, and a local slash command's `done` event carries the `result`, `usage` and `durationMs` fields the type requires. Nothing a client receives changes.
+
 ### Fixed
 
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
