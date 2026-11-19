@@ -24,9 +24,9 @@ describe('load', () => {
     writeFileSync(f, 'DEMO_A="file"\nDEMO_B="fb"\nOTHER="o"\n')
     const env: NodeJS.ProcessEnv = { DEMO_CONFIG: f, DEMO_A: 'env' }
     expect(cfg.load(env, d)).toBe(f)
-    expect(env.DEMO_A).toBe('env')
-    expect(env.DEMO_B).toBe('fb')
-    expect(env.OTHER).toBeUndefined()
+    expect(env).toMatchObject({ DEMO_A: 'env' })
+    expect(env).toMatchObject({ DEMO_B: 'fb' })
+    expect(env).not.toHaveProperty('OTHER')
   })
   it('missing explicit file throws naming the variable', () => {
     const d = mk()

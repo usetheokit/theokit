@@ -27,7 +27,7 @@ describe('write', () => {
     expect(statSync(join(d, 'demo')).mode & 0o777).toBe(0o700)
     const env: NodeJS.ProcessEnv = { DEMO_CONFIG: f }
     cfg.load(env, d)
-    expect(env.DEMO_A).toBe('v 1')
+    expect(env).toMatchObject({ DEMO_A: 'v 1' })
     expect(readdirSync(join(d, 'demo'))).toEqual(['demo.env'])
   })
   it('existing file without force throws, no temp file', async () => {
@@ -45,7 +45,7 @@ describe('write', () => {
     const f = join(d, 'c.env')
     const err = await cfg
       .write(f, { DEMO_A: 'sec"ret' }, { force: false })
-      .catch((e: unknown) => e as InstanceConfigError)
+      .catch((e: unknown) => e as Error)
     expect(err).toBeInstanceOf(InstanceConfigError)
     expect(err.message).toContain('DEMO_A')
     expect(err.message).not.toContain('sec"ret')
@@ -61,6 +61,25 @@ describe('write', () => {
       InstanceConfigError,
     )
     expect(readdirSync(d)).toEqual([])
+  })
+  it('does not leak the secret through a parser error or its cause', async () => {
+    const secret = 'tok-SECRET-123'
+    const leaky = defineInstanceConfig({
+      app: 'demo',
+      keys: {
+        DEMO_B: {
+          parse: (r) => {
+            throw new Error(`cannot parse ${r}`)
+          },
+        },
+      },
+    })
+    const err = await leaky
+      .write(join(mk(), 'c.env'), { DEMO_B: secret }, { force: false })
+      .catch((e: unknown) => e as InstanceConfigError)
+    expect(err).toBeInstanceOf(InstanceConfigError)
+    expect(err.message).not.toContain(secret)
+    expect(err.cause).toBeUndefined()
   })
   it('concurrent writers do not collide', async () => {
     const d = mk()

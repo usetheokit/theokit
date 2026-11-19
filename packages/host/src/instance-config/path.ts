@@ -41,7 +41,7 @@ export function resolveConfigPath(
       },
     )
   }
-  const xdg = env.XDG_CONFIG_HOME
+  const { XDG_CONFIG_HOME: xdg } = env
   const base = xdg !== undefined && xdg !== '' ? xdg : join(homeDir, '.config')
   const file = profile !== undefined && profile !== '' ? `${app}-${profile}.env` : `${app}.env`
   return { path: join(base, app, file), explicit: false, variable: pathVariable }
