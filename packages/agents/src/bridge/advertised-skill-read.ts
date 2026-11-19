@@ -9,7 +9,11 @@ import type { CompiledAgentOptions } from './agent-compiler.js'
 /** What the SDK agent exposes of its own skills: the public listing, and the manager behind it. */
 interface ListsSkills {
   /** The `SkillsManager` the SDK builds every `<skills>` listing from; `refresh()` re-reads it. */
-  readonly skillsManager?: { readonly list: () => Promise<readonly (Skill | InlineSkill)[]> }
+  readonly skillsManager?: {
+    /** True only when the trust gate granted the project root; a refresh then re-reads it legitimately. */
+    readonly settingSourcesIncludeProject?: boolean
+    readonly list: () => Promise<readonly (Skill | InlineSkill)[]>
+  }
 }
 
 type ReadSource = () => Promise<readonly (InlineSkill | Skill)[]>
@@ -67,8 +71,8 @@ function skillKey(s: Skill | InlineSkill): string {
  * gate, `skills.enabled`, compat roots, plugin bundles, root precedence AND a later refresh are the
  * SDK's resolution, not a second one. Nothing is re-discovered from disk here; the disclosure flags
  * come from the manager's own skills. A refresh (`agent.reload()`) re-discovers project roots even
- * when the trust gate withheld them at creation, so only skills the manager listed at creation (the
- * post-gate set, keyed by source file) stay readable; their bodies and flags still follow refreshes.
+ * when the trust gate withheld them at creation, so when the gate withheld the project root only the skills the manager listed
+ * at creation (keyed by source file) stay readable, and when it granted it the current snapshot is served; their bodies and flags still follow refreshes.
  * Without the manager (a peer that hides it) nothing is served: the public
  * listing lacks the disclosure flags, so it cannot tell a hidden skill from a listed one.
  *
@@ -79,7 +83,12 @@ async function advertisedSkills(holder: Holder): Promise<(InlineSkill | Skill)[]
   const manager = holder.agent?.skillsManager
   if (manager !== undefined && holder.roots !== undefined) {
     const roots = holder.roots
-    return (await manager.list()).filter((s) => roots.has(skillKey(s)) && isDisclosed(s))
+    // Project roots granted: the manager's current snapshot IS the listing, new skills included.
+    // Withheld: a refresh would still discover them, so only the creation-time set is served.
+    const granted = manager.settingSourcesIncludeProject === true
+    return (await manager.list()).filter(
+      (s) => (granted || roots.has(skillKey(s))) && isDisclosed(s),
+    )
   }
   // Fail closed: the public listing carries no disclosure flags, so without the manager nothing is served.
   return []

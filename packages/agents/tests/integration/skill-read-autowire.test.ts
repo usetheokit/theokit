@@ -386,6 +386,17 @@ describe('read advertised — skill_read serves what the <skills> block lists', 
     expect(await read('secret')).toBe('Skill "secret" not found. Available skills: (none).')
   })
 
+  it('read advertised serves a skill added under a granted root once the SDK refreshes', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    const root = join(cwd, '.theokit', 'skills')
+    writeSkill(root, 'first', 'FIRST BODY')
+    await run({ model: 'm', skillsRead: 'advertised', ...project }, cwd)
+    writeSkill(root, 'added', 'ADDED BODY')
+    expect(await read('added')).toContain('not found')
+    await h.lastAgent?.skillsManager?.refresh()
+    expect(await read('added')).toContain('ADDED BODY')
+  })
+
   it('read advertised on the factory path resolves a function selection to its names', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
     const root = join(cwd, '.theokit', 'skills')
