@@ -12,7 +12,7 @@ import type { ToolRefusal } from '@theokit/presenter'
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
@@ -850,17 +850,33 @@ async function* streamSdkAgent(
  * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
 export interface SdkTurnHandle {
-  wait: () => Promise<{
-    result?: string
-    usage?: { totalTokens?: number }
-    status?: string
-    error?: { message: string }
-  }>
-  stream?: () => AsyncIterable<unknown>
+  wait: () => Promise<SdkTurnOutcome>
+  /** The SDK's raw message stream (`Run.stream()`), preserved as-is. */
+  stream?: () => AsyncIterable<SdkStreamMessage>
+  /** The SDK's ordered timeline (`Run.events()`): messages and deltas interleaved. */
+  events?: () => AsyncIterable<SdkTimelineEvent>
+  /** Cancel the run; stops the stream and in-flight tool calls. */
+  cancel?: () => Promise<void>
 }
 
-/** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
-export type SdkSendOptions = Record<string, unknown>
+/** A message on the SDK's raw `Run.stream()`; discriminate on `type`. */
+export type SdkStreamMessage = SDKMessage
+
+/** What `wait()` resolves: the fields of the SDK's `RunResult` this layer and its consumers read. */
+export interface SdkTurnOutcome {
+  result?: string
+  usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number }
+  status?: string
+  error?: { message: string }
+  durationMs?: number
+  /** theokit#379 — the doom-loop guard stopped the run. */
+  stoppedByDoomLoop?: boolean
+  /** theokit#379 — the run reached its iteration ceiling. */
+  stoppedAtIterationLimit?: boolean
+}
+
+/** Per-turn options: the SDK's own `SendOptions`. */
+export type SdkSendOptions = SendOptions
 
 export interface SdkAgentHandle {
   readonly agentId: string
@@ -909,7 +925,7 @@ export interface SdkAgentHandle {
    * `as never` absorbed the difference. It is literally the divergence the facade's docstring
    * described, met again while trying to remove it.
    */
-  send: (msg: string, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
+  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
   dispose: () => Promise<void>
 }
 

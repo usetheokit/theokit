@@ -159,6 +159,24 @@ describe('toAgentStreamEvent (untrusted input)', () => {
     expect(isAgentStreamEvent({ type: 'iteration', step: 1, totalSteps: null })).toBe(true)
   })
 
+  it('validates tool_result refusal fields', async () => {
+    const { toAgentStreamEvent } = await import('../../src/bridge/agent-stream-events.js')
+    const base = {
+      type: 'tool_result',
+      callId: 'c',
+      toolName: 't',
+      output: '',
+      durationMs: 1,
+      isError: true,
+    }
+    expect(toAgentStreamEvent({ ...base, refusal: {} })).toBeUndefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 42, reason: 7 } })).toBeUndefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 'nobody' } })).toBeUndefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 'human', reason: 7 } })).toBeUndefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 'policy', reason: 'no' } })).toBeDefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 'hook' } })).toBeDefined()
+  })
+
   it('rejects non-objects, unknown types and malformed fields', async () => {
     const { toAgentStreamEvent } = await import('../../src/bridge/agent-stream-events.js')
     expect(toAgentStreamEvent(null)).toBeUndefined()

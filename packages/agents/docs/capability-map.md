@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1261 export(s) across 25 entry point(s).
+1265 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -418,8 +418,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
 | `SdkSendOptions` | type |
+| `SdkStreamMessage` | type |
 | `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
+| `SdkTurnOutcome` | type |
 | `Segment` | type |
 | `SessionRecord` | type |
 | `SessionStore` | type |
@@ -626,8 +628,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
 | `SdkSendOptions` | type |
+| `SdkStreamMessage` | type |
 | `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
+| `SdkTurnOutcome` | type |
 | `Segment` | type |
 | `SettingSourceCapability` | type |
 | `SettingSourcesSelection` | type |

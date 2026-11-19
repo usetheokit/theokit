@@ -11,6 +11,8 @@
  *
  * @internal
  */
+import type { SDKMessage, SDKUserMessage } from '@theokit/sdk'
+
 import type { Guardrail } from '../guardrails/index.js'
 import { GuardrailViolationError, runInputGuards, runOutputGuards } from '../guardrails/index.js'
 
@@ -39,7 +41,7 @@ export function withStepCeiling(
     },
     dispose: () => handle.dispose(),
     ...forwardedMembers(handle),
-    send: (msg: string, sendOpts?: SdkSendOptions) =>
+    send: (msg: string | SDKUserMessage, sendOpts?: SdkSendOptions) =>
       handle.send(msg, { maxIterations, ...sendOpts }),
   }
 }
@@ -57,10 +59,16 @@ export function withGuardrails(
     },
     dispose: () => handle.dispose(),
     ...forwardedMembers(handle),
-    send: async (msg: string, sendOpts?: SdkSendOptions): Promise<SdkTurnHandle> => {
+    send: async (
+      msg: string | SDKUserMessage,
+      sendOpts?: SdkSendOptions,
+    ): Promise<SdkTurnHandle> => {
       // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
       // not merely annotate it afterwards.
-      const guarded = await runInputGuards(msg, guardrails)
+      const guarded =
+        typeof msg === 'string'
+          ? await runInputGuards(msg, guardrails)
+          : { ...msg, text: await runInputGuards(msg.text, guardrails) }
       return guardTurn(await handle.send(guarded, sendOpts), guardrails)
     },
   }
@@ -118,7 +126,7 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
           ? out
           : { ...out, result: await runOutputGuards(out.result, guardrails) },
       ))
-  const cancelTurn = (turn as { cancel?: () => Promise<unknown> }).cancel
+  const cancelTurn = turn.cancel
   return {
     wait: guardedOutcome,
     // Cancellation must reach the inner run: a guarded turn that dropped it could not be aborted.
@@ -129,11 +137,7 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
       let streamedError = false
       if (turn.stream !== undefined) {
         for await (const event of turn.stream()) {
-          if (
-            typeof event === 'object' &&
-            event !== null &&
-            (event as { type?: unknown }).type === 'error'
-          ) {
+          if ((event as { type?: unknown }).type === 'error') {
             streamedError = true
           }
         }
@@ -148,7 +152,10 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
         return
       }
       if (out.result !== undefined) {
-        yield { type: 'assistant', message: { content: [{ type: 'text', text: out.result }] } }
+        yield {
+          type: 'assistant',
+          message: { content: [{ type: 'text', text: out.result }] },
+        } as unknown as SDKMessage
       }
       // `'run error'` when the run gave no message: the eval runner's own `run <status>` fallback.
       if (out.status === 'error') yield errorStatus(out.error?.message ?? 'run error')
@@ -157,6 +164,6 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
 }
 
 /** The SDK's terminal message for a failed run, less the agent and run ids this layer never sees. */
-function errorStatus(message: string): { type: 'status'; status: 'ERROR'; message: string } {
-  return { type: 'status', status: 'ERROR', message }
+function errorStatus(message: string): SDKMessage {
+  return { type: 'status', status: 'ERROR', message } as unknown as SDKMessage
 }

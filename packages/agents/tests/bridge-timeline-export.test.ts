@@ -51,6 +51,6 @@ describe('timeline narrowing helpers', () => {
     expect(isMessageTimelineEvent(msg)).toBe(true)
     expect(isMessageTimelineEvent(delta)).toBe(false)
     expect(isDeltaTimelineEvent(delta)).toBe(true)
-    expect(isDeltaTimelineEvent({ kind: 'delta' })).toBe(false)
+    expect(isDeltaTimelineEvent(msg)).toBe(false)
   })
 })

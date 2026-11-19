@@ -1,3 +1,5 @@
+import type { InteractionUpdate, SDKMessage } from '@theokit/sdk'
+
 import type { StreamEvent } from './agent-sse-handler.js'
 import {
   type SdkMessage,
@@ -24,26 +26,27 @@ import {
  */
 
 /** The SDK's timeline event, structurally typed so this module needs no value import from the SDK. */
-export interface SdkTimelineEvent {
-  readonly kind: 'message' | 'delta'
-  readonly message?: SdkMessage
-  readonly update?: unknown
-  /** #140 — set by the SDK when this message's text already crossed as `kind: 'delta'`. */
-  readonly textAlreadyStreamed?: boolean
-}
+export type SdkTimelineEvent =
+  | {
+      readonly kind: 'message'
+      readonly message: SDKMessage | SdkMessage
+      /** #140 — set by the SDK when this message's text already crossed as `kind: 'delta'`. */
+      readonly textAlreadyStreamed?: boolean
+    }
+  | { readonly kind: 'delta'; readonly update: InteractionUpdate }
 
-/** Narrow a timeline event to one that carries a complete SDK message. */
+/** Narrow a timeline event to the `message` variant. */
 export function isMessageTimelineEvent(
   e: SdkTimelineEvent,
-): e is SdkTimelineEvent & { readonly kind: 'message'; readonly message: SdkMessage } {
-  return e.kind === 'message' && e.message !== undefined
+): e is Extract<SdkTimelineEvent, { kind: 'message' }> {
+  return e.kind === 'message'
 }
 
-/** Narrow a timeline event to one that carries a delta update. */
+/** Narrow a timeline event to the `delta` variant. */
 export function isDeltaTimelineEvent(
   e: SdkTimelineEvent,
-): e is SdkTimelineEvent & { readonly kind: 'delta'; readonly update: unknown } {
-  return e.kind === 'delta' && e.update !== undefined
+): e is Extract<SdkTimelineEvent, { kind: 'delta' }> {
+  return e.kind === 'delta'
 }
 
 /**
@@ -228,16 +231,12 @@ export function translateTimelineEvent(
   seen: ToolSeen,
 ): StreamEvent[] {
   if (ev.kind === 'delta') {
-    if (ev.update === undefined) return []
-    const events = translateInteractionUpdate(
-      ev.update as Parameters<typeof translateInteractionUpdate>[0],
-    )
+    const events = translateInteractionUpdate(ev.update)
     // #388 — released BEFORE this event's own output, because a held result was reported earlier
     // than whatever is releasing it. The wire order a consumer reads is unchanged.
     const released = releasePendingToolResults(events, seen)
     return [...released, ...dedupeTools(events, ev.update, seen)]
   }
-  if (ev.message === undefined) return []
   const events = translateSdkEvent(ev.message, runId)
   // Only the text is a duplicate the producer can name. Tool events on this message go through the
   // id-keyed pass — the flag answers one question, and widening it by guessing would reintroduce

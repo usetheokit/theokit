@@ -345,6 +345,12 @@ const optional = (v: unknown, check: (x: unknown) => boolean): boolean =>
 
 const FILE_EDIT_FORMATS = new Set(['search-replace', 'unified-diff', 'full-file', 'line-range'])
 
+const REFUSAL_SOURCES = ['human', 'timeout', 'policy', 'hook', 'plugin']
+
+function validRefusal(r: unknown): boolean {
+  return isRecord(r) && isStr(r.by) && REFUSAL_SOURCES.includes(r.by) && optional(r.reason, isStr)
+}
+
 function validUsage(u: unknown): boolean {
   return (
     isRecord(u) &&
@@ -369,7 +375,7 @@ const VALIDATORS: Record<AgentStreamEvent['type'], (e: Record<string, unknown>) 
     isStr(e.output) &&
     isNum(e.durationMs) &&
     isBool(e.isError) &&
-    optional(e.refusal, isRecord),
+    optional(e.refusal, validRefusal),
   thinking: (e) => isStr(e.content),
   iteration: (e) => isNum(e.step) && (e.totalSteps === null || isNum(e.totalSteps)),
   approval_required: (e) =>

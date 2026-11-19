@@ -36,7 +36,6 @@ async function streamedErrorOf(run: SdkTurnHandle): Promise<string | undefined> 
   if (run.stream === undefined) return undefined
   let streamed: string | undefined
   for await (const message of run.stream()) {
-    if (typeof message !== 'object' || message === null) continue
     const event = message as { type?: unknown; status?: unknown; message?: unknown }
     if (event.type === 'error') streamed ??= describeStreamedError(message)
     // A guarded agent's stream ends a failed run with `{ type: 'status', status: 'ERROR', message }`.
@@ -160,7 +159,7 @@ export function delegationPortFromAgentFactory(
 ): DelegationPort {
   return {
     run: async (message, runOptions): Promise<DelegationResult> => {
-      const signal = runOptions?.signal ?? (options?.sendOptions?.signal as AbortSignal | undefined)
+      const signal = runOptions?.signal ?? options?.sendOptions?.signal
       try {
         return await runOnce(create, message, signal, options?.sendOptions)
       } catch (error) {
