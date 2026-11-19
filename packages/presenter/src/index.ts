@@ -19,6 +19,8 @@ export * from './presenters/terminal.js'
 export * from './presenters/json.js'
 
 export {
+  contentChunkFromEvent,
+  finalMessageOf,
   foldTurnLifecycle,
   type ContentChunk,
   type LifecycleItem,

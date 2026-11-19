@@ -55,6 +55,14 @@ export const WIRE_DATA_PART_PREFIX = 'data-'
 export const WIRE_APPROVAL_DETAIL_PART = 'data-approval'
 
 /**
+ * The transient `data-*` part saying a tool call was REFUSED, emitted just before that call's
+ * `tool-output-error`: `{ type: 'data-tool-refusal', data: { toolCallId, by, reason? }, transient: true }`.
+ * The reader folds it into the tool part as `refusal`. Carried as `data-*` for the same reason as
+ * {@link WIRE_APPROVAL_DETAIL_PART}: the error frame's schema is strict.
+ */
+export const WIRE_TOOL_REFUSAL_PART = 'data-tool-refusal'
+
+/**
  * The `data-*` part carrying a failed turn's error `code`, emitted just before the `error` frame.
  *
  * `{ type: 'data-error-code', data: { code } }`. The code cannot ride on the `error` chunk itself

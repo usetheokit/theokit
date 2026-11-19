@@ -1,5 +1,18 @@
 # @theokit/agents
 
+## 16.9.0
+
+### Minor Changes
+
+- 4e4d1fa: `@theokit/agents/client` exports `AGENT_ACTION_HEADERS` and `agentRequestHeaders`, so a plain `fetch` to an agent route can send the `X-Theo-Action` header its CSRF gate requires.
+
+### Patch Changes
+
+- 36444c2: The scheduled-job store now writes its file with the SDK's `atomicWriteJson` instead of a hand-written temp, chmod and rename.
+- Updated dependencies [3811739]
+- Updated dependencies [8d43d6a]
+  - @theokit/presenter@0.14.0
+
 ## 16.8.1
 
 ### Patch Changes
