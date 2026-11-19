@@ -48,7 +48,7 @@ function pathArguments(args: Record<string, unknown>, keys: readonly string[]): 
 
 function patchDestinations(patch: unknown): string[] {
   if (typeof patch !== 'string') throw new MalformedArgument('patch must be a string')
-  return [...patch.matchAll(PATCH_DESTINATION)].map((match) => (match[1] ?? '').trim())
+  return [...patch.matchAll(PATCH_DESTINATION)].map((match) => match[1].trim())
 }
 
 function judge(

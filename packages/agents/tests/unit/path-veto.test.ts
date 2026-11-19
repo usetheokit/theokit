@@ -25,7 +25,10 @@ function runPlugin(
   options?: Parameters<typeof createPathVetoPlugin>[1],
 ) {
   let handler: ((c: unknown) => unknown) | undefined
-  createPathVetoPlugin(scope, options).register({
+  const plugin = createPathVetoPlugin(scope, options) as unknown as {
+    register(ctx: never): void
+  }
+  plugin.register({
     on: (_event: string, h: (c: unknown) => unknown) => {
       handler = h
     },
