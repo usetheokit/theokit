@@ -7,6 +7,7 @@ import type { InlineSkill } from '@theokit/sdk'
 import type { Skill } from '@theokit/sdk/skills'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
+import { BUILD_WIRED_SKILL_READERS } from './compiled-wiring.js'
 
 /** What the SDK agent exposes of its own skills: the public listing, and the manager behind it. */
 interface ListsSkills {
@@ -113,12 +114,20 @@ export function wireInlineSkillRead<R extends WireRuntime>(
   }
   if (compiled.skillsRead !== 'advertised') {
     const inline = compiled.skills?.inline
-    if (inline !== undefined && inline.length > 0) sdkTools.push(define(inline))
+    if (inline !== undefined && inline.length > 0) {
+      const reader = define(inline)
+      if (typeof reader === 'object' && reader !== null)
+        BUILD_WIRED_SKILL_READERS.set(reader, 'inline')
+      sdkTools.push(reader)
+    }
     return rt
   }
   // Resolved on each read from the agent the SDK built, so it follows the manager's current snapshot.
   const holder: Holder = {}
-  sdkTools.push(define(() => advertisedSkills(holder)))
+  const reader = define(() => advertisedSkills(holder))
+  if (typeof reader === 'object' && reader !== null)
+    BUILD_WIRED_SKILL_READERS.set(reader, 'advertised')
+  sdkTools.push(reader)
   return {
     ...rt,
     Agent: {

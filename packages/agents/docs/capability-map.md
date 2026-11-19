@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1340 export(s) across 25 entry point(s).
+1342 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -309,6 +309,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CompiledAgentOptionsDraft` | type |
 | `CompiledContextWindow` | type |
 | `CompiledTool` | type |
+| `CompiledWiring` | type |
 | `CompressibleMessage` | type |
 | `ContentChunk` | type |
 | `ContextWindowOptions` | type |
@@ -604,6 +605,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CompiledAgentOptions` | type |
 | `CompiledContextWindow` | type |
 | `CompiledTool` | type |
+| `CompiledWiring` | type |
 | `DefineAgentConfig` | type |
 | `DefinitionOrThunk` | type |
 | `DelegateFn` | type |
