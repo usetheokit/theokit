@@ -58,6 +58,43 @@ describe('foldTranscript', () => {
     expect(r.items[0]?.tool?.status).toBe('running')
   })
 
+  it('a tool-call for a call id that already has a result sets the card running with the new input', () => {
+    const s = fold([
+      call(),
+      { type: 'tool-result', callId: 'c1', name: 'shell_exec', result: 'ok' },
+      { type: 'tool-call', callId: 'c1', name: 'shell_exec', input: { cmd: 'pwd' } },
+    ])
+    expect(s.items).toHaveLength(1)
+    expect(s.items[0]?.tool).toEqual({
+      callId: 'c1',
+      name: 'shell_exec',
+      input: { cmd: 'pwd' },
+      status: 'running',
+    })
+  })
+
+  it('a repeated tool-call closes the open message, so later text opens a new one', () => {
+    const s = fold([call(), { type: 'text', text: 'a' }, call(), { type: 'text', text: 'b' }])
+    expect(s.items.map((i) => [i.kind, i.text])).toEqual([
+      ['message', 'a'],
+      ['tool', undefined],
+      ['message', 'b'],
+    ])
+  })
+
+  it('identical repeated tool events return the same state object', () => {
+    const partial: AgentOutputEvent = {
+      type: 'partial-tool-call',
+      callId: 'c1',
+      name: 'x',
+      input: { a: [1] },
+    }
+    const p1 = fold([partial])
+    expect(foldTranscript(p1, { ...partial, input: { a: [1] } })).toBe(p1)
+    const c1 = fold([call()])
+    expect(foldTranscript(c1, call())).toBe(c1)
+  })
+
   it('a tool-result with isError true marks the tool failed and reads the shell exit code', () => {
     const result = JSON.stringify({ ok: true, stdout: 'a', stderr: 'b', exit_code: 2 })
     const s = fold([

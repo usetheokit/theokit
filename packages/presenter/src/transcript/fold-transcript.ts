@@ -48,19 +48,43 @@ function appendText(
   return streaming(state, [...state.items, { id: `${kind}_${state.items.length}`, kind, text }])
 }
 
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  const ka = Object.keys(a)
+  const kb = Object.keys(b)
+  if (ka.length !== kb.length) return false
+  const rb = b as Record<string, unknown>
+  return ka.every(
+    (k) => Object.hasOwn(rb, k) && sameValue((a as Record<string, unknown>)[k], rb[k]),
+  )
+}
+
+/**
+ * Create or update the card for `callId`. `closesMessage` (a `tool-call`) moves an existing card behind
+ * a message that is still open, so text that follows opens a new message. An update that changes
+ * nothing returns `state` itself.
+ */
 function upsertTool(
   state: TranscriptState,
   callId: string,
   update: (prev: TranscriptTool | undefined) => TranscriptTool | undefined,
+  closesMessage = false,
 ): TranscriptState {
   const index = state.items.findIndex((i) => i.kind === 'tool' && i.id === callId)
   const prev = index === -1 ? undefined : state.items[index]?.tool
   const next = update(prev)
   if (next === undefined) return state
+  const moves = closesMessage && index !== -1 && state.items.at(-1)?.kind === 'message'
+  if (prev && !moves && sameValue(prev, next)) return state
   const item: TranscriptItem = { id: callId, kind: 'tool', tool: next }
-  const items =
-    index === -1 ? [...state.items, item] : state.items.map((it, i) => (i === index ? item : it))
-  return streaming(state, items)
+  if (index === -1) return streaming(state, [...state.items, item])
+  if (moves) return streaming(state, [...state.items.filter((_, i) => i !== index), item])
+  return streaming(
+    state,
+    state.items.map((it, i) => (i === index ? item : it)),
+  )
 }
 
 function failOpenTools(items: readonly TranscriptItem[]): readonly TranscriptItem[] {
@@ -89,10 +113,11 @@ export function foldTranscript(state: TranscriptState, event: AgentOutputEvent):
           : undefined
       })
     case 'tool-call':
-      return upsertTool(state, event.callId, (prev) =>
-        prev && (prev.status === 'success' || prev.status === 'failed')
-          ? undefined
-          : { callId: event.callId, name: event.name, input: event.input, status: 'running' },
+      return upsertTool(
+        state,
+        event.callId,
+        () => ({ callId: event.callId, name: event.name, input: event.input, status: 'running' }),
+        true,
       )
     case 'tool-result':
       return upsertTool(state, event.callId, (prev) => ({
