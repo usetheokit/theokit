@@ -11,6 +11,7 @@ import type {
   TurnAgent as ReplyTurnAgent,
   TurnRun as ReplyTurnRun,
 } from '../src/channels/reply-handler.js'
+import { createEventMask } from '../src/control-plane/event-mask.js'
 import { createContainer } from '../src/composition.js'
 import {
   createTurnRunner,
@@ -596,7 +597,43 @@ describe('the typed conversions of the port (#2317)', () => {
     })
   })
 
-  it('narrows a wire event to an AgentStreamEvent by its discriminant', () => {
-    expect(isAgentStreamEvent({ type: 'text_delta' })).toBe(true)
+  it('narrows a wire event to an AgentStreamEvent by its discriminant and required fields', () => {
+    expect(isAgentStreamEvent({ type: 'text_delta', content: 'a' })).toBe(true)
+    expect(isAgentStreamEvent({ type: 'done' })).toBe(true)
+    expect(isAgentStreamEvent({ type: 'text_delta' })).toBe(false)
+    expect(isAgentStreamEvent({ type: 'not_an_event' })).toBe(false)
+  })
+
+  it('translates typed timeline events in order through a turn', async () => {
+    const run: TurnRun = {
+      async *stream() {},
+      async *events() {
+        yield { kind: 'delta', update: { type: 'text-delta', text: 'one ' } }
+        yield { kind: 'delta', update: { type: 'text-delta', text: 'two' } }
+      },
+      wait: async () => ({ status: 'finished' }),
+      cancel: async () => undefined,
+    }
+    const events: TurnEvent[] = []
+    const outcome = await runTheoClawTurn({
+      withAgent: (work) => work({ send: async () => run }),
+      message: 'hi',
+      runId: 'r1',
+      emit: (event) => events.push(event),
+    })
+    expect(outcome).toEqual({ ok: true })
+    expect(
+      events
+        .filter((e) => e.type === 'text_delta')
+        .map((e) => e['content'])
+        .join(''),
+    ).toBe('one two')
+  })
+
+  it('keeps the event type through masking', () => {
+    const out: TurnEvent[] = []
+    const mask = createEventMask(['sekret'], (event) => out.push(event))
+    mask.emit({ type: 'tool_result', result: 'a sekret b' })
+    expect(out).toEqual([{ type: 'tool_result', result: 'a [redacted] b' }])
   })
 })

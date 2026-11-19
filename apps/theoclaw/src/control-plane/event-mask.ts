@@ -21,6 +21,13 @@ function maskValue(value: unknown, secrets: readonly string[]): unknown {
   return value
 }
 
+/** One event with every string in it masked; each own field is masked, so the event keeps its shape. */
+function maskEvent(event: TurnEvent, secrets: readonly string[]): TurnEvent {
+  const masked: TurnEvent = { ...event }
+  for (const key of Object.keys(masked)) masked[key] = maskValue(masked[key], secrets)
+  return masked
+}
+
 /**
  * One turn's event mask (B-398 FR-007): a `text_delta` goes through a stream mask, which holds back
  * what could still grow into a configured value; any other event first releases what is held, as
@@ -41,7 +48,7 @@ export function createEventMask(secrets: readonly string[], emit: (event: TurnEv
         return
       }
       flush()
-      emit(maskValue(event, secrets) as TurnEvent)
+      emit(maskEvent(event, secrets))
     },
     flush,
   }

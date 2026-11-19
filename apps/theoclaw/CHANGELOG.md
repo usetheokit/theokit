@@ -13,7 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- The agent port (`TurnAgent`, `TurnRun`, `TurnTimelineEvent`) uses `InteractionUpdate` and typed timeline events, with `toSdkMessage`, `toSdkTimelineEvent` and `isAgentStreamEvent` converting without casts, so the control-plane turns and the desktop sidecar no longer cast SDK messages or events (#2317, follow-up of #1802).
+- The agent port (`TurnAgent`, `TurnRun`, `TurnTimelineEvent`) uses `InteractionUpdate` and typed timeline events, with `toSdkMessage`, `toSdkTimelineEvent` and `isAgentStreamEvent` (which checks the discriminant and a `text_delta`'s `content`) converting without casts, and the event mask copies events field by field, so the control-plane turns and the desktop sidecar no longer cast SDK messages or events (#2317, follow-up of #1802).
 
 ### Fixed
 

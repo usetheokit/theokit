@@ -95,9 +95,35 @@ export function toSdkTimelineEvent(event: TurnTimelineEvent): SdkTimelineEvent {
   }
 }
 
-/** Whether a wire event carries the discriminant of an `AgentStreamEvent`; the one narrowing, no cast. */
+const STREAM_EVENT_TYPES: ReadonlySet<string> = new Set<AgentStreamEvent['type']>([
+  'run_started',
+  'text_delta',
+  'tool_call',
+  'partial_tool_call',
+  'tool_result',
+  'thinking',
+  'iteration',
+  'approval_required',
+  'input_requested',
+  'task_progress',
+  'shell_output',
+  'artifact_start',
+  'artifact_chunk',
+  'state_update',
+  'checkpoint_saved',
+  'file_edit',
+  'error',
+  'done',
+])
+
+/**
+ * Whether a wire event is an `AgentStreamEvent`: its discriminant is one of the union's, and a
+ * `text_delta` carries its string `content`. The one narrowing, no cast.
+ */
 export function isAgentStreamEvent(event: { readonly type: string }): event is AgentStreamEvent {
-  return typeof event.type === 'string'
+  if (!STREAM_EVENT_TYPES.has(event.type)) return false
+  if (event.type === 'text_delta') return 'content' in event && typeof event.content === 'string'
+  return true
 }
 
 export interface TurnRun {
