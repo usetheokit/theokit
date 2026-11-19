@@ -2,7 +2,7 @@
 // Every dependency they declare is carried over; `workspace:` specifiers on framework packages are
 // replaced with the released version in released.json, and TheoCode's own @theocode/* packages are
 // left out (they are source, not a release). `--check` fails when package.json has drifted.
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -28,6 +28,10 @@ export function deriveDependencies({
   root = join(here, '..'),
   releasedPath = join(here, 'released.json'),
 } = {}) {
+  if (!existsSync(releasedPath))
+    throw new Error(
+      `released.json not found at ${releasedPath}: create it with an exact released version for each workspace dependency`,
+    )
   const released = validateReleased(readJson(releasedPath))
   const dirs = readdirSync(join(root, 'packages'), { withFileTypes: true }).filter((d) =>
     d.isDirectory(),
@@ -63,7 +67,13 @@ export function deriveDependencies({
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const path = join(here, 'package.json')
   const pkg = readJson(path)
-  const next = { ...pkg, dependencies: deriveDependencies() }
+  let next
+  try {
+    next = { ...pkg, dependencies: deriveDependencies() }
+  } catch (err) {
+    console.error(err.message)
+    process.exit(1)
+  }
   if (process.argv.includes('--check')) {
     if (JSON.stringify(pkg.dependencies) !== JSON.stringify(next.dependencies)) {
       console.error(

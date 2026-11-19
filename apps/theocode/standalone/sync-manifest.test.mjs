@@ -96,13 +96,23 @@ describe('sync-manifest', () => {
       assert.equal(run(dir, '--check').status, 0)
     })
 
+    it('reports a missing released.json with the fix instead of ENOENT', () => {
+      const dir = setup({})
+      rmSync(join(dir, 'released.json'))
+      const r = run(dir, '--check')
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /released\.json not found/)
+      assert.doesNotMatch(r.stderr, /ENOENT/)
+    })
+
     it('--check fails on a stale manifest without rewriting it', () => {
       const dir = setup({ stale: '1.0.0' })
       const before = readFileSync(join(dir, 'package.json'), 'utf8')
       const r = run(dir, '--check')
       assert.equal(r.status, 1)
       assert.match(r.stderr, /out of date/)
-      assert.match(r.stderr, /released\.json/)
+      for (const f of ['released.json', 'package.json', 'pnpm-lock.yaml'])
+        assert.ok(r.stderr.includes(f), `stderr names ${f}`)
       assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before)
     })
   })

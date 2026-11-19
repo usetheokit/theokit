@@ -1,12 +1,13 @@
 # Standalone consumer
 
-Installs the **released** `@theokit/agents` from the npm registry, with no `workspace:` link, and
-runs `loginWithApiKey`, `ensureFreshCredential` and `refreshOAuthTokens` from `@theokit/agents/auth`.
+Maintainer tooling for the standalone consumer's release pins. The consumer itself (auth test,
+`pnpm-workspace.yaml`, `released.json`, lockfile) is a prerequisite tracked in #2327; the commands below
+need those files in place.
 
 ```sh
 cd apps/theocode/standalone
-pnpm install --frozen-lockfile
-pnpm test
+node sync-manifest.mjs --check
+pnpm test   # sync-manifest tests only
 ```
 
 TheoCode itself links `@theokit/agents` with `workspace:*`; the pins in `released.json` are the releases
@@ -24,4 +25,6 @@ To move a release pin, or after changing a TheoCode manifest:
 3. Run `pnpm install` to update `pnpm-lock.yaml`.
 4. Commit `released.json`, `package.json` and `pnpm-lock.yaml` together.
 
-`node sync-manifest.mjs --check` and `sync-manifest.test.mjs` fail on drift.
+`node sync-manifest.mjs --check` fails on drift against the real manifests; `sync-manifest.test.mjs` verifies the
+script's behaviour (regeneration, `--check`, pin validation) on isolated fixtures and does not read the real
+manifests.
