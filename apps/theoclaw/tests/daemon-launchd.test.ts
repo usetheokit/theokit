@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -14,6 +14,17 @@ function launchctl(h: Harness): string[] {
 }
 
 describe('theoclaw daemon on macOS (launchd)', () => {
+  it('writes the plist with the mode the umask allows', async () => {
+    const old = process.umask(0o077)
+    try {
+      const h = harness({ platform: 'darwin', uid: UID })
+      expect(await daemonInstall(h.io, h.runner)).toBe(0)
+      expect(statSync(plistPath('theoclaw', h.home)).mode & 0o777).toBe(0o600)
+    } finally {
+      process.umask(old)
+    }
+  })
+
   it('the_plist_runs_the_built_entry_with_the_configuration_file', async () => {
     const h = harness({ platform: 'darwin', uid: UID, env: { THEOCLAW_PROFILE: 'work' } })
     expect(await daemonInstall(h.io, h.runner)).toBe(0)
