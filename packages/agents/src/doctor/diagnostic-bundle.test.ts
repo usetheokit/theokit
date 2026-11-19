@@ -14,7 +14,7 @@ describe('writeDiagnosticBundle', () => {
     const out = join(d, 'b.tar.gz')
     const files = [
       { name: 'report.json', content: '{"a":1}' },
-      { name: 'big.log', content: 'é'.repeat(700) },
+      { name: 'big.log', content: '\u00e9'.repeat(700) },
     ]
     const r = await writeDiagnosticBundle({ out, files, secrets: [] })
     expect(r.path).toBe(out)
@@ -125,11 +125,11 @@ describe('writeDiagnosticBundle', () => {
   it('a name over 100 bytes throws name_too_long', async () => {
     const out = join(dir(), 'b.tar.gz')
     await expect(
-      writeDiagnosticBundle({ out, files: [{ name: 'é'.repeat(51), content: 'x' }], secrets: [] }),
+      writeDiagnosticBundle({ out, files: [{ name: '\u00e9'.repeat(51), content: 'x' }], secrets: [] }),
     ).rejects.toMatchObject({ reason: 'name_too_long' })
     await writeDiagnosticBundle({
       out,
-      files: [{ name: 'é'.repeat(50), content: 'x' }],
+      files: [{ name: '\u00e9'.repeat(50), content: 'x' }],
       secrets: [],
     })
     expect(existsSync(out)).toBe(true)
