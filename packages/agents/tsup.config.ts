@@ -19,6 +19,8 @@ export default defineConfig({
     pty: 'src/pty-entry.ts',
     'tool-scope': 'src/tools/index.ts',
     bridge: 'src/bridge-entry.ts',
+    // Named sessions with interrupt and steer over `runAgentTurn`; an app-facing control surface.
+    control: 'src/control-entry.ts',
     testing: 'src/testing/index.ts',
     // M58 — pass-through subpaths mirroring the SDK's own split.
     sandbox: 'src/sandbox-entry.ts',
@@ -68,6 +70,7 @@ export default defineConfig({
     '@theokit/sdk',
     '@theokit/sdk-tools',
     'quickjs-emscripten-core',
+    'ws',
     'zod',
   ],
 })

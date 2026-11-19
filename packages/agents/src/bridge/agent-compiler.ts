@@ -397,4 +397,6 @@ export interface CompiledAgentOptions {
    * before the SDK runs. Not consumed by the SDK directly (it reads `skills`). Absent ⇒ no resolver.
    */
   skillsResolver?: SkillsSelection
+  /** Which skills `skill_read` serves (`defineAgent({ skillsRead })`). Absent ⇒ `'inline'`. */
+  skillsRead?: 'inline' | 'advertised'
 }

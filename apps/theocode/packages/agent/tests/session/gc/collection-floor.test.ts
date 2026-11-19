@@ -11,10 +11,11 @@
  * the same number got a refusal or a mass deletion according to a flag that has nothing to do with
  * it. One rule, enforced on both paths.
  */
+import { GCFloorError } from '@theokit/agents/session'
 import { describe, expect, it } from 'vitest'
 
+import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
 import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
-import { planSessionGC } from '../../../src/session/gc/per-session.js'
 
 const allProjectsSeams = {
   projectsRoot: '/projects',
@@ -28,14 +29,17 @@ const allProjectsSeams = {
 
 const perSessionSeams = {
   cwd: '/home/operator/a-project',
-  list: async () => [] as never,
-  readdir: () => [],
-  readPointer: () => undefined,
+  root: '/nonexistent-theocode-root',
+  apply: false,
+  listRegistry: async () => [],
 }
 
 describe('the collection floor', () => {
   it('test_the_single_project_plan_refuses_a_window_below_the_floor', async () => {
-    await expect(planSessionGC({ ...perSessionSeams, maxAgeDays: 0 })).rejects.toThrow(RangeError)
+    // The framework's floor error is a GCFloorError, not a RangeError.
+    await expect(
+      planAndRunCurrentProjectGC({ ...perSessionSeams, maxAgeDays: 0 }),
+    ).rejects.toThrow(GCFloorError)
   })
 
   it('test_the_all_projects_plan_refuses_the_same_window', async () => {
@@ -49,7 +53,9 @@ describe('the collection floor', () => {
   it('test_both_plans_accept_the_floor_itself', async () => {
     // Anti-vacuity. A guard written as `<= FLOOR` rather than `< FLOOR` would pass both cases above
     // and reject the smallest window a user is allowed to ask for.
-    await expect(planSessionGC({ ...perSessionSeams, maxAgeDays: 1 })).resolves.toBeDefined()
+    await expect(
+      planAndRunCurrentProjectGC({ ...perSessionSeams, maxAgeDays: 1 }),
+    ).resolves.toBeDefined()
     await expect(
       planSessionGCAllProjects({ ...allProjectsSeams, maxAgeDays: 1 }),
     ).resolves.toBeDefined()

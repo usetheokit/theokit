@@ -40,7 +40,11 @@ describe('workspace skills (OC-70)', () => {
     skill(join(workspace, 'skills'), 'needs-missing', 'x', 'requires: no-such-binary-xyz\n')
     const env = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k', THEOCLAW_WORKSPACE: workspace, HOME: home }
     const options = agentOptionsFor(env)
-    expect(options.skills?.inline.map((s) => s.name).sort()).toEqual(['canary-word', 'from-user', 'git-helper', 'summarize-text'])
+    // The SDK discovers the folders, workspace first.
+    expect(options.skills?.bundledDirs).toEqual([join(workspace, 'skills'), join(home, '.theoclaw', 'skills')])
+    // skill_read offers the folder skills, but not the one whose binary is missing, even by name or in its list.
+    expect(await readBody(options as never, 'needs-missing')).not.toContain('"x"')
+    expect(await readBody(options as never, 'no-such-skill')).not.toContain('needs-missing')
     expect(await readBody(options as never, 'canary-word')).toContain('ZEBRA-7731')
     expect(await readBody(options as never, 'from-user')).toContain('user only')
   })
@@ -70,7 +74,7 @@ describe('workspace skills (OC-70)', () => {
       ],
     } as unknown as ImportedSetup
     const options = theoClawAgentOptions({ model: 'm', apiKey: 'k', skillsDir: workspace, imported: { setup, mcp: false } })
-    expect(options.skills?.inline.map((s) => s.name).sort()).toEqual(['dup', 'git-helper', 'only-imported', 'summarize-text'])
+    expect((await options.skillsRefresh?.())?.inline.map((s) => s.name).sort()).toEqual(['git-helper', 'only-imported', 'summarize-text'])
     expect(await readBody(options as never, 'dup')).toContain('workspace body')
     expect(await readBody(options as never, 'only-imported')).toContain('imported only')
   })
@@ -100,7 +104,8 @@ describe('bundled skills (OC-74)', () => {
   it('offers git-helper and summarize-text to a chat agent, and skill_read returns the body', async () => {
     const env = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k', HOME: tmp() }
     const options = agentOptionsFor(env)
-    expect(options.skills?.inline.map((s) => s.name)).toEqual(expect.arrayContaining(['git-helper', 'summarize-text']))
+    expect(options.skills?.inline.map((s) => s.name).sort()).toEqual(['git-helper', 'summarize-text'])
+    expect(await readBody(options as never, 'git-helper')).toContain('git status')
     expect(await readBody(options as never, 'summarize-text')).toContain('five bullet points')
   })
 })

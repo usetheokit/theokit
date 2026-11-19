@@ -1,0 +1,225 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { describe, expect, it } from 'vitest'
+
+import {
+  createJobStore,
+  ScheduleStoreError,
+  type ScheduledJob,
+} from '../../src/schedule/job-store.js'
+import {
+  copyJobs,
+  createPostgresJobStore,
+  JobCopyError,
+  JobCopyUnsupportedError,
+  type SqlPool,
+} from '../../src/schedule/postgres-job-store.js'
+
+function job(id: string): ScheduledJob {
+  return {
+    id,
+    cron: '@daily',
+    prompt: 'p',
+    target: { platform: 'slack', channelId: 'C1' },
+    createdAt: 1,
+  }
+}
+
+function fakePool(rows: { id: string; job: unknown }[] = []) {
+  const calls: { sql: string; params?: readonly unknown[] }[] = []
+  const state = { fail: undefined as Error | undefined }
+  const pool: SqlPool = {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- mirrors SqlPool
+    query: async <R>(sql: string, params?: readonly unknown[]) => {
+      calls.push({ sql, params })
+      if (state.fail !== undefined && /^(INSERT|DELETE)/.test(sql)) throw state.fail
+      return { rows: (sql.startsWith('SELECT') ? rows : []) as R[] }
+    },
+  }
+  return { pool, calls, state }
+}
+
+describe('createPostgresJobStore', () => {
+  it('loads rows and writes through', async () => {
+    const { pool, calls } = fakePool([{ id: 'a', job: job('a') }])
+    const store = await createPostgresJobStore(pool)
+    expect(store.get('a')).toEqual(job('a'))
+    await store.put(job('b'))
+    expect(store.list()).toHaveLength(2)
+    expect(await store.setPreviousOutput('b', 'out')).toBe(true)
+    expect(store.get('b')?.previousOutput).toBe('out')
+    expect(await store.setPreviousOutput('zz', 'x')).toBe(false)
+    expect(await store.remove('b')).toBe(true)
+    expect(calls.some((c) => c.sql.startsWith('CREATE TABLE IF NOT EXISTS'))).toBe(true)
+  })
+
+  it('a malformed row is refused with ScheduleStoreError naming the table and job id', async () => {
+    const { pool } = fakePool([{ id: 'bad1', job: { id: 'bad1' } }])
+    const error = await createPostgresJobStore(pool, { table: 'my_jobs' }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ScheduleStoreError)
+    expect((error as Error).message).toContain('my_jobs')
+    expect((error as Error).message).toContain('bad1')
+  })
+
+  it('a row whose id differs from its job id is refused naming the table and row id', async () => {
+    const { pool } = fakePool([{ id: 'a', job: job('b') }])
+    const error = await createPostgresJobStore(pool, { table: 'my_jobs' }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ScheduleStoreError)
+    expect((error as Error).message).toContain('my_jobs')
+    expect((error as Error).message).toContain('row a')
+  })
+
+  it('copyJobs refuses when a put queued earlier lands first, without force', async () => {
+    const { pool } = fakePool()
+    const target = await createPostgresJobStore(pool)
+    const from = await createPostgresJobStore(fakePool().pool)
+    await from.put(job('s'))
+    const queued = target.put(job('q'))
+    const error = await copyJobs(from, target, { force: false }).catch((e: unknown) => e)
+    await queued
+    expect(error).toBeInstanceOf(JobCopyError)
+    expect(target.get('s')).toBeUndefined()
+  })
+
+  it('an invalid table name is refused', async () => {
+    const { pool } = fakePool()
+    for (const table of ['Jobs', '1x', 'a;drop', '', 'a'.repeat(64)]) {
+      await expect(createPostgresJobStore(pool, { table })).rejects.toBeInstanceOf(
+        ScheduleStoreError,
+      )
+    }
+  })
+
+  it('keeps the original error as cause when the database is unreachable', async () => {
+    const cause = new Error('ECONNREFUSED')
+    const pool: SqlPool = { query: () => Promise.reject(cause) }
+    const error = await createPostgresJobStore(pool).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ScheduleStoreError)
+    expect((error as Error).cause).toBe(cause)
+  })
+
+  it('writes run one after another', async () => {
+    const { calls, pool } = fakePool()
+    const slow: SqlPool = {
+      query: async (sql, params) => {
+        if (params?.[0] === 'first') await new Promise((r) => setTimeout(r, 20))
+        return pool.query(sql, params)
+      },
+    }
+    const store = await createPostgresJobStore(slow)
+    await Promise.all([store.put(job('first')), store.put(job('second'))])
+    const ids = calls.filter((c) => c.sql.startsWith('INSERT')).map((c) => c.params?.[0])
+    expect(ids).toEqual(['first', 'second'])
+  })
+
+  it('a refused write leaves memory unchanged and later writes still run', async () => {
+    const { pool, state } = fakePool()
+    const store = await createPostgresJobStore(pool)
+    state.fail = new Error('disk full')
+    await expect(store.put(job('a'))).rejects.toThrow('disk full')
+    expect(store.list()).toEqual([])
+    state.fail = undefined
+    await store.put(job('b'))
+    expect(store.list()).toHaveLength(1)
+  })
+})
+
+describe('reserved-word table names', () => {
+  it('quotes the table in every statement', async () => {
+    const { pool, calls } = fakePool()
+    const store = await createPostgresJobStore(pool, { table: 'user' })
+    await store.put(job('a'))
+    await store.setPreviousOutput('a', 'x')
+    await store.remove('a')
+    expect(calls.length).toBeGreaterThanOrEqual(5)
+    for (const c of calls) expect(c.sql).toContain('"user"')
+    for (const c of calls) expect(c.sql).not.toMatch(/(FROM|INTO|EXISTS|UPDATE) user\b/)
+  })
+})
+
+describe('copyJobs into the file store', () => {
+  it('copies into an empty file store and refuses a non-empty one', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'copy-jobs-'))
+    try {
+      const to = createJobStore(join(dir, 'schedules.json'))
+      const from = { ...to, list: () => [job('a'), job('b')] }
+      expect(await copyJobs(from, to, { force: false })).toBe(2)
+      expect(to.list()).toHaveLength(2)
+      expect(createJobStore(join(dir, 'schedules.json')).list()).toHaveLength(2)
+      await expect(copyJobs(from, to, { force: false })).rejects.toBeInstanceOf(JobCopyError)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('copyJobs', () => {
+  it('refuses a target that cannot take the copy atomically, writing nothing', async () => {
+    const puts: string[] = []
+    const base = createJobStore('/nonexistent-dir/none.json')
+    const to = {
+      ...base,
+      list: () => [] as ScheduledJob[],
+      putMany: undefined,
+      put: (j: ScheduledJob) => {
+        puts.push(j.id)
+        return j.id === 'b' ? Promise.reject(new Error('boom')) : Promise.resolve()
+      },
+    }
+    const from = { ...base, list: () => [job('a'), job('b')] }
+    await expect(copyJobs(from, to, { force: false })).rejects.toBeInstanceOf(
+      JobCopyUnsupportedError,
+    )
+    expect(puts).toEqual([])
+  })
+
+  it('refuses a non-empty target without putMany with the typed count error, before the unsupported error', async () => {
+    const base = createJobStore('/nonexistent-dir/none.json')
+    const to = { ...base, list: () => [job('x')], putMany: undefined }
+    const from = { ...base, list: () => [job('a')] }
+    const error = await copyJobs(from, to, { force: false }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(JobCopyError)
+    expect((error as JobCopyError).existing).toBe(1)
+  })
+
+  it('copyJobs refuses a non-empty target without force, and with force copies every job', async () => {
+    const dummy = fakePool([{ id: 'x', job: job('x') }])
+    const target = await createPostgresJobStore(dummy.pool)
+    const source = createJobStore('/nonexistent-dir/none.json')
+    const from = { ...source, list: () => [job('a'), job('b')] }
+    const error = await copyJobs(from, target, { force: false }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(JobCopyError)
+    expect((error as Error).message).toContain('1 job')
+    expect(await copyJobs(from, target, { force: true })).toBe(2)
+    expect(
+      target
+        .list()
+        .map((j) => j.id)
+        .sort((a, b) => a.localeCompare(b)),
+    ).toEqual(['a', 'b', 'x'])
+    // one statement for the whole copy
+    expect(dummy.calls.filter((c) => c.sql.startsWith('INSERT'))).toHaveLength(1)
+  })
+
+  it('a failed bulk copy leaves the target unchanged', async () => {
+    const { pool, state } = fakePool()
+    const target = await createPostgresJobStore(pool)
+    state.fail = new Error('boom')
+    const from = { ...createJobStore('/nonexistent-dir/none.json'), list: () => [job('a')] }
+    await expect(copyJobs(from, target, { force: false })).rejects.toThrow('boom')
+    expect(target.list()).toEqual([])
+  })
+
+  it('a bulk copy beyond the 65,535-parameter protocol limit uses a bounded parameter count', async () => {
+    const { pool, calls } = fakePool()
+    const target = await createPostgresJobStore(pool)
+    const many = Array.from({ length: 40_000 }, (_, i) => job(`j${String(i)}`))
+    const from = { ...createJobStore('/nonexistent-dir/none.json'), list: () => many }
+    expect(await copyJobs(from, target, { force: false })).toBe(40_000)
+    const insert = calls.find((c) => c.sql.startsWith('INSERT'))
+    expect(insert?.params?.length ?? 0).toBeLessThanOrEqual(1)
+    expect(target.list()).toHaveLength(40_000)
+  })
+})
