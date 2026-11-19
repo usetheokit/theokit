@@ -833,11 +833,14 @@ async function* streamSdkAgent(
 export interface SdkTurnHandle {
   wait: () => Promise<{
     result?: string
-    usage?: { totalTokens?: number }
+    usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number }
+    cost?: { amountUsd?: number }
     status?: string
     error?: { message: string }
   }>
   stream?: () => AsyncIterable<unknown>
+  /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
+  cancel?: () => unknown
 }
 
 /** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */

@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1281 export(s) across 25 entry point(s).
+1299 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -50,6 +50,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CapabilityPreset` | value |
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
+| `classifyTurnFailure` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
 | `compileAgentDefinition` | value |
@@ -59,6 +60,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `compileProjectContext` | value |
 | `compileSkills` | value |
 | `compileTools` | value |
+| `completeFromTurn` | value |
 | `CompressionFailedError` | value |
 | `ConfigurationError` | value |
 | `CONTEXT_WINDOW_FLOOR` | value |
@@ -85,6 +87,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DEFAULT_HANDLER_TIMEOUT_MS` | value |
 | `DEFAULT_KEEP_TOKENS` | value |
 | `DEFAULT_MAX_ITERATIONS` | value |
+| `DEFAULT_TURN_FAILURE_HINTS` | value |
 | `delegate` | value |
 | `delegateBackground` | value |
 | `delegateWithScoring` | value |
@@ -94,6 +97,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
+| `describeTurnFailure` | value |
 | `discoverSubagents` | value |
 | `encodeAcpMessage` | value |
 | `ERROR_CODE_DATA_PART` | value |
@@ -188,6 +192,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveSettingSources` | value |
 | `resolveTrustPosture` | value |
 | `Retry` | value |
+| `runAgentTurn` | value |
 | `RunContextCapability` | value |
 | `runInputGuards` | value |
 | `runOutputGuards` | value |
@@ -272,6 +277,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
 | `AgentTurnMetadata` | type |
+| `AgentTurnOutcome` | type |
 | `AgentWithNarrowedListAlias` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
@@ -410,6 +416,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ResolvedCompatSource` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
+| `RunAgentTurnOptions` | type |
 | `RunEvent` | type |
 | `RunStartedEvent` | type |
 | `RuntimeOverrides` | type |
@@ -463,6 +470,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `TrustPosture` | type |
 | `TrustPostureInput` | type |
 | `TrustSource` | type |
+| `TurnFailure` | type |
+| `TurnFailureHints` | type |
 | `TurnLifecycle` | type |
 | `TurnOutcome` | type |
 | `Verdict` | type |
@@ -490,6 +499,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `compileProjectContext` | value |
 | `compileSkills` | value |
 | `compileTools` | value |
+| `completeFromTurn` | value |
 | `ContextualTool` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
@@ -540,6 +550,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveCompatSources` | value |
 | `resolveMcpServers` | value |
 | `resolveSettingSources` | value |
+| `runAgentTurn` | value |
 | `runWithApiErrorHandling` | value |
 | `shouldAutoApprove` | value |
 | `streamAgentResponse` | value |
@@ -570,6 +581,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
 | `AgentTurnMetadata` | type |
+| `AgentTurnOutcome` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
 | `ApiErrorPolicy` | type |
@@ -622,6 +634,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
 | `ResolvedCompatSource` | type |
+| `RunAgentTurnOptions` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
 | `Scorer` | type |
@@ -975,6 +988,7 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `agentRunPort` | value |
 | `buildEnvContext` | value |
 | `buildRepoMap` | value |
 | `CatastrophicCommandError` | value |
@@ -1019,6 +1033,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DEFAULT_TOOL_GUIDANCE` | value |
 | `DelegateToolConfigError` | value |
 | `denyCatastrophicCommands` | value |
+| `fileTransientJob` | value |
 | `formatCode` | value |
 | `formatDiff` | value |
 | `formatError` | value |
@@ -1189,6 +1204,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `classifyProjects` | value |
 | `deleteSession` | value |
 | `forkBeforeUserTurn` | value |
+| `ForkedSessionBusyError` | value |
 | `GCFloorError` | value |
 | `GCProtectionUnavailableError` | value |
 | `listSessions` | value |
@@ -1208,11 +1224,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
+| `streamTurnForkingIfBusy` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
 | `ClassifyProjectsOptions` | type |
 | `DeleteSessionOptions` | type |
 | `DeleteSessionResult` | type |
+| `ForkIfBusyOptions` | type |
 | `FsSeam` | type |
 | `GCCandidate` | type |
 | `GCError` | type |
