@@ -75,6 +75,102 @@ export interface CurrentProjectGCOptions {
   removeFromRegistry?: (id: string) => unknown
 }
 
+type Candidate = TranscriptGCPlan['candidates'][number]
+
+/**
+ * A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
+ * first row. Each candidate therefore gets its OWN identity: the registered session (archived or
+ * not) whose transcript file this is, under either naming convention. A fork with no registry
+ * entry has no identity, and is reported by its transcript path rather than as its source.
+ * Legacy names sanitise ids (`a.b` and `a-b` share a file), so one transcript can match several
+ * identities; which entry it belongs to is then unknowable and the candidate is withheld.
+ */
+function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): TranscriptGCPlan {
+  const identitiesOf = (c: Candidate): string[] => [
+    ...new Set(
+      [...(c.id === undefined ? [] : [c.id]), ...registryIds].filter(
+        (id) =>
+          c.transcript === transcriptPath(planned.root, planned.cwd, id) ||
+          c.transcript === legacyTranscriptPath(planned.root, planned.cwd, id),
+      ),
+    ),
+  ]
+  const ambiguous: Candidate[] = []
+  const candidates = planned.candidates.flatMap((c) => {
+    const ids = identitiesOf(c)
+    if (ids.length > 1) {
+      ambiguous.push(c)
+      return []
+    }
+    return [{ ...c, id: ids[0] }]
+  })
+  return {
+    ...planned,
+    candidates,
+    kept: [
+      ...planned.kept,
+      ...ambiguous.map((c) => ({
+        id: c.id,
+        reason: 'transcript name matches more than one registered session — owner unknown',
+      })),
+    ],
+  }
+}
+
+/** True when the candidate's legacy-named transcript belongs to a session that is live right now. */
+function isLegacyLive(plan: TranscriptGCPlan, candidate: Candidate, liveIds: string[]): boolean {
+  return liveIds.some(
+    (id) => legacyTranscriptPath(plan.root, plan.cwd, id) === candidate.transcript,
+  )
+}
+
+interface CollectContext {
+  plan: TranscriptGCPlan
+  apply: boolean
+  protectedIds: () => ReadonlyMap<string, string>
+  remove: (id: string) => unknown
+  liveIds: () => string[]
+  acc: { removed: string[]; orphaned: string[]; errors: RunTranscriptGCResult['errors'][number][] }
+}
+
+async function collectCandidate(ctx: CollectContext, candidate: Candidate): Promise<void> {
+  const { plan, acc, protectedIds } = ctx
+  // Protection is re-read before every candidate: the plan is a snapshot, the framework's own
+  // re-check knows only the hashed names, and an earlier removal can take long enough for the pointer
+  // to move onto a later candidate's legacy name.
+  if (ctx.apply) {
+    try {
+      if (isLegacyLive(plan, candidate, ctx.liveIds())) return
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      acc.errors.push({ id: candidate.id, message })
+      return
+    }
+  }
+  // The framework needs an id to run; an identity-less fork gets a stand-in that is never sent to
+  // the registry, and its collection is reported by path.
+  const stand = candidate.id ?? '\u0000unregistered'
+  const res = await runTranscriptGC(
+    { ...plan, candidates: [{ ...candidate, id: stand }] },
+    {
+      apply: ctx.apply,
+      protectedIds,
+      removeFromRegistry: (id) =>
+        candidate.id !== undefined && id === candidate.id && !protectedIds().has(id)
+          ? ctx.remove(id)
+          : undefined,
+    },
+  )
+  if (candidate.id === undefined) {
+    if (res.removed.length > 0) acc.orphaned.push(candidate.transcript)
+    acc.errors.push(...res.errors.map((e) => ({ id: undefined, message: e.message })))
+  } else {
+    acc.removed.push(...res.removed)
+    acc.errors.push(...res.errors)
+  }
+  acc.orphaned.push(...res.orphaned)
+}
+
 /**
  * `sessions gc` for one project: the framework's planner with TheoCode's protection added — the TUI
  * pointer, every non-archived registry session, and the legacy-named transcript of each. Throws what
@@ -87,8 +183,7 @@ export async function planAndRunCurrentProjectGC(
     await import('@theocode/agent/session')
   const { cwd } = opts
   const everyone = await (opts.listRegistry ?? listAgents)(cwd)
-  const registered = everyone.filter((a) => a.archived !== true)
-  const registryIds = registered.map((a) => a.agentId)
+  const registryIds = everyone.filter((a) => a.archived !== true).map((a) => a.agentId)
   const protectedIds = gcProtectedIds(cwd, registryIds)
   const planned = planTranscriptGC({
     cwd,
@@ -98,90 +193,22 @@ export async function planAndRunCurrentProjectGC(
     ...(opts.root !== undefined ? { root: opts.root } : {}),
     ...(opts.now !== undefined ? { now: opts.now } : {}),
   })
-  const planned2 = withholdLegacyNamed(planned, liveSessionIds(cwd, registryIds))
-  // A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
-  // first row. Each candidate therefore gets its OWN identity: the registered session (archived or
-  // not) whose transcript file this is, under either naming convention. A fork with no registry
-  // entry has no identity, and is reported by its transcript path rather than as its source.
-  const everyRegistryId = everyone.map((a) => a.agentId)
-  // Legacy names sanitise ids (`a.b` and `a-b` share a file), so one transcript can match several
-  // identities. Which entry it belongs to is then unknowable: the candidate is withheld.
-  const identitiesOf = (c: TranscriptGCPlan['candidates'][number]): string[] => [
-    ...new Set(
-      [...(c.id === undefined ? [] : [c.id]), ...everyRegistryId].filter(
-        (id) =>
-          c.transcript === transcriptPath(planned2.root, planned2.cwd, id) ||
-          c.transcript === legacyTranscriptPath(planned2.root, planned2.cwd, id),
-      ),
-    ),
-  ]
-  const remove = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
-  const removed: string[] = []
-  const orphaned: string[] = []
-  const errors: RunTranscriptGCResult['errors'][number][] = []
-  const ambiguous = new Set<TranscriptGCPlan['candidates'][number]>()
-  const identified = planned2.candidates.flatMap((c) => {
-    const ids = identitiesOf(c)
-    if (ids.length > 1) {
-      ambiguous.add(c)
-      return []
-    }
-    return [{ ...c, id: ids[0] }]
-  })
-  const plan: TranscriptGCPlan = {
-    ...planned2,
-    candidates: identified,
-    kept: [
-      ...planned2.kept,
-      ...[...ambiguous].map((c) => ({
-        id: c.id,
-        reason: 'transcript name matches more than one registered session — owner unknown',
-      })),
-    ],
+  const withheld = withholdLegacyNamed(planned, liveSessionIds(cwd, registryIds))
+  const plan = assignOwnIdentities(
+    withheld,
+    everyone.map((a) => a.agentId),
+  )
+  const ctx: CollectContext = {
+    plan,
+    apply: opts.apply,
+    protectedIds,
+    remove: opts.removeFromRegistry ?? ((id: string) => Agent.delete(id)),
+    liveIds: () => liveSessionIds(cwd, registryIds),
+    acc: { removed: [], orphaned: [], errors: [] },
   }
-  // Protection is re-read before every candidate: the plan is a snapshot, the framework's own
-  // re-check knows only the hashed names, and an earlier removal can take long enough for the pointer
-  // to move onto a later candidate's legacy name.
-  for (const candidate of plan.candidates) {
-    const one = { ...plan, candidates: [candidate] }
-    if (opts.apply) {
-      try {
-        const legacyLive = new Set(
-          liveSessionIds(cwd, registryIds).map((id) =>
-            legacyTranscriptPath(plan.root, plan.cwd, id),
-          ),
-        )
-        if (legacyLive.has(candidate.transcript)) continue
-      } catch (err) {
-        errors.push({ id: candidate.id, message: err instanceof Error ? err.message : String(err) })
-        continue
-      }
-    }
-    // The framework needs an id to run; an identity-less fork gets a stand-in that is never sent to
-    // the registry, and its collection is reported by path.
-    const stand = candidate.id ?? '\u0000unregistered'
-    const res = await runTranscriptGC(
-      { ...one, candidates: [{ ...candidate, id: stand }] },
-      {
-        apply: opts.apply,
-        protectedIds,
-        removeFromRegistry: (id) =>
-          candidate.id !== undefined && id === candidate.id && !protectedIds().has(id)
-            ? remove(id)
-            : undefined,
-      },
-    )
-    if (candidate.id === undefined) {
-      if (res.removed.length > 0) orphaned.push(candidate.transcript)
-      errors.push(...res.errors.map((e) => ({ id: undefined, message: e.message })))
-    } else {
-      removed.push(...res.removed)
-      errors.push(...res.errors)
-    }
-    orphaned.push(...res.orphaned)
-  }
-  const result: RunTranscriptGCResult = { dryRun: !opts.apply, removed, orphaned, errors }
-  return { plan, result }
+  for (const candidate of plan.candidates) await collectCandidate(ctx, candidate)
+  const { removed, orphaned, errors } = ctx.acc
+  return { plan, result: { dryRun: !opts.apply, removed, orphaned, errors } }
 }
 
 async function gcForCurrentProject(args: ExecSessions): Promise<void> {
