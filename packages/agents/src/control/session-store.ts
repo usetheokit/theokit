@@ -60,7 +60,11 @@ const DEFAULT_REDIRECT_NOTE =
 
 const INTERRUPTED: SessionOutcome = { ok: false, code: 'interrupted' }
 const BUSY: SessionOutcome = { ok: false, code: 'busy' }
-const CLOSING: SessionOutcome = { ok: false, code: 'turn_failed', reason: 'the session store is closed' }
+const CLOSING: SessionOutcome = {
+  ok: false,
+  code: 'turn_failed',
+  reason: 'the session store is closed',
+}
 
 interface Turn {
   readonly controller: AbortController
@@ -90,7 +94,14 @@ function newTurn(owner: object): Turn {
   const ended = new Promise<void>((resolve) => {
     end = resolve
   })
-  return { controller: new AbortController(), owner, cancelRequested: false, finished: false, ended, end }
+  return {
+    controller: new AbortController(),
+    owner,
+    cancelRequested: false,
+    finished: false,
+    ended,
+    end,
+  }
 }
 
 function describe(error: unknown): string {
@@ -126,7 +137,10 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
   function evictIdle(): Entry | undefined {
     let victim: [string, Entry] | undefined
     for (const pair of entries) {
-      if (pair[1].running === undefined && (victim === undefined || pair[1].lastUsed < victim[1].lastUsed)) {
+      if (
+        pair[1].running === undefined &&
+        (victim === undefined || pair[1].lastUsed < victim[1].lastUsed)
+      ) {
         victim = pair
       }
     }
@@ -262,7 +276,9 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
     try {
       return await turnOn(session, admission, turn, message, emit)
     } catch (error) {
-      return turn.cancelRequested ? INTERRUPTED : { ok: false, code: 'turn_failed', reason: describe(error) }
+      return turn.cancelRequested
+        ? INTERRUPTED
+        : { ok: false, code: 'turn_failed', reason: describe(error) }
     } finally {
       turn.finished = true
       if (entry.running === turn) entry.running = undefined
@@ -279,7 +295,12 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
     steer: async (session, message) => {
       const entry = entries.get(session)
       const turn = entry?.running
-      if (entry?.agent === undefined || turn === undefined || turn.finished || turn.cancelRequested) {
+      if (
+        entry?.agent === undefined ||
+        turn === undefined ||
+        turn.finished ||
+        turn.cancelRequested
+      ) {
         return 'no_turn'
       }
       try {
@@ -301,7 +322,9 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
     close: async () => {
       closed = true
       for (const turn of waiting.keys()) stop(turn)
-      const turns = [...entries.values()].flatMap((e) => (e.running === undefined ? [] : [e.running]))
+      const turns = [...entries.values()].flatMap((e) =>
+        e.running === undefined ? [] : [e.running],
+      )
       for (const turn of turns) stop(turn)
       // A turn whose build is still pending disposes its own agent when the build arrives.
       await Promise.race([Promise.all(turns.map((t) => t.ended)), delay(drainMs)])

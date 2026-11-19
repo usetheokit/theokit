@@ -98,7 +98,11 @@ describe('createSessionStore', () => {
 
   it('the message after an interrupt carries the redirect note', async () => {
     const f = fake(true)
-    const store = createSessionStore({ build: async () => f.agent, redirectNote: 'NOTE:', drainMs: 20 })
+    const store = createSessionStore({
+      build: async () => f.agent,
+      redirectNote: 'NOTE:',
+      drainMs: 20,
+    })
     const turn = store.run('a', 'first', noop, {})
     await tick()
     store.interrupt('a')
@@ -162,7 +166,11 @@ describe('createSessionStore', () => {
         throw new Error('boom')
       },
     })
-    expect(await store.run('a', 'x', noop, {})).toEqual({ ok: false, code: 'turn_failed', reason: 'boom' })
+    expect(await store.run('a', 'x', noop, {})).toEqual({
+      ok: false,
+      code: 'turn_failed',
+      reason: 'boom',
+    })
   })
 
   it('close disposes every agent once and refuses later turns', async () => {
@@ -175,6 +183,8 @@ describe('createSessionStore', () => {
   })
 
   it('rejects an invalid max', () => {
-    expect(() => createSessionStore({ build: async () => fake().agent, max: 0 })).toThrow(RangeError)
+    expect(() => createSessionStore({ build: async () => fake().agent, max: 0 })).toThrow(
+      RangeError,
+    )
   })
 })
