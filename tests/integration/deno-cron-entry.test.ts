@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { join, relative, resolve } from 'node:path'
 
 import { translateCronToDeno } from '../../packages/theo/src/server/cron/adapter-translators.js'
 
+const CLI = resolve(__dirname, '../../packages/theo/src/cli/index.ts')
+const TSX = resolve(__dirname, '../../node_modules/.bin/tsx')
 const JOBS = resolve(__dirname, '../../packages/theo/src/server/jobs/index.ts')
 
 let root: string
@@ -93,20 +96,27 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
   const configs = ['theo.config.ts', `theo.config.${process.env.NODE_ENV ?? ''}.ts`]
     .filter((n) => existsSync(join(root, n)))
     .map((n) => join(root, n))
-  const entry = join(root, '.theokit', 'crons-entry.ts')
-  write('server/crons/job.ts', `export default { handler: async (ctx) => { ${handlerBody} } }\n`)
-  translateCronToDeno(
-    entry,
-    [
-      {
-        name: 'job',
-        filePath: 'server/crons/job.ts',
-        schedule: '* * * * *',
-        concurrency: 'forbid',
-      },
-    ],
-    { projectRoot: root, configPaths: configs },
+  // The real CLI build writes the entry: scan, manifest, config paths and all.
+  const DEFINE = resolve(__dirname, '../../packages/theo/src/server/cron/define-cron.ts')
+  write('package.json', JSON.stringify({ name: 'deno-cron-fixture', private: true, type: 'module' }))
+  write('app/page.tsx', 'export default function Page() { return null }\n')
+  write('index.html', '<!doctype html><html><body></body></html>\n')
+  write(
+    'server/crons/job.ts',
+    `import { defineCron } from '${DEFINE}'\nexport default defineCron('job', { schedule: '* * * * *', handler: async (ctx) => { ${handlerBody} } })\n`,
   )
+  // The build may fail later (no Vite deps in the fixture); the cron entry is emitted before.
+  try {
+    execFileSync(TSX, [CLI, 'build', '--target=deno-deploy'], {
+      cwd: root,
+      stdio: 'pipe',
+      env: { ...process.env, THEOKIT_SKIP_NATIVE_PREFLIGHT: '1' },
+    })
+  } catch {
+    /* asserted through the entry below */
+  }
+  const entry = join(root, '.theokit', 'crons-entry.ts')
+  expect(existsSync(entry), 'CLI build emitted the cron entry').toBe(true)
   // Every bare specifier the config modules reach must be in the emitted map.
   for (const spec of bareSpecifiersOf(readProjectSourcesFromDisk(root, cfg))) {
     expect(map[spec], `${spec} is mapped`).toBeDefined()
