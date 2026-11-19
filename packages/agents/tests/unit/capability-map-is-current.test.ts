@@ -68,7 +68,7 @@ describe('the committed capability map is what the package implies', () => {
     const start = rendered.indexOf('## `@theokit/agents/config`')
     expect(start, 'no config section in the map').toBeGreaterThanOrEqual(0)
     const next = rendered.indexOf('\n## ', start + 1)
-    const section = rendered.slice(start, next === -1 ? undefined : next)
+    const section = next === -1 ? rendered.slice(start) : rendered.slice(start, next)
     for (const name of ['InstructionCut', 'InstructionTrim', 'InstructionTreeBudget']) {
       expect(section, `${name} is missing from the config section as a type`).toContain(
         `| \`${name}\` | type |`,
