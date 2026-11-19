@@ -18,7 +18,7 @@ import { writeScaffoldFile } from './write-file.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /**
- * M45 (ADR-0054) — `create-theokit --surface web|tui|desktop`.
+ * M45 (ADR-0054) — `create-theokit --surface web|tui|desktop|cli`.
  *
  * A FLAG-driven additive scaffold (mirrors `--backend` / `scaffoldServices`), NOT a new top-level
  * template (ADR-0023 default-only respected). `web` is the default (the existing web app — no-op).
@@ -27,9 +27,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
  * scaffolded surface consumes the agent via the M41/M42/M44 UNIFIED client (ADR-0054 D2), not the raw
  * seam. All Tauri/Ink boilerplate lives HERE in the scaffolder templates — framework core stays agnostic.
  */
-export type SurfaceKind = 'web' | 'tui' | 'desktop'
+export type SurfaceKind = 'web' | 'tui' | 'desktop' | 'cli'
 
-const VALID_SURFACES = ['web', 'tui', 'desktop'] as const
+const VALID_SURFACES = ['web', 'tui', 'desktop', 'cli'] as const
 
 /**
  * Web-only deps dropped for the tui/desktop surfaces (they ship no web UI). `react-router` is NOT dropped
@@ -101,6 +101,21 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       'src/server/**/*.ts',
       'src/shared/**/*.ts',
     ],
+  },
+  cli: {
+    fragment: 'cli',
+    // `@theokit/agents/commands` holds `runHeadlessTurn` / `readHeadlessPrompt`. `ai` stays because
+    // theokit's in-process agent runtime imports it at RUNTIME.
+    // 16.13.0 is the first release that exports them (16.12.0 does not).
+    deps: { '@theokit/agents': '^16.13.0', ai: '^7.0.0' },
+    devDeps: { tsx: '^4.19.0' },
+    scripts: {
+      dev: 'tsx cli/main.ts',
+      start: 'tsx cli/main.ts',
+      // Runs from source through `tsx`; `build` means "typecheck" (same reasoning as the tui, #374).
+      build: 'tsc --noEmit',
+    },
+    tsconfigInclude: ['cli/**/*.ts', 'src/server/**/*.ts', 'src/shared/**/*.ts'],
   },
   desktop: {
     fragment: 'desktop',
