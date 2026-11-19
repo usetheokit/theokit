@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,6 +7,7 @@ import { discoverSkills } from '@theokit/sdk/skills'
 import { describe, expect, it } from 'vitest'
 
 import { foreignSurfaceInventory } from '../../src/bridge/index.js'
+import { EVERY_SURFACE, SURFACE_FOLDERS } from '../../src/bridge/setting-sources-gate.js'
 import { reportUnloadedSurfaces } from '../../src/bridge/unloaded-surfaces.js'
 
 function project(): string {
@@ -100,5 +102,72 @@ describe('the foreign surface inventory follows the gate', () => {
     writeFileSync(join(cwd, '.other', 'agents', 'a.md'), '---\nname: a\n---\n')
     const found = foreignSurfaceInventory({ cwd, root: '.other' }).find((e) => e.dir === 'agents')
     expect(found?.count).toBe(1)
+  })
+
+  it('every folder the gate declares follows its surface in enabled', () => {
+    const cwd = project()
+    for (const surface of EVERY_SURFACE) {
+      for (const dir of SURFACE_FOLDERS[surface]) {
+        const only = foreignSurfaceInventory({ cwd, enabled: [surface] }).find((e) => e.dir === dir)
+        const none = foreignSurfaceInventory({ cwd, enabled: [] }).find((e) => e.dir === dir)
+        if (only === undefined) continue // declared by the gate, no counter here
+        expect(only.state).toBe('read')
+        expect(none?.state).toBe('refused')
+      }
+    }
+  })
+
+  it('a surface the gate does not know cannot make a folder read', () => {
+    const cwd = project()
+    const found = foreignSurfaceInventory({
+      cwd,
+      enabled: ['nonsense' as unknown as 'commands'],
+    }).find((e) => e.dir === 'commands')
+    expect(found?.state).toBe('refused')
+  })
+
+  it('skills fence rules match the SDK at the boundaries', async () => {
+    const cwd = project()
+    const fixtures: Record<string, string> = {
+      'leading-space': ' ---\ndescription: x\n---\nbody',
+      'leading-newline': '\n---\ndescription: x\n---\nbody',
+      crlf: '---\r\ndescription: x\r\n---\r\nbody',
+      'no-newline-after-close': '---\ndescription: x\n---',
+      'blank-after-open': '---   \ndescription: x\n---  \nbody',
+      'empty-block': '---\n---\nbody',
+    }
+    for (const [name, text] of Object.entries(fixtures)) put(cwd, `skills/${name}/SKILL.md`, text)
+    const sdk = await discoverSkills(join(cwd, '.claude', 'skills'))
+    expect(entry(cwd, 'skills').count).toBe(sdk.length)
+    expect(sdk.map((k) => k.name).sort((a, b) => a.localeCompare(b))).toContain('crlf')
+  })
+
+  it('commands skips an unclosed frontmatter and follows symlinks like the loader', () => {
+    const cwd = project()
+    put(cwd, 'commands/ok.md', '---\ndescription: ok\n---\nGo')
+    put(cwd, 'commands/plain.md', 'no frontmatter at all')
+    put(cwd, 'commands/unclosed.md', '---\ndescription: never closes\nGo')
+    put(cwd, 'elsewhere/linked.md', 'x')
+    symlinkSync(
+      join(cwd, '.claude', 'elsewhere', 'linked.md'),
+      join(cwd, '.claude', 'commands', 'link.md'),
+    )
+    symlinkSync(join(cwd, '.claude', 'elsewhere'), join(cwd, '.claude', 'commands', 'dir'))
+    expect(entry(cwd, 'commands').count).toBe(4)
+  })
+
+  it('a named pipe where a definition belongs does not block the inventory or the reporter', () => {
+    const cwd = project()
+    mkdirSync(join(cwd, '.claude', 'skills', 's'), { recursive: true })
+    mkdirSync(join(cwd, '.claude', 'agent-memory', 'a'), { recursive: true })
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- test fixture, fixed argv
+    execFileSync('mkfifo', [join(cwd, '.claude', 'skills', 's', 'SKILL.md')])
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- test fixture, fixed argv
+    execFileSync('mkfifo', [join(cwd, '.claude', 'agent-memory', 'a', 'MEMORY.md')])
+    expect(entry(cwd, 'agent-memory').unreadable).toEqual(['agent-memory/a/MEMORY.md'])
+    expect(entry(cwd, 'skills').unreadable).toEqual(['skills/s/SKILL.md'])
+    const warnings: string[] = []
+    reportUnloadedSurfaces({ cwd, onWarn: (w) => warnings.push(w) })
+    expect(warnings).toEqual([])
   })
 })

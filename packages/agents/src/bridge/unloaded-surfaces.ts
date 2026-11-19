@@ -27,7 +27,7 @@
  * in `mcp-file.ts`, the output style nothing read in B-022, and a `workflows/` directory whose
  * author sees no complaint and concludes it took effect. The cost of the report is one line.
  */
-import { scanForeignSurfaces, WORKFLOW_REFUSAL_REASON } from './foreign-surfaces.js'
+import { workflowScripts, WORKFLOW_REFUSAL_REASON } from './foreign-surfaces.js'
 
 /** Where the reference keeps workflow scripts, relative to a project root. */
 const WORKFLOWS_DIR = '.claude/workflows'
@@ -42,19 +42,17 @@ export interface ReportUnloadedSurfacesInput {
 /**
  * Report the `.claude` surfaces that are present on disk and deliberately not loaded.
  *
- * Built on the foreign-surface inventory. Says nothing when there is nothing to say: a reporter that
+ * Uses only the workflow scan of the foreign-surface inventory: it runs while commands load, before any trust decision, so it must not open files of other surfaces. Says nothing when there is nothing to say: a reporter that
  * fired on every project would be noise, and noise is how a real report stops being read. An
  * unreadable directory is not a workflow anybody wrote, so it stays quiet too.
  */
 export function reportUnloadedSurfaces(input: ReportUnloadedSurfacesInput): void {
-  const workflows = scanForeignSurfaces({ cwd: input.cwd }).find(
-    ({ entry }) => entry.dir === 'workflows',
-  )
-  if (workflows === undefined || workflows.entry.count === 0) return
+  const scripts = workflowScripts(input.cwd)
+  if (scripts.length === 0) return
 
   input.onWarn(
-    `${WORKFLOWS_DIR}: found ${String(workflows.entry.count)} workflow script(s) — ` +
-      `${[...workflows.names].sort((a, b) => a.localeCompare(b)).join(', ')} — which this runtime does NOT ` +
+    `${WORKFLOWS_DIR}: found ${String(scripts.length)} workflow script(s) — ` +
+      `${scripts.join(', ')} — which this runtime does NOT ` +
       `execute. ${WORKFLOW_REFUSAL_REASON}`,
   )
 }

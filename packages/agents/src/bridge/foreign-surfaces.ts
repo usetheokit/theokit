@@ -14,10 +14,17 @@
  * loader would drop. An entry that exists and cannot be read is listed in `unreadable` instead of
  * throwing: an inventory is a report, and a report that dies on one bad file reports nothing.
  */
-import { readdirSync, readFileSync, type Dirent } from 'node:fs'
+import { readdirSync, readFileSync, statSync, type Dirent } from 'node:fs'
 import { join } from 'node:path'
 
-import { EVERY_SURFACE, type CompatSurface } from './setting-sources-gate.js'
+import { splitFrontmatter } from '../config/frontmatter.js'
+
+import {
+  EVERY_SURFACE,
+  REFUSED_FOLDERS,
+  SURFACE_FOLDERS,
+  type CompatSurface,
+} from './setting-sources-gate.js'
 
 export interface ForeignSurfaceEntry {
   /** Folder name relative to the foreign root, e.g. `'agents'`. */
@@ -56,20 +63,25 @@ interface Scan {
   readonly names: string[]
 }
 
-/** The folders, and the gate surface that feeds each (`undefined`: no surface admits it). */
-const FOLDERS: readonly {
-  readonly dir: string
-  readonly surface: CompatSurface | undefined
-  readonly scan: (path: string, dir: string) => Scan
-}[] = [
-  { dir: 'agents', surface: 'subagents', scan: scanAgents },
-  { dir: 'commands', surface: 'commands', scan: scanCommands },
-  { dir: 'skills', surface: 'skills', scan: scanSkills },
-  // Memory is applied by the host, not loaded by the gate; it follows the surface that carries agents.
-  { dir: 'agent-memory', surface: 'subagents', scan: scanAgentMemory },
-  { dir: 'workflows', surface: undefined, scan: scanWorkflows },
-  { dir: 'plugins', surface: 'plugins', scan: scanPlugins },
-]
+/** How each folder is counted. A folder the gate declares without a counter is not inventoried. */
+const SCANNERS: Readonly<Record<string, ((path: string, dir: string) => Scan) | undefined>> = {
+  agents: scanAgents,
+  commands: scanCommands,
+  skills: scanSkills,
+  'agent-memory': scanAgentMemory,
+  workflows: scanWorkflows,
+  plugins: scanPlugins,
+}
+
+/** Every folder the gate declares, with the surface that admits it (`undefined`: none does). */
+function declaredFolders(): readonly { dir: string; surface: CompatSurface | undefined }[] {
+  return [
+    ...EVERY_SURFACE.flatMap((surface) =>
+      SURFACE_FOLDERS[surface].map((dir) => ({ dir, surface }) as const),
+    ),
+    ...REFUSED_FOLDERS.map((dir) => ({ dir, surface: undefined })),
+  ]
+}
 
 export function foreignSurfaceInventory(
   input: ForeignSurfaceInventoryInput,
@@ -78,15 +90,19 @@ export function foreignSurfaceInventory(
 }
 
 /** The inventory with the names each counter took; shared with `reportUnloadedSurfaces`. */
-export function scanForeignSurfaces(
+function scanForeignSurfaces(
   input: ForeignSurfaceInventoryInput,
 ): readonly { readonly entry: ForeignSurfaceEntry; readonly names: readonly string[] }[] {
   const root = join(input.cwd, input.root ?? '.claude')
-  const enabled = input.enabled ?? EVERY_SURFACE
-  return FOLDERS.map(({ dir, surface, scan }) => {
+  // Only surfaces the gate knows can be read, whatever the caller passes.
+  const known = new Set<CompatSurface>(EVERY_SURFACE)
+  const enabled = new Set((input.enabled ?? EVERY_SURFACE).filter((surface) => known.has(surface)))
+  return declaredFolders().flatMap(({ dir, surface }) => {
+    const scan = SCANNERS[dir]
+    if (scan === undefined) return []
     const { unreadable, names } = scan(join(root, dir), dir)
     const count = names.length
-    const read = surface !== undefined && enabled.includes(surface)
+    const read = surface !== undefined && enabled.has(surface)
     const reason = refusalReason(surface, read)
     const entry: ForeignSurfaceEntry = {
       dir,
@@ -95,7 +111,7 @@ export function scanForeignSurfaces(
       unreadable,
       ...(reason !== undefined && { reason }),
     }
-    return { entry, names }
+    return [{ entry, names }]
   })
 }
 
@@ -114,7 +130,12 @@ function listDir(path: string, label: string, scan: Scan): Dirent[] {
   }
 }
 
+/** Reads a regular file. Anything else (a FIFO, a directory) is refused before it can block a read. */
 function readText(path: string): string {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path convention
+  if (!statSync(path).isFile()) {
+    throw Object.assign(new Error(`not a regular file: ${path}`), { code: 'EISDIR' })
+  }
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path convention
   return readFileSync(path, 'utf8')
 }
@@ -142,15 +163,23 @@ function scanAgents(path: string, dir: string): Scan {
 }
 
 function scanCommands(path: string, dir: string): Scan {
-  // `readCommandsDir` in `config/custom-commands.ts`: every `.md`, nested folders included.
+  // `readCommandsDir` in `config/custom-commands.ts`: stat-based, so symlinks are followed; every
+  // `.md` is walked, nested folders included, and a file whose frontmatter never closes is skipped.
   const scan = emptyScan()
   const walk = (current: string, label: string): void => {
     for (const entry of listDir(current, label, scan)) {
-      if (entry.isDirectory()) walk(join(current, entry.name), `${label}/${entry.name}`)
-      else if (entry.isFile() && entry.name.endsWith('.md')) {
+      const full = join(current, entry.name)
+      let stats
+      try {
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path convention
+        stats = statSync(full)
+      } catch {
+        continue // vanished, or a dangling link: the loader skips it as well
+      }
+      if (stats.isDirectory()) walk(full, `${label}/${entry.name}`)
+      else if (stats.isFile() && entry.name.endsWith('.md')) {
         try {
-          readText(join(current, entry.name))
-          take(scan, entry.name)
+          if (splitFrontmatter(readText(full)) !== undefined) take(scan, entry.name)
         } catch {
           scan.unreadable.push(`${label}/${entry.name}`)
         }
@@ -215,18 +244,31 @@ function scanPlugins(path: string, dir: string): Scan {
   return scan
 }
 
-function opensWithFence(raw: string): boolean {
-  return raw.slice(0, raw.indexOf('\n')).trim() === '---'
+/**
+ * Where the text after an opening or closing fence begins, if the fence line ends: the SDK's
+ * `---\s*\n`. The whitespace run after the fence must contain a newline; the match ends after the
+ * last one. Written out rather than as a regex so a long run of blanks cannot backtrack.
+ */
+function afterFenceLine(raw: string, from: number): number | undefined {
+  let end = from
+  while (end < raw.length && /\s/.test(raw.charAt(end))) end += 1
+  const newline = raw.lastIndexOf('\n', end - 1)
+  return newline >= from ? newline + 1 : undefined
 }
 
-/** The text between the fences, when the file opens with one and closes it on a line of its own. */
+/** The SDK's `hasFrontmatter`: the file begins exactly with `---`, and the fence line ends. */
+function opensWithFence(raw: string): boolean {
+  return raw.startsWith('---') && afterFenceLine(raw, 3) !== undefined
+}
+
+/** The SDK's skill pattern `^---\s*\n([\s\S]*?)\n---\s*\n`: the text between the fences. */
 function frontmatterOf(raw: string): string | undefined {
-  if (!opensWithFence(raw)) return undefined
-  const lines = raw.split('\n')
-  const closing = lines.findIndex((line, index) => index > 0 && line.trimEnd() === '---')
-  // The SDK's pattern needs a newline after the closing fence.
-  if (closing === -1 || closing === lines.length - 1) return undefined
-  return lines.slice(1, closing).join('\n')
+  const start = raw.startsWith('---') ? afterFenceLine(raw, 3) : undefined
+  if (start === undefined) return undefined
+  for (let at = raw.indexOf('\n---', start); at !== -1; at = raw.indexOf('\n---', at + 1)) {
+    if (afterFenceLine(raw, at + 4) !== undefined) return raw.slice(start, at)
+  }
+  return undefined
 }
 
 /**
@@ -287,4 +329,11 @@ function parseFields(text: string): Map<string, unknown> {
     }
   }
   return fields
+}
+
+/** The workflow scripts under `<cwd>/<root>/workflows`, sorted; a folder that cannot be listed has none. */
+export function workflowScripts(cwd: string, root = '.claude'): readonly string[] {
+  return [...scanWorkflows(join(cwd, root, 'workflows'), 'workflows').names].sort((a, b) =>
+    a.localeCompare(b),
+  )
 }

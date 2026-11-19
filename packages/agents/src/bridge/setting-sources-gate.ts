@@ -210,6 +210,24 @@ export const EVERY_SURFACE: readonly CompatSurface[] = [
   'subagents',
 ]
 
+/**
+ * The folders of a foreign root each surface feeds. A `Record` over `CompatSurface`, so a surface
+ * added to the union cannot be left without an entry; the foreign-surface inventory derives its
+ * states from this and `EVERY_SURFACE` rather than keeping its own table.
+ */
+export const SURFACE_FOLDERS: Readonly<Record<CompatSurface, readonly string[]>> = {
+  commands: ['commands'],
+  context: ['rules'],
+  hooks: [],
+  plugins: ['plugins'],
+  skills: ['skills'],
+  // Agent memory is applied by the host, but it travels with the agents that own it.
+  subagents: ['agents', 'agent-memory'],
+}
+
+/** Folders no surface admits: found, reported, never loaded (see `unloaded-surfaces.ts`). */
+export const REFUSED_FOLDERS: readonly string[] = ['workflows']
+
 const IGNORE_WARNING = (): void => undefined
 
 /** What `resolveCompatSources` returns: the whole root, or the root narrowed to some surfaces. */
