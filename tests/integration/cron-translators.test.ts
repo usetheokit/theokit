@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { tmpdir } from 'node:os'
 import { createHandlerQueue } from '../../packages/theo/src/server/jobs/queue-client.js'
@@ -216,7 +217,7 @@ describe('Deno cron context queue', () => {
     const entry = join(root, 'crons-wired-entry.ts')
     translateCronToDeno(entry, [cron('q', '* * * * *')], { configImport: '../theo.config.ts' })
     const content = readFileSync(entry, 'utf8')
-    expect(content).toContain('from "theokit/server/jobs"')
+    expect(content).toContain('from "npm:theokit/server/jobs"')
     expect(content).toContain('"../theo.config.ts"')
     expect(content).toContain('createHandlerQueue(backend')
     expect(content).toContain('run.discard()')
@@ -272,7 +273,7 @@ function runDenoEntry(
     if (!(id in modules)) throw new Error(`unexpected import ${id}`)
     return modules[id]
   }
-  new Function('require', 'exports', 'Deno', js)(require, {}, deno)
+  runInNewContext(js, { require, exports: {}, Deno: deno, crypto, AbortSignal, Date })
   return crons
 }
 

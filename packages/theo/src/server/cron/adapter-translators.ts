@@ -285,7 +285,7 @@ type ConfigModule = { default?: { jobs?: { backend?: unknown } } };
 const envConfigs: Record<string, ConfigModule> = {
 ${envTable}
 };
-const envName = (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get("NODE_ENV");
+const envName = Deno.env.get("NODE_ENV");
 const envBackend = envName === undefined ? undefined : envConfigs[envName]?.default?.jobs?.backend;
 // deno-lint-ignore no-explicit-any
 const backend = (envBackend ?? (configModule as ConfigModule).default?.jobs?.backend) as any;`

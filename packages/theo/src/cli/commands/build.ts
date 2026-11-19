@@ -339,7 +339,7 @@ function denoEnvConfigImports(cwd: string, distDir: string): Record<string, stri
   const out: Record<string, string> = {}
   for (const file of readdirSync(cwd)) {
     const m = /^theo\.config\.([^.]+)\.ts$/.exec(file)
-    if (m?.[1] !== undefined) out[m[1]] = denoImportOf(resolve(cwd, file), distDir) as string
+    if (m?.[1] !== undefined) out[m[1]] = denoImportOf(resolve(cwd, file), distDir)!
   }
   return out
 }
