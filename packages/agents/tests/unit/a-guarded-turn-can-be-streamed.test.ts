@@ -36,6 +36,8 @@ function fakeHandle(behaviour: { outcome?: TurnOutcome; failure?: Error }): SdkA
     dispose: () => Promise.resolve(),
     send: () =>
       Promise.resolve({
+        stream: async function* () {},
+        cancel: () => Promise.resolve(),
         // Created inside `wait`, so the fake holds no rejected promise before it is called.
         wait: () =>
           behaviour.failure === undefined
@@ -260,6 +262,8 @@ describe('a guarded stream emits complete SDK messages', () => {
           send: () =>
             Promise.resolve({
               id: 'run-9',
+              stream: async function* () {},
+              cancel: () => Promise.resolve(),
               wait: () => Promise.resolve(outcome),
             }),
         },

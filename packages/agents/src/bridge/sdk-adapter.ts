@@ -852,20 +852,14 @@ async function* streamSdkAgent(
 export interface SdkTurnHandle {
   /** The SDK run id, when the handle has one (`Run.id`). */
   readonly id?: string
-  wait: () => Promise<SdkLenientOutcome>
+  wait: () => Promise<SdkTurnOutcome>
   /** The SDK's raw message stream (`Run.stream()`), preserved as-is. */
-  stream?: () => AsyncIterable<SdkStreamMessage>
+  stream: () => AsyncIterable<SdkStreamMessage>
   /** The SDK's ordered timeline (`Run.events()`): messages and deltas interleaved. */
   events?: () => AsyncIterable<SdkTimelineEvent>
   /** Cancel the run; stops the stream and in-flight tool calls. */
-  cancel?: () => Promise<void>
+  cancel: () => Promise<void>
 }
-
-/**
- * What a lenient injected double resolves: {@link SdkTurnOutcome} without `error.code`. A real run
- * resolves the full outcome; {@link SdkRun} requires it.
- */
-export type SdkLenientOutcome = Omit<SdkTurnOutcome, 'error'> & { error?: { message: string } }
 
 /** A message on the SDK's raw `Run.stream()`; discriminate on `type`. */
 export type SdkStreamMessage = SDKMessage
