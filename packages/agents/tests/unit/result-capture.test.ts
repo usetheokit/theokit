@@ -35,7 +35,7 @@ describe('createResultCapture', () => {
   it('the error counts the invalid submissions that were rejected', async () => {
     const cap = createResultCapture(schema)
     await call(cap, {}).catch(() => undefined)
-    expect(() => cap.result()).toThrow(/1 invalid submission /)
+    expect(() => cap.result()).toThrow(/1 invalid rejected/)
   })
 
   it('a later valid submission replaces an earlier one', async () => {
