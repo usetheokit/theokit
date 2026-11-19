@@ -1,13 +1,12 @@
-import type {
-  WireMessage as UIMessage,
-  WireChunk as UIMessageChunk,
-  WireToolApproval,
-} from '@theokit/presenter/wire'
+import { pendingApprovals, type PendingApproval } from '@theokit/presenter'
+import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { consumeChunkStream } from '../wire/consume-ui-message-stream.js'
 
 import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
+
+export type { PendingApproval }
 
 export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'
 
@@ -59,48 +58,6 @@ export class AgentStreamInterruptedError extends TheokitAgentError {
   }
 }
 
-/**
- * One HITL decision the run is parked on, flattened for the surface that renders it
- * (usetheokit/theokit#392).
- *
- * ## Why the store publishes this at all, when the part already carries it
- *
- * `approve()` needs an id. Before this field the snapshot had four keys and none of them was that
- * id, so an application had two options: scan every part of every message for `state ===
- * 'approval-requested'`, or poll `GET /api/agents/<name>/approvals` out of band — which is what the
- * measured J2 client did, at twelve lines and two React primitives, through an endpoint under a
- * security advisory. Publishing the id is what removes the reason to reach for either.
- *
- * ## Why it is DERIVED and not accumulated
- *
- * It is computed from the current turn's parts on each emit, never written by a second reducer. A
- * separate list would need its own settle path and could then disagree with the transcript about
- * whether a decision is outstanding — and the transcript is what renders. Deriving makes the two
- * unable to drift: a settled gate leaves `approval-requested` on the same chunk that fills in the
- * output, so it leaves this array in the same step.
- *
- * ## Why plural
- *
- * The SDK dispatches a round's calls concurrently (`mapWithConcurrency`), so two gated calls of the
- * same tool can be outstanding at once — pinned by
- * `tests/integration/hitl-call-correlation.test.ts`. A singular field would have to pick one and
- * would be silently wrong exactly when a human has two things to decide.
- */
-export interface PendingApproval {
-  /** The id `approve()` settles. */
-  readonly approvalId: string
-  /** The call this gate holds — the same id `tool-input-available` announced. */
-  readonly toolCallId: string
-  /** The gated tool's name, off the part. `undefined` only if the producer announced none. */
-  readonly toolName: string | undefined
-  /** The resolved arguments the human is authorising, off the part. */
-  readonly input: unknown
-  /** The question declared on the gate, when the producer sent one. */
-  readonly question?: string
-  /** The window before the gate settles itself, in ms, when the producer sent one. */
-  readonly timeoutMs?: number
-}
-
 /** The observable state the store exposes (stable reference between emits — `useSyncExternalStore` contract). */
 export interface AgentClientState {
   /** The CURRENT turn's assistant messages (per-turn; reset each `send`). Back-compat — unchanged since M41. */
@@ -118,40 +75,6 @@ export interface AgentClientState {
    * Each entry carries the id `approve()` takes plus what the prompt needs to name the action.
    */
   pendingApprovals: PendingApproval[]
-}
-
-/** The empty array served whenever no gate is outstanding — one allocation, not one per emit. */
-const NO_PENDING_APPROVALS: PendingApproval[] = []
-
-/**
- * Project the current turn's parts into the outstanding decisions (see {@link PendingApproval}).
- *
- * Scans `messages` (the current turn) and not `thread`: a turn only reaches `#committed` on `done`,
- * and a run cannot finish while parked inside the awaited approval hook, so a committed turn has no
- * live gate to find. Scanning the whole thread would re-walk every historical part on every token
- * delta for a result that cannot change.
- */
-function derivePendingApprovals(messages: UIMessage[]): PendingApproval[] {
-  let pending: PendingApproval[] | undefined
-  for (const message of messages) {
-    for (const part of message.parts) {
-      if (part.state !== 'approval-requested') continue
-      const approval = part.approval as WireToolApproval | undefined
-      // A part in this state without an id would be a reader defect, not a decision a human can
-      // settle — skipped rather than published as an entry whose `approve()` call cannot work.
-      if (typeof approval?.id !== 'string') continue
-      pending ??= []
-      pending.push({
-        approvalId: approval.id,
-        toolCallId: String(part.toolCallId),
-        toolName: typeof part.toolName === 'string' ? part.toolName : undefined,
-        input: part.input,
-        ...(approval.question !== undefined ? { question: approval.question } : {}),
-        ...(approval.timeoutMs !== undefined ? { timeoutMs: approval.timeoutMs } : {}),
-      })
-    }
-  }
-  return pending ?? NO_PENDING_APPROVALS
 }
 
 /** Derive the turn text from a typed input: `input.message` when present, else the serialized input. */
@@ -247,7 +170,7 @@ export class AgentClient<TInput = unknown> {
     thread: [],
     status: 'idle',
     error: undefined,
-    pendingApprovals: NO_PENDING_APPROVALS,
+    pendingApprovals: pendingApprovals([]),
   }
 
   /**
@@ -335,7 +258,14 @@ export class AgentClient<TInput = unknown> {
       thread,
       status: this.#status,
       error: this.#error,
-      pendingApprovals: derivePendingApprovals(this.#messages),
+      // Plural: the SDK dispatches a round's calls concurrently (`mapWithConcurrency`), so two gated
+      // calls can be outstanding at once (`tests/integration/hitl-call-correlation.test.ts`); a
+      // singular field would be silently wrong exactly when a human has two things to decide.
+      // Derived, never accumulated, so it cannot drift from the transcript. Scans `messages` (the
+      // current turn), not `thread`: a turn only reaches `#committed` on `done`, and a run cannot
+      // finish while parked in the awaited approval hook, so a committed turn has no live gate;
+      // walking history on every token delta would be wasted work.
+      pendingApprovals: pendingApprovals(this.#messages),
     }
     for (const listener of this.#listeners) listener()
   }

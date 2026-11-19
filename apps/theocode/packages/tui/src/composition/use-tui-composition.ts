@@ -3,6 +3,7 @@ import {
   credentialError,
   credentialSource,
   makeInterruptTurn,
+  newForkGate,
   getTuiRoot,
 } from '../agent-session/index.js'
 import { composerDeps } from './composer-deps.js'
@@ -65,7 +66,7 @@ function useConversationState(s: ReturnType<typeof useTuiSession>) {
   }
 }
 
-function turnInterrupt(d: {
+export function useTurnInterrupt(d: {
   agent: { abort: () => void; thread: Parameters<typeof lastMessageId>[0] }
   markInterrupted: (id: string | undefined) => void
   streaming: boolean
@@ -74,30 +75,36 @@ function turnInterrupt(d: {
   screen: { setToast: ReturnType<typeof useScreenState>['setToast'] }
 }) {
   const { agent, streaming, pendingApproval, forkCurrentSession, screen, markInterrupted } = d
-  const interruptTurn = makeInterruptTurn({
-    abort: () => {
-      agent.abort()
+  // A ref, not closure state: `makeInterruptTurn` runs again on every render.
+  const forkGate = useRef(newForkGate())
+  const interruptTurn = makeInterruptTurn(
+    {
+      abort: () => {
+        agent.abort()
+      },
+      forkSession: forkCurrentSession,
+      onInterrupted: () => {
+        markInterrupted(lastMessageId(agent.thread))
+      },
+      hasActiveTurn: () => streaming,
+      hasPendingApproval: () => pendingApproval !== undefined && pendingApproval !== null,
+      onForkFailure: (e) => {
+        screen.setToast({
+          message: `Interrupt: fork failed — ${(e as Error).message}`,
+          variant: 'error',
+        })
+      },
     },
-    forkSession: forkCurrentSession,
-    onInterrupted: () => {
-      markInterrupted(lastMessageId(agent.thread))
-    },
-    hasActiveTurn: () => streaming,
-    hasPendingApproval: () => pendingApproval !== undefined && pendingApproval !== null,
-    onForkFailure: (e) => {
-      screen.setToast({
-        message: `Interrupt: fork failed — ${(e as Error).message}`,
-        variant: 'error',
-      })
-    },
-  })
+    forkGate.current,
+  )
 
   return interruptTurn
 }
 
 interface InterruptAndBacktrackDeps {
   screen: ReturnType<typeof useScreenState>
-  agent: Parameters<typeof useBacktrack>[0]['agent'] & Parameters<typeof turnInterrupt>[0]['agent']
+  agent: Parameters<typeof useBacktrack>[0]['agent'] &
+    Parameters<typeof useTurnInterrupt>[0]['agent']
   markInterrupted: (id: string | undefined) => void
   stdout: Parameters<typeof useBacktrack>[0]['stdout']
   streaming: boolean
@@ -131,7 +138,7 @@ function useInterruptAndBacktrack(d: InterruptAndBacktrackDeps) {
     setPendingQuestion,
     exit,
   } = d
-  const interruptTurn = turnInterrupt(d)
+  const interruptTurn = useTurnInterrupt(d)
   const backtrack = useBacktrack({
     agent,
     stdout,

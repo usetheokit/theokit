@@ -88,6 +88,16 @@ export const GET = route()
 | `./testing` | `startTestServer`: boot the app as a real process from a test |
 | `./boot`, `./adapters/web-shim`, `./adapters/ws-shim` | Runtime shims |
 
+## OIDC discovery
+
+`discoverOidcProvider(issuer)` from `theokit/server/auth` fetches and caches a provider's
+metadata. The issuer and every endpoint it returns (`authorization_endpoint`, `token_endpoint`,
+and `userinfo_endpoint`, `jwks_uri`, `end_session_endpoint` when present) must be https, or http
+on a loopback host (`localhost`, `[::1]`, `127.0.0.0/8`; never `0.0.0.0`). Endpoints need not
+share the issuer's host. Otherwise it throws `OidcInsecureEndpointError` (`code:
+'oidc_insecure_endpoint'`, with `field` and `url`), and the failure is not cached.
+`isSafeOidcUrl(url)` applies the same rule.
+
 ## Testing
 
 `theokit/testing` starts the app's own `theokit dev` (or `theokit start`) on a free port and resolves
@@ -200,6 +210,12 @@ try {
 The job commits or rolls back with the row, and workers cannot see it before the commit. It needs a
 backend with `enqueueInTransaction` (`PostgresJobBackend` has it); any other backend rejects with
 `TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction.
+
+To take back a queued job in a transaction, call
+`ctx.queue.cancelInTransaction(client, 'process-task', { idempotencyKey })`. It removes the job
+only while no worker ever leased it and resolves `true` if it removed one; a leased job (even with
+an expired lease) or a failed one is left alone. A backend without `cancelInTransaction` rejects
+with `TransactionalCancelUnsupportedError`.
 
 `theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
 and a backend is set: it polls the backend, runs each job and backs off while the backend is

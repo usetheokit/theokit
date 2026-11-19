@@ -3,7 +3,7 @@
   "exports": {
     "./main": "./src/main.tsx"
   },
-  "version": "0.1.18",
+  "version": "0.1.21",
   "private": true,
   "type": "module",
   "description": "Surface 1 — the terminal UI.",
@@ -11,6 +11,7 @@
     "@theocode/agent": "workspace:*",
     "@theocode/shared": "workspace:*",
     "@theokit/agents": "workspace:*",
+    "@theokit/sdk": "5.17.0",
     "@theokit/tui": "^0.80.0",
     "ink": "^7.1.0",
     "lowlight": "^3.0.0",

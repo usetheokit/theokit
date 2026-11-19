@@ -1,3 +1,5 @@
+import type { ToolRefusal } from '@theokit/presenter'
+
 /**
  * Typed discriminated union for agent SSE stream events.
  *
@@ -40,6 +42,8 @@ export interface ToolResultEvent {
   output: string
   durationMs: number
   isError: boolean
+  /** Set when the SDK reported `permission_denied` for this call: it was refused, not run. */
+  refusal?: ToolRefusal
 }
 
 /** Extended thinking / reasoning (when model supports it). */
