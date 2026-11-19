@@ -41,7 +41,7 @@ afterEach(() => rmSync(home, { recursive: true, force: true }))
 
 const tokenFetch = (calls) => async (url, init) => {
   calls.push({ url: String(url), body: String(init?.body) })
-  return new Response(
+  return new globalThis.Response(
     JSON.stringify({ access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600 }),
     {
       status: 200,
