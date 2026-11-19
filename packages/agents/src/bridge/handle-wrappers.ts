@@ -132,24 +132,27 @@ function guardTurn(
           ? out
           : { ...out, result: await runOutputGuards(out.result, guardrails) },
       ))
+  const cancelTurn = turn.cancel
   return {
     ...(turn.id === undefined ? {} : { id: turn.id }),
     wait: guardedOutcome,
     // Cancellation must reach the inner run: a guarded turn that dropped it could not be aborted.
-    cancel: () => turn.cancel(),
+    ...(cancelTurn === undefined ? {} : { cancel: () => cancelTurn.call(turn) }),
     async *stream() {
       // The inner stream is read only to learn that it carried an error event. Its text may hold
       // what a guard would redact, so none of it is forwarded: one fixed terminal status is.
       let streamedError = false
-      for await (const event of turn.stream()) {
-        // Untrusted at runtime: an injected stream may yield null or a primitive.
-        if (
-          typeof event === 'object' &&
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-          event !== null &&
-          (event as { type?: unknown }).type === 'error'
-        ) {
-          streamedError = true
+      if (turn.stream !== undefined) {
+        for await (const event of turn.stream()) {
+          // Untrusted at runtime: an injected stream may yield null or a primitive.
+          if (
+            typeof event === 'object' &&
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            event !== null &&
+            (event as { type?: unknown }).type === 'error'
+          ) {
+            streamedError = true
+          }
         }
       }
       if (streamedError) yield errorStatus('run error', ids)

@@ -25,11 +25,7 @@ class HandleWithPluginManager {
   }
 
   send(): Promise<{ wait: () => Promise<{ result?: string }> }> {
-    return Promise.resolve({
-      stream: async function* () {},
-      cancel: () => Promise.resolve(),
-      wait: () => Promise.resolve({ result: 'ok' }),
-    })
+    return Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) })
   }
 
   dispose(): Promise<void> {
@@ -72,12 +68,7 @@ describe('the wrappers forward the plugin manager', () => {
   it('test_a_handle_without_a_plugin_manager_has_none_after_wrapping', () => {
     const bare: SdkAgentHandle = {
       agentId: 'bare-agent',
-      send: () =>
-        Promise.resolve({
-          stream: async function* () {},
-          cancel: () => Promise.resolve(),
-          wait: () => Promise.resolve({}),
-        }),
+      send: () => Promise.resolve({ wait: () => Promise.resolve({}) }),
       dispose: () => Promise.resolve(),
     }
 
@@ -112,11 +103,7 @@ describe('the wrappers keep the members they rebuild', () => {
       agentId: 'recording-agent',
       send: (_msg, opts) => {
         sent.push(opts)
-        return Promise.resolve({
-          stream: async function* () {},
-          cancel: () => Promise.resolve(),
-          wait: () => Promise.resolve({ result: 'ok' }),
-        })
+        return Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) })
       },
       dispose: () => {
         disposed += 1
