@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1260 export(s) across 25 entry point(s).
+1265 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -967,6 +967,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `catastrophicShellReason` | value |
 | `commandDenialReason` | value |
 | `ContextMatchError` | value |
+| `copyJobs` | value |
 | `createApplyPatchTool` | value |
 | `createBraveWebSearchAdapter` | value |
 | `createCurrentTimeTool` | value |
@@ -981,6 +982,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createJobStore` | value |
 | `createListDirTool` | value |
 | `createPlanModeTool` | value |
+| `createPostgresJobStore` | value |
 | `createQuestionTool` | value |
 | `createReadFileTool` | value |
 | `createRunVitestTool` | value |
@@ -1012,6 +1014,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `injectGuidance` | value |
 | `isBlockedIp` | value |
 | `isCommandAllowed` | value |
+| `JobCopyError` | value |
+| `JobCopyUnsupportedError` | value |
 | `ReadTracker` | value |
 | `ReasoningTools` | value |
 | `RedirectBlockedError` | value |
@@ -1075,6 +1079,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ScreenedFetchOptions` | type |
 | `SessionArtifactStore` | type |
 | `SessionArtifactStoreOptions` | type |
+| `SqlPool` | type |
 | `SynthesizedAudio` | type |
 | `TaskRegistry` | type |
 | `TaskToolOptions` | type |
