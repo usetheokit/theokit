@@ -29,12 +29,13 @@ you mount HTTP surfaces).
 
 ## Subpath map
 
-Twenty-three entry points. Import the one you need — the barrel is not the API.
+Twenty-four entry points. Import the one you need — the barrel is not the API.
 
 | Subpath | What lives there |
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
+| `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer |
 | `./testing` | Test seams: compiled-agent inspection, mock streams |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
@@ -661,6 +662,30 @@ Two consequences worth stating, because they are the cost:
 ## Licence
 
 See `LICENSE`.
+
+## Named sessions with interrupt and steer
+
+`createSessionStore` (from `@theokit/agents/control`) keeps one agent per client-chosen session id
+(`/^[A-Za-z0-9_-]{1,64}$/`, else `bad_session`), runs one turn at a time on each through `runAgentTurn`,
+and keeps at most `max` (default 16). Admission is synchronous, so two new sessions cannot both take
+the last slot; a full store disposes its least recently used idle agent, or answers `busy` when every
+session is running.
+
+```ts
+import { createSessionStore } from '@theokit/agents/control'
+
+const store = createSessionStore({ build: () => createMyAgent(), max: 16 })
+const outcome = await store.run('chat-1', 'hello', (event) => send(event), socket) // never rejects
+store.steer('chat-1', 'also mention X') // 'steered' | 'no_turn'
+store.interrupt('chat-1') // 'cancelled' | 'no_turn'
+store.cancelOwnedBy(socket) // the socket closed
+await store.close()
+```
+
+An interrupt cancels the turn and the next turn waits up to `drainMs` (5000) for it to unwind; the next
+message is prefixed with `redirectNote` so the model does not resume the withdrawn request. Disposal
+failures outside a turn go to `report`; secret masking is the caller's (`sendOptions` or `emit`).
+After `close()`, `run` answers `turn_failed`.
 
 ## Sessions
 
