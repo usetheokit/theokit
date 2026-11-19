@@ -76,7 +76,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
 | `createResultCapture` | value |
-| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -151,7 +150,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `mcpServerInfo` | value |
 | `McpServersCapability` | value |
 | `mcpToolApprovals` | value |
-| `NoResultSubmittedError` | value |
 | `MemoryAdapterError` | value |
 | `MemoryCapability` | value |
 | `ModelCapability` | value |
@@ -406,7 +404,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `RefreshModelCatalogResult` | type |
 | `ResolvedCompatSource` | type |
 | `ResultCapture` | type |
-| `ResultCapture` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
 | `RunEvent` | type |
@@ -494,6 +491,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createApiErrorHandler` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -528,6 +526,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `McpFileError` | value |
 | `mcpRegistry` | value |
 | `mcpToolApprovals` | value |
+| `NoResultSubmittedError` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
 | `readCappedBody` | value |
@@ -614,6 +613,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
 | `ResolvedCompatSource` | type |
+| `ResultCapture` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
 | `Scorer` | type |
