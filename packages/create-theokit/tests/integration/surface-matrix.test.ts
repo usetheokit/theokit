@@ -27,7 +27,9 @@ describe('M45 surface matrix — parseSurfaceFlags (all forms)', () => {
     expect(() => parseSurfaceFlags(['--surface=mobile'])).toThrow(
       /unknown --surface value: 'mobile'/,
     )
-    expect(() => parseSurfaceFlags(['--surface=ios'])).toThrow(/Valid options: web, tui, desktop, cli/)
+    expect(() => parseSurfaceFlags(['--surface=ios'])).toThrow(
+      /Valid options: web, tui, desktop, cli/,
+    )
   })
 })
 
