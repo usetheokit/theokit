@@ -107,6 +107,7 @@ describe('sync-manifest', () => {
       const r = run(dir, '--check')
       assert.equal(r.status, 1)
       assert.match(r.stderr, /out of date/)
+      assert.match(r.stderr, /released\.json/)
       assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before)
     })
   })

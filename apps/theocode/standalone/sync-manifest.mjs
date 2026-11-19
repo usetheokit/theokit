@@ -67,7 +67,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--check')) {
     if (JSON.stringify(pkg.dependencies) !== JSON.stringify(next.dependencies)) {
       console.error(
-        'standalone/package.json is out of date: run `node sync-manifest.mjs`, then `pnpm install`, and commit package.json and pnpm-lock.yaml',
+        'standalone/package.json is out of date: run `node sync-manifest.mjs`, then `pnpm install`, and commit package.json, pnpm-lock.yaml and, if you changed a pin, released.json',
       )
       process.exit(1)
     }
