@@ -202,21 +202,34 @@ describe('ctx.queue in a cron handler', () => {
     scheduler.stop()
   })
 
-  it('keeps concurrent invocations apart and forwards enqueueInTransaction', async () => {
+  it('keeps overlapping invocations apart: one throws, the other still dispatches its jobs', async () => {
     const { enqueue, enqueueInTransaction, backend } = makeBackend()
-    const client = {}
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const releases: Array<() => void> = []
+    let calls = 0
     const def = defineCron('q3', {
       schedule: '* * * * *',
+      concurrency: 'allow',
       handler: async (ctx: CronContext) => {
-        ctx.queue.enqueue('child' as never, { n: 1 } as never)
-        await ctx.queue.enqueueInTransaction(client as never, 'child' as never, {} as never)
+        const me = ++calls
+        ctx.queue.enqueue('child' as never, { run: me } as never)
+        await new Promise<void>((resolve) => releases.push(resolve))
+        if (me === 1) throw new Error('boom')
+        await ctx.queue.enqueueInTransaction({} as never, 'tx' as never, {} as never)
       },
     })
-    const scheduler = createCronScheduler([def, { ...def, name: 'q4' }], { backend })
+    const scheduler = createCronScheduler([def], { backend })
     scheduler.start()
     await vi.advanceTimersByTimeAsync(65_000)
-    expect(enqueue).toHaveBeenCalledTimes(2)
-    expect(enqueueInTransaction).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(releases).toHaveLength(2)
+    releases[1]?.()
+    await vi.advanceTimersByTimeAsync(0)
+    releases[0]?.()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(enqueue).toHaveBeenCalledTimes(1)
+    expect((enqueue.mock.calls[0] as unknown as [{ input: unknown }])[0].input).toEqual({ run: 2 })
+    expect(enqueueInTransaction).toHaveBeenCalledTimes(1)
     scheduler.stop()
   })
 

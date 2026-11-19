@@ -1,5 +1,7 @@
 import { describe, it, expectTypeOf } from 'vitest'
 
+import { defineCron } from '../../packages/theo/src/server/cron/define-cron.js'
+import { defineJob } from '../../packages/theo/src/server/jobs/define-job.js'
 import type {
   JobBackend,
   JobEnqueueInput,
@@ -48,5 +50,32 @@ describe('JobBackend types (T2.1)', () => {
 describe('JobContext.queue', () => {
   it('is the typed QueueClient', () => {
     expectTypeOf<JobContext['queue']>().toEqualTypeOf<QueueClient>()
+  })
+})
+
+describe('handler queue accepts only registered jobs', () => {
+  it('job handler ctx.queue checks names and inputs', () => {
+    defineJob('fan-out', {
+      handler: (ctx) => {
+        ctx.queue.enqueue('send-email', { to: 'a@b.c', subject: 's' })
+        // @ts-expect-error unknown job name
+        ctx.queue.enqueue('nope', {})
+        // @ts-expect-error wrong input shape
+        ctx.queue.enqueue('send-email', { documentId: 'x' })
+      },
+    })
+  })
+
+  it('cron handler ctx.queue checks names and inputs', () => {
+    defineCron('probe', {
+      schedule: '* * * * *',
+      handler: (ctx) => {
+        ctx.queue.enqueue('process-document', { documentId: 'd' })
+        // @ts-expect-error unknown job name
+        ctx.queue.enqueue('nope', {})
+        // @ts-expect-error wrong input shape
+        ctx.queue.enqueue('process-document', { to: 'x' })
+      },
+    })
   })
 })
