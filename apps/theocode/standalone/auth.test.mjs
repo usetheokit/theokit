@@ -16,6 +16,8 @@ import {
   persistOAuthTokens,
 } from '@theokit/agents/auth'
 
+import { validateReleased } from './sync-manifest.mjs'
+
 const here = dirname(fileURLToPath(import.meta.url))
 const home = mkdtempSync(join(tmpdir(), 'theocode-standalone-'))
 after(() => rmSync(home, { recursive: true, force: true }))
@@ -63,9 +65,9 @@ describe('standalone install', () => {
     const released = readJson(join(here, 'released.json'))
     for (const [name, version] of Object.entries(released)) {
       assert.equal(declared[name], version, name)
-      assert.match(version, /^\d+\.\d+\.\d+$/, name)
     }
-    assert.match(declared['@theokit/sdk'], /^\d+\.\d+\.\d+/)
+    assert.doesNotThrow(() => validateReleased(released))
+    assert.match(declared['@theokit/sdk'], /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/)
   })
 })
 
