@@ -68,6 +68,7 @@ const SCANNERS: Readonly<Record<string, ((path: string, dir: string) => Scan) | 
   agents: scanAgents,
   commands: scanCommands,
   skills: scanSkills,
+  rules: scanRules,
   'agent-memory': scanAgentMemory,
   workflows: scanWorkflows,
   plugins: scanPlugins,
@@ -149,7 +150,7 @@ function scanAgents(path: string, dir: string): Scan {
     // The SDK's `readSubagentsFrom` filter: regular `.md` files that open with frontmatter.
     if (!entry.isFile() || !entry.name.endsWith('.md')) continue
     try {
-      if (opensWithFence(readText(join(path, entry.name)))) take(scan, entry.name)
+      if (isLoadableAgent(readText(join(path, entry.name)))) take(scan, entry.name)
     } catch {
       scan.unreadable.push(`${dir}/${entry.name}`)
     }
@@ -168,8 +169,14 @@ function scanCommands(path: string, dir: string): Scan {
       try {
         // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path convention
         stats = statSync(full)
-      } catch {
-        continue // vanished, or a dangling link: the loader skips it as well
+      } catch (error) {
+        // Vanished, or a dangling link: the loader skips it. Anything else (EACCES on a folder that
+        // lists but cannot be searched) is an entry that exists and cannot be inspected.
+        const code = (error as NodeJS.ErrnoException).code
+        if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'ELOOP') {
+          scan.unreadable.push(`${label}/${entry.name}`)
+        }
+        continue
       }
       if (stats.isDirectory()) walk(full, `${label}/${entry.name}`)
       else if (stats.isFile() && entry.name.endsWith('.md')) {
@@ -199,6 +206,21 @@ function scanSkills(path: string, dir: string): Scan {
       continue
     }
     if (isValidSkill(raw)) take(scan, entry.name)
+  }
+  return scan
+}
+
+function scanRules(path: string, dir: string): Scan {
+  // The instruction discovery's `.claude/rules/*.md` pattern: top-level regular `.md` files.
+  const scan = emptyScan()
+  for (const entry of listDir(path, dir, scan)) {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) continue
+    try {
+      readText(join(path, entry.name))
+      take(scan, entry.name)
+    } catch {
+      scan.unreadable.push(`${dir}/${entry.name}`)
+    }
   }
   return scan
 }
@@ -254,6 +276,29 @@ function afterFenceLine(raw: string, from: number): number | undefined {
 /** The SDK's `hasFrontmatter`: the file begins exactly with `---`, and the fence line ends. */
 function opensWithFence(raw: string): boolean {
   return raw.startsWith('---') && afterFenceLine(raw, 3) !== undefined
+}
+
+/** Frontmatter keys the SDK's subagent parser takes (`ACCEPTED_FIELDS` plus the inert `color`). */
+const SUBAGENT_FIELDS: ReadonlySet<string> = new Set([
+  'name',
+  'description',
+  'model',
+  'tools',
+  'reasoning_effort',
+  'sandbox',
+  'memory',
+  'color',
+])
+
+/**
+ * The SDK's `discoverSubagents` rule: opens with frontmatter, and declares no field the parser
+ * refuses (a Claude Code runtime field such as `permissionMode` or `hooks` skips the whole agent).
+ */
+function isLoadableAgent(raw: string): boolean {
+  if (!opensWithFence(raw)) return false
+  const text = frontmatterOf(raw)
+  if (text === undefined) return false
+  return [...parseFields(text).keys()].every((key) => SUBAGENT_FIELDS.has(key))
 }
 
 /** The SDK's skill pattern `^---\s*\n([\s\S]*?)\n---\s*\n`: the text between the fences. */

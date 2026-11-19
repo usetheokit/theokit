@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -116,8 +116,7 @@ describe('the foreign surface inventory follows the gate', () => {
       for (const dir of SURFACE_FOLDERS[surface]) {
         const only = foreignSurfaceInventory({ cwd, enabled: [surface] }).find((e) => e.dir === dir)
         const none = foreignSurfaceInventory({ cwd, enabled: [] }).find((e) => e.dir === dir)
-        if (only === undefined) continue // declared by the gate, no counter here
-        expect(only.state).toBe('read')
+        expect(only?.state).toBe('read')
         expect(none?.state).toBe('refused')
       }
     }
@@ -185,4 +184,43 @@ describe('the foreign surface inventory follows the gate', () => {
     reportUnloadedSurfaces({ cwd, onWarn: (w) => warnings.push(w) })
     expect(warnings).toEqual([])
   })
+
+  it('rules counts top-level .md files, the pattern the instruction loader reads', () => {
+    const cwd = project()
+    put(cwd, 'rules/style.md', '# style')
+    put(cwd, 'rules/notes.txt', 'x')
+    put(cwd, 'rules/nested/deep.md', '# deep')
+    expect(entry(cwd, 'rules')).toMatchObject({ state: 'read', count: 1, unreadable: [] })
+    expect(entry(cwd, 'rules', ['skills']).state).toBe('refused')
+  })
+
+  it('agents skips a definition carrying a Claude Code runtime field, as the SDK does', () => {
+    const cwd = project()
+    put(cwd, 'agents/ok.md', '---\nname: ok\ndescription: x\n---\nbody')
+    put(cwd, 'agents/perm.md', '---\nname: p\ndescription: x\npermissionMode: plan\n---\nbody')
+    put(cwd, 'agents/hooked.md', '---\nname: h\ndescription: x\nhooks:\n  - a\n---\nbody')
+    expect(entry(cwd, 'agents').count).toBe(1)
+  })
+
+  it.skipIf(process.getuid?.() === 0)(
+    'commands lists entries of a folder that lists but cannot be searched',
+    () => {
+      const cwd = project()
+      put(cwd, 'commands/ok.md', '---\ndescription: ok\n---\nGo')
+      put(cwd, 'commands/locked/inner.md', '---\ndescription: x\n---\nGo')
+      put(cwd, 'commands/locked/other.md', '---\ndescription: x\n---\nGo')
+      const locked = join(cwd, '.claude', 'commands', 'locked')
+      chmodSync(locked, 0o444)
+      try {
+        const commands = entry(cwd, 'commands')
+        expect(commands.count).toBe(1)
+        expect(commands.unreadable).toEqual([
+          'commands/locked/inner.md',
+          'commands/locked/other.md',
+        ])
+      } finally {
+        chmodSync(locked, 0o755)
+      }
+    },
+  )
 })
