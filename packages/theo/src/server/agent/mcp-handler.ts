@@ -55,7 +55,7 @@ export interface McpToolsOptions {
 
 type PreToolHandler = (
   ctx: PreToolCallContext,
-) => PreToolCallDecision | undefined | void | Promise<PreToolCallDecision | undefined | void>
+) => PreToolCallDecision | undefined | Promise<PreToolCallDecision | undefined>
 
 /** Each plugin is registered once; its `pre_tool_call` handlers are kept for every later call. */
 const preToolHandlers = new WeakMap<Plugin, Promise<PreToolHandler[]>>()
@@ -98,7 +98,7 @@ async function preToolCallRefusal(
     for (const plugin of plugins) {
       for (const handler of await collectPreToolHandlers(plugin)) {
         const decision = await handler(ctx)
-        if (decision && decision.block) return decision.message
+        if (decision) return decision.message
       }
     }
     return undefined

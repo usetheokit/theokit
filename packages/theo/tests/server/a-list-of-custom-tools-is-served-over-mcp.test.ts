@@ -124,7 +124,11 @@ describe('a list of CustomTools served over MCP', () => {
     it('an allowing plugin sees the call context and the tool runs', async () => {
       const seen: any[] = []
       const res = await call({
-        plugins: [plugin((c) => void seen.push(c))],
+        plugins: [
+          plugin((c) => {
+            seen.push(c)
+          }),
+        ],
         hookContext: { agentId: 'a1' },
       })
       expect(res.result).toEqual({ content: [{ type: 'text', text: 'x' }] })
