@@ -15,6 +15,7 @@ import {
   type SdkTimelineEvent,
   type SdkTurnHandle,
   type SdkTurnOutcome,
+  type SdkRun,
   translateSdkEvent,
   translateTimelineEvent,
   createToolSeen,
@@ -55,5 +56,31 @@ describe('bridge contract vs the real SDK', () => {
     expectTypeOf(f).toBeFunction()
     // A raw SDK message is accepted by the translator directly.
     expectTypeOf(translateSdkEvent).parameter(0).toExtend<SDKMessage | { type: string }>()
+  })
+})
+
+/** What TheoClaw's `TurnRun` (apps/theoclaw/src/agent-port.ts) requires of a run, restated. */
+interface TheoClawTurnRun {
+  stream(): AsyncIterable<{ readonly type: string }>
+  wait(): Promise<{
+    readonly status: string
+    readonly result?: string
+    readonly error?: { readonly code?: string }
+    readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number }
+    readonly cost?: { readonly amountUsd?: number }
+  }>
+  cancel(): Promise<void>
+  events?(): AsyncIterable<{ readonly kind: 'message' | 'delta' }>
+}
+
+describe('bridge contract vs TheoClaw requirements', () => {
+  it('SdkRun and a real SDK Run are assignable to the TheoClaw run port', () => {
+    expectTypeOf<SdkRun>().toExtend<TheoClawTurnRun>()
+    expectTypeOf<Run>().toExtend<SdkRun>()
+  })
+
+  it('the outcome carries cost and error.code', () => {
+    expectTypeOf<SdkTurnOutcome>().toHaveProperty('cost')
+    expectTypeOf<NonNullable<SdkTurnOutcome['error']>>().toHaveProperty('code')
   })
 })

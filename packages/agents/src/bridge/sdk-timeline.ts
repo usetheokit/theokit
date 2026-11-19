@@ -39,14 +39,17 @@ export type SdkTimelineEvent =
 export function isMessageTimelineEvent(
   e: SdkTimelineEvent,
 ): e is Extract<SdkTimelineEvent, { kind: 'message' }> {
-  return e.kind === 'message'
+  // Runtime tolerance: a hand-built or malformed event may lack the payload its `kind` promises.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  return e.kind === 'message' && e.message !== undefined
 }
 
 /** Narrow a timeline event to the `delta` variant. */
 export function isDeltaTimelineEvent(
   e: SdkTimelineEvent,
 ): e is Extract<SdkTimelineEvent, { kind: 'delta' }> {
-  return e.kind === 'delta'
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  return e.kind === 'delta' && e.update !== undefined
 }
 
 /**
@@ -231,12 +234,16 @@ export function translateTimelineEvent(
   seen: ToolSeen,
 ): StreamEvent[] {
   if (ev.kind === 'delta') {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (ev.update === undefined) return []
     const events = translateInteractionUpdate(ev.update)
     // #388 — released BEFORE this event's own output, because a held result was reported earlier
     // than whatever is releasing it. The wire order a consumer reads is unchanged.
     const released = releasePendingToolResults(events, seen)
     return [...released, ...dedupeTools(events, ev.update, seen)]
   }
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (ev.message === undefined) return []
   const events = translateSdkEvent(ev.message, runId)
   // Only the text is a duplicate the producer can name. Tool events on this message go through the
   // id-keyed pass — the flag answers one question, and widening it by guessing would reintroduce

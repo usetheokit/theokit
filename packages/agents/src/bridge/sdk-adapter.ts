@@ -850,6 +850,8 @@ async function* streamSdkAgent(
  * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
 export interface SdkTurnHandle {
+  /** The SDK run id, when the handle has one (`Run.id`). */
+  readonly id?: string
   wait: () => Promise<SdkTurnOutcome>
   /** The SDK's raw message stream (`Run.stream()`), preserved as-is. */
   stream?: () => AsyncIterable<SdkStreamMessage>
@@ -867,12 +869,26 @@ export interface SdkTurnOutcome {
   result?: string
   usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number }
   status?: string
-  error?: { message: string }
+  error?: { message: string; code?: string }
+  /** The SDK's priced cost; an undefined `amountUsd` means unpriced, never free. */
+  cost?: CostBreakdown
   durationMs?: number
   /** theokit#379 — the doom-loop guard stopped the run. */
   stoppedByDoomLoop?: boolean
   /** theokit#379 — the run reached its iteration ceiling. */
   stoppedAtIterationLimit?: boolean
+}
+
+/**
+ * A full SDK run, as a consumer that streams, cancels and reads the timeline needs it: every member
+ * is required and `status` is always set. A real SDK `Run` satisfies it; `SdkTurnHandle` stays the
+ * lenient shape for injected doubles that implement only `wait()`.
+ */
+export interface SdkRun extends SdkTurnHandle {
+  wait: () => Promise<SdkTurnOutcome & { status: string }>
+  stream: () => AsyncIterable<SdkStreamMessage>
+  events: () => AsyncIterable<SdkTimelineEvent>
+  cancel: () => Promise<void>
 }
 
 /** Per-turn options: the SDK's own `SendOptions`. */

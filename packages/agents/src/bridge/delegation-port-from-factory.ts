@@ -36,6 +36,9 @@ async function streamedErrorOf(run: SdkTurnHandle): Promise<string | undefined> 
   if (run.stream === undefined) return undefined
   let streamed: string | undefined
   for await (const message of run.stream()) {
+    // Untrusted at runtime: an injected handle's stream may yield null or a primitive.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (typeof message !== 'object' || message === null) continue
     const event = message as { type?: unknown; status?: unknown; message?: unknown }
     if (event.type === 'error') streamed ??= describeStreamedError(message)
     // A guarded agent's stream ends a failed run with `{ type: 'status', status: 'ERROR', message }`.

@@ -52,5 +52,11 @@ describe('timeline narrowing helpers', () => {
     expect(isMessageTimelineEvent(delta)).toBe(false)
     expect(isDeltaTimelineEvent(delta)).toBe(true)
     expect(isDeltaTimelineEvent(msg)).toBe(false)
+    const malformedDelta = { kind: 'delta' } as unknown as SdkTimelineEvent
+    const malformedMessage = { kind: 'message' } as unknown as SdkTimelineEvent
+    expect(isDeltaTimelineEvent(malformedDelta)).toBe(false)
+    expect(isMessageTimelineEvent(malformedMessage)).toBe(false)
+    expect(translateTimelineEvent(malformedDelta, 'r', createToolSeen())).toEqual([])
+    expect(translateTimelineEvent(malformedMessage, 'r', createToolSeen())).toEqual([])
   })
 })
