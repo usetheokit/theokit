@@ -12,15 +12,24 @@ function workspaceWithSession(): string {
   mkdirSync(dir, { recursive: true })
   const id = 'matrix-dm-_owner_localhost-g0'
   const lines = [
-    { type: 'user', sessionId: id, message: { content: [{ type: 'text', text: 'hello there' }] } },
+    { type: 'user', uuid: 'u1', parentUuid: null, sessionId: id, message: { content: [{ type: 'text', text: 'hello there' }] } },
     {
       type: 'assistant',
+      uuid: 'a1',
+      parentUuid: 'u1',
       sessionId: id,
       message: { content: [{ type: 'text', text: 'hi owner' }] },
     },
-    { type: 'user', sessionId: id, message: { content: [{ type: 'tool_result', content: 'x' }] } },
+    {
+      type: 'user',
+      uuid: 'u2',
+      parentUuid: 'a1',
+      sessionId: id,
+      message: { content: [{ type: 'tool_result', content: 'x' }] } },
   ]
-  writeFileSync(join(dir, 'abc.jsonl'), lines.map((line) => JSON.stringify(line)).join('\n') + '\n')
+  // A line that is not JSON sits between the turns; the reader skips it.
+  const body = [JSON.stringify(lines[0]), '{not json', ...lines.slice(1).map((line) => JSON.stringify(line))]
+  writeFileSync(join(dir, `${id}.jsonl`), body.join('\n') + '\n')
   return workspace
 }
 
