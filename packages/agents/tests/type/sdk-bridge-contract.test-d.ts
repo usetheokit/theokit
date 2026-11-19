@@ -106,4 +106,13 @@ describe('SdkRunAgent vs TheoClaw TurnAgent', () => {
     expectTypeOf<SDKAgent['send']>().toExtend<SdkRunAgent['send']>()
     expectTypeOf<SdkRunAgent>().toExtend<TheoClawTurnAgent>()
   })
+
+  it('a complete real SDKAgent is assignable to SdkRunAgent and SdkAgentHandle', () => {
+    expectTypeOf<SDKAgent>().toExtend<SdkRunAgent>()
+    expectTypeOf<SDKAgent>().toExtend<SdkAgentHandle>()
+    expectTypeOf<SDKAgent['generate']>().toExtend<NonNullable<SdkRunAgent['generate']>>()
+    expectTypeOf<SDKAgent['dispose']>().toExtend<SdkRunAgent['dispose']>()
+    expectTypeOf<SDKAgent['agentId']>().toExtend<SdkRunAgent['agentId']>()
+    expectTypeOf<ReturnType<SDKAgent['send']>>().toExtend<Promise<SdkRun>>()
+  })
 })

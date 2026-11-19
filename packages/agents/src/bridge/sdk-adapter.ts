@@ -921,10 +921,9 @@ export interface SdkAgentHandle {
    * decision about what a redaction means to a schema, and inventing one would be the gate that
    * reports without gating this module already refuses to build.
    */
-  readonly generate?: (
-    message: string,
-    options: { output: unknown; [key: string]: unknown },
-  ) => Promise<unknown>
+  // Method syntax on purpose: parameters are checked bivariantly, so the SDK's narrower
+  // `generate(input, { output: ZodType })` is assignable to this lenient declaration.
+  generate?(message: string, options: { output: unknown; [key: string]: unknown }): Promise<unknown>
   readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.
