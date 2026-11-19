@@ -74,7 +74,8 @@ const COULD_NOT_RUN = 'could not be found or run (a command is an absolute path 
 
 /**
  * The executable file `command` names: itself when it has a `/`, else the first one on an absolute
- * `PATH` entry.  */
+ * `PATH` entry.
+ */
 function resolveCommand(command: string, searched: readonly string[]): string | undefined {
   // A relative one would be found from TheoClaw's cwd but resolved in the agent's, the tool root.
   if (command.includes('/')) return isAbsolute(command) && executableFile(command) ? command : undefined
