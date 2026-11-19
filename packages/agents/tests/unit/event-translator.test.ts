@@ -470,3 +470,12 @@ describe('unknown events warn instead of vanishing (#141)', () => {
     expect(warnings).toEqual([])
   })
 })
+
+describe('translateSdkEvent — typed input (#1802)', () => {
+  it('accepts a message typed only by `type` and a literal carrying extra fields', () => {
+    const bare: { readonly type: string } = { type: 'unknown_kind' }
+    expect(translateSdkEvent(bare, RUN)).toEqual([])
+    const literal = translateSdkEvent({ type: 'status', status: 'FINISHED', extra: 1 }, RUN)
+    expect(literal.every((e) => typeof e.type === 'string')).toBe(true)
+  })
+})

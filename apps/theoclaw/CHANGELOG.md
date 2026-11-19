@@ -11,10 +11,6 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-
-- The bridge adapter in `@theokit/agents` types `translateSdkEvent`/`translateInteractionUpdate` as `AgentStreamEvent[]` for an SDK-typed message and widens `SdkAgentHandle`/`SdkTurnHandle` (`signal`, `onDelta`, `queueMode`, `cancel`, `usage`, `cost`, a typed `stream()`). TheoClaw's own code is unchanged; dropping its casts is tracked in #2317.
-
 ### Fixed
 
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).

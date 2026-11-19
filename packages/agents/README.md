@@ -326,7 +326,7 @@ interface SdkSendOptions {
   [key: string]: unknown
 }
 interface SdkTurnHandle {
-  wait(): Promise<{ result?: string; status?: string; error?: { message: string }
+  wait(): Promise<{ result?: string; status?: string; error?: { code?: string; message: string }
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number } }>
   stream?(): AsyncIterable<SdkMessageLike>

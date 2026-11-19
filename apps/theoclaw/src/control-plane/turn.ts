@@ -1,9 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import {
-  type AgentStreamEvent,
   type SdkMessage,
-  type StreamEvent,
   translateInteractionUpdate,
   translateSdkEvent,
 } from '@theokit/agents/bridge'
@@ -17,13 +15,8 @@ import { createEventMask } from './event-mask.js'
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
-/** One event as the wire carries it: the typed bridge event, read with an index signature. */
-export type TurnEvent = StreamEvent
-
-/** The typed bridge event as a wire event; the same object, widened. */
-export function toTurnEvent(event: AgentStreamEvent): TurnEvent {
-  return event as TurnEvent
-}
+/** One event as `translateSdkEvent` returns it. */
+export type TurnEvent = ReturnType<typeof translateSdkEvent>[number]
 
 /**
  * How a turn ended. `reason` says why a failed or cancelled one ended, for stderr; it is never sent
@@ -219,7 +212,7 @@ async function runWith(
       update as Parameters<typeof translateInteractionUpdate>[0],
     )) {
       if (event.type === 'text_delta') delta.streamed = true
-      options.emit(toTurnEvent(event))
+      options.emit(event)
     }
   }
   const run = await agent.send(options.message, { ...untrustedContentSendOptions(), onDelta })

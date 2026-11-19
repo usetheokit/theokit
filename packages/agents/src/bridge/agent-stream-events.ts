@@ -5,9 +5,6 @@ import type { ToolRefusal } from '@theokit/presenter'
  *
  * Every event has a `type` field for discrimination.
  * Clients narrow via `if (event.type === 'text_delta') event.content`.
- *
- * Declared as type aliases, not interfaces, on purpose: an alias is implicitly assignable to the open
- * `StreamEvent` (`[key: string]: unknown`) wire shape, an interface is not, and apps hold both.
  */
 
 /** Partial text content from the LLM. */

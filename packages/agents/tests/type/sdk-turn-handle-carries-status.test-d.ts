@@ -20,9 +20,9 @@ describe('SdkTurnHandle', () => {
     expectTypeOf<ResolvedTurn>().toHaveProperty('status').toEqualTypeOf<string | undefined>()
   })
 
-  it('resolves an optional error carrying a message', () => {
+  it('resolves an optional error carrying a message and a code', () => {
     expectTypeOf<ResolvedTurn>()
       .toHaveProperty('error')
-      .toEqualTypeOf<{ message: string } | undefined>()
+      .toEqualTypeOf<{ code?: string; message: string } | undefined>()
   })
 })
