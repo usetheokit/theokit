@@ -67,7 +67,7 @@ describe('objectToFormData', () => {
   it('walks the schema, not the values: keys absent from the schema are omitted', () => {
     const s = z.object({ a: z.string(), nested: z.object({ b: z.string() }) })
     const fd = objectToFormData({ a: 'x', extra: 'nope', nested: { b: 'y', extraDeep: 'nope' } }, s)
-    expect(Array.from(fd.keys()).sort()).toEqual(['a', 'nested.b'])
+    expect(Array.from(fd.keys()).sort((x, y) => x.localeCompare(y))).toEqual(['a', 'nested.b'])
   })
 
   it('refuses an array of objects, naming the field', () => {
