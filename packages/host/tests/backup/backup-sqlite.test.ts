@@ -1,10 +1,22 @@
+import { mkdtemp, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 
 import { backup } from '../../src/backup/index.js'
-import { scratch } from './support.js'
+
+const dirs: string[] = []
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true })
+})
+
+async function scratch(): Promise<string> {
+  const d = await mkdtemp(join(tmpdir(), 'host-backup-'))
+  dirs.push(d)
+  return d
+}
 
 it('snapshots a database with an open WAL writer, without sidecars', async () => {
   const { DatabaseSync } = await import('node:sqlite')

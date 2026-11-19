@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, sep } from 'node:path'
 
 import { BackupError } from './errors.js'
 
@@ -40,7 +40,7 @@ export function splitEntryPath(
   const [root, ...rest] = parts
   if (
     isAbsolute(path) ||
-    path.includes('\\') ||
+    (sep === '\\' && path.includes('\\')) ||
     path.includes('\0') ||
     rest.length === 0 ||
     parts.some((part) => part === '' || part === '.' || part === '..') ||

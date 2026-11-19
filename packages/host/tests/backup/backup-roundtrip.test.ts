@@ -1,10 +1,27 @@
-import { chmod, mkdir, readFile, stat } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 
 import { backup, restore } from '../../src/backup/index.js'
-import { put, scratch } from './support.js'
+
+const dirs: string[] = []
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true })
+})
+
+async function scratch(): Promise<string> {
+  const d = await mkdtemp(join(tmpdir(), 'host-backup-'))
+  dirs.push(d)
+  return d
+}
+
+async function put(root: string, rel: string, data: string | Buffer): Promise<void> {
+  const file = join(root, rel)
+  await mkdir(join(file, '..'), { recursive: true })
+  await writeFile(file, data)
+}
 
 it('backs up two roots and restores them byte for byte', async () => {
   const base = await scratch()
@@ -63,4 +80,15 @@ it('sets an existing empty output directory to 0700', async () => {
   await chmod(out, 0o755)
   await backup({ roots: { a: join(base, 'a') }, out })
   expect((await stat(out)).mode & 0o777).toBe(0o700)
+})
+
+it.skipIf(process.platform === 'win32')('round-trips a file name holding a backslash', async () => {
+  const base = await scratch()
+  const a = join(base, 'a')
+  await put(a, 'we\\ird.txt', 'odd')
+  const out = join(base, 'out')
+  await backup({ roots: { a }, out })
+  const target = join(base, 'target')
+  await restore({ from: out, roots: { a: target } })
+  expect(await readFile(join(target, 'we\\ird.txt'), 'utf8')).toBe('odd')
 })

@@ -1,11 +1,28 @@
-import { readFile, readdir, rename } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 
 import { backup } from '../../src/backup/index.js'
 import { restoreWith } from '../../src/backup/restore.js'
-import { put, scratch } from './support.js'
+
+const dirs: string[] = []
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true })
+})
+
+async function scratch(): Promise<string> {
+  const d = await mkdtemp(join(tmpdir(), 'host-backup-'))
+  dirs.push(d)
+  return d
+}
+
+async function put(root: string, rel: string, data: string | Buffer): Promise<void> {
+  const file = join(root, rel)
+  await mkdir(join(file, '..'), { recursive: true })
+  await writeFile(file, data)
+}
 
 it('puts the first target back when the second root fails to place', async () => {
   const base = await scratch()

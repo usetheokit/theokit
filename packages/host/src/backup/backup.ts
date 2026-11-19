@@ -1,4 +1,4 @@
-import { copyFile, chmod, rm, stat } from 'node:fs/promises'
+import { copyFile, chmod, lstat, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
@@ -74,6 +74,12 @@ export async function backup(options: BackupOptions): Promise<BackupManifest> {
       const files: ManifestEntry[] = []
       for (const name of names) {
         const dir = options.roots[name]
+        const link = await lstat(dir).catch(() => undefined)
+        if (link?.isSymbolicLink() === true) {
+          throw new BackupError(`root "${name}" ${dir} is a symbolic link; a backup follows none`, {
+            path: dir,
+          })
+        }
         const info = await stat(dir).catch(() => undefined)
         if (!info?.isDirectory()) {
           throw new BackupError(`root "${name}" ${dir} is not a directory`, { path: dir })
