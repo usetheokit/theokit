@@ -1,9 +1,17 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  mkdtempSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { discoverSkills } from '@theokit/sdk/skills'
+import { discoverSubagents } from '@theokit/sdk/subagents-loader'
 import { describe, expect, it } from 'vitest'
 
 import { foreignSurfaceInventory } from '../../src/bridge/index.js'
@@ -223,4 +231,26 @@ describe('the foreign surface inventory follows the gate', () => {
       }
     },
   )
+
+  it('agents treats comment lines in frontmatter the way the SDK parser does', async () => {
+    const cwd = project()
+    put(cwd, 'agents/plain.md', '---\nname: plain\n# reviewed twice\ndescription: x\n---\nbody')
+    put(cwd, 'agents/colon.md', '---\nname: colon\n# note: reviewed\ndescription: x\n---\nbody')
+    const loaded: string[] = []
+    for (const name of ['plain', 'colon']) {
+      const dir = project()
+      put(dir, 'agents/a.md', readFileSync(join(cwd, '.claude', 'agents', `${name}.md`), 'utf8'))
+      // The SDK keeps a `# note: x` line as a field named `# note` and refuses the agent.
+      const found = await discoverSubagents(dir, {
+        settingSources: ['project'],
+        compatSources: ['claude-code'],
+      }).then(
+        (all) => Object.keys(all).length,
+        () => 0,
+      )
+      if (found === 1) loaded.push(`${name}.md`)
+    }
+    expect(loaded).toEqual(['plain.md'])
+    expect(entry(cwd, 'agents').count).toBe(loaded.length)
+  })
 })
