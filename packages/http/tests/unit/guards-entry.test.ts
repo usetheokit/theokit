@@ -24,7 +24,8 @@ describe('@theokit/http/guards (built public entry)', () => {
   })
 
   it('exposes every name at runtime and in the declarations', async () => {
-    const mod = await import('@theokit/http/guards')
+    const entry = new URL('../../dist/guards-entry.js', import.meta.url).href
+    const mod = (await import(entry)) as Record<string, unknown>
     expect(Object.keys(mod).sort((a, b) => a.localeCompare(b))).toEqual(
       [...NAMES].sort((a, b) => a.localeCompare(b)),
     )
