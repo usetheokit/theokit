@@ -1,13 +1,12 @@
 /**
- * B-376 — the TUI's frame adapter (`src/tui/frames.ts`): how a turn's control frames become the
- * `AgentStreamSource` that `@theokit/tui`'s `agentStreamReducer` folds, and which frame-level notices
- * TheoClaw adds and where they sit in the turn. Unit tests, no socket and no terminal.
+ * B-376 — the TUI's pure reducer (`src/tui/frames.ts`): how a turn's frames become the transcript the
+ * Ink view draws. Unit tests, no socket and no terminal; the PTY test in tui-app.test.tsx covers the
+ * same reducer only through a running instance.
  */
-import { type AgentStreamEvent, agentStreamReducer, initialAgentStreamState } from "@theokit/tui";
 import { describe, expect, it } from "vitest";
 
-import type { ControlClient, ControlFrame } from "../src/control-client/control-client.js";
-import { controlStream, nextSessionId, type TurnNotice, turnEntries } from "../src/tui/frames.js";
+import type { ControlFrame } from "../src/control-client/control-client.js";
+import { addNotice, applyFrame, failTurn, INITIAL_VIEW, nextSessionId, startTurn, type TuiView } from "../src/tui/frames.js";
 
 const SESSION = "owner";
 
@@ -16,151 +15,133 @@ function event(fields: Record<string, unknown>): ControlFrame {
   return { type: "event", session: SESSION, event: fields } as unknown as ControlFrame;
 }
 
-/** Run a turn's frames as the TUI does: the stream folds in the framework reducer, ending with its done. */
-async function run(frames: readonly ControlFrame[], fail?: Error) {
-  const notices: TurnNotice[] = [];
-  let ended = 0;
-  const client = {
-    chat: async function* () {
-      yield* frames;
-      if (fail !== undefined) throw fail;
-    },
-  } as unknown as ControlClient;
-  const events: AgentStreamEvent[] = [];
-  for await (const e of controlStream(client, "hi", SESSION, (n) => notices.push(n), () => (ended += 1))) events.push(e);
-  const state = [...events, { type: "done" }].reduce(agentStreamReducer, initialAgentStreamState);
-  return { state, notices, ended, entries: turnEntries(state.events, notices) };
+function fold(view: TuiView, frames: readonly ControlFrame[]): TuiView {
+  return frames.reduce(applyFrame, view);
 }
 
-const DONE: ControlFrame = { type: "done", session: SESSION };
-
-describe("controlStream: text deltas", () => {
-  it("joins consecutive deltas into one assistant message", async () => {
-    const { state } = await run([event({ type: "text_delta", content: "Hel" }), event({ type: "text_delta", content: "lo" }), DONE]);
-    expect(state.events).toMatchObject([{ kind: "message", role: "assistant", text: "Hello" }]);
-    expect(state.status).toBe("done");
-  });
-
-  it("starts a new assistant message after a tool card", async () => {
-    const { state } = await run([
-      event({ type: "text_delta", content: "one" }),
-      event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
-      event({ type: "text_delta", content: "two" }),
-      DONE,
-    ]);
-    expect(state.events).toMatchObject([{ kind: "message", text: "one" }, { kind: "tool" }, { kind: "message", text: "two" }]);
+describe("startTurn", () => {
+  it("appends the owner's message and marks a turn running", () => {
+    const view = startTurn(INITIAL_VIEW, "hello");
+    expect(view).toEqual({ transcript: [{ kind: "user", text: "hello" }], running: true });
+    expect(INITIAL_VIEW.transcript).toEqual([]);
   });
 });
 
-describe("controlStream: tool cards", () => {
-  it("draws a running card for a tool call (until the turn ends)", async () => {
-    const client = { chat: async function* () { yield event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }); } } as unknown as ControlClient;
-    const first = await controlStream(client, "hi", SESSION, () => undefined, () => undefined).next();
-    expect(agentStreamReducer(initialAgentStreamState, first.value as AgentStreamEvent).events).toMatchObject([
-      { kind: "tool", name: "ReadFile", status: "running" },
+describe("applyFrame: text deltas", () => {
+  it("joins consecutive deltas into one assistant entry", () => {
+    const view = fold(startTurn(INITIAL_VIEW, "hi"), [
+      event({ type: "text_delta", content: "Hel" }),
+      event({ type: "text_delta", content: "lo" }),
+    ]);
+    expect(view.transcript).toEqual([
+      { kind: "user", text: "hi" },
+      { kind: "assistant", text: "Hello" },
     ]);
   });
 
-  it("settles the matching card as success, leaving the other card running", async () => {
-    const client = {
-      chat: async function* () {
-        yield event({ type: "tool_call", callId: "c1", toolName: "ReadFile" });
-        yield event({ type: "tool_call", callId: "c2", toolName: "Grep" });
-        yield event({ type: "tool_result", callId: "c1", isError: false });
-      },
-    } as unknown as ControlClient;
-    let state = initialAgentStreamState;
-    for await (const e of controlStream(client, "hi", SESSION, () => undefined, () => undefined)) state = agentStreamReducer(state, e);
-    expect(state.events).toMatchObject([
-      { kind: "tool", name: "ReadFile", status: "success" },
-      { kind: "tool", name: "Grep", status: "running" },
+  it("starts a new assistant entry after a tool card", () => {
+    const view = fold(startTurn(INITIAL_VIEW, "hi"), [
+      event({ type: "text_delta", content: "before" }),
+      event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
+      event({ type: "text_delta", content: "after" }),
     ]);
+    expect(view.transcript.map((entry) => entry.kind)).toEqual(["user", "assistant", "tool", "assistant"]);
+    expect(view.transcript.at(-1)).toEqual({ kind: "assistant", text: "after" });
   });
 
-  it("settles a card as failed only when the result says isError: true", async () => {
-    const { state } = await run([
+  it("does not merge a delta into the owner's message", () => {
+    const view = applyFrame(startTurn(INITIAL_VIEW, "hi"), event({ type: "text_delta", content: "there" }));
+    expect(view.transcript).toEqual([
+      { kind: "user", text: "hi" },
+      { kind: "assistant", text: "there" },
+    ]);
+  });
+});
+
+describe("applyFrame: tool cards", () => {
+  it("draws a running card for a tool call", () => {
+    const view = applyFrame(INITIAL_VIEW, event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }));
+    expect(view.transcript).toEqual([{ kind: "tool", callId: "c1", name: "ReadFile", status: "running" }]);
+  });
+
+  it("settles the matching card as success, leaving the other card running", () => {
+    const view = fold(INITIAL_VIEW, [
       event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
       event({ type: "tool_call", callId: "c2", toolName: "Grep" }),
-      event({ type: "tool_result", callId: "c1", isError: true }),
-      event({ type: "tool_result", callId: "c2", isError: false }),
-      DONE,
+      event({ type: "tool_result", callId: "c1", isError: false }),
     ]);
-    expect(state.events).toMatchObject([
-      { kind: "tool", name: "ReadFile", status: "failed" },
-      { kind: "tool", name: "Grep", status: "success" },
+    expect(view.transcript).toEqual([
+      { kind: "tool", callId: "c1", name: "ReadFile", status: "success" },
+      { kind: "tool", callId: "c2", name: "Grep", status: "running" },
     ]);
   });
 
-  it("ignores a result whose call id matches no card", async () => {
-    const { state } = await run([
+  it("settles a card as failed only when the result says isError: true", () => {
+    const view = fold(INITIAL_VIEW, [
       event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
-      event({ type: "tool_result", callId: "c1", isError: false }),
-      event({ type: "tool_result", callId: "missing", isError: true }),
-      DONE,
+      event({ type: "tool_result", callId: "c1", isError: true }),
     ]);
-    expect(state.events).toHaveLength(1);
-    expect(state.events[0]).toMatchObject({ name: "ReadFile", status: "success" });
+    expect(view.transcript).toEqual([{ kind: "tool", callId: "c1", name: "ReadFile", status: "failed" }]);
+  });
+
+  it("ignores a result whose call id matches no card", () => {
+    const before = applyFrame(INITIAL_VIEW, event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }));
+    const after = applyFrame(before, event({ type: "tool_result", callId: "missing", isError: true }));
+    expect(after.transcript).toEqual(before.transcript);
   });
 });
 
-describe("controlStream: the end of a turn", () => {
-  it("done ends the turn and keeps the text", async () => {
-    const { state, notices, ended } = await run([event({ type: "text_delta", content: "hi" }), DONE]);
-    expect(state.events).toMatchObject([{ text: "hi" }]);
-    expect(notices).toEqual([]);
-    expect(ended).toBe(1);
+describe("applyFrame: the end of a turn", () => {
+  it("done stops the turn and keeps the transcript", () => {
+    const running = startTurn(INITIAL_VIEW, "hi");
+    const view = applyFrame(running, { type: "done", session: SESSION });
+    expect(view).toEqual({ transcript: running.transcript, running: false });
   });
 
-  it("interrupted ends the turn with a warning line after the partial output, failing the unfinished tool", async () => {
-    const { entries, notices, ended } = await run([
-      event({ type: "text_delta", content: "part" }),
-      event({ type: "tool_call", callId: "c1", toolName: "ReadFile" }),
-      { type: "interrupted", session: SESSION },
-    ]);
-    expect(entries).toMatchObject([
-      { kind: "event", event: { kind: "message", text: "part" } },
-      { kind: "event", event: { kind: "tool", status: "failed" } },
-      { kind: "notice", variant: "warning", text: "interrupted" },
-    ]);
-    expect(notices).toHaveLength(1);
-    expect(ended).toBe(1);
+  it("interrupted stops the turn with a warning line", () => {
+    const view = applyFrame(startTurn(INITIAL_VIEW, "hi"), { type: "interrupted", session: SESSION });
+    expect(view.running).toBe(false);
+    expect(view.transcript.at(-1)).toEqual({ kind: "notice", variant: "warning", text: "interrupted" });
   });
 
-  it("an error frame ends the turn with an error line naming its code", async () => {
-    const { entries } = await run([{ type: "error", code: "busy", session: SESSION }]);
-    expect(entries).toEqual([{ kind: "notice", variant: "error", text: "the turn ended: busy" }]);
+  it("an error frame stops the turn with an error line naming its code", () => {
+    const view = applyFrame(startTurn(INITIAL_VIEW, "hi"), { type: "error", code: "busy", session: SESSION });
+    expect(view.running).toBe(false);
+    expect(view.transcript.at(-1)).toEqual({ kind: "notice", variant: "error", text: "the turn ended: busy" });
   });
 
-  it("an error event inside the turn adds an error line in place and the turn goes on", async () => {
-    const { entries, state } = await run([
-      event({ type: "text_delta", content: "before" }),
-      event({ type: "error", code: "rate_limited" }),
-      event({ type: "text_delta", content: "after" }),
-      DONE,
-    ]);
-    expect(entries).toMatchObject([
-      { kind: "event", event: { text: "before" } },
-      { kind: "notice", variant: "error", text: "the turn failed (rate_limited)" },
-      { kind: "event", event: { text: "after" } },
-    ]);
-    expect(state.status).toBe("done");
+  it("an error event inside the turn adds an error line and leaves the turn running", () => {
+    const view = applyFrame(startTurn(INITIAL_VIEW, "hi"), event({ type: "error", code: "rate_limited" }));
+    expect(view.running).toBe(true);
+    expect(view.transcript.at(-1)).toEqual({ kind: "notice", variant: "error", text: "the turn failed (rate_limited)" });
   });
+});
 
-  it("a failed connection ends the turn with the reason as an error line", async () => {
-    const { notices, ended } = await run([], new Error("connection closed before the turn ended"));
-    expect(notices).toMatchObject([{ variant: "error", text: "connection closed before the turn ended" }]);
-    expect(ended).toBe(1);
-  });
-
-  it("draws nothing for interrupt_ok, no_turn and an unknown event type", async () => {
-    const { state, notices } = await run([
+describe("applyFrame: frames that draw nothing", () => {
+  it("returns the same view for interrupt_ok, no_turn and an unknown event type", () => {
+    const running = startTurn(INITIAL_VIEW, "hi");
+    for (const frame of [
       { type: "interrupt_ok", session: SESSION },
       { type: "no_turn", session: SESSION },
       event({ type: "usage", tokens: 12 }),
-      DONE,
-    ]);
-    expect(state.events).toEqual([]);
-    expect(notices).toEqual([]);
+    ] as const) {
+      expect(applyFrame(running, frame as ControlFrame)).toBe(running);
+    }
+  });
+});
+
+describe("addNotice and failTurn", () => {
+  it("addNotice adds a line and leaves the running flag as it was", () => {
+    const running = startTurn(INITIAL_VIEW, "hi");
+    const view = addNotice(running, "warning", "no turn to interrupt");
+    expect(view.running).toBe(true);
+    expect(view.transcript.at(-1)).toEqual({ kind: "notice", variant: "warning", text: "no turn to interrupt" });
+  });
+
+  it("failTurn ends the running turn with the reason as an error line", () => {
+    const view = failTurn(startTurn(INITIAL_VIEW, "hi"), "connection closed before the turn ended");
+    expect(view.running).toBe(false);
+    expect(view.transcript.at(-1)).toEqual({ kind: "notice", variant: "error", text: "connection closed before the turn ended" });
   });
 });
 

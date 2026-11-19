@@ -23,7 +23,9 @@ async function main(): Promise<number> {
     process.stderr.write(`theoclaw-tui: ${describeError(error)}\n`)
     return 1
   }
-  const app = render(createElement(TheoClawTui, { client, session: settings.session, onExit: () => app.unmount() }))
+  const app = render(
+    createElement(TheoClawTui, { client, session: settings.session, onExit: () => app.unmount() }),
+  )
   await app.waitUntilExit()
   return 0
 }
