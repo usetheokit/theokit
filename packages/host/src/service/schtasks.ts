@@ -62,6 +62,44 @@ const ids = (stdout: string): string[] =>
     .split(',')
     .filter((id) => /^\d+$/.test(id))
 
+type PowerShell = (script: string) => Promise<RunResult>
+
+/**
+ * Ids of the task's process and its descendants, read before `/End` (a child cannot be found from
+ * a parent that has exited). The root is the process whose command line holds the arguments of the
+ * registered action; a task without arguments matches nothing rather than everything.
+ */
+async function taskProcesses(powershell: PowerShell, label: string): Promise<string[]> {
+  const script = [
+    `$task = Get-ScheduledTask -TaskName ${quotePowerShell(label)} -ErrorAction SilentlyContinue`,
+    '$cl = if ($task) { @($task.Actions)[0].Arguments } else { $null }',
+    'if (-not $cl) { return }',
+    '$all = @(Get-CimInstance Win32_Process)',
+    '$ids = @($all | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains($cl) } | ForEach-Object { $_.ProcessId })',
+    'do { $n = $ids.Count; $ids = @($ids + ($all | Where-Object { $ids -contains $_.ParentProcessId -and $_.ProcessId -ne $PID } | ForEach-Object { $_.ProcessId }) | Select-Object -Unique) } while ($ids.Count -gt $n)',
+    '$ids -join ","',
+  ].join('\n')
+  const found = await powershell(script)
+  if (found.code !== 0) throw new ServiceCommandError('process discovery', found.code, found.stderr.trim())
+  return ids(found.stdout)
+}
+
+/** Stops the processes and waits about 10 s; returns the ids still alive. */
+async function stopProcesses(powershell: PowerShell, pids: readonly string[]): Promise<string[]> {
+  const script = [
+    `$ids = @(${pids.join(',')})`,
+    'for ($i = 0; $i -lt 50; $i++) {',
+    '  $alive = @(Get-Process -Id $ids -ErrorAction SilentlyContinue)',
+    '  if ($alive.Count -eq 0) { break }',
+    '  $alive | Stop-Process -Force -ErrorAction SilentlyContinue',
+    '  Start-Sleep -Milliseconds 200',
+    '}',
+    '(@(Get-Process -Id $ids -ErrorAction SilentlyContinue) | ForEach-Object { $_.Id }) -join ","',
+  ].join('\n')
+  const result = await powershell(script)
+  return result.code === 0 ? ids(result.stdout) : pids.slice()
+}
+
 export function createSchtasksBackend(options: ServiceBackendOptions = {}): ServiceBackend {
   const runner: Runner = options.runner ?? runCommand
   const env = options.env ?? process.env
@@ -95,42 +133,6 @@ export function createSchtasksBackend(options: ServiceBackendOptions = {}): Serv
   const fail = (command: string, result: RunResult): ServiceCommandError =>
     new ServiceCommandError(`schtasks ${command}`, result.code, result.stderr.trim())
 
-  /**
-   * Ids of the task's process and its descendants, read before `/End` (a child cannot be found from
-   * a parent that has exited). The root is the process whose command line holds the arguments of the
-   * registered action; a task without arguments matches nothing rather than everything.
-   */
-  const taskProcesses = async (label: string): Promise<string[]> => {
-    const script = [
-      `$task = Get-ScheduledTask -TaskName ${quotePowerShell(label)} -ErrorAction SilentlyContinue`,
-      '$cl = if ($task) { @($task.Actions)[0].Arguments } else { $null }',
-      'if (-not $cl) { return }',
-      '$all = @(Get-CimInstance Win32_Process)',
-      '$ids = @($all | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains($cl) } | ForEach-Object { $_.ProcessId })',
-      'do { $n = $ids.Count; $ids = @($ids + ($all | Where-Object { $ids -contains $_.ParentProcessId -and $_.ProcessId -ne $PID } | ForEach-Object { $_.ProcessId }) | Select-Object -Unique) } while ($ids.Count -gt $n)',
-      '$ids -join ","',
-    ].join('\n')
-    const found = await powershell(script)
-    if (found.code !== 0) throw fail('process discovery', found)
-    return ids(found.stdout)
-  }
-
-  /** Stops the processes and waits about 10 s; returns the ids still alive. */
-  const stopProcesses = async (pids: readonly string[]): Promise<string[]> => {
-    const script = [
-      `$ids = @(${pids.join(',')})`,
-      'for ($i = 0; $i -lt 50; $i++) {',
-      '  $alive = @(Get-Process -Id $ids -ErrorAction SilentlyContinue)',
-      '  if ($alive.Count -eq 0) { break }',
-      '  $alive | Stop-Process -Force -ErrorAction SilentlyContinue',
-      '  Start-Sleep -Milliseconds 200',
-      '}',
-      '(@(Get-Process -Id $ids -ErrorAction SilentlyContinue) | ForEach-Object { $_.Id }) -join ","',
-    ].join('\n')
-    const result = await powershell(script)
-    return result.code === 0 ? ids(result.stdout) : pids.slice()
-  }
-
   return {
     platform: 'win32',
     // Task Scheduler keeps the definition itself; the task name is its identifier.
@@ -153,7 +155,8 @@ export function createSchtasksBackend(options: ServiceBackendOptions = {}): Serv
       const dir = mkdtempSync(join(tmpdir(), 'theokit-task-'))
       const path = join(dir, 'task.xml')
       try {
-        // The scheduler reads UTF-16 with a byte order mark.
+        // The scheduler reads UTF-16 with a byte order mark; the path is inside our own mkdtemp directory.
+        // eslint-disable-next-line security/detect-non-literal-fs-filename
         writeFileSync(
           path,
           Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]),
@@ -178,9 +181,9 @@ export function createSchtasksBackend(options: ServiceBackendOptions = {}): Serv
 
     async uninstall(label) {
       assertLabel(label)
-      const pids = await taskProcesses(label)
+      const pids = await taskProcesses(powershell, label)
       await schtasks('/End', '/TN', label)
-      const alive = pids.length === 0 ? [] : await stopProcesses(pids)
+      const alive = pids.length === 0 ? [] : await stopProcesses(powershell, pids)
       if (alive.length > 0) {
         throw new ServiceCommandError(
           'stop task processes',

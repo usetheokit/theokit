@@ -1,6 +1,6 @@
 import { UnsupportedPlatformError } from './errors.js'
-import type { ServiceBackend, ServiceBackendOptions } from './spec.js'
 import { createSchtasksBackend } from './schtasks.js'
+import type { ServiceBackend, ServiceBackendOptions } from './spec.js'
 import { createSystemdBackend } from './systemd.js'
 
 export {

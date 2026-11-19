@@ -20,7 +20,10 @@ function parse(line: string): string[] {
     const ch = line[i]!
     if (ch === '\\') {
       let n = 0
-      while (line[i] === '\\') (n++, i++)
+      while (line[i] === '\\') {
+        n++
+        i++
+      }
       if (line[i] === '"') {
         cur += '\\'.repeat(n >> 1)
         if (n % 2 === 1) cur += '"'
