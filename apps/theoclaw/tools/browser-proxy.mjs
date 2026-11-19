@@ -14,6 +14,10 @@
  * - the server answers every action with a `- [Snapshot](<file>)` link to a file in that directory,
  *   which no tool of the agent can open; a `tools/call` answer gets the file's content in its place
  *   (a path that leaves the directory is left as it was);
+ * - with `--cdp-endpoint` (the instance's shared browser) the server adopts the tabs other sessions
+ *   hold and makes the first its current one, so two sessions would drive one page; before this
+ *   session's first tool call the wrapper opens a tab of its own (`browser_tabs` `new`, which
+ *   becomes the current tab) and swallows the answer. Cookies stay shared: it is one context;
  * - `PLAYWRIGHT_MCP_*` variables are dropped, so the environment cannot widen the server's config.
  *
  * Exits with the server's status, 1 when it ended on a signal (SIGTERM, SIGINT and SIGHUP are
@@ -62,12 +66,16 @@ const INVALID_REQUEST = -32600
 
 const [cliPath, ...serverArgs] = process.argv.slice(2)
 if (cliPath === undefined) {
-  process.stderr.write('browser-proxy: usage: browser-proxy.mjs <playwright-mcp cli> [server args...]\n')
+  process.stderr.write(
+    'browser-proxy: usage: browser-proxy.mjs <playwright-mcp cli> [server args...]\n',
+  )
   process.exit(2)
 }
 
 const workDir = mkdtempSync(join(tmpdir(), 'theoclaw-browser-'))
-const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('PLAYWRIGHT_MCP_')))
+const env = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.startsWith('PLAYWRIGHT_MCP_')),
+)
 const server = spawn(process.execPath, [cliPath, ...serverArgs, '--output-dir', workDir], {
   cwd: workDir,
   env,
@@ -76,6 +84,24 @@ const server = spawn(process.execPath, [cliPath, ...serverArgs, '--output-dir', 
 
 /** The ids of the `tools/list` requests whose answers are still to be filtered. */
 const listRequests = new Set()
+
+/** Id of the wrapper's own `browser_tabs` call; no client request uses a string like it. */
+const OWN_TAB_ID = 'theoclaw-own-tab'
+/** Attached to a shared browser, the session opens its own tab before its first call. */
+const SHARED = serverArgs.includes('--cdp-endpoint')
+/** `undefined` until the first call, `'opening'` while the tab is being made, then `'ready'`. */
+let ownTab = SHARED ? undefined : 'ready'
+/** The client lines that arrived while the tab was opening, in order. */
+const held = []
+
+function forward(message) {
+  send(server.stdin, fromClient(message))
+}
+
+function release() {
+  ownTab = 'ready'
+  for (const message of held.splice(0)) forward(message)
+}
 
 function send(stream, message) {
   stream.write(`${JSON.stringify(message)}\n`)
@@ -121,7 +147,10 @@ function inlineSnapshots(message) {
   if (!Array.isArray(content)) return message
   const inlined = content.map((part) =>
     part?.type === 'text' && typeof part.text === 'string'
-      ? { ...part, text: part.text.replace(SNAPSHOT_LINK, (line, link) => snapshotContent(link) ?? line) }
+      ? {
+          ...part,
+          text: part.text.replace(SNAPSHOT_LINK, (line, link) => snapshotContent(link) ?? line),
+        }
       : part,
   )
   return { ...message, result: { ...message.result, content: inlined } }
@@ -130,7 +159,13 @@ function inlineSnapshots(message) {
 function fromServer(message) {
   if (message.result?.content !== undefined) return inlineSnapshots(message)
   if (!listRequests.delete(message.id) || !Array.isArray(message.result?.tools)) return message
-  return { ...message, result: { ...message.result, tools: message.result.tools.filter((tool) => OFFERED.has(tool?.name)) } }
+  return {
+    ...message,
+    result: {
+      ...message.result,
+      tools: message.result.tools.filter((tool) => OFFERED.has(tool?.name)),
+    },
+  }
 }
 
 createInterface({ input: process.stdin })
@@ -142,20 +177,51 @@ createInterface({ input: process.stdin })
     }
     if (Array.isArray(message)) {
       // A JSON-RPC batch would carry `tools/call` entries past the checks below; no batch is forwarded.
-      send(process.stdout, { jsonrpc: '2.0', id: null, error: { code: INVALID_REQUEST, message: 'theoclaw: batch requests are not supported' } })
+      send(process.stdout, {
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: INVALID_REQUEST, message: 'theoclaw: batch requests are not supported' },
+      })
       return
     }
     const name = message.params?.name
     if (message.method === 'tools/call' && !OFFERED.has(name)) {
-      send(process.stdout, { jsonrpc: '2.0', id: message.id, error: { code: NOT_OFFERED, message: `theoclaw: the browser tool ${String(name)} is not offered` } })
+      send(process.stdout, {
+        jsonrpc: '2.0',
+        id: message.id,
+        error: {
+          code: NOT_OFFERED,
+          message: `theoclaw: the browser tool ${String(name)} is not offered`,
+        },
+      })
       return
     }
-    send(server.stdin, fromClient(message))
+    if (message.method === 'tools/call' && ownTab !== 'ready') {
+      held.push(message)
+      if (ownTab === undefined) {
+        ownTab = 'opening'
+        send(server.stdin, {
+          jsonrpc: '2.0',
+          id: OWN_TAB_ID,
+          method: 'tools/call',
+          params: { name: 'browser_tabs', arguments: { action: 'new' } },
+        })
+      }
+      return
+    }
+    // Behind a held call, anything else waits too, so the server sees the client's order.
+    if (ownTab === 'opening') held.push(message)
+    else forward(message)
   })
   .on('close', () => server.stdin.end())
 
 createInterface({ input: server.stdout }).on('line', (line) => {
   const message = parse(line)
+  if (message?.id === OWN_TAB_ID) {
+    // Answered either way: a failed `new` leaves the session on the shared tab, as without the wrapper.
+    release()
+    return
+  }
   if (message === undefined) process.stdout.write(`${line}\n`)
   else send(process.stdout, fromServer(message))
 })

@@ -818,199 +818,215 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   })
   // After the shutdown hook is in place, so a signal during the probe still closes cleanly. Nothing reads `tools` before this.
   tools = await withInteractiveShell(tools, options.toolDeps)
-  tools = await withSharedBrowser(tools, options.toolDeps?.browser?.launch, (browser) => {
-    sharedBrowser = browser
-  })
-  writeToolLines(tools, stderr)
-  const acp = createAcpSessions({ agents: tools.external.acpAgents, cwd: tools.toolRoot })
-  acpSessions = acp
-  for (const line of a2aLines(a2a)) stderr(line)
-  // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
-  const userWorkflows =
-    options.generateObject === undefined
-      ? undefined
-      : loadUserWorkflows({
-          workspace: sessionSettings.workspace,
-          stateDir: policy.stateDir ?? join(sessionSettings.workspace, '.theoclaw'),
-          generate: options.generateObject,
-          write: stderr,
-        })
-  const composed = composeTheoClaw({
-    ...options,
-    ...(userWorkflows === undefined ? {} : { workflowResume: userWorkflows.resume }),
-    acp,
-    policy,
-    toolSettings: tools,
-    sessionSettings,
-    generations,
-    events,
-    ...(pairing === undefined ? {} : { pairing }),
-    write: stderr,
-    secrets: secretValues,
-  })
-  composedApp = composed
-  // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
-  const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
-  const beat =
-    heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
-  const reportJob = teamReportJob(options.env, platforms)
-  const teamReport = reportJob === undefined ? {} : { teamReport: reportJob }
-  let scheduleStore = fileStore
-  if (database.engine === 'postgres') {
-    try {
-      const opened = await openPostgresJobStore(database.dsn, options.database)
-      scheduleStore = opened.store
-      closeScheduleStore = opened.close
-    } catch (error) {
-      // A database that is down refuses the start; there is no fallback to the file store.
-      removeShutdown()
-      options.signals.off('exit', flushOnExit)
-      await teardown()
-      mask.flush()
-      throw error
-    }
-  }
-  scheduled = wireScheduler({
-    store: scheduleStore!,
-    loop: composed.loop,
-    buildRunAgent: buildWorker,
-    tools,
-    platforms,
-    ...beat,
-    ...teamReport,
-    write: stderr,
-    secrets: secretValues,
-  })
-  const relayDir = join(sessionSettings.workspace, '.theoclaw')
-  const relayState =
-    relay.client === undefined
-      ? undefined
-      : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
-  if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
-  const relayClient =
-    relayState === undefined || relay.client === undefined || relay.peers.size === 0
-      ? undefined
-      : new RelayClient(relay.client!.url, relay.client!.token)
-  // A turn that read a peer's relay message may not send back; the owner's next turn may (OC-14).
-  const relayToolsFor = (gate?: RelayTurnGate): CustomTool[] =>
-    relayState === undefined || relayClient === undefined
-      ? []
-      : relayTools(relayState, relayClient, gate)
-  const relayHandler =
-    relay.serveToken === undefined
-      ? undefined
-      : relayRoute(relay.serveToken, new RelayMailbox(100, join(relayDir, 'relay-mailbox.json')))
-  const extraTools = [
-    ...workflowTools(options.draftAgentFactory, options.generateObject, stderr),
-    ...(userWorkflows?.tools ?? []),
-    ...scheduled.scheduleTools,
-    ...peerTools(a2a.peers),
-  ]
-  const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
-  const memory = composed.memory
-  const controlExtras = [...extraTools, ...relayToolsFor(), ...(memory?.tools ?? [])]
-  const buildControlAgent = async (): Promise<TurnAgent> => {
-    const relayGate = new RelayTurnGate()
-    const control = controlAgentToolOptions(
-      tools,
-      buildWorker,
-      [...extraTools, ...relayToolsFor(relayGate), ...(memory?.tools ?? [])],
-      execApproval,
-    )
-    const recalled = (await memory?.recall()) ?? ''
-    const agent = relayGate.wrap(
-      await options.agentFactory(
-        recalled === '' ? control : { ...control, systemPromptSuffix: recalled },
-      ),
-    )
-    // TUI, desktop and `/control` turns share the chat surfaces' memory; the reviewer has `save_memory` alone.
-    return memory === undefined
-      ? agent
-      : memory.wrap(agent, 'control', 'control', async () =>
-          options.agentFactory({ tools: [saveMemoryTool(memory.store)], plugins: [] }),
-        )
-  }
-  const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
-  if (mcpEventsSettings !== undefined) {
-    mcpEvents = await startMcpEvents({
-      settings: mcpEventsSettings,
-      adapterFor: (platform) => composed.loop.started.get(platform)?.adapter,
-      withAgent: createContainer<TurnAgent>({
-        factory: options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env),
-      }).withAgent,
+  // From here the browser is running: any failure up to the return stops what started and lets the entry exit 1.
+  try {
+    tools = await withSharedBrowser(tools, options.toolDeps?.browser?.launch, (browser) => {
+      sharedBrowser = browser
+    })
+    writeToolLines(tools, stderr)
+    const acp = createAcpSessions({ agents: tools.external.acpAgents, cwd: tools.toolRoot })
+    acpSessions = acp
+    for (const line of a2aLines(a2a)) stderr(line)
+    // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
+    const userWorkflows =
+      options.generateObject === undefined
+        ? undefined
+        : loadUserWorkflows({
+            workspace: sessionSettings.workspace,
+            stateDir: policy.stateDir ?? join(sessionSettings.workspace, '.theoclaw'),
+            generate: options.generateObject,
+            write: stderr,
+          })
+    const composed = composeTheoClaw({
+      ...options,
+      ...(userWorkflows === undefined ? {} : { workflowResume: userWorkflows.resume }),
+      acp,
+      policy,
+      toolSettings: tools,
+      sessionSettings,
+      generations,
+      events,
+      ...(pairing === undefined ? {} : { pairing }),
       write: stderr,
       secrets: secretValues,
     })
-  }
-  const devices = devicePairingFor(policy.stateDir, settings.controlToken, stderr)
-  // A chat completion is a chat surface: its agent is a chat agent, holding no tool (B-382), so
-  // `/tools/invoke` is the only way to the `/control` set, built by the same call as that agent's.
-  const chatAgents = createContainer<TurnAgent>({
-    factory: webchatAgentFactory(options.env, options.createChatAgent),
-  })
-  const api = theoClawApiFor(settings.controlToken, {
-    model: settings.model,
-    withAgent: chatAgents.withAgent,
-    toolSettings: tools,
-    controlTools: () =>
-      controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools,
-    stderr,
-  })
-  if (mcpRelay !== undefined) {
-    mcpConnector = startMcpRelayConnector({
-      settings: mcpRelay,
+    composedApp = composed
+    // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
+    const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
+    const beat =
+      heartbeat === undefined
+        ? {}
+        : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
+    const reportJob = teamReportJob(options.env, platforms)
+    const teamReport = reportJob === undefined ? {} : { teamReport: reportJob }
+    let scheduleStore = fileStore
+    if (database.engine === 'postgres') {
+      // A database that is down refuses the start; there is no fallback to the file store.
+      const opened = await openPostgresJobStore(database.dsn, options.database)
+      scheduleStore = opened.store
+      closeScheduleStore = opened.close
+    }
+    scheduled = wireScheduler({
+      store: scheduleStore!,
+      loop: composed.loop,
+      buildRunAgent: buildWorker,
+      tools,
+      platforms,
+      ...beat,
+      ...teamReport,
+      write: stderr,
+      secrets: secretValues,
+    })
+    const relayDir = join(sessionSettings.workspace, '.theoclaw')
+    const relayState =
+      relay.client === undefined
+        ? undefined
+        : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
+    if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
+    const relayClient =
+      relayState === undefined || relay.client === undefined || relay.peers.size === 0
+        ? undefined
+        : new RelayClient(relay.client!.url, relay.client!.token)
+    // A turn that read a peer's relay message may not send back; the owner's next turn may (OC-14).
+    const relayToolsFor = (gate?: RelayTurnGate): CustomTool[] =>
+      relayState === undefined || relayClient === undefined
+        ? []
+        : relayTools(relayState, relayClient, gate)
+    const relayHandler =
+      relay.serveToken === undefined
+        ? undefined
+        : relayRoute(relay.serveToken, new RelayMailbox(100, join(relayDir, 'relay-mailbox.json')))
+    const extraTools = [
+      ...workflowTools(options.draftAgentFactory, options.generateObject, stderr),
+      ...(userWorkflows?.tools ?? []),
+      ...scheduled.scheduleTools,
+      ...peerTools(a2a.peers),
+    ]
+    const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
+    const memory = composed.memory
+    const controlExtras = [...extraTools, ...relayToolsFor(), ...(memory?.tools ?? [])]
+    const buildControlAgent = async (): Promise<TurnAgent> => {
+      const relayGate = new RelayTurnGate()
+      const control = controlAgentToolOptions(
+        tools,
+        buildWorker,
+        [...extraTools, ...relayToolsFor(relayGate), ...(memory?.tools ?? [])],
+        execApproval,
+      )
+      const recalled = (await memory?.recall()) ?? ''
+      const agent = relayGate.wrap(
+        await options.agentFactory(
+          recalled === '' ? control : { ...control, systemPromptSuffix: recalled },
+        ),
+      )
+      // TUI, desktop and `/control` turns share the chat surfaces' memory; the reviewer has `save_memory` alone.
+      return memory === undefined
+        ? agent
+        : memory.wrap(agent, 'control', 'control', async () =>
+            options.agentFactory({ tools: [saveMemoryTool(memory.store)], plugins: [] }),
+          )
+    }
+    const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
+    if (mcpEventsSettings !== undefined) {
+      mcpEvents = await startMcpEvents({
+        settings: mcpEventsSettings,
+        adapterFor: (platform) => composed.loop.started.get(platform)?.adapter,
+        withAgent: createContainer<TurnAgent>({
+          factory: options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env),
+        }).withAgent,
+        write: stderr,
+        secrets: secretValues,
+      })
+    }
+    const devices = devicePairingFor(policy.stateDir, settings.controlToken, stderr)
+    // A chat completion is a chat surface: its agent is a chat agent, holding no tool (B-382), so
+    // `/tools/invoke` is the only way to the `/control` set, built by the same call as that agent's.
+    const chatAgents = createContainer<TurnAgent>({
+      factory: webchatAgentFactory(options.env, options.createChatAgent),
+    })
+    const api = theoClawApiFor(settings.controlToken, {
+      model: settings.model,
+      withAgent: chatAgents.withAgent,
+      toolSettings: tools,
       controlTools: () =>
         controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools,
-      toolSettings: tools,
-      log: stderr,
+      stderr,
     })
-  }
-  const listen = options.listen ?? listenControlPlane
-  const geoDb = options.env?.THEOCLAW_GEOIP_DB?.trim() || undefined
-  serving = listen({
-    handler: serveHandler(
-      composed.router,
-      startWebchat(
-        options,
-        settings,
-        secretValues,
-        stderr,
-        composed.withChatAgent,
-        composed.think,
-        trustedProxy !== undefined,
+    if (mcpRelay !== undefined) {
+      mcpConnector = startMcpRelayConnector({
+        settings: mcpRelay,
+        controlTools: () =>
+          controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools,
+        toolSettings: tools,
+        log: stderr,
+      })
+    }
+    const listen = options.listen ?? listenControlPlane
+    const geoDb = options.env?.THEOCLAW_GEOIP_DB?.trim() || undefined
+    serving = listen({
+      handler: serveHandler(
+        composed.router,
+        startWebchat(
+          options,
+          settings,
+          secretValues,
+          stderr,
+          composed.withChatAgent,
+          composed.think,
+          trustedProxy !== undefined,
+        ),
+        devices,
+        rpcFirst(settings.controlToken, devices, api),
+        a2a.token === undefined
+          ? undefined
+          : a2aRoute({
+              token: a2a.token,
+              buildWorker,
+              tools,
+              secrets: secretValues,
+              write: stderr,
+            }),
+        relayHandler,
+        geoDb === undefined ? undefined : loadCityLookup(geoDb),
       ),
-      devices,
-      rpcFirst(settings.controlToken, devices, api),
-      a2a.token === undefined
-        ? undefined
-        : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),
-      relayHandler,
-      geoDb === undefined ? undefined : loadCityLookup(geoDb),
-    ),
-    port: settings.port,
-    host: settings.host,
-    stderr,
-    ...(trustedProxy === undefined ? {} : { trustedProxy }),
-    ...(settings.controlToken === undefined
-      ? {}
-      : {
-          control: controlOptions(
-            settings.controlToken,
-            withAgent,
-            buildControlAgent,
-            stderr,
-            secretValues,
-            devices,
-            settings.model,
-          ),
-        }),
-  })
-  let handle: ControlPlaneHandle
-  try {
-    handle = await serving
+      port: settings.port,
+      host: settings.host,
+      stderr,
+      ...(trustedProxy === undefined ? {} : { trustedProxy }),
+      ...(settings.controlToken === undefined
+        ? {}
+        : {
+            control: controlOptions(
+              settings.controlToken,
+              withAgent,
+              buildControlAgent,
+              stderr,
+              secretValues,
+              devices,
+              settings.model,
+            ),
+          }),
+    })
+    // A listener that never binds (a busy port, an address the host lacks) refuses the start too.
+    const handle = await serving
+    stdout(`theoclaw: control plane listening on ${formatAddress(handle.address())}`)
+    const announced = announceOnLan(handle, {
+      mode: discovery,
+      log: stderr,
+      createPublisher: options.createPublisher ?? createBonjourPublisher,
+    })
+    announcement = announced
+    reportSurfacesOff(settings, stdout)
+    // Last: a shutdown that began during the start has already stopped it, and then this registers nothing.
+    await scheduled.start()
+    // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
+    // running instance directly must not leave the service advertised.
+    const close = async (): Promise<void> => {
+      await teardown()
+      await stopThenClose(announced, handle)
+    }
+    return { ...handle, ...composed, announcement: announced, instance, close }
   } catch (error) {
-    // The listener never bound (a busy port, an address the host lacks): stop what started and let
-    // the entry exit 1.
     removeShutdown()
     options.signals.off('exit', flushOnExit)
     await teardown()
@@ -1018,20 +1034,4 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     mask.flush()
     throw error
   }
-  stdout(`theoclaw: control plane listening on ${formatAddress(handle.address())}`)
-  announcement = announceOnLan(handle, {
-    mode: discovery,
-    log: stderr,
-    createPublisher: options.createPublisher ?? createBonjourPublisher,
-  })
-  reportSurfacesOff(settings, stdout)
-  // Last: a shutdown that began during the start has already stopped it, and then this registers nothing.
-  await scheduled.start()
-  // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
-  // running instance directly must not leave the service advertised.
-  const close = async (): Promise<void> => {
-    await teardown()
-    await stopThenClose(announcement, handle)
-  }
-  return { ...handle, ...composed, announcement, instance, close }
 }
