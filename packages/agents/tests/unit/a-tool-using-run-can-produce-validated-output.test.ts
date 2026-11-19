@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { withGuardrails, withStepCeiling } from '../../src/bridge/handle-wrappers.js'
+import type { SdkMessage } from '../../src/bridge/event-translator.js'
 import type { SdkAgentHandle } from '../../src/bridge/sdk-adapter.js'
 
 /**
@@ -32,7 +33,7 @@ describe('the served handle offers a schema-validated, tool-using run', () => {
   it('declares generate alongside send', () => {
     // A compile error here IS the failure: the method is not on the contract. The runtime assertion
     // is incidental.
-    const handle: SdkAgentHandle = {
+    const handle: SdkAgentHandle<SdkMessage> = {
       agentId: 'a',
       send: vi.fn(),
       dispose: vi.fn(),
@@ -67,7 +68,11 @@ describe('the served handle offers a schema-validated, tool-using run', () => {
   it('keeps send as the unstructured path', () => {
     // The control. `generate` is additive: a caller that wants free text must not be forced through
     // a schema, and the two coexist on one handle rather than one replacing the other.
-    const handle = { agentId: 'a', send: vi.fn(), dispose: vi.fn() } as unknown as SdkAgentHandle
+    const handle = {
+      agentId: 'a',
+      send: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as SdkAgentHandle<SdkMessage>
     expect(typeof handle.send).toBe('function')
   })
 })

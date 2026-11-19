@@ -14,9 +14,18 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { translateInteractionUpdate, translateSdkEvent } from '../../src/bridge/event-translator.js'
+import {
+  type SdkMessage,
+  translateInteractionUpdate,
+  translateSdkEvent,
+} from '../../src/bridge/event-translator.js'
 
 const RUN = 'run-1'
+
+/** A message carrying fields the published `SDKMessage` does not declare (the cross-shape fallbacks). */
+function legacyShape(msg: SdkMessage, extra: Record<string, unknown>): SdkMessage {
+  return Object.assign({}, msg, extra)
+}
 
 describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
   it('test_assistant_text_from_message_content — reads msg.message.content, not msg.content', () => {
@@ -125,15 +134,17 @@ describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
     // #42: running status now emits a tool_call so the UI shows a running card with input args.
     expect(
       translateSdkEvent(
-        {
-          type: 'tool_call',
-          agent_id: 'a',
-          run_id: RUN,
-          call_id: 'c1',
-          name: 'glob',
-          status: 'running',
-          input: { p: '*' },
-        },
+        legacyShape(
+          {
+            type: 'tool_call',
+            agent_id: 'a',
+            run_id: RUN,
+            call_id: 'c1',
+            name: 'glob',
+            status: 'running',
+          },
+          { input: { p: '*' } },
+        ),
         RUN,
       ),
     ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'glob', input: { p: '*' } }])
@@ -164,16 +175,18 @@ describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
   it('test_running_tool_call_args_takes_precedence_over_legacy_fields — args wins (theokit#58)', () => {
     expect(
       translateSdkEvent(
-        {
-          type: 'tool_call',
-          agent_id: 'a',
-          run_id: RUN,
-          call_id: 'c1',
-          name: 'shell_exec',
-          status: 'running',
-          args: { a: 1 },
-          input: { b: 2 },
-        },
+        legacyShape(
+          {
+            type: 'tool_call',
+            agent_id: 'a',
+            run_id: RUN,
+            call_id: 'c1',
+            name: 'shell_exec',
+            status: 'running',
+            args: { a: 1 },
+          },
+          { input: { b: 2 } },
+        ),
         RUN,
       ),
     ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'shell_exec', input: { a: 1 } }])

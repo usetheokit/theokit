@@ -9,12 +9,19 @@
  * COMPILE-TIME assertions: `tsc -p packages/agents/tsconfig.test.json --noEmit` fails while either
  * field is missing: `toHaveProperty` on a key the type does not declare is a type error.
  */
+import type { InteractionUpdate, SDKMessage } from '@theokit/sdk'
 import { describe, expectTypeOf, it } from 'vitest'
 
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 import type { AgentStreamEvent, ToolResultEvent } from '../../src/bridge/agent-stream-events.js'
-import { type translateSdkEvent } from '../../src/bridge/event-translator.js'
-import type { SdkTurnHandle, SdkTurnMessage } from '../../src/bridge/sdk-adapter.js'
+import type {
+  SdkMessage,
+  translateInteractionUpdate,
+  translateSdkEvent,
+} from '../../src/bridge/event-translator.js'
+import type { withTypedStream } from '../../src/bridge/handle-wrappers.js'
+import type { SdkAgentHandle, SdkTurnHandle, toAgentFactory } from '../../src/bridge/sdk-adapter.js'
+import type { SdkTimelineEvent } from '../../src/bridge/sdk-timeline.js'
 
 type ResolvedTurn = Awaited<ReturnType<SdkTurnHandle['wait']>>
 
@@ -31,10 +38,27 @@ describe('SdkTurnHandle', () => {
 })
 
 describe('typed bridge contract', () => {
-  it('turn stream yields the SDK message union, not unknown', () => {
+  it('the default turn stream yields AgentStreamEvent', () => {
     type Stream = NonNullable<SdkTurnHandle['stream']>
-    expectTypeOf<ReturnType<Stream>>().toEqualTypeOf<AsyncIterable<SdkTurnMessage>>()
-    expectTypeOf<SdkTurnMessage['type']>().toMatchTypeOf<string>()
+    expectTypeOf<ReturnType<Stream>>().toEqualTypeOf<AsyncIterable<AgentStreamEvent>>()
+    expectTypeOf<SdkAgentHandle>().toMatchTypeOf<{
+      send: (msg: string) => Promise<SdkTurnHandle>
+    }>()
+  })
+
+  it('the served (ACP) handle keeps the SDK message vocabulary', () => {
+    type Stream = NonNullable<SdkTurnHandle<SdkMessage>['stream']>
+    expectTypeOf<ReturnType<Stream>>().toEqualTypeOf<AsyncIterable<SdkMessage>>()
+    expectTypeOf<ReturnType<ReturnType<typeof toAgentFactory>>>().toEqualTypeOf<
+      Promise<SdkAgentHandle<SdkMessage>>
+    >()
+    expectTypeOf<ReturnType<typeof withTypedStream>>().toEqualTypeOf<SdkAgentHandle>()
+  })
+
+  it('real SDK messages and updates pass without casts', () => {
+    expectTypeOf<SDKMessage>().toMatchTypeOf<SdkMessage>()
+    expectTypeOf<InteractionUpdate>().toMatchTypeOf<NonNullable<SdkTimelineEvent['update']>>()
+    expectTypeOf<SdkTimelineEvent['message']>().toEqualTypeOf<SdkMessage | undefined>()
   })
 
   it('narrows AgentStreamEvent by its discriminant', () => {
@@ -45,6 +69,9 @@ describe('typed bridge contract', () => {
 
   it('translators return AgentStreamEvent and it is assignable to StreamEvent', () => {
     expectTypeOf<ReturnType<typeof translateSdkEvent>>().toEqualTypeOf<AgentStreamEvent[]>()
+    expectTypeOf<ReturnType<typeof translateInteractionUpdate>>().toEqualTypeOf<
+      AgentStreamEvent[]
+    >()
     expectTypeOf<AgentStreamEvent>().toMatchTypeOf<StreamEvent>()
   })
 })

@@ -12,7 +12,7 @@ import type { ToolRefusal } from '@theokit/presenter'
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SDKMessage, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
@@ -24,7 +24,7 @@ import type { AgentStreamEvent } from './agent-stream-events.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
-import { type SdkMessage } from './event-translator.js'
+import type { SdkMessage } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
@@ -845,7 +845,7 @@ async function* streamSdkAgent(
  * `wait` for output, theokit#139). The ACP server (4.0.1) answers that with JSON-RPC -32603 carrying
  * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
-export interface SdkTurnHandle {
+export interface SdkTurnHandle<M = AgentStreamEvent> {
   wait: () => Promise<{
     result?: string
     usage?: { totalTokens?: number }
@@ -853,38 +853,21 @@ export interface SdkTurnHandle {
     error?: { message: string }
   }>
   /**
-   * The turn's messages, in the SDK's own message vocabulary ({@link SdkTurnMessage}), NOT
-   * `AgentStreamEvent`: this handle is served to hosts (ACP) that dispatch exhaustively on
-   * `SDKMessage['type']` and throw on any other. The framework's `AgentStreamEvent` flow is
-   * `createSdkAgentStream` and `streamAgentEndpoint`, and `translateSdkEvent` is the typed
-   * bridge from this vocabulary to it.
+   * The turn's events. With the default `M`, the typed bridge contract: `AgentStreamEvent`.
+   *
+   * A handle served to an ACP host carries `SdkMessage` instead (`SdkAgentHandle<SdkMessage>`, what
+   * {@link toAgentFactory} returns): the ACP server dispatches exhaustively on `SDKMessage['type']`
+   * and throws on anything else, so that boundary keeps the SDK's own vocabulary.
+   * `withTypedStream` (`handle-wrappers.ts`) is the adapter between the two, built on
+   * `translateSdkEvent`.
    */
-  stream?: () => AsyncIterable<SdkTurnMessage>
+  stream?: () => AsyncIterable<M>
 }
-
-/** An SDK message with the ids a wrapper that never sees the run cannot supply made optional. */
-type WithOptionalRunIds<M> = M extends unknown
-  ? Omit<M, 'agent_id' | 'run_id'> & { agent_id?: string; run_id?: string }
-  : never
-
-/**
- * One message of a served turn's `stream()`: the SDK's `SDKMessage` discriminated union, with
- * `agent_id`/`run_id` optional so a guarded turn (which synthesizes its messages) can produce it.
- */
-export type SdkTurnMessage =
-  | WithOptionalRunIds<SDKMessage>
-  /** The single assistant message a guarded turn synthesizes: guarded text, no `role`, no ids. */
-  | {
-      type: 'assistant'
-      agent_id?: string
-      run_id?: string
-      message: { role?: 'assistant'; content: { type: 'text'; text: string }[] }
-    }
 
 /** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
 export type SdkSendOptions = Record<string, unknown>
 
-export interface SdkAgentHandle {
+export interface SdkAgentHandle<M = AgentStreamEvent> {
   readonly agentId: string
   /**
    * B-062 — a tool-using run that returns schema-validated output.
@@ -931,7 +914,7 @@ export interface SdkAgentHandle {
    * `as never` absorbed the difference. It is literally the divergence the facade's docstring
    * described, met again while trying to remove it.
    */
-  send: (msg: string, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
+  send: (msg: string, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>
   dispose: () => Promise<void>
 }
 
@@ -959,10 +942,10 @@ export function toAgentFactory(
     /** Withhold the SDK default `shell`, which `approvals` does not gate. */
     withholdBuiltinShell?: boolean
   },
-): (sessionId: string) => Promise<SdkAgentHandle> {
+): (sessionId: string) => Promise<SdkAgentHandle<SdkMessage>> {
   const overrides = opts.overrides ?? {}
   const projectPerSession = resolveProjection(def, overrides)
-  return async (sessionId: string): Promise<SdkAgentHandle> => {
+  return async (sessionId: string): Promise<SdkAgentHandle<SdkMessage>> => {
     // OBJECT shape: returns the projection already built. THUNK shape: projects now, for this session.
     const { compiled, model, reasoningEffort, runContext } = await projectPerSession(sessionId)
     const rt = await loadSdkRuntime()
@@ -987,7 +970,7 @@ export function toAgentFactory(
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     })
     return withGuardrails(
-      withStepCeiling(agent as unknown as SdkAgentHandle, compiled.maxIterations),
+      withStepCeiling(agent as unknown as SdkAgentHandle<SdkMessage>, compiled.maxIterations),
       compiled.guardrails,
     )
   }

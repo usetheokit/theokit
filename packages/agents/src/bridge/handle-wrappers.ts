@@ -14,6 +14,7 @@
 import type { Guardrail } from '../guardrails/index.js'
 import { GuardrailViolationError, runInputGuards, runOutputGuards } from '../guardrails/index.js'
 
+import { type SdkMessage, translateSdkEvent } from './event-translator.js'
 import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
 
 /**
@@ -28,9 +29,9 @@ import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapte
  * turn is the per-run override this layer already honors for `model` and `reasoningEffort`.
  */
 export function withStepCeiling(
-  handle: SdkAgentHandle,
+  handle: SdkAgentHandle<SdkMessage>,
   maxIterations: number | undefined,
-): SdkAgentHandle {
+): SdkAgentHandle<SdkMessage> {
   // Nothing declared ⇒ the original handle, untouched — no wrapper, no key, the SDK default stands.
   if (maxIterations === undefined) return handle
   return {
@@ -45,9 +46,9 @@ export function withStepCeiling(
 }
 
 export function withGuardrails(
-  handle: SdkAgentHandle,
+  handle: SdkAgentHandle<SdkMessage>,
   guardrails: readonly Guardrail[] | undefined,
-): SdkAgentHandle {
+): SdkAgentHandle<SdkMessage> {
   // No guards ⇒ the original handle, untouched. Wrapping unconditionally would put an await on the
   // hot path of every served agent to enforce an empty list.
   if (guardrails === undefined || guardrails.length === 0) return handle
@@ -57,7 +58,7 @@ export function withGuardrails(
     },
     dispose: () => handle.dispose(),
     ...forwardedMembers(handle),
-    send: async (msg: string, sendOpts?: SdkSendOptions): Promise<SdkTurnHandle> => {
+    send: async (msg: string, sendOpts?: SdkSendOptions): Promise<SdkTurnHandle<SdkMessage>> => {
       // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
       // not merely annotate it afterwards.
       const guarded = await runInputGuards(msg, guardrails)
@@ -76,7 +77,7 @@ export function withGuardrails(
  * SDK's LocalAgent reads `this` in it.
  */
 function forwardedMembers(
-  handle: SdkAgentHandle,
+  handle: SdkAgentHandle<SdkMessage>,
 ): Pick<SdkAgentHandle, 'generate' | 'pluginManager'> {
   return {
     ...(handle.generate === undefined ? {} : { generate: handle.generate.bind(handle) }),
@@ -108,7 +109,10 @@ function forwardedMembers(
  * includes a guard defect such as `MalformedGuardrailResultError` (a `redact` with no text): a guard
  * written wrong is not a guard refusing (B-457).
  */
-function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTurnHandle {
+function guardTurn(
+  turn: SdkTurnHandle<SdkMessage>,
+  guardrails: readonly Guardrail[],
+): SdkTurnHandle<SdkMessage> {
   let outcome: ReturnType<SdkTurnHandle['wait']> | undefined
   const guardedOutcome = (): ReturnType<SdkTurnHandle['wait']> =>
     (outcome ??= turn
@@ -139,6 +143,40 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
 }
 
 /** The SDK's terminal message for a failed run, less the agent and run ids this layer never sees. */
-function errorStatus(message: string): { type: 'status'; status: 'ERROR'; message: string } {
+function errorStatus(message: string): SdkMessage {
   return { type: 'status', status: 'ERROR', message }
+}
+
+/**
+ * The boundary adapter from the served vocabulary to the typed bridge contract.
+ *
+ * `toAgentFactory` serves handles whose `stream()` yields `SdkMessage` (what ACP reads). This returns
+ * the same handle with `stream()` yielding `AgentStreamEvent`, each message passed through
+ * {@link translateSdkEvent} (a message may become zero or several events, and the run's `done`
+ * arrives as the `FINISHED` status). Everything else is forwarded unchanged, bound to the original.
+ */
+export function withTypedStream(handle: SdkAgentHandle<SdkMessage>): SdkAgentHandle {
+  return {
+    get agentId() {
+      return handle.agentId
+    },
+    dispose: () => handle.dispose(),
+    ...forwardedMembers(handle),
+    send: async (msg: string, sendOpts?: SdkSendOptions): Promise<SdkTurnHandle> => {
+      const turn = await handle.send(msg, sendOpts)
+      const source = turn.stream
+      return {
+        wait: () => turn.wait(),
+        ...(source === undefined
+          ? {}
+          : {
+              stream: async function* () {
+                for await (const message of source.call(turn)) {
+                  yield* translateSdkEvent(message, message.run_id ?? '')
+                }
+              },
+            }),
+      }
+    },
+  }
 }

@@ -5,14 +5,51 @@
  * TheoKit devtools + SSE handler expect AgentStreamEvent (run_started/text_delta/tool_call/done).
  * This module bridges the two — Adapter pattern (per sdk-integration-blueprint ADR-D2).
  */
-import type { CostBreakdown, InteractionUpdate } from '@theokit/sdk'
+import type { CostBreakdown, InteractionUpdate, SDKMessage } from '@theokit/sdk'
 
 import type { AgentStreamEvent } from './agent-stream-events.js'
 
-/** Minimal SDK message shape — duck-typed to avoid hard import of @theokit/sdk types. */
-export interface SdkMessage {
+/** An SDK message with the ids a layer that never sees the run cannot supply made optional. */
+type WithOptionalRunIds<M> = M extends unknown
+  ? Omit<M, 'agent_id' | 'run_id'> & { agent_id?: string; run_id?: string }
+  : never
+
+/**
+ * One SDK message: the published `SDKMessage` discriminated union (`@theokit/sdk`), type-only, with
+ * `agent_id`/`run_id` optional, plus the single assistant message a guarded turn synthesizes (guarded
+ * text, no `role`). There is no index signature: a real `SDKMessage` is accepted as it is, and `type`
+ * narrows every field.
+ */
+export type SdkMessage =
+  | WithOptionalRunIds<SDKMessage>
+  | {
+      type: 'assistant'
+      agent_id?: string
+      run_id?: string
+      message: { role?: 'assistant'; content: { type: 'text'; text: string }[] }
+    }
+
+type MessageOf<T extends SdkMessage['type']> = Extract<SdkMessage, { type: T }>
+/** A content block read defensively: a runtime payload can still miss what the declared type promises. */
+interface DefensiveBlock {
   type: string
-  [key: string]: unknown
+  text?: string
+  id?: string
+  name?: string
+  input?: unknown
+}
+
+/** `message.content` of an assistant message, read untrusted (absent ⇒ `undefined`). */
+function contentOf(msg: object): unknown {
+  const message: unknown = Reflect.get(msg, 'message')
+  return typeof message === 'object' && message !== null
+    ? Reflect.get(message, 'content')
+    : undefined
+}
+
+/** Cross-shape fallbacks for a tool's args (`input`/`arguments`), never part of the SDK schema. */
+function legacyInput(msg: object): unknown {
+  return Reflect.get(msg, 'input') ?? Reflect.get(msg, 'arguments')
 }
 
 /** Safely coerce unknown value to string. */
@@ -65,36 +102,33 @@ function serializeToolOutput(value: unknown, fallback: string): string {
   }
 }
 
-function translateSystemEvent(msg: SdkMessage, runId: string): AgentStreamEvent[] {
+function translateSystemEvent(msg: MessageOf<'system'>, runId: string): AgentStreamEvent[] {
   return [
     {
       type: 'run_started',
       runId,
       agentName: asString(msg.agent_id, 'agent'),
-      model: asString(msg.model, 'unknown'),
+      model: typeof msg.model === 'object' ? msg.model.id : asString(msg.model, 'unknown'),
     },
   ]
 }
 
-function translateAssistantEvent(msg: SdkMessage): AgentStreamEvent[] {
+function translateAssistantEvent(msg: MessageOf<'assistant'>): AgentStreamEvent[] {
   const events: AgentStreamEvent[] = []
-  // Real SDKAssistantMessage (messages.ts:58): content lives at msg.message.content.
-  const message = msg.message as { content?: unknown } | undefined
-  const content = message?.content
+  // Real SDKAssistantMessage: content lives at msg.message.content. Read defensively — a runtime
+  // payload can still be malformed even though the declared type says otherwise.
+  const content = contentOf(msg)
   if (!Array.isArray(content)) return events
 
-  for (const block of content) {
-    const b = block as { type: string; text?: string; name?: string; input?: unknown; id?: string }
+  for (const b of content as DefensiveBlock[]) {
     if (b.type === 'text' && b.text) {
       events.push({ type: 'text_delta', content: b.text })
     }
     if (b.type === 'tool_use') {
       events.push({
         type: 'tool_call',
-        // #138 — this was `tc-${Date.now()}`. A fresh id on every call is NEVER in the dedup set, so
-        // the fallback defeated dedup by construction — and still looked like a real id to a reader.
-        // An empty string is honest: `isDuplicatedByDelta` treats it as "I cannot identify this" and
-        // prefers a visible double render to a silent suppression.
+        // #138 — an empty id is honest: dedup treats it as "I cannot identify this" and prefers a
+        // visible double render to a silent suppression.
         callId: b.id ?? '',
         toolName: b.name ?? 'unknown',
         input: b.input ?? {},
@@ -104,10 +138,10 @@ function translateAssistantEvent(msg: SdkMessage): AgentStreamEvent[] {
   return events
 }
 
-function translateToolCallEvent(msg: SdkMessage): AgentStreamEvent[] {
+function translateToolCallEvent(msg: MessageOf<'tool_call'>): AgentStreamEvent[] {
   // Real SDKToolUseMessage (messages.ts:89): call_id (not id), status running|completed|error,
   // tool output in `result` (no separate `error` field).
-  const status = msg.status as string
+  const status: string = msg.status
   // #138 — likewise: without a `call_id` the identity is unknown, and a timestamp only disguises that.
   const callId = asString(msg.call_id, '')
   const toolName = asString(msg.name, 'unknown')
@@ -143,9 +177,7 @@ function translateToolCallEvent(msg: SdkMessage): AgentStreamEvent[] {
     // live TC-DIAG confirmed `args={"command":…}`); `input`/`arguments` were never the SDK field
     // and resolved to `{}`, blanking the tool card. Read `args` first, keep the others as
     // defensive cross-shape fallbacks (error-handling.md).
-    return [
-      { type: 'tool_call', callId, toolName, input: msg.args ?? msg.input ?? msg.arguments ?? {} },
-    ]
+    return [{ type: 'tool_call', callId, toolName, input: msg.args ?? legacyInput(msg) ?? {} }]
   }
   return [] // unknown status → no event
 }
@@ -174,12 +206,12 @@ function costOf(result: unknown): CostBreakdown | undefined {
     : undefined
 }
 
-function translateStatusEvent(msg: SdkMessage): AgentStreamEvent[] {
+function translateStatusEvent(msg: MessageOf<'status'>): AgentStreamEvent[] {
   // Real SDKStatusMessage (messages.ts:106): status is UPPERCASE cloud-run lifecycle;
   // error text (when present) is in `msg.message`. FINISHED/CANCELLED are terminal-clean;
   // ERROR/EXPIRED are terminal-failure (must surface — fail-loud, Unbreakable Rule 8);
   // CREATING/RUNNING are in-progress.
-  const s = msg.status as string
+  const s: string = msg.status
   if (s === 'FINISHED' || s === 'CANCELLED') {
     return [
       {
@@ -189,7 +221,7 @@ function translateStatusEvent(msg: SdkMessage): AgentStreamEvent[] {
         durationMs: 0,
         // A status message carries no price of its own; one whose `result` carries the SDK's cost
         // reports it, and otherwise the key is left out, never written as 0 (B-424).
-        ...knownCost(costOf(msg.result)),
+        ...knownCost(costOf(Reflect.get(msg, 'result'))),
       },
     ]
   }
