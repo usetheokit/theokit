@@ -646,6 +646,9 @@ importers:
       '@theokit/http':
         specifier: workspace:*
         version: link:../http
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       ai:
         specifier: 7.0.14
         version: 7.0.14(zod@4.6.7)
@@ -661,6 +664,9 @@ importers:
       vitest:
         specifier: ^4.1.12
         version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@25.9.5)(@vitest/coverage-v8@4.1.12)(happy-dom@21.0.4)(jsdom@25.0.1)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(vite@7.3.7(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
       zod:
         specifier: ^4.6.6
         version: 4.6.7
