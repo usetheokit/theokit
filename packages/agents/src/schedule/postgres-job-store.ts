@@ -73,6 +73,12 @@ export async function createPostgresJobStore(
   }
   for (const row of rows) {
     const job = readJob(table, row.job, `job ${row.id}`)
+    if (job.id !== row.id) {
+      throw new ScheduleStoreError(
+        table,
+        `row ${row.id} holds job ${job.id}; the row id and the job id must match`,
+      )
+    }
     jobs.set(job.id, job)
   }
 
@@ -107,8 +113,9 @@ export async function createPostgresJobStore(
       }),
   }
 
-  store.putMany = (batch) =>
+  store.putMany = (batch, guard) =>
     serialized(async () => {
+      guard?.(jobs.size)
       if (batch.length === 0) return
       // One statement is atomic: all rows land or none do. The batch travels as a single JSON
       // array parameter, so the count stays at 1 however many jobs there are (the protocol caps
@@ -137,6 +144,15 @@ export async function copyJobs(
   if (existing > 0 && !options.force) throw new JobCopyError(existing)
   if (to.putMany === undefined) throw new JobCopyUnsupportedError()
   const batch = from.list()
-  await to.putMany(batch)
+  // The count is checked again inside the target's serialized writes, so a put queued before this
+  // copy cannot slip in between the check and the write.
+  await to.putMany(
+    batch,
+    options.force
+      ? undefined
+      : (held) => {
+          if (held > 0) throw new JobCopyError(held)
+        },
+  )
   return batch.length
 }

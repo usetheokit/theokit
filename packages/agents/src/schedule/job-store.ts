@@ -42,9 +42,10 @@ export interface JobStore {
   setPreviousOutput(id: string, text: string): Promise<boolean>
   /**
    * Optional: save all of `jobs` as one atomic write (all land or none do), replacing a held job
-   * with the same id. `copyJobs` needs it, and refuses a target without it.
+   * with the same id. `copyJobs` needs it, and refuses a target without it. `guard` runs inside the
+   * store's serialized writes with the count of jobs held then; if it throws, nothing is written.
    */
-  putMany?(jobs: ScheduledJob[]): Promise<void>
+  putMany?(jobs: ScheduledJob[], guard?: (held: number) => void): Promise<void>
 }
 
 /**
@@ -103,8 +104,9 @@ export function createJobStore(filePath: string): JobStore {
       serialized((next) => {
         next.set(job.id, job)
       }),
-    putMany: (batch) =>
+    putMany: (batch, guard) =>
       serialized((next) => {
+        guard?.(next.size)
         for (const job of batch) next.set(job.id, job)
       }),
     remove: (id) => serialized((next) => next.delete(id)),

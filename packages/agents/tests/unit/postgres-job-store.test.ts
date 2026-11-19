@@ -63,6 +63,26 @@ describe('createPostgresJobStore', () => {
     expect((error as Error).message).toContain('bad1')
   })
 
+  it('a row whose id differs from its job id is refused naming the table and row id', async () => {
+    const { pool } = fakePool([{ id: 'a', job: job('b') }])
+    const error = await createPostgresJobStore(pool, { table: 'my_jobs' }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ScheduleStoreError)
+    expect((error as Error).message).toContain('my_jobs')
+    expect((error as Error).message).toContain('row a')
+  })
+
+  it('copyJobs refuses when a put queued earlier lands first, without force', async () => {
+    const { pool } = fakePool()
+    const target = await createPostgresJobStore(pool)
+    const from = await createPostgresJobStore(fakePool().pool)
+    await from.put(job('s'))
+    const queued = target.put(job('q'))
+    const error = await copyJobs(from, target, { force: false }).catch((e: unknown) => e)
+    await queued
+    expect(error).toBeInstanceOf(JobCopyError)
+    expect(target.get('s')).toBeUndefined()
+  })
+
   it('an invalid table name is refused', async () => {
     const { pool } = fakePool()
     for (const table of ['Jobs', '1x', 'a;drop', '', 'a'.repeat(64)]) {
