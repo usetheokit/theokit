@@ -239,8 +239,22 @@ export interface AgentBuilder<
    * name + description in a `<skills>` block (so the model KNOWS the skill exists) AND
    * auto-provisions a `skill_read` tool the model calls to load the full body ON DEMAND
    * (so a long procedure only enters the prompt when it is actually needed).
+   *
+   * Which skills `skill_read` covers depends on `options.read`:
+   * - `'inline'` (default): only the inline `createSkill(...)` objects. Skills enabled by name or
+   *   discovered on disk are listed but their body is not readable unless the app supplies its own
+   *   `skill_read`.
+   * - `'advertised'`: every skill the `<skills>` block lists — inline skills, skills enabled by
+   *   name, and skills discovered through `settingSources` / `compatSources` (project, user, compat
+   *   roots, plugin bundles) — after the trust gate. A root the gate withheld is not read, and a
+   *   withheld name is not listed in a not-found answer. On a name clash the project root wins.
+   *
+   * An app-declared `skill_read` tool always wins in both modes.
    */
-  skills(selection: SkillsSelection): AgentBuilder<TInput, TModel, TContext, TTools>
+  skills(
+    selection: SkillsSelection,
+    options?: { readonly read?: 'inline' | 'advertised' },
+  ): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
    * #825 — subagents this agent carries, by name, WITH whatever the caller applied to them.
    *
@@ -405,7 +419,12 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
       makeBuilder({ ...config, approvals: { ...(config.approvals ?? {}), [toolName]: options } }),
     approvals: (map: Record<string, HumanInTheLoopOptions>) =>
       makeBuilder({ ...config, approvals: map }),
-    skills: (selection: SkillsSelection) => makeBuilder({ ...config, skills: selection }),
+    skills: (selection: SkillsSelection, options?: { readonly read?: 'inline' | 'advertised' }) =>
+      makeBuilder({
+        ...config,
+        skills: selection,
+        ...(options?.read !== undefined ? { skillsRead: options.read } : {}),
+      }),
     subagents: (map: Record<string, SubagentAgentDefinition>) =>
       makeBuilder({ ...config, subagents: map }),
     settingSources: (selection: SettingSourcesSelection) =>

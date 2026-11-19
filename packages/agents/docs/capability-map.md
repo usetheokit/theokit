@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1264 export(s) across 25 entry point(s).
+1320 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -50,6 +50,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CapabilityPreset` | value |
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
+| `classifyTurnFailure` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
 | `compileAgentDefinition` | value |
@@ -86,6 +87,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DEFAULT_HANDLER_TIMEOUT_MS` | value |
 | `DEFAULT_KEEP_TOKENS` | value |
 | `DEFAULT_MAX_ITERATIONS` | value |
+| `DEFAULT_TURN_FAILURE_HINTS` | value |
 | `delegate` | value |
 | `delegateBackground` | value |
 | `delegateWithScoring` | value |
@@ -95,16 +97,20 @@ Measured against `@theokit/sdk@5.17.0`.
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
+| `describeTurnFailure` | value |
 | `discoverSubagents` | value |
 | `encodeAcpMessage` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `estimateTokens` | value |
+| `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
 | `extractToolUses` | value |
 | `FieldCapability` | value |
 | `flushPendingToolResults` | value |
 | `foldLayers` | value |
 | `foldTurnLifecycle` | value |
+| `FOREIGN_FOLDERS` | value |
+| `foreignSurfaceInventory` | value |
 | `formatGoalEvent` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
@@ -212,6 +218,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SubAgent` | value |
 | `SubagentsCapability` | value |
 | `SubAgentsCapability` | value |
+| `SURFACE_FOLDERS` | value |
+| `surfaceOfFolder` | value |
 | `TaskNotFoundError` | value |
 | `TelemetryCapability` | value |
 | `textPayloadExtractor` | value |
@@ -237,6 +245,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `UnsupportedRunOperationError` | value |
 | `UnsupportedTaskOperationError` | value |
 | `UntrustedSettingSourceError` | value |
+| `validateAgainstInputSchema` | value |
 | `verifyLayerOrdering` | value |
 | `wellKnownCardPath` | value |
 | `WindowBudgetExceededError` | value |
@@ -323,6 +332,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ErrorMetadata` | type |
 | `FileEditEvent` | type |
 | `FinalizedDraft` | type |
+| `ForeignSurfaceEntry` | type |
+| `ForeignSurfaceInventoryInput` | type |
 | `GatedCompatSource` | type |
 | `GatedSettingSource` | type |
 | `GoalEvent` | type |
@@ -461,6 +472,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `TrustPosture` | type |
 | `TrustPostureInput` | type |
 | `TrustSource` | type |
+| `TurnFailure` | type |
+| `TurnFailureHints` | type |
 | `TurnLifecycle` | type |
 | `TurnOutcome` | type |
 | `Verdict` | type |
@@ -508,8 +521,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `ERROR_CODE_DATA_PART` | value |
+| `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
 | `flushPendingToolResults` | value |
+| `FOREIGN_FOLDERS` | value |
+| `foreignSurfaceInventory` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
 | `isAgentContext` | value |
@@ -542,11 +558,14 @@ Measured against `@theokit/sdk@5.17.0`.
 | `streamAgentResponse` | value |
 | `streamAgentUIMessages` | value |
 | `streamFromEmitter` | value |
+| `SURFACE_FOLDERS` | value |
+| `surfaceOfFolder` | value |
 | `toAgentFactory` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
 | `UntrustedSettingSourceError` | value |
+| `validateAgainstInputSchema` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
 | `WRITE_SCOPED_TOOLS` | value |
@@ -594,6 +613,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `EphemeralAgent` | type |
 | `ErrorEvent` | type |
 | `FileEditEvent` | type |
+| `ForeignSurfaceEntry` | type |
+| `ForeignSurfaceInventoryInput` | type |
 | `GatedCompatSource` | type |
 | `GatedSettingSource` | type |
 | `HookApprovalGate` | type |
@@ -651,16 +672,21 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `assertProviderKeyWhenRequired` | value |
 | `createMockAgentStream` | value |
 | `createMockOutputEvents` | value |
 | `createMockWireStream` | value |
 | `inspectCompiled` | value |
+| `LIVE_KEY_NAMES` | value |
+| `MissingProviderKeyError` | value |
+| `requireProviderKeySetup` | value |
 | `wireChunk` | value |
 | `AgentOutputEvent` | type |
 | `CompiledInspection` | type |
 | `MockAgentStreamOptions` | type |
 | `MockResponse` | type |
 | `MockStreamEvent` | type |
+| `ProviderKeyGuardOptions` | type |
 
 ## `@theokit/agents/sandbox`
 
@@ -788,6 +814,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `builtinSecretStores` | value |
 | `CODEX_CLIENT_ID_ENV_VAR` | value |
 | `CODEX_PROVIDER` | value |
+| `createApprovalGate` | value |
+| `createJsonlLedger` | value |
 | `createPlanOnlyGate` | value |
 | `CredentialError` | value |
 | `CredentialExistsError` | value |
@@ -824,6 +852,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SecretReferenceError` | value |
 | `writeCredential` | value |
 | `AgentCredentialInput` | type |
+| `ApprovalAnswer` | type |
+| `ApprovalDecision` | type |
+| `ApprovalGateOptions` | type |
+| `ApprovalLedger` | type |
+| `ApprovalRecord` | type |
 | `AuthMethod` | type |
 | `AuthProviderOptions` | type |
 | `Classification` | type |
@@ -978,6 +1011,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `catastrophicShellReason` | value |
 | `commandDenialReason` | value |
 | `ContextMatchError` | value |
+| `copyJobs` | value |
 | `createApplyPatchTool` | value |
 | `createBraveWebSearchAdapter` | value |
 | `createCurrentTimeTool` | value |
@@ -992,6 +1026,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createJobStore` | value |
 | `createListDirTool` | value |
 | `createPlanModeTool` | value |
+| `createPostgresJobStore` | value |
 | `createQuestionTool` | value |
 | `createReadFileTool` | value |
 | `createRunVitestTool` | value |
@@ -1024,6 +1059,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `injectGuidance` | value |
 | `isBlockedIp` | value |
 | `isCommandAllowed` | value |
+| `JobCopyError` | value |
+| `JobCopyUnsupportedError` | value |
 | `ReadTracker` | value |
 | `ReasoningTools` | value |
 | `RedirectBlockedError` | value |
@@ -1087,6 +1124,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ScreenedFetchOptions` | type |
 | `SessionArtifactStore` | type |
 | `SessionArtifactStoreOptions` | type |
+| `SqlPool` | type |
 | `SynthesizedAudio` | type |
 | `TaskRegistry` | type |
 | `TaskToolOptions` | type |
@@ -1187,6 +1225,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `classifyProjects` | value |
 | `deleteSession` | value |
 | `forkBeforeUserTurn` | value |
+| `ForkedSessionBusyError` | value |
 | `GCFloorError` | value |
 | `GCProtectionUnavailableError` | value |
 | `listSessions` | value |
@@ -1206,11 +1245,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
+| `streamTurnForkingIfBusy` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
 | `ClassifyProjectsOptions` | type |
 | `DeleteSessionOptions` | type |
 | `DeleteSessionResult` | type |
+| `ForkIfBusyOptions` | type |
 | `FsSeam` | type |
 | `GCCandidate` | type |
 | `GCError` | type |
@@ -1286,7 +1327,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `bindToolScope` | value |
+| `createPathVetoPlugin` | value |
+| `isWithin` | value |
+| `resolveRealPath` | value |
 | `sandboxWritePolicy` | value |
+| `SymlinkLoopError` | value |
+| `vetoPathCall` | value |
 | `SandboxWritePolicy` | type |
 | `ToolScope` | type |
 | `ToolScopeInput` | type |
@@ -1353,14 +1399,21 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createShutdown` | value |
 | `DEFAULT_WATCHDOG_MS` | value |
 | `defineCommand` | value |
+| `EmptyPromptError` | value |
 | `exitAfterDrain` | value |
+| `readHeadlessPrompt` | value |
 | `routeCommand` | value |
+| `runHeadlessTurn` | value |
 | `SHUTDOWN_EXIT_CODES` | value |
 | `CleanupTask` | type |
 | `CommandArgument` | type |
 | `CommandDefinition` | type |
 | `CommandRegistry` | type |
 | `ExitAfterDrainDeps` | type |
+| `HeadlessIo` | type |
+| `HeadlessOutcome` | type |
+| `HeadlessTurnOptions` | type |
+| `HeadlessTurnResult` | type |
 | `RoutedInput` | type |
 | `RouteFailure` | type |
 | `Shutdown` | type |

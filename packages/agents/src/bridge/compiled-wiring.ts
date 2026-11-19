@@ -29,7 +29,7 @@ export const WIRED_HOOKS: unique symbol = Symbol.for('theokit.agents.wiredHooks'
 export const WIRED_LISTENER: unique symbol = Symbol.for('theokit.agents.wiredListener')
 
 /** `skill_read` tools this build created, so `readable` is reported only for a reader whose set is known. */
-export const BUILD_WIRED_SKILL_READERS = new WeakSet()
+export const BUILD_WIRED_SKILL_READERS = new WeakMap<object, 'inline' | 'advertised'>()
 
 type Loose = Record<string, unknown> | undefined
 type Listener = (wiring: CompiledWiring) => void
@@ -83,16 +83,16 @@ async function readCompiledWiring(
   const skills = options.skills as Loose
   const listed = [...new Set(await resolvedSkills(agent))]
   const reader = tools.find(
-    // eslint-disable-next-line sonarjs/no-empty-collection -- populated by sdk-adapter.ts
     (t) => (t as { name?: unknown }).name === 'skill_read' && BUILD_WIRED_SKILL_READERS.has(t),
   )
+  const mode = reader === undefined ? undefined : BUILD_WIRED_SKILL_READERS.get(reader)
   const sources = ((options.local as Loose)?.settingSources as string[] | undefined) ?? []
   return {
     // Caller-supplied tools only: a custom tool may deliberately replace a withheld builtin.
     tools: names(tools),
     skills: {
       listed,
-      readable: reader !== undefined ? names(skills?.inline) : [],
+      readable: mode === 'advertised' ? listed : mode === 'inline' ? names(skills?.inline) : [],
     },
     mcpServers: Object.keys((options.mcpServers as object | undefined) ?? {}),
     hooks: hooksOf(options),
