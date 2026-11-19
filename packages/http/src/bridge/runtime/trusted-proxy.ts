@@ -66,16 +66,16 @@ export function stampTrustedIdentity(
   proxy: NormalizedTrustedProxy | undefined,
 ): boolean {
   const headers = incoming.headers
-  delete headers[PEER_ADDRESS_HEADER]
-  delete headers[TRUSTED_IDENTITY_HEADER]
+  Reflect.deleteProperty(headers, PEER_ADDRESS_HEADER)
+  Reflect.deleteProperty(headers, TRUSTED_IDENTITY_HEADER)
   const remote = incoming.socket.remoteAddress
   if (remote !== undefined) headers[PEER_ADDRESS_HEADER] = remote
   const peer = remote === undefined ? undefined : normalizeAddress(remote)
   const trusted = proxy !== undefined && peer !== undefined && proxy.addresses.has(peer)
-  if (!trusted) delete headers['x-forwarded-proto']
+  if (!trusted) Reflect.deleteProperty(headers, 'x-forwarded-proto')
   if (proxy) {
     const identity = headers[proxy.identityHeader]
-    delete headers[proxy.identityHeader]
+    Reflect.deleteProperty(headers, proxy.identityHeader)
     if (trusted && typeof identity === 'string' && identity.trim() !== '') {
       headers[TRUSTED_IDENTITY_HEADER] = identity.trim()
     }
