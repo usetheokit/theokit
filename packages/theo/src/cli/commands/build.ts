@@ -1,5 +1,4 @@
 import { existsSync, readdirSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { relative, resolve, sep } from 'node:path'
 
 // T1.1 (architecture-medium-deferrals) — nodeAdapter no longer static-imported.
@@ -39,7 +38,6 @@ import { emitOpenApi } from '../../vite-plugin/openapi-emit/emit.js'
 import { loadRoutesForOpenApi } from '../../vite-plugin/openapi-emit/load-routes.js'
 import { cleanBuildOutput } from '../cleanup/cleanup.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
-import { cliVersion } from '../version.js'
 
 import { describeServicesManifest } from './build/describe-services-manifest.js'
 import { describeControllerArtifacts, emitControllerArtifacts } from './build/emit-controllers.js'
@@ -318,7 +316,6 @@ async function emitCronArtifacts(opts: {
         translateCronToDeno(resolve(opts.distDir, 'crons-entry.ts'), manifestEntries, {
           configImport: denoConfigImport(opts.cwd, opts.distDir),
           envConfigImports: denoEnvConfigImports(opts.cwd, opts.distDir),
-          theokitVersion: installedTheokitVersion(opts.cwd),
         })
         console.log(`  ✓ Cron → ${opts.distDir}/crons-entry.ts (Deno.cron)`)
         break
@@ -345,16 +342,6 @@ function denoEnvConfigImports(cwd: string, distDir: string): Record<string, stri
     if (m?.[1] !== undefined) out[m[1]] = denoImportOf(resolve(cwd, file), distDir)!
   }
   return out
-}
-
-/** Version of the `theokit` the app resolves, falling back to the running CLI's own. */
-function installedTheokitVersion(cwd: string): string {
-  try {
-    const req = createRequire(resolve(cwd, 'package.json'))
-    return (req('theokit/package.json') as { version: string }).version
-  } catch {
-    return cliVersion()
-  }
 }
 
 function denoImportOf(config: string, distDir: string): string | undefined {

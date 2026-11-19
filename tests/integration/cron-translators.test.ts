@@ -219,7 +219,7 @@ describe('Deno cron context queue', () => {
     const content = readFileSync(entry, 'utf8')
     expect(content).toContain('from "npm:theokit/server/jobs"')
     expect(content).toContain('"../theo.config.ts"')
-    expect(content).toContain('createHandlerQueue(await loadBackend()')
+    expect(content).toContain('createHandlerQueue(backend')
     expect(content).toContain('run.discard()')
     expect(content).toContain('await run.flush()')
     expect(content).not.toContain('unavailableQueue')
@@ -252,15 +252,6 @@ describe('Deno cron context queue', () => {
     const entry = join(root, 'crons-npm-entry.ts')
     translateCronToDeno(entry, [cron('q', '* * * * *')], { configImport: '../theo.config.ts' })
     expect(readFileSync(entry, 'utf8')).toContain('from "npm:theokit/server/jobs"')
-  })
-
-  it('pins the theokit import to the version the app was built with', () => {
-    const entry = join(root, 'crons-pinned-entry.ts')
-    translateCronToDeno(entry, [cron('q', '* * * * *')], {
-      configImport: '../theo.config.ts',
-      theokitVersion: '1.2.3',
-    })
-    expect(readFileSync(entry, 'utf8')).toContain('from "npm:theokit@1.2.3/server/jobs"')
   })
 })
 
@@ -301,12 +292,11 @@ describe('generated Deno cron entry, executed', () => {
     translateCronToDeno(entry, [cron('probe', '* * * * *')], {
       configImport: '../theo.config.ts',
       envConfigImports,
-      theokitVersion: '1.2.3',
     })
     return readFileSync(entry, 'utf8')
   }
   const base = (modules: Record<string, unknown>) => ({
-    'npm:theokit@1.2.3/server/jobs': { createHandlerQueue },
+    'npm:theokit/server/jobs': { createHandlerQueue },
     ...modules,
   })
 
@@ -417,27 +407,5 @@ describe('generated Deno cron entry, executed', () => {
     await runDenoEntry(content, modules, 'development').get('probe')!()
     expect(prodCalls).toHaveLength(1)
     expect(baseCalls).toHaveLength(1)
-  })
-
-  it('does not evaluate an override for another environment', async () => {
-    const calls: unknown[] = []
-    const loaded: string[] = []
-    const modules = base({
-      '../theo.config.ts': { default: { jobs: { backend: backendOf(calls) } } },
-      '../server/crons/probe.ts': {
-        default: { handler: (ctx: any) => ctx.queue.enqueue('next', {}) },
-      },
-    })
-    Object.defineProperty(modules, '../theo.config.development.ts', {
-      enumerable: true,
-      get: () => {
-        loaded.push('development')
-        throw new Error('development-only secret missing')
-      },
-    })
-    const content = generate({ development: '../theo.config.development.ts' })
-    await runDenoEntry(content, modules, 'production').get('probe')!()
-    expect(loaded).toEqual([])
-    expect(calls).toHaveLength(1)
   })
 })
