@@ -187,7 +187,15 @@ export {
   DelegationError,
   type DelegateOptions,
   type DelegationResult,
+  type SubAgentSpec,
 } from './agent-orchestrator.js'
+
+export {
+  worktreeProvider,
+  WorkspaceProviderError,
+  type IsolatedWorkspace,
+  type WorkspaceProvider,
+} from './workspace-provider.js'
 
 export {
   createToolHooksPlugin,

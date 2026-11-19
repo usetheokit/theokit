@@ -34,6 +34,7 @@ import { hooksPlugin, inheritHooks } from './delegation-hooks.js'
 import { type DelegationResult, DelegationError } from './delegation-types.js'
 import type { HookHandlers } from './hook-handlers.js'
 import { createSdkAgentStream } from './sdk-adapter.js'
+import type { WorkspaceProvider } from './workspace-provider.js'
 
 // Re-export the delegation value types for backward compatibility — they moved
 // to delegation-types.js to break the orchestrator↔loop import cycle (G1).
@@ -105,17 +106,20 @@ export interface DelegateOptions {
   /**
    * Per-run working directory → `Agent.create({ local: { cwd } })`.
    *
-   * B-073 — if you point this at a git worktree you created, the sub-agent runs in a checkout with
-   * none of the repository's gitignored files: no `.env`, no local config, no credentials. This
-   * layer does not copy them, and it has no `.worktreeinclude` — the reference's one-file answer to
-   * the same problem — because it never creates a worktree in the first place (measured with
-   * controls: zero `git worktree` calls, zero `isolation` options; held falsifiable by
-   * `tests/unit/this-layer-creates-no-worktree.test.ts`, which goes red the day that changes).
+   * If you point this at a git worktree you created yourself, the sub-agent runs in a checkout
+   * with none of the repository's gitignored files (no `.env`, no local config). To get an isolated
+   * worktree with those files copied in, pass `isolation: worktreeProvider(repo, root)` instead:
+   * `delegate` then acquires a workspace, runs with `cwd` set to it (overriding this field) and
+   * releases it, copying the paths listed in the repository's `.worktreeinclude`.
+   * A supplied `streamFactory` controls its own execution and does not read `cwd`.
    *
-   * Stated here rather than left to be discovered, because the failure does not look like a missing
-   * file — it looks like a broken agent.
    */
   cwd?: string
+  /**
+   * Run in a workspace this provider acquires for the call (a fresh UUID is the task id) and release
+   * it afterwards, on success and failure alike. Wins over `SubAgentSpec.isolation` and `cwd`.
+   */
+  isolation?: WorkspaceProvider
   /** Per-run plugins (e.g. a read-only permission gate for an explore sub-agent). */
   plugins?: PluginsSettings
   /** Per-run provider routing (e.g. OpenRouter). */
@@ -229,12 +233,44 @@ export interface SubAgentSpec {
   readonly strategy?: MainLoopMeta['strategy']
   /** Loop ceiling (`@MainLoop({ maxIterations })`); a per-run override still wins. */
   readonly maxIterations?: number
+  /** Default workspace provider for every delegation to this sub-agent; `DelegateOptions.isolation` wins. */
+  readonly isolation?: WorkspaceProvider
 }
 
 export async function delegate(
   spec: SubAgentSpec,
   message: string,
   opts: DelegateOptions = {},
+): Promise<DelegationResult> {
+  const provider = opts.isolation ?? spec.isolation
+  if (!provider) return await delegateIn(spec, message, opts)
+  const workspace = await provider.acquire(`delegate-${crypto.randomUUID()}`)
+  let result: DelegationResult
+  try {
+    result = await delegateIn(spec, message, { ...opts, cwd: workspace.path })
+  } catch (error) {
+    try {
+      await workspace.release()
+    } catch (cleanupError) {
+      // The task's own failure stays the thrown error; the cleanup failure rides along.
+      if (typeof error === 'object' && error !== null) {
+        Object.defineProperty(error, 'cleanupError', {
+          value: cleanupError,
+          configurable: true,
+          writable: true,
+        })
+      }
+    }
+    throw error
+  }
+  await workspace.release()
+  return result
+}
+
+async function delegateIn(
+  spec: SubAgentSpec,
+  message: string,
+  opts: DelegateOptions,
 ): Promise<DelegationResult> {
   const apiKey = requireApiKey(opts, spec.name)
   // Both ceilings are checked on the terms `AgentRunner` applies (B-409, review #67), before any

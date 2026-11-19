@@ -31,31 +31,31 @@ you mount HTTP surfaces).
 
 Twenty-three entry points. Import the one you need — the barrel is not the API.
 
-| Subpath | What lives there |
-|---|---|
-| `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
-| `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
-| `./testing` | Test seams: compiled-agent inspection, mock streams |
-| `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
-| `./persistence` | Transcript storage primitives forwarded from the SDK |
-| `./interactive` | The interactive-shell backend contract |
-| `./pty` | The node-pty implementation of that contract |
-| `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes`, `RefreshFailure` |
-| `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`); `defineAppBootstrap` runs one setup from every entry |
-| `./tools` | Built-in tool factories (read, list, grep, git, patch, edit, shell, …) |
-| `./client` | Transports for driving an agent from a client. `AgentClient.sendAndWait(input)` resolves when that turn settles (`done`/`error`/`aborted`, never rejects), and `asGoalLoopAgent(client)` adapts a client to the SDK `GoalLoopAgent` so `runGoalLoop` can drive it without polling. `AGENT_ACTION_HEADERS` and `agentRequestHeaders(...)` give a plain `fetch` the headers the route requires |
-| `./client/react` | `useAgent` and the React bindings |
-| `./session` | Session lifecycle, listing, fork/rewind, transcript GC with a retention floor |
-| `./hooks` | The lifecycle-hook engine and its fingerprint gate; `parseClaudeHooks` reads the Claude Code hook dialect (see below) |
-| `./ask` | The human-in-the-loop rendezvous — ask a question, settle it, abandon it safely |
-| `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable |
-| `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
-| `./mcp-health` | MCP server health probing |
-| `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
-| `./doctor` | Environment diagnostics. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
-| `./usage` | Token and cost accounting |
-| `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
-| `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
+| Subpath          | What lives there                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`              | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types                                                                                                                                                                                                                                                                                                  |
+| `./bridge`       | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART`                                                                                                                                                                                                                                                                                |
+| `./testing`      | Test seams: compiled-agent inspection, mock streams                                                                                                                                                                                                                                                                                                                                          |
+| `./sandbox`      | Sandbox backends, postures, `sandboxWritePolicy`                                                                                                                                                                                                                                                                                                                                             |
+| `./persistence`  | Transcript storage primitives forwarded from the SDK                                                                                                                                                                                                                                                                                                                                         |
+| `./interactive`  | The interactive-shell backend contract                                                                                                                                                                                                                                                                                                                                                       |
+| `./pty`          | The node-pty implementation of that contract                                                                                                                                                                                                                                                                                                                                                 |
+| `./auth`         | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes`, `RefreshFailure`                                                                                                                                                                                                                                                                                              |
+| `./config`       | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`); `defineAppBootstrap` runs one setup from every entry                                                                                                                                                                                                                                                   |
+| `./tools`        | Built-in tool factories (read, list, grep, git, patch, edit, shell, …)                                                                                                                                                                                                                                                                                                                       |
+| `./client`       | Transports for driving an agent from a client. `AgentClient.sendAndWait(input)` resolves when that turn settles (`done`/`error`/`aborted`, never rejects), and `asGoalLoopAgent(client)` adapts a client to the SDK `GoalLoopAgent` so `runGoalLoop` can drive it without polling. `AGENT_ACTION_HEADERS` and `agentRequestHeaders(...)` give a plain `fetch` the headers the route requires |
+| `./client/react` | `useAgent` and the React bindings                                                                                                                                                                                                                                                                                                                                                            |
+| `./session`      | Session lifecycle, listing, fork/rewind, transcript GC with a retention floor                                                                                                                                                                                                                                                                                                                |
+| `./hooks`        | The lifecycle-hook engine and its fingerprint gate; `parseClaudeHooks` reads the Claude Code hook dialect (see below)                                                                                                                                                                                                                                                                        |
+| `./ask`          | The human-in-the-loop rendezvous — ask a question, settle it, abandon it safely                                                                                                                                                                                                                                                                                                              |
+| `./tool-scope`   | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable                                                                                                                                                                                                                                                                                    |
+| `./a2a`          | `createA2ATool` — call a remote agent over HTTP as a tool                                                                                                                                                                                                                                                                                                                                    |
+| `./mcp-health`   | MCP server health probing                                                                                                                                                                                                                                                                                                                                                                    |
+| `./commands`     | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs`                                                                                                                                                      |
+| `./doctor`       | Environment diagnostics. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError`                                                                      |
+| `./usage`        | Token and cost accounting                                                                                                                                                                                                                                                                                                                                                                    |
+| `./evals`        | `runAgentEvals` — run cases against an agent and read pass, fail or error per case                                                                                                                                                                                                                                                                                                           |
+| `./handoff`      | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver                                                                                                                                                                                                                                                                      |
 
 A terminal command list, with aliases, hidden names and handlers, from `./commands`:
 
@@ -63,7 +63,13 @@ A terminal command list, with aliases, hidden names and handlers, from `./comman
 import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
 
 const registry = createCommandRegistry<{ exit(): void }>([
-  defineCommand({ name: 'quit', description: 'leave', aliases: ['exit'], arg: 'none', run: (_arg, ctx) => ctx.exit() }),
+  defineCommand({
+    name: 'quit',
+    description: 'leave',
+    aliases: ['exit'],
+    arg: 'none',
+    run: (_arg, ctx) => ctx.exit(),
+  }),
   defineCommand({ name: 'debug', description: 'toggle debug', hidden: true }),
 ])
 registry.palette() // [{ name: 'quit', description: 'leave' }]
@@ -152,9 +158,9 @@ const headers = agentRequestHeaders(AGENT_ACTION_HEADERS, { authorization: `Bear
 returns a binder; every factory it binds inherits the scope. `sandbox` is **required** — a scope
 without one would be an unconfined shell, and making it unrepresentable is cheaper than detecting it.
 
-**Human gates come in three layers, and they compose.** You *declare* which tools need approval on
-the builder, the *posture* decides whether auto-approval is even permissible (it carries the sandbox
-posture as evidence, so "auto-approve without confinement" cannot be expressed), and the *resolver*
+**Human gates come in three layers, and they compose.** You _declare_ which tools need approval on
+the builder, the _posture_ decides whether auto-approval is even permissible (it carries the sandbox
+posture as evidence, so "auto-approve without confinement" cannot be expressed), and the _resolver_
 settles an individual request. `./ask` is the inverse channel — the agent asking you.
 A surface reads the open question with `bridge.pending(threadId)` (a read, not a second listener)
 and learns of changes with `bridge.onChange(fn)`, which fires after a question is asked, answered,
@@ -244,6 +250,20 @@ answers `continue` until the agent calls the tool with `complete` (`done`) or `b
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
 
+## Isolated workspaces for coding sub-agents
+
+`worktreeProvider(repo, root)` (from `@theokit/agents/bridge`) gives each task its own
+`git worktree add -b task/<id> <root>/<id>`. Pass it as `isolation` to `delegate` (or on the
+`SubAgentSpec`; the option wins): `delegate` acquires a workspace, runs with `cwd` set to it and
+releases it afterwards, on failure too. If the release fails, the task's error is still the one
+thrown, with the cleanup failure on its `cleanupError`. A `streamFactory` you supply does not read `cwd`.
+Task ids must match `^[A-Za-z0-9][A-Za-z0-9._-]*$` and may not contain `..`; anything else throws
+`WorkspaceProviderError`. Used directly, `workspace.release({ keep: true })` leaves the worktree and branch.
+
+Gitignored files are not in a fresh worktree. List them in `.worktreeinclude` at the repo root (one
+literal repo-relative file or directory per line, `#` comments allowed; the `include` option renames
+the file) and they are copied in. A path that escapes the repository is refused.
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
@@ -258,25 +278,24 @@ Which `.claude/` surfaces this package reads, and which it refuses. A surface is
 with a reason** — never accepted and ignored, which is the failure an author cannot tell apart from
 configuration that had no effect.
 
-| Surface | State |
-|---|---|
-| `CLAUDE.md` | **read when the host names it** — see below |
-| `settings.json` — `permissions` | translated into the SDK's `PermissionRule[]`; an entry that cannot be rendered faithfully is reported and excluded |
-| `settings.json` — `outputStyle` | read | 
-| `settings.json` — `env` | **parsed, not applied** — see below |
-| `settings.local.json` | read, layered above `settings.json` |
-| `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared |
-| `.mcp.json` | read; a field this runtime does not carry is reported |
-| `output-styles/*.md` | read, selected by `settings.json` |
-| `agent-memory/` | **read** — `applySubagentMemory` applies a subagent's `memory:` declaration, and `apps/theocode` calls it (`apps/theocode/packages/agent/src/delegation/role-discovery.ts`). The host still decides: nothing here calls it for you |
-| `workflows/*.js` | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you |
-| `keybindings.json` | **out of scope HERE** — read by the consumer, see below |
-| `themes/*.json` | **out of scope HERE** — read by the consumer, like `keybindings.json`. `apps/theocode` resolves `~/.claude/themes/` in `apps/theocode/packages/tui/src/theme/custom-theme.ts`; this package and `@theokit/tui` read neither |
-| `~/.claude.json` — OAuth state, UI toggles | **out of scope** — a CLI's own state |
-| `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers` |
+| Surface                                       | State                                                                                                                                                                                                                              |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLAUDE.md`                                   | **read when the host names it** — see below                                                                                                                                                                                        |
+| `settings.json` — `permissions`               | translated into the SDK's `PermissionRule[]`; an entry that cannot be rendered faithfully is reported and excluded                                                                                                                 |
+| `settings.json` — `outputStyle`               | read                                                                                                                                                                                                                               |
+| `settings.json` — `env`                       | **parsed, not applied** — see below                                                                                                                                                                                                |
+| `settings.local.json`                         | read, layered above `settings.json`                                                                                                                                                                                                |
+| `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared                                                                                                                                                                                                  |
+| `.mcp.json`                                   | read; a field this runtime does not carry is reported                                                                                                                                                                              |
+| `output-styles/*.md`                          | read, selected by `settings.json`                                                                                                                                                                                                  |
+| `agent-memory/`                               | **read** — `applySubagentMemory` applies a subagent's `memory:` declaration, and `apps/theocode` calls it (`apps/theocode/packages/agent/src/delegation/role-discovery.ts`). The host still decides: nothing here calls it for you |
+| `workflows/*.js`                              | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you                                                     |
+| `keybindings.json`                            | **out of scope HERE** — read by the consumer, see below                                                                                                                                                                            |
+| `themes/*.json`                               | **out of scope HERE** — read by the consumer, like `keybindings.json`. `apps/theocode` resolves `~/.claude/themes/` in `apps/theocode/packages/tui/src/theme/custom-theme.ts`; this package and `@theokit/tui` read neither        |
+| `~/.claude.json` — OAuth state, UI toggles    | **out of scope** — a CLI's own state                                                                                                                                                                                               |
+| `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers`                                                                                                                                                                                                |
 
 **Output styles.** `loadOutputStyle({ name, cwd, homeDir })` matches a style by its file name (without `.md`) or by its frontmatter `name`. The project directory is searched before the home directory; within one directory a file-name match wins over another file's frontmatter name, and two files claiming the same frontmatter name throw `OutputStyleError` naming both paths. A named style with no match throws `OutputStyleError`. `applyOutputStyle(base, style)` (from `@theokit/agents/config`) returns `base` unchanged when there is no style, `` `${base}\n\n${style.content}` `` when `keepCodingInstructions` is true, and `style.content` otherwise.
-
 
 ### Out of scope, and who owns it instead
 
@@ -336,7 +355,7 @@ this as the same finding — and it **is** the same finding, which this document
 three packages were named.
 
 The denial is worth keeping, because it shows what an unfalsifiable sentence costs. This section
-read *"nobody reads it, in any of the three packages"* and never said which three. A reader could
+read _"nobody reads it, in any of the three packages"_ and never said which three. A reader could
 not check a set they could not enumerate, so nobody did; naming them took one edit, and the sentence
 was false the moment it became checkable — `apps/theocode` resolves `~/.claude/themes/` in
 `apps/theocode/packages/tui/src/theme/custom-theme.ts`, with three reads in that one file.
@@ -366,7 +385,11 @@ own root before foreign root; `foreignRoot: false` reads only the own root) and 
 
 ```ts
 const c = settingsCandidates({ cwd, home, ownRoot: '.myapp' })
-const read = firstSettingsFile(c.project, { ownKeys: ['model'], renames: { outputStyle: 'style' }, onWarn })
+const read = firstSettingsFile(c.project, {
+  ownKeys: ['model'],
+  renames: { outputStyle: 'style' },
+  onWarn,
+})
 ```
 
 In an own-root file an unknown key stays in `values`, so your strict schema rejects it by name. In a
@@ -422,9 +445,9 @@ through `agent-memory.ts:231`. So the chain runs end to end, and this document s
 than **resolvable**.
 
 It said the opposite until 2026-09-16, and the reason is worth keeping because it is the failure
-mode this table exists to prevent. The measurement behind *"no consumer does yet"* was true when
-taken: the consumer could not call it. Its own source says why — *"`applySubagentMemory` … is NOT in
-the published 14.4.0 this project pins, so the one line that wires it does not compile here yet"*.
+mode this table exists to prevent. The measurement behind _"no consumer does yet"_ was true when
+taken: the consumer could not call it. Its own source says why — _"`applySubagentMemory` … is NOT in
+the published 14.4.0 this project pins, so the one line that wires it does not compile here yet"_.
 The integration was written, tested, and left disconnected, waiting on a publish.
 
 What changed is not the code on either side. `apps/theocode` joined this repository, `@theokit/agents`
@@ -436,11 +459,11 @@ delivery problem as a design decision.
 the version — `agent-memory.ts` carries that measurement, and
 `the-sdk-version-that-parses-memory.test.ts` pins it.
 
-| `memory:` | Root | Who can see it |
-|---|---|---|
-| `project` | `<cwd>/.claude/agent-memory/<agent>/` | committed, shared with the team |
-| `local` | `<cwd>/.claude/agent-memory-local/<agent>/` | kept out of version control |
-| `user` | `~/.claude/agent-memory/<agent>/` | crosses projects |
+| `memory:` | Root                                        | Who can see it                  |
+| --------- | ------------------------------------------- | ------------------------------- |
+| `project` | `<cwd>/.claude/agent-memory/<agent>/`       | committed, shared with the team |
+| `local`   | `<cwd>/.claude/agent-memory-local/<agent>/` | kept out of version control     |
+| `user`    | `~/.claude/agent-memory/<agent>/`           | crosses projects                |
 
 ```ts
 import { resolveAgentMemory } from '@theokit/agents/config'
@@ -461,18 +484,18 @@ writes its own `MEMORY.md`, not the operator's.
 **This list is CLOSED.** A variable that is not in this table is not read by this package — not
 "undocumented", not "read somewhere else": not read. That is the whole point of writing it down.
 `rules/foreign-config-surfaces.md` settles the same question for `.claude/` file surfaces in one
-sentence — *a surface is read, or it is refused with a reason about this product; it is never
-accepted and ignored* — and this is that sentence applied to the environment.
+sentence — _a surface is read, or it is refused with a reason about this product; it is never
+accepted and ignored_ — and this is that sentence applied to the environment.
 
 The reason the guarantee is worth more than a list of three: it answers for every variable anyone
 could export, including the ones nobody enumerated, so an operator who sets something and sees no
 change knows which of the two worlds they are in.
 
-| Variable | Security | What it changes | Read at |
-|---|---|---|---|
-| `PROGRAMDATA` | no | Where the machine-wide operator policy is looked for on Windows. Changing it moves which policy file governs the run. | `src/config/operator-policy.ts:119` |
-| `THEOKIT_CODEX_CLIENT_ID` | **yes** | Overrides the OAuth client id used for the Codex device flow. It selects which OAuth client the device authorisation is issued against, so it is a credential-path decision rather than a convenience one. | `src/auth/device-provider.ts:97`, via the constant at `:93` |
-| `THEOKIT_DEBUG` | no | Turns on debug logging. Log output can contain request shapes, so treat the logs as sensitive even though the switch is not. | `src/debug-log.ts:10` |
+| Variable                  | Security | What it changes                                                                                                                                                                                            | Read at                                                     |
+| ------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `PROGRAMDATA`             | no       | Where the machine-wide operator policy is looked for on Windows. Changing it moves which policy file governs the run.                                                                                      | `src/config/operator-policy.ts:119`                         |
+| `THEOKIT_CODEX_CLIENT_ID` | **yes**  | Overrides the OAuth client id used for the Codex device flow. It selects which OAuth client the device authorisation is issued against, so it is a credential-path decision rather than a convenience one. | `src/auth/device-provider.ts:97`, via the constant at `:93` |
+| `THEOKIT_DEBUG`           | no       | Turns on debug logging. Log output can contain request shapes, so treat the logs as sensitive even though the switch is not.                                                                               | `src/debug-log.ts:10`                                       |
 
 The `Security` column is a decision per row, not a keyword match on the name. A name containing
 `AWS` can be a plain address, and a name matching nothing can disable a control — so each row was
@@ -505,21 +528,21 @@ here because it is the one a team evaluating this framework for deployment needs
 else.
 
 It was not always true. Hooks, MCP servers, permissions and skill execution were each a value the
-*programmer* passed at build time — a constructor argument, decided in code, by whoever wrote the
+_programmer_ passed at build time — a constructor argument, decided in code, by whoever wrote the
 agent. That is a defensible design for a framework and an indefensible one for anything an
 organisation deploys: it means the person responsible for what an agent may do on a machine has no
 way to say so.
 
 Policy is read from disk, and the layers have a fixed precedence:
 
-| Layer | Who writes it | Wins against |
-|---|---|---|
-| `managed-settings.json` | the operator / the organisation | everything below |
-| `.claude/settings.json`, `.theokit/settings.json` | the project | the code |
-| `defineAgent({ … })` | the programmer | nothing |
+| Layer                                             | Who writes it                   | Wins against     |
+| ------------------------------------------------- | ------------------------------- | ---------------- |
+| `managed-settings.json`                           | the operator / the organisation | everything below |
+| `.claude/settings.json`, `.theokit/settings.json` | the project                     | the code         |
+| `defineAgent({ … })`                              | the programmer                  | nothing          |
 
 A programmer can still decide everything, and in a single-author project nothing above them exists.
-What changed is that they are no longer the *only* one who can.
+What changed is that they are no longer the _only_ one who can.
 
 Two consequences worth stating, because they are the cost:
 
@@ -547,7 +570,8 @@ It is called before and after the removal:
 await deleteSession(id, {
   cwd,
   removeFromRegistry: (sessionId) => Agent.delete(sessionId),
-  isListedInRegistry: async (sessionId) => (await Agent.list({ runtime: 'local', cwd })).items.some((a) => a.agentId === sessionId),
+  isListedInRegistry: async (sessionId) =>
+    (await Agent.list({ runtime: 'local', cwd })).items.some((a) => a.agentId === sessionId),
 })
 ```
 
