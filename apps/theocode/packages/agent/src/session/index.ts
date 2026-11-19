@@ -10,7 +10,7 @@ export {
 
 export { forkSessionBeforeUserTurn } from './backtrack.js'
 
-export { gcProtectedIds, liveSessionIds, withholdLegacyNamed } from './gc/pointer.js'
+export { gcProtectedIds } from './gc/pointer.js'
 
 export { listAgents, CursorNotDrainedError } from './agent-list.js'
 

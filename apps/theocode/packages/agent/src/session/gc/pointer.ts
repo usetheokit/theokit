@@ -1,8 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { legacyTranscriptPath } from '@theokit/agents/persistence'
-
 /**
  * The live-session pointer: `<cwd>/.theokit/tui-session` holds the id of the session a running TUI
  * is writing to.
@@ -48,12 +46,6 @@ export function readPointerId(
   return id === '' ? undefined : id
 }
 
-/** The session ids `sessions gc` must keep: every registry id given, plus the TUI pointer's. */
-export function liveSessionIds(cwd: string, registryIds: readonly string[] = []): string[] {
-  const pointer = readPointerId(cwd)
-  return pointer === undefined ? [...registryIds] : [...registryIds, pointer]
-}
-
 /**
  * The `protectedIds` provider `theocode sessions gc` hands to the framework's `planTranscriptGC` and
  * `runTranscriptGC`: the TUI pointer, plus every non-archived registry session in `registryIds`.
@@ -73,45 +65,5 @@ export function gcProtectedIds(
     const pointer = readPointerId(cwd)
     if (pointer !== undefined) out.set(pointer, 'TUI live-session pointer')
     return out
-  }
-}
-
-interface PlanLike {
-  readonly cwd: string
-  readonly root: string
-  readonly candidates: readonly { readonly id: string | undefined; readonly transcript: string }[]
-  readonly kept: readonly { readonly id: string | undefined; readonly reason: string }[]
-}
-
-/**
- * Move out of `candidates` every transcript NAMED after a live session id, and every one whose id is
- * unreadable.
- *
- * The framework maps a protected id to the current (hashed) transcript path only. 4.x named the file
- * after the id itself and an upgraded machine has both side by side, so a live session's legacy
- * `<id>.jsonl` would be collectable. Withholding the extra name is the safe direction: a name that
- * matches nothing keeps a file, a name that is missing deletes one, and there is no undo.
- */
-export function withholdLegacyNamed<P extends PlanLike>(plan: P, liveIds: readonly string[]): P {
-  // The SDK's own id -> legacy path map: it sanitises the id (`a.b` is filed as `a-b.jsonl`), so a
-  // stem comparison against the raw id would miss exactly those sessions.
-  const legacy = new Set(liveIds.map((id) => legacyTranscriptPath(plan.root, plan.cwd, id)))
-  // #106 — a transcript whose id could not be read is kept too: "I could not read this" is not
-  // "this belongs to nobody", and the framework collects it as an unnameable orphan.
-  const held = plan.candidates.filter((c) => c.id === undefined || legacy.has(c.transcript))
-  if (held.length === 0) return plan
-  return {
-    ...plan,
-    candidates: plan.candidates.filter((c) => !held.includes(c)),
-    kept: [
-      ...plan.kept,
-      ...held.map((c) => ({
-        id: c.id,
-        reason:
-          c.id === undefined
-            ? 'session id unreadable — not shown to belong to nobody'
-            : 'legacy-named transcript of a live session',
-      })),
-    ],
   }
 }
