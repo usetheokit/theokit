@@ -19,7 +19,7 @@ export type ServiceState = 'running' | 'stopped' | 'not-installed' | 'unknown'
 export interface ServiceBackend {
   readonly platform: NodeJS.Platform
   definitionPath(spec: Pick<ServiceSpec, 'label'>): string
-  /** Throws ServiceCommandError; the previous definition is restored. */
+  /** Throws ServiceCommandError; systemd restores the previous definition; launchd removes the new one. */
   install(spec: ServiceSpec): Promise<void>
   uninstall(label: string): Promise<void>
   status(label: string): Promise<ServiceState>
@@ -31,6 +31,8 @@ export interface ServiceBackendOptions {
   readonly homeDir?: string
   readonly env?: NodeJS.ProcessEnv
   readonly uid?: number
+  /** launchd: the file stdout and stderr go to; defaults to ~/Library/Logs/<label>.log. */
+  readonly logFile?: string
 }
 
 const LABEL = /^[A-Za-z0-9._-]+$/
