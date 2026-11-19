@@ -1,0 +1,69 @@
+// The stock `RunPort` and the file-backed transient job every scheduler host otherwise rewrites.
+import { readFile } from 'node:fs/promises'
+
+import type { SdkAgentHandle, SdkSendOptions } from '../bridge/sdk-adapter.js'
+import type { ScheduledJob, ScheduleTarget } from './job-store.js'
+import type { RunPort, TransientJobOptions } from './scheduler.js'
+
+/**
+ * A `RunPort` that runs each prompt on the agent `withAgent` supplies: send with the scheduler's
+ * signal, drain the stream if the turn has one, wait, and map `error`, `cancelled` and an empty
+ * result to `{ ok: false }`. `withAgent` owns the agent's lifetime, so it disposes the agent even
+ * when the run throws.
+ */
+export function agentRunPort(
+  withAgent: <R>(work: (agent: SdkAgentHandle) => Promise<R>) => Promise<R>,
+  options: { sendOptions?: SdkSendOptions } = {},
+): RunPort {
+  return (prompt, signal) =>
+    withAgent(async (agent) => {
+      const turn = await agent.send(prompt, { ...options.sendOptions, signal })
+      if (turn.stream) {
+        for await (const _event of turn.stream()) void _event
+      }
+      const outcome = await turn.wait()
+      if (outcome.status === 'error' || outcome.error) {
+        const named = outcome.error?.code ?? outcome.error?.message ?? 'unknown'
+        return { ok: false as const, error: `run ended with error: ${named}` }
+      }
+      if (outcome.status === 'cancelled') {
+        return { ok: false as const, error: 'run ended with status cancelled' }
+      }
+      if (!outcome.result) {
+        return { ok: false as const, error: 'run finished without a result' }
+      }
+      return { ok: true as const, text: outcome.result }
+    })
+}
+
+/**
+ * A transient job whose prompt is `file`, re-read on each fire. An absent file (ENOENT) or blank
+ * text means no run; any other read error rejects.
+ */
+export function fileTransientJob(options: {
+  id: string
+  cron: string
+  target: ScheduleTarget
+  file: string
+}): { job: ScheduledJob; transient: TransientJobOptions } {
+  const { id, cron, target, file } = options
+  // `prompt` is a placeholder: a transient job's prompt is read from `file` on each fire.
+  const job: ScheduledJob = { id, cron, target, prompt: '', createdAt: Date.now() }
+  return {
+    job,
+    transient: {
+      durable: false,
+      prompt: async () => {
+        let text: string
+        try {
+          text = await readFile(file, 'utf8')
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+          throw err
+        }
+        const trimmed = text.trim()
+        return trimmed === '' ? undefined : trimmed
+      },
+    },
+  }
+}
