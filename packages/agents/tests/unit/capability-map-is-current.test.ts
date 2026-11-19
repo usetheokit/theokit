@@ -64,6 +64,18 @@ describe('the committed capability map is what the package implies', () => {
     expect(missing, 'declared exports with no section in the capability map').toEqual([])
   })
 
+  it('test_the_config_section_lists_the_instruction_trim_types', () => {
+    const start = rendered.indexOf('## `@theokit/agents/config`')
+    expect(start, 'no config section in the map').toBeGreaterThanOrEqual(0)
+    const next = rendered.indexOf('\n## ', start + 1)
+    const section = rendered.slice(start, next === -1 ? undefined : next)
+    for (const name of ['InstructionCut', 'InstructionTrim', 'InstructionTreeBudget']) {
+      expect(section, `${name} is missing from the config section as a type`).toContain(
+        `| \`${name}\` | type |`,
+      )
+    }
+  })
+
   /**
    * The map re-exports the SDK, so its content is a function of which SDK is installed — and the
    * `dep-check / suite at the bottom of every declared range` leg installs this package's declared
