@@ -35,7 +35,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
-| `./testing` | Test seams: compiled-agent inspection, mock streams |
+| `./testing` | Test seams: compiled-agent inspection, mock streams, the live-suite provider-key guard |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
 | `./interactive` | The interactive-shell backend contract |
@@ -48,7 +48,7 @@ Twenty-three entry points. Import the one you need — the barrel is not the API
 | `./session` | Session lifecycle, listing, fork/rewind, transcript GC with a retention floor |
 | `./hooks` | The lifecycle-hook engine and its fingerprint gate; `parseClaudeHooks` reads the Claude Code hook dialect (see below) |
 | `./ask` | The human-in-the-loop rendezvous — ask a question, settle it, abandon it safely |
-| `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable |
+| `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable. `protectedPaths` (absolute, or relative to `projectRoot`) lists state directories tools must not touch; `createPathVetoPlugin(scope)` is a `pre_tool_call` plugin that refuses any `path`, `file_path`, `filename`, `paths[]` or `apply_patch` destination that resolves, through symlinks and case variants, into one, and an unscoped `git_diff`. `vetoPathCall(scope, name, args)` gives the same verdict for calls that skip the plugin chain; `resolveRealPath`, `isWithin` and `SymlinkLoopError` are exported too |
 | `./a2a` | `createA2ATool` (call a remote agent over HTTP as a tool), `buildAgentCard` |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
@@ -90,7 +90,20 @@ process.exitCode = result.exitCode
 
 `loginWithApiKey(key, store, { provider?, overwrite?, env? })` (from `./auth`) trims the key, infers the provider from its prefix when none is given, and writes the credential file, returning `{ provider, path }`. It throws `CredentialError` for an empty key or an unknown prefix without a provider, `ProviderPrefixMismatchError` when the declared provider contradicts the prefix, and `CredentialExistsError` (`code: 'credential_exists'`, names the path) when a file exists and `overwrite` is not set. `logout(store, env?)` removes the file and returns whether there was one; a concurrent removal returns `false`.
 
+`grantGate(store, classify)` (from `./auth`) vetoes a governed call that has no standing grant and never asks anyone. `createApprovalGate({ store, key, waived?, reviewer?, ask?, timeoutMs?, ledger?, onError? })` is the chain in front of it: a session waiver, a saved approval in the same `PermissionStore`, an optional reviewer (`'allow' | 'deny' | 'ask'`), then the person via `ask` (`'once'`, `'always'` which is saved with `store.grant`, or `'deny'`; `{ answer, by }` records who). No `ask` means a refusal (`nobody can approve it`); a timeout is a denial named in the decision's `reason` (it does not call `onError`); a throwing reviewer defers to the person, a throwing asker denies, and each is reported through `onError(error, stage)` and named in `reason`. `decide(ctx)` returns `{ allowed, reason, by }`; `plugin` applies it as a `pre_tool_call` veto. `createJsonlLedger(dir)` is an append-only `activity.jsonl` (mode 0600) with `read()`; pass it as `ledger` to get one receipt per decision.
+
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
+
+## Testing: the live-suite guard
+
+A live (real-model) suite must not skip green in CI when the provider key is missing. `@theokit/agents/testing` exports `assertProviderKeyWhenRequired`, `requireProviderKeySetup`, `LIVE_KEY_NAMES` and `MissingProviderKeyError`: when `THEOKIT_LIVE_REQUIRED=1` and none of the key variables is set (whitespace-only counts as unset), the run fails with an error that names the variables, never a value. Without the flag it returns, so a local run keeps its skip.
+
+```ts
+// tests/live/setup.ts — register it as vitest `globalSetup`
+import { requireProviderKeySetup } from '@theokit/agents/testing'
+
+export default requireProviderKeySetup({ requiredFlag: 'MYAPP_LIVE' }) // names and requiredFlag are optional
+```
 
 ## One bootstrap for every entry
 
@@ -251,6 +264,16 @@ entry, that brings its own `transfer_to_agent` tool is refused with `reserved_to
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
+## Reading skills with `skill_read`
+
+By default only inline skills (`createSkill(...)`) get a `skill_read` tool; a skill enabled by name or found on disk is listed in the `<skills>` block but its body is not readable. Opt in with `read: 'advertised'`:
+
+```ts
+AgentBuilder.create().skills(['deploy'], { read: 'advertised' }) // or defineAgent({ skillsRead: 'advertised' })
+```
+
+`skill_read` then serves exactly what the `<skills>` block lists: inline skills, skills enabled by name, and skills discovered through the granted `settingSources` and `claudeCode` roots (project, user, `.claude`, plugin bundles). It runs after the trust gate, so a root the gate withheld is neither read nor named in a not-found answer. The project root wins a name clash. An app-declared `skill_read` tool still takes precedence.
+
 ## Delegating to a fresh agent per task
 
 `delegationPortFromAgentFactory(create, { sendOptions })` (from `@theokit/agents/bridge`) returns a
@@ -293,6 +316,10 @@ fingerprint gate as `buildHookHandlers`, ignores specs of other events, and retu
 without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
 is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
 
+## Validating direct tool calls
+
+`createToolInvokeRoute` (from `@theokit/agents/bridge`) checks `args` against the tool's own `inputSchema` by default (`validateAgainstInputSchema`, compiled once per tool): a violation answers 400 `invalid_args` with `<path>: <message>`, and a schema that does not compile answers 500 `tool_error`. Pass `validate: myValidator` to replace the default, or `validate: false` to turn validation off.
+
 ## Ending a goal loop with a tool
 
 `createGoalSignal()` returns an `update_goal` tool and a judge that read the same state. Add `signal.tool`
@@ -300,6 +327,22 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Scheduled jobs: file or PostgreSQL
+
+`createScheduler` keeps its jobs in a `JobStore` from `@theokit/agents/tools`. Pick the file store for one host with a disk, or the PostgreSQL store when there are several replicas or no durable disk. The PostgreSQL store takes a ready pool (a `pg` `Pool` has the `query` it needs), so this package adds no driver.
+
+```ts
+import { copyJobs, createJobStore, createPostgresJobStore } from '@theokit/agents/tools'
+
+const files = createJobStore('.theoclaw/schedules.json')
+const db = await createPostgresJobStore(pool, { table: 'schedule_jobs' }) // /^[a-z_][a-z0-9_]{0,62}$/
+
+await copyJobs(files, db, { force: false }) // throws JobCopyError naming the count if `db` holds jobs
+```
+
+Reads come from the jobs loaded when the store opened, and writes run one after another; replicas do not see each other's later changes until they reopen the store. A malformed row raises `ScheduleStoreError` naming the table and job id. `copyJobs` writes through the target's atomic `putMany` (one statement for PostgreSQL, one file rewrite for the file store), so a failure leaves the target unchanged; a custom `JobStore` without `putMany` raises `JobCopyUnsupportedError` before anything is written.
+
 
 ## Running scheduled prompts
 
@@ -597,6 +640,8 @@ change knows which of the two worlds they are in.
 | Variable | Security | What it changes | Read at |
 |---|---|---|---|
 | `PROGRAMDATA` | no | Where the machine-wide operator policy is looked for on Windows. Changing it moves which policy file governs the run. | `src/config/operator-policy.ts:119` |
+| `PATH` | no | Which executables count as installed when `skill_read` (`read: 'advertised'`) decides whether a skill with `requires-bins` is offered to the model, the same test the SDK applies to the `<skills>` block. | `src/bridge/advertised-skill-read.ts:26` |
+| `PATHEXT` | no | Windows executable extensions (default `.EXE;.CMD`), used to decide whether a skill's `requires-bins` are on `PATH` for `skill_read` (`read: 'advertised'`), as the SDK does. Ignored off Windows. | `src/bridge/advertised-skill-read.ts:26` |
 | `THEOKIT_CODEX_CLIENT_ID` | **yes** | Overrides the OAuth client id used for the Codex device flow. It selects which OAuth client the device authorisation is issued against, so it is a credential-path decision rather than a convenience one. | `src/auth/device-provider.ts:97`, via the constant at `:93` |
 | `THEOKIT_DEBUG` | no | Turns on debug logging. Log output can contain request shapes, so treat the logs as sensitive even though the switch is not. | `src/debug-log.ts:10` |
 

@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1309 export(s) across 25 entry point(s).
+1333 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -246,6 +246,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `UnsupportedRunOperationError` | value |
 | `UnsupportedTaskOperationError` | value |
 | `UntrustedSettingSourceError` | value |
+| `validateAgainstInputSchema` | value |
 | `verifyLayerOrdering` | value |
 | `wellKnownCardPath` | value |
 | `WindowBudgetExceededError` | value |
@@ -565,6 +566,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
 | `UntrustedSettingSourceError` | value |
+| `validateAgainstInputSchema` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
 | `WRITE_SCOPED_TOOLS` | value |
@@ -670,16 +672,21 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `assertProviderKeyWhenRequired` | value |
 | `createMockAgentStream` | value |
 | `createMockOutputEvents` | value |
 | `createMockWireStream` | value |
 | `inspectCompiled` | value |
+| `LIVE_KEY_NAMES` | value |
+| `MissingProviderKeyError` | value |
+| `requireProviderKeySetup` | value |
 | `wireChunk` | value |
 | `AgentOutputEvent` | type |
 | `CompiledInspection` | type |
 | `MockAgentStreamOptions` | type |
 | `MockResponse` | type |
 | `MockStreamEvent` | type |
+| `ProviderKeyGuardOptions` | type |
 
 ## `@theokit/agents/sandbox`
 
@@ -807,6 +814,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `builtinSecretStores` | value |
 | `CODEX_CLIENT_ID_ENV_VAR` | value |
 | `CODEX_PROVIDER` | value |
+| `createApprovalGate` | value |
+| `createJsonlLedger` | value |
 | `createPlanOnlyGate` | value |
 | `CredentialError` | value |
 | `CredentialExistsError` | value |
@@ -843,6 +852,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SecretReferenceError` | value |
 | `writeCredential` | value |
 | `AgentCredentialInput` | type |
+| `ApprovalAnswer` | type |
+| `ApprovalDecision` | type |
+| `ApprovalGateOptions` | type |
+| `ApprovalLedger` | type |
+| `ApprovalRecord` | type |
 | `AuthMethod` | type |
 | `AuthProviderOptions` | type |
 | `Classification` | type |
@@ -997,6 +1011,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `catastrophicShellReason` | value |
 | `commandDenialReason` | value |
 | `ContextMatchError` | value |
+| `copyJobs` | value |
 | `createApplyPatchTool` | value |
 | `createBraveWebSearchAdapter` | value |
 | `createCurrentTimeTool` | value |
@@ -1011,6 +1026,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createJobStore` | value |
 | `createListDirTool` | value |
 | `createPlanModeTool` | value |
+| `createPostgresJobStore` | value |
 | `createQuestionTool` | value |
 | `createReadFileTool` | value |
 | `createRunVitestTool` | value |
@@ -1043,6 +1059,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `injectGuidance` | value |
 | `isBlockedIp` | value |
 | `isCommandAllowed` | value |
+| `JobCopyError` | value |
+| `JobCopyUnsupportedError` | value |
 | `ReadTracker` | value |
 | `ReasoningTools` | value |
 | `RedirectBlockedError` | value |
@@ -1106,6 +1124,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ScreenedFetchOptions` | type |
 | `SessionArtifactStore` | type |
 | `SessionArtifactStoreOptions` | type |
+| `SqlPool` | type |
 | `SynthesizedAudio` | type |
 | `TaskRegistry` | type |
 | `TaskToolOptions` | type |
@@ -1308,7 +1327,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `bindToolScope` | value |
+| `createPathVetoPlugin` | value |
+| `isWithin` | value |
+| `resolveRealPath` | value |
 | `sandboxWritePolicy` | value |
+| `SymlinkLoopError` | value |
+| `vetoPathCall` | value |
 | `SandboxWritePolicy` | type |
 | `ToolScope` | type |
 | `ToolScopeInput` | type |
