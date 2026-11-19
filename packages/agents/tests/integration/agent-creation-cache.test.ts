@@ -10,9 +10,8 @@ import { join } from 'node:path'
 import { Agent } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { defineAgent } from '../../src/bridge/define-agent.js'
-import { toAgentFactory } from '../../src/bridge/sdk-adapter.js'
-import { streamAgentTurnInProcess } from '../../src/in-process-turn.js'
+import { compileAgentDefinition, defineAgent } from '../../src/bridge/define-agent.js'
+import { createSdkAgentStream, toAgentFactory } from '../../src/bridge/sdk-adapter.js'
 import {
   getOrCreateReporting,
   acquireSharedAgent,
@@ -190,16 +189,6 @@ describe('the real adapter entry points', () => {
       approvals,
       overrides: { cwd },
     })
-  const stream = (id: string) =>
-    streamAgentTurnInProcess(
-      { default: { tools: [], agents: {}, model: 'openai/gpt-4o-mini' } },
-      key,
-      {
-        message: 'Return only: BANANA',
-        sessionId: id,
-      } as never,
-    )[Symbol.asyncIterator]()
-
   it('two toAgentFactory calls return the registry handle', async () => {
     const id = nextId()
     const make = factory()
@@ -227,29 +216,48 @@ describe('the real adapter entry points', () => {
     expect(Agent.registry.get(id)).toBeUndefined()
   })
 
-  it('a stream finishing first leaves a served handle live, and vice versa', async () => {
+  // The adapter's own stream generator: its first event comes after the agent is acquired and
+  // before the turn ends, so the test can hold the stream open while a served caller completes.
+  const adapterStream = (id: string) =>
+    createSdkAgentStream(
+      compileAgentDefinition(defineAgent({ model: 'openai/gpt-4o-mini' })),
+      [],
+      key,
+      {
+        cwd,
+      },
+    )('Return only: BANANA', id)[Symbol.asyncIterator]()
+
+  it('a served caller completing leaves an active stream live through its completion', async () => {
+    const id = nextId()
+    const running = adapterStream(id)
+    const first = await running.next()
+    expect(first.done).toBe(false)
+    const live = Agent.registry.get(id)
+    expect(live, 'the stream holds the agent while open').toBeDefined()
+
+    const servedHandle = await factory()(id)
+    expect(servedHandle).toBe(live)
+    await servedHandle.dispose()
+    await servedHandle.dispose()
+    expect(Agent.registry.get(id)).toBe(live)
+
+    while (!(await running.next()).done) {
+      /* drain */
+    }
+    expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  it('a stream completing leaves an active served handle live', async () => {
     const id = nextId()
     const servedHandle = await factory()(id)
-    const it1 = stream(id)
-    await it1.next()
-    expect(Agent.registry.get(id)).toBe(servedHandle)
-    while (!(await it1.next()).done) {
+    const running = adapterStream(id)
+    expect((await running.next()).done).toBe(false)
+    while (!(await running.next()).done) {
       /* drain */
     }
     expect(Agent.registry.get(id)).toBe(servedHandle)
     await servedHandle.dispose()
     expect(Agent.registry.get(id)).toBeUndefined()
-
-    const id2 = nextId()
-    const it2 = stream(id2)
-    const drain = async () => {
-      while (!(await it2.next()).done) {
-        /* drain */
-      }
-    }
-    const [, served2] = await Promise.all([drain(), factory()(id2)])
-    expect(Agent.registry.get(id2)).toBe(served2)
-    await served2.dispose()
-    expect(Agent.registry.get(id2)).toBeUndefined()
   })
 })
