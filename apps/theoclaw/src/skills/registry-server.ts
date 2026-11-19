@@ -31,6 +31,11 @@ function compareVersions(a: string, b: string): number {
   return 0
 }
 
+/** The highest version of an ascending list. */
+function latestOf(versions: readonly string[]): string | undefined {
+  return versions[versions.length - 1]
+}
+
 /** What is wrong with a package (undefined when valid). */
 function validatePackage(text: string, name: string, version: string): string | undefined {
   let pkg: unknown
@@ -57,9 +62,14 @@ function validatePackage(text: string, name: string, version: string): string | 
       return 'each file needs a path and contentBase64'
     }
     const path = f.path
-    if (path === '' || path.startsWith('/') || path.includes('\\') || /^[a-zA-Z]:/.test(path))
+    if (
+      path === '' ||
+      path.startsWith('/') ||
+      path.includes('\\') ||
+      /^[a-zA-Z]:/.test(path) ||
+      path.split('/').some((part) => part === '..' || part === '')
+    )
       return `bad path ${path}`
-    if (path.split('/').some((part) => part === '..' || part === '')) return `bad path ${path}`
     if (path === 'SKILL.md') skillMd = Buffer.from(f.contentBase64, 'base64').toString('utf8')
   }
   if (skillMd === undefined) return 'SKILL.md is missing'
@@ -105,7 +115,7 @@ export function createSkillsRegistryHandler(options: SkillsRegistryOptions): Req
   const read = (name: string, version: string): Buffer =>
     readFileSync(join(dir, name, `${version}.json`))
   const describe = (name: string, versions: string[]): string => {
-    const latest = versions[versions.length - 1]
+    const latest = latestOf(versions)
     return latest === undefined
       ? ''
       : String(
@@ -134,7 +144,7 @@ export function createSkillsRegistryHandler(options: SkillsRegistryOptions): Req
         skills.push({
           name: entry.name,
           description,
-          latest: versions[versions.length - 1],
+          latest: latestOf(versions),
           versions,
         })
       }

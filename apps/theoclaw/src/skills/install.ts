@@ -119,10 +119,11 @@ export async function downloadSkill(
         (v) => typeof v?.version === 'string' && typeof v.sha256 === 'string',
       )
     : []
+  const newestFirst = [...versions].sort((a, b) =>
+    compareSemver(String(b.version), String(a.version)),
+  )
   const chosen =
-    wanted === undefined
-      ? [...versions].sort((a, b) => compareSemver(String(b.version), String(a.version)))[0]
-      : versions.find((v) => v.version === wanted)
+    wanted === undefined ? newestFirst[0] : versions.find((v) => v.version === wanted)
   if (chosen === undefined)
     throw new RegistryError(
       wanted === undefined
