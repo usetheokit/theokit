@@ -253,7 +253,10 @@ const INTERACTION_UPDATE_IGNORED: ReadonlySet<string> = new Set([
  * Translate a single SDK message to zero or more TheoKit stream events.
  * Returns an array because one SDK message may map to multiple TheoKit events.
  */
-export function translateSdkEvent(message: SdkMessageLike, runId: string): StreamEvent[] {
+export function translateSdkEvent(
+  message: SdkMessage | SdkMessageLike,
+  runId: string,
+): StreamEvent[] {
   // A copy with the index signature the per-kind readers use; the SDK's messages are plain objects.
   const msg: SdkMessage = { ...message }
   switch (msg.type) {
