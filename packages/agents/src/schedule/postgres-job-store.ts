@@ -132,9 +132,9 @@ export async function copyJobs(
   to: JobStore,
   options: { force: boolean },
 ): Promise<number> {
-  if (to.putMany === undefined) throw new JobCopyUnsupportedError()
   const existing = to.list().length
   if (existing > 0 && !options.force) throw new JobCopyError(existing)
+  if (to.putMany === undefined) throw new JobCopyUnsupportedError()
   const batch = from.list()
   await to.putMany(batch)
   return batch.length

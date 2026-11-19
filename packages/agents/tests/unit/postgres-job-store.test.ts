@@ -155,6 +155,15 @@ describe('copyJobs', () => {
     expect(puts).toEqual([])
   })
 
+  it('refuses a non-empty target without putMany with the typed count error, before the unsupported error', async () => {
+    const base = createJobStore('/nonexistent-dir/none.json')
+    const to = { ...base, list: () => [job('x')], putMany: undefined }
+    const from = { ...base, list: () => [job('a')] }
+    const error = await copyJobs(from, to, { force: false }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(JobCopyError)
+    expect((error as JobCopyError).existing).toBe(1)
+  })
+
   it('copyJobs refuses a non-empty target without force, and with force copies every job', async () => {
     const dummy = fakePool([{ id: 'x', job: job('x') }])
     const target = await createPostgresJobStore(dummy.pool)
