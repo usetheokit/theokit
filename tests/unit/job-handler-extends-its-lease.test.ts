@@ -7,7 +7,7 @@ import {
 } from '../../packages/theo/src/server/jobs/job-backend.js'
 import { InMemoryJobBackend } from '../../packages/theo/src/server/jobs/job-backend-memory.js'
 import { createJobRunner } from '../../packages/theo/src/server/jobs/job-runner.js'
-import type { JobContext } from '../../packages/theo/src/server/jobs/job-handler-types.js'
+import type { JobContext } from '../../packages/theo/src/server/jobs/job-types.js'
 
 /**
  * A handler could not extend its lease, and `lockSeconds` is one value for the whole worker, so a

@@ -255,26 +255,48 @@ describe('Deno cron context queue', () => {
   })
 })
 
-/** Run the generated Deno entry under Node: Deno.cron is captured, imports come from `modules`. */
-function runDenoEntry(
+/**
+ * Run the generated Deno entry under Node: Deno.cron is captured, imports come from `modules` (a
+ * module id missing there fails, as an unresolvable import does in Deno). Compiled as a System
+ * module, which keeps the entry's top-level await and its lazy `import()` calls. `loaded` collects
+ * every module id the entry asked for.
+ */
+async function runDenoEntry(
   content: string,
   modules: Record<string, unknown>,
   env: string | undefined,
-): Map<string, () => Promise<void>> {
+  loaded: string[] = [],
+): Promise<Map<string, () => Promise<void>>> {
   const js = ts.transpileModule(content, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.System, target: ts.ScriptTarget.ES2022 },
   }).outputText
   const crons = new Map<string, () => Promise<void>>()
   const deno = {
     cron: (name: string, _schedule: string, fn: () => Promise<void>) => crons.set(name, fn),
     env: { get: (k: string) => (k === 'NODE_ENV' ? env : undefined) },
   }
-  const require = (id: string): unknown => {
+  const load = (id: string): unknown => {
+    loaded.push(id)
     if (!(id in modules)) throw new Error(`unexpected import ${id}`)
     return modules[id]
   }
+  type Registered = {
+    setters: Array<(m: unknown) => void>
+    execute: () => Promise<void>
+  }
+  let register: (() => Registered) | undefined
+  let deps: string[] = []
+  const System = {
+    register: (d: string[], fn: (e: unknown, ctx: unknown) => Registered) => {
+      deps = d
+      register = () => fn(() => undefined, { import: (id: string) => Promise.resolve(load(id)) })
+    },
+  }
   // eslint-disable-next-line sonarjs/code-eval -- executes generated cron entry in a sandboxed vm context under test
-  runInNewContext(js, { require, exports: {}, Deno: deno, crypto, AbortSignal, Date })
+  runInNewContext(js, { System, Deno: deno, crypto, AbortSignal, Date, Object })
+  const mod = register!()
+  deps.forEach((d, i) => mod.setters[i]!(load(d)))
+  await mod.execute()
   return crons
 }
 
@@ -303,7 +325,7 @@ describe('generated Deno cron entry, executed', () => {
 
   it('flushes enqueued jobs to the configured backend with a trace id', async () => {
     const calls: Array<{ name: string; traceparent?: string }> = []
-    const crons = runDenoEntry(
+    const crons = await runDenoEntry(
       generate(),
       base({
         '../theo.config.ts': { default: { jobs: { backend: backendOf(calls) } } },
@@ -322,7 +344,7 @@ describe('generated Deno cron entry, executed', () => {
   it('propagates the run trace id into the enqueued job traceparent', async () => {
     const calls: Array<{ traceparent?: string }> = []
     let traceId = ''
-    const crons = runDenoEntry(
+    const crons = await runDenoEntry(
       generate(),
       base({
         '../theo.config.ts': { default: { jobs: { backend: backendOf(calls) } } },
@@ -343,7 +365,7 @@ describe('generated Deno cron entry, executed', () => {
 
   it('discards buffered jobs when the handler throws', async () => {
     const calls: unknown[] = []
-    const crons = runDenoEntry(
+    const crons = await runDenoEntry(
       generate(),
       base({
         '../theo.config.ts': { default: { jobs: { backend: backendOf(calls) } } },
@@ -372,7 +394,7 @@ describe('generated Deno cron entry, executed', () => {
     })
     const client = { tx: true }
     let result: unknown
-    const crons = runDenoEntry(
+    const crons = await runDenoEntry(
       generate(),
       base({
         '../theo.config.ts': { default: { jobs: { backend } } },
@@ -404,9 +426,43 @@ describe('generated Deno cron entry, executed', () => {
       },
     })
     const content = generate({ production: '../theo.config.production.ts' })
-    await runDenoEntry(content, modules, 'production').get('probe')!()
-    await runDenoEntry(content, modules, 'development').get('probe')!()
+    await (await runDenoEntry(content, modules, 'production')).get('probe')!()
+    await (await runDenoEntry(content, modules, 'development')).get('probe')!()
     expect(prodCalls).toHaveLength(1)
     expect(baseCalls).toHaveLength(1)
+  })
+
+  it('does not load an override that NODE_ENV did not select', async () => {
+    const calls: unknown[] = []
+    const loaded: string[] = []
+    const modules = base({
+      '../theo.config.ts': { default: { jobs: { backend: backendOf(calls) } } },
+      '../server/crons/probe.ts': {
+        default: { handler: (ctx: any) => ctx.queue.enqueue('next', {}) },
+      },
+    })
+    const content = generate({ development: '../theo.config.development.ts' })
+    const crons = await runDenoEntry(content, modules, 'production', loaded)
+    await crons.get('probe')!()
+    expect(loaded).not.toContain('../theo.config.development.ts')
+    expect(calls).toHaveLength(1)
+  })
+
+  it('migrates the backend before any cron runs', async () => {
+    const order: string[] = []
+    const backend = backendOf([], {
+      migrate: () => {
+        order.push('migrate')
+        return Promise.resolve()
+      },
+    })
+    const modules = base({
+      '../theo.config.ts': { default: { jobs: { backend } } },
+      '../server/crons/probe.ts': { default: { handler: () => order.push('handler') } },
+    })
+    const crons = await runDenoEntry(generate(), modules, undefined)
+    expect(order).toEqual(['migrate'])
+    await crons.get('probe')!()
+    expect(order).toEqual(['migrate', 'handler'])
   })
 })
