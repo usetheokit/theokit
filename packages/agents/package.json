@@ -25,6 +25,10 @@
       "types": "./dist/bridge.d.ts",
       "import": "./dist/bridge.js"
     },
+    "./control": {
+      "types": "./dist/control.d.ts",
+      "import": "./dist/control.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
