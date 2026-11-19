@@ -167,7 +167,31 @@ function countsPluginBundle(abs: string, name: string): boolean {
 function countsSkillDir(abs: string, name: string): boolean {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
   if (!lstatSync(join(abs, name)).isDirectory()) return false
-  return readRegularFile(join(abs, name, 'SKILL.md')) !== undefined
+  const raw = readRegularFile(join(abs, name, 'SKILL.md'))
+  return raw !== undefined && hasSkillDescription(raw)
+}
+
+/**
+ * The SDK's `discoverSkills` drops a SKILL.md whose frontmatter is missing, unclosed, or has no
+ * non-blank `description` (a quoted empty string counts as blank).
+ */
+function hasSkillDescription(raw: string): boolean {
+  const lines = raw.split('\n')
+  if (lines[0]?.trim() !== '---') return false
+  const close = lines.findIndex((line, i) => i > 0 && line.trim() === '---')
+  // The closing fence needs its own newline, so it cannot be the last element.
+  if (close < 0 || close === lines.length - 1) return false
+  const line = lines.slice(1, close).find((l) => l.startsWith('description:'))
+  if (line === undefined) return false
+  let value = line.slice('description:'.length).trim()
+  if (
+    value.length >= 2 &&
+    (value.startsWith('"') || value.startsWith("'")) &&
+    value.endsWith(value[0])
+  ) {
+    value = value.slice(1, -1).trim()
+  }
+  return value.length > 0
 }
 
 /** `.claude/rules/*.md`: a rule needs no frontmatter, so every readable `.md` file counts. */

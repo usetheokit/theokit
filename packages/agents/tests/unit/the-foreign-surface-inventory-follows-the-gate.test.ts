@@ -126,7 +126,14 @@ describe('foreign surface inventory', () => {
   })
 
   it('skills counts real subfolders holding a SKILL.md, and is refused when left out', () => {
-    const cwd = project({ 'skills/a/SKILL.md': '---\nname: a\n---\n', 'skills/b/notes.md': 'x' })
+    const cwd = project({
+      'skills/a/SKILL.md': '---\nname: a\ndescription: does a\n---\nbody',
+      'skills/b/notes.md': 'x',
+      'skills/nofm/SKILL.md': 'no frontmatter',
+      'skills/nodesc/SKILL.md': '---\nname: n\n---\nbody',
+      'skills/blank/SKILL.md': '---\nname: n\ndescription: ""\n---\nbody',
+      'skills/unclosed/SKILL.md': '---\nname: n\ndescription: d\n',
+    })
     symlinkSync('a', join(cwd, '.claude', 'skills', 'linked'))
     expect(get(cwd, 'skills').count).toBe(1)
     expect(get(cwd, 'skills').state).toBe('read')
