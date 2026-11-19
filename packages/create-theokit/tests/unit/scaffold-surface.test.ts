@@ -64,9 +64,7 @@ describe('applySurface (M45)', () => {
     scaffold(targetDir, 'my-cli')
     applySurface({ targetDir, projectName: 'my-cli', surface: 'cli' })
     const main = read('cli/main.ts')
-    expect(main).toMatch(
-      /import \{[^}]*runHeadlessTurn[^}]*\} from '@theokit\/agents\/commands'/,
-    )
+    expect(main).toMatch(/import \{[^}]*runHeadlessTurn[^}]*\} from '@theokit\/agents\/commands'/)
     expect(main).toContain('process.exitCode = result.exitCode')
     expect(main).toContain('loadProjectEnv()')
   })
