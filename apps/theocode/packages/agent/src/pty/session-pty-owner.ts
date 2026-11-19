@@ -1,18 +1,12 @@
-import { ConfigurationError } from '@theokit/agents'
-import type { InteractiveBackend } from '@theokit/agents/interactive'
-import { PtyInteractiveBackend } from '@theokit/agents-pty'
+import { createPtyOwner } from '@theokit/agents-pty'
+import type { OwnedPtyBackend } from '@theokit/agents-pty'
 import type { PtyInteractiveBackendOptions } from '@theokit/agents-pty'
 import { interactiveWrapCommand } from '@theokit/agents/sandbox'
 import type { InteractiveWrapOptions, SandboxMode } from '@theokit/agents/sandbox'
 import { MORE_PERMISSIVE } from '../config/security-floor.js'
 
-interface BackendComPosse extends InteractiveBackend {
-  killAll(): void
-  activeSessionCount(): number
-}
-
 export interface SessionPtyOwner {
-  backend(): BackendComPosse
+  backend(): OwnedPtyBackend
   setMode(mode: SandboxMode): void
   rotate(): void
   shutdown(): void
@@ -24,61 +18,29 @@ export interface SessionPtyOwnerOptions {
   initialMode: SandboxMode
   maxSessions: number
   createWrap?: (opts: InteractiveWrapOptions) => (command: string, cwd: string) => string | null
-  createBackend?: (opts: PtyInteractiveBackendOptions) => BackendComPosse
+  createBackend?: (opts: PtyInteractiveBackendOptions) => OwnedPtyBackend
 }
 
-/** Index in the shared most-confined-first ordering; -1 for an unknown mode. */
-function permissiveness(mode: SandboxMode): number {
-  return (MORE_PERMISSIVE.sandbox_mode as readonly string[]).indexOf(mode)
-}
-
+/**
+ * TheoCode's wiring of the framework PTY owner: the shared most-confined-first ordering from the
+ * config security floor (B-014: tightening the sandbox ends live sessions, loosening does not) and
+ * the sandbox wrap per mode. The ownership mechanics live in `@theokit/agents-pty`.
+ */
 export function createSessionPtyOwner(opts: SessionPtyOwnerOptions): SessionPtyOwner {
-  const { initialMode, maxSessions } = opts
-  if (!Number.isInteger(maxSessions) || maxSessions < 1) {
-    throw new ConfigurationError(
-      `maxSessions must be an integer >= 1 (received: ${String(maxSessions)})`,
-      { code: 'max_sessions_invalid' },
-    )
-  }
-
   const createWrap = opts.createWrap ?? interactiveWrapCommand
-  const createBackend =
-    opts.createBackend ?? ((o: PtyInteractiveBackendOptions) => new PtyInteractiveBackend(o))
-
-  let currentMode: SandboxMode = initialMode
-
-  const newBackend = (): BackendComPosse =>
-    createBackend({
-      wrapCommand: (command, cwd) => createWrap({ mode: currentMode })(command, cwd),
-      maxSessions,
-    })
-
-  let current = newBackend()
-
+  const owner = createPtyOwner<SandboxMode>({
+    mode: opts.initialMode,
+    order: MORE_PERMISSIVE.sandbox_mode as readonly SandboxMode[],
+    maxSessions: opts.maxSessions,
+    wrapFor: (mode) => createWrap({ mode }),
+    ...(opts.createBackend === undefined ? {} : { createBackend: opts.createBackend }),
+  })
   return {
-    backend: () => current,
+    backend: () => owner.backend(),
     setMode: (mode) => {
-      // B-014 — `wrapCommand` reads the mode at call time, so a NEW command always runs under the
-      // current confinement. A process already spawned does not: its wrap was fixed when it started.
-      // So a `bash -i` launched under danger-full-access survived a switch to read-only, alive and
-      // interactive under the permissive wrap.
-      //
-      // Tightening therefore ends live sessions; loosening does not. A session confined MORE than
-      // the current mode is not a hazard, and killing the user's REPL to grant it more access would
-      // be gratuitous. Reuses the permissiveness order the config security floor already defines.
-      const tightening = permissiveness(mode) < permissiveness(currentMode)
-      currentMode = mode
-      if (tightening) {
-        current.killAll()
-        current = newBackend()
-      }
+      owner.setMode(mode)
     },
-    rotate: () => {
-      current.killAll()
-      current = newBackend()
-    },
-    shutdown: () => {
-      current.killAll()
-    },
+    rotate: () => owner.rotate(),
+    shutdown: () => owner.shutdown(),
   }
 }
