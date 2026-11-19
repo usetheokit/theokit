@@ -19,7 +19,7 @@ export function createHostLifecycle(services: readonly HostService[]): HostLifec
   async function stopAll(): Promise<unknown[]> {
     const failures: unknown[] = []
     while (started.length > 0) {
-      const service = started.pop() as HostService
+      const service = started.pop()!
       try {
         await service.stop()
       } catch (error) {
