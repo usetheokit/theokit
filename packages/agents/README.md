@@ -386,6 +386,18 @@ Grouping it with `outputStyle` under one `read` claimed for both what is true of
 table serves is that a surface is read, or refused with a reason, and never accepted and ignored;
 a key that is parsed and dropped is the third state, and it was in this file's own table.
 
+### Inventory of a foreign root
+
+`foreignSurfaceInventory({ cwd, root?, enabled? })` from `@theokit/agents/bridge` returns one entry per
+folder (`agents`, `commands`, `skills`, `agent-memory`, `workflows`, `plugins`) with `state`
+(`'read'` or `'refused'`), `count` (what that folder's loader would take: `.md` files that open with
+frontmatter for `agents`, `.md` files for `commands`, valid `SKILL.md` definitions for `skills`, one per
+`<agent>/MEMORY.md`, scripts for `workflows`, bundles with a `skills/` folder for `plugins`),
+`unreadable` (entries that exist and could not be read, never thrown) and, when refused, `reason`.
+A folder is `read` when the compat surface that feeds it is in `enabled` (default: every surface), so
+the inventory follows the gate. `workflows` is always refused. `agent-memory` follows `subagents`;
+the host still applies it.
+
 ## Why `env` is not applied, rather than not yet applied
 
 This is a refusal with a reason, not a gap waiting for someone.
