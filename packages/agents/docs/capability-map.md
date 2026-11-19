@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1259 export(s) across 25 entry point(s).
+1264 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -59,6 +59,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `compileProjectContext` | value |
 | `compileSkills` | value |
 | `compileTools` | value |
+| `completeFromTurn` | value |
 | `CompressionFailedError` | value |
 | `ConfigurationError` | value |
 | `CONTEXT_WINDOW_FLOOR` | value |
@@ -185,6 +186,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveSettingSources` | value |
 | `resolveTrustPosture` | value |
 | `Retry` | value |
+| `runAgentTurn` | value |
 | `RunContextCapability` | value |
 | `runInputGuards` | value |
 | `runOutputGuards` | value |
@@ -267,6 +269,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
 | `AgentTurnMetadata` | type |
+| `AgentTurnOutcome` | type |
 | `AgentWithNarrowedListAlias` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
@@ -404,6 +407,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ResolvedCompatSource` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
+| `RunAgentTurnOptions` | type |
 | `RunEvent` | type |
 | `RunStartedEvent` | type |
 | `RuntimeOverrides` | type |
@@ -484,6 +488,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `compileProjectContext` | value |
 | `compileSkills` | value |
 | `compileTools` | value |
+| `completeFromTurn` | value |
 | `ContextualTool` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
@@ -531,6 +536,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveCompatSources` | value |
 | `resolveMcpServers` | value |
 | `resolveSettingSources` | value |
+| `runAgentTurn` | value |
 | `runWithApiErrorHandling` | value |
 | `shouldAutoApprove` | value |
 | `streamAgentResponse` | value |
@@ -559,6 +565,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
 | `AgentTurnMetadata` | type |
+| `AgentTurnOutcome` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
 | `ApiErrorPolicy` | type |
@@ -610,6 +617,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
 | `ResolvedCompatSource` | type |
+| `RunAgentTurnOptions` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
 | `Scorer` | type |
@@ -963,6 +971,7 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `agentRunPort` | value |
 | `buildEnvContext` | value |
 | `buildRepoMap` | value |
 | `CatastrophicCommandError` | value |
@@ -1007,6 +1016,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DEFAULT_TOOL_GUIDANCE` | value |
 | `DelegateToolConfigError` | value |
 | `denyCatastrophicCommands` | value |
+| `fileTransientJob` | value |
 | `formatCode` | value |
 | `formatDiff` | value |
 | `formatError` | value |
@@ -1361,6 +1371,7 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `checks` | value |
 | `diagnose` | value |
 | `DiagnosticBundleError` | value |
 | `installDiagnosticSink` | value |
@@ -1368,10 +1379,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `secretPresence` | value |
 | `writeDiagnosticBundle` | value |
 | `Check` | type |
+| `CredentialState` | type |
 | `Diagnosis` | type |
 | `DiagnosticDestination` | type |
 | `InstallDiagnosticSinkOptions` | type |
 | `SecretPresence` | type |
+| `SettingsFileReport` | type |
 | `WriteDiagnosticBundleOptions` | type |
 
 ## `@theokit/agents/usage`
