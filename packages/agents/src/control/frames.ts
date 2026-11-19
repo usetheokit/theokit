@@ -29,21 +29,23 @@ export function parseControlFrame(raw: string): ControlClientFrame | undefined {
     return undefined
   }
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-  const frame = value as Record<string, unknown>
-  switch (frame['type']) {
+  const { type, message, session } = value as {
+    type?: unknown
+    message?: unknown
+    session?: unknown
+  }
+  switch (type) {
     case 'chat':
-      if (!isNonEmptyString(frame['message'])) return undefined
-      if (frame['session'] === undefined) return { type: 'chat', message: frame['message'] }
-      if (!isNonEmptyString(frame['session'])) return undefined
-      return { type: 'chat', message: frame['message'], session: frame['session'] }
+      if (!isNonEmptyString(message)) return undefined
+      if (session === undefined) return { type: 'chat', message }
+      if (!isNonEmptyString(session)) return undefined
+      return { type: 'chat', message, session }
     case 'interrupt':
-      if (!isNonEmptyString(frame['session'])) return undefined
-      return { type: 'interrupt', session: frame['session'] }
+      if (!isNonEmptyString(session)) return undefined
+      return { type: 'interrupt', session }
     case 'steer':
-      if (!isNonEmptyString(frame['session']) || !isNonEmptyString(frame['message'])) {
-        return undefined
-      }
-      return { type: 'steer', session: frame['session'], message: frame['message'] }
+      if (!isNonEmptyString(session) || !isNonEmptyString(message)) return undefined
+      return { type: 'steer', session, message }
     default:
       return undefined
   }
