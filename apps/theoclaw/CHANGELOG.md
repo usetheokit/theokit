@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The TUI folds a turn's text and tool status with `@theokit/tui`'s `useAgentStream` instead of its own reducer; `tui/frames.ts` keeps only the control-frame adapter and its interrupted/error notices (#1785).
+
 ### Fixed
 
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
