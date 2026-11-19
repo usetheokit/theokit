@@ -151,3 +151,28 @@ describe('generate catch-all is terminal (EC-9)', () => {
     expect(out).not.toMatch(/path: '\*'[^}]*children: \[\{[^]]*path:/)
   })
 })
+
+describe('generateRouteManifest repeated dynamic folder names', () => {
+  it('declares a distinct identifier per page and binds each route to its own', () => {
+    mkpage('tasks/[id]')
+    mkpage('plans/[id]')
+    for (const lazyPages of [true, false]) {
+      const out = generateRouteManifest(scanRoutes(app), { lazyPages })
+      const decls = [...out.matchAll(/^(?:const|import) (Page__id_\w*)\b/gm)].map((m) => m[1])
+      expect(decls).toHaveLength(2)
+      expect(new Set(decls).size).toBe(2)
+      const routesSrc = out.slice(out.indexOf('export const routes'))
+      for (const dir of ['tasks', 'plans']) {
+        const importLine = out.split('\n').find((l) => l.includes(`${dir}/[id]/page.tsx`))
+        const imported = decls.find((d) => importLine?.includes(`${d} `))
+        expect(imported).toBeDefined()
+        const fromRoute = routesSrc.slice(routesSrc.indexOf(`path: '${dir}'`))
+        const used = /React\.createElement\((Page__id_\w*)\)/.exec(fromRoute)?.[1]
+        expect(used).toBe(imported)
+      }
+      expect(out).toContain("'/tasks/:id'")
+      expect(out).toContain("'/plans/:id'")
+      expect(out.match(/React\.createElement\(Page__id_\w*\)/g)).toHaveLength(2)
+    }
+  })
+})
