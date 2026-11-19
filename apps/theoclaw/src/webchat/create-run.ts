@@ -60,8 +60,10 @@ function startTurn(
     wake?.()
     wake = undefined
   }
-  const push = (event: TurnEvent): void => {
+  const push = (turnEvent: TurnEvent | StreamEvent): void => {
     if (closed) return
+    // The queue holds the open wire shape; the typed event spreads into it.
+    const event: StreamEvent = { ...turnEvent }
     sawError ||= event.type === 'error'
     answered ||= event.type === 'error' || event.type === 'done'
     if (held !== undefined) held.after.push(event)
