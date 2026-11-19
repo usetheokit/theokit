@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import type { Writable } from 'node:stream'
 
+import { diagnose, renderDiagnosis, type Check } from '@theokit/agents/doctor'
+
 import { auditConfiguration, fixFindings } from '../security-audit.js'
 import { configurationPath, loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -63,39 +65,55 @@ function repair(io: DoctorIo): string[] {
   return lines
 }
 
-export function doctor(io: DoctorIo, options: { readonly fix?: boolean } = {}): number {
+/**
+ * TheoClaw's checks, in the framework's shape. The configuration file is loaded into a copy of the
+ * environment first, because the model, credential and policy checks read what it sets.
+ */
+export function doctorChecks(io: DoctorIo): Check[] {
   const env: NodeJS.ProcessEnv = { ...io.env }
-  if (options.fix === true) for (const line of repair(io)) io.stdout.write(`${line}\n`)
-  const failures: string[] = []
+  const checks: Check[] = []
   let path = configurationPath(env, io.homeDir)
   try {
     path = loadConfiguration(env, io.homeDir) ?? path
+    checks.push({ name: 'config', status: 'ok', detail: path })
   } catch (error) {
-    failures.push((error as TheoClawConfigError).message)
+    checks.push({ name: 'config', status: 'fail', detail: (error as TheoClawConfigError).message })
   }
-  io.stdout.write(`config: ${path}\n`)
   try {
     requireModel(env)
+    checks.push({ name: 'model', status: 'ok', detail: 'the model settings are complete' })
   } catch (error) {
-    failures.push(error instanceof TheoClawConfigError ? error.message : 'the model settings cannot be read')
+    const detail = error instanceof TheoClawConfigError ? error.message : 'the model settings cannot be read'
+    checks.push({ name: 'model', status: 'fail', detail })
   }
   const stateDir = (env.THEOCLAW_STATE_DIR ?? '').trim()
-  if (stateDir !== '' && !existsSync(stateDir)) failures.push('THEOCLAW_STATE_DIR names a directory that does not exist (fixable with --fix)')
+  if (stateDir !== '' && !existsSync(stateDir)) {
+    const detail = 'THEOCLAW_STATE_DIR names a directory that does not exist (fixable with --fix)'
+    checks.push({ name: 'state directory', status: 'fail', detail })
+  }
   for (const key of KEYS) {
     const value = env[key]
     const defect = value === undefined || value.trim() === '' ? undefined : credentialDefect(value)
-    if (defect !== undefined) failures.push(`${key} ${defect}`)
+    if (defect !== undefined) checks.push({ name: 'credential', status: 'fail', detail: `${key} ${defect}` })
   }
-  failures.push(...checkPolicy(env, path))
-  const warnings = (() => {
-    try {
-      return auditConfiguration(io.env, io.homeDir).map((finding) => `${finding.id}: ${finding.message}`)
-    } catch {
-      return []
+  const violations = checkPolicy(env, path)
+  for (const detail of violations) checks.push({ name: 'policy', status: 'fail', detail })
+  try {
+    for (const finding of auditConfiguration(io.env, io.homeDir)) {
+      checks.push({ name: 'security audit', status: 'warn', detail: `${finding.id}: ${finding.message}` })
     }
-  })()
-  for (const line of warnings) io.stdout.write(`warn  ${line}\n`)
-  for (const line of failures) io.stdout.write(`fail  ${line}\n`)
-  if (failures.length === 0) io.stdout.write('ok    the configuration can start a turn\n')
-  return failures.length === 0 ? 0 : 3
+  } catch {
+    // an unreadable configuration is reported by the config check
+  }
+  if (!checks.some((check) => check.status === 'fail')) {
+    checks.push({ name: 'start', status: 'ok', detail: 'the configuration can start a turn' })
+  }
+  return checks
+}
+
+export function doctor(io: DoctorIo, options: { readonly fix?: boolean } = {}): number {
+  if (options.fix === true) for (const line of repair(io)) io.stdout.write(`${line}\n`)
+  const diagnosis = diagnose(doctorChecks(io))
+  io.stdout.write(`${renderDiagnosis(diagnosis)}\n`)
+  return diagnosis.exitCode === 0 ? 0 : 3
 }

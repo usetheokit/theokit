@@ -16,6 +16,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - `close()` on a running instance now also stops the channel adapters and disposes the session agents; the signal shutdown, `close()` and both start failure paths share one teardown (#1784).
 - CodeQL alerts (#1726): the capture proxy forwards only `http:` URLs, `skills publish` and the control client accept only http(s) and ws(s) addresses, and `sessions share` creates its file without following a planted link.
 
+### Changed
+
+- `theoclaw doctor` is built on `@theokit/agents/doctor`: its checks are a list passed to `diagnose` and `renderDiagnosis`, so the output uses the framework's format. Exit codes are unchanged: 0, or 3 while a check fails (#1779).
+
 ### Added
 
 - An MCP server's event can start an automation: with `THEOCLAW_MCP_EVENTS_REPLY_TO=<platform>:<channel>`, TheoClaw subscribes (`events/subscribe`, Streamable HTTP, per-subscription HMAC callbacks) to the HTTP servers of `THEOCLAW_EXTERNAL_TOOLS`, posts "event received" to that chat and then the outcome of one tool-less run that treats the event as untrusted input. Optional `THEOCLAW_MCP_EVENTS_SERVERS`, `_CALLBACK_ORIGIN` (a public HTTPS origin), `_HOST`, `_PORT`, `_TYPES`, `_INSTRUCTIONS`. Needs `@theokit/sdk` 5.17.0 (raised, with the root override). Run against a local fake MCP server only, not a real events-profile server. (OC-115, #1545)
