@@ -49,6 +49,19 @@ interface Entry {
 const SIGNALS = ['SIGINT', 'SIGTERM'] as const
 const DEFAULT_STOP_TIMEOUT_MS = 10_000
 
+function rollbackFailuresOf(
+  result: Extract<AppHostCloseResult, { ok: false }>,
+  stopTimeoutMs: number,
+): AppHostStepFailure[] {
+  return [
+    ...result.failed,
+    ...result.timedOut.map((step) => ({
+      step,
+      error: new Error(`Stop did not finish within ${stopTimeoutMs} ms`),
+    })),
+  ]
+}
+
 export function createAppHost(options: AppHostOptions = {}): AppHost {
   const { signals, exit, stopTimeoutMs = DEFAULT_STOP_TIMEOUT_MS } = options
   const entries: Entry[] = []
@@ -84,13 +97,14 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     const pending = entries.filter((entry) => entry.started).reverse()
     const failed: AppHostStepFailure[] = []
     let timedOut: string[] = []
-    let expired = false
+    const state: { expired: boolean } = { expired: false }
     let current = 0
     let timer: ReturnType<typeof setTimeout> | undefined
 
+    const isExpired = (): boolean => state.expired
     const run = async (): Promise<void> => {
       for (; current < pending.length; current++) {
-        if (expired) return
+        if (isExpired()) return
         const entry = pending[current]
         entry.started = false
         try {
@@ -99,7 +113,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
           )
         } catch (error) {
           // After the watchdog fired the result is already returned; keep it stable.
-          if (!expired) failed.push({ step: entry.name, error })
+          if (!isExpired()) failed.push({ step: entry.name, error })
           report(entry.name, error)
         }
       }
@@ -112,7 +126,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     const outcome = await Promise.race([run().then(() => 'done' as const), watchdog])
     clearTimeout(timer)
     if (outcome === 'timeout') {
-      expired = true
+      state.expired = true
       timedOut = pending.slice(current).map((entry) => entry.name)
       for (const step of timedOut)
         report(step, new Error(`Stop did not finish within ${stopTimeoutMs} ms`))
@@ -135,15 +149,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       } catch (error) {
         const result = await teardown()
         removeListeners()
-        const rollbackFailures = result.ok
-          ? []
-          : [
-              ...result.failed,
-              ...result.timedOut.map((step) => ({
-                step,
-                error: new Error(`Stop did not finish within ${stopTimeoutMs} ms`),
-              })),
-            ]
+        const rollbackFailures = result.ok ? [] : rollbackFailuresOf(result, stopTimeoutMs)
         throw new AppHostStartError(entry.name, error, rollbackFailures)
       }
     }
