@@ -10,3 +10,5 @@
  */
 export { bindToolScope, sandboxWritePolicy } from './tool-scope.js'
 export type { SandboxWritePolicy, ToolScope, ToolScopeInput } from './tool-scope.js'
+export { isWithin, resolveRealPath, SymlinkLoopError } from './real-path.js'
+export { createPathVetoPlugin, vetoPathCall } from './path-veto.js'

@@ -25,3 +25,12 @@ export type { CompiledInspection } from './inspect-compiled.js'
  * (`tests/unit/every-public-type-crosses-the-barrel.test.ts`).
  */
 export type { AgentOutputEvent } from '@theokit/presenter'
+
+// The live-suite provider-key guard, published so apps stop copying it.
+export {
+  LIVE_KEY_NAMES,
+  MissingProviderKeyError,
+  assertProviderKeyWhenRequired,
+  requireProviderKeySetup,
+  type ProviderKeyGuardOptions,
+} from './provider-key.js'

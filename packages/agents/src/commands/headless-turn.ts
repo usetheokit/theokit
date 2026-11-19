@@ -38,7 +38,6 @@ const DEFAULT_EXIT_CODES: Record<HeadlessOutcome, number> = { ok: 0, error: 1, e
 export class EmptyPromptError extends TheokitAgentError {
   override readonly name = 'EmptyPromptError'
   readonly code = 'empty_prompt'
-  readonly isRetryable = false
 
   constructor(message = 'No prompt: pass one as an argument or on stdin.') {
     super(message)

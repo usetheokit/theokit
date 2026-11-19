@@ -176,3 +176,17 @@ describe('an unknown mode fails loud instead of guessing', () => {
     expect(() => sandboxWritePolicy('' as SandboxMode, '/proj')).toThrow(/danger-full-access/)
   })
 })
+
+describe('protectedPaths', () => {
+  it('defaults to none, resolves relative entries against projectRoot, and copies the input', () => {
+    expect(bindToolScope({ projectRoot: '/proj', sandbox: fakeSandbox }).protectedPaths).toEqual([])
+    const input = ['.state', '/abs/dir']
+    const scope = bindToolScope({
+      projectRoot: '/proj',
+      sandbox: fakeSandbox,
+      protectedPaths: input,
+    })
+    input.push('/later')
+    expect(scope.protectedPaths).toEqual(['/proj/.state', '/abs/dir'])
+  })
+})

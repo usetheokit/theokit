@@ -98,3 +98,10 @@ export {
   type Liveness,
   type LivenessVerdict,
 } from './liveness-oracle.js'
+
+// #1850 — re-run a one-shot turn on a fork id when the session is busy.
+export {
+  ForkedSessionBusyError,
+  streamTurnForkingIfBusy,
+  type ForkIfBusyOptions,
+} from './fork-if-busy.js'
