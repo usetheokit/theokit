@@ -89,8 +89,12 @@ describe('the committed capability map is what the package implies', () => {
   })
 
   it('test_the_map_lists_the_recent_config_exports', () => {
+    const start = rendered.indexOf('## `@theokit/agents/config`')
+    expect(start, 'the map has no @theokit/agents/config section').toBeGreaterThanOrEqual(0)
+    const next = rendered.indexOf('\n## ', start + 1)
+    const section = rendered.slice(start, next === -1 ? undefined : next)
     for (const name of ['parseDottedOverrides', 'DottedOverrideError', 'applyOutputStyle']) {
-      expect(rendered, `${name} is missing from the generated map`).toContain(`\`${name}\``)
+      expect(section, `${name} is missing from the config section`).toContain(`\`${name}\``)
     }
   })
 })
