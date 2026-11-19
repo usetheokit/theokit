@@ -220,7 +220,7 @@ describe('the real adapter entry points', () => {
     expect(Agent.registry.get(id)).toBeUndefined()
   })
 
-  it('a later factory without guardrails cannot strip an earlier factory\'s guards', async () => {
+  it("a later factory without guardrails cannot strip an earlier factory's guards", async () => {
     const id = nextId()
     const block = { name: 'b', checkInput: () => ({ action: 'block' as const, reason: 'no' }) }
     const guarded = await factory({ guardrails: [block] })(id)
