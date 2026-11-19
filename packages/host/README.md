@@ -57,7 +57,7 @@ config.watch(path, process.env, {
 
 ## `@theokit/host/service`
 
-Install an agent app as a login service and restart it through its supervisor. Linux (`systemd --user`) and macOS (launchd LaunchAgent) exist today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
+Install an agent app as a login service and restart it through its supervisor. Linux (`systemd --user`), macOS (launchd LaunchAgent) and Windows (Task Scheduler) exist today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
 
 ```ts
 import { serviceBackend, isSupervised, restartSelf, waitForPredecessor } from '@theokit/host/service'
@@ -77,6 +77,15 @@ console.log(await backend.status('my-agent')) // 'running' | 'stopped' | 'not-in
 - A value the unit cannot hold (a line break, a bad label) throws `ServiceDefinitionError` naming the field, never the value. `%` is doubled everywhere and `$` in `ExecStart=`, per systemd.syntax(7).
 - macOS: `serviceBackend('darwin', { uid: process.getuid(), logFile })` writes `~/Library/LaunchAgents/<label>.plist` and runs `launchctl bootout` (a missing service is no error) then `launchctl bootstrap gui/<uid>`. `install` without `uid` throws `ServiceDefinitionError`. stdout and stderr go to `logFile`, default `~/Library/Logs/<label>.log`. A failing `bootstrap` removes the plist and throws `ServiceCommandError`. `KeepAlive` restarts the agent only after a non-zero exit, so `restartSelf` (exit code 75) restarts it and a clean stop stays stopped. `uninstall` keeps the plist when `bootout` fails and `launchctl print` does not say the service is absent (exit 113). `restart` runs `launchctl kickstart -k gui/<uid>/<label>`. `launchdPlist(spec, { logFile })` returns the XML-escaped plist text.
 - The unit stops at logout unless lingering is on: run `loginctl enable-linger <user>` to keep it running.
+
+### Windows (Task Scheduler)
+
+`serviceBackend('win32')` registers a logon-triggered scheduled task named by `label` (least privilege, no time limit, restart after failure every minute) from a UTF-16 XML file kept in a fresh private temporary directory and removed afterwards. `scheduledTaskXml(spec, { user })` returns the definition.
+
+- **A task carries no environment.** `install` with a non-empty `spec.env` throws `ServiceDefinitionError`: pass the values as `args` instead. Every argument is quoted per the `CommandLineToArgvW` rules.
+- The task runs as `USERDOMAIN\USERNAME` from `options.env`; without `USERNAME`, `install` throws `ServiceDefinitionError`. `command` and `workingDirectory` must be Windows absolute paths.
+- A failing `/Create` or `/Run` deletes the task and throws `ServiceCommandError`.
+- State is read through `Get-ScheduledTask` (`schtasks` output is localised). `uninstall` stops the task's process tree, then deletes the task; a failed `/Delete` counts as success only when PowerShell confirms the task is absent. `definitionPath` returns the task name.
 
 Restart from inside the app:
 
