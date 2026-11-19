@@ -44,8 +44,9 @@ function isBusyCodePart(chunk: UIMessageChunk): boolean {
  * Run one turn; if the session is busy (another process is writing it), run the turn once on a fork
  * id instead. Structural chunks are held until the first content chunk so a contended first attempt
  * emits nothing. Contention is the `data-error-code {code:'session_busy'}` part followed by an
- * `error` chunk. On the first attempt a busy signal after content was already emitted cannot be retracted and is
- * passed through; on the fork it throws `ForkedSessionBusyError`. `sessionId` settles once the stream finishes (or fails); consume `chunks` first.
+ * `error` chunk. On the first attempt a busy signal after content was already emitted cannot be
+ * retracted and is passed through; on the fork it throws `ForkedSessionBusyError`. `sessionId`
+ * settles once the stream finishes (or fails); consume `chunks` first.
  */
 export function streamTurnForkingIfBusy(
   sessionId: string,
