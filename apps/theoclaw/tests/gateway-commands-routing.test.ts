@@ -58,3 +58,11 @@ describe('agent routing through the gateway bindings', () => {
     )
   })
 })
+
+describe('gateway bindings refuse what the old router ignored', () => {
+  it('rejects a rule that names no platform, account or peer', () => {
+    expect(() =>
+      createAgentRouter({ defaultAgent: 'main', agents: [{ id: 'main', workspace: '/m' }], routes: [{ agent: 'main' }] }),
+    ).toThrow(/empty_binding_rule/)
+  })
+})

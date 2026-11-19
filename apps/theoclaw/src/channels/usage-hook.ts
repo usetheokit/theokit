@@ -1,5 +1,5 @@
 import { parseChatCommand } from '@theokit/gateway'
-import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
+import type { ChatCommand, GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
 
 import { sessionKeyFor } from '../sessions/session-key.js'
 import type { UsageFooterMode } from '../usage/turn-usage.js'
@@ -19,6 +19,12 @@ export interface UsageHook {
 }
 
 const HOOK_NAME = 'theoclaw-usage'
+/** What `/help` says about the command this hook answers. */
+export const USAGE_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
+  name: 'usage',
+  usage: '/usage off|tokens|cost|full',
+  description: 'the usage footer of replies',
+}
 const USAGE_TEXT = 'Use /usage off, /usage tokens, /usage cost or /usage full.'
 const MODES: ReadonlySet<string> = new Set<UsageMode>(['off', 'tokens', 'cost', 'full'])
 

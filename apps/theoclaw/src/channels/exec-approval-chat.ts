@@ -1,5 +1,5 @@
 import { parseChatCommand } from '@theokit/gateway'
-import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
+import type { ChatCommand, GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
 
 import type { ExecApprovalOptions, PersonReply } from '../tools/exec-approval.js'
 
@@ -9,6 +9,15 @@ export const ELEVATED_VARIABLE = 'THEOCLAW_ELEVATED'
 export const EXEC_APPROVAL_TIMEOUT_MS = 120_000
 
 const HOOK_NAME = 'theoclaw-exec-approval-chat'
+/** What `/help` says about the commands this hook answers. */
+export const EXEC_DESCRIPTIONS: readonly Pick<ChatCommand, 'name' | 'usage' | 'description'>[] = [
+  { name: 'approve', usage: '/approve [always], /deny', description: 'answer an exec waiting for approval' },
+  {
+    name: 'elevated',
+    usage: '/elevated on|off',
+    description: "run this session's shell outside the sandbox, without asking",
+  },
+]
 /** The id of a session's agent is `theoclaw-<session key>-g<generation>` (`agentIdFor`). */
 const AGENT_ID = /^theoclaw-(.+)-g\d+$/
 

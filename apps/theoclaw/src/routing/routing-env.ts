@@ -42,8 +42,10 @@ export function createAgentRouter(config: {
       rules: config.routes as readonly AgentBindingRule[],
     })
   } catch (error) {
-    const agent = (error as { detail?: unknown }).detail
-    throw new Error(`routing names an unconfigured agent: ${typeof agent === 'string' ? agent : (error as Error).message}`)
+    const { code, detail } = error as { code?: unknown; detail?: unknown }
+    // Any other refusal (an empty rule) keeps the gateway's own message.
+    if (code !== 'unknown_agent') throw error
+    throw new Error(`routing names an unconfigured agent: ${String(detail)}`)
   }
   return {
     route({ platform, peer }) {

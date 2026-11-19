@@ -1,11 +1,17 @@
 import { parseChatCommand } from '@theokit/gateway'
-import type { GatewayHook, MessageEvent } from '@theokit/gateway'
+import type { ChatCommand, GatewayHook, MessageEvent } from '@theokit/gateway'
 import type { AcpToolTransport } from 'theokit/server/agent'
 
 import type { AcpAgentConfig } from '../tools/external-tools.js'
 import { scrubbedAgentTransport } from '../tools/acp-transport.js'
 
 const HOOK_NAME = 'theoclaw-acp-command'
+/** What `/help` says about the command this hook answers. */
+export const ACP_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
+  name: 'acp',
+  usage: '/acp start <agent>|list|stop <id>',
+  description: 'run, list and stop ACP agent sessions',
+}
 const USAGE = 'Use /acp start <agent>, /acp list or /acp stop <id>.'
 
 /** One running ACP agent session the owner started. */
