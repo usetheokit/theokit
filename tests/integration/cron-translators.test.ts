@@ -211,6 +211,18 @@ describe('Deno cron context queue', () => {
     expect(content).toContain('no jobs.backend')
   })
 
+  it('wires the configured jobs.backend and a per-run outbox when given the config import', () => {
+    const entry = join(root, 'crons-wired-entry.ts')
+    translateCronToDeno(entry, [cron('q', '* * * * *')], { configImport: '../theo.config.ts' })
+    const content = readFileSync(entry, 'utf8')
+    expect(content).toContain('from "theokit/server/jobs"')
+    expect(content).toContain('"../theo.config.ts"')
+    expect(content).toContain('createHandlerQueue(backend')
+    expect(content).toContain('run.discard()')
+    expect(content).toContain('await run.flush()')
+    expect(content).not.toContain('unavailableQueue')
+  })
+
   it('generates a queue that type-checks as a QueueClient', () => {
     const file = join(root, 'queue-typecheck.ts')
     const queueTypes = resolve('packages/theo/src/server/jobs/queue-client.ts')

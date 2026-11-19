@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { relative, resolve, sep } from 'node:path'
 
 // T1.1 (architecture-medium-deferrals) — nodeAdapter no longer static-imported.
 // All adapters dispatch via `adapterRegistry` (lazy-imported within runAdapterBuild).
@@ -313,7 +313,9 @@ async function emitCronArtifacts(opts: {
         console.log(`  ✓ Cron → serverless.yml functions (${cronNodes.length})`)
         break
       case 'deno-deploy':
-        translateCronToDeno(resolve(opts.distDir, 'crons-entry.ts'), manifestEntries)
+        translateCronToDeno(resolve(opts.distDir, 'crons-entry.ts'), manifestEntries, {
+          configImport: denoConfigImport(opts.cwd, opts.distDir),
+        })
         console.log(`  ✓ Cron → ${opts.distDir}/crons-entry.ts (Deno.cron)`)
         break
       case 'node':
@@ -324,6 +326,14 @@ async function emitCronArtifacts(opts: {
     if (err instanceof ExistingConfigUnparseableError) throw err
     throw err
   }
+}
+
+/** Import specifier of theo.config.ts as seen from the Deno cron entry, or undefined without one. */
+function denoConfigImport(cwd: string, distDir: string): string | undefined {
+  const config = resolve(cwd, 'theo.config.ts')
+  if (!existsSync(config)) return undefined
+  const rel = relative(resolve(distDir), config).split(sep).join('/')
+  return rel.startsWith('.') ? rel : `./${rel}`
 }
 
 async function emitJobArtifacts(opts: {

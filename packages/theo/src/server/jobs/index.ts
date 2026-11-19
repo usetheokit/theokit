@@ -42,6 +42,7 @@ export type { Outbox, OutboxFlushOptions } from './outbox.js'
 export {
   createQueueClient,
   createOutboxDispatcher,
+  createHandlerQueue,
   TransactionalEnqueueUnsupportedError,
   TransactionalCancelUnsupportedError,
 } from './queue-client.js'
