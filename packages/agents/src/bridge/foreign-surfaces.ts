@@ -1,4 +1,4 @@
-import { lstatSync, readdirSync, readFileSync, statSync, type Stats } from 'node:fs'
+import { lstatSync, readdirSync, realpathSync, readFileSync, statSync, type Stats } from 'node:fs'
 import { join } from 'node:path'
 
 import { splitFrontmatter } from '../config/frontmatter.js'
@@ -28,7 +28,14 @@ export interface ForeignSurfaceEntry {
   readonly names?: readonly string[]
 }
 
-type Kind = 'agent-md' | 'command-md' | 'agent-memory' | 'scripts' | 'plugin-bundles'
+type Kind =
+  | 'agent-md'
+  | 'skill-dirs'
+  | 'rule-md'
+  | 'command-md'
+  | 'agent-memory'
+  | 'scripts'
+  | 'plugin-bundles'
 
 interface Folder {
   readonly dir: string
@@ -46,9 +53,9 @@ const SURFACE_FOLDERS: Record<CompatSurface, readonly Folder[]> = {
   ],
   commands: [{ dir: 'commands', kind: 'command-md' }],
   plugins: [{ dir: 'plugins', kind: 'plugin-bundles' }],
-  context: [],
+  context: [{ dir: 'rules', kind: 'rule-md' }],
   hooks: [],
-  skills: [],
+  skills: [{ dir: 'skills', kind: 'skill-dirs' }],
 }
 
 /** Folders no gate surface ever loads. */
@@ -96,8 +103,23 @@ function countsAgentMd(abs: string, name: string): boolean {
  * The command loader walks subfolders and takes every `.md` whose frontmatter, if any, closes. A
  * failure is recorded against the failing entry's own path, so readable siblings still count.
  */
-function walkCommands(abs: string, rel: string, out: Count): void {
+function walkCommands(
+  abs: string,
+  rel: string,
+  out: Count,
+  ancestors: readonly string[] = [],
+): void {
   let entries: string[]
+  let real: string
+  try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+    real = realpathSync(abs)
+  } catch {
+    out.unreadable.push(rel)
+    return
+  }
+  // A link back to a folder already being walked would count the same commands again.
+  if (ancestors.includes(real)) return
   try {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
     entries = readdirSync(abs).sort((a, b) => a.localeCompare(b))
@@ -110,7 +132,7 @@ function walkCommands(abs: string, rel: string, out: Count): void {
     try {
       const stats = statIfPresent(path)
       if (stats?.isDirectory()) {
-        walkCommands(path, `${rel}/${name}`, out)
+        walkCommands(path, `${rel}/${name}`, out, [...ancestors, real])
       } else if (stats?.isFile() && name.endsWith('.md')) {
         // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
         if (splitFrontmatter(readFileSync(path, 'utf8')) !== undefined) out.count++
@@ -131,7 +153,9 @@ function countsScript(abs: string, name: string): boolean {
 }
 
 function countsPluginBundle(abs: string, name: string): boolean {
-  if (!statIfPresent(join(abs, name))?.isDirectory()) return false
+  // The SDK walks directory entries and skips symlinks, so a linked bundle is not loaded.
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+  if (!lstatSync(join(abs, name)).isDirectory()) return false
   const skills = join(abs, name, 'skills')
   if (!statIfPresent(skills)?.isDirectory()) return false
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
@@ -139,8 +163,22 @@ function countsPluginBundle(abs: string, name: string): boolean {
   return true
 }
 
+/** `.claude/skills/<name>/SKILL.md`; the SDK walks real subfolders only. */
+function countsSkillDir(abs: string, name: string): boolean {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same convention
+  if (!lstatSync(join(abs, name)).isDirectory()) return false
+  return readRegularFile(join(abs, name, 'SKILL.md')) !== undefined
+}
+
+/** `.claude/rules/*.md`: a rule needs no frontmatter, so every readable `.md` file counts. */
+function countsRuleMd(abs: string, name: string): boolean {
+  return name.endsWith('.md') && readRegularFile(join(abs, name)) !== undefined
+}
+
 const COUNTERS: Record<Exclude<Kind, 'command-md'>, (abs: string, name: string) => boolean> = {
   'agent-md': countsAgentMd,
+  'skill-dirs': countsSkillDir,
+  'rule-md': countsRuleMd,
   'agent-memory': countsAgentMemory,
   scripts: countsScript,
   'plugin-bundles': countsPluginBundle,

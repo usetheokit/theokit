@@ -124,4 +124,33 @@ describe('foreign surface inventory', () => {
     expect(e.reason).toBeDefined()
     expect(e.count).toBe(1)
   })
+
+  it('skills counts real subfolders holding a SKILL.md, and is refused when left out', () => {
+    const cwd = project({ 'skills/a/SKILL.md': '---\nname: a\n---\n', 'skills/b/notes.md': 'x' })
+    symlinkSync('a', join(cwd, '.claude', 'skills', 'linked'))
+    expect(get(cwd, 'skills').count).toBe(1)
+    expect(get(cwd, 'skills').state).toBe('read')
+    expect(get(cwd, 'skills', ['commands']).state).toBe('refused')
+  })
+
+  it('context (.claude/rules) counts .md files without needing frontmatter, and is refused when left out', () => {
+    const cwd = project({ 'rules/r.md': 'plain', 'rules/n.txt': 'x', 'rules/sub/deep.md': 'x' })
+    expect(get(cwd, 'rules').count).toBe(1)
+    expect(get(cwd, 'rules').state).toBe('read')
+    expect(get(cwd, 'rules', ['skills']).state).toBe('refused')
+  })
+
+  it('a commands symlink back to its parent does not inflate the count or fail', () => {
+    const cwd = project({ 'commands/a.md': 'x' })
+    symlinkSync('.', join(cwd, '.claude', 'commands', 'loop'))
+    const e = get(cwd, 'commands')
+    expect(e.count).toBe(1)
+    expect(e.unreadable).toEqual([])
+  })
+
+  it('plugins skips a symlinked bundle, as the SDK does', () => {
+    const cwd = project({ 'plugins/p1/skills/s.md': 'x' })
+    symlinkSync('p1', join(cwd, '.claude', 'plugins', 'p2'))
+    expect(get(cwd, 'plugins').count).toBe(1)
+  })
 })
