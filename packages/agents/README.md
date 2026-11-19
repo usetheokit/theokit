@@ -264,6 +264,20 @@ Gitignored files are not in a fresh worktree. List them in `.worktreeinclude` at
 literal repo-relative file or directory per line, `#` comments allowed; the `include` option renames
 the file) and they are copied in. A path that escapes the repository is refused.
 
+## Turning a pushed event stream into an iterable
+
+`streamFromEmitter(start, { signal, isFinal, onError })` from `@theokit/agents/bridge` returns an
+`AsyncIterable` for a producer that pushes events to a callback. `return()` aborts the producer's signal
+at once, unless a final event (`done` or `error` by default) was already seen. A rejecting producer
+yields the `onError` event, unless an error event already went out.
+
+```ts
+generateAgentRoutes({
+  createRun: (m, s, signal) =>
+    streamFromEmitter((emit, sig) => runAgentTurn(/* ... */ emit, sig), { signal }),
+})
+```
+
 ## What changed recently
 
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
