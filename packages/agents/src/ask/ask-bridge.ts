@@ -116,12 +116,21 @@ export interface AskBridge {
     listener: (question: PendingQuestion) => void,
     options?: ListenerOptions,
   ): DisposeListener
+  /** The question pending on this thread, or undefined. A read, never a second listener. */
+  pending(threadId: string): PendingQuestion | undefined
+  /**
+   * Called after any change to the pending set: a question asked, answered, abandoned or failed.
+   * Any number of observers; each call returns its own disposer. Observers run after the state
+   * changed, cannot settle anything, and a throwing observer does not affect the others.
+   */
+  onChange(listener: (threadId: string) => void): DisposeListener
 }
 
 interface Pending {
   readonly id: string
+  readonly question: string
   readonly settle: (answer: string) => void
-  readonly fail: (error: Error) => void
+  readonly fail: (error: Error, silent?: boolean) => void
 }
 
 interface Listener {
@@ -141,9 +150,26 @@ export function createAskBridge(): AskBridge {
   const pendingById = new Map<string, Pending & { threadId: string }>()
   const listeners = new Map<string, Listener>()
 
-  const forget = (threadId: string, id: string): void => {
+  const observers = new Set<(threadId: string) => void>()
+
+  const emit = (threadId: string): void => {
+    for (const observer of [...observers]) {
+      try {
+        observer(threadId)
+      } catch {
+        // An observer is a read-side convenience; it must not break settlement or its siblings.
+      }
+    }
+  }
+
+  const forget = (threadId: string, id: string, silent = false): void => {
     pendingByThread.delete(threadId)
     pendingById.delete(id)
+    if (!silent) emit(threadId)
+  }
+
+  const entryFail = (threadId: string, error: Error): void => {
+    pendingByThread.get(threadId)?.fail(error)
   }
 
   return {
@@ -164,12 +190,13 @@ export function createAskBridge(): AskBridge {
       const promise = new Promise<string>((resolve, reject) => {
         const entry: Pending = {
           id,
+          question,
           settle: (answer) => {
             forget(threadId, id)
             resolve(answer)
           },
-          fail: (error) => {
-            forget(threadId, id)
+          fail: (error, silent) => {
+            forget(threadId, id, silent)
             reject(error)
           },
         }
@@ -177,7 +204,28 @@ export function createAskBridge(): AskBridge {
         pendingById.set(id, { ...entry, threadId })
       })
 
-      listener.notify({ id, threadId, question })
+      emit(threadId)
+      // An observer may have answered or abandoned the question while reentering the bridge; the
+      // surface must not be shown a prompt that can no longer be answered.
+      if (pendingByThread.get(threadId)?.id === id) {
+        // An observer may also have swapped the thread's listener; the current one gets the prompt.
+        const current = listeners.get(threadId)
+        if (current === undefined) {
+          entryFail(threadId, new QuestionAbandonedError(threadId, 'the surface detached'))
+        } else {
+          try {
+            current.notify({ id, threadId, question })
+          } catch (error) {
+            // A throwing surface must not leave the question open: clear it, reject the ask and
+            // tell observers, so the thread is not stuck rejecting every later ask as concurrent.
+            // Only the question this call opened: the listener may already have settled it and
+            // started a replacement, which is not ours to fail.
+            if (pendingByThread.get(threadId)?.id === id) {
+              entryFail(threadId, error instanceof Error ? error : new Error(String(error)))
+            }
+          }
+        }
+      }
       return promise
     },
 
@@ -194,10 +242,18 @@ export function createAskBridge(): AskBridge {
       const entry = pendingByThread.get(threadId)
       // Cleanup runs at the end of every turn, and most turns asked nothing.
       if (entry === undefined) return false
+      // Settle first, so a throwing cleanup cannot leave the turn waiting or the thread occupied.
+      // Observers hear about it only after the surface cleanup: one may start a replacement
+      // question, and the old question's cleanup must not clear it.
       entry.fail(
         new QuestionAbandonedError(threadId, 'the run was cancelled or the surface detached'),
+        true,
       )
-      listeners.get(threadId)?.onAbandon?.(threadId)
+      try {
+        listeners.get(threadId)?.onAbandon?.(threadId)
+      } finally {
+        emit(threadId)
+      }
       return true
     },
 
@@ -212,6 +268,22 @@ export function createAskBridge(): AskBridge {
         // Only remove OUR listener: a disposer called after another surface took the slot must not
         // detach that one. Calling it twice is a no-op by the same check.
         if (listeners.get(threadId) === entry) listeners.delete(threadId)
+      }
+    },
+
+    pending(threadId) {
+      const entry = pendingByThread.get(threadId)
+      return entry === undefined ? undefined : { id: entry.id, threadId, question: entry.question }
+    },
+
+    onChange(listener) {
+      // Wrap so registering the same function twice yields two independent disposers.
+      const observer = (threadId: string): void => {
+        listener(threadId)
+      }
+      observers.add(observer)
+      return () => {
+        observers.delete(observer)
       }
     },
   }
