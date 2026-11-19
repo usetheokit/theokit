@@ -243,3 +243,14 @@ export {
  * (`tests/unit/every-public-type-crosses-the-barrel.test.ts`).
  */
 export type { PermissionMode } from '@theokit/sdk'
+
+/**
+ * Secret references in configuration: `secretref:env:`, `secretref:file:`, `op://` (1Password) and
+ * `secretref:vault:` values resolved once at start, with the resolved values returned for masking.
+ */
+export {
+  builtinSecretStores,
+  resolveSecretRefs,
+  SecretReferenceError,
+  type SecretStore,
+} from './auth/secret-refs.js'

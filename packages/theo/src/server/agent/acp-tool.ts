@@ -89,7 +89,11 @@ export class AcpTurnStoppedError extends Error {
 }
 
 export interface AcpToolConfig {
-  /** Executable for the coding agent (e.g. `claude`, `amp`, `codex`). */
+  /**
+   * Executable for the coding agent (e.g. `claude`, `amp`, `codex`): an absolute path, or a bare name
+   * found on an absolute `PATH` entry (`env.PATH` when `env` is given). A relative path (`./agent`)
+   * or one that is not found closes the transport before anything is spawned.
+   */
   command: string
   /** Command-line arguments. */
   args?: string[]
@@ -97,7 +101,8 @@ export interface AcpToolConfig {
   cwd?: string
   /**
    * The spawned agent's whole environment: when given, the agent sees exactly these variables and
-   * none of the parent's (so channel tokens stay out of it). Omitted, it inherits `process.env`.
+   * none of the parent's (so channel tokens stay out of it). Omitted, it inherits `process.env`. Either
+   * way the agent's `PATH` keeps only its absolute entries.
    */
   env?: Record<string, string | undefined>
   /**

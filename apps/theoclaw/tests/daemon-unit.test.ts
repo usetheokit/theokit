@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -7,6 +7,20 @@ import { daemonInstall, unitFor, unitPath } from '../src/daemon.js'
 import { harness, systemctl } from './support/daemon-harness.js'
 
 describe('theoclaw daemon unit file', () => {
+  it('writes the unit with the mode the umask allows, also when it puts the previous unit back', async () => {
+    const old = process.umask(0o077)
+    try {
+      const h = harness({ answers: { 'systemctl restart': [{}, { code: 1, stderr: 'Job failed' }] } })
+      expect(await daemonInstall(h.io, h.runner)).toBe(0)
+      const path = unitPath('theoclaw', h.home)
+      expect(statSync(path).mode & 0o777).toBe(0o600)
+      expect(await daemonInstall({ ...h.io, nodePath: '/opt/other/node' }, h.runner)).toBe(1)
+      expect(statSync(path).mode & 0o777).toBe(0o600)
+    } finally {
+      process.umask(old)
+    }
+  })
+
   it('daemon refuses a missing built entry and writes no unit', async () => {
     const h = harness()
     rmSync(h.io.entry)
