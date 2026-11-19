@@ -1,12 +1,4 @@
-import {
-  mkdtempSync,
-  writeFileSync,
-  statSync,
-  mkdirSync,
-  readdirSync,
-  chmodSync,
-  existsSync,
-} from 'node:fs'
+import { mkdtempSync, writeFileSync, statSync, mkdirSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'

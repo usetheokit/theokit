@@ -1,17 +1,5 @@
-import {
-  mkdtempSync,
-  writeFileSync,
-  statSync,
-  mkdirSync,
-  readdirSync,
-  chmodSync,
-  existsSync,
-} from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { defineInstanceConfig, InstanceConfigError } from '../../src/instance-config/index.js'
-const mk = () => mkdtempSync(join(tmpdir(), 'ic-'))
 const cfg = defineInstanceConfig({
   app: 'demo',
   keys: {
