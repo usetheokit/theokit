@@ -21,6 +21,15 @@ function files(directory: string): string[] {
   })
 }
 
+/** The text of `file`, or '' when it vanished since the walk (another process renames its temp files). */
+function textOf(file: string): string {
+  try {
+    return readFileSync(file, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 /** A chat-completions server that answers "pong" and counts the requests. */
 async function modelServer() {
   let requests = 0
@@ -92,7 +101,7 @@ describe('an SMS channel turn through the process entry (#1457)', () => {
       child.kill('SIGTERM')
       await new Promise((resolve) => child.once('exit', resolve))
       for (const directory of [home, workspace, cwd, APP]) {
-        const holders = files(directory).filter((file) => !file.includes('node_modules') && !file.endsWith('.lock') && readFileSync(file, 'utf8').includes(TEXT))
+        const holders = files(directory).filter((file) => !file.includes('node_modules') && !file.endsWith('.lock') && textOf(file).includes(TEXT))
         expect(holders, directory).toEqual([])
       }
       expect(files(join(home, '.theokit', 'projects')).filter((file) => file.endsWith('.jsonl'))).toEqual([])
