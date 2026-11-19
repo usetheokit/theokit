@@ -23,7 +23,7 @@ try {
 
 ## `@theokit/host/service`
 
-Install an agent app as a login service and restart it through its supervisor. Only Linux (`systemd --user`) exists today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
+Install an agent app as a login service and restart it through its supervisor. Linux (`systemd --user`) and macOS (launchd LaunchAgent) exist today; `serviceBackend` throws `UnsupportedPlatformError` for any other platform.
 
 ```ts
 import { serviceBackend, isSupervised, restartSelf, waitForPredecessor } from '@theokit/host/service'
@@ -41,6 +41,7 @@ console.log(await backend.status('my-agent')) // 'running' | 'stopped' | 'not-in
 
 - `install` writes the unit atomically. If a `systemctl` step fails it throws `ServiceCommandError` (with `command` and `exitCode`), puts the previous unit back (or removes the file on a first install) and runs `daemon-reload`.
 - A value the unit cannot hold (a line break, a bad label) throws `ServiceDefinitionError` naming the field, never the value. `%` is doubled everywhere and `$` in `ExecStart=`, per systemd.syntax(7).
+- macOS: `serviceBackend('darwin', { uid: process.getuid(), logFile })` writes `~/Library/LaunchAgents/<label>.plist` and runs `launchctl bootout` (a missing service is no error) then `launchctl bootstrap gui/<uid>`. `install` without `uid` throws `ServiceDefinitionError`. stdout and stderr go to `logFile`, default `~/Library/Logs/<label>.log`. A failing `bootstrap` removes the plist and throws `ServiceCommandError`. `KeepAlive` restarts the agent only after a non-zero exit, so `restartSelf` (exit code 75) restarts it and a clean stop stays stopped. `uninstall` keeps the plist when `bootout` fails and `launchctl print` does not say the service is absent (exit 113). `restart` runs `launchctl kickstart -k gui/<uid>/<label>`. `launchdPlist(spec, { logFile })` returns the XML-escaped plist text.
 - The unit stops at logout unless lingering is on: run `loginctl enable-linger <user>` to keep it running.
 
 Restart from inside the app:

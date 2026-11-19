@@ -127,6 +127,7 @@ export {
 } from './openai-compatible-routes.js'
 export {
   createToolInvokeRoute,
+  validateAgainstInputSchema,
   type ToolArgsValidator,
   type ToolCallVetoPort,
   type ToolInvokeRouteOptions,

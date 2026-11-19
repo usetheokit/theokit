@@ -218,6 +218,22 @@ export {
   type Veto,
 } from './auth/permission-gate.js'
 
+/**
+ * One decision chain before a risky tool runs: waiver, saved approval, reviewer, then the person
+ * with a fail-closed timeout, and an append-only receipt of who decided.
+ */
+export {
+  createApprovalGate,
+  type ApprovalAnswer,
+  type ApprovalDecision,
+  type ApprovalGateOptions,
+} from './auth/approval-gate.js'
+export {
+  createJsonlLedger,
+  type ApprovalLedger,
+  type ApprovalRecord,
+} from './auth/approval-ledger.js'
+
 // B-080 — a `pre_tool_call` gate, which is what `./auth` already carries. It refuses state-changing
 // calls while the run is in the SDK's declared `plan` permission mode, and returns `undefined`
 // otherwise so it COMPOSES with an existing handler instead of replacing it:
