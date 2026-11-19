@@ -16,6 +16,7 @@ import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineS
 import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
+import type { Guardrail } from '../guardrails/index.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
@@ -30,7 +31,7 @@ import {
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
-import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
+import { withGuardrails } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
 import type { SdkRunUsage } from './sdk-adapter-create-options.js'
@@ -991,36 +992,48 @@ export function toAgentFactory(
 
 interface ServedConfig {
   send: SdkAgentHandle['send']
-  max: unknown
-  guards: unknown
+  /** Union of every served caller's guardrails: a later caller never drops an earlier one's. */
+  guards: Guardrail[]
+  /** The strictest (lowest) declared ceiling among served callers. */
+  max: number | undefined
+  installed: boolean
 }
 const served = new WeakMap<object, ServedConfig>()
 
 /**
- * The SDK's own handle, always: a declared step ceiling or guardrails are installed on it as its
- * `send`, so every served caller gets the object `Agent.registry.get(id)` returns. The original
- * `send` is kept once, and the latest declared config wraps it (never a wrapper of a wrapper).
+ * The SDK's own handle, always: declared guardrails and a step ceiling are installed on it as its
+ * `send`, so every served caller gets the object `Agent.registry.get(id)` returns. As the handle is
+ * shared, its `send` enforces what ANY served caller declared (all guardrails, the lowest ceiling):
+ * a caller without guards cannot strip another's, and differing ceilings are not overwritten.
  */
 function servedHandle(
   agent: SdkAgentHandle,
   max: number | undefined,
   guards: Parameters<typeof withGuardrails>[1],
 ): SdkAgentHandle {
-  const known = served.get(agent)
-  if (known !== undefined && known.max === max && known.guards === guards) return agent
-  const send = known?.send ?? agent.send.bind(agent)
-  if (known === undefined && max === undefined && (guards === undefined || guards.length === 0)) {
-    return agent
+  let cfg = served.get(agent)
+  if (cfg === undefined) {
+    cfg = { send: agent.send.bind(agent), guards: [], max: undefined, installed: false }
+    served.set(agent, cfg)
   }
-  const base = { agentId: agent.agentId, dispose: () => agent.dispose(), send } as SdkAgentHandle
-  const wrapped = withGuardrails(withStepCeiling(base, max), guards)
+  for (const g of guards ?? []) if (!cfg.guards.includes(g)) cfg.guards.push(g)
+  if (max !== undefined) cfg.max = cfg.max === undefined ? max : Math.min(cfg.max, max)
+  if (cfg.installed || (cfg.guards.length === 0 && cfg.max === undefined)) return agent
+  cfg.installed = true
+  const live = cfg
+  const base = {
+    agentId: agent.agentId,
+    dispose: () => agent.dispose(),
+    send: (msg: string, sendOpts?: SdkSendOptions) =>
+      live.send(msg, live.max === undefined ? sendOpts : { maxIterations: live.max, ...sendOpts }),
+  } as SdkAgentHandle
   Object.defineProperty(agent, 'send', {
-    value: wrapped.send,
+    value: (msg: string, sendOpts?: SdkSendOptions) =>
+      withGuardrails(base, live.guards).send(msg, sendOpts),
     configurable: true,
     writable: true,
     enumerable: false,
   })
-  served.set(agent, { send, max, guards })
   return agent
 }
 

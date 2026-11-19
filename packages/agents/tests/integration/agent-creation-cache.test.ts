@@ -220,6 +220,19 @@ describe('the real adapter entry points', () => {
     expect(Agent.registry.get(id)).toBeUndefined()
   })
 
+  it('a later factory without guardrails cannot strip an earlier factory\'s guards', async () => {
+    const id = nextId()
+    const block = { name: 'b', checkInput: () => ({ action: 'block' as const, reason: 'no' }) }
+    const guarded = await factory({ guardrails: [block] })(id)
+    const plain = await factory()(id)
+    expect(plain).toBe(guarded)
+    expect(plain).toBe(Agent.registry.get(id))
+    await expect(plain.send('hi')).rejects.toThrow()
+    await guarded.dispose()
+    await plain.dispose()
+    expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
   // The adapter's own stream generator: its first event comes after the agent is acquired and
   // before the turn ends, so the test can hold the stream open while a served caller completes.
   const adapterStream = (id: string) =>
