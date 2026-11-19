@@ -53,7 +53,10 @@ describe('released @theokit/agents auth APIs, from a standalone consumer install
       ],
       { cwd: root, stdio: 'pipe' },
     )
-    const entry = join(root, 'node_modules/@theokit/agents/dist/auth.js')
+    // A module that lives in the consumer and uses the bare specifier, so Node resolves it through
+    // the published `exports` map exactly as a real consumer's would.
+    const entry = join(root, 'consumer.mjs')
+    writeFileSync(entry, "export * from '@theokit/agents/auth'\n")
     return import(pathToFileURL(entry).href).then((m) => {
       auth = m
     })
