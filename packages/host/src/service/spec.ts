@@ -43,7 +43,7 @@ export function assertLabel(label: string): void {
 }
 
 /** A line break would end a unit directive and start another. */
-export function assertNoLineBreak(field: string, value: string): void {
+function assertNoLineBreak(field: string, value: string): void {
   if (/[\r\n]/.test(value)) throw new ServiceDefinitionError(field, 'cannot hold a line break')
 }
 
