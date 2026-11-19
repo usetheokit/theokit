@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `theokit`: the route manifest gives each page, layout, error, loading and not-found component a unique identifier, so `tasks/[id]/page.tsx` and `plans/[id]/page.tsx` build together.
+
 ### Added
 
 - `@theokit/agents`: `createGoalSignal()` gives `GoalRunner` an `update_goal` tool and a matching judge, so a goal loop ends when the agent reports `complete` or `blocked`.

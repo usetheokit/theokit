@@ -37,13 +37,37 @@ function buildRoutePath(parents: string[], segment: string): string {
 }
 
 interface WalkAccumulator {
+  /** Identifiers already declared in the manifest, so a repeat segment name gets a suffix. */
+  used: Set<string>
+  /** Identifier chosen for each node's component, keyed by `${prefix}`. */
+  names: Map<RouteNode, Map<string, string>>
   staticImports: ImportEntry[]
   lazyPages: { varName: string; importPath: string; routePath: string }[]
 }
 
-function pushIf(staticImports: ImportEntry[], filePath: string | undefined, varName: string): void {
+function allocName(node: RouteNode, seg: string, prefix: string, acc: WalkAccumulator): string {
+  const base = safeVarName(seg, prefix)
+  let name = base
+  for (let i = 2; acc.used.has(name); i++) name = `${base}_${i}`
+  acc.used.add(name)
+  let perNode = acc.names.get(node)
+  if (!perNode) acc.names.set(node, (perNode = new Map()))
+  perNode.set(prefix, name)
+  return name
+}
+
+function pushIf(
+  acc: WalkAccumulator,
+  node: RouteNode,
+  seg: string,
+  filePath: string | undefined,
+  prefix: string,
+): void {
   if (filePath !== undefined) {
-    staticImports.push({ varName, importPath: normalizePath(filePath) })
+    acc.staticImports.push({
+      varName: allocName(node, seg, prefix, acc),
+      importPath: normalizePath(filePath),
+    })
   }
 }
 
@@ -53,15 +77,15 @@ function walkRouteTree(node: RouteNode, parents: string[], acc: WalkAccumulator)
 
   if (node.page !== undefined) {
     acc.lazyPages.push({
-      varName: safeVarName(seg, 'Page'),
+      varName: allocName(node, seg, 'Page', acc),
       importPath: normalizePath(node.page),
       routePath,
     })
   }
-  pushIf(acc.staticImports, node.layout, safeVarName(seg, 'Layout'))
-  pushIf(acc.staticImports, node.error, safeVarName(seg, 'Error'))
-  pushIf(acc.staticImports, node.loading, safeVarName(seg, 'Loading'))
-  pushIf(acc.staticImports, node.notFound, safeVarName(seg, 'NotFound'))
+  pushIf(acc, node, seg, node.layout, 'Layout')
+  pushIf(acc, node, seg, node.error, 'Error')
+  pushIf(acc, node, seg, node.loading, 'Loading')
+  pushIf(acc, node, seg, node.notFound, 'NotFound')
   for (const child of node.children) {
     const childSegPath = segmentPath(node)
     const nextParents = childSegPath ? [...parents, childSegPath] : parents
@@ -90,6 +114,8 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
   // Lazy-loaded pages — tracked separately so we emit React.lazy() and
   // build the preload map.
   const acc: WalkAccumulator = {
+    used: new Set(),
+    names: new Map(),
     staticImports: [],
     lazyPages: [],
   }
@@ -169,19 +195,20 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
     '',
   )
 
+  const nameOf = (node: RouteNode, prefix: string): string =>
+    acc.names.get(node)?.get(prefix) ?? safeVarName(node.segment || 'root', prefix)
+
   // Build the children-array string for one node, separately from the
   // wrapping logic — keeps `genRouteConfig` under the complexity ceiling.
-  function buildChildrenArray(node: RouteNode, seg: string): string {
+  function buildChildrenArray(node: RouteNode): string {
     const childConfigs: string[] = []
 
     // Index route for this node's page — wrap in Suspense (the lazy module
     // is preloaded on initial hydrate, so this fallback never fires there;
     // it covers client-side navigation to other routes too).
     if (node.page) {
-      const pageVar = safeVarName(seg, 'Page')
-      const fallbackEl = node.loading
-        ? `React.createElement(${safeVarName(seg, 'Loading')})`
-        : 'null'
+      const pageVar = nameOf(node, 'Page')
+      const fallbackEl = node.loading ? `React.createElement(${nameOf(node, 'Loading')})` : 'null'
       const pageElement = `React.createElement(Suspense, { fallback: ${fallbackEl} }, React.createElement(${pageVar}))`
       childConfigs.push(`{ index: true, element: ${pageElement} }`)
     }
@@ -193,13 +220,13 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
 
     // Not-found wildcard (only at this level)
     if (node.notFound) {
-      const nfVar = safeVarName(seg, 'NotFound')
+      const nfVar = nameOf(node, 'NotFound')
       childConfigs.push(`{ path: '*', element: React.createElement(${nfVar}) }`)
     }
 
     let arr = `[${childConfigs.join(', ')}]`
     if (node.error) {
-      const errVar = safeVarName(seg, 'Error')
+      const errVar = nameOf(node, 'Error')
       arr = `[{ errorElement: React.createElement(${errVar}), children: ${arr} }]`
     }
     return arr
@@ -207,8 +234,7 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
 
   // Generate route config
   function genRouteConfig(node: RouteNode, isRoot: boolean): string {
-    const seg = node.segment || 'root'
-    const childrenArray = buildChildrenArray(node, seg)
+    const childrenArray = buildChildrenArray(node)
 
     /**
      * Scroll restoration, mounted once at the root (B-029).
@@ -231,7 +257,7 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
 
     // Build route object
     if (node.layout) {
-      const layoutVar = safeVarName(seg, 'Layout')
+      const layoutVar = nameOf(node, 'Layout')
       const pathPart = isRoot ? `path: '/'` : `path: '${segmentPath(node)}'`
       // Layout receives `<Outlet />` as `children` prop. This supports BOTH
       // conventions: Next.js-style layouts that render `{children}` AND
@@ -259,10 +285,8 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
 
     // Child segment without layout — just a route
     if (node.page && node.children.length === 0 && !node.error && !node.notFound) {
-      const pageVar = safeVarName(seg, 'Page')
-      const fallbackEl = node.loading
-        ? `React.createElement(${safeVarName(seg, 'Loading')})`
-        : 'null'
+      const pageVar = nameOf(node, 'Page')
+      const fallbackEl = node.loading ? `React.createElement(${nameOf(node, 'Loading')})` : 'null'
       const pageElement = `React.createElement(Suspense, { fallback: ${fallbackEl} }, React.createElement(${pageVar}))`
       return `{ path: '${segmentPath(node)}', element: ${pageElement} }`
     }

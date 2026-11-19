@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { scanRoutes } from '../../packages/theo/src/router/scan.js'
+import { generateRouteManifest } from '../../packages/theo/src/router/generate.js'
 
 /**
  * T2.1 — file-system PAGE routing must recognize dynamic segments [param] and
@@ -149,5 +150,26 @@ describe('generate catch-all is terminal (EC-9)', () => {
     expect(out).toContain("path: '*'")
     // no nested child path emitted after the splat (terminal)
     expect(out).not.toMatch(/path: '\*'[^}]*children: \[\{[^]]*path:/)
+  })
+})
+
+describe('generateRouteManifest repeated dynamic folder names', () => {
+  it('declares a distinct identifier per page and binds each route to its own', () => {
+    mkpage('tasks/[id]')
+    mkpage('plans/[id]')
+    for (const lazyPages of [true, false]) {
+      const out = generateRouteManifest(scanRoutes(app), { lazyPages })
+      const decls = [...out.matchAll(/^(?:const|import) (Page__id_\w*)\b/gm)].map((m) => m[1])
+      expect(decls).toHaveLength(2)
+      expect(new Set(decls).size).toBe(2)
+      for (const dir of ['tasks', 'plans']) {
+        const line = out.split('\n').find((l) => l.includes(`${dir}/[id]/page.tsx`))
+        expect(line).toBeDefined()
+        expect(decls.some((d) => line!.includes(d))).toBe(true)
+      }
+      expect(out).toContain("'/tasks/:id'")
+      expect(out).toContain("'/plans/:id'")
+      expect(out.match(/React\.createElement\(Page__id_(_\d+)?\)/g)).toHaveLength(2)
+    }
   })
 })
