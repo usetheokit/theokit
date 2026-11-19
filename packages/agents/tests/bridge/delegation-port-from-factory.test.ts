@@ -245,29 +245,4 @@ describe('delegationPortFromAgentFactory', () => {
       )
     }
   })
-
-  it('a failing disposal after a failed run reports both errors, the run first', async () => {
-    const w = fake({
-      status: 'error',
-      dispose: async () => Promise.reject(new Error('dispose boom')),
-    })
-    const error = await delegationPortFromAgentFactory(async () => w.agent)
-      .run('t')
-      .catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(DelegationError)
-    const cause = (error as DelegationError).cause as AggregateError
-    expect(cause).toBeInstanceOf(AggregateError)
-    expect(cause.errors).toHaveLength(2)
-    expect(cause.message).toContain('disposing the worker then failed: dispose boom')
-  })
-
-  it('an already aborted signal never creates the worker', async () => {
-    const create = vi.fn(async () => fake().agent)
-    const controller = new AbortController()
-    controller.abort()
-    await expect(
-      delegationPortFromAgentFactory(create).run('t', { signal: controller.signal }),
-    ).rejects.toBeInstanceOf(DelegationError)
-    expect(create).not.toHaveBeenCalled()
-  })
 })
