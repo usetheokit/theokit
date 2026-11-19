@@ -12,7 +12,7 @@ import {
   JobLeaseLostError,
   NonRetryableError,
 } from './job-backend.js'
-import type { JobContext, JobDefinition } from './job-types.js'
+import type { JobContext, JobDefinition } from './job-handler-types.js'
 import { createHandlerQueue } from './queue-client.js'
 
 /**

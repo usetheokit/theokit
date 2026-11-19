@@ -1,4 +1,4 @@
-import type { JobDefinition, JobOptions } from './job-types.js'
+import type { JobDefinition, JobOptions } from './job-handler-types.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 

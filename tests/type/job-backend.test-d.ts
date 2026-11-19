@@ -5,7 +5,8 @@ import type {
   JobEnqueueInput,
   JobLease,
 } from '../../packages/theo/src/server/jobs/job-backend.js'
-import type { JobContext, JobRegistry } from '../../packages/theo/src/server/jobs/job-types.js'
+import type { JobContext } from '../../packages/theo/src/server/jobs/job-handler-types.js'
+import type { JobRegistry } from '../../packages/theo/src/server/jobs/job-types.js'
 import type { QueueClient } from '../../packages/theo/src/server/jobs/queue-client.js'
 
 // User-side module augmentation example.

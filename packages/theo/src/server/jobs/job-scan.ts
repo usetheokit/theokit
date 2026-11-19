@@ -8,7 +8,7 @@ import { importUserModule } from '../../config/import-user-module.js'
 import { compareByCodeUnit } from '../_internal/compare-by-code-unit.js'
 import { walkSourceFiles } from '../_internal/scan-walker.js'
 
-import type { JobDefinition } from './job-types.js'
+import type { JobDefinition } from './job-handler-types.js'
 
 export interface JobNode {
   readonly name: string

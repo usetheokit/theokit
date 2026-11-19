@@ -6,7 +6,7 @@ import { jobBackendFromConfig } from '../../../server/jobs/job-backend-from-conf
 import type { JobBackend } from '../../../server/jobs/job-backend.js'
 import type { JobManifest } from '../../../server/jobs/job-manifest.js'
 import { createJobRunner } from '../../../server/jobs/job-runner.js'
-import type { JobDefinition } from '../../../server/jobs/job-types.js'
+import type { JobDefinition } from '../../../server/jobs/job-handler-types.js'
 import { createJobWorker, type JobWorker } from '../../../server/jobs/job-worker.js'
 
 /**

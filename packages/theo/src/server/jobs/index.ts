@@ -10,7 +10,8 @@
 
 // Definition
 export { defineJob } from './define-job.js'
-export type { JobOptions, JobContext, JobDefinition, JobRegistry } from './job-types.js'
+export type { JobOptions, JobContext, JobDefinition } from './job-handler-types.js'
+export type { JobRegistry } from './job-types.js'
 
 // Errors
 export {
