@@ -100,4 +100,32 @@ describe.skipIf(!posix)('NodeAcpTransport command resolution', () => {
     await t.close()
     expect(out).toBe(root)
   })
+
+  it('spawns the absolute-PATH copy of a bare command, never the one in a relative entry under cwd', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'resolve-agent-'))
+    const abs = join(root, 'abs')
+    const cwd = join(root, 'cwd')
+    mkdirSync(abs)
+    mkdirSync(join(cwd, 'relative-dir'), { recursive: true })
+    const script = (who: string): string => `#!/bin/sh\necho ${who}\n`
+    for (const [dir, who] of [
+      [abs, 'absolute'],
+      [join(cwd, 'relative-dir'), 'relative'],
+    ] as const) {
+      const f = join(dir, 'fake-agent')
+      writeFileSync(f, script(who))
+      chmodSync(f, 0o755)
+    }
+    const spawn = vi.mocked(childProcess.spawn)
+    spawn.mockClear()
+    const t = new NodeAcpTransport('fake-agent', [], cwd, { PATH: 'relative-dir:' + abs })
+    let out = ''
+    t.subscribe((c) => {
+      out += c
+    })
+    await closeOf(t)
+    await t.close()
+    expect(spawn.mock.calls[0]?.[0]).toBe(join(abs, 'fake-agent'))
+    expect(out.trim()).toBe('absolute')
+  })
 })
