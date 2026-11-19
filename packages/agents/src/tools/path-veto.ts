@@ -32,6 +32,24 @@ function checkPath(value: unknown, scope: ToolScope, caseFold: boolean): string 
   return undefined
 }
 
+/** Characters git treats as pathspec wildcards (or escapes) in a path. */
+const PATHSPEC_GLOB = /[*?[\\]/
+
+/**
+ * `git_diff` takes a pathspec, not a path: `.` or an ancestor directory selects a protected
+ * directory beneath it, and a wildcard can select one by name. Refuse both.
+ */
+function checkGitPathspec(value: string, scope: ToolScope, caseFold: boolean): string | undefined {
+  if (PATHSPEC_GLOB.test(value)) return `git_diff path ${value} may not contain wildcards`
+  const real = resolveRealPath(resolve(scope.projectRoot, value))
+  for (const protectedPath of scope.protectedPaths) {
+    if (isWithin(resolveRealPath(protectedPath), real, { caseFold })) {
+      return `git_diff path ${value} covers the protected path ${protectedPath}`
+    }
+  }
+  return checkPath(value, scope, caseFold)
+}
+
 function pathArguments(args: Record<string, unknown>, keys: readonly string[]): unknown[] {
   const found: unknown[] = []
   for (const key of keys) {
@@ -70,6 +88,9 @@ function judge(
     if (typeof path !== 'string' || path === '' || path.startsWith(':')) {
       return 'git_diff needs a path inside the tool root, with no pathspec magic'
     }
+    // Always checked, whatever `pathKeys` says.
+    const verdict = checkGitPathspec(path, scope, caseFold)
+    if (verdict !== undefined) return verdict
   }
   const candidates =
     name === 'apply_patch' ? patchDestinations(args.patch) : pathArguments(args, keys)

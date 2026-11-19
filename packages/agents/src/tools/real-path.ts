@@ -1,5 +1,5 @@
-import { lstatSync, readlinkSync, realpathSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { lstatSync, readlinkSync } from 'node:fs'
+import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
@@ -14,48 +14,57 @@ export class SymlinkLoopError extends TheokitAgentError {
   }
 }
 
-function lexists(path: string): boolean {
-  try {
-    lstatSync(path)
-    return true
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
-    throw error
-  }
-}
-
-function resolveWithHops(path: string, hops: number, maxHops: number): string {
-  if (hops > maxHops)
-    throw new SymlinkLoopError(`${path} goes through more than ${maxHops} symlinks`)
-  let existing = resolve(path)
-  const rest: string[] = []
-  while (!lexists(existing) && dirname(existing) !== existing) {
-    rest.unshift(basename(existing))
-    existing = dirname(existing)
-  }
-  try {
-    return join(realpathSync(existing), ...rest)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'ELOOP') throw new SymlinkLoopError(`${path} goes through a symlink loop`)
-    if (code !== 'ENOENT') throw error
-    // `existing` is a dangling symlink: follow its target.
-    return resolveWithHops(
-      join(resolve(dirname(existing), readlinkSync(existing)), ...rest),
-      hops + 1,
-      maxHops,
-    )
-  }
+/** The non-empty components of `path`, without its root. */
+function components(path: string): string[] {
+  return path
+    .slice(parse(path).root.length)
+    .split(sep)
+    .filter((part) => part !== '')
 }
 
 /**
- * `path` with its nearest existing ancestor replaced by that ancestor's real path, so a symlink is
- * followed and a directory that does not exist yet is placed where its symlinked parent points. A
- * dangling symlink counts as existing, and its target is followed the same way. Throws
- * `SymlinkLoopError` past `maxHops` (default 40) or on a loop.
+ * `path` with every symlink followed and counted, so a directory that does not exist yet is placed
+ * where its symlinked parent points. A dangling symlink is followed to its target. Throws
+ * `SymlinkLoopError` past `maxHops` (default 40) symlinks, or when the kernel reports a loop.
  */
 export function resolveRealPath(path: string, options: { readonly maxHops?: number } = {}): string {
-  return resolveWithHops(path, 0, options.maxHops ?? DEFAULT_MAX_HOPS)
+  const maxHops = options.maxHops ?? DEFAULT_MAX_HOPS
+  const start = resolve(path)
+  let current = parse(start).root
+  let queue = components(start)
+  let hops = 0
+  while (queue.length > 0) {
+    const part = queue[0] as string
+    queue = queue.slice(1)
+    if (part === '.') continue
+    if (part === '..') {
+      current = dirname(current)
+      continue
+    }
+    const next = join(current, part)
+    let isLink: boolean
+    try {
+      isLink = lstatSync(next).isSymbolicLink()
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ELOOP') throw new SymlinkLoopError(`${path} goes through a symlink loop`)
+      // Nothing from here on exists yet: place the rest under the real ancestor.
+      if (code === 'ENOENT' || code === 'ENOTDIR') return join(next, ...queue)
+      throw error
+    }
+    if (!isLink) {
+      current = next
+      continue
+    }
+    hops += 1
+    if (hops > maxHops) {
+      throw new SymlinkLoopError(`${path} goes through more than ${maxHops} symlinks`)
+    }
+    const target = readlinkSync(next)
+    if (isAbsolute(target)) current = parse(target).root
+    queue = [...components(isAbsolute(target) ? target : sep + target), ...queue]
+  }
+  return current
 }
 
 /**

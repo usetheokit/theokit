@@ -91,4 +91,21 @@ describe('path veto', () => {
       runPlugin(scope, { name: 'x', args: { target: '.state/a' } }, { pathKeys: ['target'] }),
     ).toMatchObject({ block: true })
   })
+
+  it('git_diff with an ancestor pathspec or a wildcard that can reach a protected path is refused', () => {
+    const { scope } = setup()
+    expect(vetoPathCall(scope, 'git_diff', { path: '.' })).toMatch(/covers/)
+    expect(vetoPathCall(scope, 'git_diff', { path: '.state*' })).toMatch(/wildcards/)
+    expect(vetoPathCall(scope, 'git_diff', { path: '.state/secret' })).toMatch(/protected/)
+  })
+
+  it('git_diff path is checked even when pathKeys omit path', () => {
+    const { scope } = setup()
+    const result = runPlugin(
+      scope,
+      { name: 'git_diff', args: { path: '.state/secret' } },
+      { pathKeys: ['target'] },
+    )
+    expect(result).toMatchObject({ block: true })
+  })
 })

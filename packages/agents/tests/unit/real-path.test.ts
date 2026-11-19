@@ -38,6 +38,22 @@ describe('resolveRealPath', () => {
   })
 })
 
+describe('resolveRealPath hops and ancestors', () => {
+  it('a child beneath a self-loop throws SymlinkLoopError', () => {
+    const dir = temp()
+    symlinkSync(join(dir, 'loop'), join(dir, 'loop'))
+    expect(() => resolveRealPath(join(dir, 'loop', 'child'))).toThrow(SymlinkLoopError)
+  })
+
+  it('maxHops counts links to existing targets', () => {
+    const dir = temp()
+    writeFileSync(join(dir, 'file'), '')
+    symlinkSync(join(dir, 'file'), join(dir, 'link'))
+    expect(() => resolveRealPath(join(dir, 'link'), { maxHops: 0 })).toThrow(SymlinkLoopError)
+    expect(resolveRealPath(join(dir, 'link'), { maxHops: 1 })).toBe(join(dir, 'file'))
+  })
+})
+
 describe('isWithin', () => {
   it('compares containment, optionally case-folded', () => {
     expect(isWithin('/a/b/c', '/a/b')).toBe(true)
