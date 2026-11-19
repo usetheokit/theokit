@@ -371,8 +371,19 @@ describe('createA2AJsonRpcHandler maxInFlight', () => {
     const handler = limited(respond)
     const first = handler(post(body))
     await new Promise((r) => setTimeout(r, 0))
-    const res = await handler(post(body))
+    let pulled = false
+    const watched = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          pulled = true
+          controller.close()
+        },
+      },
+      { highWaterMark: 0 },
+    )
+    const res = await handler(post(watched))
     expect(res.status).toBe(503)
+    expect(pulled).toBe(false)
     expect(res.headers.get('retry-after')).toBe('7')
     expect(respond).toHaveBeenCalledTimes(1)
     release[0]?.()
