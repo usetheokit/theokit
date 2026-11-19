@@ -218,7 +218,11 @@ export function createAskBridge(): AskBridge {
           } catch (error) {
             // A throwing surface must not leave the question open: clear it, reject the ask and
             // tell observers, so the thread is not stuck rejecting every later ask as concurrent.
-            entryFail(threadId, error instanceof Error ? error : new Error(String(error)))
+            // Only the question this call opened: the listener may already have settled it and
+            // started a replacement, which is not ours to fail.
+            if (pendingByThread.get(threadId)?.id === id) {
+              entryFail(threadId, error instanceof Error ? error : new Error(String(error)))
+            }
           }
         }
       }

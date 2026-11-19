@@ -294,6 +294,22 @@ describe('ask / pending and onChange', () => {
     await expect(bridge.ask('t', 'again')).rejects.toThrow('surface broke')
   })
 
+  it('a throwing listener does not fail a replacement question it started', async () => {
+    const bridge = createAskBridge()
+    let replacement: Promise<string> | undefined
+    bridge.setListener('t', (q) => {
+      if (q.question !== 'first') return
+      bridge.answer(q.id, 'done')
+      replacement = bridge.ask('t', 'second')
+      throw new Error('surface broke')
+    })
+    const first = bridge.ask('t', 'first')
+    await expect(first).resolves.toBe('done')
+    expect(bridge.pending('t')?.question).toBe('second')
+    bridge.abandon('t')
+    await replacement?.catch(() => undefined)
+  })
+
   it('an onChange disposer stops further calls', async () => {
     const { bridge } = setup()
     const a = vi.fn()
