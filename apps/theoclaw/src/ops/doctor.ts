@@ -105,9 +105,6 @@ export function doctorChecks(io: DoctorIo): Check[] {
   } catch {
     // an unreadable configuration is reported by the config check
   }
-  if (!checks.some((check) => check.status === 'fail')) {
-    checks.push({ name: 'start', status: 'ok', detail: 'the configuration can start a turn' })
-  }
   return checks
 }
 

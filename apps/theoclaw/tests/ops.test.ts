@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
+import { doctorChecks } from '../src/ops/doctor.js'
 import { teeToLogFile } from '../src/ops/log-tee.js'
 import { spawn } from 'node:child_process'
 
@@ -183,6 +184,25 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     const ok = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_DM_POLICY="pairing"\n`)
     writeFileSync(join(dirname(ok.path), 'policy.json'), readFileSync(policy))
     expect(await runCli(['doctor'], ok.h.io)).toBe(0)
+  })
+
+  it('doctor exports its checks and prints the framework rendering', async () => {
+    const { h, path } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    chmodSync(path, 0o644)
+    const checks = doctorChecks(h.io)
+    expect(checks.find((check) => check.name === 'config')).toEqual({ name: 'config', status: 'ok', detail: path })
+    expect(checks.some((check) => check.status === 'warn' && check.name === 'security audit')).toBe(true)
+    expect(checks.some((check) => check.status === 'fail')).toBe(false)
+    // a warning alone leaves the exit at 0
+    expect(await runCli(['doctor'], h.io)).toBe(0)
+    expect(h.stdout()).toContain(`✓ config: ${path}`)
+    expect(h.stdout()).toContain('! security audit: SA-001')
+    expect(h.stdout()).toMatch(/0 failed of \d+/)
+
+    const bad = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="your-api-key"\n`)
+    expect(await runCli(['doctor'], bad.h.io)).toBe(3)
+    expect(bad.h.stdout()).toContain('✗ credential: THEOKIT_API_KEY is a placeholder')
+    expect(bad.h.stdout()).toMatch(/1 failed of \d+/)
   })
 
   it('doctor refuses an unknown flag', async () => {
