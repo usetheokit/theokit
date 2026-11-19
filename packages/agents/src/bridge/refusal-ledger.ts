@@ -17,6 +17,8 @@ interface Entry {
   /** The complete veto message (text + marker): a denial is this veto's only if it ends with it. */
   tagged: string
 }
+/** The marker `recordRefusal` appends: it must be the last thing in a denial message. */
+const TRAILING_MARKER = /\[veto:([0-9a-f]{24})\]\s*$/
 const ledger = new Map<string, Map<string, Entry[]>>()
 /**
  * Bounds for runs that never reach the adapter's cleanup (a gate used directly as an SDK hook): the
@@ -78,10 +80,16 @@ export function takeRefusal(
   if (tools === undefined || queue === undefined) return undefined
   let at = 0
   if (denialMessage !== undefined) {
-    // The framework appends the whole tagged message last; a marker quoted or copied anywhere else
-    // (hook output, an earlier denial, an external denial's text) must not select an entry.
+    // Parse the one marker the framework appends last; a marker quoted or copied anywhere else
+    // (hook output, an earlier denial, an external denial's text) or a message holding several
+    // markers must not select an entry. The parsed token then has to match an entry exactly.
+    const parsed = TRAILING_MARKER.exec(denialMessage)
+    const token = parsed?.[1]
     const text = denialMessage.trimEnd()
-    at = queue.findIndex((e) => text.endsWith(e.tagged))
+    at =
+      token === undefined
+        ? -1
+        : queue.findIndex((e) => e.token === token && text.endsWith(e.tagged))
   }
   if (at < 0) return undefined
   const [taken] = queue.splice(at, 1)

@@ -154,6 +154,19 @@ describe('refusal ledger', () => {
     expect(takeRefusal('r-il', 'Bash', `blocked: ${v1}`)).toEqual({ by: 'human', reason: 'one' })
   })
 
+  it('a denial carrying several markers is matched only by its trailing one', () => {
+    const v1 = recordRefusal('r-multi', 'Bash', { by: 'human', reason: 'one' }, 'same')
+    const v2 = recordRefusal('r-multi', 'Bash', { by: 'policy', reason: 'two' }, 'same')
+    expect(takeRefusal('r-multi', 'Bash', `${v2} then ${v1}`)).toEqual({
+      by: 'human',
+      reason: 'one',
+    })
+    expect(takeRefusal('r-multi', 'Bash', `${v1} then ${v2}`)).toEqual({
+      by: 'policy',
+      reason: 'two',
+    })
+  })
+
   it('a retained run keeps every entry past the per-run bound', () => {
     retainRun('r-many')
     const first = recordRefusal('r-many', 'Bash', { by: 'human', reason: 'first' }, 'm')
