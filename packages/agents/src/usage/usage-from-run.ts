@@ -65,5 +65,9 @@ export function formatUsd(amount: number): string {
   const magnitude = Math.floor(Math.log10(Math.abs(amount)))
   const decimals = Math.min(100, Math.max(0, 5 - magnitude))
   const fixed = amount.toFixed(decimals)
-  return fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed
+  if (!fixed.includes('.')) return fixed
+  let end = fixed.length
+  while (fixed[end - 1] === '0') end -= 1
+  if (fixed[end - 1] === '.') end -= 1
+  return fixed.slice(0, end)
 }
