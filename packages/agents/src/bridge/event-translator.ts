@@ -7,7 +7,7 @@
  */
 import type { CostBreakdown, InteractionUpdate } from '@theokit/sdk'
 
-import type { StreamEvent } from './agent-sse-handler.js'
+import type { AgentStreamEvent } from './agent-stream-events.js'
 
 /** Minimal SDK message shape — duck-typed to avoid hard import of @theokit/sdk types. */
 export interface SdkMessage {
@@ -65,7 +65,7 @@ function serializeToolOutput(value: unknown, fallback: string): string {
   }
 }
 
-function translateSystemEvent(msg: SdkMessage, runId: string): StreamEvent[] {
+function translateSystemEvent(msg: SdkMessage, runId: string): AgentStreamEvent[] {
   return [
     {
       type: 'run_started',
@@ -76,8 +76,8 @@ function translateSystemEvent(msg: SdkMessage, runId: string): StreamEvent[] {
   ]
 }
 
-function translateAssistantEvent(msg: SdkMessage): StreamEvent[] {
-  const events: StreamEvent[] = []
+function translateAssistantEvent(msg: SdkMessage): AgentStreamEvent[] {
+  const events: AgentStreamEvent[] = []
   // Real SDKAssistantMessage (messages.ts:58): content lives at msg.message.content.
   const message = msg.message as { content?: unknown } | undefined
   const content = message?.content
@@ -104,7 +104,7 @@ function translateAssistantEvent(msg: SdkMessage): StreamEvent[] {
   return events
 }
 
-function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
+function translateToolCallEvent(msg: SdkMessage): AgentStreamEvent[] {
   // Real SDKToolUseMessage (messages.ts:89): call_id (not id), status running|completed|error,
   // tool output in `result` (no separate `error` field).
   const status = msg.status as string
@@ -174,7 +174,7 @@ function costOf(result: unknown): CostBreakdown | undefined {
     : undefined
 }
 
-function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
+function translateStatusEvent(msg: SdkMessage): AgentStreamEvent[] {
   // Real SDKStatusMessage (messages.ts:106): status is UPPERCASE cloud-run lifecycle;
   // error text (when present) is in `msg.message`. FINISHED/CANCELLED are terminal-clean;
   // ERROR/EXPIRED are terminal-failure (must surface — fail-loud, Unbreakable Rule 8);
@@ -245,7 +245,7 @@ const INTERACTION_UPDATE_IGNORED: ReadonlySet<string> = new Set([
  * Translate a single SDK message to zero or more TheoKit stream events.
  * Returns an array because one SDK message may map to multiple TheoKit events.
  */
-export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[] {
+export function translateSdkEvent(msg: SdkMessage, runId: string): AgentStreamEvent[] {
   switch (msg.type) {
     case 'system':
       return translateSystemEvent(msg, runId)
@@ -295,7 +295,7 @@ export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
  * consumers can stream tool-input; it never duplicates `tool_call` (different lifecycle points).
  * Reuses `serializeToolOutput` for the tool-result `output` wire contract (#41 / DRY).
  */
-export function translateInteractionUpdate(update: InteractionUpdate): StreamEvent[] {
+export function translateInteractionUpdate(update: InteractionUpdate): AgentStreamEvent[] {
   switch (update.type) {
     case 'text-delta':
       return update.text ? [{ type: 'text_delta', content: update.text }] : []

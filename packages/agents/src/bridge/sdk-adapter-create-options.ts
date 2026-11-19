@@ -29,7 +29,6 @@ import { ConfigurationError } from '../errors.js'
 import type { McpServersMap } from '../types.js'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
-import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStopReason, DoneEvent } from './agent-stream-events.js'
 import { assertCodePlugins } from './code-plugins.js'
 import { compileProjectContext } from './compile-project-context.js'
@@ -597,7 +596,7 @@ export function realUsageDone(
    * and keep asserting the same event they always did.
    */
   model?: string,
-): StreamEvent {
+): DoneEvent {
   const stopReason = stopReasonOf(result)
   return {
     type: 'done',

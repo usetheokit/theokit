@@ -11,7 +11,10 @@
  */
 import { describe, expectTypeOf, it } from 'vitest'
 
-import type { SdkTurnHandle } from '../../src/bridge/sdk-adapter.js'
+import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
+import type { AgentStreamEvent, ToolResultEvent } from '../../src/bridge/agent-stream-events.js'
+import { type translateSdkEvent } from '../../src/bridge/event-translator.js'
+import type { SdkTurnHandle, SdkTurnMessage } from '../../src/bridge/sdk-adapter.js'
 
 type ResolvedTurn = Awaited<ReturnType<SdkTurnHandle['wait']>>
 
@@ -24,5 +27,24 @@ describe('SdkTurnHandle', () => {
     expectTypeOf<ResolvedTurn>()
       .toHaveProperty('error')
       .toEqualTypeOf<{ message: string } | undefined>()
+  })
+})
+
+describe('typed bridge contract', () => {
+  it('turn stream yields the SDK message union, not unknown', () => {
+    type Stream = NonNullable<SdkTurnHandle['stream']>
+    expectTypeOf<ReturnType<Stream>>().toEqualTypeOf<AsyncIterable<SdkTurnMessage>>()
+    expectTypeOf<SdkTurnMessage['type']>().toMatchTypeOf<string>()
+  })
+
+  it('narrows AgentStreamEvent by its discriminant', () => {
+    const e = {} as AgentStreamEvent
+    if (e.type === 'tool_result') expectTypeOf(e).toEqualTypeOf<ToolResultEvent>()
+    if (e.type === 'done') expectTypeOf(e.usage.totalTokens).toEqualTypeOf<number>()
+  })
+
+  it('translators return AgentStreamEvent and it is assignable to StreamEvent', () => {
+    expectTypeOf<ReturnType<typeof translateSdkEvent>>().toEqualTypeOf<AgentStreamEvent[]>()
+    expectTypeOf<AgentStreamEvent>().toMatchTypeOf<StreamEvent>()
   })
 })

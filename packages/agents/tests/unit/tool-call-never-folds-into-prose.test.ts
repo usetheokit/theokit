@@ -53,7 +53,8 @@ describe('a text block and a tool_use block in one message (#631)', () => {
 
   it('never appends the tool name to the text', () => {
     const [text] = translateSdkEvent(TEXT_AND_TOOL, RUN)
-    const content = String(text.content)
+    if (text?.type !== 'text_delta') throw new Error('expected a text_delta first')
+    const content = text.content
 
     // The exact defect: the sentence and the marker fused with no separator.
     expect(text).toMatchObject({ type: 'text_delta' })

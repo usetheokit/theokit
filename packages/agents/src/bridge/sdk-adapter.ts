@@ -12,7 +12,7 @@ import type { ToolRefusal } from '@theokit/presenter'
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SDKMessage, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
@@ -20,7 +20,7 @@ import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
-import type { StreamEvent } from './agent-sse-handler.js'
+import type { AgentStreamEvent } from './agent-stream-events.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
@@ -375,9 +375,9 @@ function resolveTextTransformFlags(
  * `text_delta`. Both default off ⇒ the merged stream is returned unchanged (byte-identical).
  */
 function applyTextTransforms(
-  events: AsyncIterable<StreamEvent>,
+  events: AsyncIterable<AgentStreamEvent>,
   opts: { parseThinkTags: boolean; stripToolDialect: boolean },
-): AsyncIterable<StreamEvent> {
+): AsyncIterable<AgentStreamEvent> {
   let out = opts.parseThinkTags ? extractThinkTagStream(events) : events
   if (opts.stripToolDialect) out = stripToolDialectStream(out)
   return out
@@ -516,7 +516,7 @@ export function createSdkAgentStream(
     message: string,
     sessionId: string,
     factoryOpts?: { disableTools?: boolean },
-  ): AsyncIterable<StreamEvent> => ({
+  ): AsyncIterable<AgentStreamEvent> => ({
     async *[Symbol.asyncIterator]() {
       const runId = `run-${Date.now()}`
       const t0 = Date.now()
@@ -680,23 +680,19 @@ async function* streamTimeline(
   state: { sawError: boolean; lastEventType: string },
   outcome: TurnOutcome | undefined,
   refusals: ReadonlyMap<string, ToolRefusal>,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<AgentStreamEvent> {
   const run = (await sendPromise) as {
     events: () => AsyncGenerator<SdkTimelineEvent>
   }
   const seen = createToolSeen()
-  const emit = function* (events: StreamEvent[]): Generator<StreamEvent> {
+  const emit = function* (events: AgentStreamEvent[]): Generator<AgentStreamEvent> {
     for (const event of events) {
       if (event.type === 'error') state.sawError = true
       // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
       if (event.type === 'done') continue
       state.lastEventType = event.type
-      const callId = (event as { callId?: unknown }).callId
-      const refusal =
-        event.type === 'tool_result' && typeof callId === 'string'
-          ? refusals.get(callId)
-          : undefined
-      yield refusal !== undefined ? { ...event, refusal } : event
+      const refusal = event.type === 'tool_result' ? refusals.get(event.callId) : undefined
+      yield event.type === 'tool_result' && refusal !== undefined ? { ...event, refusal } : event
     }
   }
   for await (const ev of run.events()) {
@@ -753,7 +749,7 @@ async function* streamSdkAgent(
   compiled: CompiledAgentOptions,
   sdkTools: unknown[],
   opts: StreamSdkAgentOpts,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<AgentStreamEvent> {
   const { Agent } = rt
   const {
     apiKey,
@@ -856,8 +852,34 @@ export interface SdkTurnHandle {
     status?: string
     error?: { message: string }
   }>
-  stream?: () => AsyncIterable<unknown>
+  /**
+   * The turn's messages, in the SDK's own message vocabulary ({@link SdkTurnMessage}), NOT
+   * `AgentStreamEvent`: this handle is served to hosts (ACP) that dispatch exhaustively on
+   * `SDKMessage['type']` and throw on any other. The framework's `AgentStreamEvent` flow is
+   * `createSdkAgentStream` and `streamAgentEndpoint`, and `translateSdkEvent` is the typed
+   * bridge from this vocabulary to it.
+   */
+  stream?: () => AsyncIterable<SdkTurnMessage>
 }
+
+/** An SDK message with the ids a wrapper that never sees the run cannot supply made optional. */
+type WithOptionalRunIds<M> = M extends unknown
+  ? Omit<M, 'agent_id' | 'run_id'> & { agent_id?: string; run_id?: string }
+  : never
+
+/**
+ * One message of a served turn's `stream()`: the SDK's `SDKMessage` discriminated union, with
+ * `agent_id`/`run_id` optional so a guarded turn (which synthesizes its messages) can produce it.
+ */
+export type SdkTurnMessage =
+  | WithOptionalRunIds<SDKMessage>
+  /** The single assistant message a guarded turn synthesizes: guarded text, no `role`, no ids. */
+  | {
+      type: 'assistant'
+      agent_id?: string
+      run_id?: string
+      message: { role?: 'assistant'; content: { type: 'text'; text: string }[] }
+    }
 
 /** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
 export type SdkSendOptions = Record<string, unknown>

@@ -16,6 +16,7 @@
  * (blueprint `code-assistant-reasoning-ux` ADR-3).
  */
 import type { StreamEvent } from './agent-sse-handler.js'
+import type { TextDeltaEvent, ThinkingEvent } from './agent-stream-events.js'
 
 /** The de-facto inline-reasoning tag (qwen/deepseek). Single change point if a second tag ever appears. */
 const TAG = 'think'
@@ -94,7 +95,7 @@ export function createThinkTagExtractor(): {
 }
 
 /** Map an extractor segment to its StreamEvent (`thinking` segment → thinking event, else text_delta). */
-function segmentToEvent(seg: Segment): StreamEvent {
+function segmentToEvent(seg: Segment): TextDeltaEvent | ThinkingEvent {
   return seg.kind === 'thinking'
     ? { type: 'thinking', content: seg.content }
     : { type: 'text_delta', content: seg.content }
@@ -112,9 +113,9 @@ function segmentToEvent(seg: Segment): StreamEvent {
  * even when the source errors mid-stream (the flushed segments are delivered before the error
  * re-propagates) — never silently dropped (Unbreakable Rule 8: fail loud, lose nothing).
  */
-export async function* extractThinkTagStream(
-  source: AsyncIterable<StreamEvent>,
-): AsyncGenerator<StreamEvent> {
+export async function* extractThinkTagStream<E extends StreamEvent>(
+  source: AsyncIterable<E>,
+): AsyncGenerator<E | TextDeltaEvent | ThinkingEvent> {
   const extractor = createThinkTagExtractor()
   try {
     for await (const event of source) {
