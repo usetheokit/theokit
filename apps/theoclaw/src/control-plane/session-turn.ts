@@ -8,6 +8,7 @@ import {
 import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
+import { toBridgeMessage, toBridgeTimelineEvent } from './bridge-input.js'
 import { createEventMask } from './event-mask.js'
 import { describeStreamedError, outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
 
@@ -39,12 +40,12 @@ async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<
   }
   if (run.events === undefined) {
     // A run with no timeline (a port implementer older than B-376) still answers, without deltas.
-    for await (const message of run.stream()) forward(translateSdkEvent(message, options.runId))
+    for await (const message of run.stream()) forward(translateSdkEvent(toBridgeMessage(message), options.runId))
     return streamedError
   }
   const seen = createToolSeen()
   for await (const event of run.events()) {
-    forward(translateTimelineEvent(event, options.runId, seen))
+    forward(translateTimelineEvent(toBridgeTimelineEvent(event), options.runId, seen))
   }
   forward(flushPendingToolResults(seen))
   return streamedError

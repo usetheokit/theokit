@@ -1,8 +1,6 @@
-import type { InteractionUpdate } from '@theokit/sdk'
-
 import type { StreamEvent } from './agent-sse-handler.js'
 import {
-  type SdkMessageLike,
+  type SdkMessage,
   translateInteractionUpdate,
   translateSdkEvent,
 } from './event-translator.js'
@@ -28,8 +26,8 @@ import {
 /** The SDK's timeline event, structurally typed so this module needs no value import from the SDK. */
 export interface SdkTimelineEvent {
   readonly kind: 'message' | 'delta'
-  readonly message?: SdkMessageLike
-  readonly update?: InteractionUpdate
+  readonly message?: SdkMessage
+  readonly update?: unknown
   /** #140 — set by the SDK when this message's text already crossed as `kind: 'delta'`. */
   readonly textAlreadyStreamed?: boolean
 }
@@ -217,7 +215,9 @@ export function translateTimelineEvent(
 ): StreamEvent[] {
   if (ev.kind === 'delta') {
     if (ev.update === undefined) return []
-    const events = translateInteractionUpdate(ev.update)
+    const events = translateInteractionUpdate(
+      ev.update as Parameters<typeof translateInteractionUpdate>[0],
+    )
     // #388 — released BEFORE this event's own output, because a held result was reported earlier
     // than whatever is releasing it. The wire order a consumer reads is unchanged.
     const released = releasePendingToolResults(events, seen)

@@ -395,7 +395,7 @@ the listener. `GET /health` answers `{"status":"ok"}`.
 
 ### The `/control` socket
 
-Turns read the SDK agent through typed interfaces from `@theokit/agents/bridge` (`SdkMessageLike`, `SdkTimelineEvent`, `toAgentStreamEvent`) and `InteractionUpdate` from `@theokit/sdk`; no SDK message or event is cast.
+Turns read the SDK agent through typed port interfaces (`TurnAgent`, `TurnRun`, `SdkMessageLike`, `TurnTimelineEvent`) with the SDK's `InteractionUpdate`; no SDK message or event is cast.
 
 Connect to `ws://127.0.0.1:<port>/control` with `Authorization: Bearer <THEOCLAW_CONTROL_TOKEN>`;
 any other path answers 404 and a missing or wrong token 401, before any agent is built. Send
