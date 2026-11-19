@@ -120,6 +120,15 @@ const layer = parseDottedOverrides(['model=x', 'limits.turns=3'], {
 })
 ```
 
+### Trim policy per instruction source
+
+`composeInstructions(base, sources, { maxChars })` from `@theokit/agents/config` walks `sources` from the last
+entry. Each source may carry `trim`: `{ kind: 'drop' }` (default, the original behaviour), `keep-head` (cut the end),
+`keep-tail` (cut the start) or `{ kind: 'blocks-from-start', separator }` (drop whole blocks from the start, never
+cutting inside one). A source with a policy is trimmed as far as it allows before the walk moves on. Sources are
+never re-split unless their own policy is `blocks-from-start`. The result's `cuts` lists `{ name, from, to }` for
+every source that lost characters (`to` is 0 when dropped); it is empty when everything fit.
+
 ## Calling an agent route without `HttpTransport`
 
 An agent route's CSRF gate answers `403 CSRF_FAILED` unless the request carries `X-Theo-Action: 1`.
@@ -147,6 +156,9 @@ without one would be an unconfined shell, and making it unrepresentable is cheap
 the builder, the *posture* decides whether auto-approval is even permissible (it carries the sandbox
 posture as evidence, so "auto-approve without confinement" cannot be expressed), and the *resolver*
 settles an individual request. `./ask` is the inverse channel — the agent asking you.
+A surface reads the open question with `bridge.pending(threadId)` (a read, not a second listener)
+and learns of changes with `bridge.onChange(fn)`, which fires after a question is asked, answered,
+abandoned or failed and returns its own disposer.
 
 **Sessions are deleted carefully or not at all.** `./session` refuses to collect a transcript that a
 live writer holds, floors both `keepLast` and `maxAgeDays`, and plans before it applies. When your
@@ -218,6 +230,10 @@ AgentBuilder.create()
 
 A listener that throws is reported with `console.warn` and does not fail the build. `recordWiring` is unchanged; feed it from `CompiledWiring` if you want trust suppression.
 
+## Registering subagents
+
+`AgentBuilder.subagents()` (and `defineAgent({ subagents })`) takes `description` and `prompt` (required), plus optional `tools`, `model` (a `ModelSelection`, or `'inherit'`/absent for the parent's model) and `mcpServers` (names or inline configs, as the SDK takes them). All are passed to the SDK unchanged. `sandbox` and `memory` are not accepted: apply memory with `applySubagentMemory` before registering.
+
 ## Withholding SDK builtin tools
 
 `AgentBuilder.withholdBuiltinTools(['shell'])` keeps the named SDK builtin tools (`shell`,
@@ -236,6 +252,14 @@ fingerprint gate as `buildHookHandlers`, ignores specs of other events, and retu
 `HostHookOutcome` per spec (`ran`, `not-approved`, `failed`, `timed-out` or `could-not-start`)
 without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
 is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
+
+## Ending a goal loop with a tool
+
+`createGoalSignal()` returns an `update_goal` tool and a judge that read the same state. Add `signal.tool`
+to the agent that works on the goal and pass `{ judge: signal.judge }` as the `GoalRunner` deps: the judge
+answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
+no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
+and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
 
 ## What changed recently
 
@@ -531,6 +555,22 @@ See `LICENSE`.
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
 `listUserTurns(sessionId, { cwd })` lists the turns it can cut before as `{ nth, text }`. `nth` is 1-based and is
 the number `forkBeforeUserTurn` takes, so a backtrack UI can show the list and fork at the chosen entry.
+
+`deleteSession(id, { cwd, removeFromRegistry })` reports `registryOutcome: 'unconfirmed'` with the SDK's
+`Agent.delete`, because that returns `Promise<void>`. Pass `isListedInRegistry` to have it measure instead.
+It is called before and after the removal:
+
+```ts
+await deleteSession(id, {
+  cwd,
+  removeFromRegistry: (sessionId) => Agent.delete(sessionId),
+  isListedInRegistry: async (sessionId) => (await Agent.list({ runtime: 'local', cwd })).items.some((a) => a.agentId === sessionId),
+})
+```
+
+Listed after the removal is `still-present`; not listed before is `nothing-to-remove`; listed before and not
+after is `removed`. A verifier that throws or exceeds `registryTimeoutMs` gives `unconfirmed` with the error in
+`registryError`, and the transcript step still runs. Without a verifier nothing changes.
 
 ## Refused tool calls
 
