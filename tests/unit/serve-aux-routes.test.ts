@@ -72,6 +72,22 @@ describe('the agent aux dispatcher — production parity for card/mcp/list-appro
     expect(rpc.result?.serverInfo?.name).toBe('support')
   })
 
+  it('answers a notification with 202, bad JSON with -32700 and a batch with -32600', async () => {
+    const path = '/api/agents/support/mcp'
+    const note = await dispatchAuxRoute(
+      req(path, 'POST', { jsonrpc: '2.0', method: 'notifications/initialized' }),
+      path,
+      deps,
+    )
+    expect(note!.status).toBe(202)
+    expect(await note!.text()).toBe('')
+    const bad = await dispatchAuxRoute(req(path, 'POST'), path, deps)
+    expect(bad!.status).toBe(400)
+    const batch = await dispatchAuxRoute(req(path, 'POST', []), path, deps)
+    expect(batch!.status).toBe(400)
+    expect(((await batch!.json()) as { error: { code: number } }).error.code).toBe(-32600)
+  })
+
   it('M14 — serves the pending-approvals listing at /api/agents/<name>/approvals', async () => {
     const path = '/api/agents/support/approvals'
     const res = await dispatchAuxRoute(req(path), path, deps)
