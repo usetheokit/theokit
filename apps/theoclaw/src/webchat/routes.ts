@@ -3,7 +3,12 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { type AgentRouteContext, generateAgentRoutes } from '@theokit/agents/bridge'
+import {
+  type AgentRouteContext,
+  BodyTooLargeError,
+  generateAgentRoutes,
+  readCappedBody,
+} from '@theokit/agents/bridge'
 
 import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from '../control-plane/bearer.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -188,27 +193,6 @@ function relay(body: ReadableStream<Uint8Array>, stopTurn: () => void): Readable
 }
 
 /**
- * The post's body, read up to `MAX_MESSAGE_BYTES` and no further, or `undefined` past it. Read
- * from the stream rather than trusted from `content-length`, which a chunked post does not send.
- * A read that fails while the client is still connected rejects with the stream's error.
- */
-async function boundedBody(request: Request): Promise<Uint8Array<ArrayBuffer> | undefined> {
-  if (request.body === null) return new Uint8Array()
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let size = 0
-  for (let read = await reader.read(); !read.done; read = await reader.read()) {
-    size += read.value.byteLength
-    if (size > MAX_MESSAGE_BYTES) {
-      reader.cancel().catch(ignore)
-      return undefined
-    }
-    chunks.push(read.value)
-  }
-  return new Uint8Array(Buffer.concat(chunks))
-}
-
-/**
  * One chat post: the generator's handler, built per request so this request's signal reaches its
  * own turn. A client that leaves (the listener aborts `request.signal`) or a cancelled body stops
  * the turn.
@@ -324,7 +308,8 @@ async function boundedChat(
   write?: (line: string) => void,
   scope = '',
 ): Promise<Response> {
-  const body = await boundedBody(request).catch((error: unknown) => {
+  const body = await readCappedBody(request, MAX_MESSAGE_BYTES).catch((error: unknown) => {
+    if (error instanceof BodyTooLargeError) return undefined
     // A client that leaves mid-upload errors the body stream: answer, since the listener would
     // otherwise log "request failed" and write a 500 to a socket that is already gone.
     if (request.signal.aborted) return null
