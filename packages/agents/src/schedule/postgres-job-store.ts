@@ -110,11 +110,12 @@ export async function createPostgresJobStore(
   store.putMany = (batch) =>
     serialized(async () => {
       if (batch.length === 0) return
-      // One INSERT ... VALUES (...), (...) statement is atomic: all rows land or none do.
-      const values = batch.map((_, i) => `($${String(i * 2 + 1)}, $${String(i * 2 + 2)}::jsonb)`)
+      // One statement is atomic: all rows land or none do. The batch travels as a single JSON
+      // array parameter, so the count stays at 1 however many jobs there are (the protocol caps
+      // a statement at 65,535 parameters).
       await pool.query(
-        `INSERT INTO ${ident} (id, job) VALUES ${values.join(', ')} ON CONFLICT (id) DO UPDATE SET job = EXCLUDED.job`,
-        batch.flatMap((job) => [job.id, JSON.stringify(job)]),
+        `INSERT INTO ${ident} (id, job) SELECT e->>'id', e FROM jsonb_array_elements($1::jsonb) AS e ON CONFLICT (id) DO UPDATE SET job = EXCLUDED.job`,
+        [JSON.stringify(batch)],
       )
       for (const job of batch) jobs.set(job.id, job)
     })

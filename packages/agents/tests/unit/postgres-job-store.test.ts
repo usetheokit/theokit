@@ -191,4 +191,15 @@ describe('copyJobs', () => {
     await expect(copyJobs(from, target, { force: false })).rejects.toThrow('boom')
     expect(target.list()).toEqual([])
   })
+
+  it('a bulk copy beyond the 65,535-parameter protocol limit uses a bounded parameter count', async () => {
+    const { pool, calls } = fakePool()
+    const target = await createPostgresJobStore(pool)
+    const many = Array.from({ length: 40_000 }, (_, i) => job(`j${String(i)}`))
+    const from = { ...createJobStore('/nonexistent-dir/none.json'), list: () => many }
+    expect(await copyJobs(from, target, { force: false })).toBe(40_000)
+    const insert = calls.find((c) => c.sql.startsWith('INSERT'))
+    expect(insert?.params?.length ?? 0).toBeLessThanOrEqual(1)
+    expect(target.list()).toHaveLength(40_000)
+  })
 })
