@@ -1,7 +1,11 @@
-import type { CustomTool } from '@theokit/sdk'
+import type { CustomTool, Plugin } from '@theokit/sdk'
 import { describe, expect, it } from 'vitest'
 
-import { handleMcpToolsJsonRpc, serveMcpToolsStdio } from '../../src/server/agent/index.js'
+import {
+  handleMcpToolsJsonRpc,
+  type McpToolsOptions,
+  serveMcpToolsStdio,
+} from '../../src/server/agent/index.js'
 
 /**
  * A host application with no `defineAgent` module (TheoClaw) serves its own `CustomTool`s over MCP
@@ -44,5 +48,92 @@ describe('a list of CustomTools served over MCP', () => {
     const r = out.map((l) => JSON.parse(l))
     expect(r[0].result.tools.map((t: { name: string }) => t.name)).toEqual(['echo'])
     expect(r[1].result.content[0].text).toBe('yo')
+  })
+
+  describe('with plugins', () => {
+    const call = async (options?: McpToolsOptions, list: CustomTool[] = tools): Promise<any> =>
+      (
+        await handleMcpToolsJsonRpc(
+          list,
+          'host',
+          {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'echo', arguments: { text: 'x' } },
+          },
+          options,
+        )
+      ).json()
+    const plugin = (handler: (ctx: any) => unknown): Plugin =>
+      ({
+        name: 'p',
+        version: '1',
+        kind: 'general',
+        register: (ctx: any) => {
+          ctx.on('pre_tool_call', handler)
+        },
+      }) as unknown as Plugin
+    const spied = (): { list: CustomTool[]; ran: () => boolean } => {
+      let ran = false
+      return {
+        list: [{ ...tools[0], handler: () => ((ran = true), 'ok') }] as unknown as CustomTool[],
+        ran: () => ran,
+      }
+    }
+
+    it('a blocking plugin answers tools/call with isError true and its message, and the handler does not run', async () => {
+      const s = spied()
+      const res = await call(
+        { plugins: [plugin(() => ({ block: true, message: 'no way' }))] },
+        s.list,
+      )
+      expect(res.result.isError).toBe(true)
+      expect(res.result.content[0].text).toContain('no way')
+      expect(s.ran()).toBe(false)
+    })
+
+    it('a plugin that throws refuses the call (fail closed)', async () => {
+      const s = spied()
+      const res = await call(
+        {
+          plugins: [
+            plugin(() => {
+              throw new Error('boom')
+            }),
+          ],
+        },
+        s.list,
+      )
+      expect(res.result.isError).toBe(true)
+      expect(s.ran()).toBe(false)
+    })
+
+    it('tools/list is not filtered by plugins', async () => {
+      const res = await (
+        await handleMcpToolsJsonRpc(
+          tools,
+          'host',
+          { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+          { plugins: [plugin(() => ({ block: true, message: 'no' }))] },
+        )
+      ).json()
+      expect(res.result.tools).toHaveLength(1)
+    })
+
+    it('an allowing plugin sees the call context and the tool runs', async () => {
+      const seen: any[] = []
+      const res = await call({
+        plugins: [plugin((c) => void seen.push(c))],
+        hookContext: { agentId: 'a1' },
+      })
+      expect(res.result).toEqual({ content: [{ type: 'text', text: 'x' }] })
+      expect(seen[0]).toMatchObject({ name: 'echo', args: { text: 'x' }, agentId: 'a1' })
+      expect(typeof seen[0].runId).toBe('string')
+    })
+
+    it('without options behaviour is unchanged', async () => {
+      expect((await call()).result).toEqual({ content: [{ type: 'text', text: 'x' }] })
+    })
   })
 })
