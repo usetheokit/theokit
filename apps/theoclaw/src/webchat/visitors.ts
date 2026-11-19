@@ -1,9 +1,12 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Writable } from 'node:stream'
 
+import { atomicWriteJson } from '@theokit/sdk/persistence'
+
 import { UsageError } from '../cli-args.js'
+import { serializedPerFile } from '../serial-queue.js'
 
 /**
  * Expiring visitor grants for WebChat (OC-143). A reverse proxy such as Cloudflare Access
@@ -43,11 +46,9 @@ export function readGrants(file: string): VisitorGrants {
   }
 }
 
-function writeGrants(file: string, grants: VisitorGrants): void {
+async function writeGrants(file: string, grants: VisitorGrants): Promise<void> {
   mkdirSync(dirname(file), { recursive: true })
-  const temp = `${file}.tmp`
-  writeFileSync(temp, `${JSON.stringify(grants, null, 2)}\n`, { mode: 0o600 })
-  renameSync(temp, file)
+  await atomicWriteJson(file, grants, { mode: 0o600 })
 }
 
 const normalize = (email: string): string => email.trim().toLowerCase()
@@ -78,7 +79,7 @@ export interface VisitorsIo {
 const USAGE = 'theoclaw visitors: expected grant <email> --for <30m|12h|7d> | revoke <email> | list'
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-export function visitorsCommand(args: readonly string[], io: VisitorsIo, now: number = Date.now()): number {
+export async function visitorsCommand(args: readonly string[], io: VisitorsIo, now: number = Date.now()): Promise<number> {
   const [verb, email, ...rest] = args
   const file = visitorsPath(io.env, io.homeDir)
   if (verb === 'list') {
@@ -91,20 +92,26 @@ export function visitorsCommand(args: readonly string[], io: VisitorsIo, now: nu
   }
   if (email === undefined || !EMAIL.test(email)) throw new UsageError(USAGE)
   const who = normalize(email)
-  const grants = { ...readGrants(file) }
   if (verb === 'revoke') {
     if (rest.length > 0) throw new UsageError(USAGE)
-    delete grants[who]
-    writeGrants(file, grants)
+    // Read, change and write as one step per file, so two commands never start from the same old grants.
+    await serializedPerFile(file, async () => {
+      const grants = { ...readGrants(file) }
+      delete grants[who]
+      await writeGrants(file, grants)
+    })
     io.stdout.write(`revoked ${who}\n`)
     return 0
   }
   if (verb === 'grant') {
     if (rest.length !== 2 || rest[0] !== '--for') throw new UsageError(USAGE)
     const until = now + parseDuration(rest[1] ?? '')
-    for (const [other, at] of Object.entries(grants)) if (at <= now) delete grants[other]
-    grants[who] = until
-    writeGrants(file, grants)
+    await serializedPerFile(file, async () => {
+      const grants = { ...readGrants(file) }
+      for (const [other, at] of Object.entries(grants)) if (at <= now) delete grants[other]
+      grants[who] = until
+      await writeGrants(file, grants)
+    })
     io.stdout.write(`granted ${who} until ${new Date(until).toISOString()}\n`)
     return 0
   }

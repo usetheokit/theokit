@@ -37,6 +37,8 @@ export default defineConfig([
       'client/index': 'src/client/index.ts',
       // M44 (ADR-0053) — React-FREE agent-client entry (node; no React in the bundle).
       'client/core': 'src/client/core.ts',
+      // Encoder module ships as its own file so its zod-free import graph is checkable in dist.
+      'client/object-to-form-data': 'src/client/object-to-form-data.ts',
       'react-query/index': 'src/client/react-query.ts',
       // The security-header seam the six Web deploy entries import at runtime
       // (usetheokit/theokit#410). A missing entry here is invisible until a
