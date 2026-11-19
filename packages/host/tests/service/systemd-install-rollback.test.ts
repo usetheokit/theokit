@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -43,6 +43,28 @@ function fake(failOn?: string): { runner: Runner; calls: string[] } {
 }
 
 describe('systemd backend', () => {
+  it('writes a private unit under a restrictive umask and keeps its mode on rollback', async () => {
+    const homeDir = home()
+    const old = process.umask(0o077)
+    try {
+      const path = serviceBackend('linux', { homeDir }).definitionPath({ label: 'p' })
+      await serviceBackend('linux', { homeDir, runner: fake().runner }).install({
+        ...spec('p'),
+        env: { TOKEN: 'secret' },
+      })
+      expect(statSync(path).mode & 0o777).toBe(0o600)
+      chmodSync(path, 0o400)
+      await expect(
+        serviceBackend('linux', { homeDir, runner: fake('enable').runner }).install(
+          spec('p', 'two'),
+        ),
+      ).rejects.toBeInstanceOf(ServiceCommandError)
+      expect(statSync(path).mode & 0o777).toBe(0o400)
+    } finally {
+      process.umask(old)
+    }
+  })
+
   it('restores the previous unit on a failed reinstall', async () => {
     const homeDir = home()
     const ok = fake()

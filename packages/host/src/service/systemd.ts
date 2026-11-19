@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -88,7 +88,9 @@ export function createSystemdBackend(options: ServiceBackendOptions = {}): Servi
       const unit = `${spec.label}.service`
       mkdirSync(dirname(path), { recursive: true })
       const previous = existsSync(path) ? readFileSync(path, 'utf8') : undefined
-      await replaceFileAtomic(path, text, { mode: 0o644 })
+      const previousMode = previous === undefined ? undefined : statSync(path).mode & 0o777
+      // The unit holds ServiceSpec.env, so it stays private (0600, narrowed further by the umask).
+      await replaceFileAtomic(path, text)
       try {
         // `enable --now` leaves a running unit as it is, so the restart moves it onto the new file.
         await systemctl(['daemon-reload'])
@@ -97,7 +99,7 @@ export function createSystemdBackend(options: ServiceBackendOptions = {}): Servi
       } catch (error) {
         try {
           if (previous === undefined) rmSync(path, { force: true })
-          else await replaceFileAtomic(path, previous, { mode: 0o644 })
+          else await replaceFileAtomic(path, previous, { mode: previousMode })
           await runner('systemctl', ['--user', 'daemon-reload'])
         } catch (rollback) {
           if (error instanceof Error) {
