@@ -24,6 +24,34 @@ class BuiltinStoreFailure extends Error {
   override readonly name = 'BuiltinStoreFailure'
 }
 
+const MAX_SCAN_DEPTH = 6
+
+/** True when any string reachable from `thing` (message, stack, own properties, causes) contains a sensitive value. */
+function carriesAny(
+  thing: unknown,
+  sensitive: readonly string[],
+  depth = 0,
+  seen = new Set<unknown>(),
+): boolean {
+  if (typeof thing === 'string') return sensitive.some((value) => thing.includes(value))
+  if (thing === null || typeof thing !== 'object') return false
+  if (seen.has(thing)) return false
+  // Past the depth limit the object cannot be vouched for, so treat it as unsafe.
+  if (depth > MAX_SCAN_DEPTH) return true
+  seen.add(thing)
+  const probes: unknown[] = []
+  if (thing instanceof Error) probes.push(thing.name, thing.message, thing.stack)
+  for (const key of Reflect.ownKeys(thing)) {
+    // V8 keeps `stack` as an engine accessor; its text is already probed above.
+    if (thing instanceof Error && key === 'stack') continue
+    const descriptor = Object.getOwnPropertyDescriptor(thing, key)
+    // A getter could run caller code or hide a value; do not call it.
+    if (descriptor && !('value' in descriptor)) return true
+    probes.push(descriptor?.value)
+  }
+  return probes.some((probe) => carriesAny(probe, sensitive, depth + 1, seen))
+}
+
 export class SecretReferenceError extends TheokitAgentError {
   override readonly name = 'SecretReferenceError'
 
@@ -70,8 +98,8 @@ const fileStore: SecretStore = {
     try {
       // eslint-disable-next-line security/detect-non-literal-fs-filename -- the path is the operator's reference
       return trimNewline(await readFile(reference.slice(`${PREFIX}file:`.length), 'utf8'))
-    } catch {
-      throw new BuiltinStoreFailure('file could not be read')
+    } catch (cause) {
+      throw new BuiltinStoreFailure('file could not be read', { cause })
     }
   },
 }
@@ -95,7 +123,7 @@ const opStore: SecretStore = {
         ['read', '--no-newline', reference],
         { timeout: OP_TIMEOUT_MS, env: childEnv },
         (error, stdout) => {
-          if (error) reject(new BuiltinStoreFailure('1Password CLI failed'))
+          if (error) reject(new BuiltinStoreFailure('1Password CLI failed', { cause: error }))
           else resolve(trimNewline(stdout))
         },
       )
@@ -118,8 +146,8 @@ const vaultStore: SecretStore = {
       response = await fetch(`${addr}/v1/${path.replace(/^\/+/, '')}`, {
         headers: { 'X-Vault-Token': token },
       })
-    } catch {
-      throw new BuiltinStoreFailure('Vault request failed')
+    } catch (cause) {
+      throw new BuiltinStoreFailure('Vault request failed', { cause })
     }
     if (!response.ok) throw new BuiltinStoreFailure(`Vault answered ${response.status}`)
     let body: { data?: { data?: Record<string, unknown> } & Record<string, unknown> }
@@ -186,15 +214,20 @@ export async function resolveSecretRefs(
     try {
       value = await store.read(reference, env)
     } catch (error) {
-      // Only our own fixed-text failures are safe to quote or keep; a caller store's error may
-      // carry the value in its message, properties or nested cause.
+      // Only our own fixed-text failures are safe to quote. The original error is kept as the
+      // cause only when nothing reachable from it carries a resolved value or another variable's
+      // value (a token, a key); otherwise it is dropped.
       const known = error instanceof BuiltinStoreFailure
       const detail = known ? `: ${error.message}` : ''
+      const sensitive = [...values, ...Object.values(env)].filter(
+        (v): v is string => typeof v === 'string' && v !== '' && v.trim() !== reference,
+      )
+      const keep = !carriesAny(error, sensitive)
       throw new SecretReferenceError(
         `${name}: secret reference (${store.kind}) could not be resolved${detail}`,
         name,
         store.kind,
-        known ? { cause: error } : undefined,
+        keep ? { cause: error } : undefined,
       )
     }
     if (typeof value !== 'string' || value === '') {
