@@ -381,6 +381,15 @@ answers `continue` until the agent calls the tool with `complete` (`done`) or `b
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
 
+## Reading a run's final answer as an object
+
+`createResultCapture(schema)` returns a `submit_result` tool whose input schema is your zod object schema. Add
+`cap.tool` to the agent, tell it to finish by calling the tool, then read `cap.result()` after `run.wait()`. A
+submission that fails validation goes back to the model as a tool error naming the issue paths, so it can fix
+it; the last valid submission wins. `result()` throws `NoResultSubmittedError` when none was valid, and
+`submitted()` tells you beforehand. The schema must be an object schema; `name` and `description` rename or
+reword the tool.
+
 ## Scheduled jobs: file or PostgreSQL
 
 `createScheduler` keeps its jobs in a `JobStore` from `@theokit/agents/tools`. Pick the file store for one host with a disk, or the PostgreSQL store when there are several replicas or no durable disk. The PostgreSQL store takes a ready pool (a `pg` `Pool` has the `query` it needs), so this package adds no driver.
