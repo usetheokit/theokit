@@ -28,86 +28,81 @@ describe('isSupervised', () => {
   })
 })
 
-function fakeChild(pid: number | undefined, outcome: 'spawn' | Error) {
-  const child = Object.assign(new EventEmitter(), { pid, unref() {} })
-  queueMicrotask(() => {
-    if (outcome === 'spawn') child.emit('spawn')
-    else child.emit('error', outcome)
-  })
-  return child
+function fakeChild(pid: number | undefined) {
+  return Object.assign(new EventEmitter(), { pid, unref() {} })
 }
 
 describe('restartSelf', () => {
-  it('exits with 75 under a supervisor', async () => {
-    await expect(
-      restartSelf({ startEnv: {}, env: { INVOCATION_ID: 'x' }, platform: 'linux' }),
-    ).resolves.toEqual({ kind: 'exit', code: RESTART_EXIT_CODE })
+  it('returns the exit code 75 synchronously under a supervisor', () => {
+    expect(restartSelf({ startEnv: {}, env: { INVOCATION_ID: 'x' }, platform: 'linux' })).toEqual({
+      kind: 'exit',
+      code: RESTART_EXIT_CODE,
+    })
   })
 
-  it('spawns a successor with the predecessor pid', async () => {
+  it('returns the successor pid synchronously, with the predecessor pid in its env', () => {
     let seen: Record<string, string | undefined> = {}
-    const result = await restartSelf({
+    const result = restartSelf({
       startEnv: { A: '1' },
       env: {},
       platform: 'linux',
       spawn: (_c, _a, o) => {
         seen = o.env ?? {}
-        return fakeChild(42, 'spawn')
+        return fakeChild(42)
       },
     })
     expect(result).toEqual({ kind: 'spawned', pid: 42 })
     expect(seen).toMatchObject({ A: '1', THEOKIT_HOST_RESTART_AFTER_PID: String(process.pid) })
   })
 
-  it('rejects with RestartError whose cause is the error event', async () => {
-    const cause = new Error('spawn ENOENT')
-    const error = await restartSelf({
-      startEnv: {},
-      env: {},
-      platform: 'linux',
-      spawn: () => fakeChild(undefined, cause),
-    }).catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(RestartError)
-    expect((error as RestartError).cause).toBe(cause)
-  })
-
-  it('rejects with RestartError whose cause is a throw from spawn', async () => {
+  it('throws RestartError whose cause is the error thrown by spawn', () => {
     const cause = new Error('EAGAIN')
-    const error = await restartSelf({
-      startEnv: {},
-      env: {},
-      platform: 'linux',
-      spawn: () => {
-        throw cause
-      },
-    }).catch((e: unknown) => e)
-    expect((error as RestartError).cause).toBe(cause)
+    try {
+      restartSelf({
+        startEnv: {},
+        env: {},
+        platform: 'linux',
+        spawn: () => {
+          throw cause
+        },
+      })
+      expect.unreachable()
+    } catch (error) {
+      expect(error).toBeInstanceOf(RestartError)
+      expect((error as RestartError).cause).toBe(cause)
+    }
   })
 
-  it('reports a real spawn failure with its cause', async () => {
-    const error = await restartSelf({
-      startEnv: {},
-      env: {},
-      platform: 'linux',
-      spawn: (_c, _a, o) => spawn('/nonexistent/x', [], o),
-    }).catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(RestartError)
-    expect(((error as RestartError).cause as NodeJS.ErrnoException).code).toBe('ENOENT')
+  it('throws when no pid comes back and delivers the real spawn error to onSpawnError', async () => {
+    const seen: RestartError[] = []
+    expect(() =>
+      restartSelf({
+        startEnv: {},
+        env: {},
+        platform: 'linux',
+        onSpawnError: (e) => seen.push(e),
+        spawn: (_c, _a, o) => spawn('/nonexistent/x', [], o),
+      }),
+    ).toThrow(RestartError)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(seen).toHaveLength(1)
+    expect((seen[0]?.cause as NodeJS.ErrnoException).code).toBe('ENOENT')
   })
 
-  it('refuses an unsupported platform before spawning', async () => {
+  it('refuses an unsupported platform before spawning', () => {
     let spawned = false
-    const error = await restartSelf({
-      startEnv: {},
-      env: {},
-      platform: 'win32',
-      spawn: () => {
-        spawned = true
-        return fakeChild(1, 'spawn')
-      },
-    }).catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(UnsupportedPlatformError)
-    expect((error as Error).message).toContain('win32')
+    const run = () =>
+      restartSelf({
+        startEnv: {},
+        env: {},
+        platform: 'win32',
+        spawn: () => {
+          spawned = true
+          return fakeChild(1)
+        },
+      })
+    expect(run).toThrow(UnsupportedPlatformError)
+    expect(run).toThrow(/win32/)
     expect(spawned).toBe(false)
   })
 })

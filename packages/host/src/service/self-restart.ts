@@ -30,13 +30,17 @@ export function isSupervised(
 interface SuccessorProcess {
   readonly pid?: number
   unref(): void
-  once(event: 'spawn', listener: () => void): unknown
   once(event: 'error', listener: (error: Error) => void): unknown
 }
 
 export interface RestartSelfOptions {
   /** The environment the first process was started with; the successor gets it. */
   readonly startEnv: Readonly<Record<string, string | undefined>>
+  /**
+   * Node reports a failed spawn through the child's `error` event, after `restartSelf` has
+   * returned. That error arrives here, wrapped in a RestartError whose `cause` is the spawn error.
+   */
+  readonly onSpawnError?: (error: RestartError) => void
   /** Test seam: replaces `child_process.spawn`. */
   readonly spawn?: (
     command: string,
@@ -48,15 +52,16 @@ export interface RestartSelfOptions {
 }
 
 /**
- * Under a supervisor resolves `{ kind: 'exit', code: 75 }` and the caller exits with it. Otherwise
- * starts a detached successor that waits for this process (see `waitForPredecessor`) and resolves
- * once it has started. Node reports a failed spawn through the child's `error` event, after the
- * call returns, so the result is a Promise: it rejects with RestartError whose `cause` is the
- * spawn error. A platform that is neither linux nor darwin rejects with UnsupportedPlatformError.
+ * Under a supervisor returns `{ kind: 'exit', code: 75 }` and the caller exits with it. Otherwise
+ * starts a detached successor that waits for this process (see `waitForPredecessor`) and returns
+ * `{ kind: 'spawned', pid }`. The call is synchronous, so it can only report what is known at
+ * once: a throw from `spawn`, or a child with no pid, both thrown as RestartError. A platform
+ * other than linux or darwin throws UnsupportedPlatformError. The spawn error Node delivers
+ * later through the `error` event goes to `onSpawnError`.
  */
-export async function restartSelf(
+export function restartSelf(
   options: RestartSelfOptions,
-): Promise<{ kind: 'exit'; code: number } | { kind: 'spawned'; pid: number }> {
+): { kind: 'exit'; code: number } | { kind: 'spawned'; pid: number } {
   const platform = options.platform ?? process.platform
   if (platform !== 'linux' && platform !== 'darwin') throw new UnsupportedPlatformError(platform)
   if (isSupervised(options.env, platform)) return { kind: 'exit', code: RESTART_EXIT_CODE }
@@ -65,26 +70,27 @@ export async function restartSelf(
     [RESTART_AFTER_PID_VARIABLE]: String(process.pid),
   }
   const start: NonNullable<RestartSelfOptions['spawn']> = options.spawn ?? spawn
-  return new Promise((resolve, reject) => {
-    const failed = (cause: unknown): void => {
-      reject(new RestartError('could not start the successor process', { cause }))
-    }
-    try {
-      const child = start(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
-        env,
-        detached: true,
-        stdio: 'inherit',
-      })
-      child.once('error', failed)
-      child.once('spawn', () => {
-        child.unref()
-        if (child.pid === undefined) failed(new Error('spawn reported no pid'))
-        else resolve({ kind: 'spawned', pid: child.pid })
-      })
-    } catch (cause) {
-      failed(cause)
-    }
+  let child: SuccessorProcess
+  try {
+    child = start(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
+      env,
+      detached: true,
+      stdio: 'inherit',
+    })
+  } catch (cause) {
+    throw new RestartError('could not start the successor process', { cause })
+  }
+  child.once('error', (cause) => {
+    options.onSpawnError?.(new RestartError('could not start the successor process', { cause }))
   })
+  if (child.pid === undefined) {
+    throw new RestartError(
+      'could not start the successor process: spawn returned no pid (the spawn error goes to onSpawnError)',
+      { cause: new Error(`spawn ${process.execPath} returned no pid`) },
+    )
+  }
+  child.unref()
+  return { kind: 'spawned', pid: child.pid }
 }
 
 function alive(pid: number): boolean {

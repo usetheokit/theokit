@@ -50,11 +50,11 @@ Restart from inside the app:
 ```ts
 await waitForPredecessor(process.env) // first thing in a successor: waits for the old pid to exit
 // later, when a setting that needs a restart changes:
-const next = await restartSelf({ startEnv: originalEnv })
+const next = restartSelf({ startEnv: originalEnv, onSpawnError: (error) => log(error.cause) })
 if (next.kind === 'exit') process.exit(next.code) // 75: the supervisor starts the app again
 ```
 
-`isSupervised` is true for `INVOCATION_ID` on Linux and for `XPC_SERVICE_NAME` other than `0` on macOS. Otherwise `restartSelf` spawns a detached successor (it gets `THEOKIT_HOST_RESTART_AFTER_PID`) and returns its pid; if the spawn fails it rejects with `RestartError` with the cause. `restartSelf` returns a Promise because Node reports a failed spawn through the child's `error` event; it resolves once the successor has started. On a platform other than Linux or macOS it rejects with `UnsupportedPlatformError`.
+`isSupervised` is true for `INVOCATION_ID` on Linux and for `XPC_SERVICE_NAME` other than `0` on macOS. Otherwise `restartSelf` spawns a detached successor (it gets `THEOKIT_HOST_RESTART_AFTER_PID`) and returns its pid; if the spawn fails it throws `RestartError` with the cause. `restartSelf` is synchronous, so it throws only what is known at once: a throw from `spawn`, or a child with no pid. The spawn error Node delivers later through the child's `error` event goes to `onSpawnError` as a `RestartError` whose `cause` is that error. On a platform other than Linux or macOS it throws `UnsupportedPlatformError`.
 
 ## License
 
