@@ -1,6 +1,5 @@
 import { type CommandDefinition, defineCommand, routeCommand } from '@theokit/agents/commands'
-import type { ChatCommand, GatewayHook } from '@theokit/gateway'
-import { THINKING_LEVELS } from '../agent/failover.js'
+import type { GatewayHook } from '@theokit/gateway'
 
 /** The commands answered from what the process knows, never by the model (OC-105), routed by the agents command router. */
 export const INFO_COMMANDS = [
@@ -16,30 +15,6 @@ export const CHAT_COMMANDS = [
   defineCommand({ name: 'stop', description: 'stop the turn that is running', arg: 'none' }),
   defineCommand({ name: 'steer', description: 'redirect the turn that is running' }),
 ]
-
-/** What `/help` says about the commands this file answers or WebChat routes. */
-type CommandDescription = Pick<ChatCommand, 'name' | 'usage' | 'description'>
-
-export const STATUS_DESCRIPTION: CommandDescription = {
-  name: 'status',
-  usage: '/status, /model',
-  description: 'the model and surface of this chat',
-}
-export const THINK_DESCRIPTION: CommandDescription = {
-  name: 'think',
-  usage: `/think ${THINKING_LEVELS.join('|')}`,
-  description: 'the thinking level of this session (only these four)',
-}
-export const STOP_DESCRIPTION: CommandDescription = {
-  name: 'stop',
-  usage: '/stop',
-  description: 'stop the turn that is running (WebChat)',
-}
-export const STEER_DESCRIPTION: CommandDescription = {
-  name: 'steer',
-  usage: '/steer <text>',
-  description: 'redirect the turn that is running',
-}
 
 /** The command a message names (a Telegram `/model@bot` accepted) and its argument; `undefined` for any other text. */
 export function commandOf(text: string, commands: readonly CommandDefinition[]): { readonly name: string; readonly arg: string } | undefined {

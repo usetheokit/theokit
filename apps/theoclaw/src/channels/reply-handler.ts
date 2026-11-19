@@ -21,17 +21,9 @@ import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
 import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
 import { AdvisorHistory, reviewQuietly, steerNote, type AdvisorSettings } from './advisor.js'
 import { ackInbound, showTyping, type TypingOptions } from './typing.js'
-import type { ChatCommand } from '@theokit/gateway'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
-
-/** What `/help` says about `/new` and `/reset`. */
-export const RESET_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
-  name: 'new',
-  usage: '/new, /reset',
-  description: 'start a new conversation',
-}
 
 /** The one line `/new` and `/reset` answer with. */
 export const NEW_CONVERSATION_REPLY = 'Started a new conversation.'

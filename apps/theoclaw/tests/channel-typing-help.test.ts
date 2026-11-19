@@ -8,7 +8,7 @@ import { createGroupActivationHook } from '../src/channels/group-activation-hook
 import { createUsageHook } from '../src/channels/usage-hook.js'
 import { createAcpCommandHook, createAcpSessions } from '../src/channels/acp-command.js'
 import { CHAT_COMMANDS } from '../src/channels/info-commands.js'
-import { createHelpHook, HELP_COMMANDS, HELP_ENTRIES, HELP_TEXT } from '../src/channels/help-hook.js'
+import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { readAckReaction, showTyping } from '../src/channels/typing.js'
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent } from './fakes.js'
@@ -80,8 +80,14 @@ describe('every registered command has a help line', () => {
     for (const name of names) expect(HELP_COMMANDS, name).toContain(`/${name}`)
   })
 
-  it('builds the text from the same entries the commands list reads', () => {
-    for (const entry of HELP_ENTRIES) expect(HELP_TEXT).toContain(`${entry.usage ?? `/${entry.name}`} - ${entry.description}`)
+  it('registers each listed command with the gateway hook, which lets the other handlers answer it', async () => {
+    const hook = createHelpHook()
+    for (const command of HELP_COMMANDS.filter((c) => c !== '/help')) {
+      expect(
+        await hook.pre_inbound?.({ event: messageEvent('telegram', `${command} x`) } as never),
+        command,
+      ).toBeUndefined()
+    }
   })
 })
 
