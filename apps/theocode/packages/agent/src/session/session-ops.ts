@@ -32,7 +32,7 @@ export interface SessionInfo {
  * mints a fourth prefix and disappears, silently, exactly as `exec-` did from the first commit.
  *
  * What settles it is that this codebase already answers "what is a session", and the answer is not
- * the name: `gc/filesystem.ts:98` and `gc/per-session.ts:203` build the DELETION PROTECTION SET from
+ * the name: `gc/filesystem.ts:98` builds the DELETION PROTECTION SET from
  * this same listing with no filter at all. Two answers to one question is how they come to disagree,
  * and here the stricter one guarded a display while the looser one guarded deletion.
  *
@@ -54,6 +54,8 @@ export async function listSessions(cwd: string = process.cwd()): Promise<Session
   return sessionsFrom(await listAgents(cwd))
 }
 
+// Kept local rather than `transcriptRootHint` from `@theokit/agents/session`: the framework's message
+// text differs ("No sessions under …"), and callers and tests show this one.
 export function legacyRootHint(found: number, legacyRoot: string): string | undefined {
   if (found > 0) return undefined
   const newRoot = process.env.THEOKIT_HOME?.trim()
