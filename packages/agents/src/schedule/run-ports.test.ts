@@ -86,17 +86,22 @@ describe('agentRunPort', () => {
 })
 
 describe('fileTransientJob', () => {
-  const make = () =>
-    fileTransientJob({ id: 'hb', cron: '@hourly', target: { channel: 'c' } as never, file: '/x' })
+  const target = { channel: 'c' } as never
+  const make = () => fileTransientJob({ id: 'hb', cron: '@hourly', target, file: '/x' })
   beforeEach(() => readFile.mockReset())
 
   it('builds a non-durable job and re-reads the trimmed file on each fire', async () => {
     const { job, transient } = make()
     expect(job.id).toBe('hb')
+    expect(job.cron).toBe('@hourly')
+    expect(job.target).toBe(target)
     expect(transient.durable).toBe(false)
     readFile.mockResolvedValueOnce('  one \n').mockResolvedValueOnce('two')
     expect(await transient.prompt()).toBe('one')
     expect(await transient.prompt()).toBe('two')
+    expect(readFile).toHaveBeenCalledTimes(2)
+    expect(readFile).toHaveBeenNthCalledWith(1, '/x', 'utf8')
+    expect(readFile).toHaveBeenNthCalledWith(2, '/x', 'utf8')
   })
 
   it('an absent or blank file means no run', async () => {
