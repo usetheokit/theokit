@@ -54,10 +54,13 @@ function tarHeader(name: string, size: number): Buffer {
   return header
 }
 
-function redact(text: string, secrets: readonly string[]): string {
-  let out = text
-  for (const s of secrets) out = out.split(s).join('[redacted]')
-  return out
+/**
+ * The first candidate message that contains none of the secrets. The ladder ends in an empty
+ * message: no fixed text is safe against a secret that happens to be a word of it.
+ */
+function safeMessage(candidates: readonly string[], secrets: readonly string[]): string {
+  const ladder = [...candidates, 'Diagnostic bundle refused.', 'refused', '']
+  return ladder.find((m) => !secrets.some((s) => m.includes(s))) ?? ''
 }
 
 /**
@@ -70,22 +73,37 @@ export async function writeDiagnosticBundle(
   const secrets = options.secrets.filter((s) => s.length > 0)
   const mask = options.mask ?? ((t: string) => t)
   const blocks: Buffer[] = []
-  for (const file of options.files) {
-    const shown = redact(file.name, secrets)
+  for (const [index, file] of options.files.entries()) {
+    // Never show a name that holds a secret; fall back to the position.
+    const nameLeaks = secrets.some((s) => file.name.includes(s))
+    const label = (text: string) => [nameLeaks ? '' : `${text} "${file.name}"`, `${text} #${index}`]
     if (Buffer.byteLength(file.name, 'utf8') > NAME_BYTES) {
       throw new DiagnosticBundleError(
         'name_too_long',
-        `Diagnostic bundle file name "${shown}" is longer than ${NAME_BYTES} bytes.`,
+        safeMessage(
+          label('file')
+            .filter(Boolean)
+            .map((l) => `Diagnostic bundle ${l} is longer than ${NAME_BYTES} bytes.`),
+          secrets,
+        ),
       )
     }
-    const content = mask(file.content)
-    if (secrets.some((s) => content.includes(s) || file.name.includes(s))) {
+    // Check what is actually archived: encoding can change the text (an unpaired surrogate
+    // becomes U+FFFD), so test the encoded-then-decoded form, and the name as written to the header.
+    const body = Buffer.from(mask(file.content), 'utf8')
+    const archived = body.toString('utf8')
+    const archivedName = Buffer.from(file.name, 'utf8').toString('utf8')
+    if (secrets.some((s) => archived.includes(s) || archivedName.includes(s))) {
       throw new DiagnosticBundleError(
         'secret_survived',
-        `Diagnostic bundle refused: a configured secret survived in "${shown}".`,
+        safeMessage(
+          label('file')
+            .filter(Boolean)
+            .map((l) => `Diagnostic bundle refused: a configured secret survived in ${l}.`),
+          secrets,
+        ),
       )
     }
-    const body = Buffer.from(content, 'utf8')
     blocks.push(tarHeader(file.name, body.length), body)
     const pad = (512 - (body.length % 512)) % 512
     if (pad > 0) blocks.push(Buffer.alloc(pad))

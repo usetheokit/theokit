@@ -1,7 +1,8 @@
+/* eslint-disable sonarjs/no-os-command-from-path -- tar is the reference extractor */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DiagnosticBundleError, writeDiagnosticBundle } from './diagnostic-bundle.js'
 
@@ -41,13 +42,48 @@ describe('writeDiagnosticBundle', () => {
 
   it('a mask that removes the secret lets the bundle through', async () => {
     const out = join(dir(), 'b.tar.gz')
+    const d = dirname(out)
     await writeDiagnosticBundle({
       out,
       files: [{ name: 'a.txt', content: 'k=s3cret' }],
       secrets: ['s3cret'],
       mask: (t) => t.replace('s3cret', '***'),
     })
-    expect(existsSync(out)).toBe(true)
+    const x = join(d, 'x')
+    mkdirSync(x)
+    execFileSync('tar', ['-xzf', out, '-C', x])
+    expect(readFileSync(join(x, 'a.txt'), 'utf8')).toBe('k=***')
+  })
+
+  it('an error message never contains a secret, even one that occurs in the message text', async () => {
+    for (const secret of ['redacted', 'refused', 'Diagnostic', 'bundle refused']) {
+      const err = await writeDiagnosticBundle({
+        out: join(dir(), 'b.tar.gz'),
+        files: [{ name: secret, content: secret }],
+        secrets: [secret],
+      }).catch((e: unknown) => e)
+      expect((err as DiagnosticBundleError).reason).toBe('secret_survived')
+      expect((err as Error).message).not.toContain(secret)
+    }
+    const long = 'x'.repeat(101)
+    const err = await writeDiagnosticBundle({
+      out: join(dir(), 'b.tar.gz'),
+      files: [{ name: long, content: '' }],
+      secrets: ['xxx'],
+    }).catch((e: unknown) => e)
+    expect((err as Error).message).not.toContain('xxx')
+  })
+
+  it('a secret that encoding introduces (U+FFFD from a lone surrogate) is refused', async () => {
+    const out = join(dir(), 'b.tar.gz')
+    await expect(
+      writeDiagnosticBundle({
+        out,
+        files: [{ name: 'a', content: 'a\ud800b' }],
+        secrets: ['\ufffd'],
+      }),
+    ).rejects.toMatchObject({ reason: 'secret_survived' })
+    expect(existsSync(out)).toBe(false)
   })
 
   it('a name over 100 bytes throws name_too_long', async () => {
