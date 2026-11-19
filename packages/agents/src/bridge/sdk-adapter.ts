@@ -860,9 +860,11 @@ export interface SdkTurnHandle {
   }>
   /**
    * Yields SDK messages that feed `translateSdkEvent` directly, no cast. {@link SdkMessageLike} has
-   * no index signature, so an `@theokit/sdk` `SDKMessage` stream is assignable.
+   * no index signature, so an `@theokit/sdk` `SDKMessage` stream is assignable. The `number` member
+   * keeps existing handles that yield bare values compiling (additive change); a consumer feeding the
+   * translator skips them with `typeof m === 'object'`.
    */
-  stream?(): AsyncIterable<SdkMessageLike>
+  stream?(): AsyncIterable<SdkMessageLike | number>
   /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
   cancel?(): unknown
 }
