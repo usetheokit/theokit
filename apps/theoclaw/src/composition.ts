@@ -1030,6 +1030,9 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     removeShutdown()
     options.signals.off('exit', flushOnExit)
     await teardown()
+    // A listener that bound before the failure is withdrawn and closed too.
+    const bound = await serving?.catch(() => undefined)
+    if (bound !== undefined) await stopThenClose(announcement ?? NOTHING_TO_WITHDRAW, bound)
     // The mask stays: the entry writes this error and exits, and that line is masked too.
     mask.flush()
     throw error

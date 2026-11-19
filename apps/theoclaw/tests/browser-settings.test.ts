@@ -284,6 +284,35 @@ describe('THEOCLAW_BROWSER', () => {
     expect(closed).toBe(1)
   })
 
+  it('closes the listener and the shared browser when the start fails after it bound', async () => {
+    let browserClosed = 0
+    let listenerClosed = 0
+    const launch = () =>
+      Promise.resolve({
+        endpoint: 'http://127.0.0.1:4321',
+        close: () => Promise.resolve().then(() => void browserClosed++),
+      })
+    const handle = {
+      address: () => ({ host: '127.0.0.1', port: 1 }),
+      close: () => Promise.resolve().then(() => void listenerClosed++),
+      server: undefined as never,
+    }
+    const result = await startForTools(
+      { THEOCLAW_BROWSER: 'on' },
+      tempCwd(cleanups),
+      { detect: notEnforced, browser: { ...installed(), launch } },
+      {
+        listen: () => Promise.resolve(handle),
+        stdout: () => {
+          throw new Error('stdout broke')
+        },
+      },
+    )
+    expect(result.error?.message).toBe('stdout broke')
+    expect(browserClosed).toBe(1)
+    expect(listenerClosed).toBe(1)
+  })
+
   it('spawns the browser server with neither env nor envPolicy', () => {
     // Neither key present, so the SDK's `inherit-scrubbed` default applies (NFR-004).
     const server = browserServer({ cliPath: CLI })

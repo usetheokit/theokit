@@ -77,6 +77,14 @@ describe('the browser wrapper on a shared browser', () => {
     expect(replies.map((reply) => reply.id)).toEqual([1, 2])
   })
 
+  it('answers a client whose request id looks like an internal one', async () => {
+    const { replies } = await run(
+      ['--cdp-endpoint', 'http://127.0.0.1:1'],
+      [{ ...navigate(1, 'http://a/'), id: 'theoclaw-own-tab' }],
+    )
+    expect(replies.map((reply) => reply.id)).toEqual(['theoclaw-own-tab'])
+  })
+
   it('leaves an isolated browser as it was', async () => {
     const { seen } = await run(['--isolated'], [navigate(1, 'http://a/')])
     expect(seen).toEqual(['browser_navigate:http://a/'])

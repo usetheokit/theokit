@@ -25,6 +25,7 @@
  * cannot be forwarded: the server then exits on its stdin closing and the directory stays behind.
  */
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
@@ -85,8 +86,8 @@ const server = spawn(process.execPath, [cliPath, ...serverArgs, '--output-dir', 
 /** The ids of the `tools/list` requests whose answers are still to be filtered. */
 const listRequests = new Set()
 
-/** Id of the wrapper's own `browser_tabs` call; no client request uses a string like it. */
-const OWN_TAB_ID = 'theoclaw-own-tab'
+/** Id of the wrapper's own `browser_tabs` call: random per process, so no client request can carry it. */
+const OWN_TAB_ID = `theoclaw-own-tab-${randomUUID()}`
 /** Attached to a shared browser, the session opens its own tab before its first call. */
 const SHARED = serverArgs.includes('--cdp-endpoint')
 /** `undefined` until the first call, `'opening'` while the tab is being made, then `'ready'`. */
