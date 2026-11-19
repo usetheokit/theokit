@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, rmdirSync, statSync, unlinkSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
 import { Agent } from '@theokit/sdk'
@@ -11,6 +11,8 @@ import {
 } from '@theokit/sdk/persistence'
 
 import { classifyProjects, type FsSeam, type LivenessVerdict } from '../liveness-oracle.js'
+import { awaitRegistryRemoval } from './registry-remover.js'
+import { collectorRootOwner, CollectorRootNotOwnedError } from './collector-root.js'
 import { protectedTranscriptPaths } from '../session-lifecycle.js'
 import { sessionPointerPath } from '../session-pointer.js'
 
@@ -499,4 +501,173 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
     countByKind,
     errors,
   }
+}
+
+export interface RunProjectsGCOptions {
+  readonly apply: boolean
+  /** The app applying the plan. Required to apply: it must own `plan.projectsRoot` (see `claimCollectorRoot`). */
+  readonly owner?: { readonly app: string }
+  /** Removes a registered session; default `Agent.delete`. */
+  readonly removeFromRegistry?: (sessionId: string) => unknown
+  readonly registryTimeoutMs?: number
+  /** Extra protection re-read just before each removal. A throw refuses the candidate. */
+  readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>
+  readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>
+}
+
+export interface RunProjectsGCResult {
+  readonly dryRun: boolean
+  readonly removed: readonly string[]
+  readonly refused: readonly { target: string; reason: string }[]
+  readonly errors: readonly { target: string; message: string }[]
+}
+
+/** Sessions that must survive right now, as absolute transcript paths -> reason. Throws when unknowable. */
+function protectionNow(
+  plan: ProjectsGCPlan,
+  options: RunProjectsGCOptions,
+  fs: Pick<ProjectsGCFs, 'readFile'>,
+): { paths: Map<string, string>; ids: Map<string, string> } {
+  const root = dirname(plan.projectsRoot)
+  const paths = new Map<string, string>()
+  const ids = new Map<string, string>()
+  const protect = (id: string, cwd: string, reason: string): void => {
+    ids.set(id, reason)
+    paths.set(transcriptPath(root, cwd, id), reason)
+    paths.set(legacyTranscriptPath(root, cwd, id), reason)
+  }
+  for (const cwd of plan.liveCwds) {
+    try {
+      const id = fs.readFile(sessionPointerPath(cwd, root)).trim()
+      if (id.length > 0) protect(id, cwd, 'the session pointer now names it')
+    } catch (error) {
+      if (!isNotFound(error)) throw new Error(`pointer read failed: ${messageOf(error)}`)
+    }
+    for (const [id, reason] of options.protectedIds?.(cwd) ?? []) protect(id, cwd, reason)
+  }
+  return { paths, ids }
+}
+
+function removeTolerant(remove: () => void): void {
+  try {
+    remove()
+  } catch (error) {
+    if (!isNotFound(error)) throw error
+  }
+}
+
+/**
+ * Apply a {@link ProjectsGCPlan}. A dry run (`apply: false`) removes nothing and reports every candidate.
+ * Applying first requires `options.owner` to own the projects root, then re-checks protection before
+ * EACH removal (pointer, `protectedIds`, live writer) and refuses what changed since the plan.
+ *
+ * @throws {CollectorRootNotOwnedError} when applying and the root is not owned by `options.owner`.
+ * @throws {CollectorRootError} when the ownership marker cannot be read.
+ */
+export async function runProjectsGC(
+  plan: ProjectsGCPlan,
+  options: RunProjectsGCOptions,
+): Promise<RunProjectsGCResult> {
+  const removed: string[] = []
+  const refused: { target: string; reason: string }[] = []
+  const errors: { target: string; message: string }[] = []
+
+  if (!options.apply) {
+    return { dryRun: true, removed: plan.candidates.map((c) => c.target), refused, errors }
+  }
+
+  const actual = collectorRootOwner(plan.projectsRoot)
+  if (options.owner === undefined || actual?.app !== options.owner.app) {
+    throw new CollectorRootNotOwnedError(
+      plan.projectsRoot,
+      options.owner?.app ?? '(none given)',
+      actual?.app,
+    )
+  }
+
+  const fs = options.fs ?? defaultFs
+  const remove = options.removeFromRegistry ?? ((id: string) => Agent.delete(id))
+  const touched = new Set<string>()
+
+  for (const candidate of plan.candidates) {
+    const { target, project } = candidate
+    // Protection is re-read per candidate: a pointer can change while an earlier removal awaits.
+    let now: ReturnType<typeof protectionNow>
+    try {
+      now = protectionNow(plan, options, fs)
+    } catch (error) {
+      refused.push({ target, reason: `protection cannot be established: ${messageOf(error)}` })
+      continue
+    }
+    let guarded: string | undefined // the transcript whose writer matters
+    if (candidate.kind === 'transcript') guarded = target
+    else if (candidate.kind === 'writer-lock' || candidate.kind === 'lock-directory') {
+      const suffix = candidate.kind === 'writer-lock' ? '.writer.lock' : '.lock'
+      guarded = join(dirname(target), basename(target).slice(0, -suffix.length))
+    }
+    const reason =
+      now.paths.get(target) ??
+      (candidate.kind === 'registry' ? now.ids.get(candidate.sessionId ?? target) : undefined) ??
+      (guarded !== undefined ? now.paths.get(guarded) : undefined)
+    if (reason !== undefined) {
+      refused.push({ target, reason: `changed since the plan: ${reason}` })
+      continue
+    }
+    if (guarded !== undefined) {
+      let writer: boolean
+      try {
+        writer = fs.hasLiveWriter(guarded)
+      } catch {
+        writer = true
+      }
+      if (writer) {
+        refused.push({ target, reason: 'changed since the plan: a live writer holds the session' })
+        continue
+      }
+    }
+
+    try {
+      if (candidate.sessionId !== undefined) {
+        try {
+          await awaitRegistryRemoval(
+            remove(candidate.sessionId),
+            candidate.sessionId,
+            options.registryTimeoutMs,
+          )
+        } catch (error) {
+          errors.push({ target, message: `registry removal failed, kept: ${messageOf(error)}` })
+          continue
+        }
+      }
+      if (candidate.kind === 'lock-directory')
+        removeTolerant(() => {
+          rmdirSync(target)
+        })
+      else if (candidate.kind !== 'registry')
+        removeTolerant(() => {
+          unlinkSync(target)
+        })
+      removed.push(target)
+      touched.add(project)
+    } catch (error) {
+      errors.push({ target, message: messageOf(error) })
+    }
+  }
+
+  // A project directory the removals left empty goes too; a non-empty one is left alone.
+  for (const project of touched) {
+    const dir = join(plan.projectsRoot, project)
+    try {
+      if (readdirSync(dir).length === 0) {
+        removeTolerant(() => {
+          rmdirSync(dir)
+        })
+        removed.push(dir)
+      }
+    } catch (error) {
+      if (!isNotFound(error)) errors.push({ target: dir, message: messageOf(error) })
+    }
+  }
+
+  return { dryRun: false, removed, refused, errors }
 }
