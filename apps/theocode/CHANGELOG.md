@@ -17,7 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 ### Changed
-- **`@theokit/agents` is now pinned to the released `16.11.0` in all five TheoCode manifests instead of `workspace:*`.** A new consumer test (`tools/released-auth-consumer.test.mjs`) installs that exact version with npm into an empty temp directory and exercises `loginWithApiKey`, `ensureFreshCredential` and `refreshOAuthTokens` through `@theokit/agents/auth`. The standalone `pnpm-lock.yaml` is untouched; its fate is #2276. (#2243)
+- **`@theokit/agents` is now pinned to the released `16.11.0` as `workspace:16.11.0` in all five TheoCode manifests (still linked to this checkout, which the own-package-duplicates guard requires, and published as `16.11.0`) instead of `workspace:*`.** A new consumer test (`tools/released-auth-consumer.test.mjs`) installs that exact version with npm into an empty temp directory and exercises `loginWithApiKey`, `ensureFreshCredential` and `refreshOAuthTokens` through `@theokit/agents/auth`. The standalone `pnpm-lock.yaml` is untouched; its fate is #2276. (#2243)
 - **`AgentDefinitionLike` no longer declares `model?: string`.** The framework's `SubagentAgentDefinition` now takes `model` as `ModelSelection | 'inherit'`, so the string field no longer type-checked against `.subagents()`. `definitionFrom` never set it. Carrying a role's model is a separate migration. (#1858)
 - **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)
 

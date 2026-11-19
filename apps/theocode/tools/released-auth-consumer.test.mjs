@@ -28,7 +28,8 @@ const MANIFESTS = [
 const declared = MANIFESTS.map((m) => {
   const json = JSON.parse(readFileSync(join(THEOCODE, m), 'utf8'))
   const spec = { ...json.dependencies, ...json.devDependencies }['@theokit/agents']
-  return { manifest: m, spec }
+  // `workspace:<exact>` links to this checkout in development and publishes as `<exact>`.
+  return { manifest: m, spec, version: String(spec).replace(/^workspace:/, '') }
 })
 
 let root
@@ -49,7 +50,7 @@ describe('released @theokit/agents auth APIs, from a standalone consumer install
         '--no-audit',
         '--no-fund',
         '--ignore-scripts',
-        `@theokit/agents@${declared[0].spec}`,
+        `@theokit/agents@${declared[0].version}`,
       ],
       { cwd: root, stdio: 'pipe' },
     )
@@ -66,17 +67,17 @@ describe('released @theokit/agents auth APIs, from a standalone consumer install
     if (root) rmSync(root, { recursive: true, force: true })
   })
 
-  it('every TheoCode manifest pins one released version, not workspace:* ', () => {
+  it('every TheoCode manifest pins one exact released version, not workspace:*', () => {
     for (const { manifest, spec } of declared) {
-      expect(spec, manifest).toMatch(/^\d+\.\d+\.\d+$/)
+      expect(spec, manifest).toMatch(/^(workspace:)?\d+\.\d+\.\d+$/)
     }
-    expect(new Set(declared.map((d) => d.spec)).size).toBe(1)
+    expect(new Set(declared.map((d) => d.version)).size).toBe(1)
   })
 
   it('resolves the pinned version as a registry copy, not a link into the repository', () => {
     const dir = realpathSync(join(root, 'node_modules/@theokit/agents'))
     const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-    expect(pkg.version).toBe(declared[0].spec)
+    expect(pkg.version).toBe(declared[0].version)
     expect(relative(realpathSync(tmpdir()), dir).startsWith('..')).toBe(false)
     expect(dir.split(sep)).toContain('node_modules')
   })
