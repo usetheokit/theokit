@@ -28,16 +28,21 @@ export class ScheduleInbox {
     private readonly mask: (text: string) => string = (text) => text,
   ) {}
 
+  /** The stored messages; a missing file is an empty inbox, an unreadable or malformed one throws. */
   list(): InboxMessage[] {
+    let raw: string
     try {
-      const data: unknown = JSON.parse(readFileSync(this.file, 'utf8'))
-      return Array.isArray(data) ? (data as InboxMessage[]) : []
-    } catch {
-      return []
+      raw = readFileSync(this.file, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+      throw error
     }
+    const data: unknown = JSON.parse(raw)
+    if (!Array.isArray(data)) throw new Error('the schedule inbox is not a list')
+    return data as InboxMessage[]
   }
 
-  /** Append one masked message; writes are serialized. Resolves false when the write failed. */
+  /** Append one masked message; writes are serialized. Resolves false when the write failed or the stored messages cannot be read (they are never overwritten). */
   add(channelId: string, text: string): Promise<boolean> {
     const run = this.tail.then(() => {
       try {
@@ -59,12 +64,28 @@ export class ScheduleInbox {
 /** `read_schedule_inbox`: the stored messages, newest last. */
 export function createInboxTool(inbox: ScheduleInbox): CustomTool {
   const inputSchema = z.object({
-    limit: z.number().int().min(1).max(INBOX_LIMIT).optional().describe('How many of the newest messages to return.'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(INBOX_LIMIT)
+      .optional()
+      .describe('How many of the newest messages to return.'),
     channelId: z.string().min(1).optional().describe('Only the messages sent to this label.'),
   })
   const handle = (raw: unknown): Promise<string> => {
     const { limit, channelId } = inputSchema.parse(raw)
-    const all = inbox.list().filter((message) => channelId === undefined || message.channelId === channelId)
+    let stored: InboxMessage[]
+    try {
+      stored = inbox.list()
+    } catch {
+      return Promise.resolve(
+        JSON.stringify({ error: 'the schedule inbox cannot be read', messages: [] }),
+      )
+    }
+    const all = stored.filter(
+      (message) => channelId === undefined || message.channelId === channelId,
+    )
     return Promise.resolve(JSON.stringify({ messages: all.slice(-(limit ?? 20)) }))
   }
   return Tool.create({
