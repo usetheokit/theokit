@@ -2,7 +2,6 @@ import { createWireReader, finalMessageOf } from '@theokit/presenter'
 import type { AgentOutputEvent } from '@theokit/presenter'
 import { readTurnMetadata } from '@theokit/presenter/wire'
 import type { WireChunk, WireTurnMetadata } from '@theokit/presenter/wire'
-import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /** Where a one-shot turn writes: the answer on `out`, progress and diagnostics on `err`. */
 export interface HeadlessIo {
@@ -35,11 +34,10 @@ export interface HeadlessTurnOptions {
 const DEFAULT_EXIT_CODES: Record<HeadlessOutcome, number> = { ok: 0, error: 1, empty: 1, cut: 2 }
 
 /** Thrown by {@link readHeadlessPrompt} when no prompt is left. */
-export class EmptyPromptError extends TheokitAgentError {
-  override readonly name = 'EmptyPromptError'
+export class EmptyPromptError extends Error {
   constructor(message = 'No prompt: pass one as an argument or on stdin.') {
-    // an empty prompt stays empty on every attempt.
-    super(message, { code: 'EMPTY_PROMPT', isRetryable: false })
+    super(message)
+    this.name = 'EmptyPromptError'
   }
 }
 
