@@ -7,7 +7,7 @@
  * part of the path. Two grammars that disagree is how `@src/a.ts,` attached in one surface and
  * silently did not in another.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { relative } from 'node:path'
 
@@ -75,6 +75,15 @@ function defaultRead(abs: string): string | undefined {
   return readFileSync(abs, 'utf8')
 }
 
+function realpathOrUndefined(p: string): string | undefined {
+  try {
+    return realpathSync(p)
+  } catch (error) {
+    if (isNotFound(error)) return undefined
+    throw error
+  }
+}
+
 /** The absolute path a ref names, or why it cannot be read. */
 function locate(ref: string, opts: FileMentionOptions): { abs: string } | { reason: Skip } {
   if (isForbiddenPath(ref)) return { reason: 'forbidden' }
@@ -91,6 +100,16 @@ function locate(ref: string, opts: FileMentionOptions): { abs: string } | { reas
     // `dir/../.env` look harmless as written.
     if (isForbiddenPath(relative(base, abs))) return { reason: 'forbidden' }
     assertNoSymlinkEscape(abs, base)
+    // A link inside cwd may point at a forbidden file (`notes.txt -> .env`): judge the target too.
+    const realAbs = realpathOrUndefined(abs)
+    const realBase = realpathOrUndefined(base)
+    if (
+      realAbs !== undefined &&
+      realBase !== undefined &&
+      isForbiddenPath(relative(realBase, realAbs))
+    ) {
+      return { reason: 'forbidden' }
+    }
     return { abs }
   } catch (error) {
     if (error instanceof PathTraversalError) return { reason: 'outside-root' }
@@ -140,10 +159,15 @@ export function resolveFileMentions(text: string, opts: FileMentionOptions): Res
       skipped.push({ ref, reason: raw.reason })
       continue
     }
-    const content =
-      estimateTokens(raw.content) > perFile
-        ? `${raw.content.slice(0, Math.max(0, perFile * 4 - TRUNCATION_MARKER.length))}${TRUNCATION_MARKER}`
-        : raw.content
+    const truncated = estimateTokens(raw.content) > perFile
+    if (truncated && perFile * 4 < TRUNCATION_MARKER.length) {
+      // Not even the marker fits inside the cap: attach nothing rather than exceed it.
+      skipped.push({ ref, reason: 'budget' })
+      continue
+    }
+    const content = truncated
+      ? `${raw.content.slice(0, Math.max(0, perFile * 4 - TRUNCATION_MARKER.length))}${TRUNCATION_MARKER}`
+      : raw.content
     const cost = estimateTokens(content)
     if (used + cost > total) {
       overBudget++

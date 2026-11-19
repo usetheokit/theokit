@@ -132,6 +132,39 @@ describe('file mentions', () => {
     expect(Math.ceil(body.length / 4)).toBeLessThanOrEqual(5)
   })
 
+  it('a link inside cwd that points at a forbidden file is skipped as forbidden', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'fm-'))
+    writeFileSync(join(cwd, '.env'), 'SECRET=1')
+    symlinkSync(join(cwd, '.env'), join(cwd, 'notes.txt'))
+    const r = resolveFileMentions('@notes.txt', { cwd })
+    expect(r.attached).toEqual([])
+    expect(r.skipped).toEqual([{ ref: 'notes.txt', reason: 'forbidden' }])
+  })
+
+  it.each([0, 1, 3, 4, 5])(
+    'perFileTokens %i never lets the attached content exceed the cap',
+    (n) => {
+      const r = resolveFileMentions('@b.md', {
+        cwd: '/w',
+        readFile: () => 'y'.repeat(1000),
+        perFileTokens: n,
+      })
+      const body = r.message.split('--- b.md ---\n')[1] ?? ''
+      expect(Math.ceil(body.length / 4)).toBeLessThanOrEqual(n)
+      if (n < 4) {
+        expect(r.attached).toEqual([])
+        expect(r.skipped).toEqual([{ ref: 'b.md', reason: 'budget' }])
+      } else {
+        expect(r.attached).toEqual(['b.md'])
+      }
+    },
+  )
+
+  it('findFileMentions reports the index of the @', () => {
+    expect(findFileMentions('@a.ts')).toEqual([{ ref: 'a.ts', index: 0 }])
+    expect(findFileMentions('look at @src/a.ts, ok')).toEqual([{ ref: 'src/a.ts', index: 8 }])
+  })
+
   it('the total budget skips the overflow with reason budget', () => {
     const r = resolveFileMentions('@src/a.ts @b.md', {
       cwd: '/w',
