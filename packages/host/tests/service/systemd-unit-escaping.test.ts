@@ -13,6 +13,15 @@ describe('systemdUnit', () => {
     expect(unit).toContain('WorkingDirectory=/opt/my app/"q"\\b%%h$X')
   })
 
+  it('refuses a trailing backslash that would continue the line', () => {
+    const base = { label: 'x', command: '/bin/x', workingDirectory: '/srv' }
+    expect(() => systemdUnit({ ...base, workingDirectory: '/srv/app\\' })).toThrow(
+      /workingDirectory/,
+    )
+    expect(() => systemdUnit({ ...base, description: 'desc\\' })).toThrow(/description/)
+    expect(systemdUnit({ ...base, description: 'a\\b' })).toContain('Description=a\\b\n')
+  })
+
   it('refuses a line break, naming the field and not the value', () => {
     const secret = 'sekret\nvalue'
     for (const spec of [

@@ -47,6 +47,11 @@ function assertNoLineBreak(field: string, value: string): void {
   if (/[\r\n]/.test(value)) throw new ServiceDefinitionError(field, 'cannot hold a line break')
 }
 
+/** A backslash before the newline that ends the directive would continue the line into the next one. */
+function assertNoTrailingBackslash(field: string, value: string): void {
+  if (value.endsWith('\\')) throw new ServiceDefinitionError(field, 'cannot end with a backslash')
+}
+
 function assertAbsolute(field: string, value: string): void {
   assertNoLineBreak(field, value)
   if (!isAbsolute(value)) throw new ServiceDefinitionError(field, 'must be an absolute path')
@@ -55,9 +60,13 @@ function assertAbsolute(field: string, value: string): void {
 /** Check every field of a spec; throws ServiceDefinitionError naming the field, never the value. */
 export function validateSpec(spec: ServiceSpec): void {
   assertLabel(spec.label)
-  if (spec.description !== undefined) assertNoLineBreak('description', spec.description)
+  if (spec.description !== undefined) {
+    assertNoLineBreak('description', spec.description)
+    assertNoTrailingBackslash('description', spec.description)
+  }
   assertAbsolute('command', spec.command)
   assertAbsolute('workingDirectory', spec.workingDirectory)
+  assertNoTrailingBackslash('workingDirectory', spec.workingDirectory)
   for (const [index, arg] of (spec.args ?? []).entries()) assertNoLineBreak(`args[${index}]`, arg)
   for (const [name, value] of Object.entries(spec.env ?? {})) {
     if (!ENV_NAME.test(name))

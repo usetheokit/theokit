@@ -100,7 +100,14 @@ export function createSystemdBackend(options: ServiceBackendOptions = {}): Servi
         try {
           if (previous === undefined) rmSync(path, { force: true })
           else await replaceFileAtomic(path, previous, { mode: previousMode })
-          await runner('systemctl', ['--user', 'daemon-reload'])
+          const reload = await runner('systemctl', ['--user', 'daemon-reload'])
+          if (reload.code !== 0) {
+            throw new ServiceCommandError(
+              'systemctl --user daemon-reload',
+              reload.code,
+              reload.stderr.trim(),
+            )
+          }
         } catch (rollback) {
           if (error instanceof Error) {
             error.message += ` (restoring the previous unit also failed: ${rollback instanceof Error ? rollback.message : String(rollback)})`

@@ -149,4 +149,23 @@ describe('systemd backend', () => {
     const backend = serviceBackend('linux', { homeDir: home(), runner: fake('disable').runner })
     await expect(backend.uninstall('ghost')).resolves.toBeUndefined()
   })
+
+  it('reports a failing rollback daemon-reload alongside the original error', async () => {
+    const homeDir = home()
+    let reloads = 0
+    const runner: Runner = async (_c, args) => {
+      const line = args.slice(1).join(' ')
+      if (line === 'daemon-reload') reloads += 1
+      const fail = line.startsWith('enable') || (line === 'daemon-reload' && reloads > 1)
+      return { code: fail ? 1 : 0, stdout: '', stderr: fail ? 'boom' : '' }
+    }
+    const error = await serviceBackend('linux', { homeDir, runner })
+      .install(spec('r'))
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ServiceCommandError)
+    expect((error as Error).message).toMatch(/enable/)
+    expect((error as Error).message).toMatch(
+      /restoring the previous unit also failed.*daemon-reload/,
+    )
+  })
 })
