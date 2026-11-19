@@ -38,4 +38,20 @@ describe('app host stop timeout', () => {
     const error = (await started) as { rollbackFailures: { step: string }[] }
     expect(error.rollbackFailures.map((f) => f.step)).toEqual(['A'])
   })
+
+  it('keeps the close result stable when a timed-out stop rejects later', async () => {
+    vi.useFakeTimers()
+    const host = createAppHost({ stopTimeoutMs: 500 })
+    host.service(
+      'A',
+      () => 1,
+      () => new Promise<void>((_, reject) => setTimeout(() => reject(new Error('late')), 800)),
+    )
+    await host.start()
+    const closing = host.close()
+    await vi.advanceTimersByTimeAsync(500)
+    const result = await closing
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(result).toEqual({ ok: false, failed: [], timedOut: ['A'] })
+  })
 })

@@ -98,7 +98,8 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
             entry.value,
           )
         } catch (error) {
-          failed.push({ step: entry.name, error })
+          // After the watchdog fired the result is already returned; keep it stable.
+          if (!expired) failed.push({ step: entry.name, error })
           report(entry.name, error)
         }
       }
