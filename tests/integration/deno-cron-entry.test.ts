@@ -90,6 +90,21 @@ describe('Deno import map for the cron entry configs', () => {
   })
 })
 
+describe('renderDenoConfig', () => {
+  it('keeps a project alias instead of remapping it to npm:', async () => {
+    const { renderDenoConfig } = await import('../../packages/theo/src/adapters/deno-deploy.js')
+    const out = renderDenoConfig({
+      specifiers: ['@app/backend', '@lib/x', 'pg'],
+      existing: { imports: { '@app/backend': './lib/backend.ts', '@lib/': './lib/' } },
+    })
+    expect(out.imports).toEqual({
+      '@app/backend': './lib/backend.ts',
+      '@lib/': './lib/',
+      pg: 'npm:pg',
+    })
+  })
+})
+
 describe('generated Deno cron entry', () => {
   it('pins the jobs import to the given theokit version', () => {
     const entry = join(root, '.theokit', 'crons-entry.ts')

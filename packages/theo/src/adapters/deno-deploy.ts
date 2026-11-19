@@ -456,7 +456,13 @@ export function renderDenoConfig(opts: {
 }): DenoConfig {
   const config: DenoConfig = { ...(opts.existing ?? {}) }
   const imports: Record<string, string> = { ...(config.imports ?? {}) }
-  for (const specifier of opts.specifiers) imports[specifier] = `npm:${specifier}`
+  for (const specifier of opts.specifiers) {
+    // An entry the project already declared stays: its own alias (`@app/backend` → a local file)
+    // is not a registry package, and a trailing-slash prefix entry already resolves what it covers.
+    if (specifier in imports) continue
+    if (Object.keys(imports).some((key) => key.endsWith('/') && specifier.startsWith(key))) continue
+    imports[specifier] = `npm:${specifier}`
+  }
   config.imports = imports
   const unstable = [...(config.unstable ?? [])]
   if (!unstable.includes('sloppy-imports')) unstable.push('sloppy-imports')
