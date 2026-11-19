@@ -9,7 +9,7 @@ import { createServer } from "node:net";
 import { render } from "ink-testing-library";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type ControlClient, createControlClient } from "../src/control-client/control-client.js";
+import { type ControlClient, type ControlFrame, createControlClient } from "../src/control-client/control-client.js";
 import { composerReady } from "./composer-ready.js";
 import { createContainer } from "../src/composition.js";
 import { controlOptions } from "../src/control-plane/control-wiring.js";
@@ -67,6 +67,10 @@ async function startInstance(turnFor: (n: number) => FakeTurn): Promise<Instance
 async function renderTui(instance: Instance, session = "owner") {
   const client = await createControlClient({ url: `ws://127.0.0.1:${instance.port}/control`, token: TOKEN });
   clients.push(client);
+  return mount(client, session);
+}
+
+async function mount(client: ControlClient, session = "owner") {
   const view = render(<TheoClawTui client={client} session={session} onExit={() => undefined} />);
   unmounts.push(view.unmount);
   const screen = (): string => view.lastFrame() ?? "";
@@ -185,6 +189,77 @@ describe("theoclaw-tui (T4.2)", () => {
     expect(tui.screen()).not.toContain("owner-1");
     await tui.type(ESC);
     await waitFor(() => instance.agents[0]!.cancels === 1, 2000, "the instance to cancel the original turn");
+  });
+
+  it("the owner's message is drawn apart from the assistant's text", async () => {
+    const instance = await startInstance(() => ({ frames: [assistant("reply text"), finished()] }));
+    const tui = await renderTui(instance);
+    await tui.type("question text", ENTER);
+    await tui.until((f) => f.includes("reply text"), "the reply");
+    const lines = tui.screen().split("\n");
+    const asked = lines.findIndex((l) => l.includes("question text"));
+    const replied = lines.findIndex((l) => l.includes("reply text"));
+    expect(asked).toBeGreaterThanOrEqual(0);
+    expect(replied).toBeGreaterThan(asked);
+    expect(lines[asked]).not.toContain("reply text");
+  });
+
+  it("a notice added while a turn runs keeps the turn running and stays below the text already drawn", async () => {
+    const hold = deferred<void>();
+    const instance = await startInstance(() => ({ frames: [assistant("Hello"), finished()], deltas: ["Hel"], afterDeltas: hold.promise }));
+    const tui = await renderTui(instance);
+    await tui.type("hi", ENTER);
+    await tui.until((f) => f.includes("Hel"), "the first delta");
+    await tui.type("/new", ENTER, ENTER);
+    await tui.until((f) => f.includes("press Esc first"), "the refusal");
+    expect(tui.screen()).toContain("esc to interrupt");
+    hold.resolve();
+    await waitFor(() => !tui.screen().includes("esc to interrupt"), 3000, "the turn to end");
+    const lines = tui.screen().split("\n");
+    expect(lines.findIndex((l) => l.includes("Hel"))).toBeLessThan(lines.findIndex((l) => l.includes("press Esc first")));
+  });
+
+  /** A client whose first turn streams "before", waits for `release`, then streams "after" and ends. */
+  function steppedClient(release: Promise<void>, chats: string[]): ControlClient {
+    return {
+      chat: async function* (text: string, session: string) {
+        chats.push(text);
+        if (chats.length > 1) {
+          yield { type: "done", session } as ControlFrame;
+          return;
+        }
+        yield { type: "event", session, event: { type: "text_delta", content: "before" } } as unknown as ControlFrame;
+        await release;
+        yield { type: "event", session, event: { type: "text_delta", content: "after" } } as unknown as ControlFrame;
+        yield { type: "done", session } as ControlFrame;
+      },
+      interrupt: () => undefined,
+      close: async () => undefined,
+    } as unknown as ControlClient;
+  }
+
+  async function warningSplitsText(warn: (tui: Awaited<ReturnType<typeof mount>>) => Promise<void>, warning: string): Promise<void> {
+    const release = deferred<void>();
+    const chats: string[] = [];
+    const tui = await mount(steppedClient(release.promise, chats));
+    await tui.type("hi", ENTER);
+    await tui.until((f) => f.includes("before"), "the text before the warning");
+    await warn(tui);
+    await tui.until((f) => f.includes(warning), "the warning");
+    release.resolve();
+    await tui.until((f) => f.includes("after"), "the text after the warning");
+    const lines = tui.screen().split("\n");
+    const at = (needle: string): number => lines.findIndex((l) => l.includes(needle));
+    expect(at("before")).toBeLessThan(at(warning));
+    expect(at(warning)).toBeLessThan(at("after"));
+  }
+
+  it("text before and after the /new warning sits on each side of it", async () => {
+    await warningSplitsText((tui) => tui.type("/new", ENTER, ENTER), "press Esc first");
+  });
+
+  it("text before and after the queued-message warning sits on each side of it", async () => {
+    await warningSplitsText((tui) => tui.type("again", ENTER), "sent when the running turn ends");
   });
 
   it("partial assistant text is drawn before the turn ends", async () => {

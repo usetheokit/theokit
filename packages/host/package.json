@@ -1,0 +1,71 @@
+{
+  "name": "@theokit/host",
+  "version": "0.0.0",
+  "description": "Node-only process utilities for long-running agent apps: the pieces a daemon or bot host needs that belong in neither @theokit/agents nor theokit.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usetheokit/theokit.git",
+    "directory": "packages/host"
+  },
+  "homepage": "https://github.com/usetheokit/theokit/tree/main/packages/host#readme",
+  "bugs": {
+    "url": "https://github.com/usetheokit/theokit/issues"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./service": {
+      "types": "./dist/service.d.ts",
+      "import": "./dist/service.js"
+    },
+    "./backup": {
+      "types": "./dist/backup/index.d.ts",
+      "import": "./dist/backup/index.js"
+    },
+    "./app-host": {
+      "types": "./dist/app-host/index.d.ts",
+      "import": "./dist/app-host/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@theokit/sdk": "^5.17.0"
+  },
+  "devDependencies": {
+    "@theokit/sdk": "^5.17.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12"
+  },
+  "keywords": [
+    "theokit",
+    "host",
+    "daemon",
+    "agents",
+    "node"
+  ]
+}
