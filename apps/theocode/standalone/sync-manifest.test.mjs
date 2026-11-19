@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { after, describe, it } from 'node:test'
@@ -72,5 +73,41 @@ describe('sync-manifest', () => {
   it('matches the committed package.json (fails on a stale manifest)', () => {
     const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'))
     assert.deepEqual(pkg.dependencies, deriveDependencies(), 'run `node sync-manifest.mjs`')
+  })
+
+  describe('command', () => {
+    // Copy the script into <root>/standalone so its `..` root is the isolated fixture.
+    function setup(standaloneDeps) {
+      const { root } = fixture({ '@theokit/agents': '1.2.3' }, { '@theokit/agents': 'workspace:*' })
+      const dir = join(root, 'standalone')
+      mkdirSync(dir)
+      copyFileSync(join(here, 'sync-manifest.mjs'), join(dir, 'sync-manifest.mjs'))
+      writeFileSync(join(dir, 'released.json'), JSON.stringify({ '@theokit/agents': '1.2.3' }))
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({ name: 'x', dependencies: standaloneDeps }),
+      )
+      return dir
+    }
+    const run = (dir, ...args) =>
+      spawnSync(process.execPath, [join(dir, 'sync-manifest.mjs'), ...args], { encoding: 'utf8' })
+
+    it('regenerates package.json dependencies, then --check passes', () => {
+      const dir = setup({ stale: '1.0.0' })
+      assert.equal(run(dir).status, 0)
+      const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+      assert.equal(pkg.name, 'x')
+      assert.deepEqual(pkg.dependencies, { '@theokit/agents': '1.2.3', zod: '^4.0.0' })
+      assert.equal(run(dir, '--check').status, 0)
+    })
+
+    it('--check fails on a stale manifest without rewriting it', () => {
+      const dir = setup({ stale: '1.0.0' })
+      const before = readFileSync(join(dir, 'package.json'), 'utf8')
+      const r = run(dir, '--check')
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /out of date/)
+      assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before)
+    })
   })
 })
