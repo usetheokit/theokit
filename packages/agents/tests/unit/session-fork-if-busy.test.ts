@@ -92,4 +92,26 @@ describe('streamTurnForkingIfBusy', () => {
     expect(await collect(r.chunks)).toEqual(list)
     expect(opens).toBe(1)
   })
+
+  it('a fork that emits content and then hits session_busy throws ForkedSessionBusyError', async () => {
+    const late = [
+      c({ type: 'start' }),
+      c({ type: 'text-start', id: 't' }),
+      c({ type: 'data-error-code', data: { code: 'session_busy' } }),
+      c({ type: 'error', errorText: 'busy' }),
+    ]
+    const r = streamTurnForkingIfBusy('s', (id) => from(id === 's' ? busy : late), {
+      isBusy: never,
+      forkId: () => 'f',
+    })
+    const err = await collect(r.chunks).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ForkedSessionBusyError)
+    await expect(r.sessionId).rejects.toBe(err)
+  })
+
+  it('return() before the first next() settles sessionId', async () => {
+    const r = streamTurnForkingIfBusy('s', () => from(ok), { isBusy: never })
+    await r.chunks[Symbol.asyncIterator]().return?.()
+    await expect(r.sessionId).rejects.toThrow('closed before')
+  })
 })

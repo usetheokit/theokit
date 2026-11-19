@@ -44,8 +44,8 @@ function isBusyCodePart(chunk: UIMessageChunk): boolean {
  * Run one turn; if the session is busy (another process is writing it), run the turn once on a fork
  * id instead. Structural chunks are held until the first content chunk so a contended first attempt
  * emits nothing. Contention is the `data-error-code {code:'session_busy'}` part followed by an
- * `error` chunk. A busy signal after content was already emitted cannot be retracted and is passed
- * through. `sessionId` settles once the stream finishes (or fails); consume `chunks` first.
+ * `error` chunk. On the first attempt a busy signal after content was already emitted cannot be retracted and is
+ * passed through; on the fork it throws `ForkedSessionBusyError`. `sessionId` settles once the stream finishes (or fails); consume `chunks` first.
  */
 export function streamTurnForkingIfBusy(
   sessionId: string,
@@ -67,7 +67,7 @@ export function streamTurnForkingIfBusy(
   idPromise.catch(() => undefined)
 
   /** Yields the attempt's chunks; returns true when it ended in swallowed contention. */
-  async function* attempt(id: string): AsyncGenerator<UIMessageChunk, boolean> {
+  async function* attempt(id: string, isFork: boolean): AsyncGenerator<UIMessageChunk, boolean> {
     let released = false
     const held: UIMessageChunk[] = []
     let pending: UIMessageChunk | undefined
@@ -81,7 +81,9 @@ export function streamTurnForkingIfBusy(
         pending = undefined
       }
       if (released) {
-        yield chunk
+        // On a fork there is no retry left, so contention must surface even after content.
+        if (isFork && isBusyCodePart(chunk)) pending = chunk
+        else yield chunk
       } else if (STRUCTURAL.has(chunk.type)) {
         held.push(chunk)
       } else if (isBusyCodePart(chunk)) {
@@ -107,10 +109,10 @@ export function streamTurnForkingIfBusy(
       }
       const preflight = isBusy(id)
       if (preflight) fork()
-      let busy = yield* attempt(id)
+      let busy = yield* attempt(id, preflight)
       if (busy && !preflight) {
         fork()
-        busy = yield* attempt(id)
+        busy = yield* attempt(id, true)
       }
       if (busy) throw new ForkedSessionBusyError(sessionId, id)
       resolveId(id)
@@ -122,5 +124,19 @@ export function streamTurnForkingIfBusy(
     }
   }
 
-  return { chunks: run(), sessionId: idPromise }
+  const chunks: AsyncIterable<UIMessageChunk> = {
+    [Symbol.asyncIterator]() {
+      const it = run()
+      return {
+        next: () => it.next(),
+        throw: (e) => it.throw(e),
+        return: (v) => {
+          // run()'s finally never executes if the generator was not started.
+          rejectId(new Error('streamTurnForkingIfBusy: stream closed before the turn completed'))
+          return it.return(v)
+        },
+      }
+    },
+  }
+  return { chunks, sessionId: idPromise }
 }
