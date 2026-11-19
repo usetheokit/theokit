@@ -52,6 +52,15 @@ export interface AgentPartialToolCallEvent {
   readonly input: unknown
 }
 
+/**
+ * Who refused a tool call, and why. Carried on a tool result the run reported as refused (not merely
+ * failed), so a surface can say "Rejected" instead of "Ran" without searching the error text.
+ */
+export interface ToolRefusal {
+  readonly by: 'human' | 'timeout' | 'policy' | 'hook' | 'plugin'
+  readonly reason?: string
+}
+
 /** The result of a tool invocation, keyed by the same `callId`. `isError` marks a failed tool. */
 export interface AgentToolResultEvent {
   readonly type: 'tool-result'
@@ -59,6 +68,8 @@ export interface AgentToolResultEvent {
   readonly name: string
   readonly result: unknown
   readonly isError?: boolean
+  /** Set when the call was refused rather than run. */
+  readonly refusal?: ToolRefusal
 }
 
 /** A run-level error (typed message + optional code). */

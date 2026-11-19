@@ -6,7 +6,6 @@ import { discoverRoles } from './role-discovery.js'
 export interface AgentDefinitionLike {
   readonly description: string
   readonly prompt: string
-  readonly model?: string
   readonly tools?: readonly string[]
 }
 

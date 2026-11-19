@@ -33,6 +33,7 @@ function toAgentOutputEvent(e: AgentStreamEvent): AgentOutputEvent | null {
         name: e.toolName,
         result: e.output,
         isError: e.isError,
+        ...(e.refusal !== undefined ? { refusal: e.refusal } : {}),
       }
     default:
       return null
