@@ -20,6 +20,7 @@ import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { createContainer } from '../agent-container.js'
 import type { TurnAgent } from '../agent-port.js'
 import { type ChannelLoop, maskSecrets } from '../channels/channel-loop.js'
+import { createInboxTool, INBOX_PLATFORM, inboxFile, ScheduleInbox } from './schedule-inbox.js'
 import { type AgentToolOptions, workerToolOptions } from '../tools/tool-registry.js'
 import type { ToolSettings } from '../tools/tool-settings.js'
 
@@ -79,8 +80,14 @@ function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPo
 function createDeliverPort(
   loop: Pick<ChannelLoop, 'started'>,
   secrets: readonly string[] = [],
+  inbox?: ScheduleInbox,
 ): DeliverPort {
   return async (target, text) => {
+    if (target.platform === INBOX_PLATFORM && inbox !== undefined) {
+      return (await inbox.add(target.channelId, text))
+        ? { ok: true }
+        : { ok: false, error: { code: 'inbox_write_failed' } }
+    }
     const router = new DeliveryRouter()
     for (const { adapter } of loop.started.values()) router.register(adapter)
     try {
@@ -111,6 +118,8 @@ export interface WireSchedulerOptions {
   readonly tools: ToolSettings
   /** The platforms a job may target: the configured ones. */
   readonly platforms: readonly string[]
+  /** The workspace: with it a job may also target the local `inbox` platform, so no chat platform is needed. */
+  readonly workspace?: string
   readonly heartbeat?: TransientSchedule
   /** The scheduled team report (OC-142). */
   readonly teamReport?: TransientSchedule
@@ -137,17 +146,28 @@ export interface RunningScheduler {
  * can hand the tools to its `/control` agents while its own start is still synchronous.
  */
 export function wireScheduler(options: WireSchedulerOptions): RunningScheduler {
+  const secrets = options.secrets ?? []
+  const inbox =
+    options.workspace === undefined
+      ? undefined
+      : new ScheduleInbox(inboxFile(options.workspace), (text) => maskSecrets(text, secrets))
   const scheduler = createScheduler({
     store: options.store,
     run: createRunPort(options.buildRunAgent, options.tools),
-    deliver: createDeliverPort(options.loop, options.secrets),
+    deliver: createDeliverPort(options.loop, secrets, inbox),
     write: options.write,
   })
   const { heartbeat } = options
   let stopped = false
   return {
     scheduler,
-    scheduleTools: createScheduleTools({ scheduler, platforms: options.platforms }),
+    scheduleTools: [
+      ...createScheduleTools({
+        scheduler,
+        platforms: inbox === undefined ? options.platforms : [...options.platforms, INBOX_PLATFORM],
+      }),
+      ...(inbox === undefined ? [] : [createInboxTool(inbox)]),
+    ],
     async start() {
       if (stopped) return
       for (const transient of [heartbeat, options.teamReport]) {

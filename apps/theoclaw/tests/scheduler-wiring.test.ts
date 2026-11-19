@@ -19,7 +19,7 @@ import { fakeBuilders, signedLinePost } from './composition-fixtures.js'
 import { FakeAdapter, FakeAgent, waitFor } from './fakes.js'
 import { notEnforced, runControlTurn, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
 
-const SCHEDULE_TOOLS = ['schedule_job', 'list_scheduled_jobs', 'cancel_scheduled_job']
+const SCHEDULE_TOOLS = ['schedule_job', 'list_scheduled_jobs', 'cancel_scheduled_job', 'read_schedule_inbox']
 
 /** An agent that answers `answer`, or holds until its signal aborts when `answer` is undefined. */
 class AnsweringAgent implements TurnAgent {
@@ -76,6 +76,7 @@ async function start(
   agent: TurnAgent,
   built: AgentToolOptions[] = [],
   secrets: readonly string[] = [],
+  workspace?: string,
 ): Promise<RunningScheduler> {
   running = wireScheduler({
     store,
@@ -86,6 +87,7 @@ async function start(
     },
     tools: resolveToolSettings({}, dir, { detect: notEnforced, warn: () => undefined }),
     platforms: ['telegram', 'slack'],
+    ...(workspace === undefined ? {} : { workspace }),
     write: (line) => lines.push(line),
     secrets,
   })
@@ -100,6 +102,37 @@ const job = (platform = 'telegram') => ({
   prompt: 'say hello',
   target: { platform, channelId: '42' },
   createdAt: 1,
+})
+
+describe('wireScheduler inbox', () => {
+  const inboxJob = { ...job('inbox'), target: { platform: 'inbox', channelId: 'main' } }
+
+  it('delivers to the local inbox with no platform connected, masked, and the tool reads it', async () => {
+    const { scheduler, scheduleTools } = await start(new AnsweringAgent('good morning sk-live-123'), [], ['sk-live-123'], dir)
+    await scheduler.add(inboxJob)
+    expect(await scheduler.fire('job-1')).toBe('delivered')
+    const read = scheduleTools.find((tool) => tool.name === 'read_schedule_inbox')!
+    const out = JSON.parse(String(await read.handler({}, undefined as never))) as { messages: { text: string; channelId: string }[] }
+    expect(out.messages).toHaveLength(1)
+    expect(out.messages[0]?.channelId).toBe('main')
+    expect(out.messages[0]?.text).toContain('good morning')
+    expect(out.messages[0]?.text).not.toContain('sk-live-123')
+  })
+
+  it('refuses the inbox target without a workspace', async () => {
+    const { scheduleTools } = await start(new AnsweringAgent('x'))
+    expect(scheduleTools.map((tool) => tool.name)).not.toContain('read_schedule_inbox')
+    const schedule = scheduleTools.find((tool) => tool.name === 'schedule_job')!
+    const out = JSON.parse(String(await schedule.handler({ cron: '@daily', prompt: 'hi', platform: 'inbox', channelId: 'main' }, undefined as never))) as { ok: boolean }
+    expect(out.ok).toBe(false)
+  })
+
+  it('accepts the inbox target through schedule_job when a workspace is given', async () => {
+    const { scheduleTools } = await start(new AnsweringAgent('x'), [], [], dir)
+    const schedule = scheduleTools.find((tool) => tool.name === 'schedule_job')!
+    const out = JSON.parse(String(await schedule.handler({ cron: '@daily', prompt: 'hi', platform: 'inbox', channelId: 'main' }, undefined as never))) as { ok: boolean }
+    expect(out.ok).toBe(true)
+  })
 })
 
 describe('wireScheduler', () => {

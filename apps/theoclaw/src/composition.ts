@@ -647,7 +647,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
       throw error
     }
   }
-  scheduled = wireScheduler({ store: scheduleStore!, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, ...teamReport, write: stderr, secrets: secretValues })
+  scheduled = wireScheduler({ store: scheduleStore!, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, workspace: sessionSettings.workspace, ...beat, ...teamReport, write: stderr, secrets: secretValues })
   const relayDir = join(sessionSettings.workspace, '.theoclaw')
   const relayState = relay.client === undefined ? undefined : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
   if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)

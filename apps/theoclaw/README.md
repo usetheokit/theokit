@@ -492,6 +492,12 @@ them.
 | `list_scheduled_jobs`  | lists the jobs with their id, name, cron and target                                                                                                                                                 |
 | `cancel_scheduled_job` | removes a job by id                                                                                                                                                                                 |
 
+A web-only instance with no chat platform can schedule too: give the job the platform `inbox` and any
+label as the channel id. The answer is stored in `<workspace>/.theoclaw/schedule-inbox.json` (mode 0600,
+secrets masked, the latest 100 messages kept, kept even when transcripts are off), and a `/control`
+agent reads it with `read_schedule_inbox` ("what did my morning job say?"). A failed write is reported
+as undelivered. Nothing is pushed to WebChat.
+
 Jobs are kept in `<workspace>/.theoclaw/schedules.json` (mode 0600), so they survive a restart; a
 file that does not parse refuses the start, as `sessions.json` does. At most 50 jobs are kept, and
 a platform that is not configured, a cron or a timezone the scheduler rejects is refused with
