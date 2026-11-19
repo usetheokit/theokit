@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `@theokit/agents`: `createGoalSignal()` gives `GoalRunner` an `update_goal` tool and a matching judge, so a goal loop ends when the agent reports `complete` or `blocked`.
 - `@theokit/agents`: `.subagents()` accepts `model` (a `ModelSelection` or `'inherit'`) and `mcpServers` on a registered subagent, so a discovered definition keeps its declared model and MCP servers.
 
+## [@theokit/agents 16.11.0, create-theokit 3.1.5] - 2026-11-19
+
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
+
 ## [@theokit/agents 16.10.0, create-theokit 3.1.4, @theokit/http 2.6.0, @theokit/presenter 0.15.0, theokit 0.83.0] - 2026-11-18
 
 Released with no entry under `[Unreleased]`. Per-package detail is in each package's
