@@ -21,10 +21,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./service": {
-      "types": "./dist/service.d.ts",
-      "import": "./dist/service.js"
-    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -55,8 +51,5 @@
     "daemon",
     "agents",
     "node"
-  ],
-  "dependencies": {
-    "@theokit/sdk": "^5.17.0"
-  }
+  ]
 }
