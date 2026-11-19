@@ -1,5 +1,15 @@
 # @theokit/agents
 
+## 16.12.0
+
+### Minor Changes
+
+- a8f51cf: `AskBridge` gains `pending(threadId)`, which reads the question open on a thread, and `onChange(listener)`, which notifies any number of observers after a question is asked, answered, abandoned or failed.
+- 1909e20: Add `createGoalSignal`: an `update_goal` tool and a matching judge for `GoalRunner`, so the working agent can end a goal loop itself without the extra model call of the LLM judge. The signal has `status()` and `reset()`.
+- a60db39: `composeInstructions` takes an optional `trim` policy per source (`drop`, `keep-head`, `keep-tail`, `blocks-from-start`) and returns `cuts`, the characters each source lost. `InstructionTrim` and `InstructionCut` are exported from `@theokit/agents/config`.
+- b325a81: `deleteSession` accepts `isListedInRegistry` and measures `registryOutcome` from a listing before and after the removal. `RegistryOutcome` gained `still-present`.
+- 3ec555e: `.subagents()` now accepts `model` (a `ModelSelection` or `'inherit'`) and `mcpServers` on a registered subagent, so a discovered definition keeps the model and MCP servers its file declared instead of running on the parent's model.
+
 ## 16.11.0
 
 ### Minor Changes
