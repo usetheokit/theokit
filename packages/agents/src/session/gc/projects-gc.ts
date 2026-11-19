@@ -11,11 +11,11 @@ import {
 } from '@theokit/sdk/persistence'
 
 import { classifyProjects, type FsSeam, type LivenessVerdict } from '../liveness-oracle.js'
-import { awaitRegistryRemoval } from './registry-remover.js'
-import { collectorRootOwner, CollectorRootNotOwnedError } from './collector-root.js'
 import { protectedTranscriptPaths } from '../session-lifecycle.js'
 import { sessionPointerPath } from '../session-pointer.js'
 
+import { collectorRootOwner, CollectorRootNotOwnedError } from './collector-root.js'
+import { awaitRegistryRemoval } from './registry-remover.js'
 import { GCFloorError } from './transcript-gc.js'
 
 /**
