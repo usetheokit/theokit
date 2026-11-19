@@ -788,3 +788,78 @@ describe('frontmatter — CRLF is not a broken file', () => {
     expect(warnings.some((w) => w.includes('never closes'))).toBe(true)
   })
 })
+
+describe('loadInstructionTree as-listed order and per-file cap', () => {
+  const budget = { maxDepth: 2, maxFiles: 20, maxChars: 1_000_000 }
+
+  it('as-listed returns blocks in the fileNames order', () => {
+    write('USER.md', 'u')
+    write('IDENTITY.md', 'i')
+    write('SOUL.md', 's')
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      fileNames: ['SOUL.md', 'IDENTITY.md', 'USER.md'],
+      order: 'as-listed',
+    })
+    expect(tree.blocks.map((b) => b.path)).toEqual(['SOUL.md', 'IDENTITY.md', 'USER.md'])
+  })
+
+  it('as-listed with a predicate throws', () => {
+    expect(() =>
+      loadInstructionTree({
+        cwd: root,
+        roots: ['.'],
+        budget,
+        fileNames: (e) => e.endsWith('.md'),
+        order: 'as-listed',
+      }),
+    ).toThrow(/order.*fileNames/)
+  })
+
+  it('maxCharsPerFile truncates one file and keeps the next', () => {
+    write('A.md', 'x'.repeat(30_000))
+    write('B.md', 'second')
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget: { ...budget, maxCharsPerFile: 20_000 },
+      fileNames: ['A.md', 'B.md'],
+      order: 'as-listed',
+    })
+    expect(tree.blocks).toHaveLength(2)
+    expect(tree.blocks[0]?.content.startsWith('x'.repeat(20_000))).toBe(true)
+    expect(tree.blocks[1]?.content).toBe('second')
+  })
+
+  it('a truncated block ends with the truncated marker and is flagged', () => {
+    write('A.md', 'x'.repeat(50))
+    write('B.md', 'short')
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget: { ...budget, maxCharsPerFile: 10 },
+      fileNames: ['A.md', 'B.md'],
+    })
+    const [a, b] = tree.blocks
+    expect(a?.content.endsWith('[truncated]')).toBe(true)
+    expect(a?.truncated).toBe(true)
+    expect(b?.truncated).toBeUndefined()
+  })
+
+  it('warns on a directory named like an instruction file', () => {
+    mkdirSync(join(root, 'SOUL.md'))
+    write('USER.md', 'u')
+    warnings.length = 0
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      fileNames: ['SOUL.md', 'USER.md'],
+      onWarn,
+    })
+    expect(tree.count).toBe(1)
+    expect(warnings.some((w) => w.includes('SOUL.md'))).toBe(true)
+  })
+})

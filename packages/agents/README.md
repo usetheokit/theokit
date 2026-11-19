@@ -346,6 +346,16 @@ nothing, the one apparent hit being `ansi` inside `stateTransitionHistory`. It p
 calls; a palette here would be configuration nothing could act on. The toolkit reads no theme file
 either, so naming an owner would repeat the mistake the `keybindings.json` row already made.
 
+### Instruction tree: `as-listed` order and `maxCharsPerFile`
+
+`loadInstructionTree({ order: 'as-listed', fileNames: ['SOUL.md', 'IDENTITY.md'] })` returns blocks in
+the order of the `fileNames` array within each root. It is only valid with an array; a predicate
+throws a `ConfigurationError` naming `order` and `fileNames`.
+
+`budget.maxCharsPerFile` cuts each file at that many characters and appends a `[truncated]` line; the
+block carries `truncated: true`. It applies before `maxChars`, so one runaway file cannot push the
+others out. A file that fails to read for any reason except `ENOENT` is reported to `onWarn`.
+
 ### `CLAUDE.md`
 
 The instruction tree accepts any file list: `input.fileNames`, falling back to a default of
