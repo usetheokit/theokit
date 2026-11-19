@@ -345,10 +345,10 @@ const optional = (v: unknown, check: (x: unknown) => boolean): boolean =>
 
 const FILE_EDIT_FORMATS = new Set(['search-replace', 'unified-diff', 'full-file', 'line-range'])
 
-const REFUSAL_SOURCES = ['human', 'timeout', 'policy', 'hook', 'plugin']
+const REFUSAL_SOURCES = new Set(['human', 'timeout', 'policy', 'hook', 'plugin'])
 
 function validRefusal(r: unknown): boolean {
-  return isRecord(r) && isStr(r.by) && REFUSAL_SOURCES.includes(r.by) && optional(r.reason, isStr)
+  return isRecord(r) && isStr(r.by) && REFUSAL_SOURCES.has(r.by) && optional(r.reason, isStr)
 }
 
 function validUsage(u: unknown): boolean {
