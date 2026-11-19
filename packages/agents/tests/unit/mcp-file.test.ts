@@ -25,6 +25,7 @@ import {
   mcpSecretValues,
   McpFileError,
 } from '../../src/bridge/mcp-file.js'
+import * as bridge from '../../src/bridge/index.js'
 import { loadMcpJson as loadMcpJsonFromBarrel } from '../../src/index.js'
 
 describe('loadMcpJson — disco', () => {
@@ -190,6 +191,11 @@ describe('loadMcpJson — import purity', () => {
 })
 
 describe('loadMcpServersFile', () => {
+  it('is exported from the bridge entry point with mcpSecretValues', () => {
+    expect(bridge.loadMcpServersFile).toBe(loadMcpServersFile)
+    expect(bridge.mcpSecretValues).toBe(mcpSecretValues)
+  })
+
   let dir: string
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'mcp-servers-file-'))
@@ -287,5 +293,24 @@ describe('loadMcpServersFile', () => {
       ['Bearer abcdefgh', 'long-enough-value'].sort((a, b) => a.localeCompare(b)),
     )
     expect(mcpSecretValues(servers, 5)).toContain('short')
+  })
+
+  it('throws on a shape violation instead of skipping the entry, naming the path', () => {
+    expect(() => load({ s: { command: 5 } })).toThrow(/mcpServers\.s: .*command/)
+    expect(() => load({ s: { url: 'https://x.test/mcp', headers: { A: 1 } } })).toThrow(
+      /mcpServers\.s: .*headers/,
+    )
+  })
+
+  it('refuses an unknown root key', () => {
+    const path = join(dir, 'root.json')
+    writeFileSync(path, JSON.stringify({ mcpServer: { s: { command: 'npx' } } }))
+    expect(() => loadMcpServersFile(path)).toThrow(/mcpServer: unknown key/)
+  })
+
+  it('accepts type stdio and refuses another type on a command entry', () => {
+    const out = load({ s: { type: 'stdio', command: 'node' } })
+    expect(out.s).toEqual({ command: 'node' })
+    expect(() => load({ s: { type: 'http', command: 'node' } })).toThrow(/mcpServers\.s\.type/)
   })
 })

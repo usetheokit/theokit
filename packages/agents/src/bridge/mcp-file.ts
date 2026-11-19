@@ -342,6 +342,11 @@ function parseMcpJson(
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new McpFileError(`${source}: root must be a JSON object with an "mcpServers" key.`)
   }
+  if (strict?.refuseUnknownKeys === true) {
+    for (const key of Object.keys(raw)) {
+      if (key !== 'mcpServers') throw new McpFileError(`${source}: ${key}: unknown key.`)
+    }
+  }
   const serversRaw = (raw as Record<string, unknown>).mcpServers
   if (serversRaw === undefined) return {}
   if (typeof serversRaw !== 'object' || serversRaw === null || Array.isArray(serversRaw)) {
@@ -370,6 +375,9 @@ function parseMcpJson(
       if (violation !== undefined) throw new McpFileError(`${source}: ${violation}`)
     }
     const reason = validateEntry(name, entryRaw)
+    if (reason !== undefined && strict !== undefined) {
+      throw new McpFileError(`${source}: mcpServers.${name}: ${reason}`)
+    }
     if (reason !== undefined) {
       // The message never carries a `headers` value — `validateEntry` returns only the reason, and it
       // is built from the SHAPE, never from the content.
@@ -424,6 +432,9 @@ function strictViolation(
     }
   }
   if (remote) return undefined
+  if (entry.type !== undefined && entry.type !== 'stdio') {
+    return `${at}.type: a command entry may only be "stdio".`
+  }
   if (
     policy.requireAbsoluteCommandPaths &&
     typeof entry.command === 'string' &&
@@ -564,7 +575,7 @@ const REMOTE_KEYS = new Set(['url', 'type', 'headers', 'auth', 'requestTimeoutMs
 const STDIO_KEYS = new Set(['command', 'args', 'env', 'cwd'])
 
 /** Strict mode also carries the host-posture fields the policy has vetted. */
-const STRICT_STDIO_KEYS = new Set([...STDIO_KEYS, 'envPolicy', 'requestTimeoutMs'])
+const STRICT_STDIO_KEYS = new Set([...STDIO_KEYS, 'type', 'envPolicy', 'requestTimeoutMs'])
 const STRICT_REMOTE_KEYS = REMOTE_KEYS
 
 /**
