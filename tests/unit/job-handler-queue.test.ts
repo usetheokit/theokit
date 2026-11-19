@@ -4,7 +4,7 @@ import type { JobBackend, JobLease } from '../../packages/theo/src/server/jobs/j
 import { createJobRunner } from '../../packages/theo/src/server/jobs/job-runner.js'
 import { defineJob } from '../../packages/theo/src/server/jobs/define-job.js'
 
-function setup(handler: (ctx: any) => unknown) {
+function setup(handler: (ctx: any) => void | Promise<void>) {
   const lease: JobLease = {
     jobId: 'j1',
     name: 'parent',
