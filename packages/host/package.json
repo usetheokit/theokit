@@ -21,6 +21,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./instance-config": {
+      "types": "./dist/instance-config/index.d.ts",
+      "import": "./dist/instance-config/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
