@@ -278,6 +278,23 @@ describe('loadMcpServersFile', () => {
     expect(() => loadMcpServersFile(join(dir, 'nope.json'))).toThrow(McpFileError)
   })
 
+  it('keeps a __proto__ header or env key as an own property and masks its value', () => {
+    const path = join(dir, 'proto.json')
+    writeFileSync(
+      path,
+      '{"mcpServers":{"a":{"command":"npx","env":{"__proto__":"proto-env-secret"}},' +
+        '"b":{"url":"https://x.test/mcp","headers":{"__proto__":"proto-header-secret"}}}}',
+    )
+    const servers = loadMcpServersFile(path, { onWarn: () => undefined })
+    const a = servers.a as { env: Record<string, string> }
+    expect(Object.keys(a.env)).toEqual(['__proto__'])
+    expect(Object.getOwnPropertyDescriptor(a.env, '__proto__')?.value).toBe('proto-env-secret')
+    expect(mcpSecretValues(servers).sort((x, y) => x.localeCompare(y))).toEqual([
+      'proto-env-secret',
+      'proto-header-secret',
+    ])
+  })
+
   it('mcpSecretValues returns header and env values of 8 or more characters only', () => {
     const servers = load(
       {

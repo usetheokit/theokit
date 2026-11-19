@@ -71,6 +71,11 @@ interface LoadMcpJsonOptions {
 /** `${VAR}` — the whole value, not a fragment. A partial match would make `"a${B}c"` ambiguous. */
 const ENV_REFERENCE_REGEX = /^\$\{([A-Za-z_]\w*)\}$/
 
+/** Assign as an own property: plain `out[key] =` drops a `__proto__` key into the prototype setter. */
+function setOwn(out: Record<string, string>, key: string, value: string): void {
+  Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true })
+}
+
 /**
  * Resolve `${VAR}` against the host environment.
  *
@@ -98,7 +103,7 @@ function expandEnvReferences(
   for (const [key, value] of Object.entries(record)) {
     const match = ENV_REFERENCE_REGEX.exec(value)
     if (match === null) {
-      out[key] = value
+      setOwn(out, key, value)
       continue
     }
     const name = match[1]
@@ -108,10 +113,10 @@ function expandEnvReferences(
         `${MCP_FILENAME}: server "${server}" references \${${name}} in "${field}.${key}", ` +
           `and that variable is not set — the reference is left as written`,
       )
-      out[key] = value
+      setOwn(out, key, value)
       continue
     }
-    out[key] = resolved
+    setOwn(out, key, resolved)
   }
   return out
 }
