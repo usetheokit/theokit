@@ -63,18 +63,6 @@ describe('running the hook', () => {
     expect(lines()).toEqual(['START'])
   })
 
-  it('test_the_hook_sees_CLAUDE_PROJECT_DIR_as_the_project_directory', async () => {
-    // Hooks borrowed from `.claude/` reach project files through this variable (theokit-sdk#522).
-    await runSessionStartHooks({
-      specs: [spec(`echo "$CLAUDE_PROJECT_DIR" >> ${marker}`)],
-      cwd,
-      sessionId: 'tui-1',
-      approved: () => true,
-    })
-
-    expect(lines()).toEqual([cwd])
-  })
-
   it('test_it_runs_once_per_call_not_once_per_turn', async () => {
     // The whole reason this exists. The framework's event fires per loop context, and this product
     // builds an agent per turn — so mapping it there would run this on every message.

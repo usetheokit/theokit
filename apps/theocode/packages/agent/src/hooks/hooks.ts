@@ -57,7 +57,7 @@ function validateShape(entry: unknown, i: number): HookSpec {
   const parsed = hookSpecSchema.safeParse({
     ...record,
     event: CLAUDE_HOOK_EVENT_ALIASES[event],
-    timeout_ms: record['timeout_ms'] ?? DEFAULT_HOOK_TIMEOUT_MS,
+    timeout_ms: record['timeout_ms'] === undefined ? DEFAULT_HOOK_TIMEOUT_MS : record['timeout_ms'],
   })
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
