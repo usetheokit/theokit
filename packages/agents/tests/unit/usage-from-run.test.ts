@@ -20,7 +20,13 @@ describe('usageFromRun', () => {
     expect(r.costUsd).toBe(0)
   })
 
-  it('defaults tokens, keeps cache absent, carries context', () => {
+  it('a finite nonzero amount yields priced true and keeps costUsd', () => {
+    const r = usageFromRun({ cost: { amountUsd: 0.0123 } }, ctx)
+    expect(r.priced).toBe(true)
+    expect(r.costUsd).toBe(0.0123)
+  })
+
+  it('defaults tokens,keeps cache absent, carries context', () => {
     const r = usageFromRun(
       { usage: { outputTokens: 5, cacheReadTokens: 2 } },
       { ...ctx, userId: 'u' },
