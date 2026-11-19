@@ -34,7 +34,7 @@ export function resolveRealPath(path: string, options: { readonly maxHops?: numb
   let queue = components(start)
   let hops = 0
   while (queue.length > 0) {
-    const part = queue[0] as string
+    const part = queue[0]
     queue = queue.slice(1)
     if (part === '.') continue
     if (part === '..') {
