@@ -62,21 +62,12 @@ export function usageFromRun(
 export function formatUsd(amount: number): string {
   if (!Number.isFinite(amount)) return String(amount)
   if (amount === 0) return '0'
-  const sign = amount < 0 ? '-' : ''
-  const precise = Math.abs(amount).toPrecision(6)
-  const [mantissa, exponentText] = precise.split('e')
-  if (exponentText === undefined) return sign + trimZeros(mantissa)
-  // `toPrecision` switches to an exponent for very large or small values; expand it by hand.
-  const digits = mantissa.replace('.', '')
-  const exponent = Number(exponentText)
-  if (exponent >= 0) return sign + digits + '0'.repeat(exponent - 5)
-  return sign + trimZeros('0.' + '0'.repeat(-exponent - 1) + digits)
-}
-
-function trimZeros(text: string): string {
-  if (!text.includes('.')) return text
-  let end = text.length
-  while (text[end - 1] === '0') end -= 1
-  if (text[end - 1] === '.') end -= 1
-  return text.slice(0, end)
+  const magnitude = Math.floor(Math.log10(Math.abs(amount)))
+  const decimals = Math.min(100, Math.max(0, 5 - magnitude))
+  const fixed = amount.toFixed(decimals)
+  if (!fixed.includes('.')) return fixed
+  let end = fixed.length
+  while (fixed[end - 1] === '0') end -= 1
+  if (fixed[end - 1] === '.') end -= 1
+  return fixed.slice(0, end)
 }
