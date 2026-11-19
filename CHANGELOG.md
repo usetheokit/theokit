@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 16.12.0] - 2026-11-19
+
 ### Added
 
 - `@theokit/agents`: `streamFromEmitter()` in `@theokit/agents/bridge` turns a callback producer into an abortable `AsyncIterable` for `generateAgentRoutes` and `streamAgentResponse`.
