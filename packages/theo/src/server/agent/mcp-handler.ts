@@ -377,9 +377,7 @@ export async function handleMcpToolsHttp(
   const served: McpServed = {
     tools: tools as readonly CompiledTool[],
     appResources: [],
-    protocolVersions: options.protocolVersions?.length
-      ? options.protocolVersions
-      : DEFAULT_PROTOCOL_VERSIONS,
+    protocolVersions: options.protocolVersions ?? DEFAULT_PROTOCOL_VERSIONS,
   }
   return runMcp(parsed.body, (req) => dispatchMcp(served, name, req))
 }
