@@ -254,7 +254,11 @@ describe('createA2ATool', () => {
 })
 
 describe('createA2ATool timeoutMs', () => {
-  const hung = () => new Promise<Response>(() => undefined)
+  let seen: AbortSignal | null | undefined
+  const hung = (_url: unknown, init?: RequestInit) => {
+    seen = init?.signal
+    return new Promise<Response>(() => undefined)
+  }
 
   it('a peer that never answers rejects with A2ATimeoutError after timeoutMs', async () => {
     vi.useFakeTimers()
@@ -275,6 +279,8 @@ describe('createA2ATool timeoutMs', () => {
       )
       expect((error as A2ATimeoutError).peer).toBe('peer')
       expect((error as A2ATimeoutError).timeoutMs).toBe(1000)
+      expect(seen?.aborted).toBe(true)
+      expect(seen?.reason).toBe(error)
     } finally {
       vi.useRealTimers()
     }
@@ -295,7 +301,10 @@ describe('createA2ATool timeoutMs', () => {
         tool.handler({ message: 'hi' }, { signal: controller.signal }),
       ).catch((e: unknown) => e)
       await vi.advanceTimersByTimeAsync(10)
+      expect(seen?.aborted).toBe(false)
       controller.abort(new Error('cancelled'))
+      expect(seen?.aborted).toBe(true)
+      expect((seen?.reason as Error).message).toBe('cancelled')
       const error = await result
       expect(error).not.toBeInstanceOf(A2ATimeoutError)
       expect((error as Error).message).toBe('cancelled')
