@@ -146,6 +146,19 @@ const res = await fetch('http://localhost:3000/agents/support', {
 const headers = agentRequestHeaders(AGENT_ACTION_HEADERS, { authorization: `Bearer ${token}` })
 ```
 
+## Mounting a chat route for an agent built elsewhere
+
+`generateAgentRoutes` needs only the route and a `createRun`; `compiledOptions` is optional and never read.
+
+```ts
+import { generateAgentRoutes } from '@theokit/agents/bridge'
+
+const routes = generateAgentRoutes({
+  walkResult: { route: '/api/agents/support' },
+  createRun: (message, sessionId, signal) => runMyAgent(message, sessionId, signal),
+})
+```
+
 ## The shapes worth knowing before you start
 
 **Tool scope is bound once, not per tool.** `bindToolScope({ projectRoot, writeRoot, sandbox })`
@@ -247,6 +260,20 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Turning a pushed event stream into an iterable
+
+`streamFromEmitter(start, { signal, isFinal, onError })` from `@theokit/agents/bridge` returns an
+`AsyncIterable` for a producer that pushes events to a callback. `return()` aborts the producer's signal
+at once, unless a final event (`done` or `error` by default) was already seen. A rejecting producer
+yields the `onError` event, unless an error event already went out.
+
+```ts
+generateAgentRoutes({
+  createRun: (m, s, signal) =>
+    streamFromEmitter((emit, sig) => runAgentTurn(/* ... */ emit, sig), { signal }),
+})
+```
 
 ## What changed recently
 
