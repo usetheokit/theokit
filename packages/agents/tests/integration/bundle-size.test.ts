@@ -203,10 +203,11 @@ describe('Bundle size regression', () => {
    *
    * ## Raised to 43 000 for `createResultCapture` (#1853)
    *
-   * The issue requires `createResultCapture` and `NoResultSubmittedError` in the root entry, so the
-   * module (about 1.5 KB minified: the tool, the handler, the typed error) lands in `index.js` and
-   * pushed it over 42 000. Raised by an implementation run that could not ask: it had no build, so
-   * the cap is an estimate, not a measurement. A person should confirm or reset it.
+   * The issue requires `createResultCapture` and `NoResultSubmittedError` in the root entry. Measured
+   * on a built tree: `dist/index.js` is 42 624 bytes with the module, and the module (the error
+   * class, the schema check, the handler, `createResultCapture`) is about 2 800 bytes of it, so the
+   * root stood near 39 800 without it and the 42 000 cap could not hold. Headroom is 376 bytes.
+   * Raised by an implementation run from that measurement; a person should confirm it.
    */
   it('agents main bundle under 43KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
