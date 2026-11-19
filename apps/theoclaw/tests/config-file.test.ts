@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -64,15 +64,44 @@ describe('the configuration file', () => {
 
   // Audit finding (post-GREEN): THEOCLAW_CONFIG=~/x.env, or /data/theoclaw.env in the image, must
   // not narrow a directory the code did not create.
-  it('writing the file leaves an existing directory mode alone and makes a new one 0700', () => {
+  it('writing the file leaves an existing directory mode alone and makes a new one 0700', async () => {
     const existing = scratchDir()
     chmodSync(existing, 0o755)
-    writeConfiguration(join(existing, 'theoclaw.env'), { THEOCLAW_MODEL: 'm' }, { force: false })
+    await writeConfiguration(join(existing, 'theoclaw.env'), { THEOCLAW_MODEL: 'm' }, { force: false })
     expect(statSync(existing).mode & 0o777).toBe(0o755)
     expect(statSync(join(existing, 'theoclaw.env')).mode & 0o777).toBe(0o600)
 
     const fresh = join(scratchDir(), 'nested', 'theoclaw')
-    writeConfiguration(join(fresh, 'theoclaw.env'), { THEOCLAW_MODEL: 'm' }, { force: false })
+    await writeConfiguration(join(fresh, 'theoclaw.env'), { THEOCLAW_MODEL: 'm' }, { force: false })
     expect(statSync(fresh).mode & 0o777).toBe(0o700)
+  })
+
+  it('concurrent writes in one process do not collide and leave no temporary file', async () => {
+    const dir = scratchDir()
+    const path = join(dir, 'theoclaw.env')
+    await Promise.all([1, 2, 3, 4].map((n) => writeConfiguration(path, { THEOCLAW_MODEL: `m${n}` }, { force: true })))
+    expect(readFileSync(path, 'utf8')).toMatch(/^THEOCLAW_MODEL="m\d"\n$/)
+    expect(readdirSync(dir)).toEqual(['theoclaw.env'])
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+  })
+
+  it('refuses the second of two concurrent writes without force', async () => {
+    const path = join(scratchDir(), 'theoclaw.env')
+    const results = await Promise.allSettled([
+      writeConfiguration(path, { THEOCLAW_MODEL: 'first' }, { force: false }),
+      writeConfiguration(path, { THEOCLAW_MODEL: 'second' }, { force: false }),
+    ])
+    expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected'])
+    expect(readFileSync(path, 'utf8')).toBe('THEOCLAW_MODEL="first"\n')
+  })
+
+  it('queues equivalent spellings of one path together', async () => {
+    const dir = scratchDir()
+    const results = await Promise.allSettled([
+      writeConfiguration(join(dir, 'theoclaw.env'), { THEOCLAW_MODEL: 'first' }, { force: false }),
+      writeConfiguration(`${dir}/./theoclaw.env`, { THEOCLAW_MODEL: 'second' }, { force: false }),
+    ])
+    expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected'])
+    expect(readFileSync(join(dir, 'theoclaw.env'), 'utf8')).toBe('THEOCLAW_MODEL="first"\n')
   })
 })

@@ -1,8 +1,8 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
-import { open, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { PreToolCallContext } from '@theokit/sdk'
+import { atomicWriteJson } from '@theokit/sdk/persistence'
 
 import { describeError } from '../control-plane/errors.js'
 import type { GeneralPlugin } from './general-plugin.js'
@@ -47,15 +47,7 @@ export function createExecApprovalStore(dir: string): ExecApprovalStore {
   const approved = load(path)
   let writes: Promise<unknown> = Promise.resolve()
   const save = async (command: string): Promise<void> => {
-    const temporary = `${path}.tmp`
-    const handle = await open(temporary, 'w', 0o600)
-    try {
-      await handle.chmod(0o600)
-      await handle.writeFile(`${JSON.stringify({ approved: [...new Set([...approved, command])] }, null, 2)}\n`)
-    } finally {
-      await handle.close()
-    }
-    await rename(temporary, path)
+    await atomicWriteJson(path, { approved: [...new Set([...approved, command])] }, { mode: 0o600 })
     approved.add(command)
   }
   return {
