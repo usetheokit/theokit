@@ -329,10 +329,6 @@ export default defineConfig({
       '@theokit/agents/usage': path.resolve(__dirname, 'packages/agents/src/usage/index.ts'),
       '@theokit/agents/ask': path.resolve(__dirname, 'packages/agents/src/ask/index.ts'),
       '@theokit/agents/hooks': path.resolve(__dirname, 'packages/agents/src/hooks/index.ts'),
-      '@theokit/agents/turn-failure': path.resolve(
-        __dirname,
-        'packages/agents/src/errors/turn-failure.ts',
-      ),
       // M73 — `/persistence`, needed the moment framework code composed the atomic-write and
       // file-lock primitives.
       '@theokit/agents/persistence': path.resolve(

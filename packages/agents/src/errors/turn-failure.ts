@@ -120,6 +120,6 @@ export function describeTurnFailure(
     hints[failure.code] ?? DEFAULT_TURN_FAILURE_HINTS[failure.code] ?? messageHint(text, hints)
   if (failure.code !== 'unknown') text += ` [${failure.code}]`
   if (hint) text += `: ${hint}`
-  if (opts.attempts !== undefined && opts.attempts > 1) text += ` (after ${opts.attempts} attempts)`
+  if (opts.attempts !== undefined && opts.attempts > 1) text += ` after ${opts.attempts} attempts`
   return text
 }

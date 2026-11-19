@@ -73,10 +73,6 @@
       "types": "./dist/session.d.ts",
       "import": "./dist/session.js"
     },
-    "./turn-failure": {
-      "types": "./dist/turn-failure.d.ts",
-      "import": "./dist/turn-failure.js"
-    },
     "./hooks": {
       "types": "./dist/hooks.d.ts",
       "import": "./dist/hooks.js"
