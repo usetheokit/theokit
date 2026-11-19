@@ -99,6 +99,14 @@ describe('skills through the SDK (OC-70..72, OC-74)', () => {
     expect(text).not.toContain('PROJECT-DESCRIPTION')
   })
 
+  it('with the project source on, a legacy skill in a project root is not offered ungated', async () => {
+    const cwd = dirWith({})
+    mkdirSync(join(cwd, '.theokit', 'skills', 'ungated'), { recursive: true })
+    writeFileSync(join(cwd, '.theokit', 'skills', 'ungated', 'SKILL.md'), skillFile('ungated', 'p', 'requires', 'theoclaw-no-such-bin'))
+    const text = await firstRequest(dirWith({}), { approvedHooks: new Set(['fingerprint']), pluginWorkspace: cwd })
+    expect(text).not.toContain('ungated skill')
+  })
+
   it('offers a requires-bins skill only while its binary is on PATH', async () => {
     const dir = dirWith({ needy: skillFile('needy', 'x', 'requires-bins', 'theoclaw-fake-bin') })
     expect(await firstRequest(dir)).not.toContain('needy skill')
