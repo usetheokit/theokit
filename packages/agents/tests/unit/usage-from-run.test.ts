@@ -45,4 +45,11 @@ describe('formatUsd', () => {
     expect(formatUsd(100)).toBe('100')
     expect(formatUsd(1234567.891)).toBe('1234570')
   })
+
+  it('formatUsd keeps a nonzero amount below 1e-100 and never prints an exponent', () => {
+    expect(formatUsd(1e-101)).toBe(`0.${'0'.repeat(100)}1`)
+    expect(formatUsd(1.5e-120)).toBe(`0.${'0'.repeat(119)}15`)
+    expect(formatUsd(-2.5e-7)).toBe('-0.00000025')
+    expect(formatUsd(1e21)).toBe(`1${'0'.repeat(21)}`)
+  })
 })
