@@ -31,6 +31,8 @@ describe('M62 — @theokit/agents/tools passes the sdk-tools factory surface thr
   it('exports the schedule module (B-396)', () => {
     for (const name of [
       'createJobStore',
+      'createPostgresJobStore',
+      'copyJobs',
       'ScheduleStoreError',
       'createScheduler',
       'createScheduleTools',

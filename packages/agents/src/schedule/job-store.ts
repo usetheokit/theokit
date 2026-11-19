@@ -40,6 +40,12 @@ export interface JobStore {
   remove(id: string): Promise<boolean>
   /** Resolves `false`, and changes nothing, when the job is no longer held (a cancel won the race). */
   setPreviousOutput(id: string, text: string): Promise<boolean>
+  /**
+   * Optional: save all of `jobs` as one atomic write (all land or none do), replacing a held job
+   * with the same id. `copyJobs` needs it, and refuses a target without it. `guard` runs inside the
+   * store's serialized writes with the count of jobs held then; if it throws, nothing is written.
+   */
+  putMany?(jobs: ScheduledJob[], guard?: (held: number) => void): Promise<void>
 }
 
 /**
@@ -50,8 +56,12 @@ export class ScheduleStoreError extends TheokitAgentError {
   override readonly name = 'ScheduleStoreError'
   readonly file: string
 
-  constructor(file: string, detail: string) {
-    super(`${file}: ${detail}`, { code: 'SCHEDULE_STORE_INVALID', isRetryable: false })
+  constructor(file: string, detail: string, options: { cause?: unknown } = {}) {
+    super(`${file}: ${detail}`, {
+      code: 'SCHEDULE_STORE_INVALID',
+      isRetryable: false,
+      ...options,
+    })
     this.file = file
   }
 }
@@ -94,6 +104,11 @@ export function createJobStore(filePath: string): JobStore {
       serialized((next) => {
         next.set(job.id, job)
       }),
+    putMany: (batch, guard) =>
+      serialized((next) => {
+        guard?.(next.size)
+        for (const job of batch) next.set(job.id, job)
+      }),
     remove: (id) => serialized((next) => next.delete(id)),
     setPreviousOutput: (id, text) =>
       serialized((next) => {
@@ -127,12 +142,16 @@ function loadJobs(filePath: string): ScheduledJob[] {
     )
   }
   if (!Array.isArray(parsed.jobs)) throw new ScheduleStoreError(filePath, 'has no jobs array')
-  return parsed.jobs.map((raw, index) => readJob(filePath, raw, index))
+  return parsed.jobs.map((raw, index) => readJob(filePath, raw, `job ${String(index)}`))
 }
 
-function readJob(filePath: string, raw: unknown, index: number): ScheduledJob {
+/**
+ * Validate one raw job. `label` names it in the message (`job 0`, `job <id>`); a bad job raises
+ * {@link ScheduleStoreError} naming `source` (a file or a table).
+ */
+export function readJob(source: string, raw: unknown, label: string): ScheduledJob {
   const fail = (detail: string): never => {
-    throw new ScheduleStoreError(filePath, `job ${String(index)} ${detail}`)
+    throw new ScheduleStoreError(source, `${label} ${detail}`)
   }
   if (!isRecord(raw)) return fail('is not an object')
   for (const key of ['id', 'cron', 'prompt'] as const) {
