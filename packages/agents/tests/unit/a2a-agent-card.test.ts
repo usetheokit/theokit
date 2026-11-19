@@ -107,4 +107,15 @@ describe('buildAgentCard plain form', () => {
     expect(card.skills).toHaveLength(1)
     expect(card.security).toEqual([{ b: [] }])
   })
+
+  it('a plain input that also carries a tools property keeps its skills', () => {
+    const input = {
+      name: 'x',
+      route: '/x',
+      baseUrl: 'https://a.example',
+      skills: [{ id: 's', name: 's', description: 'S' }],
+      tools: 'not-an-array',
+    }
+    expect(buildAgentCard(input).skills).toEqual(input.skills)
+  })
 })

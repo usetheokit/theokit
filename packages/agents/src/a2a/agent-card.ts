@@ -75,9 +75,13 @@ export function buildAgentCard(
   const options = opts ?? (input as PlainAgentCardInput)
   const entry: { name: string; route: string; stream?: boolean } = input
   const skills =
-    'tools' in input
-      ? input.tools.map((t) => ({ id: t.name, name: t.name, description: t.description }))
-      : (input.skills ?? [])
+    opts === undefined
+      ? ((input as PlainAgentCardInput).skills ?? [])
+      : (input as AgentManifestEntry).tools.map((t) => ({
+          id: t.name,
+          name: t.name,
+          description: t.description,
+        }))
   const base = trimTrailingSlash(options.baseUrl)
   return {
     name: entry.name,
