@@ -149,15 +149,24 @@ describe('skills through the SDK (OC-70..72, OC-74)', () => {
     }
   })
 
-  it('with the project source on, reads a plugin skill folder added after the options were created', async () => {
+  it('with the project source on, offers a plugin skill added between two turns of the same agent', async () => {
     const cwd = dirWith({})
-    const options = theoClawAgentOptions({ model: 'm', apiKey: 'stub-key', skillsDir: dirWith({}), approvedHooks: new Set(['f']), pluginWorkspace: cwd })
-    expect(await skillRead(options, 'late-plugin')).not.toContain('LATE-BODY')
-    const root = join(cwd, '.theokit', 'plugins', 'acme', 'skills')
-    mkdirSync(join(root, 'late-plugin'), { recursive: true })
-    writeFileSync(join(root, '..', 'plugin.json'), JSON.stringify({ name: 'acme', version: '1.0.0' }))
-    writeFileSync(join(root, 'late-plugin', 'SKILL.md'), skillFile('late-plugin', 'LATE-BODY'))
-    expect(await skillRead(options, 'late-plugin')).toContain('LATE-BODY')
+    const stub = await startModelStub([{ text: 'one' }, { text: 'two' }])
+    stubs.push(stub)
+    const options = theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', skillsDir: dirWith({}), approvedHooks: new Set(['f']), pluginWorkspace: cwd })
+    const agent = await Agent.create(withSdkSkills(options) as never)
+    try {
+      await (await agent.send('hello')).wait()
+      const root = join(cwd, '.theokit', 'plugins', 'acme', 'skills')
+      mkdirSync(join(root, 'late-plugin'), { recursive: true })
+      writeFileSync(join(root, '..', 'plugin.json'), JSON.stringify({ name: 'acme', version: '1.0.0' }))
+      writeFileSync(join(root, 'late-plugin', 'SKILL.md'), skillFile('late-plugin', 'LATE-BODY'))
+      await (await agent.send('again')).wait()
+    } finally {
+      await agent[Symbol.asyncDispose]()
+    }
+    expect(JSON.stringify(stub.requests[0])).not.toContain('late-plugin skill')
+    expect(JSON.stringify(stub.requests[1])).toContain('late-plugin skill')
   })
 
   it('with the project source on, a workspace skill beats a user skill, which beats a project skill', async () => {
