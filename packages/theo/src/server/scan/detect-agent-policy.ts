@@ -26,9 +26,10 @@
  * checked at runtime by `readAgentPolicy`, which throws on anything that is neither `'public'` nor
  * a function — so a wrong type fails loudly rather than being served open.
  */
-import { createRequire } from 'node:module'
 
 import type * as TS from 'typescript'
+
+import { loadTypescript } from './load-typescript.js'
 
 /**
  * The compiler, loaded on first use and never at import time.
@@ -44,11 +45,8 @@ import type * as TS from 'typescript'
  *
  * Cached, so scanning many files still loads it once.
  */
-let compiler: typeof TS | undefined
-
 function ts_(): typeof TS {
-  compiler ??= createRequire(import.meta.url)('typescript') as typeof TS
-  return compiler
+  return loadTypescript()
 }
 
 const POLICY_EXPORT = 'policy'

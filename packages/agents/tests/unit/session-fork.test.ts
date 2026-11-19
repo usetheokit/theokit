@@ -80,72 +80,75 @@ afterEach(() => {
 })
 
 describe('forkBeforeUserTurn', () => {
-  it('finds_the_first_user_turn_past_a_leading_assistant_record', () => {
-    const { recordIndex } = forkBeforeUserTurn('src', 'fork-1', 1, { cwd, root })
+  it('finds_the_first_user_turn_past_a_leading_assistant_record', async () => {
+    const { recordIndex } = await forkBeforeUserTurn('src', 'fork-1', 1, { cwd, root })
     // Index 1, not 0 — the transcript opens with an assistant preamble.
     expect(recordIndex).toBe(1)
   })
 
-  it('finds_second_user_turn_past_tool_records', () => {
-    const { recordIndex } = forkBeforeUserTurn('src', 'fork-2', 2, { cwd, root })
+  it('finds_second_user_turn_past_tool_records', async () => {
+    const { recordIndex } = await forkBeforeUserTurn('src', 'fork-2', 2, { cwd, root })
     // Index 5, not 1 — three assistant/tool records separate the two user turns. A naive
     // implementation counting records instead of turns would answer 1 here.
     expect(recordIndex).toBe(5)
   })
 
-  it('accepts_nth_equal_to_the_last_user_turn', () => {
+  it('accepts_nth_equal_to_the_last_user_turn', async () => {
     // EC-8 — the boundary itself, not just "one past it". Off-by-one at the top of a range is the
     // classic failure of 1-based counting, and the original suite tested only the overflow.
-    const { recordIndex } = forkBeforeUserTurn('src', 'fork-3', 3, { cwd, root })
+    const { recordIndex } = await forkBeforeUserTurn('src', 'fork-3', 3, { cwd, root })
     expect(recordIndex).toBe(7)
   })
 
-  it('writes_the_fork_to_the_destination_transcript', () => {
-    const { transcript } = forkBeforeUserTurn('src', 'fork-dst', 2, { cwd, root })
+  it('writes_the_fork_to_the_destination_transcript', async () => {
+    const { transcript } = await forkBeforeUserTurn('src', 'fork-dst', 2, { cwd, root })
     expect(transcript).toBe(transcriptPath(root, cwd, 'fork-dst'))
   })
 
-  it('throws_when_nth_exceeds_available_turns', () => {
-    expect(() => forkBeforeUserTurn('src', 'fork-x', 4, { cwd, root })).toThrow(
+  it('throws_when_nth_exceeds_available_turns', async () => {
+    await expect(forkBeforeUserTurn('src', 'fork-x', 4, { cwd, root })).rejects.toThrow(
       /has 3 reachable user turn\(s\)/,
     )
   })
 
-  it('rejects_zero_and_negative_nth', () => {
+  it('rejects_zero_and_negative_nth', async () => {
     // The 1-based guard: a 0-based index on a destructive-feeling operation is a silent off-by-one.
-    expect(() => forkBeforeUserTurn('src', 'fork-y', 0, { cwd, root })).toThrow(
+    await expect(forkBeforeUserTurn('src', 'fork-y', 0, { cwd, root })).rejects.toThrow(
       /counts user turns from 1/,
     )
-    expect(() => forkBeforeUserTurn('src', 'fork-z', -1, { cwd, root })).toThrow(
+    await expect(forkBeforeUserTurn('src', 'fork-z', -1, { cwd, root })).rejects.toThrow(
       /counts user turns from 1/,
     )
   })
 
-  it('forkBeforeUserTurn forks a transcript whose last line is torn', () => {
+  it('forkBeforeUserTurn forks a transcript whose last line is torn', async () => {
     const path = transcriptPath(root, cwd, 'torn')
     mkdirSync(join(path, '..'), { recursive: true })
     writeFileSync(path, `${[record('user', 'a'), record('user', 'b')].join('\n')}\n{"type":"assis`)
-    const { recordIndex, selectedText } = forkBeforeUserTurn('torn', 'torn-fork', 1, { cwd, root })
+    const { recordIndex, selectedText } = await forkBeforeUserTurn('torn', 'torn-fork', 1, {
+      cwd,
+      root,
+    })
     expect(recordIndex).toBe(0)
     expect(selectedText).toBe('a')
   })
 
-  it('forkBeforeUserTurn still throws JsonlParseError on a corrupt middle line', () => {
+  it('forkBeforeUserTurn still throws JsonlParseError on a corrupt middle line', async () => {
     const path = transcriptPath(root, cwd, 'corrupt')
     mkdirSync(join(path, '..'), { recursive: true })
     writeFileSync(
       path,
       `${[record('user', 'a'), '{"type":"assis', record('user', 'b')].join('\n')}\n`,
     )
-    expect(() => forkBeforeUserTurn('corrupt', 'corrupt-fork', 1, { cwd, root })).toThrow(
+    await expect(forkBeforeUserTurn('corrupt', 'corrupt-fork', 1, { cwd, root })).rejects.toThrow(
       /invalid JSON/,
     )
   })
 
-  it('rejects_src_equal_to_new_id', () => {
+  it('rejects_src_equal_to_new_id', async () => {
     // EC-1 (MUST FIX) — both ids resolve to the SAME path, so a self-fork truncates the source in
     // place. Unreachable while the function always threw; fixing the count is what opens it.
-    expect(() => forkBeforeUserTurn('src', 'src', 1, { cwd, root })).toThrow(
+    await expect(forkBeforeUserTurn('src', 'src', 1, { cwd, root })).rejects.toThrow(
       /srcId and newId must differ/,
     )
   })
@@ -204,47 +207,47 @@ describe('forkBeforeUserTurn — on a transcript that looks like a real one', ()
     writeRealisticTranscript('real')
   })
 
-  it('test_fork_starts_after_the_last_compact_boundary', () => {
-    const { recordIndex } = forkBeforeUserTurn('real', 'f1', 1, { cwd, root })
+  it('test_fork_starts_after_the_last_compact_boundary', async () => {
+    const { recordIndex } = await forkBeforeUserTurn('real', 'f1', 1, { cwd, root })
     // 4, not 0. Index 0 is a turn that has left the model's window; forking there silently rewinds
     // the user past what they can see.
     expect(recordIndex).toBe(4)
   })
 
-  it('test_fork_skips_tool_result_records_when_counting_turns', () => {
-    const { recordIndex } = forkBeforeUserTurn('real', 'f2', 2, { cwd, root })
+  it('test_fork_skips_tool_result_records_when_counting_turns', async () => {
+    const { recordIndex } = await forkBeforeUserTurn('real', 'f2', 2, { cwd, root })
     // 8, not 5. Index 5 carries `type: 'user'` because that is how the protocol frames a tool
     // result — but nobody typed it, and "the 2nd thing I said" does not mean it.
     expect(recordIndex).toBe(8)
   })
 
-  it('test_fork_skips_goal_continuation_markers', () => {
+  it('test_fork_skips_goal_continuation_markers', async () => {
     // Index 7 is synthetic: the goal runner wrote it, not the user. If it counted, nth=2 would land
     // there and the user would be rewound to a message they never sent.
-    const { recordIndex } = forkBeforeUserTurn('real', 'f3', 2, { cwd, root })
+    const { recordIndex } = await forkBeforeUserTurn('real', 'f3', 2, { cwd, root })
     expect(recordIndex).not.toBe(7)
   })
 
-  it('test_fork_returns_the_selected_turn_text', () => {
+  it('test_fork_returns_the_selected_turn_text', async () => {
     // The whole point of a backtrack is re-seeding the composer with what was typed. Returning only
     // an index makes every surface re-read the transcript to find out what it just selected.
-    const result = forkBeforeUserTurn('real', 'f4', 1, { cwd, root })
+    const result = await forkBeforeUserTurn('real', 'f4', 1, { cwd, root })
     expect(result.selectedText).toBe('kept-1')
   })
 
-  it('test_nth_below_one_raises_a_distinct_typed_error', () => {
+  it('test_nth_below_one_raises_a_distinct_typed_error', async () => {
     // EC-5. Record indices in this module are 0-based, so 0 is the likely mistake. Falling through
     // to "0 exceeds the 2 reachable turns" sends the caller to read the transcript instead of their
     // own call.
     // The message already distinguished the two cases before T2.3 — it says "counts user turns
     // from 1" rather than falling through to the exceeded-error, which is what EC-5 asked for.
-    expect(() => forkBeforeUserTurn('real', 'f5', 0, { cwd, root })).toThrow(
+    await expect(forkBeforeUserTurn('real', 'f5', 0, { cwd, root })).rejects.toThrow(
       /counts user turns from 1/i,
     )
   })
 
-  it('test_nth_beyond_reachable_turns_names_the_reachable_count', () => {
-    expect(() => forkBeforeUserTurn('real', 'f6', 3, { cwd, root })).toThrow(/\b2\b/)
+  it('test_nth_beyond_reachable_turns_names_the_reachable_count', async () => {
+    await expect(forkBeforeUserTurn('real', 'f6', 3, { cwd, root })).rejects.toThrow(/\b2\b/)
   })
 })
 
@@ -256,11 +259,13 @@ describe('forkBeforeUserTurn — onto a protected session', () => {
     return p
   }
 
-  it('forkBeforeUserTurn onto the most recent session throws LiveTranscriptError', () => {
+  it('forkBeforeUserTurn onto the most recent session throws LiveTranscriptError', async () => {
     touch('src', 1000)
     const live = touch('live', 2000)
     const before = readFileSync(live, 'utf8')
-    expect(() => forkBeforeUserTurn('src', 'live', 2, { cwd, root })).toThrow(LiveTranscriptError)
+    await expect(forkBeforeUserTurn('src', 'live', 2, { cwd, root })).rejects.toThrow(
+      LiveTranscriptError,
+    )
     expect(readFileSync(live, 'utf8')).toBe(before)
   })
 
@@ -271,7 +276,9 @@ describe('forkBeforeUserTurn — onto a protected session', () => {
     const before = readFileSync(live, 'utf8')
     const lease = await acquireSessionWriter(live)
     try {
-      expect(() => forkBeforeUserTurn('src', 'live', 2, { cwd, root })).toThrow(LiveTranscriptError)
+      await expect(forkBeforeUserTurn('src', 'live', 2, { cwd, root })).rejects.toThrow(
+        LiveTranscriptError,
+      )
       expect(readFileSync(live, 'utf8')).toBe(before)
     } finally {
       await (lease as { release?: () => Promise<void> }).release?.()
@@ -311,7 +318,10 @@ describe('listUserTurns', () => {
   it('every entry nth selects the same text in forkBeforeUserTurn', async () => {
     write('lst', lines)
     for (const entry of await listUserTurns('lst', { cwd, root })) {
-      const out = forkBeforeUserTurn('lst', `dst-${String(entry.nth)}`, entry.nth, { cwd, root })
+      const out = await forkBeforeUserTurn('lst', `dst-${String(entry.nth)}`, entry.nth, {
+        cwd,
+        root,
+      })
       expect(out.selectedText).toBe(entry.text)
     }
   })
