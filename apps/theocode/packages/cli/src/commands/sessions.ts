@@ -81,8 +81,8 @@ type Candidate = TranscriptGCPlan['candidates'][number]
  * A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
  * first row. Each candidate therefore gets its OWN identity: the registered session (archived or
  * not) whose transcript file this is, under either naming convention. A fork with no registry
- * entry has no identity. The listing omits archived sessions, so such a fork may still own an
- * unlisted registry entry: it is withheld rather than deleted as an orphan.
+ * entry (the listing includes archived ones) has no identity, and is reported by its transcript
+ * path rather than as its source.
  * Legacy names sanitise ids (`a.b` and `a-b` share a file), so one transcript can match several
  * identities; which entry it belongs to is then unknowable and the candidate is withheld.
  */
@@ -103,7 +103,8 @@ function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): 
     const reason =
       ids.length > 1
         ? 'transcript name matches more than one registered session — owner unknown'
-        : 'transcript belongs to no listed session (a fork, possibly of an archived entry) — owner unknown'
+        : undefined
+    if (reason === undefined) return [{ ...c, id: undefined }]
     withheld.push({ id: c.id, reason })
     return []
   })
@@ -147,21 +148,49 @@ async function collectCandidate(ctx: CollectContext, candidate: Candidate): Prom
     }
   }
   // `Agent.delete` removes by id with no project constraint, so an id the listing for this project
-  // did not return is an orphan transcript only: the registry is never asked about it.
+  // did not return is an orphan transcript only: the registry is never asked about it. An
+  // identity-less fork gets a stand-in id the registry never sees; its collection is reported by path.
+  const stand = candidate.id ?? '\u0000unregistered'
   const res = await runTranscriptGC(
-    { ...plan, candidates: [candidate] },
+    { ...plan, candidates: [{ ...candidate, id: stand }] },
     {
       apply: ctx.apply,
       protectedIds,
       removeFromRegistry: (id) =>
-        id === candidate.id && ctx.registered.has(id) && !protectedIds().has(id)
+        candidate.id !== undefined &&
+        id === candidate.id &&
+        ctx.registered.has(id) &&
+        !protectedIds().has(id)
           ? ctx.remove(id)
           : undefined,
     },
   )
-  acc.removed.push(...res.removed)
-  acc.errors.push(...res.errors)
+  if (candidate.id === undefined) {
+    if (res.removed.length > 0) acc.orphaned.push(candidate.transcript)
+    acc.errors.push(...res.errors.map((e) => ({ id: undefined, message: e.message })))
+  } else {
+    acc.removed.push(...res.removed)
+    acc.errors.push(...res.errors)
+  }
   acc.orphaned.push(...res.orphaned)
+}
+
+/**
+ * The project's registry listing INCLUDING archived sessions. The default listing hides them, and
+ * an archived session's transcript would then look unregistered and be unlinked with its entry kept.
+ */
+export async function listIncludingArchived(
+  cwd: string,
+  list: (o: { runtime: 'local'; cwd: string; includeArchived: true }) => Promise<{
+    items: { agentId: string; archived?: boolean }[]
+    nextCursor?: string
+  }> = (o) => Agent.list(o),
+): Promise<{ agentId: string; archived?: boolean }[]> {
+  const r = await list({ runtime: 'local', cwd, includeArchived: true })
+  if (r.nextCursor !== undefined) {
+    throw new Error(`the agent listing returned a cursor (${r.nextCursor}) this version cannot drain`)
+  }
+  return r.items
 }
 
 /**
@@ -172,10 +201,10 @@ async function collectCandidate(ctx: CollectContext, candidate: Candidate): Prom
 export async function planAndRunCurrentProjectGC(
   opts: CurrentProjectGCOptions,
 ): Promise<{ plan: TranscriptGCPlan; result: RunTranscriptGCResult }> {
-  const { gcProtectedIds, liveSessionIds, listAgents, withholdLegacyNamed } =
+  const { gcProtectedIds, liveSessionIds, withholdLegacyNamed } =
     await import('@theocode/agent/session')
   const { cwd } = opts
-  const everyone = await (opts.listRegistry ?? listAgents)(cwd)
+  const everyone = await (opts.listRegistry ?? listIncludingArchived)(cwd)
   const registryIds = everyone.filter((a) => a.archived !== true).map((a) => a.agentId)
   const protectedIds = gcProtectedIds(cwd, registryIds)
   const planned = planTranscriptGC({

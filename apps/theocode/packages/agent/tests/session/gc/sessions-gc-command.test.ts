@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   humanReport,
+  listIncludingArchived,
   planAndRunCurrentProjectGC,
   sessionsCommand,
 } from '../../../../cli/src/commands/sessions.js'
@@ -210,9 +211,7 @@ describe('a fork is collected under its own identity', () => {
     expect(plan.candidates.map((c) => c.id)).toEqual(['the-fork'])
   })
 
-  it('test_a_fork_absent_from_the_listing_is_withheld_not_deleted_as_an_orphan', async () => {
-    // The production listing omits archived sessions, so a fork the listing does not return may still
-    // own a registry entry. It is kept, and nothing is sent to the registry.
+  it('test_an_unregistered_fork_is_reported_by_path_not_as_its_source', async () => {
     writeTranscript(fx, 'newest', 1)
     writeTranscript(fx, 'source-live', 2)
     const fork = writeTranscript(fx, 'the-fork', 90, { content: forkOf('source-live') })
@@ -223,10 +222,21 @@ describe('a fork is collected under its own identity', () => {
       removeFromRegistry: (id: string) => void removed.push(id),
     })
 
-    expect(existsSync(fork)).toBe(true)
-    expect(result.removed).toEqual([])
+    expect(existsSync(fork)).toBe(false)
     expect(removed).toEqual([])
-    expect(plan.kept.map((k) => k.reason).join('\n')).toContain('owner unknown')
+    expect(result.removed).toEqual([])
+    expect(result.orphaned).toEqual([fork])
+    expect(humanReport(plan, result).join('\n')).not.toContain('source-live')
+  })
+
+  it('test_the_default_listing_asks_for_archived_sessions', async () => {
+    let seen: Record<string, unknown> | undefined
+    const items = await listIncludingArchived('/p', async (o) => {
+      seen = o
+      return { items: [{ agentId: 'old-archived', archived: true }] }
+    })
+    expect(seen).toMatchObject({ includeArchived: true })
+    expect(items.map((i) => i.agentId)).toEqual(['old-archived'])
   })
 
   it('test_a_readable_orphan_absent_from_the_listing_never_reaches_the_registry', async () => {
@@ -390,7 +400,7 @@ vi.mock('@theocode/agent/session', async (importOriginal) => ({
 }))
 vi.mock('@theokit/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@theokit/agents')>()),
-  Agent: { delete: async () => undefined },
+  Agent: { delete: async () => undefined, list: async () => ({ items: [] }) },
 }))
 
 describe('theocode sessions gc, through sessionsCommand', () => {
