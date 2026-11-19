@@ -57,6 +57,11 @@ export {
 } from './agent-route-generator.js'
 
 export {
+  delegationPortFromAgentFactory,
+  type DelegationPortFromAgentFactoryOptions,
+} from './delegation-port-from-factory.js'
+
+export {
   createSdkAgentStream,
   toAgentFactory,
   type SdkAgentHandle,
@@ -259,3 +264,5 @@ export {
   type ForeignSurfaceEntry,
   type ForeignSurfaceInventoryInput,
 } from './foreign-surfaces.js'
+
+export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'

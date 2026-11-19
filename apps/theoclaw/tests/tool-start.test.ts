@@ -185,6 +185,7 @@ describe('the tool options each agent receives', () => {
       'question',
       'read_file',
       'read_pdf',
+      'read_schedule_inbox',
       'run_code',
       'schedule_job',
       'session_search',
