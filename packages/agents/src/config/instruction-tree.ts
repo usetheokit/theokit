@@ -5,13 +5,15 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import type { Stats } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { basename, join, relative, resolve } from 'node:path'
 
 // Imported from the SDK directly, not from this package's own barrel: these files now LIVE in
 // `@theokit/agents`, so `from '@theokit/agents'` would be a package self-reference (and a cycle
 // through `src/index.ts`). The barrel re-exports the same SDK symbols for consumers; inside the
 // package we reach the source.
 import { assertNoSymlinkEscape } from '@theokit/sdk/path-safety'
+
+import { ConfigurationError } from '../errors.js'
 
 import { splitFrontmatter } from './frontmatter.js'
 import { expandInstructionImports } from './instruction-imports.js'
@@ -60,7 +62,12 @@ export interface InstructionBlock {
    * fail-closed policy drop the block on this flag instead of publishing it unscoped.
    */
   readonly scopesUnreadable: boolean
+  /** Present and `true` only when `budget.maxCharsPerFile` cut this block; its content ends with `[truncated]`. */
+  readonly truncated?: boolean
 }
+
+/** Marker appended to a block cut by `maxCharsPerFile`. */
+const TRUNCATED_MARKER = '[truncated]'
 
 /**
  * Does a block's `paths:` scope cover this file?
@@ -149,6 +156,8 @@ export interface InstructionTreeBudget {
   readonly maxFiles: number
   /** Total characters across all blocks. */
   readonly maxChars: number
+  /** Cut each file at this many characters (marker '[truncated]'), before maxChars is applied. */
+  readonly maxCharsPerFile?: number
 }
 
 export interface LoadInstructionTreeInput {
@@ -189,7 +198,9 @@ export interface LoadInstructionTreeInput {
    * is looking at — which is why offering the walk without offering the order left the capability
    * half-built.
    */
-  readonly order?: 'outward-in' | 'lexicographic'
+  readonly order?: 'outward-in' | 'lexicographic' | 'as-listed'
+  // 'as-listed': only valid with `fileNames` as an array; within each directory, files follow the
+  // array order (directories after the files, alphabetically).
 }
 
 export interface InstructionTree {
@@ -253,6 +264,11 @@ const IGNORE_WARNING = (): void => undefined
  */
 export function loadInstructionTree(input: LoadInstructionTreeInput): InstructionTree {
   const warn = input.onWarn ?? IGNORE_WARNING
+  if (input.order === 'as-listed' && !Array.isArray(input.fileNames)) {
+    throw new ConfigurationError(
+      "loadInstructionTree: order 'as-listed' requires fileNames to be an array, not a predicate or unset",
+    )
+  }
   const fileNames = input.fileNames ?? DEFAULT_FILE_NAMES
   // Normalised once, at the edge, so the hot path inside the walk is a single call either way.
   const accepts =
@@ -263,6 +279,9 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
 
   const blocks: InstructionBlock[] = []
   const seenInodes = new Set<string>()
+  // `as-listed` collects a root's accepted files first so the list order is applied BEFORE the
+  // budgets: otherwise a root `B.md` would use up `maxFiles` ahead of a listed-first nested `A.md`.
+  let candidates: string[] | undefined
   let chars = 0
 
   /**
@@ -278,6 +297,25 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
    * threads it. No shared mutable state, so nothing to narrow wrongly — and the recursion now says
    * out loud what it decided instead of leaving a flag behind for someone else to read.
    */
+
+  /** Budget-checks and reads one accepted file. @returns `true` when a ceiling stopped the walk. */
+  const admit = (path: string): boolean => {
+    if (blocks.length >= input.budget.maxFiles) {
+      warn(`instruction budget: stopped at ${String(input.budget.maxFiles)} files`)
+      return true
+    }
+
+    const parsed = parseInstructionFile(path, cwd, warn, input.budget.maxCharsPerFile)
+    if (parsed === undefined) return false
+
+    if (chars + parsed.content.length > input.budget.maxChars) {
+      warn(`instruction budget: stopped at ${String(input.budget.maxChars)} characters`)
+      return true
+    }
+    chars += parsed.content.length
+    blocks.push(parsed)
+    return false
+  }
 
   /** @returns `true` when a ceiling stopped the walk — the caller must stop descending too. */
   const visit = (dir: string, depth: number): boolean => {
@@ -298,13 +336,27 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
     }
 
     // Ordering is `walkOrder`'s decision, with its three bands and their reasons written there.
-    for (const { entry, path, stats } of walkOrder(dir, entries, input.order ?? 'outward-in')) {
+    for (const { entry, path, stats } of walkOrder(
+      dir,
+      entries,
+      input.order ?? 'outward-in',
+      Array.isArray(input.fileNames) ? (input.fileNames as readonly string[]) : [],
+      (entry, path) => {
+        // A matching entry that cannot be stat'ed (ELOOP, EACCES...) is a real failure; only a
+        // vanished one is quietly dropped.
+        if (accepts(entry))
+          warn(`instruction file could not be read, skipped: ${relative(cwd, path)}`)
+      },
+    )) {
       // Inode identity, not path identity — see the function docblock.
       const inode = `${String(stats.dev)}:${String(stats.ino)}`
       if (seenInodes.has(inode)) continue
       seenInodes.add(inode)
 
       if (stats.isDirectory()) {
+        if (accepts(entry)) {
+          warn(`instruction file is a directory and was not read: ${relative(cwd, path)}`)
+        }
         if (visit(path, depth + 1)) return true
         continue
       }
@@ -324,27 +376,31 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
         continue
       }
 
-      if (blocks.length >= input.budget.maxFiles) {
-        warn(`instruction budget: stopped at ${String(input.budget.maxFiles)} files`)
-        return true
+      if (candidates !== undefined) {
+        candidates.push(path)
+        continue
       }
-
-      const parsed = parseInstructionFile(path, cwd, warn)
-      if (parsed === undefined) continue
-
-      if (chars + parsed.content.length > input.budget.maxChars) {
-        warn(`instruction budget: stopped at ${String(input.budget.maxChars)} characters`)
-        return true
-      }
-      chars += parsed.content.length
-      blocks.push(parsed)
+      if (admit(path)) return true
     }
     return false
   }
 
   let truncated = false
   for (const root of input.roots) {
+    if (input.order === 'as-listed') candidates = []
     truncated = visit(resolve(cwd, root), 0)
+    if (candidates !== undefined) {
+      const listed = input.fileNames as readonly string[]
+      const found = candidates
+      candidates = undefined
+      found.sort((x, y) => listed.indexOf(basename(x)) - listed.indexOf(basename(y)))
+      for (const path of found) {
+        if (admit(path)) {
+          truncated = true
+          break
+        }
+      }
+    }
     if (truncated) break
   }
 
@@ -370,14 +426,17 @@ interface WalkEntry {
 function walkOrder(
   dir: string,
   entries: readonly string[],
-  order: 'outward-in' | 'lexicographic',
+  order: 'outward-in' | 'lexicographic' | 'as-listed',
+  listed: readonly string[],
+  onStatError: (entry: string, path: string) => void,
 ): WalkEntry[] {
   const found: WalkEntry[] = []
   for (const entry of [...entries].sort((a, b) => a.localeCompare(b))) {
     const path = join(dir, entry)
     try {
       found.push({ entry, path, stats: statSync(path) })
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') onStatError(entry, path)
       continue
     }
   }
@@ -385,6 +444,24 @@ function walkOrder(
   // `lexicographic` stays literally alphabetical. It is the documented escape for a caller who wants
   // the raw order, so the semantic rule below must not leak into it.
   if (order === 'lexicographic') return found
+
+  // `as-listed`: the caller's array is the order. Files not in the list (cannot be accepted anyway)
+  // and directories follow, alphabetically.
+  if (order === 'as-listed') {
+    const rank = (item: WalkEntry): number => {
+      const index = listed.indexOf(item.entry)
+      return item.stats.isDirectory() || index === -1 ? Number.MAX_SAFE_INTEGER : index
+    }
+    return [
+      ...found
+        .filter((item) => rank(item) !== Number.MAX_SAFE_INTEGER)
+        .sort((a, b) => rank(a) - rank(b)),
+      ...found.filter(
+        (item) => rank(item) === Number.MAX_SAFE_INTEGER && !item.stats.isDirectory(),
+      ),
+      ...found.filter((item) => item.stats.isDirectory()),
+    ]
+  }
 
   // Three bands, and each boundary is a decision with a reason.
   //
@@ -420,11 +497,16 @@ function parseInstructionFile(
   path: string,
   cwd: string,
   warn: (message: string) => void,
+  maxCharsPerFile?: number,
 ): InstructionBlock | undefined {
   let raw: string
   try {
     raw = readFileSync(path, 'utf8')
-  } catch {
+  } catch (error) {
+    // Only a file that is not there is quietly skipped; a permission error is a real failure.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      warn(`instruction file could not be read, skipped: ${relative(cwd, path)}`)
+    }
     return undefined
   }
 
@@ -435,17 +517,20 @@ function parseInstructionFile(
     return undefined
   }
 
+  // Imports expand AFTER the frontmatter split, so an `@ref` inside a frontmatter block is not one
+  // — that block is metadata about the file, not content of the prompt.
+  const expanded = expandInstructionImports({
+    text: parsed.body,
+    filePath: path,
+    rootDir: cwd,
+    onWarn: warn,
+  })
+  const capped = maxCharsPerFile !== undefined && expanded.length > maxCharsPerFile
   return {
     path: rel,
-    // Imports expand AFTER the frontmatter split, so an `@ref` inside a frontmatter block is not one
-    // — that block is metadata about the file, not content of the prompt.
-    content: expandInstructionImports({
-      text: parsed.body,
-      filePath: path,
-      rootDir: cwd,
-      onWarn: warn,
-    }),
+    content: capped ? `${expanded.slice(0, maxCharsPerFile)}\n${TRUNCATED_MARKER}` : expanded,
     ...scopeOf(parsed.frontmatter, rel, warn),
+    ...(capped ? { truncated: true } : {}),
   }
 }
 

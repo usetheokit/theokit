@@ -109,10 +109,103 @@ export interface AuthProviderOptions {
    * Default `0`: the SDK's own skew decides, as before.
    */
   readonly refreshBeforeMs?: number
+  /** Abort each refresh request after this long. Default: no timeout (today's behaviour). */
+  readonly requestTimeoutMs?: number
+  /** 'use-stored': on a transient failure after the retries, return the stored credential. Default 'throw'. */
+  readonly onTransientFailure?: 'throw' | 'use-stored'
+}
+
+/** Set by {@link observeFetch} when the failure came from the network or the deadline. */
+interface TransportState {
+  transient: boolean
+}
+
+function isTransportFailure(err: unknown): boolean {
+  if (err instanceof SyntaxError) return false
+  return err instanceof TypeError || classifyRefreshFailure(err).transient
+}
+
+const BODY_READERS = new Set(['json', 'text', 'arrayBuffer', 'blob', 'formData'])
+
+/**
+ * Wrap `fetch` so a transport failure stays recognizable after the SDK re-wraps it (it keeps only the
+ * message, so a bare `TypeError: fetch failed` or an abort would reach the classifier as text that
+ * matches nothing). A network error or the deadline sets `state.transient`. With `ms`, the deadline
+ * covers the response BODY too, and rejects even when `fetch` ignores the abort signal.
+ */
+function observeFetch(
+  base: typeof fetch,
+  ms: number | undefined,
+  state: TransportState,
+): typeof fetch {
+  return async (input, init) => {
+    const controller = new AbortController()
+    const outer = init?.signal
+    const onOuter = (): void => {
+      controller.abort(outer?.reason)
+    }
+    if (outer) {
+      if (outer.aborted) controller.abort(outer.reason)
+      else outer.addEventListener('abort', onOuter, { once: true })
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let deadline: Promise<never> | undefined
+    if (ms !== undefined) {
+      deadline = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          const err = new Error(`refresh request timeout after ${String(ms)}ms`)
+          err.name = 'AbortError'
+          state.transient = true
+          controller.abort(err)
+          reject(err)
+        }, ms)
+      })
+      deadline.catch(() => undefined) // observed only while a race is pending
+    }
+    const done = (): void => {
+      clearTimeout(timer)
+      outer?.removeEventListener('abort', onOuter)
+    }
+    const race = <T>(p: Promise<T>): Promise<T> => (deadline ? Promise.race([p, deadline]) : p)
+    let res: Response
+    try {
+      res = await race(base(input, { ...init, signal: controller.signal }))
+    } catch (err) {
+      done()
+      // `TypeError: fetch failed` is how Node reports a refused/reset connection.
+      if (isTransportFailure(err)) state.transient = true
+      throw err
+    }
+    if (!res.ok) {
+      done()
+      return res
+    }
+    // Keep the deadline running until the body is consumed, and observe a body that fails mid-read.
+    return new Proxy(res, {
+      get(target, prop) {
+        const value: unknown = Reflect.get(target, prop, target)
+        if (typeof value !== 'function') return value
+        const fn = value as (...a: unknown[]) => unknown
+        if (typeof prop === 'string' && BODY_READERS.has(prop)) {
+          return (...args: unknown[]) =>
+            race(fn.apply(target, args) as Promise<unknown>)
+              .catch((err: unknown) => {
+                // A reset while reading is transport; malformed JSON (SyntaxError) is not.
+                if (isTransportFailure(err)) state.transient = true
+                throw err
+              })
+              .finally(done)
+        }
+        return fn.bind(target)
+      },
+    })
+  }
 }
 
 export class AuthProvider {
   private readonly refreshBeforeMs: number
+  private readonly requestTimeoutMs: number | undefined
+  private readonly onTransientFailure: 'throw' | 'use-stored'
 
   constructor(
     private readonly config: OAuthProviderConfig,
@@ -126,6 +219,17 @@ export class AuthProvider {
       )
     }
     this.refreshBeforeMs = refreshBeforeMs
+    const requestTimeoutMs = options.requestTimeoutMs
+    if (
+      requestTimeoutMs !== undefined &&
+      (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0)
+    ) {
+      throw new RangeError(
+        `AuthProvider: requestTimeoutMs must be a finite number of milliseconds above 0, got ${String(requestTimeoutMs)}`,
+      )
+    }
+    this.requestTimeoutMs = requestTimeoutMs
+    this.onTransientFailure = options.onTransientFailure ?? 'throw'
   }
 
   /**
@@ -207,16 +311,30 @@ export class AuthProvider {
       // structural gate.
       const MAX_ATTEMPTS = 3
       for (let attempt = 0; ; attempt++) {
+        const transport: TransportState = { transient: false }
+        const attemptDeps: EnsureFreshHttpDeps = {
+          ...deps,
+          fetch: observeFetch(deps.fetch, this.requestTimeoutMs, transport),
+        }
         try {
           const fresh = await ensureFreshCredential(
             decidedOn,
             { config: this.config, store: this.store, env },
-            deps,
+            attemptDeps,
           )
           return fresh === decidedOn ? current : fresh
         } catch (err) {
-          const failure = classifyRefreshFailure(err)
-          if (!failure.transient || attempt >= MAX_ATTEMPTS - 1) throw failure
+          const failure = transport.transient
+            ? new RefreshFailure('transient failure refreshing the credential', true, {
+                cause: err,
+              })
+            : classifyRefreshFailure(err)
+          if (!failure.transient) throw failure
+          if (attempt >= MAX_ATTEMPTS - 1) {
+            // 'use-stored': a token that is still stored beats failing the run on an unreachable endpoint.
+            if (this.onTransientFailure === 'use-stored') return current
+            throw failure
+          }
           await new Promise((resolve) => setTimeout(resolve, waitWithJitter(attempt)))
         }
       }
