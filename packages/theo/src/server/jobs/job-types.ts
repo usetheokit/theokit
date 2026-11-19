@@ -2,6 +2,8 @@
  * Job primitive types (R0.5.5-9).
  */
 
+import type { QueueClient } from './queue-client.js'
+
 /**
  * Type registry for jobs. Users extend via module augmentation:
  *
@@ -25,6 +27,12 @@
 export interface JobRegistry {}
 
 export interface JobContext<TInput = unknown> {
+  /**
+   * Enqueue follow-up jobs from this handler. Jobs buffered with `enqueue` are dispatched after the
+   * handler returns and dropped if it throws; they carry this job's trace. Use
+   * `enqueueInTransaction` to tie a job to your own database transaction.
+   */
+  readonly queue: QueueClient
   /** W3C trace_id propagated from the originating request or cron. */
   readonly traceId: string
   /** The job's input, type-narrowed per JobRegistry entry. */

@@ -199,3 +199,13 @@ describe('Deno Deploy cron translator (T1.5)', () => {
     expect(content).toContain('fresh')
   })
 })
+
+describe('Deno cron context queue', () => {
+  it('passes a queue that fails clearly, since no jobs.backend is loaded', () => {
+    const entry = join(root, 'crons-queue-entry.ts')
+    translateCronToDeno(entry, [cron('q', '* * * * *')])
+    const content = readFileSync(entry, 'utf8')
+    expect(content).toContain('queue:')
+    expect(content).toContain('no jobs.backend')
+  })
+})

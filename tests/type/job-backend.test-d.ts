@@ -5,7 +5,8 @@ import type {
   JobEnqueueInput,
   JobLease,
 } from '../../packages/theo/src/server/jobs/job-backend.js'
-import type { JobRegistry } from '../../packages/theo/src/server/jobs/job-types.js'
+import type { JobContext, JobRegistry } from '../../packages/theo/src/server/jobs/job-types.js'
+import type { QueueClient } from '../../packages/theo/src/server/jobs/queue-client.js'
 
 // User-side module augmentation example.
 declare module '../../packages/theo/src/server/jobs/job-types.js' {
@@ -40,5 +41,11 @@ describe('JobBackend types (T2.1)', () => {
   it('JobRegistry augmentation extends the type map', () => {
     type ProcessInput = JobRegistry['process-document']
     expectTypeOf<ProcessInput>().toEqualTypeOf<{ documentId: string }>()
+  })
+})
+
+describe('JobContext.queue', () => {
+  it('is the typed QueueClient', () => {
+    expectTypeOf<JobContext['queue']>().toEqualTypeOf<QueueClient>()
   })
 })

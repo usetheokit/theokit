@@ -216,6 +216,8 @@ export function translateCronToDeno(entryPath: string, crons: readonly CronManif
     traceId: crypto.randomUUID().replace(/-/g, ""),
     scheduledAt: new Date(),
     signal: AbortSignal.timeout(60_000),
+    // The Deno entry loads no theo.config.ts, so there is no jobs.backend to enqueue through.
+    queue: new Proxy({}, { get: () => () => { throw new Error("ctx.queue is unavailable in the Deno cron entry: no jobs.backend is loaded."); } }),
   });
 });`,
   )

@@ -2,6 +2,7 @@ import { createLogger } from '../observability/logger.js'
 import {
   extractTraceContext,
   generateNewTraceContext,
+  newSpanId,
 } from '../observability/trace-context-propagation.js'
 
 import {
@@ -12,6 +13,7 @@ import {
   NonRetryableError,
 } from './job-backend.js'
 import type { JobContext, JobDefinition } from './job-types.js'
+import { createHandlerQueue } from './queue-client.js'
 
 /**
  * Job runner — pulls leases from a backend and invokes the matching
@@ -127,8 +129,13 @@ export function createJobRunner(
     }
     armLockTimer(lease.lockExpiresAt)
 
+    // Children carry this job's trace; the worker's span id is not tracked, so a fresh one stands in.
+    const handlerQueue = createHandlerQueue(backend, {
+      traceparent: `00-${traceId}-${newSpanId()}-01`,
+    })
     const jobCtx: JobContext = {
       traceId,
+      queue: handlerQueue.queue,
       input: parsedInput,
       signal: abortController.signal,
       attempt: lease.attempts,
@@ -155,9 +162,11 @@ export function createJobRunner(
     let failed = false
     try {
       await def.handler(jobCtx)
+      await handlerQueue.flush()
     } catch (err) {
       failed = true
       failure = err
+      handlerQueue.discard()
     } finally {
       clearTimeout(lockTimer)
     }

@@ -10,6 +10,7 @@ import { validateProjectStructure } from '../../config/validate-structure.js'
 import { initCacheEngineFromConfig } from '../../server/cache-bootstrap.js'
 import { createCronScheduler } from '../../server/cron/cron-runtime-node.js'
 import { cronScanDirs, listCronFiles } from '../../server/cron/cron-scan.js'
+import { jobBackendFromConfig } from '../../server/jobs/job-backend-from-config.js'
 import { listJobFiles } from '../../server/jobs/job-scan.js'
 import { orchestrateDev } from '../../services/index.js'
 import { theoPluginAsync } from '../../vite-plugin/index.js'
@@ -201,7 +202,7 @@ async function startDevCrons(
     return
   }
   const definitions = await loadCronModules(files, (filePath) => server.ssrLoadModule(filePath))
-  const scheduler = createCronScheduler(definitions)
+  const scheduler = createCronScheduler(definitions, { backend: jobBackendFromConfig(config) })
   scheduler.start()
   console.log(
     `\n  Crons: ${String(definitions.length)} scheduled in dev (--crons); edits apply after a restart.`,
