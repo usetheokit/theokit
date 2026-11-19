@@ -97,7 +97,13 @@ function visitReference(node, ctx, internals, seen, queue, referrer) {
     // The referring declaration and the local name it imports under tie a reference to its declaration.
     const fresh = !seen.has(d)
     const text = fresh ? printDecl(d, ctx.printer) : null
-    record(internals, d, declKey(d, ctx), text, raw !== sym ? `${declKey(referrer, ctx)}>${node.text}` : null)
+    record(
+      internals,
+      d,
+      declKey(d, ctx),
+      text,
+      raw !== sym ? `${declKey(referrer, ctx)}>${node.text}` : null,
+    )
     if (!fresh) continue
     seen.add(d)
     queue.push(d)
