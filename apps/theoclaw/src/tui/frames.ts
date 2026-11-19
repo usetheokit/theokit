@@ -73,23 +73,28 @@ export function nextSessionId(base: string, n: number): string {
 /** Notices the app raises while a turn runs; the stream places each at the point it has reached when it takes it. */
 export interface TurnInbox {
   post(n: TuiNotice): void
-  take(): TuiNotice[]
+  /** The posted notices that arrived before `before` (a stamp from `stamp`), oldest first; the rest stay queued. */
+  take(before?: number): TuiNotice[]
+  /** Resolves once a notice is queued. */
   wait(): Promise<void>
+  /** A stamp on the inbox's clock, to order something else's arrival against the posts. */
+  stamp(): number
 }
 
 export function createTurnInbox(): TurnInbox {
-  let queue: TuiNotice[] = []
+  let queue: { n: TuiNotice; seq: number }[] = []
+  let clock = 0
   let wake: (() => void) | undefined
   return {
     post(n) {
-      queue.push(n)
+      queue.push({ n, seq: ++clock })
       wake?.()
       wake = undefined
     },
-    take() {
-      const taken = queue
-      queue = []
-      return taken
+    take(before = Number.POSITIVE_INFINITY) {
+      const taken = queue.filter((item) => item.seq < before)
+      queue = queue.filter((item) => item.seq >= before)
+      return taken.map((item) => item.n)
     },
     wait() {
       if (queue.length > 0) return Promise.resolve()
@@ -97,6 +102,7 @@ export function createTurnInbox(): TurnInbox {
         wake = resolve
       })
     },
+    stamp: () => ++clock,
   }
 }
 
@@ -129,20 +135,25 @@ export async function* controlStream(
   const raise = (n: TuiNotice): void => notice({ ...n, after: mirror.events.length })
   const iterator = client.chat(text, session)[Symbol.asyncIterator]()
   try {
-    let next = iterator.next()
-    next.catch(() => undefined)
+    // Each frame is stamped when it arrives, so a notice posted after it is placed after it however late the stream resumes.
+    const pull = (): Promise<{ result: IteratorResult<ControlFrame>; seq: number }> => {
+      const pulled = iterator.next().then((result) => ({ result, seq: inbox.stamp() }))
+      pulled.catch(() => undefined)
+      return pulled
+    }
+    let next = pull()
     for (;;) {
       const woke = inbox.wait().then(() => 'notice' as const)
       const got = await Promise.race([next, woke])
-      for (const n of inbox.take()) {
+      for (const n of inbox.take(got === 'notice' ? undefined : got.seq)) {
         local = addNotice(local, n.variant, n.text)
         raise(n)
         // An empty assistant message closes the open one, so later text starts a new message below the notice.
         yield emit({ type: 'assistant', message: '' })
       }
       if (got === 'notice') continue
-      if (got.done === true) return
-      const frame = got.value
+      if (got.result.done === true) return
+      const frame = got.result.value
       local = applyFrame(local, frame)
       if (frame.type === 'event') {
         const { event } = frame
@@ -180,8 +191,7 @@ export async function* controlStream(
         raise({ variant: 'error', text: `the turn ended: ${frame.code}` })
         return
       }
-      next = iterator.next()
-      next.catch(() => undefined)
+      next = pull()
     }
   } catch (error) {
     raise({ variant: 'error', text: error instanceof Error ? error.message : String(error) })
