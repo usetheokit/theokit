@@ -145,6 +145,15 @@ describe('refusal ledger', () => {
     })
   })
 
+  it('interleaved framework and external denials are each classified by their own message', () => {
+    const v1 = recordRefusal('r-il', 'Bash', { by: 'human', reason: 'one' }, 'same')
+    const v2 = recordRefusal('r-il', 'Bash', { by: 'policy', reason: 'two' }, 'same')
+    expect(takeRefusal('r-il', 'Bash', `ext quoting ${v1} then more`)).toBeUndefined()
+    expect(takeRefusal('r-il', 'Bash', `blocked: ${v2}`)).toEqual({ by: 'policy', reason: 'two' })
+    expect(takeRefusal('r-il', 'Bash', 'plain external')).toBeUndefined()
+    expect(takeRefusal('r-il', 'Bash', `blocked: ${v1}`)).toEqual({ by: 'human', reason: 'one' })
+  })
+
   it('a retained run keeps every entry past the per-run bound', () => {
     retainRun('r-many')
     const first = recordRefusal('r-many', 'Bash', { by: 'human', reason: 'first' }, 'm')
