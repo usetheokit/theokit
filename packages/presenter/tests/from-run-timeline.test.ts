@@ -147,4 +147,37 @@ describe('fromRunTimelineEvent', () => {
     fromRunTimelineEvent(completedMsg('c1', 'ok'), s)
     expect(flushRunTimeline(s)).toHaveLength(1)
   })
+
+  it.each([
+    ['delta first', false],
+    ['message first', true],
+  ])('distinct callId and modelCallId alias one tool start (%s)', (_n, msgFirst) => {
+    const d = delta({
+      type: 'tool-call-started',
+      callId: 'c1',
+      modelCallId: 'm1',
+      toolCall: { name: 'sh', args: {} },
+    })
+    const m = msg({ type: 'tool_call', status: 'running', call_id: 'm1', name: 'sh' })
+    const out = run(msgFirst ? [m, d] : [d, m]).filter((e) => e.type === 'tool-call')
+    expect(out).toHaveLength(1)
+  })
+
+  it('a start recorded under one alias suppresses a later report under the other', () => {
+    const s = createRunTimelineState()
+    const m = msg({ type: 'tool_call', status: 'running', call_id: 'm1', name: 'sh' })
+    const d = delta({
+      type: 'tool-call-started',
+      callId: 'c1',
+      modelCallId: 'm1',
+      toolCall: { name: 'sh', args: {} },
+    })
+    const again = delta({
+      type: 'tool-call-started',
+      callId: 'c1',
+      toolCall: { name: 'sh', args: {} },
+    })
+    const out = [m, d, again].flatMap((e) => fromRunTimelineEvent(e, s))
+    expect(out.filter((e) => e.type === 'tool-call')).toHaveLength(1)
+  })
 })
