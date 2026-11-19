@@ -200,16 +200,8 @@ describe('Bundle size regression', () => {
    * `@theokit/agents/a2a` (`src/a2a-entry.ts`) in the major B-407 already carries. Measured after
    * the move: `dist/index.js` 39 332 bytes, `dist/a2a.js` 2 750. The cap stays at 42 000.
    * `the-a2a-tool-ships-on-its-own-subpath.test.ts` keeps the module out of the root bundle.
-   *
-   * ## Raised to 43 000 for `createResultCapture` (#1853)
-   *
-   * The issue requires `createResultCapture` and `NoResultSubmittedError` in the root entry. Two
-   * builds of `tsup` on the same tree: `dist/index.js` is 40 334 bytes with the export removed from
-   * `src/index.ts` and 42 624 with it, so the module costs 2 290 bytes against 1 666 of headroom
-   * under the old 42 000 cap. The smallest cap that holds is above 42 624; 43 000 leaves 376 bytes.
-   * Raised by an implementation run from that measurement; a person should confirm it.
    */
-  it('agents main bundle under 43KB', (ctx) => {
+  it('agents main bundle under 42KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -219,7 +211,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(43_000)
+    expect(size).toBeLessThan(42_000)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 
