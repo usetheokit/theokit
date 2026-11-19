@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1299 export(s) across 25 entry point(s).
+1311 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -805,6 +805,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `builtinSecretStores` | value |
 | `CODEX_CLIENT_ID_ENV_VAR` | value |
 | `CODEX_PROVIDER` | value |
+| `createApprovalGate` | value |
+| `createJsonlLedger` | value |
 | `createPlanOnlyGate` | value |
 | `CredentialError` | value |
 | `CredentialExistsError` | value |
@@ -841,6 +843,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SecretReferenceError` | value |
 | `writeCredential` | value |
 | `AgentCredentialInput` | type |
+| `ApprovalAnswer` | type |
+| `ApprovalDecision` | type |
+| `ApprovalGateOptions` | type |
+| `ApprovalLedger` | type |
+| `ApprovalRecord` | type |
 | `AuthMethod` | type |
 | `AuthProviderOptions` | type |
 | `Classification` | type |

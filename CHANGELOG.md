@@ -6,10 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added
-
-- `@theokit/agents`: `createApprovalGate` and `createJsonlLedger` in `@theokit/agents/auth` decide a risky tool call in one chain (session waiver, saved approval, optional reviewer, then the person with a fail-closed timeout) and append a receipt of each decision.
-
 ### Fixed
 
 - `theokit`: the route manifest gives each page, layout, error, loading and not-found component a unique identifier, so `tasks/[id]/page.tsx` and `plans/[id]/page.tsx` build together.

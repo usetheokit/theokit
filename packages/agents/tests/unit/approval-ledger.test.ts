@@ -1,4 +1,4 @@
-import { mkdtempSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -33,5 +33,14 @@ describe('createJsonlLedger', () => {
     expect(await ledger.read()).toEqual([])
     writeFileSync(join(dir, 'x.jsonl'), '{"a":1}\nnot json\n')
     await expect(ledger.read()).rejects.toThrow(/damaged line 2/)
+  })
+
+  it('tightens an existing world-readable file to 0600', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ledger-'))
+    const file = join(dir, 'activity.jsonl')
+    writeFileSync(file, '')
+    chmodSync(file, 0o644)
+    await createJsonlLedger(dir).append(rec('a'))
+    expect(statSync(file).mode & 0o777).toBe(0o600)
   })
 })
