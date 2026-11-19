@@ -374,24 +374,33 @@ function parseMcpJson(
       const violation = strictViolation(name, entryRaw, strict)
       if (violation !== undefined) throw new McpFileError(`${source}: ${violation}`)
     }
-    const reason = validateEntry(name, entryRaw)
-    if (reason !== undefined && strict !== undefined) {
-      throw new McpFileError(`${source}: mcpServers.${name}: ${reason}`)
+    const issue = validateEntry(entryRaw)
+    if (issue !== undefined && strict !== undefined) {
+      const at = issue.path === '' ? '' : `.${issue.path}`
+      throw new McpFileError(`${source}: mcpServers.${name}${at}: ${issue.reason}`)
     }
-    if (reason !== undefined) {
+    if (issue !== undefined) {
+      const reason = issue.reason
       // The message never carries a `headers` value — `validateEntry` returns only the reason, and it
       // is built from the SHAPE, never from the content.
       onWarn(`${source}: server "${name}" ignored — ${reason}`)
       continue
     }
-    out[name] = buildEntry(
-      entryRaw as Record<string, unknown>,
-      name,
-      env,
-      onWarn,
-      source,
-      strict !== undefined,
-    )
+    // defineProperty, not `out[name] =`: a policy may admit `__proto__`, and assignment would set
+    // the prototype instead of adding the entry.
+    Object.defineProperty(out, name, {
+      value: buildEntry(
+        entryRaw as Record<string, unknown>,
+        name,
+        env,
+        onWarn,
+        source,
+        strict !== undefined,
+      ),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
   }
   return out
 }
@@ -465,9 +474,22 @@ function strictViolation(
  * **reason**, not the entry — so no value from the file (`headers` in particular) can escape into the
  * message.
  */
-function validateEntry(name: string, entryRaw: unknown): string | undefined {
+/** A shape defect: the JSON path under the entry (`''` for the entry itself) and the reason. */
+interface ShapeIssue {
+  path: string
+  reason: string
+}
+
+/** `field.member` for the first non-string member of a map, else `field`. Names a key, never a value. */
+function memberPath(field: string, map: unknown): string {
+  if (typeof map !== 'object' || map === null || Array.isArray(map)) return field
+  const bad = Object.entries(map).find(([, v]) => typeof v !== 'string')
+  return bad === undefined ? field : `${field}.${bad[0]}`
+}
+
+function validateEntry(entryRaw: unknown): ShapeIssue | undefined {
   if (typeof entryRaw !== 'object' || entryRaw === null || Array.isArray(entryRaw)) {
-    return 'the entry must be an object.'
+    return { path: '', reason: 'the entry must be an object.' }
   }
   const entry = entryRaw as Record<string, unknown>
   const hasUrl = entry.url !== undefined
@@ -475,23 +497,31 @@ function validateEntry(name: string, entryRaw: unknown): string | undefined {
 
   // The SDK union is DISCRIMINATED: an entry satisfying both branches is neither, and guessing which
   // one would be choosing for the user in silence.
-  if (hasUrl && hasCommand) return 'declares both "command" and "url" — pick one transport.'
-  if (!hasUrl && !hasCommand) return 'requires "command" (stdio) or "url" (http/sse).'
+  if (hasUrl && hasCommand)
+    return { path: '', reason: 'declares both "command" and "url" — pick one transport.' }
+  if (!hasUrl && !hasCommand)
+    return { path: '', reason: 'requires "command" (stdio) or "url" (http/sse).' }
 
   return hasUrl ? validateRemote(entry) : validateStdio(entry)
 }
 
 /** The stdio branch — what this module already validated before M112, untouched. */
-function validateStdio(entry: Record<string, unknown>): string | undefined {
+function validateStdio(entry: Record<string, unknown>): ShapeIssue | undefined {
   if (typeof entry.command !== 'string' || entry.command.length === 0) {
-    return 'field "command" must be a non-empty string.'
+    return { path: 'command', reason: 'field "command" must be a non-empty string.' }
   }
-  if (entry.args !== undefined && !isStringArray(entry.args))
-    return 'field "args" must be an array of strings.'
-  if (entry.env !== undefined && !isStringRecord(entry.env))
-    return 'field "env" must be a map of strings.'
-  if (entry.cwd !== undefined && typeof entry.cwd !== 'string')
-    return 'field "cwd" must be a string.'
+  if (entry.args !== undefined && !isStringArray(entry.args)) {
+    const at = Array.isArray(entry.args)
+      ? `args.${entry.args.findIndex((x) => typeof x !== 'string')}`
+      : 'args'
+    return { path: at, reason: 'field "args" must be an array of strings.' }
+  }
+  if (entry.env !== undefined && !isStringRecord(entry.env)) {
+    return { path: memberPath('env', entry.env), reason: 'field "env" must be a map of strings.' }
+  }
+  if (entry.cwd !== undefined && typeof entry.cwd !== 'string') {
+    return { path: 'cwd', reason: 'field "cwd" must be a string.' }
+  }
   return undefined
 }
 
@@ -514,24 +544,27 @@ function normaliseTransport(value: unknown): 'http' | 'sse' | undefined {
   return undefined
 }
 
-function validateRemote(entry: Record<string, unknown>): string | undefined {
+function validateRemote(entry: Record<string, unknown>): ShapeIssue | undefined {
   if (typeof entry.url !== 'string' || entry.url.length === 0) {
-    return 'field "url" must be a non-empty string.'
+    return { path: 'url', reason: 'field "url" must be a non-empty string.' }
   }
   try {
     new URL(entry.url)
   } catch {
-    return 'field "url" is not a valid URL.'
+    return { path: 'url', reason: 'field "url" is not a valid URL.' }
   }
   if (entry.type !== undefined && normaliseTransport(entry.type) === undefined) {
-    return 'field "type" must be "http", "streamable-http" or "sse".'
+    return { path: 'type', reason: 'field "type" must be "http", "streamable-http" or "sse".' }
   }
   if (entry.headers !== undefined && !isStringRecord(entry.headers)) {
     // The message speaks of the SHAPE. Never of the content — this is the field that carries `Authorization`.
-    return 'field "headers" must be a map of strings.'
+    return {
+      path: memberPath('headers', entry.headers),
+      reason: 'field "headers" must be a map of strings.',
+    }
   }
   if (entry.requestTimeoutMs !== undefined && typeof entry.requestTimeoutMs !== 'number') {
-    return 'field "requestTimeoutMs" must be a number.'
+    return { path: 'requestTimeoutMs', reason: 'field "requestTimeoutMs" must be a number.' }
   }
   return undefined
 }
