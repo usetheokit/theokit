@@ -191,7 +191,8 @@ async function runTurn(
   const send = (event: AgentStreamEvent): void => {
     if (!state.live) return
     const mapped = options.mapEvent === undefined ? event : options.mapEvent(event)
-    if (mapped !== undefined) options.emit(mapped)
+    // `mapEvent` may itself have aborted the signal: recheck before emitting.
+    if (mapped !== undefined && isLive()) options.emit(mapped)
   }
   const onDelta = ({ update }: { update: { type: string } }): void => {
     if (!state.live) return

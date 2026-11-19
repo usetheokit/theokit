@@ -111,6 +111,25 @@ describe('runAgentTurn', () => {
     expect(events).toEqual([])
   })
 
+  it('does not emit an event when mapEvent aborts the signal', async () => {
+    const { agent } = fakeAgent({ deltas: ['a'] })
+    const controller = new AbortController()
+    const events: AgentStreamEvent[] = []
+    const outcome = await runAgentTurn({
+      agent,
+      message: 'hi',
+      runId: 'r',
+      emit: (e) => events.push(e),
+      signal: controller.signal,
+      mapEvent: (e) => {
+        controller.abort()
+        return e
+      },
+    })
+    expect(outcome).toMatchObject({ ok: false, code: 'turn_cancelled' })
+    expect(events).toEqual([])
+  })
+
   it('final assistant text already streamed by onDelta is not emitted twice', async () => {
     const { agent } = fakeAgent({
       deltas: ['hel', 'lo'],
