@@ -881,7 +881,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     const relayState =
       relay.client === undefined
         ? undefined
-        : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
+        : await RelayState.load(join(relayDir, 'relay.json'), relay.peers)
     if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
     const relayClient =
       relayState === undefined || relay.client === undefined || relay.peers.size === 0
