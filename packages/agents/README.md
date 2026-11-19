@@ -624,7 +624,7 @@ plan is a separate step. Each candidate is `{ project, kind, target, sessionId?,
   adds to `errors`.
 - Several cwds can share one project directory (the encoding is lossy). Every cwd the transcripts record is consulted,
   and `candidateCwds()` adds known workspaces that encode to the project, so a colliding cwd with no transcript of
-  its own is protected too. Planning a live project needs `candidateCwds` listing every cwd of the app that could share the directory AND `candidateCwdsComplete: true`, the caller's declaration that the list is complete (a colliding cwd known only to its own registry cannot be discovered from disk); without both a live project is kept whole and the reason is in `kept`. Any project, live or dead,
+  its own is protected too. Planning a project needs `candidateCwds` listing every cwd of the app that could share the directory AND `candidateCwdsComplete: true`, the caller's declaration that the list is complete (a colliding cwd known only to its own registry cannot be discovered from disk); without both a project (live or dead: a dead verdict can rest on headers alone) is kept whole and the reason is in `kept`. Any project, live or dead,
   holding a transcript whose header cannot be read or names no cwd of the project is kept whole.
 - `keepLast` or `maxAgeDays` below 1 throws `GCFloorError`.
 

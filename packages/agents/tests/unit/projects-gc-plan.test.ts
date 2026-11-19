@@ -172,7 +172,7 @@ describe('planProjectsGC', () => {
     expect(result.countByKind.registry).toBe(1)
   })
 
-  it('a dead project plans transcripts and temps but no registry entries', async () => {
+  it('a dead project plans transcripts and temps but no registry entries, and still reads registries', async () => {
     transcript('new', 1)
     transcript('old', 100)
     let asked = false
@@ -183,7 +183,7 @@ describe('planProjectsGC', () => {
         return Promise.resolve([{ id: 'orphan', lastModified: 0 }])
       },
     })
-    expect(asked).toBe(false)
+    expect(asked).toBe(true)
     expect(result.candidates.map((c) => c.kind)).toEqual(['transcript'])
     expect(result.liveCwds).toEqual([])
   })
@@ -347,6 +347,34 @@ describe('planProjectsGC protection edge cases', () => {
     expect(undeclared.candidates.map((c) => c.target)).not.toContain(active)
     expect(undeclared.candidates).toEqual([])
     expect(undeclared.kept.some((k) => k.reason.includes('candidateCwdsComplete'))).toBe(true)
+  })
+
+  it('a dead verdict does not hide a live cwd known only to its registry', async () => {
+    const hidden = '/work-app'
+    transcript('new', 1)
+    const active = transcript('active', 300)
+    const dead = () => new Map([[NAME, { liveness: 'dead' as const, reason: 'gone', cwd: CWD }]])
+    const listRegistry = (cwd: string) => Promise.resolve(cwd === hidden ? [{ id: 'active' }] : [])
+    const undeclared = await plan({
+      classify: dead,
+      candidateCwdsComplete: undefined,
+      listRegistry,
+    })
+    expect(undeclared.candidates).toEqual([])
+    const declared = await plan({ classify: dead, candidateCwds: () => [hidden], listRegistry })
+    expect(declared.candidates.map((c) => c.target)).not.toContain(active)
+  })
+
+  it('the default classifier calls a project dead when its header cwd is gone, yet the registry cwd still protects', async () => {
+    const hidden = '/work-app'
+    transcript('new', 1)
+    const active = transcript('active', 300)
+    const result = await plan({
+      classify: undefined,
+      candidateCwds: () => [hidden],
+      listRegistry: (cwd) => Promise.resolve(cwd === hidden ? [{ id: 'active' }] : []),
+    })
+    expect(result.candidates.map((c) => c.target)).not.toContain(active)
   })
 
   it('a dead project with a malformed transcript header is kept whole', async () => {

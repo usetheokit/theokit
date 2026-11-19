@@ -340,7 +340,7 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       })
       continue
     }
-    if (live && cwd !== undefined) {
+    {
       // The encoding is many-to-one and registries cannot be enumerated: a colliding live cwd may
       // appear in no header and no verdict, only in its own registry. Registry coverage is complete
       // only when the caller declares the cwds it knows; otherwise the project is kept whole.
@@ -348,11 +348,13 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
         kept.push({
           project,
           reason:
-            'live project: registry coverage of every cwd sharing this directory cannot be established without candidateCwds and candidateCwdsComplete: true; project kept whole',
+            'registry coverage of every cwd sharing this directory cannot be established without candidateCwds and candidateCwdsComplete: true; project kept whole',
         })
         continue
       }
-      const cwds = new Set([cwd, ...headerCwds])
+      // A dead verdict can rest on the headers that read: a colliding cwd that is alive but appears
+      // only in its own registry makes it wrong, so the same guard and registry reads apply.
+      const cwds = new Set([...(cwd === undefined ? [] : [cwd]), ...headerCwds])
       for (const extra of options.candidateCwds()) {
         if (encodeProjectDir(extra) === project) cwds.add(extra)
       }
@@ -389,7 +391,7 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
         fail(messageOf(error))
         continue
       }
-      for (const member of cwds) liveCwds.add(member)
+      if (live) for (const member of cwds) liveCwds.add(member)
     }
 
     const idByName = new Map<string, string>()
@@ -463,7 +465,7 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
 
     // 5. Registry entries (live projects only) older than the window whose transcript is gone. An
     //    entry with no usable age cannot be shown old, so it stays.
-    for (const { cwd: member, entry } of registry) {
+    for (const { cwd: member, entry } of live ? registry : []) {
       if (!usable(entry.lastModified) || entry.lastModified >= cutoff) continue
       const names = [
         transcriptPath(root, member, entry.id),
