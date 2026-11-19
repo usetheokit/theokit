@@ -12,41 +12,25 @@ vi.mock('@theokit/sdk', async (importOriginal) => {
   return { ...actual, readSessionMessages: vi.fn(actual.readSessionMessages) }
 })
 
-function workspaceWithSession(): string {
-  const workspace = scratchDir()
+function projectDir(workspace: string): string {
   const dir = join(workspace, '.theoclaw', 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
   mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+const text = (value: string) => [{ type: 'text', text: value }]
+
+function workspaceWithSession(): string {
+  const workspace = scratchDir()
   const id = 'matrix-dm-_owner_localhost-g0'
   const lines = [
-    {
-      type: 'user',
-      uuid: 'u1',
-      parentUuid: null,
-      sessionId: id,
-      message: { content: [{ type: 'text', text: 'hello there' }] },
-    },
-    {
-      type: 'assistant',
-      uuid: 'a1',
-      parentUuid: 'u1',
-      sessionId: id,
-      message: { content: [{ type: 'text', text: 'hi owner' }] },
-    },
-    {
-      type: 'user',
-      uuid: 'u2',
-      parentUuid: 'a1',
-      sessionId: id,
-      message: { content: [{ type: 'tool_result', content: 'x' }] },
-    },
+    { type: 'user', sessionId: id, message: { content: text('hello there') } },
+    { type: 'assistant', sessionId: id, message: { content: text('hi owner') } },
+    { type: 'user', sessionId: id, message: { content: [{ type: 'tool_result', content: 'x' }] } },
   ]
-  // A line that is not JSON sits between the turns; the reader skips it.
-  const body = [
-    JSON.stringify(lines[0]),
-    '{not json',
-    ...lines.slice(1).map((line) => JSON.stringify(line)),
-  ]
-  writeFileSync(join(dir, `${id}.jsonl`), body.join('\n') + '\n')
+  // The file has its own name and no uuids; a line that is not JSON sits between the turns.
+  const body = [JSON.stringify(lines[0]), '{not json', ...lines.slice(1).map((l) => JSON.stringify(l))]
+  writeFileSync(join(projectDir(workspace), 'abc.jsonl'), body.join('\n') + '\n')
   return workspace
 }
 
@@ -121,43 +105,49 @@ describe('theoclaw sessions', () => {
 })
 
 describe('transcript reading', () => {
-  it('goes through the SDK reader with the session id, workspace and session directory', async () => {
+  function write(name: string, records: unknown[]): string {
+    const workspace = scratchDir()
+    writeFileSync(
+      join(projectDir(workspace), name),
+      records.map((r) => JSON.stringify(r)).join('\n') + '\n',
+    )
+    return workspace
+  }
+
+  it('goes through the SDK reader with the workspace as cwd', async () => {
     const workspace = workspaceWithSession()
     vi.mocked(readSessionMessages).mockClear()
     await run(['sessions', 'export', 'matrix-dm'], workspace)
-    expect(readSessionMessages).toHaveBeenCalledWith({
-      sessionId: 'matrix-dm-_owner_localhost-g0',
-      cwd: workspace,
-      sessionDir: expect.any(String),
-    })
+    expect(readSessionMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: workspace, sessionDir: expect.any(String) }),
+    )
+  })
+
+  it('shows what the SDK reader returns, not what the file holds', async () => {
+    vi.mocked(readSessionMessages).mockResolvedValueOnce([
+      { role: 'user', text: 'from the reader', parts: [{ type: 'text', text: 'from the reader' }] },
+    ])
+    const { out } = await run(['sessions', 'export', 'matrix-dm'], workspaceWithSession())
+    expect(out).toBe('user: from the reader\n')
   })
 
   it('keeps the messages before a compact boundary', async () => {
-    const workspace = scratchDir()
     const id = 'compacted-g0'
-    const dir = join(workspace, '.theoclaw', 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
-    mkdirSync(dir, { recursive: true })
-    const turn = (type: string, uuid: string, parentUuid: string | null, content: unknown) =>
-      JSON.stringify({ type, uuid, parentUuid, sessionId: id, message: { content } })
-    const boundary = (uuid: string) =>
-      JSON.stringify({
-        type: 'system',
-        subtype: 'compact_boundary',
-        uuid,
-        parentUuid: null,
-        sessionId: id,
-      })
-    const text = (value: string) => [{ type: 'text', text: value }]
-    const body = [
-      turn('user', 'u1', null, text('first question')),
-      turn('assistant', 'a1', 'u1', text('first answer')),
+    const turn = (type: string, uuid: string, parentUuid: string | null, value: string) => ({
+      type, uuid, parentUuid, sessionId: id, message: { content: text(value) },
+    })
+    const boundary = (uuid: string) => ({
+      type: 'system', subtype: 'compact_boundary', uuid, parentUuid: null, sessionId: id,
+    })
+    const workspace = write(`${id}.jsonl`, [
+      turn('user', 'u1', null, 'first question'),
+      turn('assistant', 'a1', 'u1', 'first answer'),
       boundary('b1'),
-      turn('user', 'u2', 'b1', text('second question')),
-      turn('assistant', 'a2', 'u2', text('second answer')),
+      turn('user', 'u2', 'b1', 'second question'),
+      turn('assistant', 'a2', 'u2', 'second answer'),
       boundary('b2'),
-      turn('user', 'u3', 'b2', text('third question')),
-    ]
-    writeFileSync(join(dir, `${id}.jsonl`), body.join('\n') + '\n')
+      turn('user', 'u3', 'b2', 'third question'),
+    ])
     const expected =
       'user: first question\nassistant: first answer\nuser: second question\n' +
       'assistant: second answer\nuser: third question\n'
@@ -172,39 +162,41 @@ describe('transcript reading', () => {
     expect(snapshot.messages).toHaveLength(5)
   })
 
-  it('reads a record whose content is a plain string', async () => {
-    const workspace = scratchDir()
+  it('keeps every chain of a transcript, in file order', async () => {
+    const id = 'forked-g0'
+    const workspace = write('fork.jsonl', [
+      { type: 'user', uuid: 'u1', parentUuid: null, sessionId: id, message: { content: text('one') } },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'u1', sessionId: id, message: { content: text('two') } },
+      { type: 'assistant', uuid: 'a2', parentUuid: 'u1', sessionId: id, message: { content: text('branch') } },
+      { type: 'user', uuid: 'u3', parentUuid: 'a2', sessionId: id, message: { content: text('three') } },
+    ])
+    expect((await run(['sessions', 'export', 'forked'], workspace)).out).toBe(
+      'user: one\nassistant: two\nassistant: branch\nuser: three\n',
+    )
+  })
+
+  it('reads string content, with or without uuids', async () => {
     const id = 'legacy-g0'
-    const dir = join(workspace, '.theoclaw', 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
-    mkdirSync(dir, { recursive: true })
-    const body = [
-      {
-        type: 'user',
-        uuid: 'u1',
-        parentUuid: null,
-        sessionId: id,
-        message: { content: 'plain question' },
-      },
-      {
-        type: 'assistant',
-        uuid: 'a1',
-        parentUuid: 'u1',
-        sessionId: id,
-        message: { content: 'plain answer' },
-      },
-    ].map((line) => JSON.stringify(line))
-    writeFileSync(join(dir, `${id}.jsonl`), body.join('\n') + '\n')
+    const workspace = write('legacy.jsonl', [
+      { type: 'user', sessionId: id, message: { content: 'plain question' } },
+      { type: 'assistant', uuid: 'a1', parentUuid: null, sessionId: id, message: { content: 'plain answer' } },
+    ])
     const { code, out } = await run(['sessions', 'export', 'legacy'], workspace)
     expect(code).toBe(0)
     expect(out).toBe('user: plain question\nassistant: plain answer\n')
   })
 
-  it('shows what the SDK reader returns, not what the file holds', async () => {
-    vi.mocked(readSessionMessages).mockResolvedValueOnce([
-      { role: 'user', text: 'from the reader', parts: [{ type: 'text', text: 'from the reader' }] },
+  it('skips content it cannot read and goes on', async () => {
+    const id = 'odd-g0'
+    const workspace = write('odd.jsonl', [
+      { type: 'user', sessionId: id, message: { content: [null, 7, { type: 'text', text: 'kept' }] } },
+      { type: 'assistant', sessionId: id, message: { content: { not: 'an array' } } },
+      { type: 'assistant', sessionId: id, message: null },
+      { type: 'user', sessionId: id, message: { content: text('after') } },
     ])
-    const { out } = await run(['sessions', 'export', 'matrix-dm'], workspaceWithSession())
-    expect(out).toBe('user: from the reader\n')
+    const { code, out } = await run(['sessions', 'export', 'odd'], workspace)
+    expect(code).toBe(0)
+    expect(out).toBe('user: kept\nuser: after\n')
   })
 })
 

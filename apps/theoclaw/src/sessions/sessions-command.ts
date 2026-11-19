@@ -33,7 +33,6 @@ const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [
 /** The user and assistant turns of a session, read by the SDK; entries with no text are dropped. */
 async function readMessages(session: ChatSession): Promise<Message[]> {
   const stored = await readFullHistory({
-    sessionId: session.id,
     cwd: session.workspace,
     transcript: session.transcript,
   })
