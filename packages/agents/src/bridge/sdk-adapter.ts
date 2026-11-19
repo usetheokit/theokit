@@ -921,9 +921,10 @@ export interface SdkAgentHandle {
    * decision about what a redaction means to a schema, and inventing one would be the gate that
    * reports without gating this module already refuses to build.
    */
-  // Method syntax on purpose: parameters are checked bivariantly, so the SDK's narrower
-  // `generate(input, { output: ZodType })` is assignable to this lenient declaration.
-  generate?(message: string, options: { output: unknown; [key: string]: unknown }): Promise<unknown>
+  // `options` is `any` on purpose: the SDK's `generate` is generic over a Zod schema
+  // (`GenerateOptions<T>`), which no non-generic parameter type can accept contravariantly.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  generate?(message: string, options: any): Promise<unknown>
   readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.
