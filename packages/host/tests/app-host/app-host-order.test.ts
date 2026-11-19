@@ -53,4 +53,10 @@ describe('app host order', () => {
     await host.close()
     expect(seen).toBe('v')
   })
+
+  it('exposes createAppHost and AppHostStartError from the public subpath', async () => {
+    const publicApi = await import('@theokit/host/app-host')
+    expect(typeof publicApi.createAppHost).toBe('function')
+    expect(typeof publicApi.AppHostStartError).toBe('function')
+  })
 })

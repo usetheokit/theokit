@@ -21,4 +21,21 @@ describe('app host stop timeout', () => {
     await vi.advanceTimersByTimeAsync(1000)
     expect(stopA).not.toHaveBeenCalled()
   })
+
+  it('reports timed-out rollback stops in rollbackFailures', async () => {
+    vi.useFakeTimers()
+    const host = createAppHost({ stopTimeoutMs: 500 })
+    host.service(
+      'A',
+      () => 1,
+      () => new Promise<void>(() => {}),
+    )
+    host.service('B', () => {
+      throw new Error('boom')
+    })
+    const started = host.start().catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(500)
+    const error = (await started) as { rollbackFailures: { step: string }[] }
+    expect(error.rollbackFailures.map((f) => f.step)).toEqual(['A'])
+  })
 })

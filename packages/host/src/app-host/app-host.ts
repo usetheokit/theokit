@@ -134,7 +134,16 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       } catch (error) {
         const result = await teardown()
         removeListeners()
-        throw new AppHostStartError(entry.name, error, result.ok ? [] : result.failed)
+        const rollbackFailures = result.ok
+          ? []
+          : [
+              ...result.failed,
+              ...result.timedOut.map((step) => ({
+                step,
+                error: new Error(`Stop did not finish within ${stopTimeoutMs} ms`),
+              })),
+            ]
+        throw new AppHostStartError(entry.name, error, rollbackFailures)
       }
     }
   }
