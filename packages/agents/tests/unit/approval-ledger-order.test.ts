@@ -2,11 +2,13 @@ import { chmodSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import type * as FsPromises from 'node:fs/promises'
+
 import { describe, expect, it, vi } from 'vitest'
 
 const calls: string[] = []
 vi.mock('node:fs/promises', async (orig) => {
-  const real = await orig<typeof import('node:fs/promises')>()
+  const real = await orig<typeof FsPromises>()
   return {
     ...real,
     chmod: (...a: Parameters<typeof real.chmod>) => (calls.push('chmod'), real.chmod(...a)),
