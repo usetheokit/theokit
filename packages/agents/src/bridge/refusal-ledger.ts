@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto'
-
 import type { ToolRefusal } from '@theokit/presenter'
 
 /**
@@ -41,7 +39,7 @@ export function recordRefusal(
   refusal: ToolRefusal,
   message: string,
 ): string {
-  const token = randomBytes(12).toString('hex')
+  const token = crypto.randomUUID().replaceAll('-', '').slice(0, 24)
   let tools = ledger.get(runId)
   if (tools === undefined) {
     if (ledger.size >= MAX_RUNS) {
