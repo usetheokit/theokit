@@ -384,6 +384,8 @@ gap worth declaring and one worth closing — so it was closed. `loadPersonalMcp
 and only that key, and returns empty on a malformed file rather than throwing, because one stray comma
 in a shared home file must not break every project on the machine.
 
+**One turn.** `runAgentTurn({ agent, message, runId, emit, signal?, sendOptions?, mapEvent? })` (from `@theokit/agents/bridge`) runs one `agent.send` on an agent you already hold, passes each translated event to `emit` (final assistant text already streamed as deltas is not repeated), and resolves, never rejects, with `{ ok: true, usage? }` or `{ ok: false, code: 'turn_failed' | 'turn_cancelled', reason }`. A streamed `error` fails the turn even when `wait()` reports finished. An aborted `signal` cancels the run and closes the stream without waiting on a hung cancel, and nothing is emitted after that. `completeFromTurn(withAgent)` adapts it to the `complete` port of `createOpenAICompatibleRoutes`; a failed turn throws, so the route answers 502.
+
 **MCP scopes.** `loadMcpScopes({ cwd, home, projectAllowed, onClash?, personalFiles?, onWarn? })` (from `@theokit/agents/bridge`) merges the personal servers (`~/.claude.json` by default) with `<cwd>/.mcp.json`. When `projectAllowed` is false the project's servers are withheld: the file is parsed only to list its names in `projectWithheld`. On a name clash the personal server wins by default, so a repository cannot replace a server the operator configured; pass `onClash: 'project-wins'` for the reference format. Clashes are returned as data in `shadowed`. A malformed project file throws `McpFileError`; a malformed personal file only warns.
 
 Both MCP readers are called by the host, not from inside this package — `loadMcpJson` has no internal

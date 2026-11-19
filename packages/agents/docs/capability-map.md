@@ -59,6 +59,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `compileProjectContext` | value |
 | `compileSkills` | value |
 | `compileTools` | value |
+| `completeFromTurn` | value |
 | `CompressionFailedError` | value |
 | `ConfigurationError` | value |
 | `CONTEXT_WINDOW_FLOOR` | value |
@@ -185,6 +186,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveSettingSources` | value |
 | `resolveTrustPosture` | value |
 | `Retry` | value |
+| `runAgentTurn` | value |
 | `RunContextCapability` | value |
 | `runInputGuards` | value |
 | `runOutputGuards` | value |
@@ -267,6 +269,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
 | `AgentTurnMetadata` | type |
+| `AgentTurnOutcome` | type |
 | `AgentWithNarrowedListAlias` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
@@ -403,6 +406,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ResolvedCompatSource` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
+| `RunAgentTurnOptions` | type |
 | `RunEvent` | type |
 | `RunStartedEvent` | type |
 | `RuntimeOverrides` | type |
@@ -483,6 +487,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `compileProjectContext` | value |
 | `compileSkills` | value |
 | `compileTools` | value |
+| `completeFromTurn` | value |
 | `ContextualTool` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
@@ -530,6 +535,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveCompatSources` | value |
 | `resolveMcpServers` | value |
 | `resolveSettingSources` | value |
+| `runAgentTurn` | value |
 | `runWithApiErrorHandling` | value |
 | `shouldAutoApprove` | value |
 | `streamAgentResponse` | value |
@@ -558,6 +564,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
 | `AgentTurnMetadata` | type |
+| `AgentTurnOutcome` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
 | `ApiErrorPolicy` | type |
@@ -608,6 +615,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
 | `ResolvedCompatSource` | type |
+| `RunAgentTurnOptions` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
 | `Scorer` | type |
