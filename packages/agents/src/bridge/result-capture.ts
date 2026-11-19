@@ -50,8 +50,8 @@ export function createResultCapture<T>(
       opts.description ??
       'Submit your final result when your work is done. If it is rejected, fix it and call again.',
     inputSchema,
-    handler: (input: unknown) => {
-      const parsed = schema.safeParse(input)
+    handler: async (input: unknown) => {
+      const parsed = await schema.safeParseAsync(input)
       if (!parsed.success) {
         rejected++
         throw new Error(
