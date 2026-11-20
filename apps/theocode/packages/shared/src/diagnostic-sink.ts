@@ -34,9 +34,10 @@ export function installDiagnosticSink(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   const result = installFrameworkSink({
-    // Translated, not forwarded. The framework's contract is stated in terms of its own key; handing
-    // it this process's whole environment would have it read a variable nobody here sets.
-    env: { THEOKIT_DIAGNOSTICS: env.THEOCODE_DIAGNOSTICS },
+    // The framework reads the variable it is TOLD to read; this product's name is the only thing
+    // that is ours, so it is passed as `envVar` rather than translated into the framework's key.
+    env,
+    envVar: 'THEOCODE_DIAGNOSTICS',
     install,
     onWarn: (message) => process.stderr.write(`diagnostics: ${message}\n`),
   })

@@ -6,6 +6,8 @@ import { promisify } from 'node:util'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
+import { prepareWorkspace } from './prepare-workspace.js'
+
 const execFileAsync = promisify(execFile)
 
 /** A directory a sub-agent may edit without sharing a working tree with anyone else. */
@@ -213,12 +215,14 @@ async function copyIncluded(repo: string, workspace: string, include: string): P
 
 /**
  * One `git worktree add -b <prefix><id> <root>/<id>` per task. Gitignored files named in the
- * `include` file (default `.worktreeinclude`) are copied into the new worktree.
+ * `include` file (default `.worktreeinclude`) are copied into the new worktree. With `prepare: true`
+ * the worktree is then prepared by `prepareWorkspace` (devcontainer, lockfile install); a failure
+ * removes the worktree and its branch.
  */
 export function worktreeProvider(
   repo: string,
   root: string,
-  options: { branchPrefix?: string; include?: string } = {},
+  options: { branchPrefix?: string; include?: string; prepare?: boolean } = {},
 ): WorkspaceProvider {
   const prefix = options.branchPrefix ?? 'task/'
   const include = options.include ?? '.worktreeinclude'
@@ -270,6 +274,7 @@ export function worktreeProvider(
       await git(repo, ['worktree', 'add', '-b', branch, path])
       try {
         await copyIncluded(repo, path, include)
+        if (options.prepare) await prepareWorkspace(path)
       } catch (error) {
         try {
           await remove(path, branch, { worktree: false, branch: false })

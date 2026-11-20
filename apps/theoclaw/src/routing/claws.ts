@@ -5,7 +5,7 @@ import type { Writable } from 'node:stream'
 import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import type { AgentProfile, AgentRoute } from './agent-routes.js'
+import type { AgentProfile, AgentRoute } from './routing-env.js'
 
 /**
  * `theoclaw claws add|update|remove|list` (OC-136): a packaged agent is a directory holding a

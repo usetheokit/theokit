@@ -7,7 +7,7 @@
 
 /** What an agent was built with, as reported to `onWired`. */
 export interface CompiledWiring {
-  /** Tool names handed to `Agent.create`, with withheld builtins removed. SDK defaults are not enumerated. */
+  /** Caller-supplied tool names handed to `Agent.create`; withheld builtins are listed in `withheldBuiltinTools`, and a caller tool sharing a withheld name stays here. SDK defaults are not enumerated. */
   readonly tools: readonly string[]
   readonly skills: {
     /** Skills the created agent resolved (`agent.skills.list()`): a disk skill appears only when its source is granted and it exists; an inline skill only when also named in `skills.enabled`. */

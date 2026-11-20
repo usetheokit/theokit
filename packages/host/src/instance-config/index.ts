@@ -1,11 +1,13 @@
 import { auditInstanceConfig, fixInstanceConfig } from './audit.js'
 import { loadInstanceConfig } from './load.js'
+import { onboardInstanceConfig, type OnboardIo, type OnboardOptions } from './onboard.js'
 import { assertAppName, defaultVariable, resolveConfigPath } from './path.js'
 import { reloadInstanceConfig, type ReloadEvent } from './reload.js'
 import { watchInstanceConfig, type WatchOptions } from './watch.js'
 import { writeInstanceConfig } from './write.js'
 
 export { InstanceConfigError } from './errors.js'
+export type { OnboardIo, OnboardOptions } from './onboard.js'
 export type { ReloadEvent } from './reload.js'
 export type { WatchOptions } from './watch.js'
 
@@ -41,6 +43,15 @@ export interface InstanceConfig<K extends string> {
     entries: Readonly<Partial<Record<K, string>>>,
     options: { force: boolean },
   ): Promise<void>
+  /**
+   * First-run setup: collects every declared key (answers, then `secretFromEnv`, then prompts; a `secret` key is read
+   * with echo off), checks the values with each key's `parse` and `validate`, and writes the file. Without `force`
+   * an existing file is refused by `write` itself. Nothing printed or thrown holds a value.
+   */
+  onboard(
+    io: OnboardIo,
+    options: OnboardOptions<K>,
+  ): Promise<{ path: string; written: readonly K[] }>
   audit(path: string): AuditFinding[]
   /** Applies chmod to each finding and returns the findings that were fixed. */
   fix(findings: readonly AuditFinding[]): AuditFinding[]
@@ -72,6 +83,15 @@ export function defineInstanceConfig<K extends string>(
     path: (env, homeDir) => resolve(env, homeDir).path,
     load: (env, homeDir) => loadInstanceConfig(resolve(env, homeDir), declared, env),
     write: (path, entries, opts) => writeInstanceConfig(app, keys, path, entries, opts),
+    onboard: (io, opts) =>
+      onboardInstanceConfig(
+        keys,
+        (env, homeDir) => resolve(env, homeDir).path,
+        (path, entries, writeOptions) =>
+          writeInstanceConfig(app, keys, path, entries, writeOptions),
+        io,
+        opts,
+      ),
     audit: (path) => auditInstanceConfig(app, path),
     fix: (findings) => fixInstanceConfig(findings),
     reload: (path, env, previous) => reloadInstanceConfig(keys, path, env, previous),

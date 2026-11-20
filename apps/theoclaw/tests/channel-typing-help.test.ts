@@ -7,6 +7,7 @@ import type { GatewayContext, MessageEvent, PlatformName, SendResult } from '@th
 import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
 import { createUsageHook } from '../src/channels/usage-hook.js'
 import { createAcpCommandHook, createAcpSessions } from '../src/channels/acp-command.js'
+import { CHAT_COMMANDS } from '../src/channels/info-commands.js'
 import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { readAckReaction, showTyping } from '../src/channels/typing.js'
@@ -61,15 +62,49 @@ describe('typing indicator (OC-106)', () => {
 })
 
 describe('/help (OC-105)', () => {
-  it('answers with the command list and blocks the message from the model', () => {
+  it('answers with the command list and blocks the message from the model', async () => {
     const hook = createHelpHook()
     const decide = (text: string) =>
       hook.pre_inbound?.({ event: messageEvent('telegram', text) } as never)
-    expect(decide('/help')).toEqual({ block: true, message: HELP_TEXT })
-    expect(decide('/help@mybot')).toEqual({ block: true, message: HELP_TEXT })
-    expect(decide('/commands')).toEqual({ block: true, message: HELP_TEXT })
-    expect(decide('/helpful')).toBeUndefined()
-    expect(decide('please /help')).toBeUndefined()
+    expect(await decide('/help')).toEqual({ block: true, message: HELP_TEXT })
+    expect(await decide('/help@mybot')).toEqual({ block: true, message: HELP_TEXT })
+    expect(await decide('/commands')).toEqual({ block: true, message: HELP_TEXT })
+    expect(await decide('/helpful')).toBeUndefined()
+    expect(await decide('please /help')).toBeUndefined()
+  })
+})
+
+describe('every registered command has a help line', () => {
+  it('lists each chat command, the reset and goal commands, and /help itself', () => {
+    const names = [...CHAT_COMMANDS.map((c) => c.name), 'new', 'reset', 'goal', 'help']
+    for (const name of names) expect(HELP_COMMANDS, name).toContain(`/${name}`)
+  })
+
+  it('lists exactly the commands the handlers answer, so a new handler needs a help line', () => {
+    const answered = [
+      ...CHAT_COMMANDS.map((c) => `/${c.name}`),
+      '/new',
+      '/reset',
+      '/goal',
+      '/help',
+      '/usage',
+      '/activation',
+      '/approve',
+      '/deny',
+      '/elevated',
+      '/acp',
+    ]
+    expect([...HELP_COMMANDS].sort()).toEqual([...new Set(answered)].sort())
+  })
+
+  it('registers each listed command with the gateway hook, which lets the other handlers answer it', async () => {
+    const hook = createHelpHook()
+    for (const command of HELP_COMMANDS.filter((c) => c !== '/help')) {
+      expect(
+        await hook.pre_inbound?.({ event: messageEvent('telegram', `${command} x`) } as never),
+        command,
+      ).toBeUndefined()
+    }
   })
 })
 
@@ -208,5 +243,14 @@ describe('readAckReaction', () => {
     expect(readAckReaction({})).toBeUndefined()
     expect(readAckReaction({ THEOCLAW_ACK_REACTION: '' })).toBeUndefined()
     expect(readAckReaction({ THEOCLAW_ACK_REACTION: 'OFF' })).toBeUndefined()
+  })
+})
+
+describe('help lines are generated from the registered commands', () => {
+  it('shows each chat command with the description it was defined with', () => {
+    for (const command of CHAT_COMMANDS) {
+      if (command.name === 'model') continue // listed under /status
+      expect(HELP_TEXT, command.name).toContain(command.description ?? '')
+    }
   })
 })

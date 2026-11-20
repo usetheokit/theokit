@@ -1,6 +1,11 @@
 import { CronExpressionParser } from 'cron-parser'
 
-import { generateNewTraceContext } from '../observability/trace-context-propagation.js'
+import type { JobBackend } from '../jobs/job-backend.js'
+import { createHandlerQueue, type HandlerQueue } from '../jobs/queue-client.js'
+import {
+  generateNewTraceContext,
+  type TraceContext,
+} from '../observability/trace-context-propagation.js'
 
 import type { CronLock } from './cron-lock.js'
 import type { CronContext, CronDefinition } from './cron-types.js'
@@ -33,6 +38,8 @@ import type { CronContext, CronDefinition } from './cron-types.js'
 export interface CronSchedulerOptions {
   /** Shared lock deciding which process runs each tick. Absent: this process runs every tick. */
   lock?: CronLock
+  /** Backend behind `ctx.queue`. Absent: `ctx.queue` calls reject. */
+  backend?: JobBackend
 }
 
 export interface CronScheduler {
@@ -46,6 +53,13 @@ interface CronJobState {
   timer: NodeJS.Timeout | null
   abortController: AbortController | null
   lockToken?: number
+}
+
+/** The invocation's own queue and outbox, its jobs carrying the cron's trace. */
+function queueFor(backend: JobBackend | undefined, trace: TraceContext): HandlerQueue {
+  return createHandlerQueue(backend, {
+    traceparent: `00-${trace.trace_id}-${trace.span_id}-${trace.flags}`,
+  })
 }
 
 export function createCronScheduler(
@@ -115,21 +129,25 @@ export function createCronScheduler(
       )
       return
     }
-
     state.inFlight = true
     state.abortController = new AbortController()
     const traceCtx = generateNewTraceContext()
+    const handlerQueue = queueFor(options.backend, traceCtx)
     const ctx: CronContext = {
       traceId: traceCtx.trace_id,
+      queue: handlerQueue.queue,
       scheduledAt,
       signal: state.abortController.signal,
     }
 
-    // Fire-and-forget: EC-109 — never await here so a hanging handler
-    // can't block the scheduler loop or other crons.
+    // Fire-and-forget (EC-109): a hanging handler must not block the loop or other crons.
     void Promise.resolve()
-      .then(() => state.def.handler(ctx))
+      .then(async () => {
+        await state.def.handler(ctx)
+        await handlerQueue.flush()
+      })
       .catch((err: unknown) => {
+        handlerQueue.discard()
         console.error(
           `[theokit:cron] "${state.def.name}" handler error:`,
           err instanceof Error ? err.message : err,
@@ -151,8 +169,7 @@ export function createCronScheduler(
     state.timer = setTimeout(() => {
       fireIfLockAllows(state, next)
     }, delayMs)
-    // setTimeout returns a Timeout object; in Node, .unref() is available but
-    // we DO want this to keep the event loop alive in dev — explicit no-unref.
+    // No .unref(): the timer must keep the event loop alive.
   }
 
   return {
