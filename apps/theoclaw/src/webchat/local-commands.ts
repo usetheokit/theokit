@@ -58,6 +58,7 @@ export function withLocalCommands(runner: TurnRunner, context: LocalCommandConte
     if (reply === undefined) return runner(message, emit, signal)
     emit({ type: 'text_delta', content: reply })
     const done: DoneEvent = { type: 'done', result: reply, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 0 }
+    // Spread: `DoneEvent` is an interface with no index signature, which `StreamEvent` requires.
     emit({ ...done })
     return { ok: true }
   }

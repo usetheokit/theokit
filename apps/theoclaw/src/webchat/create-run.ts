@@ -76,6 +76,7 @@ function startTurn(
   }
   const release = (usage?: TurnUsage): void => {
     if (held === undefined) return
+    // Spread: `DoneEvent` is an interface with no index signature, which `StreamEvent` requires.
     queue.push(usage === undefined ? held.done : { ...withUsage(held.done, usage) }, ...held.after)
     held = undefined
     notify()
