@@ -30,6 +30,11 @@ beforeAll(() => {
 })
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
+/** Read through a call: after `gate.release = undefined` and an await, TypeScript keeps the narrowing. */
+function release(): void {
+  gate.release?.()
+}
+
 async function started(): Promise<void> {
   while (gate.release === undefined) await new Promise((r) => setTimeout(r, 1))
 }
@@ -42,7 +47,7 @@ describe('a fork in flight, through the composition root', () => {
     const pending = root.sessionFork()
     await started()
     noteTurnStart()
-    gate.release?.()
+    release()
     const out = await pending
     expect(out.stale).toBe(true)
     expect(root.session.session()).toBe(before)
@@ -54,7 +59,7 @@ describe('a fork in flight, through the composition root', () => {
     const pending = root.sessionFork()
     await started()
     root.pointToSession('tui-other')
-    gate.release?.()
+    release()
     const out = await pending
     expect(out.stale).toBe(true)
     expect(root.session.session()).toBe('tui-other')
@@ -65,7 +70,7 @@ describe('a fork in flight, through the composition root', () => {
     gate.release = undefined
     const pending = root.sessionFork()
     await started()
-    gate.release?.()
+    release()
     const out = await pending
     expect(out.copied).toBe(true)
     expect(root.session.session()).toBe(out.newId)

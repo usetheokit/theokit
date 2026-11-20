@@ -385,7 +385,7 @@ function memberStreamFactory(
   compiledForMember: CompiledAgentOptions,
   allTools: Parameters<typeof createSdkAgentStream>[1],
   apiKey: string,
-) {
+): RoundStreamFactory {
   if (opts.streamFactory) return opts.streamFactory
   return createSdkAgentStream(compiledForMember, allTools, apiKey, {
     model: opts.model ?? compiledForMember.model,

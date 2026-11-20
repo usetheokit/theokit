@@ -94,10 +94,12 @@ describe('pnpm typecheck clean gate (T0.3)', () => {
   // EC-205: orphan @ts-expect-error directives become lint errors after
   // Zod fix removes the underlying TS errors. Lint reports them as
   // "Unused @ts-expect-error directive". Gate is via lint, not typecheck.
+  // Type tests (`*.test-d.ts`) are left out: there the directive IS the assertion, and one with
+  // nothing to suppress already fails the vitest typecheck run, so it can never be an orphan.
   it('@ts-expect-error count in tests is bounded (no explosion post-Zod-fix)', () => {
     const result = execSync(
       // eslint-disable-next-line sonarjs/no-os-command-from-path -- developer-local gate running grep
-      'grep -rn "@ts-expect-error" tests/ 2>&1 || true',
+      'grep -rn --exclude="*.test-d.ts" "@ts-expect-error" tests/ 2>&1 || true',
       { cwd: REPO, encoding: 'utf8' },
     )
     const count = (result.match(/^[^:]+:\d+:/gm) ?? []).length
