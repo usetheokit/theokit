@@ -26,6 +26,10 @@ const completedDelta = (callId: string, result: unknown) =>
 const completedMsg = (callId: string, result: unknown) =>
   msg({ type: 'tool_call', status: 'completed', call_id: callId, name: 'sh', result })
 
+// Compile-time check: every variant of the SDK RunTimelineEvent union must be accepted.
+const acceptsFullUnion = (event: RunTimelineEvent) =>
+  fromRunTimelineEvent(event, createRunTimelineState())
+
 describe('fromRunTimelineEvent', () => {
   it('a message with textAlreadyStreamed true emits no text but keeps its tool calls', () => {
     const out = run([
@@ -95,7 +99,7 @@ describe('fromRunTimelineEvent', () => {
 
   it('accepts the SDK RunTimelineEvent type', () => {
     const event: RunTimelineEvent = { kind: 'delta', update: { type: 'text-delta', text: 'Hi' } }
-    const out = fromRunTimelineEvent(event, createRunTimelineState())
+    const out = acceptsFullUnion(event)
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({ type: 'text' })
   })
