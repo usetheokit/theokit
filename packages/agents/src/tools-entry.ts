@@ -176,6 +176,13 @@ export {
   type ScheduleTarget,
 } from './schedule/job-store.js'
 export {
+  copyJobs,
+  createPostgresJobStore,
+  JobCopyError,
+  JobCopyUnsupportedError,
+  type SqlPool,
+} from './schedule/postgres-job-store.js'
+export {
   createScheduler,
   type CreateSchedulerOptions,
   type DeliverPort,
@@ -187,3 +194,4 @@ export {
   type TransientJobOptions,
 } from './schedule/scheduler.js'
 export { createScheduleTools, type CreateScheduleToolsOptions } from './schedule/schedule-tools.js'
+export { agentRunPort, fileTransientJob } from './schedule/run-ports.js'

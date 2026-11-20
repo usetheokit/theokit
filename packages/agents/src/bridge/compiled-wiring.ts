@@ -10,7 +10,7 @@ export interface CompiledWiring {
   /** Tool names handed to `Agent.create`, with withheld builtins removed. SDK defaults are not enumerated. */
   readonly tools: readonly string[]
   readonly skills: {
-    /** Skills named in the options: enabled names plus inline skills. Skills the SDK discovers on disk are not enumerated. */
+    /** Skills the created agent resolved (`agent.skills.list()`): a disk skill appears only when its source is granted and it exists; an inline skill only when also named in `skills.enabled`. */
     readonly listed: readonly string[]
     /** Inline skills a `skill_read` tool wired by this build serves. A caller-supplied `skill_read` is opaque, so it reports none. */
     readonly readable: readonly string[]
@@ -25,11 +25,14 @@ export interface CompiledWiring {
 /** Plugins built by this layer carry the hook events they register here; the SDK hides them inside `register`. */
 export const WIRED_HOOKS: unique symbol = Symbol.for('theokit.agents.wiredHooks')
 
-/** `skill_read` tools this build created, so `readable` is reported only for a reader whose set is known. */
+/** The `onWired` listener rides on the builder's plugin, so it reaches the final options intact. */
+export const WIRED_LISTENER: unique symbol = Symbol.for('theokit.agents.wiredListener')
 
-export const BUILD_WIRED_SKILL_READERS = new WeakSet()
+/** `skill_read` tools this build created, so `readable` is reported only for a reader whose set is known. */
+export const BUILD_WIRED_SKILL_READERS = new WeakMap<object, 'inline' | 'advertised'>()
 
 type Loose = Record<string, unknown> | undefined
+type Listener = (wiring: CompiledWiring) => void
 
 const names = (v: unknown): string[] =>
   Array.isArray(v)
@@ -39,53 +42,82 @@ const names = (v: unknown): string[] =>
       })
     : []
 
-function hooksOf(plugins: unknown): CompiledWiring['hooks'] {
-  if (!Array.isArray(plugins)) return []
-  return plugins.flatMap((p: unknown) => {
-    const list = (p as Record<symbol, unknown> | null)?.[WIRED_HOOKS]
+const pluginsOf = (options: Record<string, unknown>): (Record<symbol, unknown> | null)[] =>
+  Array.isArray(options.plugins) ? (options.plugins as (Record<symbol, unknown> | null)[]) : []
+
+function hooksOf(options: Record<string, unknown>): CompiledWiring['hooks'] {
+  return pluginsOf(options).flatMap((p) => {
+    const list = p?.[WIRED_HOOKS]
     return Array.isArray(list) ? (list as CompiledWiring['hooks']) : []
   })
 }
 
-/** Read the wiring from the options exactly as they reach `Agent.create`. */
-export function readCompiledWiring(options: Record<string, unknown>): CompiledWiring {
+function listenerOf(options: Record<string, unknown>): Listener | undefined {
+  for (const p of pluginsOf(options)) {
+    const l = p?.[WIRED_LISTENER]
+    if (typeof l === 'function') return l as Listener
+  }
+  return undefined
+}
+
+/** The skills the created agent resolved; `undefined` handle (skills never turned on) means none. */
+async function resolvedSkills(agent: unknown): Promise<string[]> {
+  const handle = (agent as { skills?: { list?: () => Promise<unknown> } } | null)?.skills
+  if (typeof handle?.list !== 'function') return []
+  try {
+    return names(await handle.list())
+  } catch {
+    return []
+  }
+}
+
+/** Skills a `skill_read` wired by this build serves; a caller-supplied reader reports none. */
+function readableSkills(tools: object[], listed: string[], skills: Loose): string[] {
+  for (const t of tools) {
+    if ((t as { name?: unknown }).name !== 'skill_read') continue
+    // eslint-disable-next-line sonarjs/no-empty-collection -- populated by advertised-skill-read.ts
+    const mode = BUILD_WIRED_SKILL_READERS.get(t)
+    if (mode === 'advertised') return listed
+    if (mode === 'inline') return names(skills?.inline)
+  }
+  return []
+}
+
+/** Read the wiring from the options as they reached `Agent.create`, and skills from the created agent. */
+async function readCompiledWiring(
+  options: Record<string, unknown>,
+  agent: unknown,
+): Promise<CompiledWiring> {
   const tools = Array.isArray(options.tools) ? (options.tools as object[]) : []
   const withheld = Array.isArray(options.withheldBuiltinTools)
     ? (options.withheldBuiltinTools as string[])
     : []
   const skills = options.skills as Loose
-  const inline = names(skills?.inline)
-  const reader = tools.find(
-    // eslint-disable-next-line sonarjs/no-empty-collection -- populated by sdk-adapter.ts
-    (t) => (t as { name?: unknown }).name === 'skill_read' && BUILD_WIRED_SKILL_READERS.has(t),
-  )
+  const listed = [...new Set(await resolvedSkills(agent))]
+  const readable = readableSkills(tools, listed, skills)
   const sources = ((options.local as Loose)?.settingSources as string[] | undefined) ?? []
   return {
     // Caller-supplied tools only: a custom tool may deliberately replace a withheld builtin.
     tools: names(tools),
     skills: {
-      // Enabled names resolve against the project root, which only a granted `project` source reads.
-      listed: [
-        ...new Set([...(sources.includes('project') ? names(skills?.enabled) : []), ...inline]),
-      ],
-      readable: reader !== undefined ? inline : [],
+      listed,
+      readable,
     },
     mcpServers: Object.keys((options.mcpServers as object | undefined) ?? {}),
-    hooks: hooksOf(options.plugins),
+    hooks: hooksOf(options),
     subagents: Object.keys((options.agents as object | undefined) ?? {}),
     settingSources: { project: sources.includes('project'), user: sources.includes('user') },
     withheldBuiltinTools: [...withheld],
   }
 }
 
-/** Report the wiring; a throwing listener is warned about and never fails the build. */
-export function reportWiring(
-  listener: ((wiring: CompiledWiring) => void) | undefined,
+async function reportWiring(
+  listener: Listener,
   options: Record<string, unknown>,
-): void {
-  if (listener === undefined) return
+  agent: unknown,
+): Promise<void> {
   try {
-    listener(readCompiledWiring(options))
+    listener(await readCompiledWiring(options, agent))
   } catch (err) {
     console.warn('[theokit] onWired listener threw; the agent was still built:', err)
   }
@@ -95,48 +127,39 @@ interface AgentStatics {
   getOrCreate(id: string, options: never): Promise<unknown>
 }
 
-type BeforeCreate = (ctx: unknown) => unknown
-
 /**
- * `Agent.getOrCreate`, reporting the wiring only when this call CREATED the agent.
- *
- * The SDK's own `getOrCreate` stays the single authority: it serves a live-cache hit, joins an
- * in-flight creation and registers the new handle in the live cache, so every caller of one id gets
- * the same handle and nothing here can create a second one. Creation is detected through the SDK's
- * `onBeforeCreate` gate, which runs only on the call that actually creates (after the id-collision
- * check, never on a cache hit, a join or a resume). The report is made once `getOrCreate` resolves,
- * so a creation that fails reports nothing and a retry reports normally.
- *
- * A caller that joins another call's creation, or hits the cache, gets no report: its options were
- * not the ones the agent was built with. A caller's own `onBeforeCreate` is kept and runs first.
+ * `Agent.getOrCreate`, always — so the SDK's live-agent cache and in-flight registry apply with or
+ * without a listener. The listener runs only when THIS call created the agent: the SDK invokes
+ * `onBeforeCreate` on the create path alone (not on a cache hit, a resume, or a concurrent caller
+ * that shares the winner's in-flight build), so that hook is the creation signal.
  */
 export async function getOrCreateReporting(
   sdk: unknown,
   sessionId: string,
   options: Record<string, unknown>,
-  listener: ((wiring: CompiledWiring) => void) | undefined,
 ): Promise<unknown> {
   const statics = sdk as AgentStatics
+  const listener = listenerOf(options)
   if (listener === undefined) return statics.getOrCreate(sessionId, options as never)
-  const state = { created: false }
-  const own = options.onBeforeCreate as BeforeCreate | undefined
-  const gated = {
+  let created = false as boolean
+  const prior = options.onBeforeCreate as ((info: unknown) => unknown) | undefined
+  const wrapped = {
     ...options,
-    onBeforeCreate: async (ctx: unknown) => {
-      if (own !== undefined) await own(ctx)
-      state.created = true
+    onBeforeCreate: async (info: unknown) => {
+      await prior?.(info)
+      created = true
     },
   }
-  const agent = await statics.getOrCreate(sessionId, gated as never)
-  if (state.created) reportWiring(listener, options)
+  const agent = await statics.getOrCreate(sessionId, wrapped as never)
+  if (created) await reportWiring(listener, options, agent)
   return agent
 }
 
 interface Hold {
   /** Stream callers still using the handle; each releases exactly its own via `releaseSharedAgent`. */
   streams: number
-  /** Served owners: each acquisition adds one, each `dispose()` of the shared handle drops one. */
-  served: number
+  /** Served holders, oldest first: each `dispose()` of the shared handle releases the oldest. */
+  served: (() => void)[]
   sdk: object
   id: string
   dispose: () => Promise<void>
@@ -168,33 +191,35 @@ function inLane<T>(sdk: object, id: string, fn: () => Promise<T>): Promise<T> {
  *
  * `kind: 'stream'` (default): the caller releases with {@link releaseSharedAgent}; holds are counted.
  * `kind: 'served'`: the caller keeps the SDK's own handle (identity preserved, same object as
- * `Agent.registry.get(id)`), whose `dispose()` is replaced by a release of the single served hold.
- * Each served acquisition is released by one `dispose()`; surplus calls are no-ops, and none touches a stream's hold. Only the last hold disposes.
+ * `Agent.registry.get(id)`), whose `dispose()` is replaced by a release of ONE served hold. The
+ * handle is one object, so a `dispose()` cannot name its caller: it releases the oldest hold and
+ * runs that hold's `onRelease`. Calls beyond the held count are no-ops, and none touches a stream's
+ * hold. Only the last hold disposes.
  */
 export function acquireSharedAgent(
   sdk: unknown,
   sessionId: string,
   options: Record<string, unknown>,
-  listener: ((wiring: CompiledWiring) => void) | undefined,
   kind: 'stream' | 'served' = 'stream',
+  onRelease: () => void = () => undefined,
 ): Promise<unknown> {
   return inLane(sdk as object, sessionId, async () => {
-    const agent = (await getOrCreateReporting(sdk, sessionId, options, listener)) as object
+    const agent = (await getOrCreateReporting(sdk, sessionId, options)) as object
     let hold = holders.get(agent)
     if (hold === undefined) {
       const target = agent as { dispose(): Promise<void> }
       hold = {
         streams: 0,
-        served: 0,
+        served: [],
         sdk: sdk as object,
         id: sessionId,
         dispose: target.dispose.bind(target),
       }
       holders.set(agent, hold)
-      // The handle's own `dispose()` (whoever calls it) can only drop the served hold.
+      // The handle's own `dispose()` (whoever calls it) can only drop a served hold.
       setDispose(agent, () => releaseServed(target))
     }
-    if (kind === 'served') hold.served++
+    if (kind === 'served') hold.served.push(onRelease)
     else hold.streams++
     return agent
   })
@@ -210,7 +235,7 @@ function setDispose(agent: object, value: () => Promise<void>): void {
 }
 
 async function settle(agent: object, hold: Hold): Promise<void> {
-  if (hold.streams > 0 || hold.served > 0) return
+  if (hold.streams > 0 || hold.served.length > 0) return
   holders.delete(agent)
   // Back to the real disposal, so a later `dispose()` on this handle cannot loop through us.
   setDispose(agent, hold.dispose)
@@ -221,8 +246,7 @@ function releaseServed(agent: object): Promise<void> {
   const hold = holders.get(agent)
   if (hold === undefined) return Promise.resolve()
   return inLane(hold.sdk, hold.id, async () => {
-    if (hold.served === 0) return
-    hold.served--
+    hold.served.shift()?.()
     await settle(agent, hold)
   })
 }

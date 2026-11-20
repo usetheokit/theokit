@@ -49,7 +49,6 @@ import type { AgentDefinitionLike } from '../delegation/named-subagents.js'
 import { diskEntities } from './disk-entities.js'
 import { permissionsPluginsFor } from '../composition/agent-spec.js'
 import { refuseForeignHook } from '../hooks/foreign-hook-gate.js'
-import { skillReadTool } from '../context/readable-skills.js'
 import { settingSourcesFor } from '../setting-sources.js'
 
 /** B-055 — told when a PreToolUse hook blocks a tool call, so a surface can render it. */
@@ -199,20 +198,11 @@ export async function buildChatAgent(overrides: {
   // type, T1.2 made name and description options, and the adapter stopped existing — it did not shrink,
   // it vanished. `askUser` remains the fallback; the preferred asker comes from the context.
   const profileScopedTools = profileTools(overrides?.surface, ask, abandonQuestion)
-  // B-099 — the tool the system prompt has been telling the model to call.
-  //
-  // `instructions.ts` says "call `skill_read` with its name to load the steps", and nothing added
-  // it. The SDK does not add it for you — "The SDK NEVER auto-injects it — bring-your-own-tools
-  // stays intact" — and describes what that leaves behind: "the entire on-disk surface was
-  // advertised to the model and unreadable by it". Measured 2026-09-15 beside Claude Code on the
-  // same project: it loaded a skill body and returned the token inside; this product answered that
-  // the required tool was not available, over 75 skills sitting under `.claude/skills/`.
-  //
-  // Absent when there is nothing to read, so a project with no skills does not carry a tool whose
-  // every answer would be "no such skill".
+  // B-099 / #1925 — `skill_read`, the tool the system prompt tells the model to call, is no longer built
+  // here: `.skills(…, { read: 'advertised' })` in `withProjectEntities` makes the framework serve exactly
+  // what the `<skills>` block lists, after the trust gate.
   const allTools = [
     ...profileScopedTools,
-    ...(await skillReadTool(overrides.cwd, operatorHome, posture.allows.skills)),
     ...(overrides?.extraTools ?? []),
   ]
   return chain.tools(allTools).build()
@@ -564,7 +554,11 @@ function withProjectEntities(
       // repository may steer the agent; `~/.theokit/skills/` is not this repository, and gating it
       // would refuse someone their own configuration because of where they happened to `cd` — the
       // same reasoning `context/rules.ts` and `user-agents-md.ts` already apply to instructions.
-      .skills([...(posture.allows.skills ? cfg.skills : []), ...ctx.operatorSkills])
+      .skills([...(posture.allows.skills ? cfg.skills : []), ...ctx.operatorSkills.map((s) => s.name), ...ctx.operatorSkills], {
+        // #1925 — `skill_read` serves exactly what the `<skills>` block lists, after the trust gate: the
+        // framework reads the SDK's own skills manager, so a root the gate withheld is never readable.
+        read: 'advertised',
+      })
         .subagents(ctx.namedSubagents)
       // M20 — opt into theokit's `.theokit/` file-based config (project + user): skills, subagents, hooks,
       // context, mcp are discovered from disk. The enabler for M24 (disk skills), M25 (subagent roles), M26

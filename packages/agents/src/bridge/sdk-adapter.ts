@@ -14,20 +14,19 @@ import type { ToolRefusal } from '@theokit/presenter'
 // prettier-ignore
 import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
+import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
 import type { Guardrail } from '../guardrails/index.js'
+import { resolveEnabledSkills } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
+import { wireInlineSkillRead } from './advertised-skill-read.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
-import {
-  BUILD_WIRED_SKILL_READERS,
-  acquireSharedAgent,
-  releaseSharedAgent,
-} from './compiled-wiring.js'
+import { acquireSharedAgent, releaseSharedAgent } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
@@ -334,7 +333,9 @@ interface SdkRuntime {
    * at load so an older peer degrades gracefully (inline skills still list in the `<skills>` block, they
    * just aren't auto-readable). Used to auto-wire reading for `defineAgent({ skills: [inlineSkill] })`.
    */
-  defineSkillReadTool?: (skills: readonly InlineSkill[]) => unknown
+  defineSkillReadTool?: (
+    skills: readonly InlineSkill[] | (() => Promise<readonly (InlineSkill | Skill)[]>),
+  ) => unknown
 }
 
 /**
@@ -464,32 +465,6 @@ function createTurnUsageMeter(
   })
 }
 
-/**
- * Auto-wire `skill_read` for inline skills (`defineAgent({ skills: [inlineSkill] })`). An inline
- * skill lists in the `<skills>` block by name + description only — its body is unreachable to the
- * model without the `skill_read` tool, so registering an inline skill implies wanting it readable.
- * Dedup: skip when the app already declared a `skill_read` (an explicit `defineSkillReadTool` wins).
- * Graceful: skip when the loaded SDK predates `defineSkillReadTool`.
- */
-function wireInlineSkillRead(
-  sdkTools: unknown[],
-  rt: SdkRuntime,
-  compiled: CompiledAgentOptions,
-  compiledTools: CompiledTool[],
-): void {
-  const inlineSkills = compiled.skills?.inline
-  if (
-    inlineSkills !== undefined &&
-    inlineSkills.length > 0 &&
-    rt.defineSkillReadTool !== undefined &&
-    !compiledTools.some((t) => t.name === 'skill_read')
-  ) {
-    const reader = rt.defineSkillReadTool(inlineSkills)
-    if (typeof reader === 'object' && reader !== null) BUILD_WIRED_SKILL_READERS.add(reader)
-    sdkTools.push(reader)
-  }
-}
-
 /** Wiring triad pillar (c) — M7 run-context metric: where the injected run-context came from. */
 function runContextSource(overrides: RuntimeOverrides, compiled: CompiledAgentOptions): string {
   if (overrides.runContext !== undefined) return 'per-run'
@@ -556,7 +531,7 @@ export function createSdkAgentStream(
         usageMeter,
       )
 
-      wireInlineSkillRead(sdkTools, rt, compiled, compiledTools)
+      const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
       debugLog('[THEO_AGENT_M7_RUN_CONTEXT]', {
         source: runContextSource(overrides, compiled),
         keys: runContext !== undefined ? Object.keys(runContext) : [],
@@ -583,7 +558,7 @@ export function createSdkAgentStream(
         yield* runTurnWithRetry(
           (outcome) =>
             streamSdkAgent(
-              rt,
+              skillRt,
               compiled,
               sdkTools,
               outcome === undefined ? turnOpts : { ...turnOpts, outcome },
@@ -787,12 +762,9 @@ async function* streamSdkAgent(
     ...m8,
     ...extra,
   }
-  const agent = (await acquireSharedAgent(
-    Agent,
-    sessionId,
-    createOptions,
-    compiled.onWired,
-  )) as Awaited<ReturnType<typeof Agent.getOrCreate>>
+  const agent = (await acquireSharedAgent(Agent, sessionId, createOptions)) as Awaited<
+    ReturnType<typeof Agent.getOrCreate>
+  >
   try {
     // theokit#140 — ONE ordered source. The `onDelta` sink + merge queue are gone: the SDK's
     // `run.events()` appends messages and deltas as the loop reports them, so arrival order IS
@@ -866,11 +838,14 @@ async function* streamSdkAgent(
 export interface SdkTurnHandle {
   wait: () => Promise<{
     result?: string
-    usage?: { totalTokens?: number }
+    usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number }
+    cost?: { amountUsd?: number }
     status?: string
     error?: { message: string }
   }>
   stream?: () => AsyncIterable<unknown>
+  /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
+  cancel?: () => unknown
 }
 
 /** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
@@ -965,8 +940,14 @@ export function toAgentFactory(
     }
     const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
     // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream).
-    wireInlineSkillRead(sdkTools, rt, compiled, compiled.tools)
-    const { options: m8 } = assembleM8CreateOptions(compiled)
+    const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
+    // `read: 'advertised'` only: a function-valued selection must reach the SDK as a static `enabled` list so
+    // the listing and `skill_read` agree. The default `'inline'` path is left exactly as it was.
+    const created =
+      compiled.skillsRead === 'advertised'
+        ? await withResolvedSkills(compiled, runContext)
+        : compiled
+    const { options: m8 } = assembleM8CreateOptions(created)
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
     applyPosture(extra, m8, opts.approvals, compiled.hitl)
@@ -979,61 +960,75 @@ export function toAgentFactory(
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     }
     // The owner's `dispose()` releases its hold; a stream sharing the handle keeps it alive.
+    const entry: ServedEntry = { guards: compiled.guardrails ?? [], max: compiled.maxIterations }
     const agent = (await acquireSharedAgent(
-      rt.Agent,
+      skillRt.Agent,
       sessionId,
       createOptions,
-      compiled.onWired,
       'served',
+      () => {
+        releaseServedEntry(agent, entry)
+      },
     )) as SdkAgentHandle
-    return servedHandle(agent, compiled.maxIterations, compiled.guardrails)
+    return servedHandle(agent, entry)
   }
 }
 
+interface ServedEntry {
+  guards: readonly Guardrail[]
+  max: number | undefined
+}
 interface ServedConfig {
   send: SdkAgentHandle['send']
-  /** Union of every served caller's guardrails: a later caller never drops an earlier one's. */
-  guards: Guardrail[]
-  /** The strictest (lowest) declared ceiling among served callers. */
-  max: number | undefined
-  installed: boolean
+  /** Active served holders, oldest first; releases (`dispose()`) drop the oldest. */
+  entries: ServedEntry[]
 }
 const served = new WeakMap<object, ServedConfig>()
+
+/** A served holder released: its guardrails and ceiling stop applying; the others' remain. */
+function releaseServedEntry(agent: object, entry: ServedEntry): void {
+  const cfg = served.get(agent)
+  if (cfg === undefined) return
+  const at = cfg.entries.indexOf(entry)
+  if (at >= 0) cfg.entries.splice(at, 1)
+}
 
 /**
  * The SDK's own handle, always: declared guardrails and a step ceiling are installed on it as its
  * `send`, so every served caller gets the object `Agent.registry.get(id)` returns. As the handle is
- * shared, its `send` enforces what ANY served caller declared (all guardrails, the lowest ceiling):
- * a caller without guards cannot strip another's, and differing ceilings are not overwritten.
+ * shared, its `send` enforces what the ACTIVE served holders declared (all their guardrails, the
+ * lowest ceiling), recomputed on every send: a caller without guards cannot strip another's, and a
+ * released caller's constraints stop applying.
  */
-function servedHandle(
-  agent: SdkAgentHandle,
-  max: number | undefined,
-  guards: Parameters<typeof withGuardrails>[1],
-): SdkAgentHandle {
+function servedHandle(agent: SdkAgentHandle, entry: ServedEntry): SdkAgentHandle {
   let cfg = served.get(agent)
   if (cfg === undefined) {
-    cfg = { send: agent.send.bind(agent), guards: [], max: undefined, installed: false }
-    served.set(agent, cfg)
+    const live: ServedConfig = { send: agent.send.bind(agent), entries: [] }
+    cfg = live
+    served.set(agent, live)
+    const base = {
+      agentId: agent.agentId,
+      dispose: () => agent.dispose(),
+      send: (msg: string, sendOpts?: SdkSendOptions) => {
+        const ceilings = live.entries.flatMap((e) => (e.max === undefined ? [] : [e.max]))
+        return live.send(
+          msg,
+          ceilings.length === 0 ? sendOpts : { maxIterations: Math.min(...ceilings), ...sendOpts },
+        )
+      },
+    } as SdkAgentHandle
+    Object.defineProperty(agent, 'send', {
+      value: (msg: string, sendOpts?: SdkSendOptions) =>
+        withGuardrails(base, [...new Set(live.entries.flatMap((e) => e.guards))]).send(
+          msg,
+          sendOpts,
+        ),
+      configurable: true,
+      writable: true,
+      enumerable: false,
+    })
   }
-  for (const g of guards ?? []) if (!cfg.guards.includes(g)) cfg.guards.push(g)
-  if (max !== undefined) cfg.max = cfg.max === undefined ? max : Math.min(cfg.max, max)
-  if (cfg.installed || (cfg.guards.length === 0 && cfg.max === undefined)) return agent
-  cfg.installed = true
-  const live = cfg
-  const base = {
-    agentId: agent.agentId,
-    dispose: () => agent.dispose(),
-    send: (msg: string, sendOpts?: SdkSendOptions) =>
-      live.send(msg, live.max === undefined ? sendOpts : { maxIterations: live.max, ...sendOpts }),
-  } as SdkAgentHandle
-  Object.defineProperty(agent, 'send', {
-    value: (msg: string, sendOpts?: SdkSendOptions) =>
-      withGuardrails(base, live.guards).send(msg, sendOpts),
-    configurable: true,
-    writable: true,
-    enumerable: false,
-  })
+  cfg.entries.push(entry)
   return agent
 }
 
@@ -1066,3 +1061,15 @@ function servedHandle(
  * The runner moderates the stream as it flows. The served turn's `stream()` (B-414) yields the
  * guarded completed reply as one message, or nothing on a block, so a block is not mid-token.
  */
+
+/** Fold a function-valued selection into a static `skills.enabled`; a static list is untouched. */
+async function withResolvedSkills(
+  compiled: CompiledAgentOptions,
+  runContext: Record<string, unknown> | undefined,
+): Promise<CompiledAgentOptions> {
+  if (!compiled.skillsResolver) return compiled
+  const enabled = await resolveEnabledSkills(compiled.skillsResolver, runContext ?? {})
+  return enabled === undefined
+    ? compiled
+    : { ...compiled, skills: { ...compiled.skills, enabled, autoInject: true } }
+}

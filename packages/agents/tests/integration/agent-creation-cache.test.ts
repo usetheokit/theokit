@@ -16,6 +16,7 @@ import {
   getOrCreateReporting,
   acquireSharedAgent,
   releaseSharedAgent,
+  WIRED_LISTENER,
   type CompiledWiring,
 } from '../../src/bridge/compiled-wiring.js'
 
@@ -34,7 +35,16 @@ const opts = (extra: Record<string, unknown> = {}): Record<string, unknown> => (
   ...extra,
 })
 const get = (id: string, listener?: (w: CompiledWiring) => void, extra?: Record<string, unknown>) =>
-  getOrCreateReporting(Agent, id, opts(extra), listener) as Promise<{
+  getOrCreateReporting(
+    Agent,
+    id,
+    opts({
+      ...(listener === undefined
+        ? {}
+        : { plugins: [{ name: 'wired', [WIRED_LISTENER]: listener, register() {} }] }),
+      ...extra,
+    }),
+  ) as Promise<{
     dispose(): Promise<void>
   }>
 
@@ -128,7 +138,7 @@ describe('getOrCreateReporting against the real SDK', () => {
   })
 
   const acquire = (id: string) =>
-    acquireSharedAgent(Agent, id, opts(), undefined) as Promise<{ dispose(): Promise<void> }>
+    acquireSharedAgent(Agent, id, opts()) as Promise<{ dispose(): Promise<void> }>
 
   it('keeps the shared handle cached until the last overlapping user releases it', async () => {
     const id = nextId()
@@ -143,7 +153,7 @@ describe('getOrCreateReporting against the real SDK', () => {
   })
 
   const served = (id: string) =>
-    acquireSharedAgent(Agent, id, opts(), undefined, 'served') as Promise<{
+    acquireSharedAgent(Agent, id, opts(), 'served') as Promise<{
       dispose(): Promise<void>
     }>
 
@@ -157,6 +167,18 @@ describe('getOrCreateReporting against the real SDK', () => {
     await owner.dispose()
     expect(Agent.registry.get(id)).toBe(stream)
     await releaseSharedAgent(stream)
+    expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  it('a served handle disposed more often than held never disposes a later holder', async () => {
+    const id = nextId()
+    const first = await served(id)
+    await first.dispose()
+    await first.dispose()
+    expect(Agent.registry.get(id)).toBeUndefined()
+    const second = await served(id)
+    expect(Agent.registry.get(id)).toBe(second)
+    await second.dispose()
     expect(Agent.registry.get(id)).toBeUndefined()
   })
 
@@ -230,6 +252,68 @@ describe('the real adapter entry points', () => {
     await expect(plain.send('hi')).rejects.toThrow()
     await guarded.dispose()
     await plain.dispose()
+    expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  it('one served caller disposing leaves the other holder live and usable', async () => {
+    const id = nextId()
+    const make = factory()
+    const first = await make(id)
+    const second = await make(id)
+    expect(second).toBe(first)
+    await first.dispose()
+    expect(Agent.registry.get(id)).toBe(second)
+    await second.dispose()
+    expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  /** Put a recording `send` on the live SDK handle, so the test sees what reaches the SDK. */
+  async function recordSends(id: string) {
+    const raw = (await Agent.getOrCreate(id, opts() as never)) as unknown as object
+    const calls: { maxIterations?: number }[] = []
+    Object.defineProperty(raw, 'send', {
+      value: (_m: string, o?: { maxIterations?: number }) => {
+        calls.push(o ?? {})
+        return Promise.resolve({})
+      },
+      configurable: true,
+      writable: true,
+    })
+    return calls
+  }
+  interface Sendable {
+    send(m: string): Promise<unknown>
+    dispose(): Promise<void>
+  }
+
+  it("a released guarded caller's guardrails and ceiling stop applying", async () => {
+    const id = nextId()
+    const calls = await recordSends(id)
+    const block = { name: 'b', checkInput: () => ({ action: 'block' as const, reason: 'no' }) }
+    const guarded = (await factory({ guardrails: [block], maxIterations: 1 })(id)) as Sendable
+    const plain = (await factory()(id)) as Sendable
+    expect(plain).toBe(guarded)
+    await expect(plain.send('hi')).rejects.toThrow()
+    expect(calls).toHaveLength(0)
+    await guarded.dispose()
+    expect(Agent.registry.get(id)).toBe(plain)
+    await plain.send('hi')
+    expect(calls).toEqual([{}])
+    await plain.dispose()
+    expect(Agent.registry.get(id)).toBeUndefined()
+  })
+
+  it('the lowest ceiling among active holders applies, and is recomputed on release', async () => {
+    const id = nextId()
+    const calls = await recordSends(id)
+    const low = (await factory({ maxIterations: 2 })(id)) as Sendable
+    const high = (await factory({ maxIterations: 5 })(id)) as Sendable
+    await high.send('a')
+    expect(calls.at(-1)).toEqual({ maxIterations: 2 })
+    await low.dispose()
+    await high.send('b')
+    expect(calls.at(-1)).toEqual({ maxIterations: 5 })
+    await high.dispose()
     expect(Agent.registry.get(id)).toBeUndefined()
   })
 

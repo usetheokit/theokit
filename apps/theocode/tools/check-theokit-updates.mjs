@@ -28,6 +28,8 @@ import { execFileSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { channelFor, compareVersions } from '../../../scripts/lib/app-dependencies.mjs'
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SCOPE = '@theokit/'
 const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
@@ -126,16 +128,8 @@ function installedAcross(declarations, name) {
   }
 }
 
-/**
- * Which dist-tag a package is tracked on here, read from the version ON DISK (#73).
- *
- * Not configured anywhere: a repository that pins a prerelease has already said which channel it
- * follows, and asking it to say so a second time is a second place to drift.
- */
-export function channelFor(installed) {
-  if (installed === undefined) return 'latest'
-  return installed.includes('-') ? 'next' : 'latest'
-}
+/** Which dist-tag a package is tracked on, read from the version ON DISK (#73); the rule is shared. */
+export { channelFor }
 
 /**
  * The version this row should compare against, and the channel it came from.
@@ -206,7 +200,8 @@ function collectRows() {
       // it is a migration, and it needs the suite run against it before anyone believes it.
       split,
       major: !split && installed !== undefined && majorOf(latest) > majorOf(installed),
-      current: !split && installed === latest,
+      // Not behind: a pin ahead of the published tag is not stale (shared semver precedence).
+      current: !split && installed !== undefined && compareVersions(installed, latest) >= 0,
       declarations,
     })
   }
