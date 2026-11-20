@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import process from 'node:process'
 import { Agent } from '@theokit/agents'
 import { exitAfterDrain } from '@theokit/agents/commands'
-import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
+import { transcriptPath } from '@theokit/agents/persistence'
 import {
   planTranscriptGC,
   runTranscriptGC,
@@ -90,25 +90,6 @@ function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): 
   }
 }
 
-/**
- * The framework maps a protected id to its hashed transcript only, but 4.x named the file after the
- * id and an upgraded machine has both. Move out of `candidates` every transcript carrying the legacy
- * name of a protected id (registered session or TUI pointer), so a live session's old file is kept.
- */
-function withholdLegacyNamed(planned: TranscriptGCPlan, liveIds: string[]): TranscriptGCPlan {
-  const legacy = new Set(liveIds.map((id) => legacyTranscriptPath(planned.root, planned.cwd, id)))
-  const held = planned.candidates.filter((c) => legacy.has(c.transcript))
-  if (held.length === 0) return planned
-  return {
-    ...planned,
-    candidates: planned.candidates.filter((c) => !held.includes(c)),
-    kept: [
-      ...planned.kept,
-      ...held.map((c) => ({ id: c.id, reason: 'legacy-named transcript of a live session' })),
-    ],
-  }
-}
-
 /** The framework's note for a candidate with no id; here that is expected, not a failure. */
 const UNNAMEABLE = 'transcript collected without a registry removal'
 
@@ -147,7 +128,7 @@ export async function planAndRunCurrentProjectGC(
     cwd,
     everyone.filter((a) => a.archived !== true).map((a) => a.agentId),
   )
-  const planned = planTranscriptGC({
+  const planned = await planTranscriptGC({
     cwd,
     keepLast: opts.keepLast ?? 10,
     maxAgeDays: opts.maxAgeDays ?? 30,
@@ -156,7 +137,7 @@ export async function planAndRunCurrentProjectGC(
     ...(opts.now !== undefined ? { now: opts.now } : {}),
   })
   const plan = assignOwnIdentities(
-    withholdLegacyNamed(planned, [...protectedIds().keys()]),
+    planned,
     everyone.map((a) => a.agentId),
   )
   const remove = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))

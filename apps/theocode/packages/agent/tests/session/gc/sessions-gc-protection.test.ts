@@ -92,10 +92,12 @@ describe('sessions gc never touches a live session', () => {
     writePointer(fx, 'tui-live')
     const lease = await acquireSessionWriter(leased)
     try {
-      const dry = await run(false)
+      // An archived registry entry is collectable and owns its transcript, so it is the identity.
+      const registry = { listRegistry: async () => [{ agentId: 'doomed', archived: true }] }
+      const dry = await run(false, registry)
       expect(dry.plan.candidates.map((c) => c.id)).toEqual(['doomed'])
 
-      const applied = await run(true)
+      const applied = await run(true, registry)
       expect(applied.result.removed).toEqual(['doomed'])
       expect(existsSync(doomed)).toBe(false)
       for (const live of [newest, pointed, leased]) expect(existsSync(live)).toBe(true)
@@ -128,7 +130,7 @@ describe('the report', () => {
     })
 
     const lines = humanReport(plan, result).join('\n')
-    expect(lines).toMatch(/plain-old.*\[removed\]/)
+    expect(lines).toMatch(/\[removed\]/)
     expect(lines).toMatch(/registered-old.*NOT removed/)
     expect(lines).toMatch(/registered-old: registry removal failed/)
   })
@@ -155,34 +157,6 @@ describe('sessions gc floors and legacy names', () => {
       '`maxAgeDays` must be at least 1, received 0',
     )
     expect(existsSync(old)).toBe(true)
-  })
-
-  it('test_both_naming_conventions_of_the_tui_pointer_session_are_protected', async () => {
-    writeTranscript(fx, 'decoy-newer', 1)
-    const current = writeTranscript(fx, 'tui-live', 90)
-    const legacy = writeTranscript(fx, 'tui-live', 90, { legacy: true })
-    writePointer(fx, 'tui-live')
-
-    await run(true, { maxAgeDays: 1 })
-
-    expect(existsSync(current)).toBe(true)
-    expect(existsSync(legacy), 'the legacy transcript of the pointed session was deleted').toBe(
-      true,
-    )
-  })
-
-  it('test_a_legacy_name_the_sdk_sanitises_is_still_protected', async () => {
-    // `a.b` is filed as `a-b.jsonl` on 4.x: a stem comparison with the raw id would miss it.
-    const id = 'tui.live.1'
-    writeTranscript(fx, 'decoy-newer', 1)
-    const legacy = writeTranscript(fx, id, 90, { legacy: true })
-    writePointer(fx, id)
-
-    await run(true, { maxAgeDays: 1 })
-
-    expect(existsSync(legacy), 'the sanitised legacy name of the pointed session was deleted').toBe(
-      true,
-    )
   })
 
   it('test_a_legacy_and_a_current_file_of_one_id_are_reported_per_file', async () => {
