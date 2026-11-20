@@ -373,7 +373,7 @@ when both are set, the union is passed.
 
 ## Describing a failed turn
 
-Import from `@theokit/agents`. `classifyTurnFailure(err)` walks `err.cause` (at most eight links) and returns `{ code, transient, message }`. A typed code anywhere in the chain wins over text, and `transient` comes only from `isTransientError` and typed provider status fields, never from digits in a message. `describeTurnFailure(failure, { attempts, hints })` renders `"<message> [<code>]: <hint>"` and appends `after N attempts` only when `attempts > 1`. `DEFAULT_TURN_FAILURE_HINTS` is neutral; pass `hints` to replace the wording for single codes.
+Import from `@theokit/agents/errors`. `classifyTurnFailure(err)` walks `err.cause` (at most eight links) and returns `{ code, transient, message }`. A typed code anywhere in the chain wins over text, and `transient` comes only from `isTransientError` and typed provider status fields, never from digits in a message. `describeTurnFailure(failure, { attempts, hints })` renders `"<message> [<code>]: <hint>"` and appends `after N attempts` only when `attempts > 1`. `DEFAULT_TURN_FAILURE_HINTS` is neutral; pass `hints` to replace the wording for single codes.
 
 ## Hooks the host owns
 
@@ -792,10 +792,12 @@ which is a worse failure than never having documented it.
   Those are the SDK's, and a PR that adds one here is rejected on sight.
 - It does **not** depend on the `theokit` web framework. The dependency runs the other way.
 - Web Standards over Node APIs inside `src/` — `Request`/`Response`, `fetch`, `crypto.randomUUID`.
-  Two `node:crypto` imports remain and both are measured rather than overlooked: `createHash` in
+  Three `node:crypto` imports remain and each is measured rather than overlooked: `createHash` in
   `packages/agents/src/hooks/hook-fingerprint.ts`, because the Web equivalent is async and this
-  function is not, and `randomBytes` in `packages/agents/src/hooks/hook-spec.ts`, where
-  `getRandomValues` would buy conformance at the cost of a hand-written hex conversion. A third
+  function is not, `randomBytes` in `packages/agents/src/hooks/hook-spec.ts`, where
+  `getRandomValues` would buy conformance at the cost of a hand-written hex conversion, and
+  `timingSafeEqual` in `packages/agents/src/control/device-pairing.ts`, which compares a pairing
+  credential in constant time and has no Web equivalent. Another
   was removed on 2026-09-17: `randomUUID` had no such defence — the global is the API this line
   names, and three other files in the package were already using it.
   File reads keep `node:fs`: there is no Web Standard to prefer.

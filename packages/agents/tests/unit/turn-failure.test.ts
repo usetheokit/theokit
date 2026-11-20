@@ -4,7 +4,7 @@ import {
   DEFAULT_TURN_FAILURE_HINTS,
   classifyTurnFailure,
   describeTurnFailure,
-} from '@theokit/agents'
+} from '@theokit/agents/errors'
 
 const provider = (code: string, statusCode?: number, retry = false): TheokitAgentError =>
   new TheokitAgentError('provider said no', {

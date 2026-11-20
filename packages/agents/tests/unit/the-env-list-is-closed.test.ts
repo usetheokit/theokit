@@ -183,15 +183,16 @@ describe('the Web-Standards boundary names every exception it keeps', () => {
    * `node:crypto` while three other files used the global, so the line's own example was its only
    * counter-example. Measured and removed 2026-09-17.
    *
-   * Two imports remain and the README names both with the reason. This asserts the SET, so a third
+   * Three imports remain and the README names each with the reason. This asserts the SET, so a third
    * one makes the claim false and fails here rather than being discovered by a reader.
    */
   const ALLOWED = [
     'src/hooks/hook-fingerprint.ts', // createHash — the Web equivalent is async, this is not
     'src/hooks/hook-spec.ts', // randomBytes — getRandomValues needs a hand-written hex conversion
+    'src/control/device-pairing.ts', // timingSafeEqual — the Web has no constant-time comparison
   ] as const
 
-  it('test_no_node_crypto_import_outside_the_two_the_readme_names', () => {
+  it('test_no_node_crypto_import_outside_the_ones_the_readme_names', () => {
     const root = join(import.meta.dirname, '..', '..')
     const offenders: string[] = []
     const walk = (dir: string): void => {

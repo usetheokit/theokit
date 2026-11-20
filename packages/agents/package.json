@@ -93,6 +93,10 @@
       "types": "./dist/a2a.d.ts",
       "import": "./dist/a2a.js"
     },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
     "./evals": {
       "types": "./dist/evals.d.ts",
       "import": "./dist/evals.js"
