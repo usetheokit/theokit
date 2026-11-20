@@ -33,41 +33,53 @@ function tree(spec: Record<string, readonly string[]>): string {
   return root
 }
 
-describe('skill_read (advertised)', () => {
+describe('readableSkills', () => {
   it('carries the BODY, which is the whole point — a name and a description are already in the prompt', async () => {
     const cwd = tree({ '.theokit/skills': ['alpha'] })
     const chat = await buildThroughRuntime(cwd, join(cwd, 'nohome'), TRUSTED, ['alpha'])
-    expect(await readSkill(chat, 'alpha')).toContain('BODY OF alpha')
+    const answer = await readSkill(chat, 'alpha')
+    expect(answer).toContain('BODY OF alpha')
+    expect(answer).not.toContain('not found')
   })
 
   it("reads the repository's .claude/skills — the root that holds them in practice", async () => {
     const cwd = tree({ '.claude/skills': ['beta'] })
     const chat = await buildThroughRuntime(cwd, join(cwd, 'nohome'), TRUSTED, ['beta'])
-    expect(await readSkill(chat, 'beta')).toContain('BODY OF beta')
+    const answer = await readSkill(chat, 'beta')
+    expect(answer).toContain('BODY OF beta')
+    expect(answer).not.toContain('not found')
   })
 
-  it("reads the operator's own ~/.theokit/skills", async () => {
+  it('reads the operator\'s own ~/.theokit/skills', async () => {
     const home = tree({ '.theokit/skills': ['mine'] })
     const chat = await buildThroughRuntime(tree({}), home, TRUSTED)
-    expect(await readSkill(chat, 'mine')).toContain('BODY OF mine')
+    const answer = await readSkill(chat, 'mine')
+    expect(answer).toContain('BODY OF mine')
+    expect(answer).not.toContain('not found')
   })
 
-  it("does NOT read ~/.claude/skills — another kit's corpus, per user-skills.ts", async () => {
+  it('does NOT read ~/.claude/skills — another kit\'s corpus, per user-skills.ts', async () => {
     const home = tree({ '.claude/skills': ['foreign-corpus'] })
     const chat = await buildThroughRuntime(tree({}), home, TRUSTED, ['foreign-corpus'])
-    expect(await readSkill(chat, 'foreign-corpus')).not.toContain('BODY OF foreign-corpus')
+    const answer = await readSkill(chat, 'foreign-corpus')
+    expect(answer).not.toContain('BODY OF foreign-corpus')
+    expect(answer).toContain('not found')
   })
 
-  it('answers "not found" for a project with no skills anywhere, rather than throwing', async () => {
+  it('returns [] for a project with no skills anywhere, rather than throwing', async () => {
     const cwd = tree({})
     const chat = await buildThroughRuntime(cwd, join(cwd, 'nohome'), TRUSTED)
-    expect(await readSkill(chat, 'anything')).toContain('not found')
+    const answer = await readSkill(chat, 'anything')
+    expect(answer).toContain('not found')
+    expect(answer).toContain('Available skills: (none)')
   })
 
-  it('serves one body when two roots declare the name — the operator root, which is inline', async () => {
+  it('keeps one entry per name when two roots declare it, project first', async () => {
     const home = tree({ '.theokit/skills': ['dup'] })
     const cwd = tree({ '.theokit/skills': ['dup'] })
     const chat = await buildThroughRuntime(cwd, home, TRUSTED, ['dup'])
-    expect(await readSkill(chat, 'dup')).toContain('BODY OF dup')
+    const answer = await readSkill(chat, 'dup')
+    expect(answer).toContain('BODY OF dup')
+    expect(answer.match(/BODY OF dup/g)).toHaveLength(1)
   })
 })
