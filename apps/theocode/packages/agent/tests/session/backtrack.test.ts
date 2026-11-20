@@ -17,6 +17,7 @@ import { dirname, join } from 'node:path'
 
 import { JsonlParseError, transcriptPath } from '@theokit/agents/persistence'
 import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
+import { LiveTranscriptError } from '@theokit/sdk/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -119,7 +120,7 @@ describe('fork before a user turn (framework forkBeforeUserTurn)', () => {
 
     await expect(
       forkSessionBeforeUserTurn('src', 'tui-live', 1, { cwd, baseDir: base }),
-    ).rejects.toThrow()
+    ).rejects.toBeInstanceOf(LiveTranscriptError)
     expect(existsSync(transcriptPath(base, cwd, 'tui-live'))).toBe(false)
   })
 
