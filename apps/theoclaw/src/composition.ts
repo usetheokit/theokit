@@ -461,6 +461,7 @@ function withSharedBrowser(settings: ToolSettings, launch: BrowserLauncher | und
   adopt(createSharedBrowser(join(settings.workspace, '.theoclaw', 'browser-profile'), launch))
   const was = browserLine(settings.browser)
   const line = browserLine({ ...settings.browser, cdpEndpoint: 'shared' })
+  if (!settings.offLines.includes(was)) throw new Error('theoclaw: the browser start line is missing from the start lines')
   return { ...settings, offLines: settings.offLines.map((l) => (l === was ? line : l)) }
 }
 
