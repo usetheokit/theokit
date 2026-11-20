@@ -118,4 +118,8 @@ describe('buildAgentCard plain form', () => {
     }
     expect(buildAgentCard(input).skills).toEqual(input.skills)
   })
+
+  it('a manifest entry passed without options throws instead of building an empty card', () => {
+    expect(() => (buildAgentCard as (e: unknown) => unknown)(entry)).toThrow(TypeError)
+  })
 })

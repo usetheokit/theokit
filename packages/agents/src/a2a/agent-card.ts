@@ -72,6 +72,11 @@ export function buildAgentCard(
   input: AgentManifestEntry | PlainAgentCardInput,
   opts?: BuildAgentCardOptions,
 ): AgentCard {
+  if (opts === undefined && typeof (input as PlainAgentCardInput).baseUrl !== 'string') {
+    throw new TypeError(
+      'buildAgentCard: pass options with a manifest entry, or baseUrl in the plain form',
+    )
+  }
   const options = opts ?? (input as PlainAgentCardInput)
   const entry: { name: string; route: string; stream?: boolean } = input
   const skills =
