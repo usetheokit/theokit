@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  type AgentStreamEvent,
+  type ErrorEvent,
   translateInteractionUpdate,
   translateSdkEvent,
 } from '@theokit/agents/bridge'
 
 import type { InteractionUpdate } from '@theokit/sdk'
 
-import { type SdkMessageLike, toSdkMessage, type TurnAgent, type TurnRun } from '../agent-port.js'
+import { type SdkMessageLike, toSdkMessage, type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { type TurnUsage, usageOf } from '../usage/turn-usage.js'
@@ -16,8 +18,8 @@ import { createEventMask } from './event-mask.js'
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
-/** One event as `translateSdkEvent` returns it. */
-export type TurnEvent = ReturnType<typeof translateSdkEvent>[number]
+/** One event of a turn: the bridge's typed `AgentStreamEvent`. */
+export type TurnEvent = AgentStreamEvent
 
 /**
  * How a turn ended. `reason` says why a failed or cancelled one ended, for stderr; it is never sent
@@ -60,10 +62,9 @@ function failed(reason: string): TurnOutcome {
 function ignore(): void {}
 
 /** A streamed error as the turn's reason shows it: its code, and the message when it has one. */
-export function describeStreamedError(event: object): string {
-  const { code, message } = event as { code?: unknown; message?: unknown }
-  const text = String(code ?? 'error')
-  return typeof message === 'string' && message !== '' ? `${text}: ${message}` : text
+export function describeStreamedError(event: ErrorEvent): string {
+  const { code, message } = event
+  return message !== '' ? `${code}: ${message}` : code
 }
 
 interface AbortWatch {
@@ -135,7 +136,7 @@ function emitMessage(
   // The step's finished `assistant` message repeats text its deltas already sent.
   const textStreamed = message.type === 'assistant' && delta.streamed
   if (message.type === 'assistant') delta.streamed = false
-  for (const event of translateSdkEvent(toSdkMessage(message), options.runId)) {
+  for (const event of typedEvents(translateSdkEvent(toSdkMessage(message), options.runId))) {
     if (options.signal?.aborted === true) break
     if (textStreamed && event.type === 'text_delta') continue
     if (event.type === 'error') streamedError ??= describeStreamedError(event)
@@ -209,7 +210,7 @@ async function runWith(
   const onDelta = ({ update }: { readonly update: InteractionUpdate }): void => {
     if (options.signal?.aborted === true) return
     if (update.type !== 'text-delta' && update.type !== 'thinking-delta') return
-    for (const event of translateInteractionUpdate(update)) {
+    for (const event of typedEvents(translateInteractionUpdate(update))) {
       if (event.type === 'text_delta') delta.streamed = true
       options.emit(event)
     }

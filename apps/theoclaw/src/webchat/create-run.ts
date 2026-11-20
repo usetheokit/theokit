@@ -13,6 +13,11 @@ function turnFailed(reason: string): StreamEvent {
   return { type: 'error', code: 'turn_failed', message: `the turn failed: ${reason}`, retryable: false }
 }
 
+/** The turn's typed event as the wire's `StreamEvent`; the copy carries the index signature the interfaces lack. */
+function toStreamEvent(event: TurnEvent): StreamEvent {
+  return { ...event }
+}
+
 const DONE: IteratorReturnResult<undefined> = { done: true, value: undefined }
 
 /**
@@ -64,9 +69,10 @@ function startTurn(
     if (closed) return
     sawError ||= event.type === 'error'
     answered ||= event.type === 'error' || event.type === 'done'
-    if (held !== undefined) held.after.push(event)
-    else if (event.type === 'done') held = { done: event, after: [] }
-    else queue.push(event)
+    const wire = toStreamEvent(event)
+    if (held !== undefined) held.after.push(wire)
+    else if (event.type === 'done') held = { done: wire, after: [] }
+    else queue.push(wire)
     notify()
   }
   const release = (usage?: TurnUsage): void => {
