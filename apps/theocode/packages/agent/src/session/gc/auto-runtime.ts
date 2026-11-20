@@ -2,9 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import { projectsRoot } from '@theokit/agents/session'
-
-import { sweepDecision } from './auto.js'
+import { projectsRoot, sweepDecision } from '@theokit/agents/session'
 import { buildSweepCommand, type SweepCommand } from './spawn-sweep.js'
 
 /**
