@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 
 import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
 import { MemoryStore } from '../src/memory/memory-store.js'
+import { userIdOf } from '../src/memory/wiring.js'
 import { theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { chatSessions } from '../src/sessions/chat-sessions.js'
 
@@ -20,35 +21,33 @@ interface Callable {
   handler: (input: unknown) => Promise<string> | string
 }
 
-/** A scripted agent: it answers `answer`; given `save_memory`, it saves `fact` the way a model would. */
-function scripted(options: AgentOptions, answer: string, fact?: string) {
-  const sent: string[] = []
+/** A scripted agent that answers `answer`. */
+function scripted(_options: AgentOptions, answer: string) {
   return {
-    sent,
-    send: async (message: string) => {
-      sent.push(message)
-      const save = (options.tools as unknown as Callable[] | undefined)?.find((tool) => tool.name === 'save_memory')
-      if (save !== undefined && fact !== undefined) await save.handler({ query: fact })
-      return {
-        stream: async function* () {},
-        wait: async () => ({ status: 'finished', result: answer }),
-        cancel: async () => undefined,
-      }
-    },
+    send: async () => ({
+      stream: async function* () {},
+      wait: async () => ({ status: 'finished', result: answer }),
+      cancel: async () => undefined,
+    }),
     dispose: async () => undefined,
   }
 }
 
+const stateOf = () => mkdtempSync(join(tmpdir(), 'theoclaw-state-'))
+const memoryOf = (options: AgentOptions) => options.memory as { enabled: boolean; directory: string; userId: string; review?: { after: string }; mirror?: unknown }
+const dm = (platform: string, id: string) => ({ platform, sender: { id }, channel: { type: 'dm', id } }) as unknown as MessageEvent
+
 describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
-  it('stores a turn per surface, runs a forked reviewer with save_memory alone, and keeps its fact', async () => {
+  it('stores a turn per surface and gives each session SDK memory with post-turn review, outside the cwd', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-'))
+    const state = stateOf()
     const opened: { id: string; options: AgentOptions }[] = []
-    const { sessions, withAgent, memory } = chatSessions({
-      env: { ...ENV, THEOCLAW_WORKSPACE: workspace },
+    const { sessions, withAgent } = chatSessions({
+      env: { ...ENV, THEOCLAW_WORKSPACE: workspace, THEOCLAW_STATE_DIR: state },
       write: () => undefined,
       getOrCreate: async (id, options) => {
         opened.push({ id, options })
-        return scripted(options, 'noted', id.includes('-review-') ? 'The owner lives in Porto' : undefined) as never
+        return scripted(options, 'noted') as never
       },
     })
     for (const platform of ['telegram', 'line']) {
@@ -58,18 +57,16 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
         lease.release()
       })
     }
-    await memory?.idle()
-
-    const reviewers = opened.filter((o) => o.id.includes('-review-'))
-    expect(reviewers).toHaveLength(2)
-    expect(reviewers[0]?.options.tools?.map((tool) => tool.name)).toEqual(['save_memory'])
-    // The chat agents themselves hold no tool.
-    expect((opened.find((o) => !o.id.includes('-review-'))?.options.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
-
-    const store = new MemoryStore(join(workspace, '.theoclaw', 'memory'))
-    expect(store.search('Porto').map((hit) => hit.surface).sort()).toEqual(['line', 'telegram'])
-    expect(store.facts('telegram:u')).toEqual(['The owner lives in Porto'])
-    expect(store.facts('line:u')).toEqual(['The owner lives in Porto'])
+    // No reviewer fork: the SDK reviews each finished turn itself.
+    expect(opened).toHaveLength(2)
+    for (const { options } of opened) {
+      expect(memoryOf(options)).toMatchObject({ enabled: true, directory: join(state, 'memory'), review: { after: 'turn' } })
+      expect((options.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
+    }
+    expect(new MemoryStore(join(state, 'memory')).search('Porto').map((hit) => hit.surface).sort()).toEqual(['line', 'telegram'])
+    // Memory writes nothing under the agent's cwd.
+    expect(existsSync(join(workspace, '.theoclaw', 'memory'))).toBe(false)
+    expect(memoryOf(opened[0]!.options).directory.startsWith(workspace)).toBe(false)
     await sessions.disposeAll()
   })
 
@@ -85,47 +82,49 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
     }
   })
 
-  it('opens a fresh session, on any surface, with the fact earlier sessions kept in its prompt', async () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-'))
-    new MemoryStore(join(workspace, '.theoclaw', 'memory')).saveFact('The owner lives in Porto', 'line:u')
-    const prompts: unknown[] = []
+  it('gives a fresh session, on any surface, the same SDK store, which injects the facts earlier sessions kept', async () => {
+    const state = stateOf()
+    const seen: AgentOptions[] = []
     const { sessions, withAgent } = chatSessions({
-      env: { ...ENV, THEOCLAW_WORKSPACE: workspace },
+      env: { ...ENV, THEOCLAW_WORKSPACE: mkdtempSync(join(tmpdir(), 'theoclaw-mem-')), THEOCLAW_STATE_DIR: state },
       write: () => undefined,
       getOrCreate: async (_id, options) => {
-        prompts.push(options.systemPrompt)
+        seen.push(options)
         return scripted(options, 'x') as never
       },
     })
-    await withAgent(event('line'), (lease) => lease.release())
-    expect(String(prompts[0])).toContain('- The owner lives in Porto')
+    await withAgent(dm('line', 'u'), (lease) => lease.release())
+    expect(memoryOf(seen[0]!)).toMatchObject({ enabled: true, directory: join(state, 'memory') })
     await sessions.disposeAll()
   })
 
   it('recalls a fact only to the sender who said it; an owner shares one scope across platforms (#1508)', async () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-'))
-    const store = new MemoryStore(join(workspace, '.theoclaw', 'memory'))
-    store.saveFact('The owner favorite color is teal')
-    store.saveFact('Peer likes tea', 'matrix:@peer')
-    const prompts = new Map<string, string>()
+    const memories = new Map<string, string>()
     const { sessions, withAgent } = chatSessions({
-      env: { ...ENV, THEOCLAW_WORKSPACE: workspace, THEOCLAW_OWNERS: 'matrix:@owner,telegram:1' },
+      env: { ...ENV, THEOCLAW_WORKSPACE: mkdtempSync(join(tmpdir(), 'theoclaw-mem-')), THEOCLAW_STATE_DIR: stateOf(), THEOCLAW_OWNERS: 'matrix:@owner,telegram:1' },
       write: () => undefined,
       getOrCreate: async (id, options) => {
-        prompts.set(id, String(options.systemPrompt))
+        memories.set(id, memoryOf(options).userId)
         return scripted(options, 'x') as never
       },
     })
-    const dm = (platform: string, id: string) => ({ platform, sender: { id }, channel: { type: 'dm', id } }) as unknown as MessageEvent
     for (const e of [dm('matrix', '@owner'), dm('matrix', '@peer'), dm('telegram', '1'), dm('matrix', '@other')]) {
       await withAgent(e, (lease) => lease.release())
     }
-    const all = [...prompts.values()]
-    expect(all.filter((p) => p.includes('teal'))).toHaveLength(2)
-    expect(all.filter((p) => p.includes('Peer likes tea'))).toHaveLength(1)
-    expect(all.filter((p) => p.includes('teal') && p.includes('Peer likes tea'))).toHaveLength(0)
-    expect(store.saveFact('Peer likes tea', 'matrix:@other')).toBe(true)
+    const ids = [...memories.values()]
+    // The two owner identities share the owner partition; each other sender has a partition of its own.
+    expect(ids.filter((id) => id === 'owner')).toHaveLength(2)
+    expect(new Set(ids).size).toBe(3)
+    expect(ids.filter((id) => id !== 'owner').every((id) => id !== 'owner')).toBe(true)
     await sessions.disposeAll()
+  })
+
+  it('never shares a partition between two senders, even ones that differ only in case or punctuation', () => {
+    const scopes = ['telegram:1', 'telegram:2', 'matrix:@Alice', 'matrix:@alice', 'matrix:a-lice', 'matrix:a.lice', 'owner']
+    const ids = scopes.map(userIdOf)
+    expect(new Set(ids).size).toBe(scopes.length)
+    for (const id of ids) expect(id).toMatch(/^[a-z0-9][a-z0-9-_]*$/)
+    expect(userIdOf('owner')).toBe('owner')
   })
 
   it('puts the recalled facts in a /control agent prompt, after an import too', () => {
@@ -175,26 +174,24 @@ describe('persona in the chat session prompt (#1511)', () => {
 })
 
 describe('memory block with the persona files in a new session prompt (#1731)', () => {
-  it('carries the saved fact, the standing order and SOUL.md together', async () => {
+  it('opens the owner SDK memory with the standing order and SOUL.md in the prompt', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-all-'))
     writeFileSync(join(workspace, 'SOUL.md'), 'Always answer in pirate speak.')
     writeFileSync(join(workspace, 'STANDING-ORDERS.md'), 'Never discuss the weather.')
-    new MemoryStore(join(workspace, '.theoclaw', 'memory')).saveFact('The owner lives in Porto')
     const opened: AgentOptions[] = []
     const { withAgent } = chatSessions({
-      env: { ...ENV, THEOCLAW_WORKSPACE: workspace, THEOCLAW_OWNERS: 'telegram:u,line:u' },
+      env: { ...ENV, THEOCLAW_WORKSPACE: workspace, THEOCLAW_STATE_DIR: stateOf(), THEOCLAW_OWNERS: 'telegram:u,line:u' },
       write: () => undefined,
       getOrCreate: async (_id, options) => {
         opened.push(options)
         return scripted(options, 'ok') as never
       },
     })
-    const dm = (platform: string) => ({ platform, sender: { id: 'u' }, channel: { type: 'dm', id: 'u' } }) as unknown as MessageEvent
-    await withAgent(dm('line'), (lease) => lease.release())
+    await withAgent(dm('line', 'u'), (lease) => lease.release())
     const prompt = String(opened[0]?.systemPrompt)
     expect(prompt).toContain('pirate speak')
     expect(prompt).toContain('Never discuss the weather.')
-    expect(prompt).toContain('- The owner lives in Porto')
+    expect(memoryOf(opened[0]!).userId).toBe('owner')
     expect(prompt).toContain(UNTRUSTED_CONTENT_NOTICE)
   })
 })

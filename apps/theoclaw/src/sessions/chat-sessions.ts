@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { rmSync, statSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
@@ -10,12 +10,7 @@ import type { AgentOptions, Plugin } from '@theokit/sdk'
 import { isAuthenticatedSender, senderKey } from '../authorization/policy.js'
 import { OWNER_SCOPE } from '../memory/memory-store.js'
 import { memoryBackend } from '../memory/backend.js'
-import {
-  createMemory,
-  type MemoryWiring,
-  memoryEnabled,
-  reviewerOptions,
-} from '../memory/wiring.js'
+import { createMemory, type MemoryWiring, memoryEnabled } from '../memory/wiring.js'
 import { withSdkSkills } from '../agent/create-agent.js'
 import { createContainer } from '../agent-container.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -100,15 +95,13 @@ export function chatSessions(options: ChatSessionsOptions): {
   }
   const memory = memoryEnabled(options.env, transient)
     ? createMemory(
-        join(settings.workspace, '.theoclaw', 'memory'),
+        memoryDirectory(options.env),
         options.write,
-        memoryBackend(options.env, settings.workspace),
+        memoryBackend(options.env),
       )
     : undefined
-  let reviews = 0
   const owners = ownerKeys(options.env)
   const currentEvent = new AsyncLocalStorage<MessageEvent>()
-  const recalled = recalledPrompt(memory)
   const thinking = new Map<string, ThinkingLevel>()
   // Spread after the channel's options, which carry the instance-wide THEOCLAW_THINKING, so the session's level wins.
   const thinkingExtra = (key: string): AgentOptions & { thinking?: ThinkingLevel } => {
@@ -123,7 +116,6 @@ export function chatSessions(options: ChatSessionsOptions): {
     getOrCreate: async (id, sessionOptions) => {
       const dir = sessionOptions.local?.sessionDir
       const scope = scopeOf(currentEvent.getStore(), owners)
-      const facts = await recalled(scope)
       const backendOptions = (await memory?.agentOptions()) ?? {}
       const build = (agentId: string, extra: AgentOptions): Promise<SessionAgent> =>
         createChannelAgentFactory<SessionAgent>(options.env, (channel) =>
@@ -132,24 +124,17 @@ export function chatSessions(options: ChatSessionsOptions): {
             ...backendOptions,
             ...channel,
             ...extra,
+            // The SDK's memory: this sender's own partition, outside the cwd, reviewed after each turn.
+            ...(memory === undefined ? {} : { memory: memory.settings(scope) }),
+            ...(backendOptions.plugins === undefined ? {} : { plugins: [...pluginList(extra.plugins ?? channel.plugins ?? sessionOptions.plugins), ...pluginList(backendOptions.plugins)] }),
             // The session's prompt carries the persona; `...channel` would replace it with the bare notice.
             systemPrompt: extra.systemPrompt ?? sessionOptions.systemPrompt ?? channel.systemPrompt,
-            ...withFacts(extra.systemPrompt ?? sessionOptions.systemPrompt ?? channel.systemPrompt, extra, facts),
             local: { ...sessionOptions.local, ...channel.local },
           }),
         )()
       try {
         const opened = await build(id, thinkingExtra(keyOf(id)))
-        // The reviewer is a fork: its own agent id and only `save_memory`, opened after each turn.
-        const agent =
-          memory === undefined
-            ? opened
-            : memory.wrap(opened, surfaceOf(id), keyOf(id), () =>
-                build(
-                  `${id}-review-${++reviews}`,
-                  reviewerOptions(memory.store, sessionOptions, scope),
-                ),
-              )
+        const agent = memory === undefined ? opened : memory.record(opened, surfaceOf(id), keyOf(id))
         return transient ? withIncognitoCleanup(agent, dir) : agent
       } catch (error) {
         if (transient) removeIncognitoDir(dir)
@@ -195,16 +180,15 @@ export function chatSessions(options: ChatSessionsOptions): {
 const keyOf = (id: string): string => id.replace(/^theoclaw-/, '').replace(/-g\d+$/, '')
 const surfaceOf = (id: string): string => keyOf(id).split('-')[0] ?? 'chat'
 
-/**
- * A session's agent opens with the facts earlier sessions kept, as data (OC-56); the reviewer fork
- * (which passes `tools`) does not. Read when the agent opens, so a new session sees the latest.
- */
-function recalledPrompt(memory: MemoryWiring | undefined) {
-  return async (scope: string): Promise<string> => (await memory?.recall(scope)) ?? ''
+/** The plugins of an options object that lists them (the SDK also takes a settings object). */
+function pluginList(plugins: AgentOptions['plugins']): readonly Plugin[] {
+  return Array.isArray(plugins) ? (plugins as readonly Plugin[]) : []
 }
 
-function withFacts(prompt: AgentOptions['systemPrompt'], extra: AgentOptions, facts: string): { systemPrompt?: string } {
-  return facts === '' || extra.tools !== undefined || typeof prompt !== 'string' ? {} : { systemPrompt: `${prompt}\n\n${facts}` }
+/** Where the SDK keeps facts and the turn log: the instance's state directory, never an agent's cwd. */
+function memoryDirectory(env: Readonly<Record<string, string | undefined>>): string {
+  const state = env.THEOCLAW_STATE_DIR?.trim()
+  return join(state === undefined || state === '' ? join(env.THEOKIT_HOME?.trim() || join(homedir(), '.theokit'), 'theoclaw') : state, 'memory')
 }
 
 /** The `platform:senderId` keys `THEOCLAW_OWNERS` names, compared the way the owner policy does. */

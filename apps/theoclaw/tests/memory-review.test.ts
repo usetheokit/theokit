@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { MemoryStore } from '../src/memory/memory-store.js'
-import { saveMemoryTool, sessionSearchTool } from '../src/memory/memory-tools.js'
-import { afterTurn } from '../src/memory/turn-review.js'
+import { sessionSearchTool } from '../src/memory/memory-tools.js'
+import { recordTurn } from '../src/memory/wiring.js'
 
 interface Callable {
   name: string
@@ -38,28 +38,10 @@ describe('memory across surfaces (OC-56, Hermes row 3)', () => {
     expect(out).toContain('webchat')
     expect(out).toContain('deploy goes on Fridays')
   })
-
-  it('has a reviewer save a fact the next session recalls, and a failing reviewer does not reject', async () => {
-    const d = dir()
-    const store = new MemoryStore(d)
-    const save = saveMemoryTool(store) as unknown as Callable
-    await afterTurn(store, turn('tui', 'I work in Lisbon'), async (prompt) => {
-      expect(prompt).toContain('I work in Lisbon')
-      await save.handler({ query: 'The owner works in Lisbon' })
-      await save.handler({ query: 'The owner works in Lisbon' })
-    })
-    expect(store.facts()).toEqual(['The owner works in Lisbon'])
-    expect(new MemoryStore(d).recallSection()).toContain('- The owner works in Lisbon')
-    expect(new MemoryStore(dir()).recallSection()).toBe('')
-
-    const errors: unknown[] = []
-    await afterTurn(store, turn('tui', 'x'), () => Promise.reject(new Error('boom')), (e) => errors.push(e))
-    expect(errors).toHaveLength(1)
-  })
 })
 
 describe('a failed turn append (#1462)', () => {
-  it('reaches onError and the next turn is still recorded and reviewed', async () => {
+  it('is reported and never throws, and the next turn is still recorded', () => {
     const appended: unknown[] = []
     let calls = 0
     const store = {
@@ -68,13 +50,11 @@ describe('a failed turn append (#1462)', () => {
         appended.push(turn)
       },
     } as never
-    const errors: unknown[] = []
-    const reviewed: string[] = []
+    const errors: string[] = []
     const turn = { surface: 's', sessionKey: 'k', user: 'u', assistant: 'a', at: 't' }
-    await afterTurn(store, turn, async (p) => void reviewed.push(p), (e) => errors.push(e))
-    await afterTurn(store, turn, async (p) => void reviewed.push(p), (e) => errors.push(e))
+    recordTurn(store, turn, (line) => errors.push(line))
+    recordTurn(store, turn, (line) => errors.push(line))
     expect(errors).toHaveLength(1)
     expect(appended).toHaveLength(1)
-    expect(reviewed).toHaveLength(1)
   })
 })

@@ -8,54 +8,46 @@ import { memoryBackend, memoryBackendName } from '../src/memory/backend.js'
 import { createMemory } from '../src/memory/wiring.js'
 
 const fakeMem0 = () => {
-  const written: { content: unknown; userId: string }[] = []
-  const adapter = {
-    write: (content: unknown, ctx: { userId: string }) => {
-      written.push({ content, userId: ctx.userId })
-      return Promise.resolve('1')
-    },
-    recall: (_q: string, ctx: { userId: string }) => Promise.resolve(written.filter((w) => w.userId === ctx.userId).map((w) => ({ id: '1', content: String(w.content) }))),
-  }
-  const importer = (specifier: string) => Promise.resolve(specifier === '@theokit/memory-mem0' ? { mem0Memory: () => ({ kind: 'memory', createProvider: () => adapter }) } : {})
-  return { written, importer }
+  const plugin = { kind: 'memory', createProvider: () => ({}) }
+  const importer = (specifier: string) => Promise.resolve(specifier === '@theokit/memory-mem0' ? { mem0Memory: () => plugin } : {})
+  return { plugin, importer }
 }
+const dir = () => mkdtempSync(join(tmpdir(), 'mem-'))
 
 describe('THEOCLAW_MEMORY_BACKEND', () => {
   it('defaults to builtin and rejects an unknown name', () => {
     expect(memoryBackendName({})).toBe('builtin')
-    expect(memoryBackend({}, '/w')).toBeUndefined()
+    expect(memoryBackend({})).toBeUndefined()
     expect(() => memoryBackendName({ THEOCLAW_MEMORY_BACKEND: 'nope' })).toThrow(/must be one of/)
   })
 
   it('needs the backend key', () => {
-    expect(() => memoryBackend({ THEOCLAW_MEMORY_BACKEND: 'mem0' }, '/w')).toThrow(/MEM0_API_KEY/)
+    expect(() => memoryBackend({ THEOCLAW_MEMORY_BACKEND: 'mem0' })).toThrow(/MEM0_API_KEY/)
   })
 
-  it('mirrors a saved fact to mem0 and recalls it in a new session', async () => {
-    const { written, importer } = fakeMem0()
-    const backend = memoryBackend({ THEOCLAW_MEMORY_BACKEND: 'mem0', MEM0_API_KEY: 'k' }, '/w', importer)
-    const dir = mkdtempSync(join(tmpdir(), 'mem-'))
-    const first = createMemory(dir, () => undefined, backend)
-    first.store.saveFact('The owner lives in Lisbon')
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(written).toEqual([{ content: 'The owner lives in Lisbon', userId: 'owner' }])
-    // A new chat on a fresh local directory still recalls it: it comes from Mem0.
-    const second = createMemory(mkdtempSync(join(tmpdir(), 'mem-')), () => undefined, backend)
-    expect(await second.recall('owner')).toContain('- The owner lives in Lisbon')
+  it('hands every agent the mem0 plugin and has the SDK mirror facts to it and recall from it first', async () => {
+    const { plugin, importer } = fakeMem0()
+    const backend = memoryBackend({ THEOCLAW_MEMORY_BACKEND: 'mem0', MEM0_API_KEY: 'k' }, importer)
+    const memory = createMemory(dir(), () => undefined, backend)
+    expect((await memory.agentOptions()).plugins).toEqual([plugin])
+    expect(memory.settings()).toMatchObject({ userId: 'owner', mirror: { write: true, recall: 'adapters-first' } })
   })
 
-  it('falls back to the local store when the backend fails', async () => {
+  it('keeps the SDK store alone, without a mirror, for the builtin backend', () => {
+    expect(createMemory(dir(), () => undefined).settings().mirror).toBeUndefined()
+  })
+
+  it('falls back to the SDK store when the backend fails, and says so', async () => {
     const lines: string[] = []
-    const backend = memoryBackend({ THEOCLAW_MEMORY_BACKEND: 'mem0', MEM0_API_KEY: 'k' }, '/w', () => Promise.reject(new Error('missing')))
-    const memory = createMemory(mkdtempSync(join(tmpdir(), 'mem-')), (line) => lines.push(line), backend)
-    memory.store.saveFact('local fact')
-    expect(await memory.recall('owner')).toContain('- local fact')
+    const backend = memoryBackend({ THEOCLAW_MEMORY_BACKEND: 'mem0', MEM0_API_KEY: 'k' }, () => Promise.reject(new Error('missing')))
+    const memory = createMemory(dir(), (line) => lines.push(line), backend)
+    expect(await memory.agentOptions()).toEqual({})
     expect(lines.join('\n')).toMatch(/needs @theokit\/memory-mem0/)
   })
 
   it('gives agents the sdk-memory provider', async () => {
     const provider = { kind: 'provider' }
-    const backend = memoryBackend({ THEOCLAW_MEMORY_BACKEND: 'sdk-memory' }, '/w', () => Promise.resolve({ createInMemoryMarkdownProvider: () => provider }))
+    const backend = memoryBackend({ THEOCLAW_MEMORY_BACKEND: 'sdk-memory' }, () => Promise.resolve({ createInMemoryMarkdownProvider: () => provider }))
     expect(await backend?.agentOptions()).toEqual({ memoryProvider: provider })
   })
 })
