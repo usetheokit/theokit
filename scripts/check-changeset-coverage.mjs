@@ -153,7 +153,8 @@ function workspacePackages() {
       const manifest = join(d, 'package.json')
       if (!existsSync(join(ROOT, manifest))) continue
       const pkg = readJson(manifest)
-      if (typeof pkg.name === 'string') packages.set(pkg.name, { private: pkg.private === true })
+      if (typeof pkg.name === 'string')
+        packages.set(pkg.name, { private: pkg.private === true, version: pkg.version })
     }
   }
   return packages
@@ -209,11 +210,11 @@ function parseRelease(line) {
   const name = unquote(line.slice(0, colon).trim())
   const bump = unquote(line.slice(colon + 1).trim())
   if (name === undefined || !/^[^\s"':]+$/.test(name) || !BUMPS.has(bump)) return undefined
-  return name
+  return { name, bump }
 }
 
-/** The package names a changeset's frontmatter releases. Any line it cannot read exits 2. */
-function namedPackages(entry, frontmatter) {
+/** The releases a changeset's frontmatter asks for. Any line it cannot read exits 2. */
+function namedReleases(entry, frontmatter) {
   const named = []
   for (const raw of frontmatter.split(/\r?\n/)) {
     const line = stripComment(raw).trim()
@@ -246,6 +247,34 @@ function unpublishable(named, packages, isIgnored) {
   return reasons.length > 0 ? { reasons, mixed } : undefined
 }
 
+/** The standalone body line that says a 0.x package is meant to be released as 1.0.0. */
+const majorMarker = (name) => `<!-- changeset-major-1.0: ${name} -->`
+
+/**
+ * A `major` on a 0.x package releases 1.0.0, which cannot be taken back once published (#2471). A
+ * breaking change in 0.x is a `minor`; an intended 1.0.0 says so with a standalone body line
+ * `<!-- changeset-major-1.0: <package> -->`.
+ */
+function refuseZeroMajors(entry, body, releases) {
+  const lines = new Set(body.split(/\r?\n/).map((l) => l.trim()))
+  for (const { name, bump } of releases) {
+    const version = packages.get(name)?.version
+    if (bump !== 'major' || typeof version !== 'string' || !version.startsWith('0.')) continue
+    if (lines.has(majorMarker(name))) continue
+    console.error(
+      `check-changeset-coverage: .changeset/${entry} asks for \`major\` on ${name}, which is at ${version}.`,
+    )
+    console.error(
+      '  That releases 1.0.0 and cannot be taken back once it is on npm. Use `minor` for',
+    )
+    console.error(
+      `  a breaking change in 0.x, or, if 1.0.0 is intended, add the line ${majorMarker(name)}`,
+    )
+    console.error('  to the changeset body.')
+    process.exit(1)
+  }
+}
+
 /**
  * Every package any changeset names, read from the working tree rather than from the range: a
  * changeset added in an earlier commit of the same range still covers the change.
@@ -265,13 +294,15 @@ for (const entry of existsSync(dir) ? readdirSync(dir) : []) {
     console.error(`check-changeset-coverage: .changeset/${entry} has no frontmatter block.`)
     process.exit(2)
   }
-  const named = namedPackages(entry, front[1])
+  const releases = namedReleases(entry, front[1])
+  const named = releases.map((r) => r.name)
   for (const name of named) {
     if (!packages.has(name)) {
       unreadable(`.changeset/${entry} names ${name}, which no workspace package declares.`)
     }
     declared.add(name)
   }
+  refuseZeroMajors(entry, text.slice(front[0].length), releases)
   const verdict = unpublishable(named, packages, isIgnored)
   if (verdict !== undefined) refused.push([entry, verdict])
 }
