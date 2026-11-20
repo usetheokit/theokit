@@ -22,6 +22,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- WebChat's terminal event is typed as the bridge's `DoneEvent`: a `done` from the runner is completed (empty `result` and zero `durationMs` when missing) and then given the usage line and model, a failed turn's `done` is forwarded unchanged, and a command answered locally (`/think`, `/compact`, `/steer`, `/stop`, `/status`) ends with a complete `done` holding its reply, zero usage and zero duration, so no usage line is written for it.
 - With `THEOCLAW_BROWSER=on` the instance runs one Chromium, started with the first `/control` session and restarted if it dies, on a persistent profile (`.theoclaw/browser-profile`) that every `/control` session attaches to over loopback CDP, so a login survives between turns and two sessions can use the browser at once (#1152).
 - `sessions` (list, show, export, share) and `resume` read transcripts with the SDK's `readSessionMessages` instead of parsing the JSONL by hand, so a change in the transcript format no longer breaks them silently (#1780).
 - `/sessions` now lists through the SDK listing (async, newest first), so a transcript whose first line is malformed is identified by a later record. (#1943)
