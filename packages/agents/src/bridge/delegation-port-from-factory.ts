@@ -160,7 +160,7 @@ export function delegationPortFromAgentFactory(
 ): DelegationPort {
   return {
     run: async (message, runOptions): Promise<DelegationResult> => {
-      const signal = runOptions?.signal ?? (options?.sendOptions?.signal as AbortSignal | undefined)
+      const signal = runOptions?.signal ?? options?.sendOptions?.signal
       try {
         return await runOnce(create, message, signal, options?.sendOptions)
       } catch (error) {
