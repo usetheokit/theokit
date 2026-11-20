@@ -121,6 +121,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
       # imports from `packages/theo/dist/*` to validate the npm publish
@@ -130,6 +131,20 @@ jobs:
       # but the binstub points to dist/cli/index.js which doesn't exist
       # until the theo package finishes building → ordering blow-up).
       - run: pnpm build:packages
+      # Public-surface gate, AFTER the build (it reads `dist/*.d.ts`). On a pull request it compares
+      # with the PR base, so removing or changing a stable export without a major changeset fails the
+      # job; the full-history checkout above supplies the base ref and `<base>...HEAD`. On a push
+      # there is no base, so only the drift check against the committed baseline runs.
+      - name: Public surface gate (@theokit/agents)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+            node scripts/check-public-surface.mjs @theokit/agents --base "origin/${BASE_REF}"
+          else
+            node scripts/check-public-surface.mjs @theokit/agents
+          fi
       # `typecheck:only`, not `typecheck`: the latter is `pnpm build:packages && tsc --noEmit`,
       # and the step above already built. Measured on run 33179795266 — build:packages 51s, then
       # typecheck 67s, of which ~50s was that build running a second time.
