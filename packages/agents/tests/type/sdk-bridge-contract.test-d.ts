@@ -39,9 +39,9 @@ describe('bridge contract vs the real SDK', () => {
 
   it('the turn exposes typed stream, timeline, cancel and outcome', () => {
     expectTypeOf<SdkStreamMessage>().toEqualTypeOf<SDKMessage>()
-    type T = Required<SdkTurnHandle>
-    expectTypeOf<ReturnType<T['events']>>().toEqualTypeOf<AsyncIterable<SdkTimelineEvent>>()
-    expectTypeOf<ReturnType<T['cancel']>>().toEqualTypeOf<Promise<void>>()
+    expectTypeOf<ReturnType<SdkRun['stream']>>().toEqualTypeOf<AsyncIterable<SdkStreamMessage>>()
+    expectTypeOf<ReturnType<SdkRun['events']>>().toEqualTypeOf<AsyncIterable<SdkTimelineEvent>>()
+    expectTypeOf<ReturnType<SdkRun['cancel']>>().toEqualTypeOf<Promise<void>>()
     expectTypeOf<SdkTurnOutcome>().toHaveProperty('stoppedByDoomLoop')
     expectTypeOf<SdkTurnOutcome>().toHaveProperty('stoppedAtIterationLimit')
   })

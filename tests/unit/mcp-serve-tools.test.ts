@@ -49,7 +49,7 @@ describe('handleMcpToolsJsonRpc', () => {
   })
   it('tools/call returns handler result as text', async () => {
     const r = await rpc('tools/call', { name: 'echo', arguments: { text: 'hi' } })
-    expect(r.result).toEqual({ content: [{ type: 'text', text: 'hi' }] })
+    expect(r.result).toEqual({ content: [{ type: 'text', text: 'hi' }], isError: false })
   })
   it('unknown tool, missing name and throwing handler give isError', async () => {
     const u = await rpc('tools/call', { name: 'nope' })

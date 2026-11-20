@@ -27,7 +27,9 @@ describe('M45 surface matrix — parseSurfaceFlags (all forms)', () => {
     expect(() => parseSurfaceFlags(['--surface=mobile'])).toThrow(
       /unknown --surface value: 'mobile'/,
     )
-    expect(() => parseSurfaceFlags(['--surface=ios'])).toThrow(/Valid options: web, tui, desktop/)
+    expect(() => parseSurfaceFlags(['--surface=ios'])).toThrow(
+      /Valid options: web, tui, desktop, cli/,
+    )
   })
 })
 
@@ -67,6 +69,10 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     expect(has('tui')).toBe(false)
     expect(has('sidecar')).toBe(false)
     expect(pkg().dependencies.theokit).toBeDefined()
+  })
+
+  it('parses --surface=cli', () => {
+    expect(parseSurfaceFlags(['--surface=cli'])).toBe('cli')
   })
 
   it('tui — Ink app on the unified client, web UI dropped, deps + tsconfig correct', () => {
@@ -233,7 +239,7 @@ describe('M45 surface matrix — persist apps for out-of-band npm install + tsc'
       expect(true).toBe(true) // no scratch requested — skip persistence
       return
     }
-    for (const surface of ['tui', 'desktop'] as const) {
+    for (const surface of ['tui', 'desktop', 'cli'] as const) {
       const out = join(scratch, `gen-${surface}`)
       rmSync(out, { recursive: true, force: true })
       mkdirSync(scratch, { recursive: true })

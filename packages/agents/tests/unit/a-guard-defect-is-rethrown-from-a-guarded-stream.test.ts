@@ -16,12 +16,7 @@ function finishedHandle(result: string): SdkAgentHandle {
   return {
     agentId: 'fake-agent',
     dispose: () => Promise.resolve(),
-    send: () =>
-      Promise.resolve({
-        stream: async function* () {},
-        cancel: () => Promise.resolve(),
-        wait: () => Promise.resolve({ status: 'finished', result }),
-      }),
+    send: () => Promise.resolve({ wait: () => Promise.resolve({ status: 'finished', result }) }),
   }
 }
 

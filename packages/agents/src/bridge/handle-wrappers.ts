@@ -11,7 +11,7 @@
  *
  * @internal
  */
-import type { SDKMessage, SDKUserMessage } from '@theokit/sdk'
+import type { SDKUserMessage } from '@theokit/sdk'
 
 import type { Guardrail } from '../guardrails/index.js'
 import { GuardrailViolationError, runInputGuards, runOutputGuards } from '../guardrails/index.js'
@@ -69,7 +69,7 @@ export function withGuardrails(
         typeof msg === 'string'
           ? await runInputGuards(msg, guardrails)
           : { ...msg, text: await runInputGuards(msg.text, guardrails) }
-      return guardTurn(await handle.send(guarded, sendOpts), guardrails, handle.agentId)
+      return guardTurn(await handle.send(guarded, sendOpts), guardrails)
     },
   }
 }
@@ -116,13 +116,7 @@ function forwardedMembers(
  * includes a guard defect such as `MalformedGuardrailResultError` (a `redact` with no text): a guard
  * written wrong is not a guard refusing (B-457).
  */
-function guardTurn(
-  turn: SdkTurnHandle,
-  guardrails: readonly Guardrail[],
-  agentId: string,
-): SdkTurnHandle {
-  // The ids every SDK message carries: the inner run's id when it has one, else empty (honest).
-  const ids = { agent_id: agentId, run_id: turn.id ?? '' }
+function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTurnHandle {
   let outcome: ReturnType<SdkTurnHandle['wait']> | undefined
   const guardedOutcome = (): ReturnType<SdkTurnHandle['wait']> =>
     (outcome ??= turn
@@ -132,49 +126,45 @@ function guardTurn(
           ? out
           : { ...out, result: await runOutputGuards(out.result, guardrails) },
       ))
+  const cancelTurn = (turn as { cancel?: () => Promise<unknown> }).cancel
   return {
-    ...(turn.id === undefined ? {} : { id: turn.id }),
     wait: guardedOutcome,
     // Cancellation must reach the inner run: a guarded turn that dropped it could not be aborted.
-    cancel: () => turn.cancel(),
+    ...(typeof cancelTurn === 'function' ? { cancel: () => cancelTurn.call(turn) } : {}),
     async *stream() {
       // The inner stream is read only to learn that it carried an error event. Its text may hold
       // what a guard would redact, so none of it is forwarded: one fixed terminal status is.
       let streamedError = false
-      for await (const event of turn.stream()) {
-        // Untrusted at runtime: an injected stream may yield null or a primitive.
-        if (
-          typeof event === 'object' &&
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-          event !== null &&
-          (event as { type?: unknown }).type === 'error'
-        ) {
-          streamedError = true
+      if (turn.stream !== undefined) {
+        for await (const event of turn.stream()) {
+          if (
+            typeof event === 'object' &&
+            event !== null &&
+            (event as { type?: unknown }).type === 'error'
+          ) {
+            streamedError = true
+          }
         }
       }
-      if (streamedError) yield errorStatus('run error', ids)
+      if (streamedError) yield errorStatus('run error')
       let out: Awaited<ReturnType<SdkTurnHandle['wait']>>
       try {
         out = await guardedOutcome()
       } catch (err) {
         if (!(err instanceof GuardrailViolationError)) throw err
-        yield errorStatus(err.message, ids)
+        yield errorStatus(err.message)
         return
       }
       if (out.result !== undefined) {
-        yield {
-          type: 'assistant',
-          ...ids,
-          message: { role: 'assistant', content: [{ type: 'text', text: out.result }] },
-        } satisfies SDKMessage
+        yield { type: 'assistant', message: { content: [{ type: 'text', text: out.result }] } }
       }
       // `'run error'` when the run gave no message: the eval runner's own `run <status>` fallback.
-      if (out.status === 'error') yield errorStatus(out.error?.message ?? 'run error', ids)
+      if (out.status === 'error') yield errorStatus(out.error?.message ?? 'run error')
     },
   }
 }
 
-/** The SDK's terminal message for a failed run, carrying the agent and run ids the SDK stamps. */
-function errorStatus(message: string, ids: { agent_id: string; run_id: string }): SDKMessage {
-  return { type: 'status', ...ids, status: 'ERROR', message }
+/** The SDK's terminal message for a failed run, less the agent and run ids this layer never sees. */
+function errorStatus(message: string): { type: 'status'; status: 'ERROR'; message: string } {
+  return { type: 'status', status: 'ERROR', message }
 }

@@ -36,8 +36,6 @@ function fakeHandle(behaviour: { outcome?: TurnOutcome; failure?: Error }): SdkA
     dispose: () => Promise.resolve(),
     send: () =>
       Promise.resolve({
-        stream: async function* () {},
-        cancel: () => Promise.resolve(),
         // Created inside `wait`, so the fake holds no rejected promise before it is called.
         wait: () =>
           behaviour.failure === undefined
@@ -79,17 +77,12 @@ async function collect(stream: (() => AsyncIterable<unknown>) | undefined): Prom
 }
 
 function assistantMessage(text: string): unknown {
-  return {
-    type: 'assistant',
-    agent_id: 'fake-agent',
-    run_id: '',
-    message: { role: 'assistant', content: [{ type: 'text', text }] },
-  }
+  return { type: 'assistant', message: { content: [{ type: 'text', text }] } }
 }
 
 /** The terminal message the SDK's own stream ends with when a run fails. */
 function errorStatus(message: string): unknown {
-  return { type: 'status', agent_id: 'fake-agent', run_id: '', status: 'ERROR', message }
+  return { type: 'status', status: 'ERROR', message }
 }
 
 const BLOCKED_MESSAGE = 'Guardrail "block-everything-out" blocked output: nothing leaves'
@@ -250,49 +243,12 @@ describe('a guarded turn can be streamed', () => {
     await expect(violation).rejects.toBeInstanceOf(GuardrailViolationError)
     await expect(violation).rejects.toMatchObject(BLOCKED_OUTPUT)
   })
-})
 
-describe('a guarded stream emits complete SDK messages', () => {
-  it('stamps agent_id, run_id and role on the assistant and error status messages', async () => {
-    const turn = async (outcome: TurnOutcome) => {
-      const handle = withGuardrails(
-        {
-          agentId: 'agent-7',
-          dispose: () => Promise.resolve(),
-          send: () =>
-            Promise.resolve({
-              id: 'run-9',
-              stream: async function* () {},
-              cancel: () => Promise.resolve(),
-              wait: () => Promise.resolve(outcome),
-            }),
-        },
-        [{ name: 'noop', checkOutput: () => ({ action: 'allow' }) }],
-      )
-      const run = await handle.send('hi')
-      const out: unknown[] = []
-      for await (const m of run.stream?.() ?? []) out.push(m)
-      return out
-    }
-    const [assistant] = (await turn({ result: 'ok', status: 'finished' })) as Array<{
-      type: string
-      agent_id: string
-      run_id: string
-      message: { role: string }
-    }>
-    expect(assistant).toMatchObject({
-      type: 'assistant',
-      agent_id: 'agent-7',
-      run_id: 'run-9',
-      message: { role: 'assistant' },
-    })
-    const [status] = await turn({ status: 'error', error: { message: 'boom' } })
-    expect(status).toEqual({
-      type: 'status',
-      agent_id: 'agent-7',
-      run_id: 'run-9',
-      status: 'ERROR',
-      message: 'boom',
-    })
+  it('test_a_wait_only_handle_is_guarded_without_calling_a_stream_it_lacks', async () => {
+    const handle = withGuardrails(fakeHandle({ outcome: FINISHED }), [countingRedactor().guard])
+    const turn = await handle.send('hi')
+
+    expect(await collect(turn.stream)).toEqual([assistantMessage('the word is [REDACTED]')])
+    expect(turn.cancel).toBeUndefined()
   })
 })
