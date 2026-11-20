@@ -77,6 +77,10 @@ describe('#106 — unreadable is not orphaned', () => {
       'a transcript this run could not read was scheduled for deletion as an orphan',
     ).not.toContain('unreadable-one')
     expect(existsSync(bad), 'an unreadable transcript was deleted').toBe(true)
+    expect(
+      plan.kept.map((k) => k.reason),
+      'the unreadable transcript must be reported as kept, naming the file',
+    ).toContain(`transcript id unreadable: ${bad}`)
   })
 
   it('test_a_readable_orphan_is_still_collected', async () => {

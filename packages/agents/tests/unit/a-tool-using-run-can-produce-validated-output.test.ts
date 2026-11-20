@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 
 import { withGuardrails, withStepCeiling } from '../../src/bridge/handle-wrappers.js'
 import type { SdkMessage } from '../../src/bridge/event-translator.js'
@@ -60,7 +61,7 @@ describe('the served handle offers a schema-validated, tool-using run', () => {
       ],
     ] as const) {
       expect(typeof wrapped.generate, `${name} dropped it`).toBe('function')
-      await wrapped.generate?.('x', { output: {} })
+      await wrapped.generate?.('x', { output: z.object({}) })
     }
     expect(generate).toHaveBeenCalledTimes(2)
   })

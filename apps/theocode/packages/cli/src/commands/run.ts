@@ -8,8 +8,11 @@ import {
   execExitCode,
   silentEmptyTurnDiagnostic,
 } from '../runtime/index.js'
-import { consumeWithForkIfBusy, availableIdOrFork } from '../runtime/index.js'
-import { exitAfterDrain } from '@theokit/agents/commands'
+import { exitAfterDrain, runHeadlessTurn } from '@theokit/agents/commands'
+import { sessionHasWriter, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
+import { streamTurnForkingIfBusy } from '@theokit/agents/session'
+import type { WireChunk } from '@theokit/presenter/wire'
+import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { readFileSync, writeFileSync } from 'node:fs'
 import type { ExecRun } from '../runtime/index.js'
@@ -72,13 +75,13 @@ export function createDiffGit(
  *
  * `turnFailureReporting` bundles three members so that none can be wired without the others, and
  * the sole production consumer wired two: `startTurn` had a test and no caller. That is not inert
- * here — `session-busy.ts` opens a SECOND stream on the same hooks when the session is contended,
+ * here — the fork-if-busy retry opens a SECOND stream on the same hooks when the session is contended,
  * so a `rate_limit` spent on the first pass was still being counted into the second turn's error
  * text. "After 3 attempts" on a turn that made one is the false attribution `RetryRecord.startTurn`
  * exists to prevent.
  *
  * Wrapping the opener rather than calling `startTurn()` once before the consume: the fork is opened
- * inside `consumeWithForkIfBusy`, where this caller has no line to put it on, and a reset that only
+ * inside `streamTurnForkingIfBusy`, where this caller has no line to put it on, and a reset that only
  * covers the first attempt would leave exactly the case that was wrong.
  */
 export function perTurnStream(
@@ -179,6 +182,11 @@ export async function resolveRunTarget(args: ExecRun, injected?: RunTargetDeps) 
  * explicit id, and a rule that read that as "new session" fired the hook on a resume, with the
  * previous turn's id — measured on the bench, and the reason `resolveSession` returns both facts.
  */
+function availableIdOrFork(sessionId: string, cwd: string): string {
+  const target = transcriptPath(transcriptRoot(), cwd, sessionId)
+  return sessionHasWriter(target) ? `${sessionId}-fork-${randomUUID().slice(0, 8)}` : sessionId
+}
+
 async function openSession(args: ExecRun): Promise<string> {
   const resolved = await resolveSession(args)
   const sessionId = availableIdOrFork(resolved.id, process.cwd())
@@ -252,14 +260,29 @@ export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<voi
           onRunEvent: failure.onRunEvent,
         }) as AsyncIterable<unknown>,
     )
-    await consumeWithForkIfBusy(
-      sessionId,
-      openStream,
-      (chunk) => {
-        processor.process(chunk as never)
-      },
-      (line) => process.stderr.write(line),
-    )
+    // The framework opens the stream (forking once on `session_busy`) and drains it; the processor
+    // taps each chunk on the way, so this product's output formats are untouched. The framework's
+    // own output is silenced: the processor is what writes to stdout and stderr.
+    const quiet = { out: () => {}, err: () => {} }
+    const forked = streamTurnForkingIfBusy(sessionId, openStream as never, {
+      onFork: (from, to) =>
+        process.stderr.write(
+          `[exec] session ${from} is being written by another process — forking to ${to}\n`,
+        ),
+    })
+    async function* tap(chunks: AsyncIterable<WireChunk>): AsyncGenerator<WireChunk> {
+      try {
+        for await (const chunk of chunks) {
+          processor.process(chunk)
+          yield chunk
+        }
+      } catch (err) {
+        status = 'error'
+        errorMsg = err instanceof Error ? err.message : String(err)
+        throw err
+      }
+    }
+    await runHeadlessTurn(tap(forked.chunks), { io: quiet })
   } catch (err) {
     status = 'error'
     errorMsg = err instanceof Error ? err.message : String(err)

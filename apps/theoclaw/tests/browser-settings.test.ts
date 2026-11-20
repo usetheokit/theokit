@@ -26,6 +26,8 @@ const PROXY = join(import.meta.dirname, '..', 'tools', 'browser-proxy.mjs')
 /** The browser config the server is started with: it names the headless shell `browser:install` installs. */
 const CONFIG = join(import.meta.dirname, '..', 'tools', 'browser-config.json')
 const ON_LINE = 'tools: browser is on (headless chromium, isolated profile)'
+const SHARED_LINE =
+  'tools: browser is on (headless chromium, persistent profile shared by sessions, started on first use)'
 const OFF_LINE = 'tools: browser is off (THEOCLAW_BROWSER unset)'
 const MODEL_ENV = { THEOCLAW_MODEL: 'openrouter/m', OPENROUTER_API_KEY: 'router-key' }
 
@@ -54,8 +56,21 @@ function installed(): BrowserDeps {
   return { resolveCli: () => CLI, browsersDir: browsersDir('chromium-1200') }
 }
 
+/** A launcher that starts no Chromium: the start tests only look at the wiring. */
+function fakeInstalled(): BrowserDeps {
+  return {
+    ...installed(),
+    launch: () =>
+      Promise.resolve({ endpoint: 'http://127.0.0.1:4321', close: () => Promise.resolve() }),
+  }
+}
+
 function settingsWith(env: Record<string, string | undefined>, browser: BrowserDeps = installed()) {
-  return resolveToolSettings(env, tempDir('theoclaw-browser-ws-'), { detect: notEnforced, warn: () => undefined, browser })
+  return resolveToolSettings(env, tempDir('theoclaw-browser-ws-'), {
+    detect: notEnforced,
+    warn: () => undefined,
+    browser,
+  })
 }
 
 function refusal(run: () => unknown): TheoClawConfigError {
@@ -99,6 +114,18 @@ describe('THEOCLAW_BROWSER', () => {
     })
     expect(settings.offLines).toContain(ON_LINE)
     expect(settings.offLines).not.toContain(OFF_LINE)
+  })
+
+  it('attaches the browser server to the shared browser when an endpoint is known', () => {
+    const settings = settingsWith({ THEOCLAW_BROWSER: 'on' })
+    const browser = { ...settings.browser!, cdpEndpoint: 'http://127.0.0.1:4321' }
+    const servers = agentToolOptions({ ...settings, browser }).mcpServers
+    expect(servers?.browser).toEqual({
+      type: 'stdio',
+      command: process.execPath,
+      args: [PROXY, CLI, '--cdp-endpoint', 'http://127.0.0.1:4321'],
+      sequential: true,
+    })
   })
 
   it('gives the control agent the browser beside run_code and delegate_all, and its workers none', async () => {
@@ -148,7 +175,9 @@ describe('THEOCLAW_BROWSER', () => {
     const absent = join(tempDir('theoclaw-browsers-'), 'missing')
     const firefoxOnly = browsersDir('firefox-1')
     for (const dir of [empty, absent, firefoxOnly]) {
-      const error = refusal(() => readBrowser({ THEOCLAW_BROWSER: 'on' }, { resolveCli: () => CLI, browsersDir: dir }))
+      const error = refusal(() =>
+        readBrowser({ THEOCLAW_BROWSER: 'on' }, { resolveCli: () => CLI, browsersDir: dir }),
+      )
       expect(error.variable).toBe('THEOCLAW_BROWSER')
       expect(error.message).toContain('browser:install')
       expect(error.message).toContain(dir)
@@ -164,7 +193,12 @@ describe('THEOCLAW_BROWSER', () => {
   })
 
   it('refuses PLAYWRIGHT_BROWSERS_PATH=0 naming the value', () => {
-    const error = refusal(() => readBrowser({ THEOCLAW_BROWSER: 'on', PLAYWRIGHT_BROWSERS_PATH: '0' }, { resolveCli: () => CLI }))
+    const error = refusal(() =>
+      readBrowser(
+        { THEOCLAW_BROWSER: 'on', PLAYWRIGHT_BROWSERS_PATH: '0' },
+        { resolveCli: () => CLI },
+      ),
+    )
     expect(error.variable).toBe('PLAYWRIGHT_BROWSERS_PATH')
     expect(error.message).toContain('PLAYWRIGHT_BROWSERS_PATH=0')
     expect(error.message).not.toContain('browsers directory 0 ')
@@ -173,41 +207,103 @@ describe('THEOCLAW_BROWSER', () => {
   it('refuses a browsers directory that is a file', () => {
     const file = join(tempDir('theoclaw-browsers-'), 'not-a-dir')
     writeFileSync(file, '')
-    const error = refusal(() => readBrowser({ THEOCLAW_BROWSER: 'on' }, { resolveCli: () => CLI, browsersDir: file }))
+    const error = refusal(() =>
+      readBrowser({ THEOCLAW_BROWSER: 'on' }, { resolveCli: () => CLI, browsersDir: file }),
+    )
     expect(error.message).toContain('browser:install')
   })
 
   it('does not count a dangling chromium-1200 symlink', () => {
     const dangling = browsersDir()
     symlinkSync(join(dangling, 'nowhere'), join(dangling, 'chromium-1200'))
-    const error = refusal(() => readBrowser({ THEOCLAW_BROWSER: 'on' }, { resolveCli: () => CLI, browsersDir: dangling }))
+    const error = refusal(() =>
+      readBrowser({ THEOCLAW_BROWSER: 'on' }, { resolveCli: () => CLI, browsersDir: dangling }),
+    )
     expect(error.message).toContain('browser:install')
   })
 
   it('refuses to start when the browser package does not resolve', () => {
     const resolveCli = (): string => {
-      throw Object.assign(new Error("Cannot find module '@playwright/mcp/package.json'"), { code: 'MODULE_NOT_FOUND' })
+      throw Object.assign(new Error("Cannot find module '@playwright/mcp/package.json'"), {
+        code: 'MODULE_NOT_FOUND',
+      })
     }
-    const error = refusal(() => readBrowser({ THEOCLAW_BROWSER: 'on' }, { resolveCli, browsersDir: browsersDir('chromium-1200') }))
+    const error = refusal(() =>
+      readBrowser(
+        { THEOCLAW_BROWSER: 'on' },
+        { resolveCli, browsersDir: browsersDir('chromium-1200') },
+      ),
+    )
     expect(error.variable).toBe('THEOCLAW_BROWSER')
     expect(error.message).toContain('@playwright/mcp')
     expect(error.message).toContain('pnpm install')
   })
 
   it('prints the browser line on start', async () => {
-    const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), { detect: notEnforced, browser: installed() })
+    const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), {
+      detect: notEnforced,
+      browser: fakeInstalled(),
+    })
     started.push(result)
     expect(result.error).toBeUndefined()
-    expect(result.output()).toContain(ON_LINE)
+    expect(result.output()).toContain(SHARED_LINE)
   })
 
   it('gives a /control turn of the started process the browser server', async () => {
     // Review round 1 (F-tests-2, F-wire-1): through the composition, not one layer below it.
-    const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), { detect: notEnforced, browser: installed() })
+    const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), {
+      detect: notEnforced,
+      browser: fakeInstalled(),
+    })
     started.push(result)
     const options = await runControlTurn(result)
     expect(Object.keys(options.mcpServers ?? {})).toEqual(['browser'])
+    expect(options.mcpServers?.browser).toMatchObject({
+      args: expect.arrayContaining(['--cdp-endpoint', 'http://127.0.0.1:4321']),
+    })
   })
+
+  it('launches no browser at start, one at the first /control turn, and closes it at stop', async () => {
+    let launched = 0
+    let closed = 0
+    const launch = () =>
+      Promise.resolve({
+        endpoint: 'http://127.0.0.1:4321',
+        close: () => Promise.resolve().then(() => void closed++),
+      }).then((browser) => {
+        launched++
+        return browser
+      })
+    const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), {
+      detect: notEnforced,
+      browser: { ...installed(), launch },
+    })
+    expect(result.error).toBeUndefined()
+    expect(launched).toBe(0)
+    await runControlTurn(result)
+    await runControlTurn(result)
+    expect(launched).toBe(1)
+    await stop(result)
+    expect(closed).toBe(1)
+  })
+
+  it('starts even when Chromium cannot launch, and fails only the turn that needs it', async () => {
+    let attempts = 0
+    const launch = () => {
+      attempts++
+      return Promise.reject(new Error('no chromium here'))
+    }
+    const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), {
+      detect: notEnforced,
+      browser: { ...installed(), launch },
+    })
+    started.push(result)
+    expect(result.error).toBeUndefined()
+    expect(attempts).toBe(0)
+    // The turn's agent is never built, so the turn waits out the fixture's 5 s and gives up.
+    await expect(runControlTurn(result)).rejects.toThrow('no /control agent')
+    expect(attempts).toBe(1)
+  }, 15_000)
 
   it('spawns the browser server with neither env nor envPolicy', () => {
     // Neither key present, so the SDK's `inherit-scrubbed` default applies (NFR-004).
@@ -218,12 +314,18 @@ describe('THEOCLAW_BROWSER', () => {
 
   it('passes mcpServers to Agent.create', async () => {
     const settings = settingsWith({ THEOCLAW_BROWSER: 'on' })
-    const options = theoClawAgentOptions({ model: 'm', apiKey: 'k', toolOptions: agentToolOptions(settings) })
+    const options = theoClawAgentOptions({
+      model: 'm',
+      apiKey: 'k',
+      toolOptions: agentToolOptions(settings),
+    })
     expect(options.mcpServers).toEqual({ browser: browserServer({ cliPath: CLI }) })
     const create = vi.spyOn(Agent, 'create').mockResolvedValue({} as SDKAgent)
     await createTheoClawAgent(options)
     expect(create).toHaveBeenCalledTimes(1)
-    expect(create.mock.calls[0]?.[0]).toMatchObject({ mcpServers: { browser: browserServer({ cliPath: CLI }) } })
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      mcpServers: { browser: browserServer({ cliPath: CLI }) },
+    })
   })
 
   it('keeps the browser server beside the servers of an import whose MCP is on', () => {
@@ -243,6 +345,9 @@ describe('THEOCLAW_BROWSER', () => {
       imported: { setup: imported, mcp: true },
     })
     // An imported server named `browser` does not replace the one THEOCLAW_BROWSER configured.
-    expect(options.mcpServers).toEqual({ docs: { command: 'docs-mcp' }, browser: browserServer({ cliPath: CLI }) })
+    expect(options.mcpServers).toEqual({
+      docs: { command: 'docs-mcp' },
+      browser: browserServer({ cliPath: CLI }),
+    })
   })
 })

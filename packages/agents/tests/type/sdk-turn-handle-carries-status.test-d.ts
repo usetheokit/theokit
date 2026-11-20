@@ -33,7 +33,7 @@ describe('SdkTurnHandle', () => {
   it('resolves an optional error carrying a message', () => {
     expectTypeOf<ResolvedTurn>()
       .toHaveProperty('error')
-      .toEqualTypeOf<{ message: string } | undefined>()
+      .toEqualTypeOf<{ message: string; code?: string } | undefined>()
   })
 })
 
@@ -57,8 +57,12 @@ describe('typed bridge contract', () => {
 
   it('real SDK messages and updates pass without casts', () => {
     expectTypeOf<SDKMessage>().toMatchTypeOf<SdkMessage>()
-    expectTypeOf<InteractionUpdate>().toMatchTypeOf<NonNullable<SdkTimelineEvent['update']>>()
-    expectTypeOf<SdkTimelineEvent['message']>().toEqualTypeOf<SdkMessage | undefined>()
+    expectTypeOf<InteractionUpdate>().toMatchTypeOf<
+      Extract<SdkTimelineEvent, { kind: 'delta' }>['update']
+    >()
+    expectTypeOf<
+      Extract<SdkTimelineEvent, { kind: 'message' }>['message']
+    >().toMatchTypeOf<SdkMessage>()
   })
 
   it('narrows AgentStreamEvent by its discriminant', () => {
