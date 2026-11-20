@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1367 export(s) across 26 entry point(s).
+1396 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -77,6 +77,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createGoalSignal` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -164,6 +165,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `moderateOutputStream` | value |
 | `NetworkError` | value |
 | `noopReflectionStrategy` | value |
+| `NoResultSubmittedError` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
 | `parseModelId` | value |
@@ -255,6 +257,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `withEphemeralAgent` | value |
 | `WithheldBuiltinToolsCapability` | value |
 | `withPreCompaction` | value |
+| `WorkspaceProviderError` | value |
+| `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `A2ACapabilities` | type |
 | `A2ASkill` | type |
@@ -359,6 +363,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `InlineSkill` | type |
 | `InProcessApprovalRequest` | type |
 | `InProcessAwaitApproval` | type |
+| `IsolatedWorkspace` | type |
 | `IterationEvent` | type |
 | `JudgeResult` | type |
 | `KnownAgentRunErrorCode` | type |
@@ -419,6 +424,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `RefreshModelCatalogOptions` | type |
 | `RefreshModelCatalogResult` | type |
 | `ResolvedCompatSource` | type |
+| `ResultCapture` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
 | `RunAgentTurnOptions` | type |
@@ -450,6 +456,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `StreamFromEmitterOptions` | type |
 | `StructuredOutputErrorCode` | type |
 | `SubagentDefinition` | type |
+| `SubAgentSpec` | type |
 | `Summarize` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
@@ -483,6 +490,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `WireChunk` | type |
 | `WireDataPart` | type |
 | `WiredEntity` | type |
+| `WorkspaceProvider` | type |
 
 ## `@theokit/agents/bridge`
 
@@ -510,6 +518,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createApiErrorHandler` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -549,6 +558,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `mcpRegistry` | value |
 | `mcpSecretValues` | value |
 | `mcpToolApprovals` | value |
+| `NoResultSubmittedError` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
 | `readCappedBody` | value |
@@ -573,6 +583,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `validateAgainstInputSchema` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
+| `WorkspaceProviderError` | value |
+| `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `AfterToolCallContext` | type |
 | `AgentDefinition` | type |
@@ -626,6 +638,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `HookApprovalRequest` | type |
 | `InferAgentInput` | type |
 | `InferAgentToolNames` | type |
+| `IsolatedWorkspace` | type |
 | `IterationEvent` | type |
 | `LLMCallContext` | type |
 | `McpApprovalSpec` | type |
@@ -644,6 +657,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
 | `ResolvedCompatSource` | type |
+| `ResultCapture` | type |
 | `RunAgentTurnOptions` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
@@ -661,6 +675,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `StateUpdateEvent` | type |
 | `StreamEvent` | type |
 | `StreamFromEmitterOptions` | type |
+| `SubAgentSpec` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
 | `ToolArgsValidator` | type |
@@ -673,16 +688,20 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolInvokeRouteOptions` | type |
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
+| `WorkspaceProvider` | type |
 
 ## `@theokit/agents/control`
 
 | Symbol | Kind |
 |---|---|
 | `attachControlSocket` | value |
+| `ControlConnectionError` | value |
+| `createControlClient` | value |
 | `createDevicePairing` | value |
 | `createSessionStore` | value |
 | `pairRoute` | value |
 | `AgentTurnUsage` | type |
+| `ControlClient` | type |
 | `ControlClientFrame` | type |
 | `ControlServerFrame` | type |
 | `ControlSocketOptions` | type |
@@ -938,6 +957,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `currentOperatorPolicy` | value |
 | `DEFAULT_CONTEXT_PRESSURE_THRESHOLDS` | value |
 | `defineAppBootstrap` | value |
+| `defineLayeredConfig` | value |
 | `DottedOverrideError` | value |
 | `effectiveContextWindow` | value |
 | `envKnob` | value |
@@ -945,6 +965,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `expandCommandTemplate` | value |
 | `expandInstructionImports` | value |
 | `FILE_INLINE_CAP` | value |
+| `findFileMentions` | value |
 | `firstSettingsFile` | value |
 | `FOREIGN_KEY_DECISIONS` | value |
 | `frontmatterValue` | value |
@@ -966,6 +987,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `projectEnvStep` | value |
 | `readSettingsFile` | value |
 | `resolveAgentMemory` | value |
+| `resolveFileMentions` | value |
 | `resolveOperatorRoots` | value |
 | `resolveOutputStyle` | value |
 | `SETTINGS_LAYERS` | value |
@@ -993,6 +1015,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `EnvOptOut` | type |
 | `EnvReachabilityAudit` | type |
 | `ExpandImportsInput` | type |
+| `FileMentionOptions` | type |
 | `InstructionBlock` | type |
 | `InstructionCut` | type |
 | `InstructionSource` | type |
@@ -1022,6 +1045,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProvenancePerKey` | type |
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
+| `ResolvedFileMentions` | type |
+| `SecurityFloorSpec` | type |
 | `Settings` | type |
 | `SettingsCandidate` | type |
 | `SettingsCandidates` | type |
@@ -1491,10 +1516,14 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `formatUsd` | value |
 | `InMemoryUsageStorage` | value |
 | `readRunUsage` | value |
+| `usageFromRun` | value |
 | `RunUsageSnapshot` | type |
+| `RunUsageSource` | type |
 | `ToolUsageRecord` | type |
+| `UsageFromRunContext` | type |
 | `UsageQuery` | type |
 | `UsageRecord` | type |
 | `UsageResult` | type |
