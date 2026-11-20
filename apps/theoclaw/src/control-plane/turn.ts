@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 
 import {
   type AgentStreamEvent,
-  type ErrorEvent,
   translateInteractionUpdate,
   translateSdkEvent,
 } from '@theokit/agents/bridge'
@@ -62,9 +61,14 @@ function failed(reason: string): TurnOutcome {
 function ignore(): void {}
 
 /** A streamed error as the turn's reason shows it: its code, and the message when it has one. */
-export function describeStreamedError(event: ErrorEvent): string {
+export function describeStreamedError(event: {
+  readonly type: string
+  readonly code?: unknown
+  readonly message?: unknown
+}): string {
   const { code, message } = event
-  return message !== '' ? `${code}: ${message}` : code
+  const text = String(code ?? 'error')
+  return typeof message === 'string' && message !== '' ? `${text}: ${message}` : text
 }
 
 interface AbortWatch {

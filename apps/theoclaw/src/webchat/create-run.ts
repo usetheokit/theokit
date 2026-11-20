@@ -9,7 +9,7 @@ import { formatUsageLine, type TurnUsage } from '../usage/turn-usage.js'
  * then sees one error, never a stream that simply stops. The presenter masks the message for the
  * client and writes it, unmasked, to the server's stderr.
  */
-function turnFailed(reason: string): StreamEvent {
+function turnFailed(reason: string): TurnEvent {
   return { type: 'error', code: 'turn_failed', message: `the turn failed: ${reason}`, retryable: false }
 }
 
