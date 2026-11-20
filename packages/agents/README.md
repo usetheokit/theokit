@@ -334,6 +334,19 @@ AgentBuilder.create()
 
 A listener that throws is reported with `console.warn` and does not fail the build. `recordWiring` is unchanged; feed it from `CompiledWiring` if you want trust suppression.
 
+## Deferring a gated tool call
+
+By default a `@HumanInTheLoop` call pauses the run on `awaitApproval`, so a pending approval lives as long as the process. Set `onDefer` on the HITL wiring to end the run instead: the plugin emits the same approval event, awaits `onDefer(approval)`, then returns the SDK defer veto (`{ defer: true }`) and never calls `awaitApproval`.
+
+```ts
+createHitlPlugin({
+  gated, emit, awaitApproval,
+  onDefer: async (a) => { await store.save(a) }, // a: DeferredApproval — approvalId, toolUseId, toolName, input, question, runId, agentId
+})
+```
+
+Persisting the approval is the host's job. If `onDefer` rejects (or the call has no `toolUseId`), the call is blocked with `approval could not be recorded: <reason>` rather than run unapproved. Resuming the run is not part of this plugin.
+
 ## Reading skills with `skill_read`
 
 By default only inline skills (`createSkill(...)`) get a `skill_read` tool; a skill enabled by name or found on disk is listed in the `<skills>` block but its body is not readable. Opt in with `read: 'advertised'`:
@@ -385,6 +398,10 @@ fingerprint gate as `buildHookHandlers`, ignores specs of other events, and retu
 `HostHookOutcome` per spec (`ran`, `not-approved`, `failed`, `timed-out` or `could-not-start`)
 without throwing. `options.env` is required and is the whole environment of the hook; `process.env`
 is never inherited. Leave the event unwired in the loop handlers so it is not delivered twice.
+
+## Code mode and plugin hooks
+
+`createCodeMode` (from `@theokit/agents/code-mode`) runs each `api.<name>(input)` call of a script through `onPermissionRequest`. Pass `plugins` to also run their `pre_tool_call` hooks on every script call, after `onPermissionRequest`, so a path veto or approval gate that guards normal calls guards code mode too. A hook that returns `{ block: true, message }` refuses the call with that message; a hook that throws refuses it as well, and the handler never runs. `hookContext: { agentId, runId? }` becomes the `agentId` and `runId` of the hook context. Without `plugins` nothing changes.
 
 ## Hooks for a child agent
 

@@ -22,7 +22,7 @@
  * throws). (b) is stopped by the injected sandbox (the restricted API is the ONLY surface the code
  * sees). If the app injects a weak sandbox, (b) is on the app — hence the vetted-sandbox requirement.
  */
-import type { CustomTool } from '@theokit/sdk'
+import { runPreToolCall, type CustomTool, type Plugin } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /**
@@ -69,6 +69,13 @@ export interface CodeModeConfig {
     tool: string
     args: unknown
   }) => CodeModePermission | Promise<CodeModePermission>
+  /**
+   * `pre_tool_call` hooks of these plugins run before each script call, after `onPermissionRequest`;
+   * a block refuses the call with its message. A hook that throws refuses the call too (fail closed).
+   */
+  plugins?: readonly Plugin[]
+  /** Passed as `agentId` and `runId` in the hook context. */
+  hookContext?: { agentId: string; runId?: string }
   /** Tool name the model calls (default `run_code`). */
   name?: string
   /** Tool description surfaced to the model. */
@@ -246,6 +253,26 @@ export function createCodeMode(config: CodeModeConfig): {
     )
   }
 
+  const plugins = config.plugins ?? []
+  const refuseByPlugins = async (tool: string, input: Record<string, unknown>): Promise<void> => {
+    if (plugins.length === 0) return
+    let decision: Awaited<ReturnType<typeof runPreToolCall>>
+    try {
+      decision = await runPreToolCall(plugins, {
+        name: tool,
+        args: input,
+        agentId: config.hookContext?.agentId ?? 'code-mode',
+        runId: config.hookContext?.runId ?? '',
+      })
+    } catch (error) {
+      const why = error instanceof Error ? error.message : String(error)
+      throw new CodeModePermissionDeniedError(tool, `a plugin hook failed: ${why}`)
+    }
+    if (decision !== undefined && 'block' in decision && decision.block) {
+      throw new CodeModePermissionDeniedError(tool, decision.message)
+    }
+  }
+
   // Assemble the restricted API: each declared tool becomes a permission-gated callable.
   const api: CodeModeApi = {}
   for (const tool of config.tools) {
@@ -253,6 +280,7 @@ export function createCodeMode(config: CodeModeConfig): {
       const input = checkArguments(tool, args)
       const decision = await config.onPermissionRequest({ tool: tool.name, args })
       if (!decision.granted) throw new CodeModePermissionDeniedError(tool.name, decision.reason)
+      await refuseByPlugins(tool.name, input)
       return options?.signal === undefined
         ? tool.handler(input)
         : tool.handler(input, { signal: options.signal })

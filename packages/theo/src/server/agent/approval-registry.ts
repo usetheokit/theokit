@@ -11,132 +11,17 @@
  * registry — the interface is injectable so a durable impl (Redis, etc.) slots in without touching
  * the harness. We do NOT build a durable store now (YAGNI).
  */
-// The timeout policy vocabulary is owned by the `@HumanInTheLoop` decorator (DRY / G12) — reuse it
-// rather than re-declaring the union, so the two can never drift.
-import type { TimeoutAction } from '@theokit/agents'
-
 import { processSingleton } from '../../core/process-singleton.js'
 
-export interface RegisterOptions {
-  /** Milliseconds before the approval auto-settles per `onTimeout`. */
-  timeoutMs: number
-  /**
-   * What a timeout means. Only `'proceed'` auto-approves; `'abort'` and `'retry'` both deny — the
-   * registry does NOT implement retry semantics (a timed-out `'retry'` is a deny, not a re-prompt).
-   */
-  onTimeout: TimeoutAction
-  /** M14 — the gated tool name, surfaced by `list()` (optional; absent for legacy callers). */
-  toolName?: string
-  /** M14 — the approval question, surfaced by `list()` (optional). */
-  question?: string
-  /**
-   * Who the run belongs to — the `RouteSubject.id` admitted for it (B-016).
-   *
-   * Absent when the run had no identity to record, which is the `'public'` agent path:
-   * `admitAgentRequest` deliberately does not resolve a subject when the policy is absent or
-   * `'public'`, so there is nothing to attribute the approval to. Absent therefore means "no owner
-   * was established", never "anyone", and the caller must branch on the difference — a rule that
-   * refused when it is absent would start turning public agents away.
-   *
-   * Deliberately NOT surfaced by `list()`: that listing feeds a UI, and owner ids are identity.
-   */
-  owner?: string
-  /**
-   * M20 — an optional JSON-schema descriptor of the custom payload the approver may attach. Carried
-   * verbatim into `list()` + the `approval_required` event so the UI knows what to collect. Kept as
-   * a plain JSON object (not a live Zod schema) so the registry stays serializable and SDK-free.
-   */
-  payloadSchema?: Record<string, unknown>
-}
+import type { ApprovalDecision, ApprovalRegistry, PendingApproval } from './approval-types.js'
 
-/**
- * M20 — a settled HITL decision. `approved` is the allow/deny bit (backward-compatible with the
- * legacy boolean); `reason` + `payload` are the optional approver-attached extras that surface to
- * the model (on denial, via the veto message) and to the app/UI.
- */
-export interface ApprovalDecision {
-  approved: boolean
-  reason?: string
-  payload?: unknown
-  /**
-   * What settled this, when it was not a person (usetheokit/theokit#393).
-   *
-   * Absent means the decision arrived through `resolve()` — a human, or whatever the application
-   * wired to that route. `'timeout'` means the window closed with nobody deciding and `onTimeout`
-   * was applied.
-   *
-   * The distinction is the whole point of a HITL gate: without it an expired approval and an
-   * explicit deny are byte-identical on the wire, and the sentence the caller gets — "denied by
-   * human approver" — asserts a fact that did not happen. It is marked on the ALLOW side too:
-   * `onTimeout: 'proceed'` permits the tool BECAUSE nobody answered, and recording that as a plain
-   * approval is the same fabrication with the opposite sign.
-   *
-   * One member rather than `timedOut: boolean`, because the question is what settled it; a second
-   * cause (a cancel, a shutdown) joins the union instead of adding another boolean.
-   */
-  settledBy?: 'timeout'
-}
-
-/** M14 — a pending approval as surfaced by {@link ApprovalRegistry.list}. */
-export interface PendingApproval {
-  approvalId: string
-  toolName?: string
-  question?: string
-  /** Epoch millis when the pending approval auto-settles (registeredAt + timeoutMs). */
-  expiresAt: number
-  /** M20 — the declared custom-payload schema, if the gated tool declares one. */
-  payloadSchema?: Record<string, unknown>
-}
-
-export interface ApprovalRegistry {
-  /**
-   * Register a pending approval; the returned Promise settles with the full {@link ApprovalDecision}
-   * on `resolve` or timeout (M20 — was a bare boolean pre-M20).
-   */
-  register(approvalId: string, opts: RegisterOptions): Promise<ApprovalDecision>
-  /**
-   * Settle a pending approval. Accepts a full {@link ApprovalDecision} OR a bare boolean (coerced to
-   * `{ approved }` — backward-compatible). Returns false if the id is unknown or already settled.
-   */
-  resolve(approvalId: string, decision: boolean | ApprovalDecision): boolean
-  /** M14 — list the currently-pending approvals (process-wide; single-process contract). */
-  list(): PendingApproval[]
-  /**
-   * Who owns the pending approval `approvalId`, or `undefined` (B-016).
-   *
-   * `undefined` covers three cases the caller treats identically — never registered, already
-   * settled, and registered without an owner — because in all three there is nothing to compare a
-   * caller against.
-   */
-  ownerOf(approvalId: string): string | undefined
-  /**
-   * How far this registry's answers reach — B-236.
-   *
-   * `'instance'` means every answer is about ONE process. `getApprovalRegistry()` resolves a
-   * `processSingleton`, and every deploy target the approvals listing became reachable on is
-   * multi-instance by construction: a Worker is isolates, a Lambda is concurrent invocations. So
-   * an owner whose run paused on another instance was answered `200 {approvals: []}`, which is
-   * indistinguishable from "nothing is pending".
-   *
-   * It is declared HERE rather than assumed by the listing handler because the interface is
-   * injectable so a durable implementation can replace this one. A constant in the handler would
-   * become false the day somebody wires that up, which is this defect one layer higher.
-   *
-   * Optional, and an implementation that declares nothing is read as `'instance'`. Silence takes
-   * the narrow claim: a registry that cannot say how far it reaches must not be reported as
-   * speaking for a deployment.
-   */
-  readonly scope?: ApprovalRegistryScope
-}
-
-/**
- * How far a registry's answers reach.
- *
- * `'shared'` is declared by an implementation backed by a store every instance reads — nothing in
- * this framework ships one today (YAGNI), and the value exists so that wiring one does not mean
- * editing the listing handler.
- */
-export type ApprovalRegistryScope = 'instance' | 'shared'
+export type {
+  ApprovalDecision,
+  ApprovalRegistry,
+  ApprovalRegistryScope,
+  PendingApproval,
+  RegisterOptions,
+} from './approval-types.js'
 
 interface Pending {
   settle: (decision: ApprovalDecision) => void
@@ -144,6 +29,18 @@ interface Pending {
   info: PendingApproval
   /** Held beside `info` rather than inside it, so `list()` cannot leak it (B-016). */
   owner?: string
+}
+
+const CONFIGURED_SLOT = Symbol.for('theokit.singleton.approval-registry.configured')
+
+/**
+ * Replace the registry every route and the agent streamer use — pass
+ * `createDurableApprovalRegistry(store)` to keep pending approvals across restarts and instances.
+ * `undefined` restores the in-process default. Call it once at startup, before the first request.
+ */
+export function configureApprovalRegistry(registry: ApprovalRegistry | undefined): void {
+  ;(globalThis as unknown as Record<symbol, ApprovalRegistry | undefined>)[CONFIGURED_SLOT] =
+    registry
 }
 
 /**
@@ -156,6 +53,10 @@ interface Pending {
  * Tests use {@link createInProcessApprovalRegistry} directly — never this singleton.
  */
 export function getApprovalRegistry(): ApprovalRegistry {
+  const configured = (globalThis as unknown as Record<symbol, ApprovalRegistry | undefined>)[
+    CONFIGURED_SLOT
+  ]
+  if (configured !== undefined) return configured
   // Per PROCESS, not per module instance (usetheokit/theokit#401). The paragraph above calls a
   // single instance "not a convenience but a correctness requirement", and a module-level `let`
   // does not deliver that: it gives one instance per MODULE INSTANCE, and this module is emitted

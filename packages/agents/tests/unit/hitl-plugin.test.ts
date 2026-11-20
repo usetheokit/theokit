@@ -17,6 +17,8 @@ interface PreToolCallContext {
   args: Record<string, unknown>
   agentId: string
   runId: string
+  toolUseId?: string
+  approvedOnResume?: boolean
 }
 type PreToolHandler = (c: PreToolCallContext) => unknown
 
@@ -140,5 +142,74 @@ describe('createHitlPlugin — SDK code-plugin discriminator', () => {
     expect(plugin.kind).toBe('general')
     expect(typeof plugin.version).toBe('string')
     expect(plugin.version.length).toBeGreaterThan(0)
+  })
+})
+
+describe('createHitlPlugin onDefer', () => {
+  const gatedWiring = (extra: Partial<HitlWiring>): HitlWiring => ({
+    gated: new Map([['deploy', { question: 'Deploy?' }]]),
+    emit: vi.fn(),
+    awaitApproval: vi.fn(),
+    ...extra,
+  })
+
+  it('hitl_plugin_defers_when_on_defer_is_wired', async () => {
+    const onDefer = vi.fn(async () => {})
+    const w = gatedWiring({ onDefer })
+    const out = await captureHandler(w)({ ...CTX('deploy'), toolUseId: 'tu1' })
+    expect(out).toEqual({ defer: true })
+    expect(onDefer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolUseId: 'tu1',
+        toolName: 'deploy',
+        input: { env: 'prod' },
+        question: 'Deploy?',
+        runId: 'r1',
+        agentId: 'a1',
+      }),
+    )
+    expect(w.emit).toHaveBeenCalledOnce()
+    expect(w.awaitApproval).not.toHaveBeenCalled()
+  })
+
+  it('hitl_plugin_blocks_when_on_defer_rejects', async () => {
+    const w = gatedWiring({ onDefer: () => Promise.reject(new Error('disk full')) })
+    const out = (await captureHandler(w)({ ...CTX('deploy'), toolUseId: 'tu1' })) as {
+      block: boolean
+      message: string
+    }
+    expect(out.block).toBe(true)
+    expect(out.message).toContain('disk full')
+    expect(w.awaitApproval).not.toHaveBeenCalled()
+  })
+
+  it('blocks when the call has no toolUseId', async () => {
+    const onDefer = vi.fn(async () => {})
+    const out = (await captureHandler(gatedWiring({ onDefer }))(CTX('deploy'))) as {
+      block: boolean
+    }
+    expect(out.block).toBe(true)
+    expect(onDefer).not.toHaveBeenCalled()
+  })
+})
+
+describe('createHitlPlugin on resume', () => {
+  it('does_not_gate_a_call_a_person_already_approved_on_resume', async () => {
+    const onDefer = vi.fn(async () => {})
+    const w: HitlWiring = {
+      gated: new Map([['deploy', { question: 'Deploy?' }]]),
+      emit: vi.fn(),
+      awaitApproval: vi.fn(),
+      onDefer,
+    }
+    const out = await captureHandler(w)({
+      ...CTX('deploy'),
+      toolUseId: 'tu1',
+      approvedOnResume: true,
+    })
+    expect(out).toBeUndefined()
+    expect(w.emit).not.toHaveBeenCalled()
+    expect(onDefer).not.toHaveBeenCalled()
+    expect(w.awaitApproval).not.toHaveBeenCalled()
   })
 })

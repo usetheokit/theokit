@@ -6,3 +6,13 @@ find the full documentation for it [in our repository](https://github.com/change
 
 We have a quick list of common questions to get you started engaging with this project in
 [our documentation](https://github.com/changesets/changesets/blob/main).
+
+## Breaking changes in 0.x
+
+A `major` on a package below 1.0.0 releases 1.0.0, which cannot be taken back once published, so
+`scripts/check-changeset-coverage.mjs` refuses it. Use `minor` for a breaking change in 0.x. If the
+release really is 1.0.0, add this line on its own in the changeset body:
+
+```
+<!-- changeset-major-1.0: <package-name> -->
+```

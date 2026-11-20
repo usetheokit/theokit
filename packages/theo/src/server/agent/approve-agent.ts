@@ -14,6 +14,7 @@ import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 import { admitAgentRequest, agentAccessDenied, type AgentSubjectResolver } from './agent-access.js'
 import type { ApprovalDecision, ApprovalRegistry } from './approval-registry.js'
+import type { StoredApproval } from './approval-store.js'
 import { closePauseSpan } from './hitl-pause-spans.js'
 
 /** The path segment separating the agent name from the approval id. */
@@ -148,12 +149,101 @@ async function refuseIfNotOwner(
   )
 }
 
+/** Runs the turn that answers a deferred tool call, on the record's session. Streams like the run route. */
+export type ResumeApproval = (
+  record: StoredApproval,
+  decision: { toolUseId: string; behavior: 'allow' | 'deny'; message?: string },
+) => Promise<Response> | Response
+
+async function handleDurableApproval(
+  request: Request,
+  store: NonNullable<ApprovalRegistry['store']>,
+  approvalId: string,
+  agentName: string,
+  access: { resolveSubject?: AgentSubjectResolver; resume?: ResumeApproval },
+): Promise<Response> {
+  const notPending = jsonError(404, 'NOT_PENDING', `No pending approval for id '${approvalId}'.`)
+  const found = await store.get(approvalId)
+  // Another agent's id answers exactly like an unknown one.
+  if (found?.agentName !== agentName) return notPending
+
+  if (found.owner !== undefined) {
+    const subject = access.resolveSubject === undefined ? null : await access.resolveSubject()
+    if (subject?.id !== found.owner) {
+      return jsonError(403, 'FORBIDDEN', 'the approval belongs to another subject')
+    }
+  }
+
+  if ((found.schemaVersion as number) !== 1) {
+    return jsonError(
+      409,
+      'UNSUPPORTED_APPROVAL_VERSION',
+      `The stored approval has schemaVersion ${String(found.schemaVersion)}; this server reads version 1.`,
+    )
+  }
+
+  // An expired record is settled by its `onTimeout`, whatever the late caller said — so the body
+  // is only read (and only has to be well formed) when there is a live decision to take from it.
+  const expired = found.expiresAt <= Date.now()
+  let decision: ApprovalDecision
+  if (expired) {
+    decision = {
+      approved: found.onTimeout === 'proceed',
+      settledBy: 'timeout',
+      reason: `no decision before ${new Date(found.expiresAt).toISOString()}; onTimeout: '${found.onTimeout}' was applied`,
+    }
+  } else {
+    let body: unknown = null
+    try {
+      body = await request.json()
+    } catch {
+      /* handled below as a 400 */
+    }
+    const parsed = parseApprovalBody(body)
+    if (parsed === null) {
+      return jsonError(400, 'BAD_REQUEST', 'Request body must contain a boolean `approved`.')
+    }
+    decision = parsed
+  }
+  if (access.resume === undefined) {
+    return jsonError(501, 'NOT_IMPLEMENTED', 'This server cannot resume a durable approval.')
+  }
+
+  // Take the record first, so two requests cannot both resume it.
+  const claimed = store.claim !== undefined ? await store.claim(approvalId) : found
+  if (claimed === undefined) return notPending
+  if (store.claim === undefined) await store.delete(approvalId)
+
+  try {
+    const response = await access.resume(claimed, {
+      toolUseId: claimed.toolUseId,
+      behavior: decision.approved ? 'allow' : 'deny',
+      ...(decision.reason !== undefined ? { message: decision.reason } : {}),
+    })
+    // A refusal (CSRF, an agent that no longer compiles, no credential) is an answer, not a turn:
+    // the approval is still pending, so it goes back.
+    if (!response.ok) await store.put(claimed)
+    return response
+  } catch (err) {
+    await store.put(claimed) // the turn did not start: the approval is still pending
+    throw err
+  }
+}
+
 export async function handleAgentApproval(
   request: Request,
   urlPath: string,
   registry: ApprovalRegistry,
   csrfMode: CsrfMode = 'strict',
-  access: { policy?: RoutePolicy; resolveSubject?: AgentSubjectResolver } = {},
+  access: {
+    policy?: RoutePolicy
+    resolveSubject?: AgentSubjectResolver
+    /**
+     * Run the continuation turn for a durable approval (#1960). Required for a registry with a
+     * `store`; absent ⇒ a durable approval answers 501.
+     */
+    resume?: ResumeApproval
+  } = {},
 ): Promise<Response> {
   if (csrfMode !== 'off') {
     const csrf = validateCsrfRequest(request)
@@ -174,6 +264,10 @@ export async function handleAgentApproval(
   }
   const decision = await admitAgentRequest(access.policy, access.resolveSubject, params)
   if (!decision.allowed) return agentAccessDenied(decision, params)
+
+  if (registry.store !== undefined) {
+    return handleDurableApproval(request, registry.store, approvalId, params.agent, access)
+  }
 
   const notOwner = await refuseIfNotOwner(registry, approvalId, access.resolveSubject, params)
   if (notOwner !== undefined) return notOwner

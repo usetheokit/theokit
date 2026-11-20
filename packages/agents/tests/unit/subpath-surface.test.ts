@@ -126,8 +126,11 @@ describe('M90 — the infra subpath surface is locked', () => {
     //
     // 204 since the floor moved to `@theokit/sdk` ^5.17.0: +4, nothing removed. In `sandbox`,
     // `E2BSandbox`, `E2B_CA_BUNDLE` and the types `E2BSandboxConfig`, `E2BSandboxHandle`.
+    //
+    // 219 since the floor moved to `@theokit/sdk` ^5.32.0 (#1959): +15, nothing removed — seven in
+    // `persistence`, four values and `SandboxContainer` in `sandbox`, and three types.
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(204)
+    expect(total).toBe(219)
   })
 
   /**

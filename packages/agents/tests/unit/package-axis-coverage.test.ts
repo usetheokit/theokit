@@ -86,6 +86,11 @@ const DECISIONS: Record<string, Decision> = {
 
   // ── OUT. Nine, and the reason each one is out is different. That difference is the point of
   // recording decisions rather than keeping an allowlist.
+  '@theokit/skills-registry': {
+    verdict: 'out',
+    reason:
+      'A skills registry client a host wires itself; this layer has no skills-registry surface to re-export.',
+  },
   '@theokit/acp': {
     verdict: 'out',
     reason:

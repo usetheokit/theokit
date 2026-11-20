@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.8.0
+
+### Minor Changes
+
+- 6228390: Add `@theokit/http/guards`: `readBearerToken`, `bearerCheck`, `bearerGuard`, `isLoopback`, `resolveBindAddress`, `parsePort`, and the `GuardConfigError` and `BindRefusedError` classes, so an agent app checks a shared token and refuses a public bind by default with one reviewed copy.
+- caf098d: `createNodeServer` accepts `trustedProxy: { identityHeader, addresses }`: the identity header and `x-forwarded-proto` are believed only from an allowlisted TCP peer. New exports `trustedIdentity(request)`, `peerAddress(request)`, `PEER_ADDRESS_HEADER`, `TRUSTED_IDENTITY_HEADER` and `TrustedProxyOptions`. The server always strips client-supplied internal headers and, without `trustedProxy`, ignores `x-forwarded-proto`.
+
+### Patch Changes
+
+- 0ce1fcf: The dispatcher leaves form bodies unread on routes without `@Body`, so `readCappedFormData` can stream and cap multipart and urlencoded uploads. Routes using `@Body` still get a parsed, validated body.
+- f0654a1: Move `createNodeServer`, `BindError` and their types into their own module, separate from the Node runtime adapter. The public `@theokit/http/runtime/node` exports are unchanged.
+
 ## [Unreleased]
 
 ### Added

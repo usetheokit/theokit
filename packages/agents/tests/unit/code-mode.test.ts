@@ -1,4 +1,4 @@
-import type { CustomTool } from '@theokit/sdk'
+import type { CustomTool, Plugin } from '@theokit/sdk'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -128,5 +128,100 @@ describe('createCodeMode on @theokit/agents/code-mode', () => {
 
     expect(sandboxSignal).toBe(controller.signal)
     expect(tool.handler).toHaveBeenCalledWith({ path: 'a' }, { signal: controller.signal })
+  })
+
+  describe('plugins', () => {
+    const pluginWith = (
+      hook: (ctx: { name: string; args: unknown; agentId: string; runId: string }) => unknown,
+    ): Plugin =>
+      ({
+        name: 'p',
+        version: '1.0.0',
+        kind: 'general',
+        register: (ctx: { on: (h: string, f: unknown) => unknown }) => {
+          ctx.on('pre_tool_call', hook)
+        },
+      }) as unknown as Plugin
+
+    it('a plugin that blocks a tool refuses the script call with the plugin message', async () => {
+      const tool = spyTool('write_file')
+      const seen = vi.fn()
+      const { tool: run } = createCodeMode({
+        tools: [tool],
+        sandbox: toySandbox(),
+        onPermissionRequest: () => ({ granted: true }),
+        plugins: [
+          pluginWith((ctx) => {
+            seen(ctx)
+            return { block: true, message: 'paths outside the repo are vetoed' }
+          }),
+        ],
+        hookContext: { agentId: 'a1', runId: 'r1' },
+      })
+      await expect(run.handler({ code: 'call:write_file:{"path":"/etc"}' })).rejects.toThrow(
+        /write_file.*paths outside the repo are vetoed/,
+      )
+      expect(tool.handler).not.toHaveBeenCalled()
+      expect(seen).toHaveBeenCalledWith({
+        name: 'write_file',
+        args: { path: '/etc' },
+        agentId: 'a1',
+        runId: 'r1',
+      })
+    })
+
+    it('onPermissionRequest still runs first and its refusal wins', async () => {
+      const hook = vi.fn()
+      const { tool: run } = createCodeMode({
+        tools: [spyTool('write_file')],
+        sandbox: toySandbox(),
+        onPermissionRequest: () => ({ granted: false, reason: 'gate says no' }),
+        plugins: [pluginWith(hook)],
+      })
+      await expect(run.handler({ code: 'call:write_file:{"path":"x"}' })).rejects.toThrow(
+        /gate says no/,
+      )
+      expect(hook).not.toHaveBeenCalled()
+    })
+
+    it('a plugin that throws refuses the call and does not run the handler', async () => {
+      const tool = spyTool('write_file')
+      const { tool: run } = createCodeMode({
+        tools: [tool],
+        sandbox: toySandbox(),
+        onPermissionRequest: () => ({ granted: true }),
+        plugins: [
+          pluginWith(() => {
+            throw new Error('boom')
+          }),
+        ],
+      })
+      await expect(run.handler({ code: 'call:write_file:{"path":"x"}' })).rejects.toBeInstanceOf(
+        CodeModePermissionDeniedError,
+      )
+      expect(tool.handler).not.toHaveBeenCalled()
+    })
+
+    it('a plugin that allows lets the handler run, and without plugins behaviour is unchanged', async () => {
+      const withPlugin = spyTool('read_file')
+      const plain = spyTool('read_file')
+      const allowing = createCodeMode({
+        tools: [withPlugin],
+        sandbox: toySandbox(),
+        onPermissionRequest: () => ({ granted: true }),
+        plugins: [pluginWith(() => undefined)],
+      })
+      const none = createCodeMode({
+        tools: [plain],
+        sandbox: toySandbox(),
+        onPermissionRequest: () => ({ granted: true }),
+      })
+      await expect(allowing.tool.handler({ code: 'call:read_file:{"path":"x"}' })).resolves.toBe(
+        'read_file ran',
+      )
+      await expect(none.tool.handler({ code: 'call:read_file:{"path":"x"}' })).resolves.toBe(
+        'read_file ran',
+      )
+    })
   })
 })

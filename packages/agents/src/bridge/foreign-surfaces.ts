@@ -14,7 +14,16 @@
  * loader would drop. An entry that exists and cannot be read is listed in `unreadable` instead of
  * throwing: an inventory is a report, and a report that dies on one bad file reports nothing.
  */
-import { readdirSync, readFileSync, statSync, type Dirent } from 'node:fs'
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  type Dirent,
+} from 'node:fs'
 import { join } from 'node:path'
 
 import { splitFrontmatter } from '../config/frontmatter.js'
@@ -128,12 +137,17 @@ function listDir(path: string, label: string, scan: Scan): Dirent[] {
 
 /** Reads a regular file. Anything else (a FIFO, a directory) is refused before it can block a read. */
 function readText(path: string): string {
+  // O_NONBLOCK so opening a FIFO cannot hang; the check and the read share one descriptor.
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path convention
-  if (!statSync(path).isFile()) {
-    throw Object.assign(new Error(`not a regular file: ${path}`), { code: 'EISDIR' })
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK)
+  try {
+    if (!fstatSync(fd).isFile()) {
+      throw Object.assign(new Error(`not a regular file: ${path}`), { code: 'EISDIR' })
+    }
+    return readFileSync(fd, 'utf8')
+  } finally {
+    closeSync(fd)
   }
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path convention
-  return readFileSync(path, 'utf8')
 }
 
 function emptyScan(): Scan {

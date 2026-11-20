@@ -23,11 +23,19 @@ interface PreToolCallContext {
   args: Record<string, unknown>
   agentId: string
   runId: string
+  /** Id of the tool call (SDK `PreToolCallContext.toolUseId`); optional in the SDK contract. */
+  toolUseId?: string
+  /** Set by the SDK when this call was deferred earlier and a person approved it on resume. */
+  approvedOnResume?: boolean
 }
 interface PreToolCallVeto {
   block: true
   message: string
 }
+interface PreToolCallDefer {
+  defer: true
+}
+type PreToolCallResult = PreToolCallVeto | PreToolCallDefer | undefined
 interface PluginContext {
   on(hook: string, handler: (ctx: PreToolCallContext) => unknown): void
 }
@@ -63,6 +71,18 @@ export interface HitlDecision {
   settledBy?: 'timeout'
 }
 
+/** What a host needs to persist a deferred approval and answer it from a later request. */
+export interface DeferredApproval {
+  readonly approvalId: string
+  /** The SDK tool call id, so the host can key the stored approval to the call it must answer. */
+  readonly toolUseId: string
+  readonly toolName: string
+  readonly input: Record<string, unknown>
+  readonly question?: string
+  readonly runId: string
+  readonly agentId: string
+}
+
 /** Injected wiring — the harness (mount-agent) supplies these; the plugin stays pure. */
 export interface HitlWiring {
   /** Tool name → its `@HumanInTheLoop` config. A tool absent here is NOT gated. */
@@ -93,6 +113,13 @@ export interface HitlWiring {
    * outage must not decide whether a gated tool runs, and must not delay the pause it announces.
    */
   onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>
+
+  /**
+   * When present, a gated call is deferred: the plugin emits the approval event, calls this, then
+   * returns the SDK defer veto, and `awaitApproval` is not called. A rejection (or a missing
+   * `toolUseId`) fails closed: the call is blocked with a message naming the failure.
+   */
+  onDefer?: (approval: DeferredApproval) => Promise<void>
 }
 
 /** What an application is told when a gated tool pauses. The stream's facts, off the stream. */
@@ -104,6 +131,21 @@ export interface ApprovalRequest {
   /** Relative, exactly as the stream carries it — the app knows its own base URL; this does not. */
   callbackUrl: string
   timeoutMs: number
+}
+
+/** Record the approval through `onDefer`, then defer; fail closed when it cannot be recorded. */
+async function deferCall(
+  onDefer: (approval: DeferredApproval) => Promise<void>,
+  a: Omit<DeferredApproval, 'toolUseId'> & { toolUseId: string | undefined },
+): Promise<PreToolCallVeto | PreToolCallDefer> {
+  try {
+    if (a.toolUseId === undefined) throw new Error('the tool call carries no toolUseId')
+    await onDefer({ ...a, toolUseId: a.toolUseId })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    return { block: true, message: `approval could not be recorded: ${reason}` }
+  }
+  return { defer: true }
 }
 
 /**
@@ -118,9 +160,11 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
     // the HITL veto never fires (the run would proceed WITHOUT waiting for human approval).
     kind: 'general',
     register(ctx) {
-      ctx.on('pre_tool_call', async (c): Promise<PreToolCallVeto | undefined> => {
+      ctx.on('pre_tool_call', async (c): Promise<PreToolCallResult> => {
         const opts = wiring.gated.get(c.name)
         if (!opts) return undefined // not gated — allow
+        // A call a person already approved on resume must not be gated a second time.
+        if (c.approvedOnResume === true) return undefined
         const approvalId = crypto.randomUUID()
         wiring.emit({
           type: 'approval_required',
@@ -151,6 +195,18 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
               // Intentionally ignored — the run's outcome belongs to the human, not to the channel.
             }
           })()
+        }
+
+        if (wiring.onDefer !== undefined) {
+          return deferCall(wiring.onDefer, {
+            approvalId,
+            toolUseId: c.toolUseId,
+            toolName: c.name,
+            input: c.args,
+            question: opts.question,
+            runId: c.runId,
+            agentId: c.agentId,
+          })
         }
 
         const raw = await wiring.awaitApproval(approvalId, opts, c.name)

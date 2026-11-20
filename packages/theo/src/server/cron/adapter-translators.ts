@@ -242,8 +242,8 @@ export function translateCronToDeno(
   const wired = options.configImport !== undefined
   const lines = crons.map((c) =>
     wired
-      ? `Deno.cron("${c.name}", "${c.schedule}", async () => {
-  const mod = await import("../${c.filePath}");
+      ? `Deno.cron(${JSON.stringify(c.name)}, ${JSON.stringify(c.schedule)}, async () => {
+  const mod = await import(${JSON.stringify(`../${c.filePath}`)});
   const def = mod.default;
   const traceId = crypto.randomUUID().replace(/-/g, "");
   const spanId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
@@ -261,8 +261,8 @@ export function translateCronToDeno(
   }
   await run.flush();
 });`
-      : `Deno.cron("${c.name}", "${c.schedule}", async () => {
-  const mod = await import("../${c.filePath}");
+      : `Deno.cron(${JSON.stringify(c.name)}, ${JSON.stringify(c.schedule)}, async () => {
+  const mod = await import(${JSON.stringify(`../${c.filePath}`)});
   const def = mod.default;
   await def.handler({
     traceId: crypto.randomUUID().replace(/-/g, ""),
@@ -273,7 +273,7 @@ export function translateCronToDeno(
 });`,
   )
   const envTable = Object.entries(options.envConfigImports ?? {})
-    .map(([env, spec]) => `  ${JSON.stringify(env)}: () => import(${JSON.stringify(spec)}),`)
+    .map(([env, spec]) => `  [${JSON.stringify(env)}]: () => import(${JSON.stringify(spec)}),`)
     .join('\n')
   const prelude = wired
     ? `import { createHandlerQueue } from "npm:theokit/server/jobs";

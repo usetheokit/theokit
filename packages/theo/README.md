@@ -344,6 +344,10 @@ carry, so on those targets `theokit build` names it as not applied and `GET /__t
 
 Cloudflare Workers, step by step: [`docs/wiki/sops/cloudflare-deploy.md`](https://github.com/usetheokit/theokit/blob/main/docs/wiki/sops/cloudflare-deploy.md).
 
+## Guarding MCP tool calls with plugins
+
+`handleMcpToolsJsonRpc`, `handleMcpJsonRpc` and `handleMcpStdioLine` from `theokit/server/agent` take a trailing `McpToolsOptions`: `plugins` (the `pre_tool_call` hooks of these plugins run before each `tools/call`) and `hookContext` (`{ agentId }`; a `runId` is generated per call). A blocking hook, or one that throws, answers the call with `isError: true` and the plugin message, and the tool does not run. `tools/list` is not filtered. Without options nothing changes.
+
 ## Licence
 
 Apache-2.0 — see `LICENSE`.
@@ -354,3 +358,19 @@ Apache-2.0 — see `LICENSE`.
 
 - `handleMcpToolsHttp(tools, name, request, options?)` handles a whole HTTP request: 405 with `allow: POST` for other methods, 400 with `-32700` for bad JSON, 400 with `-32600` for a batch, and 202 with an empty body for a notification such as `notifications/initialized`. `initialize` echoes the client's `protocolVersion` when it is in `options.protocolVersions` (default `2025-06-18`, `2025-03-26`, `2024-11-05`), else the newest.
 - `handleMcpToolsJsonRpc(tools, name, body)` takes an already parsed body. A message without `id` (notification) gets a 202 with an empty body, `ping` returns `{}`, and a successful `tools/call` carries `isError: false`. The agent MCP route and stdio (which writes no line for a notification) behave the same.
+
+## Durable human-in-the-loop approvals
+
+By default a pending `@HumanInTheLoop` approval lives in the memory of the process that holds the paused run, so a restart loses it and the listing answers `scope: 'instance'`. To keep approvals in a store instead, configure a durable registry once at startup:
+
+```ts
+import {
+  configureApprovalRegistry,
+  createDurableApprovalRegistry,
+  createFileApprovalStore,
+} from 'theokit/server/agent'
+
+configureApprovalRegistry(createDurableApprovalRegistry(createFileApprovalStore('.theokit/approvals')))
+```
+
+A gated call is then written to the store and the run ends deferred; `GET /api/agents/<name>/approvals` lists from the store (`scope: 'shared'`), and `POST /api/agents/<name>/approve/<id>` resumes the same session with the decision. An expired record is settled by its `onTimeout`. Instances share approvals only when they share the store directory (and the agent's session storage); implement `ApprovalStore` for Redis or a database otherwise.

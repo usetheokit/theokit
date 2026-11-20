@@ -20,10 +20,10 @@
   },
   "dependencies": {
     "@theocode/shared": "link:../shared",
-    "@theokit/agents": "16.13.0",
+    "@theokit/agents": "17.0.0",
     "@theokit/agents-pty": "0.2.1",
     "smol-toml": "^1.7.0",
     "zod": "^4.0.0",
-    "@theokit/sdk": "5.17.0"
+    "@theokit/sdk": "5.32.0"
   }
 }

@@ -1,7 +1,0 @@
----
-'@theokit/agents': minor
----
-
-Add `loadMcpServersFile` and `mcpSecretValues` to `@theokit/agents/bridge`: load an MCP servers file from any path under a security policy (absolute commands and cwd, no `envPolicy: all`, a timeout Node can honour, SDK-safe server names, unknown keys refused), and collect the header and env values an output mask should hide. Unlike `loadMcpJson`, which warns and skips a bad entry, it throws `McpFileError` even when no policy is given.
-
-The shared parser now stores server names and env/header keys as own properties, so a `__proto__` key in `.mcp.json` becomes an ordinary entry instead of reaching the prototype; `loadMcpJson` benefits too.

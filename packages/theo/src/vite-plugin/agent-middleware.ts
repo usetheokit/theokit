@@ -23,7 +23,7 @@ import {
   isApprovalPath,
   parseApprovalAgentName,
 } from '../server/agent/approve-agent.js'
-import { mountAgent } from '../server/agent/mount-agent.js'
+import { makeApprovalResume, mountAgent } from '../server/agent/mount-agent.js'
 import { resolveProvider } from '../server/agent/provider-resolver.js'
 import { matchAgentAuxRoute, serveMatchedAuxRoute } from '../server/agent/serve-aux-routes.js'
 import { createWebRequestSource } from '../server/http/node-request.js'
@@ -111,16 +111,31 @@ async function serveApprove(
         serverDir: deps.serverDir,
         pluginRunner: deps.pluginRunner,
       })
-      const policy =
+      const mod = agent === undefined ? undefined : await deps.loadModule(agent.filePath)
+      const policy = agent === undefined ? undefined : readAgentPolicy(mod, agent.filePath)
+      // A durable approval is answered by a continuation turn of the agent (#1960).
+      const resume =
         agent === undefined
           ? undefined
-          : readAgentPolicy(await deps.loadModule(agent.filePath), agent.filePath)
+          : makeApprovalResume(
+              mod,
+              request,
+              (model: string | undefined, plugins?: readonly unknown[]): string =>
+                resolveProvider(model, { plugins }).apiKey,
+              {
+                source: agent.filePath,
+                csrfMode: deps.csrfMode,
+                projectRoot: deps.projectRoot,
+                agentName: agent.name,
+                resolveSubject,
+              },
+            )
       const response = await handleAgentApproval(
         request,
         urlPath,
         getApprovalRegistry(),
         deps.csrfMode,
-        { policy, resolveSubject },
+        { policy, resolveSubject, resume },
       )
       await writeWebResponseToServerResponse(response, res)
     },

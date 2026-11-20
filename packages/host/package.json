@@ -1,6 +1,6 @@
 {
   "name": "@theokit/host",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Node-only process utilities for long-running agent apps: the pieces a daemon or bot host needs that belong in neither @theokit/agents nor theokit.",
   "repository": {
     "type": "git",
@@ -57,10 +57,10 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@theokit/sdk": "^5.17.0"
+    "@theokit/sdk": "^5.32.0"
   },
   "devDependencies": {
-    "@theokit/sdk": "^5.17.0",
+    "@theokit/sdk": "^5.32.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"
