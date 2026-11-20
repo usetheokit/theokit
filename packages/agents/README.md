@@ -917,6 +917,48 @@ Applying requires the root to be owned by `owner.app`. `claimCollectorRoot(proje
 app's call: claim the default root, and a custom one only if it holds no projects yet. `runProjectsGC` throws
 `CollectorRootNotOwnedError` (code `collector_root_not_owned`) when the marker is missing or names another app.
 
+### Scheduling the sweep
+
+`scheduleSessionSweep({ enabled, stampFile, command, onReport, intervalHours?, timeoutMs? })` runs the cross-project GC
+in a detached child, at most once per `intervalHours` (default 24). It reads `stampFile` (an unparseable or missing
+stamp counts as a first run), writes it BEFORE spawning, and never blocks or throws: a failure goes to `onReport`.
+The first run is dry (`command({ apply: false })`), later ones apply. The child gets `timeoutMs` (default 600000) and
+`SIGTERM`; when it closes, its last stdout line is reported. The command is the app's: `sweepDecision` is the pure
+interval check.
+
+```ts
+import { dirname, join } from 'node:path'
+import { projectsRoot, scheduleSessionSweep } from '@theokit/agents/session'
+
+scheduleSessionSweep({
+  enabled: true,
+  stampFile: join(dirname(projectsRoot()), '.last-session-gc'),
+  command: ({ apply }) => ({
+    command: process.execPath,
+    args: [myScript, 'sessions-gc', ...(apply ? ['--apply'] : [])],
+  }),
+  onReport: (line) => console.error(line),
+})
+```
+
+```ts
+// the child (myScript sessions-gc): plan, then run
+import { claimCollectorRoot, planProjectsGC, projectsRoot, runProjectsGC } from '@theokit/agents/session'
+
+const root = projectsRoot()
+const apply = process.argv.includes('--apply')
+if (apply) claimCollectorRoot(root, { app: 'my-app' }) // only if the app owns this root
+const plan = await planProjectsGC({
+  projectsRoot: root,
+  keepLast: 20,
+  maxAgeDays: 30,
+  candidateCwds: () => knownWorkspaces(),
+  candidateCwdsComplete: true, // only if the list is truly complete
+})
+const result = await runProjectsGC(plan, { apply, owner: { app: 'my-app' } })
+console.log(`${result.dryRun ? 'would remove' : 'removed'} ${result.removed.length} of ${plan.candidates.length}`)
+```
+
 ## Refused tool calls
 
 When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
