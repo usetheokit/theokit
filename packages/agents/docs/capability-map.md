@@ -1495,10 +1495,14 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `formatUsd` | value |
 | `InMemoryUsageStorage` | value |
 | `readRunUsage` | value |
+| `usageFromRun` | value |
 | `RunUsageSnapshot` | type |
+| `RunUsageSource` | type |
 | `ToolUsageRecord` | type |
+| `UsageFromRunContext` | type |
 | `UsageQuery` | type |
 | `UsageRecord` | type |
 | `UsageResult` | type |
