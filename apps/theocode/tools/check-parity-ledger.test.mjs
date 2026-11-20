@@ -39,7 +39,9 @@ describe('parity ledger', () => {
     expect(declaresTest("it('test_x', () => {})", 'test_x')).toBe(true)
     expect(declaresTest("// test_x", 'test_x')).toBe(false)
     expect(declaresTest("it.skip('test_x', () => {})", 'test_x')).toBe(false)
-    expect(declaresTest("  it('names the skills that live under .claude/skills and', () => {})", 'names the skills that live under .claude/skills')).toBe(true)
+    // The shared scanner matches the whole title; a prefix of it is not evidence.
+    expect(declaresTest("  it('names the skills and more', () => {})", 'names the skills and more')).toBe(true)
+    expect(declaresTest("  it('names the skills and more', () => {})", 'names the skills')).toBe(false)
   })
   it('test_a_codex_slash_row_the_surface_does_not_answer_fails', () => {
     const surface = { builtin: new Set(['raw']), pointers: new Set(['recap']) }

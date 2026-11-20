@@ -57,4 +57,19 @@ describe.skipIf(!hasBundle)('built CLI (dist/cli.js) — runs as a published bin
     expect(existsSync(join(dir, 'frontend/src/App.tsx'))).toBe(true)
     expect(existsSync(join(dir, 'sidecar/sidecar.ts'))).toBe(true)
   })
+
+  it('refuses --bare combined with --surface=cli', () => {
+    let stderr = ''
+    let status: number | null = 0
+    try {
+      runCli('bare-cli', '--surface=cli', '--bare')
+    } catch (e) {
+      const err = e as { stderr?: string; status?: number | null }
+      stderr = err.stderr ?? ''
+      status = err.status ?? null
+    }
+    expect(status).toBe(1)
+    expect(stderr).toContain('--bare cannot be combined with --surface=cli')
+    expect(existsSync(join(workDir, 'bare-cli'))).toBe(false)
+  })
 })
