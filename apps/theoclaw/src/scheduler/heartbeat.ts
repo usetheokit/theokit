@@ -3,6 +3,7 @@
 import { join } from 'node:path'
 
 import { fileTransientJob } from '@theokit/agents/tools'
+import { validateCron } from '@theokit/sdk/cron'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { PLATFORMS } from '../channels/platforms.js'
@@ -61,8 +62,12 @@ export function readScheduleVariable(
     )
   }
   const cron = tokens.join(' ')
-  const problem = cronProblem(cron)
-  if (problem !== undefined) throw refuse(`has a cron the scheduler rejects: ${problem}`)
+  // The SDK's own validator, synchronous: the start may not await before its listener.
+  try {
+    validateCron(cron)
+  } catch (error) {
+    throw refuse(`has a cron the scheduler rejects: ${error instanceof Error ? error.message : String(error)}`)
+  }
   return { cron, target: { platform, channelId: targetToken.slice(separator + 1) } }
 }
 
@@ -79,62 +84,4 @@ export function heartbeatJob(workspace: string, settings: HeartbeatSettings): Tr
 
 function refuseFor(variable: string, detail: string): TheoClawConfigError {
   return new TheoClawConfigError(`${variable} ${detail}`, { variable })
-}
-
-// The SDK validates a cron only inside its asynchronous `Cron.create`, and the start may not await
-// before its listener (a signal would pass unhandled), so the same rules are checked here, at read
-// time. They mirror the SDK 5.11 validator (`internal/cron/validate.ts`); `tests/heartbeat.test.ts`
-// checks that what this accepts the SDK accepts too, and the SDK still validates at registration.
-const SHORTHANDS = new Set(['@hourly', '@daily', '@weekly', '@monthly', '@yearly'])
-const FIELD_RANGES = [
-  { name: 'minute', min: 0, max: 59 },
-  { name: 'hour', min: 0, max: 23 },
-  { name: 'day of month', min: 1, max: 31 },
-  { name: 'month', min: 1, max: 12 },
-  { name: 'day of week', min: 0, max: 6 },
-] as const
-const DIGITS = /^\d+$/
-
-/** Why the SDK would refuse `cron`, or `undefined` when it would accept it. */
-function cronProblem(cron: string): string | undefined {
-  if (cron.startsWith('@')) return SHORTHANDS.has(cron) ? undefined : `unknown shorthand ${cron}`
-  const fields = cron.split(' ')
-  if (fields.length !== FIELD_RANGES.length) {
-    return `${cron} has ${String(fields.length)} fields, not ${String(FIELD_RANGES.length)}`
-  }
-  const bad = FIELD_RANGES.find((range, index) => !fieldAccepted(fields[index] ?? '', range))
-  return bad === undefined ? undefined : `${cron} has an invalid ${bad.name} field`
-}
-
-interface FieldRange {
-  readonly min: number
-  readonly max: number
-}
-
-function fieldAccepted(field: string, range: FieldRange): boolean {
-  if (field === '*') return true
-  if (field.startsWith('*/')) return stepAccepted(field.slice(2), range)
-  if (field.includes(',')) return field.split(',').every((part) => fieldAccepted(part, range))
-  if (field.includes('-')) return spanAccepted(field, range)
-  return inRange(numberOf(field), range)
-}
-
-function stepAccepted(text: string, range: FieldRange): boolean {
-  const step = numberOf(text)
-  return step !== undefined && step > 0 && step <= range.max
-}
-
-function spanAccepted(field: string, range: FieldRange): boolean {
-  const [start, end, ...rest] = field.split('-').map(numberOf)
-  return (
-    rest.length === 0 && inRange(start, range) && inRange(end, range) && (start ?? 0) <= (end ?? 0)
-  )
-}
-
-function inRange(value: number | undefined, range: FieldRange): boolean {
-  return value !== undefined && value >= range.min && value <= range.max
-}
-
-function numberOf(text: string): number | undefined {
-  return DIGITS.test(text) ? Number.parseInt(text, 10) : undefined
 }
