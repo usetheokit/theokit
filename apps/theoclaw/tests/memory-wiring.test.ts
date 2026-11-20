@@ -4,13 +4,14 @@ import { join } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
 import type { AgentOptions } from '@theokit/sdk'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
 import { MemoryStore } from '../src/memory/memory-store.js'
 import { userIdOf } from '../src/memory/wiring.js'
 import { theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { chatSessions } from '../src/sessions/chat-sessions.js'
+import { dm as dmEvent, say, seen } from './memory-sdk-support.js'
 
 const ENV = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k', THEOCLAW_TRANSCRIPTS: 'on' }
 const event = (platform: string) =>
@@ -30,7 +31,9 @@ function scripted(_options: AgentOptions, answer: string) {
 
 const stateOf = () => mkdtempSync(join(tmpdir(), 'theoclaw-state-'))
 const memoryOf = (options: AgentOptions) => options.memory as { enabled: boolean; directory: string; userId: string; review?: { after: string }; mirror?: unknown }
-const dm = (platform: string, id: string) => ({ platform, sender: { id }, channel: { type: 'dm', id } }) as unknown as MessageEvent
+const dm = dmEvent
+
+afterEach(() => vi.unstubAllEnvs())
 
 describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
   it('stores a turn per surface and gives each session SDK memory with post-turn review, outside the cwd', async () => {
@@ -112,6 +115,22 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
     expect(new Set(ids).size).toBe(3)
     expect(ids.filter((id) => id !== 'owner').every((id) => id !== 'owner')).toBe(true)
     await sessions.disposeAll()
+  })
+
+  it('never recalls a fact saved for one DM sender to another, through the real SDK memory (#1834)', { timeout: 60_000 }, async () => {
+    const state = stateOf()
+    const saving = await say(state, 'telegram', 'alice', true)
+    const same = await say(state, 'telegram', 'alice', false)
+    const other = await say(state, 'telegram', 'bob', false)
+    const otherPlatform = await say(state, 'line', 'alice', false)
+    try {
+      expect(saving.requests.length).toBeGreaterThanOrEqual(3)
+      expect(seen(same)).toContain('Quillon-7731')
+      expect(seen(other)).not.toContain('Quillon-7731')
+      expect(seen(otherPlatform)).not.toContain('Quillon-7731')
+    } finally {
+      await Promise.all([saving.close(), same.close(), other.close(), otherPlatform.close()])
+    }
   })
 
   it('never shares a partition between two senders, even ones that differ only in case or punctuation', () => {
