@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -141,6 +141,5 @@ describe('onboard', () => {
     expect(readFileSync(file, 'utf8')).toContain('MODEL="m"')
     await config.onboard(io, { ...base, answers: { MODEL: 'n', PORT: '2' }, force: true })
     expect(readFileSync(file, 'utf8')).toContain('MODEL="n"')
-    writeFileSync(file, '')
   })
 })

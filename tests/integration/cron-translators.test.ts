@@ -196,6 +196,22 @@ describe('Deno Deploy cron translator (T1.5)', () => {
     expect(content).toMatch(/Deno\.cron\("hourly",\s*"0 \* \* \* \*"/)
   })
 
+  it('encodes hostile names and keeps a __proto__ environment key an own entry', () => {
+    const entry = join(root, 'crons-entry.ts')
+    translateCronToDeno(entry, [cron('a"); evil(); ("', '* * * * *')], {
+      configImport: './cfg.js',
+      envConfigImports: Object.fromEntries([
+        ['__proto__', './proto.js'],
+        ['production', './prod.js'],
+      ]),
+    })
+    const content = readFileSync(entry, 'utf8')
+    expect(content).toContain('Deno.cron("a\\"); evil(); (\\"", "* * * * *"')
+    expect(content).not.toContain('Deno.cron("a"); evil()')
+    expect(content).toContain('["__proto__"]: () => import("./proto.js")')
+    expect(content).toContain('["production"]: () => import("./prod.js")')
+  })
+
   it('overwrites existing entry file (managed file)', () => {
     const entry = join(root, 'crons-entry.ts')
     writeFileSync(entry, '// stale content')

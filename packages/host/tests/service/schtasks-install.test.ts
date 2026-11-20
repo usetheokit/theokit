@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { closeSync, existsSync, fstatSync, openSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -23,8 +23,13 @@ describe('schtasks install', () => {
       calls.push([cmd, ...args].join(' '))
       if (args[0] === '/Create') {
         xmlPath = args[args.indexOf('/XML') + 1]!
-        mode = statSync(xmlPath).mode & 0o777
-        bytes = readFileSync(xmlPath)
+        const fd = openSync(xmlPath, 'r')
+        try {
+          mode = fstatSync(fd).mode & 0o777
+          bytes = readFileSync(fd)
+        } finally {
+          closeSync(fd)
+        }
       }
       return { code: 0, stdout: '', stderr: '' }
     }
