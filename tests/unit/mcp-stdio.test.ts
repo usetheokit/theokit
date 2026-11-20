@@ -25,6 +25,15 @@ describe('handleMcpStdioLine', () => {
     expect(rpc.result.serverInfo.name).toBe('support')
   })
 
+  it('returns null for a notification line', async () => {
+    const out = await handleMcpStdioLine(
+      JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+      mod,
+      'support',
+    )
+    expect(out).toBeNull()
+  })
+
   it('answers tools/list', async () => {
     const out = await handleMcpStdioLine(
       JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
