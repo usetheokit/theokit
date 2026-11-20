@@ -12,11 +12,12 @@ import type { ToolRefusal } from '@theokit/presenter'
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SDKAgent, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
+import type { Guardrail } from '../guardrails/index.js'
 import { resolveEnabledSkills } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
@@ -25,11 +26,11 @@ import { wireInlineSkillRead } from './advertised-skill-read.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
-import { getOrCreateReporting } from './compiled-wiring.js'
+import { acquireSharedAgent, releaseSharedAgent } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
-import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
+import { withGuardrails } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { dropRunRefusals, retainRun, takeRefusal } from './refusal-ledger.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
@@ -827,7 +828,7 @@ async function* streamSdkAgent(
     ...m8,
     ...extra,
   }
-  const agent = (await getOrCreateReporting(Agent, sessionId, createOptions)) as Awaited<
+  const agent = (await acquireSharedAgent(Agent, sessionId, createOptions)) as Awaited<
     ReturnType<typeof Agent.getOrCreate>
   >
   try {
@@ -886,7 +887,7 @@ async function* streamSdkAgent(
       yield realUsageDone(await (await sendPromise).wait(), t0, modelIdOf(model))
     }
   } finally {
-    await agent.dispose()
+    await releaseSharedAgent(agent)
   }
 }
 
@@ -909,20 +910,49 @@ async function* streamSdkAgent(
  * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
 export interface SdkTurnHandle {
-  wait: () => Promise<{
-    result?: string
-    usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number }
-    cost?: { amountUsd?: number }
-    status?: string
-    error?: { message: string }
-  }>
+  /** The SDK run id, when the handle has one (`Run.id`). */
+  readonly id?: string
+  wait: () => Promise<SdkTurnOutcome>
+  /** Optional: a wait-only handle has none. Lenient (`unknown`); {@link SdkRun} narrows it to the SDK's messages. */
   stream?: () => AsyncIterable<unknown>
+  /** The SDK's ordered timeline (`Run.events()`): messages and deltas interleaved. */
+  events?: () => AsyncIterable<SdkTimelineEvent>
   /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
   cancel?: () => unknown
 }
 
-/** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
-export type SdkSendOptions = Record<string, unknown>
+/** A message on the SDK's raw `Run.stream()`; discriminate on `type`. */
+export type SdkStreamMessage = SDKMessage
+
+/** What `wait()` resolves: the fields of the SDK's `RunResult` this layer and its consumers read. */
+export interface SdkTurnOutcome {
+  result?: string
+  usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number }
+  status?: string
+  error?: { message: string; code?: string }
+  /** The SDK's priced cost; an undefined `amountUsd` means unpriced, never free. */
+  cost?: CostBreakdown
+  durationMs?: number
+  /** theokit#379 — the doom-loop guard stopped the run. */
+  stoppedByDoomLoop?: boolean
+  /** theokit#379 — the run reached its iteration ceiling. */
+  stoppedAtIterationLimit?: boolean
+}
+
+/**
+ * A full SDK run, as a consumer that streams, cancels and reads the timeline needs it: every member
+ * is required and `status` is always set. A real SDK `Run` satisfies it; `SdkTurnHandle` stays the
+ * lenient shape for injected doubles that implement only `wait()`.
+ */
+export interface SdkRun extends SdkTurnHandle {
+  wait: () => Promise<SdkTurnOutcome & { status: string }>
+  stream: () => AsyncIterable<SdkStreamMessage>
+  events: () => AsyncIterable<SdkTimelineEvent>
+  cancel: () => Promise<void>
+}
+
+/** Per-turn options: the SDK's own `SendOptions`. */
+export type SdkSendOptions = SendOptions
 
 export interface SdkAgentHandle {
   readonly agentId: string
@@ -951,10 +981,8 @@ export interface SdkAgentHandle {
    * decision about what a redaction means to a schema, and inventing one would be the gate that
    * reports without gating this module already refuses to build.
    */
-  readonly generate?: (
-    message: string,
-    options: { output: unknown; [key: string]: unknown },
-  ) => Promise<unknown>
+  // The SDK's own generic signature: schema-validated options and the inferred result type.
+  generate?: SDKAgent['generate']
   readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.
@@ -971,8 +999,17 @@ export interface SdkAgentHandle {
    * `as never` absorbed the difference. It is literally the divergence the facade's docstring
    * described, met again while trying to remove it.
    */
-  send: (msg: string, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
+  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
   dispose: () => Promise<void>
+}
+
+/**
+ * An agent whose `send` resolves the strict {@link SdkRun}: what a consumer that streams, cancels
+ * and reads priced outcomes (TheoClaw) needs. A real SDK agent satisfies it; `SdkAgentHandle` stays
+ * the lenient shape for injected doubles.
+ */
+export type SdkRunAgent = Omit<SdkAgentHandle, 'send'> & {
+  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkRun>
 }
 
 /**
@@ -1032,12 +1069,77 @@ export function toAgentFactory(
       ...extra,
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     }
-    const agent = await getOrCreateReporting(skillRt.Agent, sessionId, createOptions)
-    return withGuardrails(
-      withStepCeiling(agent as SdkAgentHandle, compiled.maxIterations),
-      compiled.guardrails,
-    )
+    // The owner's `dispose()` releases its hold; a stream sharing the handle keeps it alive.
+    const entry: ServedEntry = { guards: compiled.guardrails ?? [], max: compiled.maxIterations }
+    const agent = (await acquireSharedAgent(
+      skillRt.Agent,
+      sessionId,
+      createOptions,
+      'served',
+      () => {
+        releaseServedEntry(agent, entry)
+      },
+    )) as SdkAgentHandle
+    return servedHandle(agent, entry)
   }
+}
+
+interface ServedEntry {
+  guards: readonly Guardrail[]
+  max: number | undefined
+}
+interface ServedConfig {
+  send: SdkAgentHandle['send']
+  /** Active served holders, oldest first; releases (`dispose()`) drop the oldest. */
+  entries: ServedEntry[]
+}
+const served = new WeakMap<object, ServedConfig>()
+
+/** A served holder released: its guardrails and ceiling stop applying; the others' remain. */
+function releaseServedEntry(agent: object, entry: ServedEntry): void {
+  const cfg = served.get(agent)
+  if (cfg === undefined) return
+  const at = cfg.entries.indexOf(entry)
+  if (at >= 0) cfg.entries.splice(at, 1)
+}
+
+/**
+ * The SDK's own handle, always: declared guardrails and a step ceiling are installed on it as its
+ * `send`, so every served caller gets the object `Agent.registry.get(id)` returns. As the handle is
+ * shared, its `send` enforces what the ACTIVE served holders declared (all their guardrails, the
+ * lowest ceiling), recomputed on every send: a caller without guards cannot strip another's, and a
+ * released caller's constraints stop applying.
+ */
+function servedHandle(agent: SdkAgentHandle, entry: ServedEntry): SdkAgentHandle {
+  let cfg = served.get(agent)
+  if (cfg === undefined) {
+    const live: ServedConfig = { send: agent.send.bind(agent), entries: [] }
+    cfg = live
+    served.set(agent, live)
+    const base = {
+      agentId: agent.agentId,
+      dispose: () => agent.dispose(),
+      send: (msg: string, sendOpts?: SdkSendOptions) => {
+        const ceilings = live.entries.flatMap((e) => (e.max === undefined ? [] : [e.max]))
+        return live.send(
+          msg,
+          ceilings.length === 0 ? sendOpts : { maxIterations: Math.min(...ceilings), ...sendOpts },
+        )
+      },
+    } as SdkAgentHandle
+    Object.defineProperty(agent, 'send', {
+      value: (msg: string, sendOpts?: SdkSendOptions) =>
+        withGuardrails(base, [...new Set(live.entries.flatMap((e) => e.guards))]).send(
+          msg,
+          sendOpts,
+        ),
+      configurable: true,
+      writable: true,
+      enumerable: false,
+    })
+  }
+  cfg.entries.push(entry)
+  return agent
 }
 
 /**

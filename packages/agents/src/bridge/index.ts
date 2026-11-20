@@ -43,6 +43,10 @@ export {
   isDone,
   isError,
   isApprovalRequired,
+  isThinking,
+  isInputRequested,
+  isAgentStreamEvent,
+  toAgentStreamEvent,
   type ArtifactStartEvent,
   type ArtifactChunkEvent,
   type StateUpdateEvent,
@@ -69,6 +73,10 @@ export {
   // name the return, and goes back to writing the adapter this milestone exists to delete.
   type SdkSendOptions,
   type SdkTurnHandle,
+  type SdkTurnOutcome,
+  type SdkRun,
+  type SdkRunAgent,
+  type SdkStreamMessage,
 } from './sdk-adapter.js'
 // M96 — the approval posture crosses the boundary: without it being nameable, the consumer cannot
 // declare what `toAgentFactory` now requires. `AgentDefinition` (a name already taken just below, by
@@ -139,6 +147,8 @@ export { ERROR_CODE_DATA_PART, presentUIMessageStream } from './present-ui-messa
 export {
   createToolSeen,
   flushPendingToolResults,
+  isDeltaTimelineEvent,
+  isMessageTimelineEvent,
   translateTimelineEvent,
   type SdkTimelineEvent,
 } from './sdk-timeline.js'

@@ -231,9 +231,11 @@ describe('theocode sessions gc, through sessionsCommand', () => {
     vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Exit(code)
     }) as never)
+    process.exitCode = undefined
   })
   afterEach(() => {
     vi.restoreAllMocks()
+    process.exitCode = undefined
     if (savedHome === undefined) delete process.env.THEOKIT_HOME
     else process.env.THEOKIT_HOME = savedHome
   })
@@ -252,7 +254,9 @@ describe('theocode sessions gc, through sessionsCommand', () => {
       if (e instanceof Exit) return e.code
       throw e
     }
-    return undefined
+    // The command ends through `exitAfterDrain`, which sets the exit code rather than exiting.
+    const code = process.exitCode
+    return typeof code === 'number' ? code : undefined
   }
 
   it('test_apply_keeps_the_pointer_the_newest_and_the_leased_and_exits_zero', async () => {

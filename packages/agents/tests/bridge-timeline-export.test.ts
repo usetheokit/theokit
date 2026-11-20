@@ -42,3 +42,21 @@ describe('the bridge exports the timeline translator', () => {
     expect(flushPendingToolResults(createToolSeen())).toEqual([])
   })
 })
+
+describe('timeline narrowing helpers', () => {
+  it('narrows message and delta events', async () => {
+    const { isDeltaTimelineEvent, isMessageTimelineEvent } = await import('@theokit/agents/bridge')
+    const msg: SdkTimelineEvent = { kind: 'message', message: assistantText('x') }
+    const delta: SdkTimelineEvent = { kind: 'delta', update: { type: 'text-delta', text: 'a' } }
+    expect(isMessageTimelineEvent(msg)).toBe(true)
+    expect(isMessageTimelineEvent(delta)).toBe(false)
+    expect(isDeltaTimelineEvent(delta)).toBe(true)
+    expect(isDeltaTimelineEvent(msg)).toBe(false)
+    const malformedDelta = { kind: 'delta' } as unknown as SdkTimelineEvent
+    const malformedMessage = { kind: 'message' } as unknown as SdkTimelineEvent
+    expect(isDeltaTimelineEvent(malformedDelta)).toBe(false)
+    expect(isMessageTimelineEvent(malformedMessage)).toBe(false)
+    expect(translateTimelineEvent(malformedDelta, 'r', createToolSeen())).toEqual([])
+    expect(translateTimelineEvent(malformedMessage, 'r', createToolSeen())).toEqual([])
+  })
+})
