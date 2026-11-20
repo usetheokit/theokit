@@ -410,7 +410,7 @@ describe("the WebChat terminal event is a complete typed done", () => {
   };
 
   it("enriches a bare done with usage and fills result and durationMs", async () => {
-    const events = await drain(async (_m, emit) => (emit({ type: "done" }), usage));
+    const events = await drain(async (_m, emit) => (emit({ type: "done" } as never), usage));
     expect(events).toEqual([
       { type: "done", result: "", durationMs: 0, usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 }, model: "m-1" },
     ]);
@@ -418,12 +418,12 @@ describe("the WebChat terminal event is a complete typed done", () => {
 
   it("keeps the result and duration a typed done already has", async () => {
     const done = { type: "done", result: "ok", durationMs: 40, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, reasoningTokens: 3 } };
-    const events = await drain(async (_m, emit) => (emit(done), usage));
+    const events = await drain(async (_m, emit) => (emit(done as never), usage));
     expect(events[0]).toMatchObject({ result: "ok", durationMs: 40, usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 3 } });
   });
 
   it("forwards a done unchanged when the turn failed", async () => {
-    const events = await drain(async (_m, emit) => (emit({ type: "done" }), { ok: false, code: "turn_failed", reason: "x" } as never));
+    const events = await drain(async (_m, emit) => (emit({ type: "done" } as never), { ok: false, code: "turn_failed", reason: "x" } as never));
     expect(events[0]).toEqual({ type: "done" });
   });
 });

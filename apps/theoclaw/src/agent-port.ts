@@ -68,12 +68,9 @@ export interface GoalRunResult {
  * same reason as the stream element: the bridge's `SdkTimelineEvent` carries `SdkMessage`, whose
  * index signature the SDK's own event type does not declare.
  */
-export interface TurnTimelineEvent {
-  readonly kind: 'message' | 'delta'
-  readonly message?: SdkMessageLike
-  readonly update?: InteractionUpdate
-  readonly textAlreadyStreamed?: boolean
-}
+export type TurnTimelineEvent =
+  | { readonly kind: 'message'; readonly message: SdkMessageLike; readonly textAlreadyStreamed?: boolean }
+  | { readonly kind: 'delta'; readonly update: InteractionUpdate }
 
 /** What the translators read of an SDK message: its discriminant. The SDK's own messages have it. */
 export interface SdkMessageLike {
@@ -87,10 +84,10 @@ export function toSdkMessage(message: SdkMessageLike): SdkMessage {
 
 /** A timeline event as the bridge's `SdkTimelineEvent`, built field by field (no cast). */
 export function toSdkTimelineEvent(event: TurnTimelineEvent): SdkTimelineEvent {
+  if (event.kind === 'delta') return { kind: 'delta', update: event.update }
   return {
-    kind: event.kind,
-    ...(event.message === undefined ? {} : { message: toSdkMessage(event.message) }),
-    ...(event.update === undefined ? {} : { update: event.update }),
+    kind: 'message',
+    message: toSdkMessage(event.message),
     ...(event.textAlreadyStreamed === undefined ? {} : { textAlreadyStreamed: event.textAlreadyStreamed }),
   }
 }
