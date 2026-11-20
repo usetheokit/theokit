@@ -35,8 +35,9 @@ export class InMemoryUsageStorage implements UsageStorageAdapter {
     const llm = matching.filter((record): record is UsageRecord => record.kind !== 'tool')
     return Promise.resolve({
       totalTokens: llm.reduce((sum, r) => sum + r.tokens.input + r.tokens.output, 0),
-      totalCostUsd: llm.reduce((sum, r) => sum + r.costUsd, 0),
+      totalCostUsd: llm.reduce((sum, r) => (r.priced === false ? sum : sum + r.costUsd), 0),
       runs: llm.length,
+      unpricedRuns: llm.filter((r) => r.priced === false).length,
     })
   }
 

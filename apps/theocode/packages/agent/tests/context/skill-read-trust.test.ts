@@ -3,41 +3,16 @@ import { join } from 'node:path'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { buildThroughRuntime, readSkill, TRUSTED, UNTRUSTED } from '../helpers/advertised-skill-read.js'
 import { tempRoot } from '../helpers/temp-root.js'
 
 /**
  * #1904 — `skill_read` serves exactly what the `<skills>` block lists: the repository's skills only
  * in a trusted directory, and the operator's own from the CONFIGURED home.
  *
- * These go through `buildChatAgent`, so the `chat.ts` → `skillReadTool` and `disk-entities.ts` →
- * `discoverRoles` wiring is what is under test, not only the helpers.
+ * These go through `buildChatAgent` and the framework runtime, so the `chat.ts` → `.skills(…, { read:
+ * 'advertised' })` and `disk-entities.ts` → `discoverRoles` wiring is what is under test.
  */
-const allows = (on: boolean) => ({
-  projectConfig: on,
-  agentsMd: on,
-  hooks: on,
-  memory: on,
-  mcp: on,
-  skills: on,
-  subagents: on,
-  customCommands: on,
-})
-const TRUSTED = { level: 'trusted', allows: allows(true) }
-const UNTRUSTED = { level: 'untrusted', source: 'store', allows: allows(false) }
-
-const config = {
-  sandbox_mode: 'read-only',
-  approval_policy: 'on-request',
-  model: 'gpt-5.4',
-  reasoning_effort: 'medium',
-  hooks: [],
-  skills: [],
-  memory: false,
-  declaredWindow: undefined,
-  contextWindow: { window: 1000 },
-  sandboxPosture: { enforced: true, detail: 'test', mode: 'read-only' },
-}
-
 const discoverRoles = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/delegation/role-discovery.js', async (orig) => {
@@ -55,26 +30,8 @@ function write(root: string, name: string, canary: string): void {
   )
 }
 
-interface Compiled {
-  tools: { name: string; handler: (input: Record<string, unknown>) => unknown }[]
-}
-
-async function build(cwd: string, home: string, posture: unknown): Promise<Compiled> {
-  const { buildChatAgent } = await import('../../src/chat/chat.js')
-  return (await buildChatAgent({
-    surface: 'headless',
-    cwd,
-    home,
-    posture,
-    config,
-  } as never)) as unknown as Compiled
-}
-
-async function skillRead(agent: Compiled, name: string): Promise<string> {
-  const tool = agent.tools.find((t) => t.name === 'skill_read')
-  expect(tool, 'skill_read is missing from the agent').toBeDefined()
-  return String(await tool?.handler({ name }))
-}
+const build = buildThroughRuntime
+const skillRead = readSkill
 
 describe('skill_read through buildChatAgent (#1904)', () => {
   beforeEach(() => {
@@ -88,7 +45,7 @@ describe('skill_read through buildChatAgent (#1904)', () => {
     // One operator skill, so the tool exists and its not-found answer lists names.
     write(join(home, '.theokit', 'skills'), 'mine', 'MINE')
 
-    const answer = await skillRead(await build(cwd, home, UNTRUSTED), 'x')
+    const answer = await skillRead(await build(cwd, home, UNTRUSTED, ['x']), 'x')
 
     expect(answer).not.toContain('PROJECT-X')
     expect(answer).toContain('not found')
@@ -102,7 +59,7 @@ describe('skill_read through buildChatAgent (#1904)', () => {
     const home = tempRoot('skill-trust-home-')
     write(join(cwd, '.claude', 'skills'), 'x', 'PROJECT-X')
 
-    expect(await skillRead(await build(cwd, home, TRUSTED), 'x')).toContain('PROJECT-X')
+    expect(await skillRead(await build(cwd, home, TRUSTED, ['x']), 'x')).toContain('PROJECT-X')
   })
 
   it('reads the configured home and not the real one', async () => {
@@ -128,5 +85,31 @@ describe('skill_read through buildChatAgent (#1904)', () => {
     await build(cwd, home, TRUSTED)
 
     expect(discoverRoles).toHaveBeenCalledWith(expect.objectContaining({ cwd, home }))
+  })
+})
+
+describe('skill_read serves exactly the skills the <skills> block lists (#1925)', () => {
+  it('does not serve a skill on disk that the configuration did not enable', async () => {
+    const cwd = tempRoot('skill-adv-cwd-')
+    const home = tempRoot('skill-adv-home-')
+    write(join(cwd, '.claude', 'skills'), 'listed', 'LISTED-BODY')
+    write(join(cwd, '.claude', 'skills'), 'unlisted', 'UNLISTED-BODY')
+
+    const agent = await build(cwd, home, TRUSTED, ['listed'])
+
+    expect(await skillRead(agent, 'listed')).toContain('LISTED-BODY')
+    const answer = await skillRead(agent, 'unlisted')
+    expect(answer).not.toContain('UNLISTED-BODY')
+    expect(answer).toContain('not found')
+  })
+
+  it('serves a skill shipped in a plugin bundle once it is enabled', async () => {
+    const cwd = tempRoot('skill-adv-cwd-')
+    const home = tempRoot('skill-adv-home-')
+    write(join(cwd, '.claude', 'plugins', 'sample', 'skills'), 'bundled', 'BUNDLED-BODY')
+
+    const agent = await build(cwd, home, TRUSTED, ['bundled'])
+
+    expect(await skillRead(agent, 'bundled')).toContain('BUNDLED-BODY')
   })
 })

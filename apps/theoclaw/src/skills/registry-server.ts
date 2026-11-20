@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 
-import { parseSkillMarkdown } from './registry.js'
+import { skillHeader } from './legacy-compat.js'
 
 /**
  * OC-72: a reference skill registry. Packages live as `<dir>/<name>/<version>.json`, the exact bytes
@@ -29,6 +29,11 @@ function compareVersions(a: string, b: string): number {
   const pb = b.split('.').map(Number)
   for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return (pa[i] ?? 0) - (pb[i] ?? 0)
   return 0
+}
+
+/** The highest version of an ascending list. */
+function latestOf(versions: readonly string[]): string | undefined {
+  return versions[versions.length - 1]
 }
 
 /** What is wrong with a package (undefined when valid). */
@@ -57,13 +62,18 @@ function validatePackage(text: string, name: string, version: string): string | 
       return 'each file needs a path and contentBase64'
     }
     const path = f.path
-    if (path === '' || path.startsWith('/') || path.includes('\\') || /^[a-zA-Z]:/.test(path))
+    if (
+      path === '' ||
+      path.startsWith('/') ||
+      path.includes('\\') ||
+      /^[a-zA-Z]:/.test(path) ||
+      path.split('/').some((part) => part === '..' || part === '')
+    )
       return `bad path ${path}`
-    if (path.split('/').some((part) => part === '..' || part === '')) return `bad path ${path}`
     if (path === 'SKILL.md') skillMd = Buffer.from(f.contentBase64, 'base64').toString('utf8')
   }
   if (skillMd === undefined) return 'SKILL.md is missing'
-  const entry = parseSkillMarkdown(skillMd, 'bundled')
+  const entry = skillHeader(skillMd)
   if (entry === undefined) return 'SKILL.md does not parse'
   if (entry.name !== name) return 'SKILL.md name differs from the package name'
   return undefined
@@ -105,7 +115,7 @@ export function createSkillsRegistryHandler(options: SkillsRegistryOptions): Req
   const read = (name: string, version: string): Buffer =>
     readFileSync(join(dir, name, `${version}.json`))
   const describe = (name: string, versions: string[]): string => {
-    const latest = versions[versions.length - 1]
+    const latest = latestOf(versions)
     return latest === undefined
       ? ''
       : String(
@@ -134,7 +144,7 @@ export function createSkillsRegistryHandler(options: SkillsRegistryOptions): Req
         skills.push({
           name: entry.name,
           description,
-          latest: versions[versions.length - 1],
+          latest: latestOf(versions),
           versions,
         })
       }

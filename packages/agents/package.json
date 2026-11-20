@@ -25,6 +25,10 @@
       "types": "./dist/bridge.d.ts",
       "import": "./dist/bridge.js"
     },
+    "./control": {
+      "types": "./dist/control.d.ts",
+      "import": "./dist/control.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
@@ -138,7 +142,8 @@
     "@theokit/http": ">=2.1.0-next.0",
     "quickjs-emscripten-core": "0.32.0",
     "react": ">=18",
-    "zod": "^4.0.0"
+    "ws": ">=8",
+    "zod": "^4.2.0"
   },
   "peerDependenciesMeta": {
     "@jitl/quickjs-wasmfile-release-sync": {
@@ -149,6 +154,9 @@
     },
     "react": {
       "optional": true
+    },
+    "ws": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -156,11 +164,13 @@
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@theokit/acp": "^4.0.1",
     "@theokit/http": "workspace:*",
+    "@types/ws": "8.18.1",
     "ai": "7.0.14",
     "quickjs-emscripten-core": "0.32.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12",
+    "ws": "8.22.0",
     "zod": "^4.4.3"
   },
   "engines": {

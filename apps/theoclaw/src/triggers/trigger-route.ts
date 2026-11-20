@@ -1,4 +1,4 @@
-import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
+import { SeenIds, type BasePlatformAdapter, type PlatformName } from '@theokit/gateway'
 import { fromSdkMessage } from '@theokit/presenter'
 import { github } from 'theokit/server/webhook'
 import type { VerifyFn } from 'theokit/server/webhook'
@@ -38,20 +38,6 @@ function answer(status: number): Response {
   return new Response(null, { status })
 }
 
-/** The delivery ids a trigger accepted, the oldest dropped past the cap. */
-function deliveryCache(): { has(id: string): boolean; add(id: string): void } {
-  const seen = new Set<string>()
-  const order: string[] = []
-  return {
-    has: (id) => seen.has(id),
-    add: (id) => {
-      seen.add(id)
-      order.push(id)
-      if (order.length > REMEMBERED_DELIVERIES) seen.delete(order.shift() as string)
-    },
-  }
-}
-
 /** The prompt of one delivery: the trigger's instructions, if any, then the body as delivered. */
 function promptOf(trigger: TriggerSettings, body: string): string {
   const parts = [trigger.instructions, `The following was delivered by trigger ${trigger.name}:`, body]
@@ -84,7 +70,7 @@ export async function runText(agent: TurnAgent, prompt: string): Promise<{ reado
 export function createTriggerRoute(options: TriggerRouteOptions): WebhookRoute {
   const { trigger, adapterFor, withAgent, write } = options
   const verify = options.verify ?? github({ secret: trigger.secret })
-  const seen = deliveryCache()
+  const seen = new SeenIds(REMEMBERED_DELIVERIES)
   const { platform, channelId } = trigger.replyTo
 
   const run = async (body: string): Promise<void> => {

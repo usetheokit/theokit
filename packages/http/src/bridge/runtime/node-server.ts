@@ -6,6 +6,11 @@ import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { Duplex } from 'node:stream'
 
 import { nodeIncomingToRequest, writeResponseToNode } from './node.js'
+import {
+  normalizeTrustedProxy,
+  stampTrustedIdentity,
+  type TrustedProxyOptions,
+} from './trusted-proxy.js'
 
 export interface NodeServerOptions {
   /** Default true: the Request's signal aborts when the client disconnects before the response finished. */
@@ -13,6 +18,8 @@ export interface NodeServerOptions {
   /** Omitted: upgrade requests are answered with 404 and the socket is closed. */
   readonly onUpgrade?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void
   readonly onError?: (error: unknown, phase: 'request' | 'server') => void
+  /** Believe an identity header (and `x-forwarded-proto`) only from these peers. Invalid options throw. */
+  readonly trustedProxy?: TrustedProxyOptions
 }
 
 export interface NodeServer {
@@ -55,6 +62,7 @@ export function createNodeServer(
       // a failing hook must not escape
     }
   }
+  const proxy = options.trustedProxy ? normalizeTrustedProxy(options.trustedProxy) : undefined
   const abortOnDisconnect = options.abortOnDisconnect !== false
   const upgraded = new Set<Duplex>()
 
@@ -68,7 +76,14 @@ export function createNodeServer(
             if (!nodeRes.writableFinished) controller.abort()
           })
         }
-        const base = nodeIncomingToRequest(nodeReq)
+        // Read URL inputs before stamping: the identity header may be `host` or `x-forwarded-proto`.
+        const { host } = nodeReq.headers
+        const forwardedProto = nodeReq.headers['x-forwarded-proto']
+        const trusted = stampTrustedIdentity(nodeReq, proxy)
+        const base = nodeIncomingToRequest(nodeReq, {
+          proto: trusted ? forwardedProto : undefined,
+          host,
+        })
         const request = abortOnDisconnect ? new Request(base, { signal: controller.signal }) : base
         const response = await handler(request)
         await writeResponseToNode(response, nodeRes)

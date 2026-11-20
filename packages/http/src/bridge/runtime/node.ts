@@ -12,9 +12,12 @@ import { Readable } from 'node:stream'
 import type { RuntimeAdapter } from './types.js'
 
 /** Convert Node.js IncomingMessage to Web Standard Request. */
-export function nodeIncomingToRequest(nodeReq: IncomingMessage): Request {
-  const proto = nodeReq.headers['x-forwarded-proto'] ?? 'http'
-  const host = nodeReq.headers.host ?? 'localhost'
+export function nodeIncomingToRequest(
+  nodeReq: IncomingMessage,
+  origin?: { readonly proto?: string | string[]; readonly host?: string },
+): Request {
+  const proto = origin ? (origin.proto ?? 'http') : (nodeReq.headers['x-forwarded-proto'] ?? 'http')
+  const host = (origin ? origin.host : nodeReq.headers.host) ?? 'localhost'
   const url = `${proto}://${host}${nodeReq.url ?? '/'}` // eslint-disable-line @typescript-eslint/restrict-template-expressions -- proto/host are string|string[]
   const method = nodeReq.method ?? 'GET'
 

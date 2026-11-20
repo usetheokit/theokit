@@ -21,6 +21,14 @@ export interface A2AJsonRpcHandlerOptions {
   maxBodyBytes: number
   /** One bound over reading the body and the turn, in milliseconds. */
   timeoutMs: number
+  /**
+   * The most turns in flight at once. A request over it answers 503 with `retry-after`, after the
+   * method and `authorize` checks and before the body is read. A slot is held until `respond`
+   * settles, so a turn that outlived its deadline still counts. Omitted, no limit.
+   */
+  maxInFlight?: number
+  /** The `retry-after` of the 503, in seconds (default 5). */
+  retryAfterSeconds?: number
 }
 
 type RpcId = string | number | null
@@ -226,10 +234,16 @@ async function runTurn(
   return rpcError(id, INTERNAL_ERROR, 'the agent turn failed')
 }
 
+/** Counts the turns in flight for one handler. */
+interface Slots {
+  taken: number
+}
+
 async function handle(
   options: A2AJsonRpcHandlerOptions,
   request: Request,
   deadline: AbortSignal,
+  slots: Slots,
 ): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response(null, { status: 405, headers: { allow: 'POST' } })
@@ -237,17 +251,50 @@ async function handle(
   if (!options.authorize(request.headers.get('authorization') ?? undefined)) {
     return new Response(null, { status: 401, headers: { 'www-authenticate': 'Bearer' } })
   }
-  const read = await readBoundedBody(request, options.maxBodyBytes, deadline)
-  if (!read.ok) return new Response(null, { status: read.status })
-  const parsed = parseRequest(read.bytes)
-  if (!parsed.ok) return parsed.response
-  return runTurn(options, parsed.id, parsed.text, deadline)
+  if (options.maxInFlight !== undefined && slots.taken >= options.maxInFlight) {
+    return new Response(null, {
+      status: 503,
+      headers: { 'retry-after': String(options.retryAfterSeconds ?? 5) },
+    })
+  }
+  // The slot is released once the request is answered and any started `respond` has settled.
+  slots.taken += 1
+  let open = 2
+  const release = () => {
+    open -= 1
+    if (open === 0) slots.taken -= 1
+  }
+  let responded = false
+  const turnStarted = () => responded
+  const tracked: A2AJsonRpcHandlerOptions = {
+    ...options,
+    respond: async (text, signal) => {
+      responded = true
+      try {
+        return await options.respond(text, signal)
+      } finally {
+        release()
+      }
+    },
+  }
+  try {
+    const read = await readBoundedBody(request, options.maxBodyBytes, deadline)
+    if (!read.ok) return new Response(null, { status: read.status })
+    const parsed = parseRequest(read.bytes)
+    if (!parsed.ok) return parsed.response
+    return await runTurn(tracked, parsed.id, parsed.text, deadline)
+  } finally {
+    // No turn started: its half of the slot is never held.
+    if (!turnStarted()) release()
+    release()
+  }
 }
 
 /** Build the `message/send` handler. Each call keeps its own state; nothing is shared. */
 export function createA2AJsonRpcHandler(
   options: A2AJsonRpcHandlerOptions,
 ): (request: Request) => Promise<Response> {
+  const slots: Slots = { taken: 0 }
   return async (request: Request): Promise<Response> => {
     // Created on entry so one bound covers the body read and the turn.
     // A plain controller and timer, not AbortSignal.any + AbortSignal.timeout: on Node 22.12 that
@@ -261,7 +308,7 @@ export function createA2AJsonRpcHandler(
     else request.signal.addEventListener('abort', abort, { once: true })
     const deadline = controller.signal
     try {
-      return await handle(options, request, deadline)
+      return await handle(options, request, deadline, slots)
     } finally {
       clearTimeout(timer)
       request.signal.removeEventListener('abort', abort)

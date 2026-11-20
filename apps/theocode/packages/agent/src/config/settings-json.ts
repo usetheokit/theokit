@@ -71,8 +71,8 @@ import { TheokitAgentError } from '@theokit/agents'
 // the framework's own `names nothing a consumer cannot import` gate measured on 2026-09-12.
 import { permissionRulesFromSettings, type PermissionRule } from '@theokit/agents/config'
 
-import { hookSpecSchema } from '@theokit/agents/hooks'
-import { HOOK_EVENTS } from '../hooks/hooks-spec.js'
+import { CLAUDE_HOOK_EVENT_ALIASES, parseClaudeHooks } from '@theokit/agents/hooks'
+import { DEFAULT_HOOK_TIMEOUT_MS as DEFAULT_HOOK_TIMEOUT_MS_OURS } from '../hooks/hooks-spec.js'
 import { FOREIGN_SETTINGS_KEYS } from './foreign-keys.js'
 
 /** Raised when `settings.json` carries a shape the SDK's own read of the same file would reject. */
@@ -187,9 +187,6 @@ function asPermissionsBlock(
   }
 }
 
-/** `matcher: "*"` means every tool. It is not a regex, so it is dropped rather than forwarded. */
-const MATCH_ALL = '*'
-
 /**
  * Two conventions that are not settings in any dialect, and are present in both files measured
  * here: `$schema`, the editor's JSON Schema pointer, and a leading `_`, the way JSON files carry a
@@ -227,71 +224,63 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** One command entry: the hook, a string naming why it was dropped, or null when it is not one. */
-function translateOne(
-  event: string,
-  matcher: string | undefined,
-  entry: unknown,
-): TranslatedHook | string | null {
-  if (!isRecord(entry)) return null
-  const type = entry['type']
-  if (type !== 'command' || typeof entry['command'] !== 'string') {
-    return `${event}: hook of type "${String(type)}" is not a command`
-  }
-  if (!hookSpecSchema.shape.command.safeParse(entry['command']).success) {
-    return `${event}: hook command is empty or contains control characters that would be hidden in the approval dialog`
-  }
-  // Seconds there, milliseconds here. The unit change is the whole reason this is not a spread.
-  const seconds = entry['timeout']
-  return {
-    event,
-    command: entry['command'],
-    ...(matcher !== undefined && matcher !== MATCH_ALL ? { matcher } : {}),
-    ...(typeof seconds === 'number' ? { timeout_ms: seconds * 1000 } : {}),
-  }
-}
+/** Our spelling of each framework event, for handing the framework's specs back in our dialect. */
+const OUR_EVENT_NAME: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(CLAUDE_HOOK_EVENT_ALIASES).flatMap(([ours, theirs]) =>
+    theirs === null ? [] : [[theirs, ours]],
+  ),
+)
 
-/** Why this event's block cannot be translated at all, or null when it can. */
-function whyNotTranslatable(event: string, groups: unknown): string | null {
-  if (!(HOOK_EVENTS as readonly string[]).includes(event)) {
-    return `${event}: this product has no such hook event`
-  }
-  if (!Array.isArray(groups)) return `${event}: expected an array of matcher groups`
-  return null
-}
+/**
+ * A hook with no `timeout` takes OUR default, not the framework's 30 s. Filled in before the
+ * framework parses, and dropped again from the result so an unset timeout stays unset here.
+ */
+const DEFAULT_TIMEOUT_SECONDS = DEFAULT_HOOK_TIMEOUT_MS_OURS / 1000
 
-/** One event's matcher groups, fanned out: a group holds an array of commands, not one. */
-function translateGroups(event: string, groups: readonly unknown[]): (TranslatedHook | string)[] {
-  const out: (TranslatedHook | string)[] = []
-  for (const group of groups) {
-    if (!isRecord(group)) continue
-    const matcher = typeof group['matcher'] === 'string' ? group['matcher'] : undefined
-    const inner = Array.isArray(group['hooks']) ? group['hooks'] : []
-    for (const entry of inner) {
-      const one = translateOne(event, matcher, entry)
-      if (one !== null) out.push(one)
-    }
+function withOurTimeoutDefault(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [event, groups] of Object.entries(raw)) {
+    out[event] = Array.isArray(groups)
+      ? groups.map((group: unknown) => {
+          if (!isRecord(group) || !Array.isArray(group['hooks'])) return group
+          // A matcher that is not a string means "no matcher" here, as it always has.
+          const { matcher, ...rest } = group
+          return {
+            ...rest,
+            ...(typeof matcher === 'string' ? { matcher } : {}),
+            hooks: group['hooks'].map((entry: unknown) =>
+              isRecord(entry) && entry['timeout'] === undefined
+                ? { ...entry, timeout: DEFAULT_TIMEOUT_SECONDS }
+                : entry,
+            ),
+          }
+        })
+      : groups
   }
   return out
 }
 
+/** The framework says only that a hook is not a command; operators were told which type it was. */
+function nameTheType(reason: string, raw: Record<string, unknown>): string {
+  const at = /^(\w+)\[(\d+)\]\.hooks\[(\d+)\]: only "command" hooks are supported$/.exec(reason)
+  if (at === null) return reason
+  const group = (raw[at[1] as string] as unknown[] | undefined)?.[Number(at[2])]
+  const entry = isRecord(group) ? (group['hooks'] as unknown[])[Number(at[3])] : undefined
+  const type = isRecord(entry) ? String(entry['type']) : 'unknown'
+  return `${at[1] as string}: hook of type "${type}" is not a command`
+}
+
 export function translateForeignHooks(raw: unknown): ForeignHooksRead {
   if (!isRecord(raw)) return { hooks: [], dropped: [] }
-  const hooks: TranslatedHook[] = []
-  const dropped: string[] = []
-
-  for (const [event, groups] of Object.entries(raw)) {
-    const refusal = whyNotTranslatable(event, groups)
-    if (refusal !== null) {
-      dropped.push(refusal)
-      continue
-    }
-    for (const one of translateGroups(event, groups as unknown[])) {
-      if (typeof one === 'string') dropped.push(one)
-      else hooks.push(one)
-    }
-  }
-  return { hooks, dropped }
+  // The dialect itself (names, nesting, `*`, seconds, command validation) is the framework's.
+  const parsed = parseClaudeHooks(withOurTimeoutDefault(raw))
+  const hooks: TranslatedHook[] = parsed.specs.map((spec) => ({
+    event: OUR_EVENT_NAME[spec.event] ?? spec.event,
+    command: spec.command,
+    ...(spec.matcher !== undefined ? { matcher: spec.matcher } : {}),
+    ...(spec.timeout_ms !== DEFAULT_TIMEOUT_SECONDS * 1000 ? { timeout_ms: spec.timeout_ms } : {}),
+  }))
+  return { hooks, dropped: parsed.dropped.map((reason) => nameTheType(reason, raw)) }
 }
 
 /**
@@ -392,7 +381,6 @@ const SPECIFIER_ARG: Readonly<Record<string, string>> = {
   Grep: 'pattern',
 }
 
-
 export function translateSettings(raw: unknown, opts: TranslateOptions): SettingsRead {
   if (!isRecord(raw))
     return {
@@ -429,9 +417,9 @@ export function translateSettings(raw: unknown, opts: TranslateOptions): Setting
       // cannot get any other way: WHICH entries could not be rendered, and are therefore not being
       // applied even though the block as a whole is.
       const translated = permissionRulesFromSettings(asPermissionsBlock(value), {
-          specifierArg: SPECIFIER_ARG,
-          ...(opts.baseDir === undefined ? {} : { baseDir: opts.baseDir }),
-        })
+        specifierArg: SPECIFIER_ARG,
+        ...(opts.baseDir === undefined ? {} : { baseDir: opts.baseDir }),
+      })
       permissionRules = translated.rules
       unsupportedPermissions = translated.unsupported.map((u) => ({
         entry: u.entry,
