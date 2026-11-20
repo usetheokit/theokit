@@ -186,6 +186,7 @@ async function gcForCurrentProject(args: ExecSessions): Promise<void> {
   } catch (err) {
     process.stderr.write(`[sessions gc] ${err instanceof Error ? err.message : String(err)}\n`)
     exitAfterDrain(1)
+    return
   }
   const { plan, result } = outcome
   if (args.json) {

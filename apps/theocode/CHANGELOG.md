@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Changed
+- **The headless commands (`exec`, `review`, `sessions`, `doctor`, `goal`) now end through the framework's `exitAfterDrain`.** The exit code is the same, but the process exits only after stdout and stderr have drained, so piped output is no longer cut short. `sessions gc` also stops cleanly after a planning error instead of falling through to the report.
+
 ### Removed
 - **The unused `writeCredential` wrapper and `StoredOAuthCredential` type in `auth/credentials.ts`.** Sign-in already writes through the framework's `loginWithApiKey`; nothing called the wrapper, and `knip` flagged both.
 

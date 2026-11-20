@@ -207,8 +207,6 @@ describe('#1894 — doctor reports the wiring buildChatAgent publishes', () => {
     try {
       process.chdir(project)
       await doctorCommand({ json: true })
-    } catch (e) {
-      if ((e as Error).message !== 'exit') throw e
     } finally {
       code = typeof process.exitCode === 'number' ? process.exitCode : undefined
       process.exitCode = priorExitCode
@@ -254,8 +252,6 @@ describe('#1894 — doctor reports the wiring buildChatAgent publishes', () => {
     try {
       process.chdir(project)
       await doctor({ json: true })
-    } catch (e) {
-      if ((e as Error).message !== 'exit') throw e
     } finally {
       code = typeof process.exitCode === 'number' ? process.exitCode : undefined
       process.exitCode = priorExitCode
