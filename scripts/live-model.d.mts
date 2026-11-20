@@ -9,3 +9,6 @@ export const DEFAULT_LIVE_MODEL: string
 
 /** `env.LIVE_MODEL` trimmed, or `DEFAULT_LIVE_MODEL` when that leaves nothing. */
 export function resolveLiveModel(env: Record<string, string | undefined>): string
+
+/** `resolveLiveModel`, prefixed `openrouter/` unless it already is, so the SDK routes it to OpenRouter. */
+export function resolveSdkLiveModel(env: Record<string, string | undefined>): string
