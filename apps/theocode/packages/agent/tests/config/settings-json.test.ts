@@ -83,6 +83,16 @@ describe('hooks — the two dialects, and the four ways the foreign one breaks o
     expect(dropped.join(' ')).toContain('prompt')
   })
 
+  it('test_a_non_string_matcher_is_ignored_and_the_commands_are_kept', () => {
+    // The previous translator read a matcher that is not a string as "no matcher": the hooks ran
+    // match-all. The framework parser drops the whole group, so the adapter must not hand it one.
+    const { hooks, dropped } = translateForeignHooks({
+      Stop: [{ matcher: null, hooks: [{ type: 'command', command: 'check.sh' }] }],
+    })
+    expect(dropped).toEqual([])
+    expect(hooks).toEqual([{ event: 'Stop', command: 'check.sh' }])
+  })
+
   it('test_one_group_fans_out_to_one_entry_per_command', () => {
     // Measured: PostToolUse here holds one matcher group with three commands under it.
     const { hooks } = translateForeignHooks({

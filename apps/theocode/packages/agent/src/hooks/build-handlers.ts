@@ -1,5 +1,6 @@
 import {
   buildHookHandlers as buildInFramework,
+  CLAUDE_HOOK_EVENT_ALIASES,
   DEFAULT_CONTINUATION_BUDGET,
   type HookEvent as FrameworkEvent,
   type HookSpec as FrameworkSpec,
@@ -62,21 +63,12 @@ import type { HookEvent, HookSpec } from './hooks-spec.js'
 type Delivery = FrameworkEvent | null
 
 const EVENT_TO_FRAMEWORK: Readonly<Record<HookEvent, Delivery>> = {
-  PreToolUse: 'pre_tool_call',
-  // NOT `post_tool_call`: our PostToolUse hooks append feedback the model reads, which is what
-  // `transform_tool_result` does and what a notification-shaped `post_tool_call` does not.
-  PostToolUse: 'transform_tool_result',
-  Stop: 'post_assistant_reply',
-  // `hooks/session-start.ts` fires this, at the moment a surface mints a session id.
-  //
-  // It used to be `on_session_start`, and the event never ran. Registration was never the problem —
-  // measured: our map carried it, the compiled plugin registered it, and the framework fires what is
-  // registered. What differs is MEANING: `on_session_start` is once per loop context, and this
-  // product builds a new agent module per turn, so the mapping would run a `SessionStart` hook on
-  // every user message. That is worse than not running it, because it is exactly the hook an author
-  // writes assuming it happens once.
-  //
-  // `null` here is what stops it being delivered twice once the surface fires it.
+  // The framework's dialect table owns the names, including the decision that `PostToolUse` is
+  // `transform_tool_result` (its hooks append feedback the model reads), not `post_tool_call`.
+  ...(CLAUDE_HOOK_EVENT_ALIASES as Readonly<Record<HookEvent, Delivery>>),
+  // `hooks/session-start.ts` fires this at the moment a surface mints a session id. Mapped to
+  // `on_session_start` it would run once per turn (a new agent module is built per turn), and be
+  // delivered twice once the surface fires it. `null` keeps the map total and says so.
   SessionStart: null,
 }
 

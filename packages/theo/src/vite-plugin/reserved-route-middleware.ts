@@ -24,6 +24,11 @@ export function createReservedRouteMiddleware(
       }
       res.statusCode = reserved.status
       res.setHeader('Content-Type', 'application/json')
+      const token = process.env.THEOKIT_TEST_READY_TOKEN
+      // Only the test helper sets the token: it proves this child, not a foreign listener, answered.
+      if (token !== undefined && pathname === '/__theo/ready') {
+        res.setHeader('x-theokit-ready-token', token)
+      }
       res.end(JSON.stringify(reserved.body))
     } catch (err) {
       // A readiness probe that throws is a 503 inside `serveReservedRoute`; reaching here is a fault

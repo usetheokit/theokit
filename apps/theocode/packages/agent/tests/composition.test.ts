@@ -159,6 +159,7 @@ const discoverSubagents = vi.fn((cwd: string, opts: { settingSources: string[] }
 vi.mock('@theokit/agents', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   loadMcpJson,
+  loadMcpScopes: (await import('./helpers/keyed-mcp-scopes.js')).keyedMcpScopes(loadMcpJson),
   discoverSubagents,
 }))
 

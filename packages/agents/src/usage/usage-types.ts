@@ -48,6 +48,12 @@ export interface UsageRecord {
   tokens: { input: number; output: number; cacheRead?: number; cacheWrite?: number }
   /** USD in fractional dollars. */
   costUsd: number
+  /**
+   * `false` when the provider or catalog gave no finite price for this run; `costUsd` is then `0`
+   * and must not be summed as a price. Optional: `undefined` means priced, so records written
+   * before this field existed keep their meaning.
+   */
+  priced?: boolean
   timestamp: Date
 }
 
@@ -87,6 +93,12 @@ export interface UsageResult {
   totalTokens: number
   totalCostUsd: number
   runs: number
+  /**
+   * How many of `runs` were explicitly unpriced (`priced: false`); their cost is not in
+   * `totalCostUsd`. Optional so adapters written before this field existed still satisfy the
+   * interface; absent means unknown.
+   */
+  unpricedRuns?: number
 }
 
 /** Where usage goes. The framework owns the vocabulary; the app owns the storage. */
