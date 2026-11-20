@@ -45,10 +45,7 @@ describe('B-024 — the composition seam is real', () => {
     // Reading the real ~/.theokit store instead would make this assertion depend on the machine.
     writeFileSync(store, JSON.stringify({ trusted: [dir] }), { mode: 0o600 })
 
-    const composed = await composeRun(
-      { overrides: [] },
-      { cwd: dir, store, userDir: OPERATOR_HOME },
-    )
+    const composed = await composeRun({ overrides: [] }, { cwd: dir, store, userDir: OPERATOR_HOME })
 
     expect(composed.mod.default, 'composition produced no agent module').not.toBe(undefined)
     expect(
@@ -70,10 +67,7 @@ describe('B-024 — the composition seam is real', () => {
     )
 
     writeFileSync(store, JSON.stringify({ trusted: [] }), { mode: 0o600 })
-    const untrusted = await composeRun(
-      { overrides: [] },
-      { cwd: dir, store, userDir: OPERATOR_HOME },
-    )
+    const untrusted = await composeRun({ overrides: [] }, { cwd: dir, store, userDir: OPERATOR_HOME })
 
     writeFileSync(store, JSON.stringify({ trusted: [dir] }), { mode: 0o600 })
     const trusted = await composeRun({ overrides: [] }, { cwd: dir, store, userDir: OPERATOR_HOME })
@@ -91,10 +85,7 @@ describe('B-024 — the composition seam is real', () => {
   it('test_a_cli_override_reaches_the_effective_config', async () => {
     writeFileSync(store, JSON.stringify({ trusted: [dir] }), { mode: 0o600 })
 
-    const composed = await composeRun(
-      { overrides: ['reasoning_effort=high'] },
-      { cwd: dir, store, userDir: OPERATOR_HOME },
-    )
+    const composed = await composeRun({ overrides: ['reasoning_effort=high'] }, { cwd: dir, store, userDir: OPERATOR_HOME })
 
     expect(composed.cfg.reasoning_effort, 'a -c override did not reach the effective config').toBe(
       'high',
@@ -150,10 +141,7 @@ describe('composeRun routes the model for the credential that will serve it', ()
 
   it('test_without_a_router_the_configured_id_is_used_unchanged', async () => {
     // Anti-vacuity: the seam is additive. A caller that supplies no router gets what it always got.
-    const composed = await composeRun(
-      { overrides: [], model: 'anthropic/x' },
-      { cwd: dir, store, userDir: OPERATOR_HOME },
-    )
+    const composed = await composeRun({ overrides: [], model: 'anthropic/x' }, { cwd: dir, store, userDir: OPERATOR_HOME })
 
     expect(composed.model).toBe('anthropic/x')
   })

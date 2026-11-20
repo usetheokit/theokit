@@ -31,9 +31,7 @@ describe('toolLine', () => {
   it('test_a_patch_renders_as_a_patch_not_as_escaped_json', () => {
     const out = toolLine({ toolName: 'ApplyPatch', input: { patch: PATCH } })
 
-    expect(out, 'the diff body must survive as lines').toContain(
-      '-  return (amount + amount) * rate',
-    )
+    expect(out, 'the diff body must survive as lines').toContain('-  return (amount + amount) * rate')
     expect(out).toContain('+  return amount + amount * rate')
     expect(out, 'escaped newlines mean it went through JSON.stringify').not.toContain('\\n')
   })

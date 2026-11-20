@@ -17,11 +17,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import {
-  createHumanProcessor,
-  createJsonlProcessor,
-  type ExecIo,
-} from '../../src/runtime/events.js'
+import { createHumanProcessor, createJsonlProcessor, type ExecIo } from '../../src/runtime/events.js'
 
 function capture(): { io: ExecIo; out: string[]; err: string[] } {
   const out: string[] = []

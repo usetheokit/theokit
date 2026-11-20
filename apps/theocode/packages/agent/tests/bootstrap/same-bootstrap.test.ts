@@ -10,7 +10,7 @@ import { bootstrapSurface } from '../../src/bootstrap/index.js'
 const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 
-it('the CLI, the TUI and the ACP entry each await the same bootstrapSurface once', () => {
+it('the CLI, the TUI and the ACP entry all call the same bootstrapSurface, awaited, once each', () => {
   const entries: readonly [file: string, importLine: RegExp][] = [
     [
       '../../../cli/src/main.ts',
@@ -33,7 +33,7 @@ it('the CLI, the TUI and the ACP entry each await the same bootstrapSurface once
   }
 })
 
-it('one call runs each framework bootstrap step exactly once, in order', async () => {
+it('one awaited call has installed the home and the project dir when it resolves', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'once-'))
   try {
     const env: Record<string, string | undefined> = {}

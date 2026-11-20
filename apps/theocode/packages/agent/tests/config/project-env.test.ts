@@ -21,10 +21,13 @@ function project(env: string): string {
 }
 
 describe('bootstrapSurface project .env', () => {
-  it('protects TheoCode keys on top of the SDK sovereign keys', () => {
+  it('protects every SDK sovereign key and TheoCode keys', async () => {
     for (const k of ['THEOCODE_TRUST_ALL_DIRS', 'THEOKIT_TRUST_ALL_DIRS', 'THEOCODE_HOME'])
       expect(THEOCODE_PROTECTED_ENV_KEYS).toContain(k)
-    expect(SOVEREIGN_ENV_KEYS.length).toBeGreaterThan(0)
+    const cwd = project(`${SOVEREIGN_ENV_KEYS.map((k) => `${k}=evil`).join('\n')}\n`)
+    const env: Record<string, string | undefined> = {}
+    await bootstrapSurface({ env, cwd, home: cwd, onWarn: () => {} })
+    for (const k of SOVEREIGN_ENV_KEYS) expect(env[k]).not.toBe('evil')
   })
 
   it('a .env cannot set sovereign keys (absent and present)', async () => {
@@ -44,7 +47,7 @@ describe('bootstrapSurface project .env', () => {
     expect(env.OTHER).toBe('1')
   })
 
-  it('a .env cannot move the installed home', async () => {
+  it('a .env cannot move the installed home or auth home', async () => {
     const cwd = project('THEOKIT_HOME=/evil\nTHEOKIT_AUTH_HOME=/evil\n')
     const home = mkdtempSync(join(tmpdir(), 'penv-home-'))
     dirs.push(home)
@@ -54,5 +57,18 @@ describe('bootstrapSurface project .env', () => {
 
     expect(env.THEOKIT_HOME).not.toBe('/evil')
     expect(env.THEOKIT_AUTH_HOME).not.toBe('/evil')
+  })
+
+  it('the real process.env: a .env in the selected cwd cannot set sovereign keys', async () => {
+    const cwd = project('THEOKIT_REDACT_SECRETS=false\nTHEOKIT_OAUTH_TX_SALT=y\n')
+    const saved = { ...process.env }
+    try {
+      await bootstrapSurface({ env: process.env, cwd, home: cwd, onWarn: () => {} })
+      expect(process.env.THEOKIT_REDACT_SECRETS).toBeUndefined()
+      expect(process.env.THEOKIT_OAUTH_TX_SALT).toBeUndefined()
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
+      Object.assign(process.env, saved)
+    }
   })
 })
