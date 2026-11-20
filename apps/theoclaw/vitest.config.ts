@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 import { configDefaults, defineConfig } from 'vitest/config'
 
 /** Vitest matches excludes relative to each project's root, even for a root-level run. */
@@ -26,7 +28,7 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, ...projectRelativeExcludes(process.argv)],
     environment: 'node',
     // Routes the CI live and container model through OpenRouter before any test reads it.
-    setupFiles: ['tests/support/live-model-setup.ts'],
+    setupFiles: [fileURLToPath(new URL('./tests/support/live-model-setup.ts', import.meta.url))],
     // Read only by a `--coverage` run, so the plain suite is unchanged. The control plane is the
     // code B-372 adds, and its plan bounds it at 90% on all three counters.
     coverage: {
