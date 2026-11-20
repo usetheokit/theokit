@@ -59,7 +59,7 @@
       "status": "shipped",
       "evidence": {
         "file": "packages/agent/tests/foreign-skills-are-listed.test.ts",
-        "test": "names the skills that live under .claude/skills"
+        "test": "names the skills that live under .claude/skills and load without a config line"
       }
     },
     {

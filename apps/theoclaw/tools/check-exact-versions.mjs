@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url'
 
 import { exactVersionViolations as sharedExactVersionViolations } from '../../../scripts/lib/app-dependencies.mjs'
 
+const SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies']
+
 /** Thrown when a manifest cannot be judged at all, as opposed to holding a range. */
 class ManifestShapeError extends Error {
   constructor(message) {
@@ -29,14 +31,13 @@ const isPlainObject = (value) => value !== null && typeof value === 'object' && 
  * one; TheoClaw's check has never judged `peerDependencies`, so those are left out.
  */
 export function exactVersionViolations(manifest) {
-  const judged = { ...manifest }
-  delete judged.peerDependencies
-  try {
-    return sharedExactVersionViolations(judged)
-  } catch (error) {
-    if (error instanceof TypeError) throw new ManifestShapeError(error.message)
-    throw error
+  const judged = {}
+  for (const section of SECTIONS) {
+    if (!(section in manifest)) continue
+    if (!isPlainObject(manifest[section])) throw new ManifestShapeError(`${section} is not an object`)
+    judged[section] = manifest[section]
   }
+  return sharedExactVersionViolations(judged)
 }
 
 /** The parsed manifest at `path`; throws `ManifestShapeError` naming why it cannot be read. */

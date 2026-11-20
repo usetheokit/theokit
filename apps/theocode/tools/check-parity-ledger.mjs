@@ -25,17 +25,8 @@ const PRODUCTS = ['codex', 'claude-code']
 const STATUSES = ['shipped', 'pointer', 'gap', 'not-planned']
 const nonEmpty = (v) => typeof v === 'string' && v.trim().length > 0
 
-/**
- * True when the source has a live `it('name'` / `test('name'` declaration (not a comment, skip or todo).
- * Uses the shared scanner; TheoCode's ledger names a test by a prefix of its title, so a title that
- * starts with `name` also counts.
- */
-export function declaresTest(source, name) {
-  if (declaresActiveTest(source, name)) return true
-  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const code = source.replace(/\/\*[\s\S]*?\*\/|(^|[^:'"`])\/\/[^\n]*/g, '$1')
-  return new RegExp(`^\\s*(?:it|test)\\(\\s*(['"\`])${esc}`, 'm').test(code)
-}
+/** True when the source has a live `it('name'` / `test('name'` declaration: the shared scanner, exact title. */
+export const declaresTest = declaresActiveTest
 
 /** Problems with the rows, one string each. `read` returns a file's text or null. */
 export function ledgerProblems(rows, read, answeredCodexNames = [], surface = null) {
