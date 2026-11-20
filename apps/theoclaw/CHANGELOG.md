@@ -22,6 +22,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- With `THEOCLAW_BROWSER=on` the instance runs one Chromium, started with the first `/control` session and restarted if it dies, on a persistent profile (`.theoclaw/browser-profile`) that every `/control` session attaches to over loopback CDP, so a login survives between turns and two sessions can use the browser at once (#1152).
 - `sessions` (list, show, export, share) and `resume` read transcripts with the SDK's `readSessionMessages` instead of parsing the JSONL by hand, so a change in the transcript format no longer breaks them silently (#1780).
 - `/sessions` now lists through the SDK listing (async, newest first), so a transcript whose first line is malformed is identified by a later record. (#1943)
 - Trigger delivery ids use the framework `SeenIds`, WebChat reads its body with `readCappedBody`, and the Google Chat route no longer caps the body a second time after the webhook router (#1781).
