@@ -14,12 +14,12 @@ import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
 import { listSessions } from '@theokit/agents/session'
-import { readSessionMessages } from '@theokit/sdk'
 
 import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { resolveInstance } from '../instance.js'
+import { readFullHistory } from './transcript-history.js'
 
 /**
  * `theoclaw sessions list|show|export` (OC-51): a read-only view over the chat transcripts the SDK
@@ -41,20 +41,12 @@ interface Message {
 
 const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [--json]'
 
-type ChatSession = Awaited<ReturnType<typeof listSessions>>[number] & {
-  id: string
-  workspace: string
-}
-
 /** The user and assistant turns of a session, read by the SDK; entries with no text are dropped. */
 async function readMessages(session: ChatSession): Promise<Message[]> {
-  const stored = await readSessionMessages({
-    sessionId: session.id,
+  const stored = await readFullHistory({
     cwd: session.workspace,
-    sessionDir: join(session.workspace, '.theoclaw'),
-    // The reader throws on a record whose content is a string (older transcripts); one such
-    // session must not take down `list` or `resume`, so it reads as having no messages.
-  }).catch(() => [])
+    transcript: session.transcript,
+  })
   // The reader's `text` also renders tool calls and results; the CLI shows only what was said.
   return stored
     .map((entry) => ({
@@ -62,6 +54,11 @@ async function readMessages(session: ChatSession): Promise<Message[]> {
       text: (entry.parts ?? []).map((part) => (part.type === 'text' ? part.text : '')).join(''),
     }))
     .filter((entry) => entry.text !== '')
+}
+
+type ChatSession = Awaited<ReturnType<typeof listSessions>>[number] & {
+  id: string
+  workspace: string
 }
 
 async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {

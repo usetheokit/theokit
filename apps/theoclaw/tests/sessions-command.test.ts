@@ -23,26 +23,18 @@ const text = (value: string) => [{ type: 'text', text: value }]
 function workspaceWithSession(): string {
   const workspace = scratchDir()
   const id = 'matrix-dm-_owner_localhost-g0'
-  const turn = (type: string, uuid: string, parentUuid: string | null, content: unknown) => ({
-    type,
-    uuid,
-    parentUuid,
-    sessionId: id,
-    timestamp: '2026-01-01T00:00:00.000Z',
-    message: { content },
-  })
   const lines = [
-    turn('user', 'u1', null, text('hello there')),
-    turn('assistant', 'a1', 'u1', text('hi owner')),
-    turn('user', 'u2', 'a1', [{ type: 'tool_result', content: 'x' }]),
+    { type: 'user', sessionId: id, message: { content: text('hello there') } },
+    { type: 'assistant', sessionId: id, message: { content: text('hi owner') } },
+    { type: 'user', sessionId: id, message: { content: [{ type: 'tool_result', content: 'x' }] } },
   ]
-  // A line that is not JSON sits between the turns; the SDK reader skips it.
+  // The file has its own name and no uuids; a line that is not JSON sits between the turns.
   const body = [
     JSON.stringify(lines[0]),
     '{not json',
     ...lines.slice(1).map((l) => JSON.stringify(l)),
   ]
-  writeFileSync(join(projectDir(workspace), `${id}.jsonl`), body.join('\n') + '\n')
+  writeFileSync(join(projectDir(workspace), 'abc.jsonl'), body.join('\n') + '\n')
   return workspace
 }
 
@@ -126,6 +118,15 @@ describe('transcript reading', () => {
     return workspace
   }
 
+  it('goes through the SDK reader with the workspace as cwd', async () => {
+    const workspace = workspaceWithSession()
+    vi.mocked(readSessionMessages).mockClear()
+    await run(['sessions', 'export', 'matrix-dm'], workspace)
+    expect(readSessionMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: workspace, sessionDir: expect.any(String) }),
+    )
+  })
+
   it('shows what the SDK reader returns, not what the file holds', async () => {
     vi.mocked(readSessionMessages).mockResolvedValueOnce([
       { role: 'user', text: 'from the reader', parts: [{ type: 'text', text: 'from the reader' }] },
@@ -134,54 +135,114 @@ describe('transcript reading', () => {
     expect(out).toBe('user: from the reader\n')
   })
 
-  it('shows what the SDK reader returns for a compacted transcript', async () => {
+  it('keeps the messages before a compact boundary', async () => {
     const id = 'compacted-g0'
     const turn = (type: string, uuid: string, parentUuid: string | null, value: string) => ({
       type,
       uuid,
       parentUuid,
       sessionId: id,
-      timestamp: '2026-01-01T00:00:00.000Z',
       message: { content: text(value) },
+    })
+    const boundary = (uuid: string) => ({
+      type: 'system',
+      subtype: 'compact_boundary',
+      uuid,
+      parentUuid: null,
+      sessionId: id,
     })
     const workspace = write(`${id}.jsonl`, [
       turn('user', 'u1', null, 'first question'),
       turn('assistant', 'a1', 'u1', 'first answer'),
-      { type: 'system', subtype: 'compact_boundary', uuid: 'b1', parentUuid: null, sessionId: id },
+      boundary('b1'),
       turn('user', 'u2', 'b1', 'second question'),
+      turn('assistant', 'a2', 'u2', 'second answer'),
+      boundary('b2'),
+      turn('user', 'u3', 'b2', 'third question'),
     ])
-    const sdk = await readSessionMessages({
-      sessionId: id,
-      cwd: workspace,
-      sessionDir: join(workspace, '.theoclaw'),
-    })
-    const expected = sdk.map((m) => `${m.role}: ${m.text}\n`).join('')
-    expect(expected).not.toBe('')
+    const expected =
+      'user: first question\nassistant: first answer\nuser: second question\n' +
+      'assistant: second answer\nuser: third question\n'
     expect((await run(['sessions', 'export', 'compacted'], workspace)).out).toBe(expected)
+    expect((await run(['sessions', 'list'], workspace)).out).toContain('compacted-g0\t5 messages')
+    expect((await run(['resume'], workspace)).out).toContain(expected)
+    const shared = scratchDir()
+    await run(['sessions', 'share', 'compacted', '--to', shared], workspace)
+    const snapshot = JSON.parse(
+      readFileSync(join(shared, 'shared-sessions', `${id}.json`), 'utf8'),
+    ) as { messages: unknown[] }
+    expect(snapshot.messages).toHaveLength(5)
   })
 
-  it('does not fail on a transcript with string content', async () => {
-    const id = 'legacy-g0'
-    const workspace = write(`${id}.jsonl`, [
+  it('keeps every chain of a transcript, in file order', async () => {
+    const id = 'forked-g0'
+    const workspace = write('fork.jsonl', [
       {
         type: 'user',
         uuid: 'u1',
         parentUuid: null,
         sessionId: id,
-        message: { content: 'plain question' },
+        message: { content: text('one') },
       },
       {
         type: 'assistant',
         uuid: 'a1',
         parentUuid: 'u1',
         sessionId: id,
-        message: { content: text('answer') },
+        message: { content: text('two') },
+      },
+      {
+        type: 'assistant',
+        uuid: 'a2',
+        parentUuid: 'u1',
+        sessionId: id,
+        message: { content: text('branch') },
+      },
+      {
+        type: 'user',
+        uuid: 'u3',
+        parentUuid: 'a2',
+        sessionId: id,
+        message: { content: text('three') },
+      },
+    ])
+    expect((await run(['sessions', 'export', 'forked'], workspace)).out).toBe(
+      'user: one\nassistant: two\nassistant: branch\nuser: three\n',
+    )
+  })
+
+  it('reads string content, with or without uuids', async () => {
+    const id = 'legacy-g0'
+    const workspace = write('legacy.jsonl', [
+      { type: 'user', sessionId: id, message: { content: 'plain question' } },
+      {
+        type: 'assistant',
+        uuid: 'a1',
+        parentUuid: null,
+        sessionId: id,
+        message: { content: 'plain answer' },
       },
     ])
     const { code, out } = await run(['sessions', 'export', 'legacy'], workspace)
     expect(code).toBe(0)
-    expect(out).toBe('')
-    expect((await run(['sessions', 'list'], workspace)).out).toContain('legacy-g0\t0 messages')
+    expect(out).toBe('user: plain question\nassistant: plain answer\n')
+  })
+
+  it('skips content it cannot read and goes on', async () => {
+    const id = 'odd-g0'
+    const workspace = write('odd.jsonl', [
+      {
+        type: 'user',
+        sessionId: id,
+        message: { content: [null, 7, { type: 'text', text: 'kept' }] },
+      },
+      { type: 'assistant', sessionId: id, message: { content: { not: 'an array' } } },
+      { type: 'assistant', sessionId: id, message: null },
+      { type: 'user', sessionId: id, message: { content: text('after') } },
+    ])
+    const { code, out } = await run(['sessions', 'export', 'odd'], workspace)
+    expect(code).toBe(0)
+    expect(out).toBe('user: kept\nuser: after\n')
   })
 })
 
