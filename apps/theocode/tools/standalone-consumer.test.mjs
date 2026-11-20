@@ -27,7 +27,8 @@ describe('standalone consumer manifests', () => {
     for (const [name, range] of Object.entries(depsOf(read(`standalone/${p}`)))) {
       expect(range, name).not.toMatch(/^workspace:/)
       if (name.startsWith('@theokit/')) expect(range, name).toMatch(/^[~^]?\d/)
-      if (real[name] !== 'workspace:*') expect(range, name).toBe(real[name])
+      // `workspace:16.13.0` links this checkout and names the release a registry consumer gets (#2243).
+      if (real[name] !== 'workspace:*') expect(range, name).toBe(real[name].replace(/^workspace:/, ''))
     }
   })
 

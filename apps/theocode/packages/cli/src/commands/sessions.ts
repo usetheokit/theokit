@@ -145,7 +145,7 @@ const UNNAMEABLE = 'transcript collected without a registry removal'
  * The project's registry listing INCLUDING archived sessions. The default listing hides them, and
  * an archived session's transcript would then look unregistered and be unlinked with its entry kept.
  */
-export async function listIncludingArchived(
+async function listIncludingArchived(
   cwd: string,
   list: (o: { runtime: 'local'; cwd: string; includeArchived: true }) => Promise<{
     items: { agentId: string; archived?: boolean }[]

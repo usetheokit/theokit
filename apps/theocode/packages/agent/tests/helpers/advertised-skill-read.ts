@@ -20,7 +20,7 @@ const allows = (on: boolean) => ({
 export const TRUSTED = { level: 'trusted', allows: allows(true) }
 export const UNTRUSTED = { level: 'untrusted', source: 'store', allows: allows(false) }
 
-export function skillConfig(skills: string[] = []) {
+function skillConfig(skills: string[] = []) {
   return {
     sandbox_mode: 'read-only',
     approval_policy: 'on-request',

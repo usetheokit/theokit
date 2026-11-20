@@ -219,12 +219,38 @@ function printHeadlessApprovalNotice(decision: Parameters<typeof headlessApprova
   if (notice !== null) process.stderr.write(notice)
 }
 
+/** The turn's stream, opened per attempt so the framework can fork it once on `session_busy`. */
+function openTurnStream(
+  streamAgentTurnInProcess: typeof import('@theokit/agents').streamAgentTurnInProcess,
+  target: Awaited<ReturnType<typeof resolveRunTarget>>,
+  prompt: string,
+  failure: ReturnType<typeof turnFailureReporting>,
+): ReturnType<typeof perTurnStream> {
+  return perTurnStream(
+    failure,
+    (sessionId) =>
+      streamAgentTurnInProcess(target.mod, target.apiKey, {
+        message: prompt,
+        sessionId: sessionId,
+        awaitApproval: async () => target.headlessPolicy,
+        // Without this the framework masks every failure to "An error occurred." — the right
+        // default for a public HTTP endpoint and the wrong one here, where the caller IS the
+        // operator. See `@theocode/shared/turn-error`.
+        onError: failure.onError,
+        // The only member read is `rate_limit`; every other event is ignored, the same discipline
+        // the TUI's MCP sink applies to the same stream.
+        onRunEvent: failure.onRunEvent,
+      }) as AsyncIterable<unknown>,
+  )
+}
+
 export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<void> {
   const prompt = readPrompt(args)
   if (prompt === undefined) return
 
   const { streamAgentTurnInProcess } = await import('@theokit/agents')
-  const { headlessPolicy, mod, apiKey, shellTimeoutMs } = await resolveRunTarget(args)
+  const target = await resolveRunTarget(args)
+  const { headlessPolicy, shellTimeoutMs } = target
   printHeadlessApprovalNotice(headlessPolicy)
 
   const sessionId = await openSession(args)
@@ -244,22 +270,7 @@ export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<voi
     // the user as `rate_limit (HTTP 429)` (see the ORDER note above, which fixed that specific
     // case). The count comes from the SDK's own `rate_limit` event, not from anything invented here.
     const failure = turnFailureReporting({ diagnosticsEnabled })
-    const openStream = perTurnStream(
-      failure,
-      (sessionId) =>
-        streamAgentTurnInProcess(mod, apiKey, {
-          message: prompt,
-          sessionId: sessionId,
-          awaitApproval: async () => headlessPolicy,
-          // Without this the framework masks every failure to "An error occurred." — the right
-          // default for a public HTTP endpoint and the wrong one here, where the caller IS the
-          // operator. See `@theocode/shared/turn-error`.
-          onError: failure.onError,
-          // The only member read is `rate_limit`; every other event is ignored, the same discipline
-          // the TUI's MCP sink applies to the same stream.
-          onRunEvent: failure.onRunEvent,
-        }) as AsyncIterable<unknown>,
-    )
+    const openStream = openTurnStream(streamAgentTurnInProcess, target, prompt, failure)
     // The framework opens the stream (forking once on `session_busy`) and drains it; the processor
     // taps each chunk on the way, so this product's output formats are untouched. The framework's
     // own output is silenced: the processor is what writes to stdout and stderr.

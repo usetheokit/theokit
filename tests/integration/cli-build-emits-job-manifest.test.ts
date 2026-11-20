@@ -4,6 +4,8 @@ import { execFileSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
+import { linkToolchain } from '../helpers/link-toolchain'
+
 const REPO = resolve(__dirname, '../..')
 const CLI = resolve(REPO, 'packages/theo/src/cli/index.ts')
 // The local `tsx` by absolute path rather than `npx`: a bare command name is resolved through
@@ -78,6 +80,7 @@ const runBuild = (): { stdout: string; exitCode: number } => {
 beforeEach(() => {
   projectDir = mkdtempSync(join(tmpdir(), 'theokit-cli-job-'))
   writeMinimalApp()
+  linkToolchain(projectDir)
 })
 
 afterEach(() => {
