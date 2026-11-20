@@ -137,11 +137,7 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
       let streamedError = false
       if (turn.stream !== undefined) {
         for await (const event of turn.stream()) {
-          if (
-            typeof event === 'object' &&
-            event !== null &&
-            (event as { type?: unknown }).type === 'error'
-          ) {
+          if (event.type === 'error') {
             streamedError = true
           }
         }

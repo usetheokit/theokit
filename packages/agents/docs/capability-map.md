@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1448 export(s) across 26 entry point(s).
+1450 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -450,6 +450,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SDKAgent` | type |
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
+| `SdkMessageLike` | type |
 | `SdkRun` | type |
 | `SdkRunAgent` | type |
 | `SdkSendOptions` | type |
@@ -693,6 +694,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ScoreVerdict` | type |
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
+| `SdkMessageLike` | type |
 | `SdkRun` | type |
 | `SdkRunAgent` | type |
 | `SdkSendOptions` | type |
