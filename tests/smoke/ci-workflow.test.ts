@@ -313,7 +313,7 @@ describe('Release Workflow', () => {
 
 describe('CI public-surface gate', () => {
   const job = loadWorkflow('ci.yml').jobs['typecheck-build']
-  type Step = {
+  interface Step {
     name?: string
     run?: string
     env?: Record<string, string>
