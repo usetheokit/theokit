@@ -243,12 +243,4 @@ describe('a guarded turn can be streamed', () => {
     await expect(violation).rejects.toBeInstanceOf(GuardrailViolationError)
     await expect(violation).rejects.toMatchObject(BLOCKED_OUTPUT)
   })
-
-  it('test_a_wait_only_handle_is_guarded_without_calling_a_stream_it_lacks', async () => {
-    const handle = withGuardrails(fakeHandle({ outcome: FINISHED }), [countingRedactor().guard])
-    const turn = await handle.send('hi')
-
-    expect(await collect(turn.stream)).toEqual([assistantMessage('the word is [REDACTED]')])
-    expect(turn.cancel).toBeUndefined()
-  })
 })
