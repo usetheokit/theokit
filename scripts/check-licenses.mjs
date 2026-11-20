@@ -81,13 +81,6 @@ const ALLOWED_WITH_REASON = new Map([
       'misrepresenting the origin of the software.',
   ],
   [
-    'Apache-2.0 AND MIT',
-    '@swc/core-linux-x64-gnu (via the optional @swc/core peer of @theokit/http@2.6.0, reached by the ' +
-      'released @theokit/agents TheoCode now pins). A conjunction, so both terms apply: the tarball ' +
-      'LICENSE is the unmodified Apache License, Version 2.0, and the rest is MIT. Both are ' +
-      'permissive; the obligations are notice retention and the Apache patent grant.',
-  ],
-  [
     'Apache 2.0',
     'qrcode-terminal@0.12.0. A non-SPDX spelling of Apache-2.0: the tarball LICENSE was read and is the ' +
       'unmodified Apache License, Version 2.0 (attribution and notice retention, patent grant).',

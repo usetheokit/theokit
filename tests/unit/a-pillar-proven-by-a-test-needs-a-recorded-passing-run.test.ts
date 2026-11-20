@@ -11,9 +11,9 @@
  * files under a checkout path that is not this one. Every fixture lives in an OS temp directory.
  */
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -240,14 +240,11 @@ describe('a proven row names a live proof test that exists and declares the titl
     expect(out.stdout).toContain('file must sit under apps/theoclaw or apps/theocode')
   })
 
-  it('fails a path that reaches a package test through a link inside the app', () => {
-    // A link under apps/theocode that points at packages/agents/tests makes the framework's own live
-    // test look as if it sat inside the app. (The app's node_modules no longer links the framework:
-    // TheoCode consumes the released package, #2243.) The link is made here and removed after.
-    const linkDir = mkdtempSync(join(ROOT, 'apps/theocode/pillar-link-'))
-    dirs.push(linkDir)
-    symlinkSync(join(ROOT, 'packages/agents/tests'), join(linkDir, 'tests'))
-    const linked = `apps/theocode/${basename(linkDir)}/tests/live/live-m52-capability.test.ts`
+  it('fails a path that reaches a package test through the app node_modules link', () => {
+    // apps/theocode/node_modules/@theokit/agents is the pnpm link to packages/agents, so this file
+    // is the framework's own live test spelled as if it sat inside the app.
+    const linked =
+      'apps/theocode/node_modules/@theokit/agents/tests/live/live-m52-capability.test.ts'
     const fullName = 'file/registry authoring → same waist → real answer'
     const out = check([[record(1, 'passed', linked)]], compactionRow({ file: linked, fullName }))
 
