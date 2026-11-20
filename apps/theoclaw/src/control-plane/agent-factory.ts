@@ -3,19 +3,44 @@ import { rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { loadInstructionTree } from '@theokit/agents/config'
+
 import { customProviderPlugins, parseCustomProviders } from '../agent/custom-providers.js'
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
 import type { ThinkingLevel } from '../agent/failover.js'
 import type { AgentImport, TheoClawAgentOptions, TheoClawLocalOptions } from '../agent/create-agent.js'
 import { parseFallbackModel, parseThinkingLevel, withFailover } from '../agent/failover.js'
 import { parseApprovedHooks } from '../agent/hook-approval.js'
-import { readPersonaPrompt } from '../agent/persona-files.js'
 import { agentTelemetry, readTelemetrySettings } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import type { BindEnvironment } from './bind.js'
 import { TheoClawConfigError } from './errors.js'
 import { requireModel } from './settings.js'
 import type { TurnAgent } from './turn.js'
+
+/**
+ * OC-55 (B-379): the persona files of a workspace, injected into a chat agent's system prompt, in this order.
+ * HEARTBEAT.md is left out: it steers the heartbeat run, not a conversation.
+ */
+export const PERSONA_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'AGENTS.md', 'STANDING-ORDERS.md'] as const
+
+/** One file is cut at this many characters, so a runaway file cannot fill the context. */
+export const PERSONA_FILE_LIMIT = 20_000
+
+/** The persona section for `workspace`: each present, non-empty file under its own heading; '' when none. */
+export function readPersonaPrompt(workspace: string): string {
+  const { blocks } = loadInstructionTree({
+    cwd: workspace,
+    roots: ['.'],
+    fileNames: PERSONA_FILES,
+    order: 'as-listed',
+    budget: { maxDepth: 0, maxFiles: PERSONA_FILES.length, maxChars: Number.MAX_SAFE_INTEGER, maxCharsPerFile: PERSONA_FILE_LIMIT },
+  })
+  return blocks
+    .filter((block) => block.content.trim() !== '')
+    .map((block) => `## ${block.path}\n\n${block.content.trim()}`)
+    .join('\n\n')
+}
 
 /** The slice of `Agent.create` the factory calls; tests pass a fake. */
 export type CreateAgent = (options: TheoClawAgentOptions) => Promise<TurnAgent>
