@@ -14,7 +14,14 @@ import type {
   SkillsSettings,
   SystemPromptResolver,
 } from '@theokit/sdk'
-import type { CostBreakdown, MemorySettings, TelemetrySettings, TokenUsage } from '@theokit/sdk'
+import type {
+  CostBreakdown,
+  HookApprovalGate,
+  HookApprovalRequest,
+  MemorySettings,
+  TelemetrySettings,
+  TokenUsage,
+} from '@theokit/sdk'
 import { PermissionEngine, PermissionPlugin } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
@@ -95,28 +102,13 @@ interface M8CreateOptions {
  */
 /**
  * #686 — a consumer's decision point before the SDK spawns a hook, forwarded to
- * `Agent.create({ local: { hooks } })`.
- *
- * Declared here rather than imported: the SDK's `HookApprovalGate` landed in `5.4.0` and this
- * package's floor is `^4.52.1`, so importing the type would refuse to build on every version below
- * it. The shape is structural and small, which is the same reasoning `compatSources` already
- * records — "a string union is declarable here".
+ * `Agent.create({ local: { hooks } })`. The types are the SDK's own, re-exported under the same names.
  *
  * The SDK calls the option `hooks`. On this layer's authoring surface it is `hookApproval`, because
  * `defineAgent({ hooks })` is already the LIFECYCLE seam and two different security-relevant things
  * under one name is how a consumer configures the wrong one.
  */
-export interface HookApprovalGate {
-  readonly approve?: (request: HookApprovalRequest) => boolean | Promise<boolean>
-}
-
-/** What the consumer is shown when asked to approve a hook. Mirrors the SDK's shape (5.4.0). */
-export interface HookApprovalRequest {
-  readonly command: string
-  readonly event: string
-  readonly sourcePath?: string
-  readonly matcher?: string
-}
+export type { HookApprovalGate, HookApprovalRequest }
 
 /** The major in which `compatSources` itself landed — reading the foreign root at all. */
 const COMPAT_ROOT_SINCE_MAJOR = 5

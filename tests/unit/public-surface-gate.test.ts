@@ -14,16 +14,28 @@ interface Baseline {
   entries: Record<
     string,
     {
-      internals: Record<string, string>
-      names: Record<string, { tier: string; declaration: string; deprecatedSince: string | null }>
+      names: Record<
+        string,
+        {
+          tier: string
+          declaration: string
+          deprecatedSince: string | null
+          internals: Record<string, string>
+        }
+      >
     }
   >
 }
 interface Gate {
   DEPRECATION_WINDOW_DAYS: number
   extractSurface: (dir: string) => Baseline
-  comparePolicy: (prev: Baseline, next: Baseline, o: { major: boolean; now: number }) => string[]
-  declaresMajor: (texts: string[], pkg: string) => boolean
+  comparePolicy: (
+    prev: Baseline,
+    next: Baseline,
+    o: { major: boolean; now: number; level?: string },
+  ) => string[]
+  declaresMajor: (texts: string[], pkg: string, level?: 'major' | 'minor') => boolean
+  breakingLevel: (version: string) => 'major' | 'minor'
 }
 
 const path: string = resolve(import.meta.dirname, '..', '..', 'scripts', 'check-public-surface.mjs')
@@ -52,6 +64,10 @@ function surface(dts: string, extra: Record<string, string> = {}): Baseline {
   }
   return gate.extractSurface(dir)
 }
+
+/** Every referenced declaration of an entry, keyed by identity (merged over its exports). */
+const refsOf = (b: Baseline, entry = '.'): Record<string, string> =>
+  Object.assign({}, ...Object.values(b.entries[entry]?.names ?? {}).map((n) => n.internals))
 
 const NOW = Date.parse('2026-11-17')
 const run = (a: Baseline, b: Baseline, major = false) =>
@@ -109,7 +125,7 @@ describe('public surface gate', () => {
     const src = (inner: string) =>
       `interface Inner { ${inner} }\nexport type Outer = Inner\nexport {}\n`
     const prev = surface(src('a: string'))
-    expect(prev.entries['.']?.internals['dist/index.d.ts#Inner']).toContain('a: string')
+    expect(refsOf(prev)['dist/index.d.ts#Inner']).toContain('a: string')
     expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
     expect(run(prev, surface(src('a: number')))).toEqual([
       expect.stringContaining('referenced type dist/index.d.ts#Inner changed'),
@@ -121,7 +137,7 @@ describe('public surface gate', () => {
     const src = (inner: string) =>
       `/** @experimental */\nexport interface Exp { ${inner} }\nexport type Outer = Exp\n`
     const prev = surface(src('a: string'))
-    expect(prev.entries['.']?.internals['dist/index.d.ts#Exp']).toContain('a: string')
+    expect(refsOf(prev)['dist/index.d.ts#Exp']).toContain('a: string')
     expect(run(prev, surface(src('a: string; b?: number')))).toEqual([])
     expect(run(prev, surface(src('a: number')))).toEqual([
       expect.stringContaining('referenced type dist/index.d.ts#Exp changed'),
@@ -135,7 +151,7 @@ describe('public surface gate', () => {
     })
     const index = `import { Shared as A } from './one'\nimport { Shared as B } from './two'\nexport type Out = [A, B]\n`
     const prev = surface(index, src('b: string'))
-    const keys = Object.keys(prev.entries['.']?.internals ?? {})
+    const keys = Object.keys(refsOf(prev))
     expect(keys).toEqual(['dist/one.d.ts#Shared', 'dist/two.d.ts#Shared'])
     // A change to the second one is not hidden by the first one with the same name.
     expect(run(prev, surface(index, src('b: number')))).toEqual([
@@ -149,8 +165,104 @@ describe('public surface gate', () => {
       surface(`import { C } from './chunk-${hash}'\nexport type Out = C\n`, {
         [`chunk-${hash}.d.ts`]: 'export interface C { a: string }\n',
       })
-    expect(Object.keys(at('aubY9WIa').entries['.']?.internals ?? {})).toEqual(['dist/chunk.d.ts#C'])
+    expect(Object.keys(refsOf(at('aubY9WIa')))).toEqual(['dist/chunk-<hash>.d.ts#C'])
     expect(at('aubY9WIa')).toEqual(at('Zz09_-xY'))
+  })
+
+  const chunks = (one: string, two: string) => ({
+    'chunk-ABCDEFG1.d.ts': `export interface T { ${one} }\n`,
+    'chunk-ABCDEFG2.d.ts': `export interface T { ${two} }\n`,
+  })
+  const tuple = `import { T as A } from './chunk-ABCDEFG1'\nimport { T as B } from './chunk-ABCDEFG2'\nexport type Out = [A, B]\n`
+  const split = `import { T as A } from './chunk-ABCDEFG1'\nimport { T as B } from './chunk-ABCDEFG2'\nexport type Out1 = A\nexport type Out2 = B\n`
+  const changed = expect.stringContaining('referenced type dist/chunk-<hash>.d.ts#T')
+
+  it('keeps both declarations when two chunks mask to the same name, and fails a break in either', () => {
+    const prev = surface(tuple, chunks('a: string', 'b: string'))
+    expect(Object.keys(refsOf(prev))).toEqual([
+      'dist/chunk-<hash>.d.ts#T@dist/index.d.ts#Out>A',
+      'dist/chunk-<hash>.d.ts#T@dist/index.d.ts#Out>B',
+    ])
+    for (const f of [chunks('a: number', 'b: string'), chunks('a: string', 'b: number')]) {
+      expect(run(prev, surface(tuple, f))).toEqual([changed])
+    }
+    expect(run(prev, surface(tuple, chunks('a: string; c?: number', 'b: string')))).toEqual([])
+  })
+
+  it('fails when two chunks that mask alike swap their shapes under one export', () => {
+    const prev = surface(tuple, chunks('a: string', 'b: string'))
+    expect(run(prev, surface(tuple, chunks('b: string', 'a: string')))).not.toEqual([])
+  })
+
+  it('ties each reference to its declaration, not to the order the walk meets them', () => {
+    const iface = (members: string) =>
+      `import { T as A } from './chunk-ABCDEFG1'\nimport { T as B } from './chunk-ABCDEFG2'\nexport interface Out { ${members} }\n`
+    const prev = surface(iface('a: A; b: B'), chunks('p: string', 'q: string'))
+    // `x?: B` comes first and the two shapes swap: both old members change incompatibly.
+    const next = surface(iface('x?: B; a: A; b: B'), chunks('q: string', 'p: string'))
+    expect(run(prev, next)).not.toEqual([])
+  })
+
+  it('keys a reference by the declaration it resolves to when two wrappers import different `T` as `T`', () => {
+    const wrappers = (one: string, two: string) => ({
+      ...chunks(one, two),
+      'w1.d.ts': `import { T } from './chunk-ABCDEFG1'\nexport interface W1 { t: T }\n`,
+      'w2.d.ts': `import { T } from './chunk-ABCDEFG2'\nexport interface W2 { t: T }\n`,
+    })
+    const index = (members: string) =>
+      `import { W1 } from './w1'\nimport { W2 } from './w2'\nexport interface Out { ${members} }\n`
+    const prev = surface(index('a: W1; b: W2'), wrappers('p: string', 'q: string'))
+    // `x?: W2` is met first and the two shapes swap: both old members change incompatibly.
+    const next = surface(index('x?: W2; a: W1; b: W2'), wrappers('q: string', 'p: string'))
+    expect(run(prev, next)).not.toEqual([])
+  })
+
+  it('keeps references of separate exports apart when their chunks mask alike', () => {
+    const prev = surface(split, chunks('a: string', 'b: string'))
+    for (const f of [chunks('a: number', 'b: string'), chunks('a: string', 'b: number')]) {
+      expect(run(prev, surface(split, f))).toEqual([changed])
+    }
+    expect(run(prev, surface(split, chunks('b: string', 'a: string')))).toHaveLength(2)
+  })
+
+  it('keeps `types.d.ts` and `types-internal.d.ts` distinct, since only a hash suffix is stripped', () => {
+    const index = `import { Shared as A } from './types'\nimport { Shared as B } from './types-internal'\nexport type Out = [A, B]\n`
+    const files = {
+      'types.d.ts': 'export interface Shared { a: string }\n',
+      'types-internal.d.ts': 'export interface Shared { b: string }\n',
+    }
+    expect(Object.keys(refsOf(surface(index, files)))).toEqual([
+      'dist/types-internal.d.ts#Shared',
+      'dist/types.d.ts#Shared',
+    ])
+  })
+
+  it('does not merge a hash-like file name with the plain one, so a change to either is seen', () => {
+    const index = `import { Shared as A } from './types'\nimport { Shared as B } from './types-internAl'\nexport type Out = [A, B]\n`
+    const files = (inner: string) => ({
+      'types.d.ts': 'export interface Shared { a: string }\n',
+      'types-internAl.d.ts': `export interface Shared { ${inner} }\n`,
+    })
+    const prev = surface(index, files('b: string'))
+    expect(Object.keys(refsOf(prev))).toEqual([
+      'dist/types-<hash>.d.ts#Shared',
+      'dist/types.d.ts#Shared',
+    ])
+    expect(run(prev, surface(index, files('b: number')))).toEqual([
+      expect.stringContaining('referenced type dist/types-<hash>.d.ts#Shared changed'),
+    ])
+  })
+
+  it('keeps a hash-like file identity when an unrelated plain file with the stripped name appears', () => {
+    const before = `import { Shared as B } from './types-internAl'\nexport type Out = B\n`
+    const after = `import { Shared as A } from './types'\nimport { Shared as B } from './types-internAl'\nexport type Out = B\nexport interface Opt { x?: A }\n`
+    const hashed = { 'types-internAl.d.ts': 'export interface Shared { b: string }\n' }
+    const prev = surface(before, hashed)
+    const next = surface(after, {
+      ...hashed,
+      'types.d.ts': 'export interface Shared { a: string }\n',
+    })
+    expect(run(prev, next)).toEqual([])
   })
 
   it('fails a stable value export turned into a type-only export', () => {
@@ -181,6 +293,30 @@ describe('public surface gate', () => {
     ])
   })
 
+  it('treats minor as the breaking bump for a 0.x package only', () => {
+    expect(gate.breakingLevel('0.83.0')).toBe('minor')
+    expect(gate.breakingLevel('1.2.0')).toBe('major')
+    const minor = ["---\n'theokit': minor\n---\n"]
+    expect(gate.declaresMajor(minor, 'theokit', 'minor')).toBe(true)
+    expect(gate.declaresMajor(minor, 'theokit', 'major')).toBe(false)
+    expect(gate.declaresMajor(["---\n'theokit': patch\n---\n"], 'theokit', 'minor')).toBe(false)
+    const prev = surface(BASE)
+    const next = surface('export interface Opts { a: string }\n')
+    expect(gate.comparePolicy(prev, next, { major: false, now: NOW, level: 'minor' })[0]).toContain(
+      '"@x/pkg": minor',
+    )
+  })
+
+  it('refuses a removal inside the window for a 0.x package even with a minor changeset', () => {
+    const dep = surface(
+      '/** @deprecated since 2026-11-10 use g */\nexport declare function f(): void\n',
+    )
+    const gone = surface('export declare function g(): void\n')
+    const out = gate.comparePolicy(dep, gone, { major: true, now: NOW, level: 'minor' })
+    expect(out).toHaveLength(1)
+    expect(out[0]).toContain('window is')
+  })
+
   it('reads a major declaration from changeset frontmatter', () => {
     expect(gate.declaresMajor(["---\n'@x/pkg': major\n---\n\nx"], '@x/pkg')).toBe(true)
     expect(gate.declaresMajor(["---\n'@x/pkg': minor\n---\n"], '@x/pkg')).toBe(false)
@@ -192,7 +328,7 @@ describe('public surface gate CLI', () => {
   const REPO = resolve(import.meta.dirname, '..', '..')
   const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')))
 
-  function repo(): string {
+  function repo(version?: string): string {
     const root = mkdtempSync(join(tmpdir(), 'surface-cli-'))
     dirs.push(root)
     mkdirSync(join(root, 'scripts'))
@@ -202,7 +338,7 @@ describe('public surface gate CLI', () => {
     symlinkSync(join(REPO, 'node_modules'), join(root, 'node_modules'))
     writeFileSync(
       join(root, 'packages', 'pkg', 'package.json'),
-      JSON.stringify({ name: '@x/pkg', exports: { '.': { types: './dist/index.d.ts' } } }),
+      JSON.stringify({ name: '@x/pkg', version, exports: { '.': { types: './dist/index.d.ts' } } }),
     )
     git(root, 'init', '-q', '-b', 'main')
     return root
@@ -231,8 +367,8 @@ describe('public surface gate CLI', () => {
     git(root, 'commit', '-q', '-m', msg)
   }
   /** main holds a baseline with `f` and `g`; a branch removes `g` and may add a changeset. */
-  function removal(changeset?: string, changesetOnMain = false): string {
-    const root = repo()
+  function removal(changeset?: string, changesetOnMain = false, version?: string): string {
+    const root = repo(version)
     setDts(root, 'export declare function f(): void\nexport declare function g(): void\n')
     expect(gate(root, 'pkg', '--write').status).toBe(0)
     if (changesetOnMain && changeset) writeFileSync(join(root, '.changeset', 'old.md'), changeset)
@@ -256,6 +392,16 @@ describe('public surface gate CLI', () => {
     expect(gate(root, 'pkg', '--base', 'main').status).toBe(1)
   })
 
+  it('runs the drift check without --base, in a checkout that has no origin/main', () => {
+    const root = repo()
+    setDts(root, 'export declare function f(): void\n')
+    gate(root, 'pkg', '--write')
+    commit(root, 'base')
+    expect(gate(root, 'pkg').status).toBe(0)
+    setDts(root, 'export declare function h(): void\n')
+    expect(gate(root, 'pkg').status).toBe(1)
+  })
+
   it('fails a removal without a major changeset in the range', () => {
     const r = gate(removal(), 'pkg', '--base', 'main')
     expect(r.status).toBe(1)
@@ -270,18 +416,19 @@ describe('public surface gate CLI', () => {
     expect(gate(removal(MAJOR, true), 'pkg', '--base', 'main').status).toBe(1)
   })
 
-  it('fails when the base has no baseline, unless bootstrapping is explicit', () => {
-    const root = repo()
-    writeFileSync(join(root, 'README.md'), 'x')
-    commit(root, 'base without a baseline')
-    git(root, 'checkout', '-q', '-b', 'pr')
-    setDts(root, 'export declare function f(): void\n')
-    gate(root, 'pkg', '--write')
-    commit(root, 'pr adds the baseline')
-    const strict = gate(root, 'pkg', '--base', 'main')
-    expect(strict.status).toBe(1)
-    expect(strict.stderr).toContain('--allow-missing-base')
-    expect(gate(root, 'pkg', '--base', 'main', '--allow-missing-base').status).toBe(0)
+  it('for a 0.x package a minor changeset passes a removal and a patch one fails', () => {
+    const MINOR = "---\n'@x/pkg': minor\n---\n\nx\n"
+    const PATCH = "---\n'@x/pkg': patch\n---\n\nx\n"
+    expect(gate(removal(MINOR, false, '0.5.0'), 'pkg', '--base', 'main').status).toBe(0)
+    const none = gate(removal(undefined, false, '0.5.0'), 'pkg', '--base', 'main')
+    expect(none.status).toBe(1)
+    expect(none.stderr).toContain('"@x/pkg": minor')
+    expect(gate(removal(PATCH, false, '0.5.0'), 'pkg', '--base', 'main').status).toBe(1)
+  })
+
+  it('for a 1.x package a minor changeset does not cover a removal', () => {
+    const MINOR = "---\n'@x/pkg': minor\n---\n\nx\n"
+    expect(gate(removal(MINOR, false, '1.5.0'), 'pkg', '--base', 'main').status).toBe(1)
   })
 
   it('exits 2 for an unknown package and for an unreadable base', () => {

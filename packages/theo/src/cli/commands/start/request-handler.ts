@@ -81,9 +81,14 @@ async function tryServeReserved(
   const reserved = await serveReservedRoute(pathname, ctx.reservedRoutes ?? {})
   if (reserved === null) return false
   const payload = JSON.stringify(reserved.body)
+  const token = process.env.THEOKIT_TEST_READY_TOKEN
   res.writeHead(reserved.status, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(payload),
+    // Only the test helper sets the token: it proves this child, not a foreign listener, answered.
+    ...(token !== undefined && pathname === '/__theo/ready'
+      ? { 'x-theokit-ready-token': token }
+      : {}),
   })
   res.end(payload)
   return true

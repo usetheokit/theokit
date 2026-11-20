@@ -1,0 +1,58 @@
+import { readFileSync, writeFileSync } from 'node:fs'
+import { parseArgs } from 'node:util'
+
+import { loadProjectEnv } from '@theokit/sdk'
+import { readHeadlessPrompt, runHeadlessTurn } from '@theokit/agents/commands'
+import { streamAgentTurnInProcess } from 'theokit/server/agent'
+
+import * as chatAgent from '../agents/chat.js'
+
+// Load a project `.env` if present, WITHOUT letting it move the credential store.
+//
+// A repository's `.env` is untrusted input: it arrives with the clone, before any trust prompt.
+// `loadProjectEnv` applies everything else and refuses the keys that decide WHERE the framework
+// looks (`SOVEREIGN_ENV_KEYS`); those stay the operator's, set in the shell.
+loadProjectEnv()
+
+/** Resolve the provider key from the environment (OpenRouter / Anthropic / OpenAI). */
+const apiKey = (): string =>
+  process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY ?? ''
+
+/** Piped stdin, or '' on an interactive terminal so an argument-only run never blocks. */
+const readStdin = (): string => (process.stdin.isTTY ? '' : readFileSync(0, 'utf-8'))
+
+async function main(): Promise<void> {
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    options: {
+      json: { type: 'boolean', default: false },
+      output: { type: 'string', short: 'o' },
+    },
+  })
+
+  let message: string
+  try {
+    message = readHeadlessPrompt({ prompt: positionals.join(' '), stdin: 'append', readStdin })
+  } catch (e) {
+    process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`)
+    process.exitCode = 1
+    return
+  }
+
+  const outputFile = values.output
+  const result = await runHeadlessTurn(
+    streamAgentTurnInProcess(chatAgent, apiKey(), { message }),
+    {
+      io: {
+        out: (s) => void process.stdout.write(s),
+        err: (s) => void process.stderr.write(s),
+      },
+      json: values.json,
+      outputLastMessage:
+        outputFile === undefined ? undefined : (text) => writeFileSync(outputFile, text),
+    },
+  )
+  process.exitCode = result.exitCode
+}
+
+await main()

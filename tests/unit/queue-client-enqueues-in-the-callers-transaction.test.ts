@@ -5,6 +5,7 @@ import type { JobBackend } from '../../packages/theo/src/server/jobs/job-backend
 import { createOutbox } from '../../packages/theo/src/server/jobs/outbox.js'
 import {
   createQueueClient,
+  TransactionalCancelUnsupportedError,
   TransactionalEnqueueUnsupportedError,
 } from '../../packages/theo/src/server/jobs/queue-client.js'
 import type { PoolLike } from '../../packages/theo/src/server/storage/storage-types.js'
@@ -67,5 +68,27 @@ describe('QueueClient.enqueueInTransaction', () => {
     } finally {
       backend.destroy()
     }
+  })
+})
+
+describe('QueueClient.cancelInTransaction', () => {
+  it('test_cancels_through_the_callers_connection', async () => {
+    const cancel = vi.fn(() => Promise.resolve(true))
+    const backend: JobBackend = { ...transactionalBackend(), cancelInTransaction: cancel }
+    const queue = createQueueClient(backend, createOutbox())
+
+    const removed = await queue.cancelInTransaction(client, 'run-task' as never, {
+      idempotencyKey: 'k1',
+    })
+
+    expect(removed).toBe(true)
+    expect(cancel).toHaveBeenCalledWith(client, { name: 'run-task', idempotencyKey: 'k1' })
+  })
+
+  it('test_refuses_a_backend_without_cancelInTransaction', async () => {
+    const queue = createQueueClient(new InMemoryJobBackend(), createOutbox())
+    await expect(
+      queue.cancelInTransaction(client, 'run-task' as never, { idempotencyKey: 'k1' }),
+    ).rejects.toBeInstanceOf(TransactionalCancelUnsupportedError)
   })
 })

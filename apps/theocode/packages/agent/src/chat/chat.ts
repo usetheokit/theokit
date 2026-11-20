@@ -3,13 +3,14 @@ import { homedir } from 'node:os'
 import { AgentBuilder, ConfigurationError, loadMcpJson } from '@theokit/agents'
 
 import { mcpScopes } from '../mcp-scopes.js'
-import { bothRuleRoots, publishWiring } from '../composition/composition-record.js'
+import { bothRuleRoots, publishWiringAndListen } from '../composition/composition-record.js'
 import type { WiredCapabilities } from '../wired-capabilities.js'
 import { memoryEnabledForSession } from '../memory/memory-switch.js'
 import { sandboxModeForSession } from '../sandbox-switch.js'
 import { withSandboxMode } from '../config/effective-config.js'
 import {
   createGenericHttpSearchAdapter,
+  createInteractiveShellTool,
   createQuestionTool,
   createUpdatePlanTool,
   createWebFetchTool,
@@ -36,12 +37,11 @@ import {
 import { interactiveWrapCommand } from '@theokit/agents/sandbox'
 import { loadApprovedHooks } from '../hooks/index.js'
 import { buildHookHandlers, withBuiltinShellVeto, parseHooks } from '../hooks/index.js'
-import { sandboxWritePolicy } from '../config/index.js'
+import { sandboxWritePolicy } from '@theokit/agents/tool-scope'
 import { resolveTrustPosture, type TrustPosture } from '../config/index.js'
 import { baseInstructionsFor } from '../output-style-wiring.js'
 import { createAnalystSubagent, createDelegateToTeamTool } from '../delegation/index.js'
 import { abandonQuestion, ask } from '../ask/index.js'
-import { createInteractiveShellTool } from '../ask/index.js'
 import { MAX_PTY_SESSIONS } from '../pty/index.js'
 import type { SessionPtyOwner } from '../pty/index.js'
 import { ToolRegistry, resolveToolScope } from '../tools/index.js'
@@ -49,7 +49,6 @@ import type { AgentDefinitionLike } from '../delegation/named-subagents.js'
 import { diskEntities } from './disk-entities.js'
 import { permissionsPluginsFor } from '../composition/agent-spec.js'
 import { refuseForeignHook } from '../hooks/foreign-hook-gate.js'
-import { skillReadTool } from '../context/readable-skills.js'
 import { settingSourcesFor } from '../setting-sources.js'
 
 /** B-055 — told when a PreToolUse hook blocks a tool call, so a surface can render it. */
@@ -185,7 +184,7 @@ export async function buildChatAgent(overrides: {
     searchConfigured,
   })
 
-  publishWiring(overrides?.onWired, { posture, cwd, cfg, mcp, operatorSkills: disk.operatorSkills, rules, aggregateCuts })
+  const onCompiled = publishWiringAndListen(overrides?.onWired, { posture, cwd, cfg, mcp, operatorSkills: disk.operatorSkills, rules, aggregateCuts })
 
   // M70 — the two registrations that depend on the surface PROFILE, applied here because the builder
   // is a fluent chain with no `.tools([...])`: there is no way to skip a link in the middle of it.
@@ -199,23 +198,14 @@ export async function buildChatAgent(overrides: {
   // type, T1.2 made name and description options, and the adapter stopped existing — it did not shrink,
   // it vanished. `askUser` remains the fallback; the preferred asker comes from the context.
   const profileScopedTools = profileTools(overrides?.surface, ask, abandonQuestion)
-  // B-099 — the tool the system prompt has been telling the model to call.
-  //
-  // `instructions.ts` says "call `skill_read` with its name to load the steps", and nothing added
-  // it. The SDK does not add it for you — "The SDK NEVER auto-injects it — bring-your-own-tools
-  // stays intact" — and describes what that leaves behind: "the entire on-disk surface was
-  // advertised to the model and unreadable by it". Measured 2026-09-15 beside Claude Code on the
-  // same project: it loaded a skill body and returned the token inside; this product answered that
-  // the required tool was not available, over 75 skills sitting under `.claude/skills/`.
-  //
-  // Absent when there is nothing to read, so a project with no skills does not carry a tool whose
-  // every answer would be "no such skill".
+  // B-099 / #1925 — `skill_read`, the tool the system prompt tells the model to call, is no longer built
+  // here: `.skills(…, { read: 'advertised' })` in `withProjectEntities` makes the framework serve exactly
+  // what the `<skills>` block lists, after the trust gate.
   const allTools = [
     ...profileScopedTools,
-    ...(await skillReadTool(overrides.cwd, operatorHome, posture.allows.skills)),
     ...(overrides?.extraTools ?? []),
   ]
-  return allTools.reduce((acc, tool) => acc.tool(tool), chain).build()
+  return chain.tools(allTools).onWired(onCompiled).build()
 }
 
 /**
@@ -243,7 +233,7 @@ function chatContext(overrides: {
   return {
     posture,
     cfg,
-    writePolicy: sandboxWritePolicy(cfg.sandbox_mode),
+    writePolicy: sandboxWritePolicy(cfg.sandbox_mode, cwd),
     registry: new ToolRegistry(resolveToolScope(cfg, cwd)),
     modelId: overrides?.model ?? cfg.model,
     cwd,
@@ -332,8 +322,8 @@ function chatHookChain(
   )
 }
 
-function withWriteTools<T extends { tool: (t: CustomTool) => T }>(
-  base: T,
+function withWriteTools(
+  base: ReturnType<typeof baseAgent>['agent'],
   ctx: {
     writePolicy: ReturnType<typeof sandboxWritePolicy>
     registry: ToolRegistry
@@ -345,13 +335,15 @@ function withWriteTools<T extends { tool: (t: CustomTool) => T }>(
     cwd: string
     reasoning_effort?: ReasoningEffort
   },
-): T {
+) {
   const { writePolicy, registry, modelId, cfg, posture, lifecycleHooks, cwd } = ctx
   const overrides = { reasoning_effort: ctx.reasoning_effort }
-  return writePolicy.writes
-    ? base
+  return base.when(writePolicy.writes, (b) =>
+    b
         .tool(registry.get('ApplyPatch'))
+        .approval('ApplyPatch', GATE_QUESTIONS.ApplyPatch)
         .tool(registry.get('Edit'))
+        .approval('Edit', GATE_QUESTIONS.Edit)
         // M36 — a SEQUENTIAL team (explorer → worker) built from the SDK's `Squad.create` (no bespoke
         // orchestration — Rule 9). Write-gated with the other write tools: the worker member needs write
         // authority, so gating here keeps a team from widening a member's authority beyond the parent's
@@ -370,7 +362,8 @@ function withWriteTools<T extends { tool: (t: CustomTool) => T }>(
             hooks: lifecycleHooks,
           }),
         )
-    : base
+        .approval('delegate_to_team', GATE_QUESTIONS.delegate_to_team),
+  )
 }
 
 /**
@@ -416,7 +409,7 @@ type ShellAndProjectCtx = {
   }
 
 function withShellAndProjectEntities(
-  withWrites: ReturnType<typeof withWriteTools<ReturnType<typeof baseAgent>['agent']>>,
+  withWrites: ReturnType<typeof withWriteTools>,
   ctx: ShellAndProjectCtx,
 ) {
   return withProjectEntities(withShellTools(withWrites, ctx), ctx)
@@ -430,10 +423,10 @@ function withShellAndProjectEntities(
  * `withWriteTools` already takes and returns the builder; this follows the same seam.
  */
 function withShellTools(
-  withWrites: ReturnType<typeof withWriteTools<ReturnType<typeof baseAgent>['agent']>>,
+  withWrites: ReturnType<typeof withWriteTools>,
   ctx: ShellAndProjectCtx,
 ) {
-  const { registry, interactiveBackend, modelId, writePolicy } = ctx
+  const { registry, interactiveBackend, modelId } = ctx
   return (
     withWrites
       // M2 — the write side: atomic multi-file edits, gated behind approval below. M18: now the Codex-faithful
@@ -466,6 +459,7 @@ function withShellTools(
             '(max 300000). Requires human approval before running.',
         ),
       )
+      .approval('Bash', GATE_QUESTIONS.Bash)
       // M14 — interactive session as a surface-agnostic built-in from @theokit/agents/tools, backed by the
       // injected @theokit/agents-pty (local node-pty). `interactive_shell` starts a REPL/prompting session;
       // `write_stdin` drives it. Both gated below. Replaces the bespoke run_shell-interactive + write_stdin.
@@ -474,7 +468,9 @@ function withShellTools(
       // information the model can act on — never reach it. See
       // `agents/ask/interactive-shell-tool.ts` (which carries the mechanised exit criterion).
       .tool(createInteractiveShellTool({ interactive: interactiveBackend }))
+      .approval('interactive_shell', GATE_QUESTIONS.interactive_shell)
       .tool(createWriteStdinTool({ interactive: interactiveBackend }))
+      .approval('write_stdin', GATE_QUESTIONS.write_stdin)
       // M4 — the visible plan/step affordance for the iterate-to-green loop (no side effect, not gated).
       // M17: now the Codex-faithful `createUpdatePlanTool` built-in (declarative plan; structured result
       // rendered as a □/▶/✔ checklist by the TUI's formatToolResult). Retired the bespoke local tool.
@@ -486,39 +482,44 @@ function withShellTools(
       // approval. The run pauses and the surface shows an approval card — allow or reject — before it runs.
       // M23 — the approval map must reference ONLY registered tools (the framework fail-fasts otherwise),
       // so the write-tool gates appear exactly when the sandbox mode granted those tools.
-      .approvals(approvalGates({ writes: writePolicy.writes, searchConfigured: ctx.searchConfigured }))
   )
 }
+
+/**
+ * The question on each approval card: the one source for both the `.approval(...)` registered beside
+ * each tool and the set of gated names the permissions plugin receives (#945).
+ */
+const GATE_QUESTIONS = {
+  ApplyPatch: { question: 'Apply this file patch?' },
+  Edit: { question: 'Apply this edit?' },
+  delegate_to_team: { question: 'Delegate this task to the team (the worker may edit/run files)?' },
+  Bash: { question: 'Run this shell command?' },
+  interactive_shell: { question: 'Start this interactive session?' },
+  write_stdin: { question: 'Send this input to the interactive session?' },
+  web_fetch: { question: 'Fetch this URL?' },
+  web_search: { question: 'Search the web for this?' },
+} as const
 
 /**
  * The human-in-the-loop gates, one per side-effecting tool this process registers. Also the set an
  * unmatched `permissions` verdict is handed to (#945), so the card and that set cannot drift apart.
  */
 export function approvalGates(opts: { writes: boolean; searchConfigured: boolean }) {
+  const q = GATE_QUESTIONS
   return {
     ...(opts.writes
-      ? {
-          ApplyPatch: { question: 'Apply this file patch?' },
-          Edit: { question: 'Apply this edit?' },
-          delegate_to_team: {
-            question: 'Delegate this task to the team (the worker may edit/run files)?',
-          },
-        }
+      ? { ApplyPatch: q.ApplyPatch, Edit: q.Edit, delegate_to_team: q.delegate_to_team }
       : {}),
-    Bash: { question: 'Run this shell command?' },
-    interactive_shell: { question: 'Start this interactive session?' },
-    write_stdin: { question: 'Send this input to the interactive session?' },
-    web_fetch: { question: 'Fetch this URL?' },
-    // Present only when the tool is. An approval entry for a tool the agent was not given is
-    // refused by the framework at construction, so this ternary is load-bearing, not cosmetic.
-    ...(opts.searchConfigured ? { web_search: { question: 'Search the web for this?' } } : {}),
+    Bash: q.Bash,
+    interactive_shell: q.interactive_shell,
+    write_stdin: q.write_stdin,
+    web_fetch: q.web_fetch,
+    ...(opts.searchConfigured ? { web_search: q.web_search } : {}),
   }
 }
 
 /** Every gated name. `writes: true` is a superset, not a claim: an ungranted write tool is never registered. */
-const ALL_GATED: ReadonlySet<string> = new Set(
-  Object.keys(approvalGates({ writes: true, searchConfigured: true })),
-)
+const ALL_GATED: ReadonlySet<string> = new Set(Object.keys(GATE_QUESTIONS))
 
 /**
  * The entities read from the project's own disk: MCP servers, skills, setting sources, hooks.
@@ -553,7 +554,11 @@ function withProjectEntities(
       // repository may steer the agent; `~/.theokit/skills/` is not this repository, and gating it
       // would refuse someone their own configuration because of where they happened to `cd` — the
       // same reasoning `context/rules.ts` and `user-agents-md.ts` already apply to instructions.
-      .skills([...(posture.allows.skills ? cfg.skills : []), ...ctx.operatorSkills])
+      .skills([...(posture.allows.skills ? cfg.skills : []), ...ctx.operatorSkills.map((s) => s.name), ...ctx.operatorSkills], {
+        // #1925 — `skill_read` serves exactly what the `<skills>` block lists, after the trust gate: the
+        // framework reads the SDK's own skills manager, so a root the gate withheld is never readable.
+        read: 'advertised',
+      })
         .subagents(ctx.namedSubagents)
       // M20 — opt into theokit's `.theokit/` file-based config (project + user): skills, subagents, hooks,
       // context, mcp are discovered from disk. The enabler for M24 (disk skills), M25 (subagent roles), M26
@@ -711,6 +716,9 @@ function baseAgent(ctx: {
       // config object without the key made the whole expression `undefined` — which reads as "off"
       // to the SDK and as a type error to nobody, because the field is optional upstream. It cost a
       // test that asserted `false` and got `undefined`.
+      // #1913 — the SDK builtin `shell` is withheld from the declared set, so its schema is not re-sent
+      // on every round and the model cannot pick it. `withBuiltinShellVeto` stays as the backstop.
+      .withholdBuiltinTools(['shell'])
       .memory({
         enabled: posture.allows.memory && cfg.memory === true && memoryEnabledForSession(),
       })
@@ -770,11 +778,14 @@ function baseAgent(ctx: {
       // — so the agent builds and runs with or without a search provider (Brave would throw `no_api_key` at
       // creation). Both are `@theokit/agents/tools` built-ins — wired, not reinvented (Rule 9).
       .tool(createWebFetchTool())
+      .approval('web_fetch', GATE_QUESTIONS.web_fetch)
       // `web_search` is declared ONLY when a provider is configured — see `webSearchConfigured`.
       // `.when` (M69) is the seam for exactly this: a conditional link in the MIDDLE of a fluent
       // chain, which is what `chat.ts:320` records as impossible without it.
       .when(ctx.searchConfigured, (b) =>
-        b.tool(createWebSearchTool({ search: createGenericHttpSearchAdapter() })),
+        b
+          .tool(createWebSearchTool({ search: createGenericHttpSearchAdapter() }))
+          .approval('web_search', GATE_QUESTIONS.web_search),
       )
 
   return { agent, cuts: composed.cuts }

@@ -159,6 +159,7 @@ const discoverSubagents = vi.fn((cwd: string, opts: { settingSources: string[] }
 vi.mock('@theokit/agents', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   loadMcpJson,
+  loadMcpScopes: (await import('./helpers/keyed-mcp-scopes.js')).keyedMcpScopes(loadMcpJson),
   discoverSubagents,
 }))
 
@@ -231,6 +232,16 @@ describe('path 1 — buildChatAgent composes the coding agent', () => {
         `"${write}" mutates the user's disk (or delegates the authority to) and reached the model ` +
           'without an approval gate',
       ).toContain(write)
+    }
+  })
+
+  it('test_danger_full_access_grants_the_write_tools', async () => {
+    resolveEffectiveConfig.mockReturnValue(config('danger-full-access'))
+    const agent = await compile({ surface: 'headless', cwd: '/p' })
+    const names = namesOf(agent)
+
+    for (const write of ['ApplyPatch', 'Edit', 'delegate_to_team']) {
+      expect(names, `danger-full-access did not grant "${write}"`).toContain(write)
     }
   })
 

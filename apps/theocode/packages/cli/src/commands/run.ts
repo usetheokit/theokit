@@ -9,8 +9,7 @@ import {
   silentEmptyTurnDiagnostic,
 } from '../runtime/index.js'
 import { consumeWithForkIfBusy, availableIdOrFork } from '../runtime/index.js'
-import { DEFAULT_WATCHDOG_MS } from '@theokit/agents/commands'
-import { createDrainedProcessOutput } from '../runtime/index.js'
+import { exitAfterDrain } from '@theokit/agents/commands'
 import { homedir } from 'node:os'
 import { readFileSync, writeFileSync } from 'node:fs'
 import type { ExecRun } from '../runtime/index.js'
@@ -23,12 +22,13 @@ import {
   type TurnFailureHooks,
 } from '@theocode/shared/turn-failure-reporting'
 
-function readPrompt(args: ExecRun): string {
+function readPrompt(args: ExecRun): string | undefined {
   if (args.stdinBehavior === 'required' || args.stdinBehavior === 'forced') {
     const lido = readFileSync(0, 'utf8').trim()
     if (lido.length === 0) {
       process.stderr.write('No prompt provided\n')
-      process.exit(1)
+      exitAfterDrain(1)
+      return undefined
     }
     return lido
   }
@@ -213,6 +213,7 @@ function printHeadlessApprovalNotice(decision: Parameters<typeof headlessApprova
 
 export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<void> {
   const prompt = readPrompt(args)
+  if (prompt === undefined) return
 
   const { streamAgentTurnInProcess } = await import('@theokit/agents')
   const { headlessPolicy, mod, apiKey, shellTimeoutMs } = await resolveRunTarget(args)
@@ -283,6 +284,5 @@ export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<voi
   //
   // So collection belongs to the long-lived surface (the TUI spawns a child), and `sessions gc`
   // remains here as the explicit command it always was.
-  const drainedExit = createDrainedProcessOutput(DEFAULT_WATCHDOG_MS)
-  drainedExit(execExitCode(result, emptyTurn))
+  exitAfterDrain(execExitCode(result, emptyTurn))
 }

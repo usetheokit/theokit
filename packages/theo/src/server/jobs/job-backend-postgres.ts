@@ -10,10 +10,13 @@ import type { PoolLike } from '../storage/storage-types.js'
 
 import {
   type JobBackend,
+  type JobDeferInput,
   type JobEnqueueInput,
   type JobLease,
   type JobLeaseFence,
   type JobNackOptions,
+  type JobRescheduleInput,
+  type JobSelector,
   JobLeaseLostError,
 } from './job-backend.js'
 
@@ -31,8 +34,9 @@ import {
  *     KEPT as failed: `failed_at` is set, `last_error` holds the message, and
  *     `dequeue` never returns it again. Query them with
  *     `SELECT * FROM theokit_jobs WHERE failed_at IS NOT NULL`, replay one with
- *     `UPDATE ... SET failed_at = NULL, attempts = 0, available_at = NOW()`,
- *     and purge old ones yourself: nothing deletes them. A failed job keeps its
+ *     `UPDATE ... SET failed_at = NULL, attempts = 0, available_at = NOW()`
+ *     (leave `leased_at` as it is: it marks the job as once leased, so
+ *     `cancelInTransaction` keeps leaving it alone), and purge old ones yourself: nothing deletes them. A failed job keeps its
  *     idempotency key, so enqueueing that key again returns the failed job's id.
  *   - A retried job waits `retryDelaySeconds(attempts)` before it is
  *     available again (default `min(2^attempts, 3600)` seconds), and its
@@ -212,7 +216,9 @@ export class PostgresJobBackend implements JobBackend {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         lease_token TEXT,
         last_error TEXT,
-        failed_at TIMESTAMPTZ
+        failed_at TIMESTAMPTZ,
+        held_from TIMESTAMPTZ,
+        leased_at TIMESTAMPTZ
       )
     `)
     // Columns added after the first release. `CREATE TABLE IF NOT EXISTS` leaves a table created by
@@ -220,6 +226,17 @@ export class PostgresJobBackend implements JobBackend {
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS lease_token TEXT`)
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS last_error TEXT`)
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ`)
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS held_from TIMESTAMPTZ`)
+    // Set the first time a worker leases the job and never cleared, not even by a replay that
+    // resets `attempts`, so `cancelInTransaction` can tell a job that was ever leased.
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS leased_at TIMESTAMPTZ`)
+    // A row leased before this column existed has it NULL: backfill every row that was ever leased,
+    // including one already replayed (`last_error` survives a nack and a replay).
+    await this.#pool.query(
+      `UPDATE ${t} SET leased_at = NOW()
+       WHERE leased_at IS NULL AND (attempts > 0 OR failed_at IS NOT NULL OR locked_until IS NOT NULL
+              OR last_error IS NOT NULL)`,
+    )
     await this.#pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ${t}_idempotency_key_idx
       ON ${t} (name, idempotency_key)
@@ -265,6 +282,26 @@ export class PostgresJobBackend implements JobBackend {
     return this.#insertJob(client, input)
   }
 
+  /**
+   * Remove a job no worker ever leased, through the caller's transaction (usetheokit/theokit#2118).
+   * A leased job (even with an expired lease) or a failed one is kept: a run may be going on.
+   * Returns whether a job was removed.
+   */
+  async cancelInTransaction(
+    client: PoolLike,
+    input: { name: string; idempotencyKey: string },
+  ): Promise<boolean> {
+    const res = await client.query<{ id: string }>(
+      `DELETE FROM ${this.#table}
+       WHERE name = $1 AND idempotency_key = $2
+         AND leased_at IS NULL AND locked_until IS NULL AND failed_at IS NULL AND attempts = 0
+         AND last_error IS NULL
+       RETURNING id`,
+      [input.name, input.idempotencyKey],
+    )
+    return res.rows.length > 0
+  }
+
   async #insertJob(db: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }> {
     const t = this.#table
     const values = [
@@ -308,6 +345,95 @@ export class PostgresJobBackend implements JobBackend {
     )
   }
 
+  async defer(client: PoolLike, input: JobDeferInput): Promise<string[]> {
+    const t = this.#table
+    const sel = this.#select(input, 2)
+    const until = input.until === 'infinity' ? 'infinity' : input.until.toISOString()
+    const r = await client.query<{ id: string }>(
+      `UPDATE ${t}
+       SET held_from = COALESCE(held_from, available_at), available_at = $1::timestamptz,
+           locked_until = NULL, lease_token = NULL
+       WHERE id IN (${sel.sql})
+       RETURNING id`,
+      [until, ...sel.params],
+    )
+    return r.rows.map((row) => row.id)
+  }
+
+  async restore(client: PoolLike, input: JobSelector): Promise<string[]> {
+    const t = this.#table
+    const sel = this.#select(input, 1, 'AND held_from IS NOT NULL')
+    const r = await client.query<{ id: string }>(
+      `UPDATE ${t}
+       SET available_at = held_from, held_from = NULL
+       WHERE id IN (${sel.sql})
+       RETURNING id`,
+      sel.params,
+    )
+    return r.rows.map((row) => row.id)
+  }
+
+  async reschedule(client: PoolLike, jobId: string, input: JobRescheduleInput): Promise<boolean> {
+    const t = this.#table
+    if ((input.availableAt === undefined) === (input.ahead === undefined)) {
+      throw new Error(
+        'PostgresJobBackend.reschedule: pass exactly one of `availableAt` and `ahead`.',
+      )
+    }
+    // `ahead`: one second before the earliest time the other selected jobs had (a held job counts
+    // at the time it will be restored to). The selected jobs are read with a blocking FOR UPDATE:
+    // inside the caller's transaction no worker can lease them and no other transaction can move
+    // them until it ends, and a job another transaction is moving is waited for, not skipped, so
+    // its new time is what we go ahead of. A job already leased is not pending and is left out.
+    let target = '$2::timestamptz'
+    const params: unknown[] = [jobId]
+    if (input.ahead) {
+      const sel = this.#select(input.ahead, 2, 'AND id <> $1', false)
+      const times = sel.sql.replace('SELECT id', 'SELECT COALESCE(held_from, available_at) AS at')
+      const others = await client.query<{ at: Date | string }>(times, [jobId, ...sel.params])
+      const at = Math.min(...others.rows.map((row) => new Date(row.at).getTime()))
+      if (!Number.isFinite(at)) {
+        // Nothing to be ahead of: leave the time as it is.
+        target = 'available_at'
+      } else {
+        params.push(new Date(at - 1000).toISOString())
+        target =
+          'CASE WHEN available_at > $2::timestamptz THEN $2::timestamptz ELSE available_at END'
+      }
+    } else {
+      params.push(input.availableAt?.toISOString())
+    }
+    // A job moved here is no longer leased: clear an expired lease so a stale nack cannot overwrite it.
+    const r = await client.query<{ id: string }>(
+      `UPDATE ${t} SET available_at = ${target}, locked_until = NULL, lease_token = NULL
+       WHERE id IN (
+         SELECT id FROM ${t}
+         WHERE id = $1 AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW())
+         FOR UPDATE SKIP LOCKED
+       )
+       RETURNING id`,
+      params,
+    )
+    return r.rows.length > 0
+  }
+
+  /** Subquery picking the unleased, unfailed jobs of `sel`, locked with SKIP LOCKED unless `skipLocked` is false (wait for the lock). Params start at `$first`. */
+  #select(
+    sel: JobSelector,
+    first: number,
+    extra = '',
+    skipLocked = true,
+  ): { sql: string; params: unknown[] } {
+    const params: unknown[] = [sel.name]
+    let sql = `SELECT id FROM ${this.#table} WHERE name = $${String(first)}`
+    for (const [key, values] of Object.entries(sel.where ?? {})) {
+      params.push(key, values.map(String))
+      sql += ` AND (input ->> $${String(first + params.length - 2)}) = ANY($${String(first + params.length - 1)}::text[])`
+    }
+    sql += ` AND failed_at IS NULL AND (locked_until IS NULL OR locked_until < NOW()) ${extra} FOR UPDATE${skipLocked ? ' SKIP LOCKED' : ''}`
+    return { sql, params }
+  }
+
   async dequeue(opts: { batchSize?: number; lockSeconds?: number }): Promise<JobLease[]> {
     const t = this.#table
     const batchSize = opts.batchSize ?? 1
@@ -332,7 +458,9 @@ export class PostgresJobBackend implements JobBackend {
       `UPDATE ${t}
        SET locked_until = NOW() + ($2 || ' seconds')::interval,
            attempts = attempts + 1,
-           lease_token = $3
+           leased_at = COALESCE(leased_at, NOW()),
+           lease_token = $3,
+           held_from = NULL
        WHERE id IN (
          SELECT id FROM ${t}
          WHERE (locked_until IS NULL OR locked_until < NOW())

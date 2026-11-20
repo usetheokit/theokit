@@ -12,9 +12,12 @@ import { Readable } from 'node:stream'
 import type { RuntimeAdapter } from './types.js'
 
 /** Convert Node.js IncomingMessage to Web Standard Request. */
-export function nodeIncomingToRequest(nodeReq: IncomingMessage): Request {
-  const proto = nodeReq.headers['x-forwarded-proto'] ?? 'http'
-  const host = nodeReq.headers.host ?? 'localhost'
+export function nodeIncomingToRequest(
+  nodeReq: IncomingMessage,
+  origin?: { readonly proto?: string | string[]; readonly host?: string },
+): Request {
+  const proto = origin ? (origin.proto ?? 'http') : (nodeReq.headers['x-forwarded-proto'] ?? 'http')
+  const host = (origin ? origin.host : nodeReq.headers.host) ?? 'localhost'
   const url = `${proto}://${host}${nodeReq.url ?? '/'}` // eslint-disable-line @typescript-eslint/restrict-template-expressions -- proto/host are string|string[]
   const method = nodeReq.method ?? 'GET'
 
@@ -42,11 +45,18 @@ export function nodeIncomingToRequest(nodeReq: IncomingMessage): Request {
   })
 }
 
+const isGone = (res: ServerResponse): boolean => res.destroyed
+
 /** Write Web Standard Response to Node.js ServerResponse. */
 export async function writeResponseToNode(
   response: Response,
   nodeRes: ServerResponse,
 ): Promise<void> {
+  // Client left while the handler was still working: nothing to write, stop the producer.
+  if (isGone(nodeRes)) {
+    await response.body?.cancel().catch(() => undefined)
+    return
+  }
   nodeRes.writeHead(response.status, Object.fromEntries(response.headers.entries()))
 
   if (!response.body) {
@@ -55,17 +65,30 @@ export async function writeResponseToNode(
   }
 
   const reader = response.body.getReader()
+  // Client left before the body ended: cancel the producer, even while a read is pending.
+  const onClose = (): void => {
+    if (!nodeRes.writableFinished) void reader.cancel().catch(() => undefined)
+  }
+  nodeRes.once('close', onClose)
   try {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- intentional infinite loop with break
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      if (nodeRes.destroyed) break
+      if (isGone(nodeRes)) {
+        await reader.cancel().catch(() => undefined)
+        break
+      }
       nodeRes.write(value)
     }
   } finally {
-    reader.releaseLock()
-    if (!nodeRes.destroyed) nodeRes.end()
+    nodeRes.off('close', onClose)
+    try {
+      reader.releaseLock()
+    } catch {
+      // a cancel still pending keeps the lock; nothing to release
+    }
+    if (!isGone(nodeRes)) nodeRes.end()
   }
 }
 

@@ -10,6 +10,8 @@ import {
   transcriptRoot,
 } from '@theokit/agents/persistence'
 
+import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
+
 import { protectedSessions } from './session-ops.js'
 import type { SessionRecord } from '@theokit/agents'
 
@@ -49,7 +51,7 @@ function isRealUserTurn(record: SessionRecord): boolean {
   if (record.type !== 'user') return false
   const hasText = textBlocks(record).some((t) => t.length > 0)
   if (!hasText) return false
-  return !textOf(record).startsWith('[[theokit:goal-continuation]]')
+  return !textOf(record).startsWith(GOAL_CONTINUATION_MARKER)
 }
 
 interface TruncationResult {
@@ -118,12 +120,12 @@ export interface ForkBeforeResult {
   selectedText?: string
 }
 
-export function forkSessionBeforeUserTurn(
+export async function forkSessionBeforeUserTurn(
   srcId: string,
   newId: string,
   nth: number,
   opts: { cwd?: string; baseDir?: string } = {},
-): ForkBeforeResult {
+): Promise<ForkBeforeResult> {
   const cwd = opts.cwd ?? process.cwd()
   const dir = opts.baseDir ?? defaultBaseDir()
   const src = transcriptPath(dir, cwd, srcId)
@@ -137,7 +139,7 @@ export function forkSessionBeforeUserTurn(
   mkdirSync(dirname(dst), { recursive: true })
   forkTranscript(src, dst, {
     beforeRecordIndex: prefix.length,
-    liveSessionPaths: protectedSessions(cwd, dir),
+    liveSessionPaths: await protectedSessions(cwd, dir),
   })
   return { newId, copied: true, selectedText }
 }

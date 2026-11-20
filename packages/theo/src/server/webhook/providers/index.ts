@@ -23,3 +23,6 @@ export type {
 
 export { line } from './line.js'
 export type { LineWebhookOptions } from './line.js'
+
+export { verifyHmacSha256, decodeBase64Signature, decodeHexSignature } from './hmac-sha256.js'
+export type { DecodeSignature, DecodeResult } from './hmac-sha256.js'

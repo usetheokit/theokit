@@ -6,6 +6,7 @@
  *
  * Flow: @Agent decorator → compileAgent() → createSdkAgentStream() → SDK Agent.create() → Run.stream()
  */
+import type { ToolRefusal } from '@theokit/presenter'
 // M96 — the rationale below, and the `prettier-ignore`, exist for lint budget: this file sits at the
 // `max-lines` ceiling (500 lines of code) and the break prettier would make in this import costs
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
@@ -13,14 +14,18 @@
 // prettier-ignore
 import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
+import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
+import { resolveEnabledSkills } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
+import { wireInlineSkillRead } from './advertised-skill-read.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
+import { getOrCreateReporting } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
@@ -111,8 +116,7 @@ export interface RuntimeOverrides {
    * SDK's native transcript, not a swappable adapter.
    *
    * Forwarded to the SDK as `local.baseDir`, which that package deprecated in its own #301 in favour
-   * of `sessionDir`. It stays `baseDir` on purpose: `sessionDir` does not exist at `^4.52.1`, the
-   * floor this package declares, so switching would type-error on the floor and — worse — silently
+   * of `sessionDir`. It stays `baseDir` on purpose: `sessionDir` is not what this package forwards today, so switching would change behaviour and — worse — silently
    * send the transcript to the SDK default `~/.theokit` for any consumer resolving there, losing
    * per-app persistence. Migrating the name is a floor bump, not a rename, and the deprecated field
    * is still honoured. Attempted and reverted rather than assumed: the typecheck gate caught it.
@@ -328,7 +332,9 @@ interface SdkRuntime {
    * at load so an older peer degrades gracefully (inline skills still list in the `<skills>` block, they
    * just aren't auto-readable). Used to auto-wire reading for `defineAgent({ skills: [inlineSkill] })`.
    */
-  defineSkillReadTool?: (skills: readonly InlineSkill[]) => unknown
+  defineSkillReadTool?: (
+    skills: readonly InlineSkill[] | (() => Promise<readonly (InlineSkill | Skill)[]>),
+  ) => unknown
 }
 
 /**
@@ -458,30 +464,6 @@ function createTurnUsageMeter(
   })
 }
 
-/**
- * Auto-wire `skill_read` for inline skills (`defineAgent({ skills: [inlineSkill] })`). An inline
- * skill lists in the `<skills>` block by name + description only — its body is unreachable to the
- * model without the `skill_read` tool, so registering an inline skill implies wanting it readable.
- * Dedup: skip when the app already declared a `skill_read` (an explicit `defineSkillReadTool` wins).
- * Graceful: skip when the loaded SDK predates `defineSkillReadTool`.
- */
-function wireInlineSkillRead(
-  sdkTools: unknown[],
-  rt: SdkRuntime,
-  compiled: CompiledAgentOptions,
-  compiledTools: CompiledTool[],
-): void {
-  const inlineSkills = compiled.skills?.inline
-  if (
-    inlineSkills !== undefined &&
-    inlineSkills.length > 0 &&
-    rt.defineSkillReadTool !== undefined &&
-    !compiledTools.some((t) => t.name === 'skill_read')
-  ) {
-    sdkTools.push(rt.defineSkillReadTool(inlineSkills))
-  }
-}
-
 /** Wiring triad pillar (c) — M7 run-context metric: where the injected run-context came from. */
 function runContextSource(overrides: RuntimeOverrides, compiled: CompiledAgentOptions): string {
   if (overrides.runContext !== undefined) return 'per-run'
@@ -548,7 +530,7 @@ export function createSdkAgentStream(
         usageMeter,
       )
 
-      wireInlineSkillRead(sdkTools, rt, compiled, compiledTools)
+      const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
       debugLog('[THEO_AGENT_M7_RUN_CONTEXT]', {
         source: runContextSource(overrides, compiled),
         keys: runContext !== undefined ? Object.keys(runContext) : [],
@@ -575,7 +557,7 @@ export function createSdkAgentStream(
         yield* runTurnWithRetry(
           (outcome) =>
             streamSdkAgent(
-              rt,
+              skillRt,
               compiled,
               sdkTools,
               outcome === undefined ? turnOpts : { ...turnOpts, outcome },
@@ -630,17 +612,38 @@ function resolveCreateOptions(
   return { m8, extra }
 }
 
+/** SDK `permission_denied` `source` → who refused. `file_hook` is a hook; the rest are plugin vetoes. */
+function refusalFromRunEvent(ev: unknown): { callId: string; refusal: ToolRefusal } | undefined {
+  if (typeof ev !== 'object' || ev === null) return undefined
+  const e = ev as { type?: unknown; toolCallId?: unknown; source?: unknown; message?: unknown }
+  if (e.type !== 'permission_denied' || typeof e.toolCallId !== 'string' || e.toolCallId === '') {
+    return undefined
+  }
+  const by = e.source === 'file_hook' ? 'hook' : 'plugin'
+  return {
+    callId: e.toolCallId,
+    refusal: { by, ...(typeof e.message === 'string' ? { reason: e.message } : {}) },
+  }
+}
+
 function buildSendOptions(
   overrides: RuntimeOverrides,
   factoryOpts: { disableTools?: boolean } | undefined,
   compiled: CompiledAgentOptions,
+  refusals: Map<string, ToolRefusal>,
 ): SendOptions {
   const sendOptions: SendOptions = {}
   if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
   applyStepCeiling(sendOptions, compiled.maxIterations)
-  // theokit#132 — set only when supplied: an `onRunEvent: undefined` riding along would still
-  // change what the SDK receives on the non-opted-in path.
-  if (overrides.onRunEvent !== undefined) sendOptions.onRunEvent = overrides.onRunEvent
+  // theokit#132 — the caller's sink still receives every event unchanged. The adapter also listens
+  // for `permission_denied` (the SDK's structural refusal signal) so the matching tool result can
+  // carry a typed refusal; an exit code of 126 alone is not evidence of one.
+  const callerSink = overrides.onRunEvent
+  sendOptions.onRunEvent = (ev) => {
+    const found = refusalFromRunEvent(ev)
+    if (found !== undefined) refusals.set(found.callId, found.refusal)
+    return callerSink?.(ev)
+  }
   return sendOptions
 }
 
@@ -658,6 +661,7 @@ async function* streamTimeline(
   runId: string,
   state: { sawError: boolean; lastEventType: string },
   outcome: TurnOutcome | undefined,
+  refusals: ReadonlyMap<string, ToolRefusal>,
 ): AsyncGenerator<StreamEvent> {
   const run = (await sendPromise) as {
     events: () => AsyncGenerator<SdkTimelineEvent>
@@ -669,7 +673,12 @@ async function* streamTimeline(
       // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
       if (event.type === 'done') continue
       state.lastEventType = event.type
-      yield event
+      const callId = (event as { callId?: unknown }).callId
+      const refusal =
+        event.type === 'tool_result' && typeof callId === 'string'
+          ? refusals.get(callId)
+          : undefined
+      yield refusal !== undefined ? { ...event, refusal } : event
     }
   }
   for await (const ev of run.events()) {
@@ -745,25 +754,29 @@ async function* streamSdkAgent(
   const { m8, extra } = resolveCreateOptions(compiled, overrides, opts.usageMeter)
 
   // V4-N.1: declared before try so `finally` can dispose even when `run.wait()` rejects.
-  const agent = await Agent.getOrCreate(sessionId, {
+  const createOptions = {
     apiKey,
     model: buildModelSelection(model, reasoningEffort),
     tools: sdkTools,
     ...m8,
     ...extra,
-  })
+  }
+  const agent = (await getOrCreateReporting(Agent, sessionId, createOptions)) as Awaited<
+    ReturnType<typeof Agent.getOrCreate>
+  >
   try {
     // theokit#140 — ONE ordered source. The `onDelta` sink + merge queue are gone: the SDK's
     // `run.events()` appends messages and deltas as the loop reports them, so arrival order IS
     // model order, and `textAlreadyStreamed` tells us which text is a repeat instead of leaving us
     // to compare content. `state` survives only to carry the two facts the tail block below needs.
     const state = { sawError: false, lastEventType: '' }
-    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled)
+    const refusals = new Map<string, ToolRefusal>()
+    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled, refusals)
     const sendPromise = agent.send(buildSendInput(message, overrides), sendOptions)
     // The generator is opened lazily so consumption starts only when the caller pulls — the loop is
     // detached inside the SDK (`setTimeout(() => void driveLoop())`), so the run handle is available
     // long before the turn finishes and the timeline streams live.
-    const timeline = () => streamTimeline(sendPromise, runId, state, opts.outcome)
+    const timeline = () => streamTimeline(sendPromise, runId, state, opts.outcome, refusals)
     for await (const event of applyTextTransforms(timeline(), {
       parseThinkTags,
       stripToolDialect,
@@ -824,11 +837,14 @@ async function* streamSdkAgent(
 export interface SdkTurnHandle {
   wait: () => Promise<{
     result?: string
-    usage?: { totalTokens?: number }
+    usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number }
+    cost?: { amountUsd?: number }
     status?: string
     error?: { message: string }
   }>
   stream?: () => AsyncIterable<unknown>
+  /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
+  cancel?: () => unknown
 }
 
 /** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
@@ -923,21 +939,28 @@ export function toAgentFactory(
     }
     const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
     // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream).
-    wireInlineSkillRead(sdkTools, rt, compiled, compiled.tools)
-    const { options: m8 } = assembleM8CreateOptions(compiled)
+    const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
+    // `read: 'advertised'` only: a function-valued selection must reach the SDK as a static `enabled` list so
+    // the listing and `skill_read` agree. The default `'inline'` path is left exactly as it was.
+    const created =
+      compiled.skillsRead === 'advertised'
+        ? await withResolvedSkills(compiled, runContext)
+        : compiled
+    const { options: m8 } = assembleM8CreateOptions(created)
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
     applyPosture(extra, m8, opts.approvals, compiled.hitl)
-    const agent = await rt.Agent.getOrCreate(sessionId, {
+    const createOptions = {
       apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),
       tools: sdkTools,
       ...m8,
       ...extra,
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
-    })
+    }
+    const agent = await getOrCreateReporting(skillRt.Agent, sessionId, createOptions)
     return withGuardrails(
-      withStepCeiling(agent as unknown as SdkAgentHandle, compiled.maxIterations),
+      withStepCeiling(agent as SdkAgentHandle, compiled.maxIterations),
       compiled.guardrails,
     )
   }
@@ -972,3 +995,15 @@ export function toAgentFactory(
  * The runner moderates the stream as it flows. The served turn's `stream()` (B-414) yields the
  * guarded completed reply as one message, or nothing on a block, so a block is not mid-token.
  */
+
+/** Fold a function-valued selection into a static `skills.enabled`; a static list is untouched. */
+async function withResolvedSkills(
+  compiled: CompiledAgentOptions,
+  runContext: Record<string, unknown> | undefined,
+): Promise<CompiledAgentOptions> {
+  if (!compiled.skillsResolver) return compiled
+  const enabled = await resolveEnabledSkills(compiled.skillsResolver, runContext ?? {})
+  return enabled === undefined
+    ? compiled
+    : { ...compiled, skills: { ...compiled.skills, enabled, autoInject: true } }
+}

@@ -12,6 +12,7 @@ export {
   WIRE_CHUNK_TYPES,
   WIRE_DATA_PART_PREFIX,
   WIRE_ERROR_CODE_PART,
+  WIRE_TOOL_REFUSAL_PART,
   wireChunkSchema,
   type WireChunk,
   type WireDataPart,
@@ -26,6 +27,8 @@ export {
 
 export { readMessageStream } from './read-message-stream.js'
 
+export { readTurnMetadata, type WireStopReason, type WireTurnMetadata } from './turn-metadata.js'
+
 export type {
   WireHeaders,
   WireMessage,
@@ -34,5 +37,6 @@ export type {
   WireReconnectOptions,
   WireSendOptions,
   WireToolApproval,
+  WireToolRefusal,
   WireTransport,
 } from './types.js'
