@@ -35,7 +35,7 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
-| `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer |
+| `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer; `createDevicePairing` and `pairRoute`: setup-code device pairing |
 | `./testing` | Test seams: compiled-agent inspection, mock streams, the live-suite provider-key guard |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
@@ -828,6 +828,21 @@ An interrupt cancels the turn and the next turn waits up to `drainMs` (5000) for
 message is prefixed with `redirectNote` so the model does not resume the withdrawn request. Disposal
 failures outside a turn go to `report`; secret masking is the caller's (`sendOptions` or `emit`).
 After `close()`, `run` answers `turn_failed`.
+
+## Device pairing
+
+`createDevicePairing({ dir })` (from `@theokit/agents/control`) lets a phone or second machine reach a control surface. The owner calls `issueCode()` (valid `codeTtlMs`, default 10 minutes, and for one request). The device redeems it with a name (max 64 characters) and a credential it chose: `request(code, name, credential)` refuses `bad_credential` (shorter than `minCredentialLength`, default 32, or fewer than 10 distinct characters), `bad_name`, `unknown_or_expired` and `too_many_pending` (`maxPending`, default 20). The owner lists `pending()`, then `approve(id)` or `deny(id)`. Approved devices are stored in `<dir>/devices.json` (mode 0600) as SHA-256 digests only; `accepts(authorization)` compares a `Bearer` header in constant time.
+
+```ts
+import { createDevicePairing, pairRoute } from '@theokit/agents/control'
+
+const pairing = createDevicePairing({ dir: stateDir })
+const handlePair = pairRoute(pairing) // POST { code, name, token } -> 202 { id } | 400 | 401 | 413 | 429
+pairing.onRevoke((id) => closeSocketsOf(id)) // e.g. close with code 1008
+await pairing.revoke('my-phone') // removes every approved device with that name (names are not unique)
+```
+
+`revoke(name)` calls each `onRevoke` listener with the id of every removed device, after the store is written. Device names are not unique: two devices approved under the same name are revoked together. Approving a request whose credential matches an already approved device replaces that device silently, and its id is passed to `onRevoke` so its sockets close. The route reads `{ code, name, token }` (`credential` is accepted as an alias for `token`).
 
 ## Sessions
 
