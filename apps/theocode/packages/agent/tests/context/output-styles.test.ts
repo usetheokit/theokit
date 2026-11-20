@@ -16,7 +16,19 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { loadOutputStyle, applyOutputStyle } from '../../src/context/output-styles.js'
+import { applyOutputStyle, loadOutputStyle as frameworkLoad } from '@theokit/agents/config'
+
+import { outputStyleResolves } from '../../src/output-style-wiring.js'
+
+/**
+ * #1925 — the loader is the framework's, so this file asks the framework API the questions the
+ * product's own loader used to answer. The one product decision — a missing style is not an error —
+ * is asserted through `outputStyleResolves`.
+ */
+function loadOutputStyle(name: string, roots: { home: string; project: string }) {
+  const style = frameworkLoad({ name, cwd: roots.project, homeDir: roots.home })
+  return style === undefined ? undefined : { ...style, instructions: style.content }
+}
 
 let home: string
 let project: string
@@ -62,7 +74,9 @@ describe('finding a style', () => {
   it('test_a_style_nobody_wrote_resolves_to_nothing_rather_than_throwing', () => {
     // The caller must be able to tell "no such style" from "a style with empty instructions", and a
     // missing directory is the ordinary case for anyone who has not made one.
-    expect(loadOutputStyle('absent', { home, project })).toBeNull()
+    expect(outputStyleResolves('absent', { home, project })).toBe(false)
+    style(home, 'present.md', 'Hello.\n')
+    expect(outputStyleResolves('present', { home, project })).toBe(true)
   })
 })
 
@@ -88,7 +102,7 @@ describe('what a style does to the instructions', () => {
   it('test_no_style_leaves_the_built_in_instructions_exactly_as_they_were', () => {
     // Anti-vacuity floor: without this arm, a function that always returned the built-in text would
     // satisfy the append case, and one that always returned the style would satisfy the replace case.
-    expect(applyOutputStyle(BUILT_IN, null)).toBe(BUILT_IN)
+    expect(applyOutputStyle(BUILT_IN, undefined)).toBe(BUILT_IN)
   })
 
   it('test_the_frontmatter_itself_never_reaches_the_prompt', () => {
