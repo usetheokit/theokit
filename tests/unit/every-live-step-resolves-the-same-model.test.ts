@@ -5,7 +5,11 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveLiveModel as resolveInTheoCode } from '../../apps/theocode/packages/agent/tests/live/live-model.js'
 import { DEFAULT_LIVE_MODEL as PREFLIGHT_DEFAULT } from '../../scripts/live-model-preflight.mjs'
-import { DEFAULT_LIVE_MODEL, resolveLiveModel } from '../../scripts/live-model.mjs'
+import {
+  DEFAULT_LIVE_MODEL,
+  resolveLiveModel,
+  resolveSdkLiveModel,
+} from '../../scripts/live-model.mjs'
 
 /**
  * The live-model job sets one `LIVE_MODEL` for the preflight and both live steps (B-415, CX-3).
@@ -68,6 +72,16 @@ describe('resolveLiveModel', () => {
   })
 })
 
+describe('resolveSdkLiveModel', () => {
+  it.each([
+    [{}, `openrouter/${DEFAULT_LIVE_MODEL}`],
+    [{ LIVE_MODEL: '  anthropic/claude-x ' }, 'openrouter/anthropic/claude-x'],
+    [{ LIVE_MODEL: 'openrouter/anthropic/claude-x' }, 'openrouter/anthropic/claude-x'],
+  ] as [Record<string, string | undefined>, string][])('resolves %j to %j', (env, model) => {
+    expect(resolveSdkLiveModel(env)).toBe(model)
+  })
+})
+
 describe('the live files', () => {
   const agentsFiles = liveTests(AGENTS_LIVE)
   // Every live test of every TheoCode package, so a live file added later is checked without
@@ -86,12 +100,15 @@ describe('the live files', () => {
 
   const jobModelFiles = agentsFiles.filter((file) => !PINNED_MODEL_FILES.has(basename(file)))
 
-  it.each([...jobModelFiles, THEOCODE_A2A_TEST])(
-    '%s resolves its model through resolveLiveModel',
-    (file) => {
-      expect(readFileSync(file, 'utf8')).toMatch(/const MODEL = resolveLiveModel\(process\.env\)/)
-    },
-  )
+  it.each(jobModelFiles)('%s resolves its SDK-routed model through resolveSdkLiveModel', (file) => {
+    expect(readFileSync(file, 'utf8')).toMatch(/const MODEL = resolveSdkLiveModel\(process\.env\)/)
+  })
+
+  it('resolves the TheoCode A2A model through resolveLiveModel', () => {
+    expect(readFileSync(THEOCODE_A2A_TEST, 'utf8')).toMatch(
+      /const MODEL = resolveLiveModel\(process\.env\)/,
+    )
+  })
 
   // A pinned file still never reads LIVE_MODEL (the check above); it names its model as a literal,
   // so the one model it runs is visible in the file and not chosen by the job.

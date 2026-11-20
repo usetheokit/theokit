@@ -4,6 +4,7 @@
 import { join } from 'node:path'
 
 import {
+  agentRunPort,
   createJobStore,
   createScheduler,
   createScheduleTools,
@@ -52,23 +53,42 @@ function runAgentToolOptions(tools: ToolSettings): AgentToolOptions {
  * Run one prompt on a fresh worker agent inside its own request boundary, which disposes it. A run
  * that ends `error` or `cancelled`, or with no answer, is a failure naming its status or code.
  */
+/**
+ * The slice of the SDK handle `agentRunPort` uses, over a worker agent. The turn has no `stream`, so
+ * the port only waits for it, as the run port here always did. `dispose` is a no-op: the container's
+ * `withAgent` owns the agent's lifetime and disposes it when the run settles.
+ */
+function handleOf(agent: TurnAgent): Parameters<Parameters<typeof agentRunPort>[0]>[0] extends (a: infer H) => unknown ? H : never {
+  return {
+    agentId: 'theoclaw-scheduled-run',
+    send: async (message, options) => {
+      if (typeof message !== 'string') throw new Error('a scheduled run sends its prompt as text')
+      const run = await agent.send(message, options)
+      return {
+        wait: async () => {
+          const outcome = await run.wait()
+          return {
+            status: outcome.status,
+            ...(outcome.result === undefined ? {} : { result: outcome.result }),
+            ...(outcome.error === undefined
+              ? {}
+              : { error: { message: outcome.error.code ?? 'unknown', ...outcome.error } }),
+          }
+        },
+      }
+    },
+    dispose: () => Promise.resolve(),
+  }
+}
+
 function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPort {
   const { withAgent } = createContainer<TurnAgent>({
     factory: () => buildRunAgent(runAgentToolOptions(tools)),
   })
-  return (prompt, signal) =>
-    withAgent(async (agent) => {
-      const run = await agent.send(prompt, { ...untrustedContentSendOptions(), signal })
-      const outcome = await run.wait()
-      if (
-        outcome.status === 'error' ||
-        outcome.status === 'cancelled' ||
-        outcome.result === undefined
-      ) {
-        return { ok: false, error: outcome.error?.code ?? `the run ended ${outcome.status}` }
-      }
-      return { ok: true, text: outcome.result }
-    })
+  return agentRunPort(
+    (work) => withAgent((agent) => work(handleOf(agent))),
+    { sendOptions: untrustedContentSendOptions() },
+  )
 }
 
 /**

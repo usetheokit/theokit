@@ -82,7 +82,7 @@ function triageTools(generate: GenerateObject, write: (line: string) => void): C
   }
   return [
     workflowAsTool(logged, { name: 'triage', description: TRIAGE_DESCRIPTION, inputSchema: TriageInput, reportSuspended: true }),
-    workflowResumeTool(workflow as unknown as Parameters<typeof workflowResumeTool>[0], { name: 'triage_resume', description: TRIAGE_RESUME_DESCRIPTION }),
+    workflowResumeTool(workflow, { name: 'triage_resume', description: TRIAGE_RESUME_DESCRIPTION }),
   ]
 }
 

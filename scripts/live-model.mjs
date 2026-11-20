@@ -15,3 +15,18 @@ export function resolveLiveModel(env) {
   const configured = (env.LIVE_MODEL ?? '').trim()
   return configured === '' ? DEFAULT_LIVE_MODEL : configured
 }
+
+/**
+ * The model id the SDK routes to OpenRouter. The job's `LIVE_MODEL` is an OpenRouter API id
+ * (`google/gemini-2.5-flash-lite`), and the SDK reads a bare `google/` prefix as the Google
+ * provider, which refuses the OpenRouter key with HTTP 400. The explicit `openrouter/` prefix
+ * routes it. An id that already carries it is kept. The preflight talks to OpenRouter directly, so
+ * it keeps `resolveLiveModel`.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {string}
+ */
+export function resolveSdkLiveModel(env) {
+  const model = resolveLiveModel(env)
+  return model.startsWith('openrouter/') ? model : `openrouter/${model}`
+}
