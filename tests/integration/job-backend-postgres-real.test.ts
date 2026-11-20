@@ -646,9 +646,8 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       // probe below can only be satisfied by that session, not by any other lock wait on the table.
       const other = await pool.connect()
       try {
-        const pid = Number(
-          (await other.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0].pid,
-        )
+        const pid = (await other.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]
+          .pid
         await tx.query('BEGIN')
         expect(
           await backend.reschedule(tx, a.jobId, {
@@ -689,9 +688,11 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         `SELECT id, available_at <= NOW() AS due, (locked_until IS NULL OR locked_until < NOW()) AS free
          FROM theokit_jobs_ci ORDER BY id`,
       )
-      expect(rows.rows.map((r) => [r.id, r.due, r.free]).sort()).toEqual(
-        [a.jobId, b.jobId, c.jobId].map((id) => [id, true, true]).sort(),
-      )
+      expect(Object.fromEntries(rows.rows.map((r) => [r.id, [r.due, r.free]]))).toEqual({
+        [a.jobId]: [true, true],
+        [b.jobId]: [true, true],
+        [c.jobId]: [true, true],
+      })
       expect(await leaseOneByOne()).toEqual([b.jobId, c.jobId, a.jobId])
     })
 
