@@ -12,7 +12,15 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { disposeMembers } from '../../src/delegation/squad.js'
+import { DELEGATION_CAP_MS, runTeamWithCap } from '../../src/delegation/squad.js'
+
+/** The disposal guarantees, exercised through the capped runner that now owns them. */
+const disposeMembers = async (
+  members: readonly { [Symbol.asyncDispose]: () => PromiseLike<void> }[],
+  report: (line: string) => void,
+): Promise<void> => {
+  await runTeamWithCap(members, async () => undefined, report)
+}
 
 const member = (onDispose: () => Promise<void>) => ({ [Symbol.asyncDispose]: onDispose })
 const ok = (): (() => Promise<void>) => async () => {}
@@ -22,7 +30,7 @@ const boom =
     throw new Error(why)
   }
 
-describe('disposeMembers', () => {
+describe('runTeamWithCap disposal', () => {
   it('test_a_clean_disposal_reports_nothing', async () => {
     const lines: string[] = []
 
@@ -82,5 +90,34 @@ describe('disposeMembers', () => {
     await expect(delegateWithFailingCleanup()).resolves.toBe(
       'the delegation result the user waited for',
     )
+  })
+})
+
+describe('a squad that hits the delegation cap cancels its members', () => {
+  it('test_cap_expiry_disposes_every_member_and_reports_the_recovery_message', async () => {
+    const disposed: string[] = []
+    const members = ['explorer', 'worker'].map((n) =>
+      member(async () => {
+        disposed.push(n)
+      }),
+    )
+
+    await expect(
+      runTeamWithCap(members, () => new Promise<string>(() => {}), () => {}, 5),
+    ).rejects.toThrow(/delegation_timeout[\s\S]*NOT reverted/)
+
+    expect(disposed).toHaveLength(2)
+  })
+
+  it('test_work_failing_before_the_cap_surfaces_its_own_error', async () => {
+    await expect(
+      runTeamWithCap([], () => Promise.reject(new Error('the member agent crashed')), () => {}),
+    ).rejects.toThrow('the member agent crashed')
+  })
+})
+
+describe('the default cap', () => {
+  it('test_the_default_cap_is_fifteen_minutes', () => {
+    expect(DELEGATION_CAP_MS).toBe(15 * 60_000)
   })
 })
