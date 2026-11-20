@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { createInteractiveShellTool } from '../../src/ask/interactive-shell-tool.js'
+import { createInteractiveShellTool } from '@theokit/agents/tools'
 
 /** A provider whose backend refuses with a session cap, the shape `@theokit/sdk-pty` raises. */
 const cappedProvider = () =>

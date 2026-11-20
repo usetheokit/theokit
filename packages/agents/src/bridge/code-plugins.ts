@@ -43,8 +43,8 @@ import { ConfigurationError } from '../errors.js'
  * FILESYSTEM-bundle form was refusing two thirds of the CODE form instead.
  *
  * Modelled here as name-plus-one-capability rather than by importing the SDK union, for the reason
- * the module header gives: this layer must not depend on the SDK's value side, and the published
- * floor is `^4.52.1` where the union's shape is not guaranteed identical. The capability keys ARE
+ * the module header gives: this layer must not depend on the SDK's value side, and the union's shape
+ * is the SDK's to change. The capability keys ARE
  * the discriminator, so the refusal below stays exact.
  */
 export type CodePlugin = { readonly name: string } & (

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { createWebhookRouter } from '../src/webhooks/router.js'
 import { createGoogleChatRoute } from '../src/webhooks/google-chat.js'
 
 function request(headers: Record<string, string>, body = '{}'): Request {
@@ -37,8 +38,27 @@ describe('createGoogleChatRoute', () => {
   })
 
   it('refuses a body over 1 MiB with 413', async () => {
-    const route = createGoogleChatRoute({ handleRequest: async () => ({ status: 200, body: {} }) })
-    const response = await route(request({ authorization: 'Bearer abc' }, 'x'.repeat(1024 * 1024 + 1)))
+    let called = false
+    const route = createGoogleChatRoute({
+      handleRequest: async () => {
+        called = true
+        return { status: 200, body: {} }
+      },
+    })
+    const router = createWebhookRouter({
+      routes: new Map(),
+      isStarted: () => true,
+      write: () => {},
+      named: new Map([['chat', { methods: ['POST'], handle: route }]]),
+    })
+    const response = await router(
+      new Request('http://localhost/webhooks/chat', {
+        method: 'POST',
+        headers: { authorization: 'Bearer abc' },
+        body: 'x'.repeat(1024 * 1024 + 1),
+      }),
+    )
     expect(response.status).toBe(413)
+    expect(called).toBe(false)
   })
 })

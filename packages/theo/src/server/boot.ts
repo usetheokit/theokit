@@ -20,13 +20,21 @@ import { NotFoundError } from '../core/contracts/theo-error.js'
 
 import { type ReservedRoutes, serveReservedRoute } from './define/health-route.js'
 
-/** Options for {@link createConventionFetchHandler}. */
+/**
+ * Options for {@link createConventionFetchHandler}.
+ *
+ * @experimental The handler serves only reserved routes and answers 404 for the rest, so its options will grow.
+ */
 export interface ConventionFetchHandlerOptions {
   /** Reserved health/ready routes (M7-2). Liveness defaults to 200 even when omitted. */
   readonly reservedRoutes?: ReservedRoutes
 }
 
-/** A socketless convention-server handle. */
+/**
+ * A socketless convention-server handle.
+ *
+ * @experimental See {@link createConventionFetchHandler}.
+ */
 export interface ConventionFetchHandle {
   /** Serve a single request in-process (no socket). Reserved routes first, else a typed 404. */
   fetch(request: Request): Promise<Response>
@@ -38,6 +46,8 @@ export interface ConventionFetchHandle {
  * Build an in-process convention-server `fetch` handler. Reserved `/__theo/*`
  * routes (health/ready) are served first; any other path yields a typed
  * `NOT_FOUND` envelope (404) via the same translator the wire boundary uses.
+ *
+ * @experimental It does not route to convention handlers yet, so what it serves will change.
  */
 export function createConventionFetchHandler(
   options: ConventionFetchHandlerOptions = {},

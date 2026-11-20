@@ -2,6 +2,7 @@
 // `config`+`store` state and delegates to the SDK's free OAuth-lifecycle functions), plus the auth
 // domain's types re-exported so a consumer types the whole surface from the Theokit layer, never
 // reaching back to `@theokit/sdk/auth`.
+export { CredentialExistsError, loginWithApiKey, logout } from './auth/api-key-login.js'
 export { AuthProvider, RefreshFailure, type AuthProviderOptions } from './auth/auth-provider.js'
 
 // M73 — "enriching never reduces". The SDK's store mechanics cross as a PURE PASS-THROUGH.
@@ -217,6 +218,22 @@ export {
   type Veto,
 } from './auth/permission-gate.js'
 
+/**
+ * One decision chain before a risky tool runs: waiver, saved approval, reviewer, then the person
+ * with a fail-closed timeout, and an append-only receipt of who decided.
+ */
+export {
+  createApprovalGate,
+  type ApprovalAnswer,
+  type ApprovalDecision,
+  type ApprovalGateOptions,
+} from './auth/approval-gate.js'
+export {
+  createJsonlLedger,
+  type ApprovalLedger,
+  type ApprovalRecord,
+} from './auth/approval-ledger.js'
+
 // B-080 — a `pre_tool_call` gate, which is what `./auth` already carries. It refuses state-changing
 // calls while the run is in the SDK's declared `plan` permission mode, and returns `undefined`
 // otherwise so it COMPOSES with an existing handler instead of replacing it:
@@ -242,3 +259,14 @@ export {
  * (`tests/unit/every-public-type-crosses-the-barrel.test.ts`).
  */
 export type { PermissionMode } from '@theokit/sdk'
+
+/**
+ * Secret references in configuration: `secretref:env:`, `secretref:file:`, `op://` (1Password) and
+ * `secretref:vault:` values resolved once at start, with the resolved values returned for masking.
+ */
+export {
+  builtinSecretStores,
+  resolveSecretRefs,
+  SecretReferenceError,
+  type SecretStore,
+} from './auth/secret-refs.js'

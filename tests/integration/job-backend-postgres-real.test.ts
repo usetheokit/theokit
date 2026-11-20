@@ -466,6 +466,140 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       })
     })
 
+    describe('cancelInTransaction', () => {
+      const cancel = async (key: string, outcome: 'COMMIT' | 'ROLLBACK' = 'COMMIT') => {
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          const removed = await backend.cancelInTransaction(client, {
+            name: 'cancel-me',
+            idempotencyKey: key,
+          })
+          await client.query(outcome)
+          return removed
+        } finally {
+          client.release()
+        }
+      }
+      const count = async (key: string) =>
+        (await pool.query(`SELECT id FROM theokit_jobs_ci WHERE idempotency_key = $1`, [key])).rows
+          .length
+
+      it('test_removes_a_queued_job_once', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-queued' })
+        expect(await cancel('k-queued')).toBe(true)
+        expect(await count('k-queued')).toBe(0)
+        expect(await cancel('k-queued')).toBe(false)
+      })
+
+      it('test_a_rolled_back_cancel_keeps_the_job', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-rollback' })
+        expect(await cancel('k-rollback', 'ROLLBACK')).toBe(true)
+        expect(await count('k-rollback')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-rollback'`)
+      })
+
+      it('test_a_leased_job_with_an_expired_lease_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-leased' })
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET locked_until = NOW() - INTERVAL '1 minute', attempts = 1
+           WHERE idempotency_key = 'k-leased'`,
+        )
+        expect(await cancel('k-leased')).toBe(false)
+        expect(await count('k-leased')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-leased'`)
+      })
+
+      it('test_a_retried_job_whose_lock_was_cleared_is_left_alone', async () => {
+        await backend.enqueue({
+          name: 'cancel-me',
+          input: {},
+          idempotencyKey: 'k-retry',
+          maxAttempts: 3,
+        })
+        const [lease] = await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
+        await backend.nack(lease.jobId, { error: 'boom', leaseToken: lease.leaseToken })
+        expect(await cancel('k-retry')).toBe(false)
+        expect(await count('k-retry')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-retry'`)
+      })
+
+      it('test_a_replayed_failed_job_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-replay' })
+        const [lease] = await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
+        await backend.nack(lease.jobId, { error: 'boom', leaseToken: lease.leaseToken })
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NULL, attempts = 0, available_at = NOW()
+           WHERE idempotency_key = 'k-replay'`,
+        )
+        expect(await cancel('k-replay')).toBe(false)
+        expect(await count('k-replay')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-replay'`)
+      })
+
+      it('test_a_job_leased_before_the_migration_then_replayed_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-premig' })
+        // The state an older version left: leased and failed, with no `leased_at`.
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET leased_at = NULL, attempts = 1, failed_at = NOW()
+           WHERE idempotency_key = 'k-premig'`,
+        )
+        await backend.migrate()
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NULL, attempts = 0, locked_until = NULL,
+           available_at = NOW() WHERE idempotency_key = 'k-premig'`,
+        )
+        expect(await cancel('k-premig')).toBe(false)
+        expect(await count('k-premig')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-premig'`)
+      })
+
+      it('test_a_job_replayed_before_the_migration_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-prereplay' })
+        // Leased, failed and replayed by an older version: only `last_error` is left of the lease.
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET leased_at = NULL, attempts = 0, failed_at = NULL,
+           locked_until = NULL, last_error = 'boom' WHERE idempotency_key = 'k-prereplay'`,
+        )
+        await backend.migrate()
+        expect(await cancel('k-prereplay')).toBe(false)
+        expect(await count('k-prereplay')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-prereplay'`)
+      })
+
+      it('test_a_job_an_old_worker_leased_and_failed_after_the_migration_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-oldworker' })
+        await backend.migrate()
+        // An old worker does not know `leased_at`: it runs the pre-`leased_at` lease and final-failure
+        // statements, then the job is replayed.
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET locked_until = NOW() + INTERVAL '30 seconds',
+           attempts = attempts + 1, lease_token = 'old-worker' WHERE idempotency_key = 'k-oldworker'`,
+        )
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NOW(), last_error = 'boom', locked_until = NULL,
+           lease_token = NULL WHERE idempotency_key = 'k-oldworker'`,
+        )
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NULL, attempts = 0, available_at = NOW()
+           WHERE idempotency_key = 'k-oldworker'`,
+        )
+        expect(await cancel('k-oldworker')).toBe(false)
+        expect(await count('k-oldworker')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-oldworker'`)
+      })
+
+      it('test_a_failed_job_is_left_alone', async () => {
+        await backend.enqueue({ name: 'cancel-me', input: {}, idempotencyKey: 'k-failed' })
+        await pool.query(
+          `UPDATE theokit_jobs_ci SET failed_at = NOW() WHERE idempotency_key = 'k-failed'`,
+        )
+        expect(await cancel('k-failed')).toBe(false)
+        expect(await count('k-failed')).toBe(1)
+        await pool.query(`DELETE FROM theokit_jobs_ci WHERE idempotency_key = 'k-failed'`)
+      })
+    })
+
     // usetheokit/theokit#1072 — `theokit start` now runs migrate() at boot, so every replica runs it
     // at the same moment. Concurrent `CREATE TABLE IF NOT EXISTS` on a fresh table fails in Postgres
     // with a unique violation on pg_type: 36 of 80 calls (8 at a time, 10 fresh tables) failed
@@ -490,6 +624,78 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         await wide.query(`DROP TABLE IF EXISTS ${table}`)
         await wide.end()
       }
+    })
+
+    // Postgres returns rows in no promised order without ORDER BY, so a batch dequeue cannot show
+    // which job is first. Lease one job at a time after the commit and read the order off the leases.
+    const leaseOneByOne = async (): Promise<string[]> => {
+      const order: string[] = []
+      for (;;) {
+        const leases = await backend.dequeue({ batchSize: 1, lockSeconds: 60 })
+        if (leases.length === 0) return order
+        order.push(leases[0].jobId)
+      }
+    }
+
+    it('a reschedule waiting on a transaction goes ahead of the time that transaction left, leased in order', async () => {
+      const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, delaySeconds: 100 })
+      const b = await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 50 })
+      const c = await backend.enqueue({ name: 'run-task', input: { taskId: 3 }, delaySeconds: 80 })
+      const tx = await pool.connect()
+      try {
+        await tx.query('BEGIN')
+        expect(
+          await backend.reschedule(tx, a.jobId, {
+            ahead: { name: 'run-task', where: { taskId: [2] } },
+          }),
+        ).toBe(true)
+        let done = false
+        const competing = backend
+          .reschedule(pool, c.jobId, { ahead: { name: 'run-task', where: { taskId: [1] } } })
+          .then((ok) => {
+            done = true
+            return ok
+          })
+        // Wait until Postgres reports a backend blocked on a row lock, so the contention is proven
+        // rather than assumed from elapsed time.
+        for (let waited = 0; ; waited += 25) {
+          const blocked = await pool.query<{ n: string }>(
+            `SELECT count(*)::text AS n FROM pg_stat_activity
+             WHERE wait_event_type = 'Lock' AND query LIKE '%theokit_jobs_ci%'`,
+          )
+          if (Number(blocked.rows[0].n) > 0) break
+          if (waited > 5000) throw new Error('competing reschedule never blocked on the lock')
+          await new Promise((r) => setTimeout(r, 25))
+        }
+        expect(done).toBe(false)
+        await backend.reschedule(tx, b.jobId, { availableAt: new Date(Date.now() + 10_000) })
+        await tx.query('COMMIT')
+        expect(await competing).toBe(true)
+      } finally {
+        tx.release()
+      }
+      // Make every job due without changing their relative order, then lease one at a time.
+      await pool.query(`UPDATE theokit_jobs_ci SET available_at = available_at - INTERVAL '1 day'`)
+      expect(await leaseOneByOne()).toEqual([b.jobId, c.jobId, a.jobId])
+    })
+
+    it('defers to infinity: an immediately available job is leased and the held one is not until restored', async () => {
+      const target = await backend.enqueue({ name: 'run-task', input: { taskId: 1 } })
+      const control = await backend.enqueue({ name: 'run-task', input: { taskId: 2 } })
+      const moved = await backend.defer(pool, {
+        name: 'run-task',
+        where: { taskId: [1] },
+        until: 'infinity',
+      })
+      expect(moved).toEqual([target.jobId])
+      // The control job is available now, so an empty queue could not be mistaken for a held target;
+      // the target is older, so a failed hold would lease it first.
+      const first = await backend.dequeue({ batchSize: 1, lockSeconds: 60 })
+      expect(first.map((l) => l.jobId)).toEqual([control.jobId])
+      expect(await backend.dequeue({ batchSize: 1, lockSeconds: 60 })).toEqual([])
+      expect(await backend.restore(pool, { name: 'run-task' })).toEqual([target.jobId])
+      const second = await backend.dequeue({ batchSize: 1, lockSeconds: 60 })
+      expect(second.map((l) => l.jobId)).toEqual([target.jobId])
     })
   },
 )

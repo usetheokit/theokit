@@ -1,4 +1,9 @@
-import type { SettingSource, TrustPosture } from '@theokit/sdk'
+import type {
+  CompatSource,
+  CompatSurface as SdkCompatSurface,
+  SettingSource,
+  TrustPosture,
+} from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { currentOperatorPolicy } from '../config/operator-policy.js'
@@ -173,26 +178,12 @@ export interface SettingSourcesSelection {
 /**
  * The surfaces a foreign configuration root can contribute.
  *
- * Written out rather than imported, for the same reason as the `claude-code` literal below:
- * `CompatSurface` does not exist in `@theokit/sdk@4.52.1`, this package's declared floor, and a gate
- * that cannot build against its own minimum dependency is worse than a constant that has been
- * checked. Verified against the published 5.4.0 `.d.ts`, where the union is
- * `"hooks" | "plugins" | "skills" | "subagents"` — note `subagents`, not `agents`.
- *
- * The two unions therefore DIVERGE, on purpose. `commands` is this layer's, because
+ * A superset of the SDK's `CompatSurface`, on purpose: `commands` is this layer's, because
  * `<projectDir>/.claude/commands/*.md` is read here and never by the SDK. A caller who builds SDK
- * `local` options directly cannot pass a value of this type — `TS2345`, with a compiler message
- * that names the mismatch and not the reason. Derive the SDK's list from this one minus the names
- * the SDK lacks rather than writing one list beside the other; a hand-copied list goes stale the
- * day a surface is added, which is the divergence #704 existed to remove.
+ * `local` options directly cannot pass a value of this type; derive the SDK's list from this one
+ * minus the names the SDK lacks rather than writing a second list.
  *
- * `context` is the foreign root's INSTRUCTIONS — `.claude/rules/*.md`. Added ahead of the SDK
- * release that honours it (usetheokit/theokit-sdk#652), and that ordering is safe in exactly one
- * direction: the SDK matches an `import` list PER SURFACE, so a name it does not recognise is never
- * matched and changes nothing. On an older SDK the rules load as they always did; on a newer one
- * the grant is what keeps them loading. The reverse — shipping the SDK gate first and this
- * vocabulary second — would take `.claude/rules` from every caller here with no name they could
- * write to ask for it back, which is the failure the paragraph above this one describes.
+ * `context` is the foreign root's INSTRUCTIONS — `.claude/rules/*.md`.
  */
 // `commands` is loaded by THIS package rather than by the SDK, and was missing here until #704.
 // An enumeration used to NARROW a root must cover every surface that root feeds: a name absent
@@ -206,14 +197,48 @@ export type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skil
  * It must stay in step with `CompatSurface`; the type is the contract and this is the enumeration of
  * it, which TypeScript checks by construction below.
  */
-const EVERY_SURFACE: readonly CompatSurface[] = [
-  'commands',
-  'context',
-  'hooks',
-  'plugins',
-  'skills',
-  'subagents',
+// Build-time guard: every SDK surface must be a member of the union above, so a surface the SDK adds
+// and this gate does not know fails the build instead of being dropped.
+const _covers: readonly CompatSurface[] = [] as readonly SdkCompatSurface[]
+
+/**
+ * The folders of a foreign root each surface feeds. A `Record` over `CompatSurface`, so a surface
+ * added to the union cannot be left without an entry — and this is the one declaration both the gate
+ * and the foreign-surface inventory read.
+ */
+export const SURFACE_FOLDERS: Readonly<Record<CompatSurface, readonly string[]>> = {
+  commands: ['commands'],
+  context: ['rules'],
+  hooks: [],
+  plugins: ['plugins'],
+  skills: ['skills'],
+  // Agent memory is applied by the host, but it travels with the agents that own it.
+  subagents: ['agents', 'agent-memory'],
+}
+
+/**
+ * Every surface the bare `'claude-code'` literal stands for, derived from {@link SURFACE_FOLDERS} so
+ * the enumeration cannot fall behind the declaration.
+ */
+export const EVERY_SURFACE: readonly CompatSurface[] = Object.keys(
+  SURFACE_FOLDERS,
+) as readonly CompatSurface[]
+
+/** Folders of the convention that no surface lists: found, reported, never loaded. */
+const UNADMITTED_FOLDERS: readonly string[] = ['workflows']
+
+/** Every folder of the foreign root this layer knows about. */
+export const FOREIGN_FOLDERS: readonly string[] = [
+  ...new Set([...Object.values(SURFACE_FOLDERS).flat(), ...UNADMITTED_FOLDERS]),
 ]
+
+/**
+ * The surface that admits `dir`, or `undefined` when none lists it (the folder is refused). Derived
+ * from {@link SURFACE_FOLDERS}: listing a folder under a surface is what admits it.
+ */
+export function surfaceOfFolder(dir: string): CompatSurface | undefined {
+  return EVERY_SURFACE.find((surface) => SURFACE_FOLDERS[surface].includes(dir))
+}
 
 const IGNORE_WARNING = (): void => undefined
 
@@ -431,18 +456,8 @@ export function resolveCompatSources(
       'projectSettings',
     )
   }
-  // The SDK declares `export type CompatSource = "claude-code"` — kebab, verified against the
-  // PUBLISHED package rather than its source, by compiling the literal and its camelCase twin under
-  // `--strict` (the `@ts-expect-error` on the twin was consumed, so the union really does reject it).
-  //
-  // Written out rather than imported, deliberately. `import type { CompatSource } from '@theokit/sdk'`
-  // would turn a future disagreement into a compile error, which is strictly better — and it would
-  // also stop this package compiling against `^4.52.1`, its own declared floor, where the type does
-  // not exist yet. A gate that cannot build against its minimum dependency is worse than a constant
-  // that has been checked. Import it when the floor moves past the version that introduced it.
-  //
-  // The check matters more than a spelling normally would: the SDK DROPS an unrecognised name in
-  // silence, so a wrong constant here is a forward that is declared, gated, projected, and then
+  // The literal is checked against the SDK's `CompatSource` below. The SDK DROPS an unrecognised name in
+  // silence, so a wrong constant here would be a forward that is declared, gated, projected, and then
   // discarded with no message — the exact failure #634 exists to prevent.
   // #686 — an EMPTY list is the one input where "nothing" and "unset, so everything" are both
   // defensible readings, and picking either would settle a security question by convention. Refused
@@ -459,6 +474,7 @@ export function resolveCompatSources(
   }
   // The two places the compat brand is minted. Both are past every posture check above, which is
   // the property the type then carries for the rest of the program.
+  const dialect = 'claude-code' satisfies CompatSource
   const gated = (source: ResolvedCompatSource): GatedCompatSource => source as GatedCompatSource
 
   // B-042 — the operator's refusal, applied where the root is granted. This gate's own message above
@@ -473,9 +489,9 @@ export function resolveCompatSources(
     const kept = (surfaces ?? EVERY_SURFACE).filter((surface) => surface !== 'hooks')
     // No empty `import` list: `#686` refuses that as ambiguous, and it would be a lie here anyway.
     // Nothing survived, so nothing is granted.
-    return kept.length === 0 ? [] : [gated({ kind: 'claude-code', import: kept })]
+    return kept.length === 0 ? [] : [gated({ kind: dialect, import: kept })]
   }
 
-  if (surfaces !== undefined) return [gated({ kind: 'claude-code', import: [...surfaces] })]
-  return [gated('claude-code')]
+  if (surfaces !== undefined) return [gated({ kind: dialect, import: [...surfaces] })]
+  return [gated(dialect)]
 }

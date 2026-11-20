@@ -199,7 +199,11 @@ describe("POST /webchat/chat", () => {
     const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
     const chunk = new Uint8Array(16_384).fill(0x78);
     let sent = 0;
+    let cancelled = false;
     const body = new ReadableStream<Uint8Array>({
+      cancel() {
+        cancelled = true;
+      },
       pull(controller) {
         if (sent > MAX_MESSAGE_BYTES) controller.close();
         else {
@@ -219,6 +223,7 @@ describe("POST /webchat/chat", () => {
 
     expect(response.status).toBe(413);
     expect(stub.calls.built).toBe(0);
+    await waitFor(() => cancelled, "the oversized body's cancel");
   });
 
   // F-dom-4: /control caps a frame at 64 KiB; the chat post is bounded the same way.

@@ -6,7 +6,7 @@ import { PtyInteractiveBackend } from '@theokit/agents-pty'
 import { InteractiveBackend } from '@theokit/agents/interactive'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createConfinedInteractive, probeInteractiveShell, withInteractiveShell } from '../src/tools/interactive-shell.js'
+import { createConfinedInteractive, shellEnv, probeInteractiveShell, withInteractiveShell } from '../src/tools/interactive-shell.js'
 import { buildTools } from '../src/tools/tool-registry.js'
 import { resolveToolSettings, toolSettingsForSession } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
@@ -59,6 +59,15 @@ describe('the interactive shell in the session sandbox', () => {
     expect(await waitUntil(() => existsSync(marker) && readFileSync(marker, 'utf8').includes('PATH='))).toBe(true)
     expect(readFileSync(marker, 'utf8')).not.toContain('sekrit')
     backend.kill(sessionId)
+  })
+
+  it('the shell environment leaves out TMPDIR and the XDG variables but keeps the allowlist', () => {
+    const env = shellEnv({ PATH: '/usr/bin', TMPDIR: '/tmp/x', XDG_CONFIG_HOME: '/x', XDG_DATA_HOME: '/y', MODEL_KEY: 'sekrit' })
+    expect(env.PATH).toBe('/usr/bin')
+    expect(env).not.toHaveProperty('TMPDIR')
+    expect(env).not.toHaveProperty('XDG_CONFIG_HOME')
+    expect(env).not.toHaveProperty('XDG_DATA_HOME')
+    expect(env).not.toHaveProperty('MODEL_KEY')
   })
 
   it('is registered only when the probe passed: not without host tools, not without an enforced sandbox', async () => {

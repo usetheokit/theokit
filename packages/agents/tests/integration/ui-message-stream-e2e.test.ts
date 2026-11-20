@@ -27,6 +27,8 @@ import { parseJsonEventStream, readUIMessageStream, uiMessageChunkSchema } from 
 import { describe, expect, it } from 'vitest'
 
 import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
+import type { WireChunk, WireMessage } from '@theokit/presenter/wire'
+import { readMessageStream } from '@theokit/presenter/wire'
 import { presentUIMessageStream } from '../../src/bridge/present-ui-message-stream.js'
 // Test-only cross-package composition — see file header.
 import { uiMessageStreamResponse } from '../../../theo/src/server/define/ui-message-stream-response.js'
@@ -166,5 +168,42 @@ describe('UIMessageStream end-to-end — tool + reasoning (M1)', () => {
     const reasoning = parts.find((p) => p.type === 'reasoning')
     expect(reasoning, `no reasoning part in ${JSON.stringify(parts)}`).toBeDefined()
     expect(reasoning?.text).toBe('hmm')
+  })
+})
+
+describe('tool refusal over the wire', () => {
+  it('the refusal survives the wire: presentUIMessageStream then readMessageStream puts refusal on the tool part', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'tool_call', callId: 'c1', toolName: 'Bash', input: {} },
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'Bash',
+        output: 'denied',
+        durationMs: 0,
+        isError: true,
+        refusal: { by: 'plugin', reason: 'nope' },
+      },
+    ]
+    async function* gen() {
+      for (const e of events) yield e
+    }
+    const chunks: WireChunk[] = []
+    for await (const c of presentUIMessageStream(gen(), {
+      textId: 't0',
+      onError: (e) => e.message,
+    })) {
+      chunks.push(c)
+    }
+    const stream = new ReadableStream<WireChunk>({
+      start(ctl) {
+        for (const c of chunks) ctl.enqueue(c)
+        ctl.close()
+      },
+    })
+    let last: WireMessage | undefined
+    for await (const m of readMessageStream(stream)) last = m
+    const tool = last!.parts.find((p) => p.type === 'dynamic-tool')
+    expect(tool).toMatchObject({ state: 'output-error', refusal: { by: 'plugin', reason: 'nope' } })
   })
 })
