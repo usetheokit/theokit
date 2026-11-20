@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { open, readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -29,9 +29,14 @@ describe.each([true, false])('storage round trip (encrypted: %s)', (encrypted) =
     const location = await registry.init('main', { encrypted })
     expect(location).toEqual({ root: join(base, 'stores/main'), encrypted })
     const archive = await registry.store('main', backupDir)
-    expect((await stat(archive)).mode & 0o777).toBe(0o600)
-    if (encrypted) {
-      expect((await readFile(archive)).includes(Buffer.from('hello'))).toBe(false)
+    const handle = await open(archive, 'r')
+    try {
+      expect((await handle.stat()).mode & 0o777).toBe(0o600)
+      if (encrypted) {
+        expect((await handle.readFile()).includes(Buffer.from('hello'))).toBe(false)
+      }
+    } finally {
+      await handle.close()
     }
     const fetched = join(base, 'fetched')
     await registry.fetchLatest('main', fetched)

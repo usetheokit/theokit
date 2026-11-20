@@ -57,10 +57,10 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@theokit/sdk": "^5.17.0"
+    "@theokit/sdk": "^5.32.0"
   },
   "devDependencies": {
-    "@theokit/sdk": "^5.17.0",
+    "@theokit/sdk": "^5.32.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"

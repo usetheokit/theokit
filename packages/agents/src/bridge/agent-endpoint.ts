@@ -204,6 +204,8 @@ async function* appendCheckpointSaved(
 interface StreamHitlOptions {
   gated: HitlWiring['gated']
   awaitApproval: HitlWiring['awaitApproval']
+  /** When present, a gated call is recorded here and deferred instead of awaited in-process. */
+  onDefer?: HitlWiring['onDefer']
 }
 
 interface StreamAgentOptions {
@@ -222,6 +224,11 @@ interface StreamAgentOptions {
   images?: RuntimeOverrides['images']
   /** Enable human-in-the-loop tool approval (M4). Absent ⇒ the M2 non-HITL path, byte-unchanged. */
   hitl?: StreamHitlOptions
+  /**
+   * Resume the tool calls a previous run deferred (SDK `SendOptions.toolDecisions`). The turn is a
+   * continuation of `sessionId`; `message` is ignored by the SDK on a resume.
+   */
+  toolDecisions?: RuntimeOverrides['toolDecisions']
   /**
    * theokit-file-based-config (EC-1) — the app root `cwd` the SDK resolves `.theokit/` against when
    * `settingSources` is active. The framework boundary (`mountAgent`) threads its resolved
@@ -398,6 +405,7 @@ function unguardedStream(
   if (input.images !== undefined) overrides.images = input.images
   // theokit#132 — thread the RunEvent sink so it reaches `SendOptions.onRunEvent`.
   if (input.onRunEvent !== undefined) overrides.onRunEvent = input.onRunEvent
+  if (input.toolDecisions !== undefined) overrides.toolDecisions = input.toolDecisions
   // theokit#474 — thread the retry policy, defaulting its abort signal to the run's own. Without
   // that default an aborted turn would keep sleeping out its backoff before noticing, which is the
   // same `retry.signal ?? signal` the reflective loop's `startRound` already applies.
@@ -437,6 +445,7 @@ function unguardedStream(
         queue.push(e)
       },
       awaitApproval: input.hitl.awaitApproval,
+      ...(input.hitl.onDefer !== undefined ? { onDefer: input.hitl.onDefer } : {}),
     })
     const sdkStream = createSdkAgentStream(compiled, compiled.tools, apiKey, {
       ...overrides,

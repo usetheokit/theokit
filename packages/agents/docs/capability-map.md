@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1455 export(s) across 27 entry point(s).
+1477 export(s) across 27 entry point(s).
 
-Measured against `@theokit/sdk@5.17.0`.
+Measured against `@theokit/sdk@5.32.0`.
 
 ## `@theokit/agents`
 
@@ -166,7 +166,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `mcpToolApprovals` | value |
 | `MemoryAdapterError` | value |
 | `MemoryCapability` | value |
+| `MemoryFactAmbiguousError` | value |
+| `MemoryFactNotRemovableError` | value |
 | `ModelCapability` | value |
+| `ModelFallbackExhaustedError` | value |
 | `moderateOutputStream` | value |
 | `NetworkError` | value |
 | `noopReflectionStrategy` | value |
@@ -180,6 +183,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PreCompactionHandlerError` | value |
 | `prepareWorkspace` | value |
 | `presentUIMessageStream` | value |
+| `ProfileConflictError` | value |
 | `ProjectContextCapability` | value |
 | `projectContextMetadataOnlyKnobs` | value |
 | `promptInjectionDetector` | value |
@@ -240,6 +244,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `toModelOption` | value |
 | `Tool` | value |
 | `ToolboxCapability` | value |
+| `ToolCallBlockedError` | value |
 | `ToolError` | value |
 | `ToolsCapability` | value |
 | `Toolset` | value |
@@ -330,6 +335,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ContextWindowSource` | type |
 | `CostGuardOptions` | type |
 | `CustomTool` | type |
+| `DeferredApproval` | type |
 | `DefineAgentConfig` | type |
 | `DefinitionOrThunk` | type |
 | `DelegateFn` | type |
@@ -405,6 +411,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `MemoryAdapterErrorCode` | type |
 | `Modality` | type |
 | `ModelCapabilities` | type |
+| `ModelFallbackAttempt` | type |
 | `ModelOption` | type |
 | `NamedTool` | type |
 | `OpenAIChatMessage` | type |
@@ -774,6 +781,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `buildBwrapArgv` | value |
 | `buildSeccompFilter` | value |
 | `createSandboxBackend` | value |
+| `defaultDockerRunner` | value |
 | `detectBwrap` | value |
 | `detectBwrapMemoized` | value |
 | `DockerSandbox` | value |
@@ -781,10 +789,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `E2BSandbox` | value |
 | `interactiveWrapCommand` | value |
 | `LinuxSandbox` | value |
+| `listSandboxContainers` | value |
 | `LocalSandbox` | value |
 | `provisionRepo` | value |
 | `realProbeCount` | value |
 | `realProbes` | value |
+| `removeSandboxContainers` | value |
 | `RepoProvisionError` | value |
 | `resetBwrapMemo` | value |
 | `resetInteractiveWarnLatch` | value |
@@ -793,6 +803,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveSandboxPosture` | value |
 | `restrictedSeccompPath` | value |
 | `SandboxBackend` | value |
+| `SandboxDockerError` | value |
 | `SandboxNotAvailableError` | value |
 | `SandboxSecurityError` | value |
 | `seccompPathForArch` | value |
@@ -812,6 +823,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `InteractiveWrapOptions` | type |
 | `ProvisionRepoOptions` | type |
 | `SandboxConfig` | type |
+| `SandboxContainer` | type |
 | `SandboxMode` | type |
 | `SandboxNetworkPolicy` | type |
 | `SandboxPosture` | type |
@@ -822,8 +834,10 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `acquireInstanceLock` | value |
 | `acquireSessionWriter` | value |
 | `appendJsonl` | value |
+| `applyProfile` | value |
 | `applyWalWithFallback` | value |
 | `atomicWriteJson` | value |
 | `atomicWriteTempTarget` | value |
@@ -831,6 +845,9 @@ Measured against `@theokit/sdk@5.17.0`.
 | `classifySessionArtifact` | value |
 | `encodeProjectDir` | value |
 | `forkTranscript` | value |
+| `getProfilesRoot` | value |
+| `InMemorySessionStore` | value |
+| `InstanceLockedError` | value |
 | `isCorruptionError` | value |
 | `JsonlParseError` | value |
 | `legacyTranscriptPath` | value |
@@ -840,9 +857,11 @@ Measured against `@theokit/sdk@5.17.0`.
 | `loadJsonl` | value |
 | `openSqliteResilient` | value |
 | `PersistenceSchema` | value |
+| `ProfileConflictError` | value |
 | `readJsonlIds` | value |
 | `readJsonlTail` | value |
 | `replaceFileAtomic` | value |
+| `resolveProfile` | value |
 | `sanitizeFts5Query` | value |
 | `SessionBusyError` | value |
 | `sessionHasWriter` | value |
@@ -855,10 +874,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `AtomicWriteJsonOptions` | type |
 | `FileLockOptions` | type |
 | `ForkTranscriptOptions` | type |
+| `InstanceLock` | type |
 | `ListSessionsOptions` | type |
 | `OpenSqliteResilientOptions` | type |
 | `ReadJsonlTailOptions` | type |
 | `ResilientSqliteDb` | type |
+| `ResolvedProfile` | type |
+| `ResolveProfileOptions` | type |
 | `SessionArtifact` | type |
 | `SessionIdSource` | type |
 | `SessionListing` | type |

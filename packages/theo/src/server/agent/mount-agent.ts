@@ -25,6 +25,7 @@ import {
   type AgentSubjectResolver,
 } from './agent-access.js'
 import type { ApiKeyResolver } from './api-key-resolver.js'
+import type { ResumeApproval } from './approve-agent.js'
 import { buildAgentHitl } from './build-agent-streamer.js'
 import { durableUiMessageStreamResponse } from './durable-ui-message-stream-response.js'
 import { observeServedRun } from './observe-served-run.js'
@@ -119,6 +120,15 @@ interface MountAgentOptions {
    * agent declaring `'public'` never pays for the application's `createContext`.
    */
   resolveSubject?: AgentSubjectResolver
+  /**
+   * Run a CONTINUATION turn instead of reading a message from the request: the approve route
+   * resumes a deferred session with the person's answer (#1960). The request body is not read and
+   * the run policy is not re-evaluated — the approve route already admitted the caller.
+   */
+  continuation?: {
+    sessionId: string
+    toolDecisions: readonly { toolUseId: string; behavior: 'allow' | 'deny'; message?: string }[]
+  }
 }
 
 /**
@@ -242,6 +252,7 @@ export async function mountAgent(
     agentName,
     policy,
     resolveSubject,
+    continuation,
   }: MountAgentOptions = {},
 ): Promise<Response> {
   // Enforce CSRF BEFORE any work — an agent run spends real LLM tokens, so a cross-origin
@@ -268,7 +279,10 @@ export async function mountAgent(
 
   const resolveOnce = memoizeSubject(resolveSubject)
 
-  const admitted = await admitRequest(request, declaredPolicy, resolveOnce, identity)
+  const admitted =
+    continuation === undefined
+      ? await admitRequest(request, declaredPolicy, resolveOnce, identity)
+      : { message: '', sessionId: continuation.sessionId }
   if (admitted instanceof Response) return admitted
   const input = admitted
 
@@ -304,7 +318,10 @@ export async function mountAgent(
   // registers a pending approval in the shared registry (the Promise that PAUSES the run); the
   // approve route (`handleAgentApproval`) resolves it. No gated tools ⇒ the M2 stream path unchanged.
   // Extracted to `build-agent-streamer.ts` (M39 / DRY — the thread routes reuse the same wiring).
-  const hitl = buildAgentHitl(compiled, await resolveApprovalOwner(declaredPolicy, resolveOnce))
+  const hitl = buildAgentHitl(compiled, await resolveApprovalOwner(declaredPolicy, resolveOnce), {
+    agentName: identity,
+    sessionId: input.sessionId,
+  })
 
   // M37 (ADR-0046) — mint a transport runId + stream through the durable layer:
   // each SSE frame is cached + `id:`-tagged so a dropped client can reconnect
@@ -314,6 +331,7 @@ export async function mountAgent(
   const stream = streamAgentUIMessages(compiled, resolvedApiKey, {
     ...input,
     hitl,
+    ...(continuation !== undefined ? { toolDecisions: continuation.toolDecisions } : {}),
     signal: request.signal,
     // Two reasons to name a cwd, and memory is the one that must win when both apply: file-based
     // discovery works from `process.cwd()` (it just discovers less), while durable memory written
@@ -337,6 +355,23 @@ export async function mountAgent(
     observeServedRun(stream, { agentName: identity, request }),
     { runId, cache: getRunEventCache() },
   )
+}
+
+/**
+ * The `resume` the approve route needs for a durable approval (#1960): runs the continuation turn
+ * through `mountAgent`, so it streams on the same wire as `POST /api/agents/<name>`.
+ */
+export function makeApprovalResume(
+  mod: unknown,
+  request: Request,
+  apiKey: string | ApiKeyResolver,
+  options: Omit<MountAgentOptions, 'continuation'>,
+): ResumeApproval {
+  return (record, decision) =>
+    mountAgent(mod, request, apiKey, {
+      ...options,
+      continuation: { sessionId: record.sessionId, toolDecisions: [decision] },
+    })
 }
 
 /**

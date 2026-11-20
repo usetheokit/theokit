@@ -59,6 +59,8 @@ import { runTurnWithRetry, type TurnOutcome } from './turn-retry.js'
 export type BridgeImage = { url: string } | { data: string; mimeType: string }
 
 export interface RuntimeOverrides {
+  /** Answers to the calls a previous run deferred; forwarded to `SendOptions.toolDecisions`. */
+  toolDecisions?: SendOptions['toolDecisions']
   /** Overrides the model for this call (`?? compiled.model ?? default`). */
   model?: string | ModelSelection
   /**
@@ -673,6 +675,7 @@ function buildSendOptions(
   handle: { id?: string },
 ): SendOptions {
   const sendOptions: SendOptions = {}
+  if (overrides.toolDecisions !== undefined) sendOptions.toolDecisions = overrides.toolDecisions
   if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
   applyStepCeiling(sendOptions, compiled.maxIterations)
   // theokit#132 — the caller's sink still receives every event unchanged. The adapter also listens

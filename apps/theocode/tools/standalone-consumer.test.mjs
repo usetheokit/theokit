@@ -27,9 +27,15 @@ describe('standalone consumer manifests', () => {
     for (const [name, range] of Object.entries(depsOf(read(`standalone/${p}`)))) {
       expect(range, name).not.toMatch(/^workspace:/)
       if (name.startsWith('@theokit/')) expect(range, name).toMatch(/^[~^]?\d/)
-      // `workspace:16.13.0` links this checkout and names the release a registry consumer gets (#2243).
+      // `workspace:*` links this checkout; the standalone manifest names the release a registry consumer gets (#2243).
       if (real[name] !== 'workspace:*') expect(range, name).toBe(real[name].replace(/^workspace:/, ''))
     }
+  })
+
+  it('pins one exact released @theokit/agents in every standalone manifest', () => {
+    const pins = manifests.map((p) => depsOf(read(`standalone/${p}`))['@theokit/agents'])
+    expect(new Set(pins.filter(Boolean)).size).toBe(1)
+    for (const pin of pins.filter(Boolean)) expect(pin).toMatch(/^\d+\.\d+\.\d+$/)
   })
 
   it('has its own lockfile and workspace root, with no workspace references in the lockfile', () => {

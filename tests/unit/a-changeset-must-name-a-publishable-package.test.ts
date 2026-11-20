@@ -31,6 +31,7 @@ const WORKSPACE = "packages:\n  - 'packages/*'\n  - 'apps/*'\n  - 'my-test'\n"
 const MANIFESTS: Readonly<Record<string, object>> = {
   'packages/pub/package.json': { name: '@scope/pub', version: '1.0.0' },
   'packages/a/package.json': { name: '@scope/a', version: '1.0.0' },
+  'packages/zero/package.json': { name: 'zero-pkg', version: '0.5.0' },
   'apps/priv/package.json': { name: 'priv', version: '0.0.0', private: true },
   'apps/ignored/package.json': { name: 'ignored-app', version: '1.0.0' },
 }
@@ -426,5 +427,31 @@ describe('this repository passes its own check', () => {
     )
     expect(stale.status, stale.stderr).toBe(1)
     expect(stale.stderr).toMatch(/priv\.md: names only priv/)
+  })
+})
+
+describe('a major on a 0.x package is refused (#2471)', () => {
+  it('test_a_major_on_a_zero_x_package_is_refused_with_the_remedy', () => {
+    const out = run(fixture({ changesets: { 'z.md': changeset("'zero-pkg': major") } }))
+
+    expect(out.status, out.stderr).toBe(1)
+    expect(out.stderr).toMatch(/z\.md asks for `major` on zero-pkg, which is at 0\.5\.0/)
+    expect(out.stderr).toMatch(/Use `minor` for\s+a breaking change in 0\.x/)
+  })
+
+  it('test_a_minor_on_a_zero_x_package_and_a_major_on_a_1_x_package_pass', () => {
+    const out = run(
+      fixture({ changesets: { 'ok.md': changeset("'zero-pkg': minor\n'@scope/pub': major") } }),
+    )
+
+    expect(out.status, out.stderr).toBe(0)
+  })
+
+  it('test_the_marker_for_that_package_allows_an_intended_1_0', () => {
+    const marked = `---\n'zero-pkg': major\n---\n\n<!-- changeset-major-1.0: zero-pkg -->\n\nFirst stable.\n`
+    expect(run(fixture({ changesets: { 'm.md': marked } })).status).toBe(0)
+
+    const other = marked.replace(': zero-pkg -->', ': other -->')
+    expect(run(fixture({ changesets: { 'm.md': other } })).status).toBe(1)
   })
 })

@@ -52,7 +52,11 @@ import {
   isThreadMessagePath,
   isThreadStreamPath,
 } from './handle-thread-routes.js'
-import { isListApprovalsPath, handleListApprovals } from './list-approvals-handler.js'
+import {
+  isListApprovalsPath,
+  handleListApprovals,
+  handleListDurableApprovals,
+} from './list-approvals-handler.js'
 import { extractAppResources } from './mcp-app-resources.js'
 import { isMcpPath, handleMcpJsonRpc, parseMcpHttpBody } from './mcp-handler.js'
 import { getRunEventCache } from './run-event-cache.js'
@@ -323,7 +327,10 @@ export async function serveMatchedAuxRoute(
     if (admission.refusal !== null) return admission.refusal
     // SCOPED to this caller. `admitAux` answered "may you touch this agent's approvals"; it cannot
     // answer "which of them are yours", and the registry is process-wide by contract (ADR 0017).
-    return handleListApprovals(getApprovalRegistry(), admission.subject)
+    const registry = getApprovalRegistry()
+    return registry.store === undefined
+      ? handleListApprovals(registry, admission.subject)
+      : handleListDurableApprovals(registry, admission.subject, route.agent.name)
   }
 
   // M37 — INTENTIONALLY open (no CSRF, no auth gate): a GET is not CSRF-vulnerable, the run-start

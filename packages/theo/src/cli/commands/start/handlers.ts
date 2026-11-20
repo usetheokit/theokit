@@ -10,7 +10,7 @@ import {
   isApprovalPath,
   parseApprovalAgentName,
 } from '../../../server/agent/approve-agent.js'
-import { mountAgent } from '../../../server/agent/mount-agent.js'
+import { makeApprovalResume, mountAgent } from '../../../server/agent/mount-agent.js'
 import { resolveProvider } from '../../../server/agent/provider-resolver.js'
 import { matchAgentAuxRoute, serveMatchedAuxRoute } from '../../../server/agent/serve-aux-routes.js'
 import { executeAction } from '../../../server/http/action-execute.js'
@@ -320,16 +320,36 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
         // named agent's declared policy. The resolver is memoized and lazy: `handleAgentApproval`
         // invokes it only when the agent declares one.
         const approveAgent = c.cachedAgents.find((a) => a.name === parseApprovalAgentName(urlPath))
+        const approveMod =
+          approveAgent === undefined ? undefined : await c.loadModule(approveAgent.filePath)
         const policy =
           approveAgent === undefined
             ? undefined
-            : readAgentPolicy(await c.loadModule(approveAgent.filePath), approveAgent.filePath)
+            : readAgentPolicy(approveMod, approveAgent.filePath)
+        const resolveSubject = agentSubjectResolver(c)
+        // A durable approval is answered by a continuation turn of the agent (#1960).
+        const resume =
+          approveAgent === undefined
+            ? undefined
+            : makeApprovalResume(
+                approveMod,
+                request,
+                (model: string | undefined, plugins?: readonly unknown[]): string =>
+                  resolveProvider(model, { plugins }).apiKey,
+                {
+                  source: approveAgent.filePath,
+                  csrfMode: c.csrfMode,
+                  projectRoot: c.projectRoot,
+                  agentName: approveAgent.name,
+                  resolveSubject,
+                },
+              )
         const response = await handleAgentApproval(
           request,
           urlPath,
           getApprovalRegistry(),
           c.csrfMode,
-          { policy, resolveSubject: agentSubjectResolver(c) },
+          { policy, resolveSubject, resume },
         )
         await writeWebResponseToServerResponse(response, c.res)
       },
