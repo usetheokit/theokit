@@ -87,7 +87,9 @@ describe('scope coverage', () => {
     migrateConfigCommand(project, { userDir: home, env: {} })
 
     expect(existsSync(join(home, '.theokit', 'settings.json'))).toBe(true)
-    expect(said.join(''), 'the file it could not convert was not reported').toContain('already exists')
+    expect(said.join(''), 'the file it could not convert was not reported').toContain(
+      'already exists',
+    )
   })
 
   it('test_with_nothing_to_convert_it_says_so_and_writes_nothing', () => {

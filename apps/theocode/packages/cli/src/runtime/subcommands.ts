@@ -6,7 +6,12 @@
  * declarations — while this file owns how each subcommand reads its own arguments. Adding one is an
  * entry in `SUBCOMMANDS` here, and `args.test.ts` holds that table against the usage text.
  */
-import { SESSION_ACTIONS, type ExecArgs, type OptionValues, type SessionAction } from './exec-args.js'
+import {
+  SESSION_ACTIONS,
+  type ExecArgs,
+  type OptionValues,
+  type SessionAction,
+} from './exec-args.js'
 
 function parseReview(values: OptionValues, positionals: string[], overrides: string[]): ExecArgs {
   const targets = [
@@ -197,4 +202,3 @@ function parseGoal(values: OptionValues, positionals: string[], overrides: strin
     overrides,
   }
 }
-

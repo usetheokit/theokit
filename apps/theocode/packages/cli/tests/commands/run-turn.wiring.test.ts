@@ -10,7 +10,7 @@
  * #30 — `turnFailureReporting` bundles three members precisely so that none can be forgotten:
  * "bundling them removes the way to wire one and forget the other, which is the only failure mode
  * the separate pieces cannot detect." The sole production consumer wired two. `startTurn` had a
- * test and no caller, and `session-busy.ts` opens a SECOND stream on the same hooks when the
+ * test and no caller, and the fork-if-busy retry opens a SECOND stream on the same hooks when the
  * session is contended — so a `rate_limit` counted in the first pass was still being attributed to
  * the second turn's error text, which is the false attribution the field's own doc names.
  */
@@ -56,11 +56,12 @@ describe('#30 — a retry count belongs to the turn that spent it', () => {
 
     open('exec-1')
     failure.onRunEvent({ type: 'rate_limit', attempt: 3 })
-    expect(failure.onError({ message: 'boom' }), 'the count never reached the first turn').toContain(
-      'after 3 attempts',
-    )
+    expect(
+      failure.onError({ message: 'boom' }),
+      'the count never reached the first turn',
+    ).toContain('after 3 attempts')
 
-    // What `consumeWithForkIfBusy` does when the session is contended: a second stream, same hooks.
+    // What `streamTurnForkingIfBusy` does when the session is contended: a second stream, same hooks.
     open('exec-1-fork-abcd1234')
 
     expect(
@@ -82,5 +83,39 @@ describe('#30 — a retry count belongs to the turn that spent it', () => {
     open('exec-7')
 
     expect(seen).toEqual(['exec-7'])
+  })
+})
+
+describe('the framework fork-if-busy path the run command uses', () => {
+  const busy = [
+    { type: 'start' },
+    { type: 'data-error-code', data: { code: 'session_busy' } },
+    { type: 'error', errorText: 'busy' },
+  ]
+  const ok = [{ type: 'start' }, { type: 'text-start', id: 't' }, { type: 'finish' }]
+
+  it('test_a_contended_session_is_reopened_once_on_a_fork_and_the_count_restarts', async () => {
+    const { streamTurnForkingIfBusy } = await import('@theokit/agents/session')
+    const failure = turnFailureReporting({ diagnosticsEnabled: () => false })
+    const opened: string[] = []
+    const forks: string[] = []
+    const open = perTurnStream(failure, (id) => {
+      opened.push(id)
+      return (async function* () {
+        for (const c of opened.length === 1 ? busy : ok) yield c as never
+      })()
+    })
+    const turn = streamTurnForkingIfBusy('s1', open as never, {
+      isBusy: () => false,
+      forkId: (id) => `${id}-fork`,
+      onFork: (_from, to) => forks.push(to),
+    })
+    const seen: string[] = []
+    for await (const chunk of turn.chunks) seen.push(chunk.type)
+
+    expect(opened).toEqual(['s1', 's1-fork'])
+    expect(forks).toEqual(['s1-fork'])
+    expect(seen).toEqual(['start', 'text-start', 'finish'])
+    await expect(turn.sessionId).resolves.toBe('s1-fork')
   })
 })

@@ -32,7 +32,9 @@ export function migrateConfigCommand(
   const unique = [...new Set(found)]
 
   if (unique.length === 0) {
-    process.stdout.write('nothing to convert: no config.toml in the project or the user directory\n')
+    process.stdout.write(
+      'nothing to convert: no config.toml in the project or the user directory\n',
+    )
     return
   }
   // Per file, and a failure on one never stops the others. Measured on a real run: the project root

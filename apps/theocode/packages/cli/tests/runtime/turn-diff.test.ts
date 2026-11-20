@@ -9,8 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { turnDiff } from '../../src/runtime/turn-diff.js'
 
-const git = (out: string, ok = true) =>
-  vi.fn((_args: string[]) => ({ ok, stdout: out }))
+const git = (out: string, ok = true) => vi.fn((_args: string[]) => ({ ok, stdout: out }))
 
 describe('#105 — the diff of a turn', () => {
   it('test_it_asks_git_only_about_the_paths_the_turn_wrote', () => {
@@ -67,9 +66,13 @@ describe('#105 — the diff of a turn', () => {
     )
     const out = turnDiff(run, ['new.py'])
 
-    expect(out, 'an untracked file the turn created was reported as no change').toContain('+def add()')
+    expect(out, 'an untracked file the turn created was reported as no change').toContain(
+      '+def add()',
+    )
     const noIndex = run.mock.calls.find((c) => c[0].includes('--no-index'))
-    expect(noIndex?.[0], 'the untracked file was not diffed against /dev/null').toContain('/dev/null')
+    expect(noIndex?.[0], 'the untracked file was not diffed against /dev/null').toContain(
+      '/dev/null',
+    )
   })
 
   it('test_the_index_is_never_written_to', () => {

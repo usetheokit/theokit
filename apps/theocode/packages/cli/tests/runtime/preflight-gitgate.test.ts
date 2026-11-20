@@ -152,7 +152,9 @@ describe('a failure git did not explain', () => {
     })
 
     expect(warnings.join('')).not.toContain(' — ')
-    expect(warnings.join(''), 'the verdict itself went missing').toContain('Not inside a git repository')
+    expect(warnings.join(''), 'the verdict itself went missing').toContain(
+      'Not inside a git repository',
+    )
   })
 
   it('test_the_gate_still_refuses_when_git_gave_no_reason', () => {

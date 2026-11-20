@@ -39,7 +39,10 @@ describe('resolveSessionId', () => {
     const id = (await resolveSession({ mode: 'run' } as never)).id
 
     expect(id).toMatch(/^exec-/)
-    expect(listAgents, 'a fresh run listed the registry it has no reason to read').not.toHaveBeenCalled()
+    expect(
+      listAgents,
+      'a fresh run listed the registry it has no reason to read',
+    ).not.toHaveBeenCalled()
   })
 
   it('test_an_explicit_id_is_used_verbatim', async () => {
@@ -59,7 +62,9 @@ describe('resolveSessionId', () => {
   })
 
   it('test_a_session_from_another_directory_is_not_resumed_here', async () => {
-    listAgents.mockResolvedValue([{ agentId: 'elsewhere', cwd: '/somewhere/else', lastModified: 900 }])
+    listAgents.mockResolvedValue([
+      { agentId: 'elsewhere', cwd: '/somewhere/else', lastModified: 900 },
+    ])
 
     const id = (await resolveSession(resumeLast)).id
 
@@ -121,9 +126,9 @@ describe('#132 — whether the resolution STARTED a session', () => {
   })
 
   it('test_resuming_an_explicit_id_does_not', async () => {
-    expect(
-      (await resolveSession({ mode: 'resume', resume: { id: 'abc' } } as never)).started,
-    ).toBe(false)
+    expect((await resolveSession({ mode: 'resume', resume: { id: 'abc' } } as never)).started).toBe(
+      false,
+    )
   })
 
   it('test_resume_last_that_FOUND_one_does_not', async () => {

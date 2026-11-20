@@ -36,9 +36,9 @@ installDiagnosticSink(setDiagnosticsSink)
  * CALL TIME, and `-C/--cd` chdir'd inside `main` — after this had already run. `theocode -C other/
  * …` therefore loaded the `.env` of the directory the user was leaving.
  */
-function bootstrap(): void {
+async function bootstrap(): Promise<void> {
   // BEFORE anything resolves an SDK path; the steps and their order live in `bootstrapSurface`.
-  bootstrapSurface({
+  await bootstrapSurface({
     env: process.env,
     cwd: process.cwd(),
     home: homedir(),
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
   }
 
   // AFTER chdir: `.env` belongs to the directory the user selected, not the one they started in.
-  bootstrap()
+  await bootstrap()
 
   return dispatchCommand(args, shutdown)
 }
