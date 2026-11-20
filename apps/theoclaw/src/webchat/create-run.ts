@@ -61,7 +61,7 @@ function startTurn(
   const controller = new AbortController()
   const queue: StreamEvent[] = []
   // The run's `done` and whatever follows it wait for the turn's outcome, which carries the usage.
-  let held: { readonly done: DoneEvent; readonly after: StreamEvent[] } | undefined
+  let held: { readonly done: StreamEvent; readonly after: StreamEvent[] } | undefined
   let closed = false
   let answered = false
   let sawError = false
