@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1396 export(s) across 26 entry point(s).
+1403 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -1281,7 +1281,11 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `claimCollectorRoot` | value |
 | `classifyProjects` | value |
+| `CollectorRootError` | value |
+| `CollectorRootNotOwnedError` | value |
+| `collectorRootOwner` | value |
 | `deleteSession` | value |
 | `forkBeforeUserTurn` | value |
 | `ForkedSessionBusyError` | value |
@@ -1301,6 +1305,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `readThreadHistory` | value |
 | `recordProjectDir` | value |
 | `resolveProjectDir` | value |
+| `runProjectsGC` | value |
 | `runTranscriptGC` | value |
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
@@ -1326,6 +1331,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProjectsGCRegistryEntry` | type |
 | `ReadThreadHistoryOptions` | type |
 | `RegistryOutcome` | type |
+| `RunProjectsGCOptions` | type |
+| `RunProjectsGCResult` | type |
 | `RunTranscriptGCResult` | type |
 | `SessionSummary` | type |
 | `ThreadHistory` | type |
