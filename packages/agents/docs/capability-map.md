@@ -78,6 +78,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createGoalSignal` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -165,6 +166,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `moderateOutputStream` | value |
 | `NetworkError` | value |
 | `noopReflectionStrategy` | value |
+| `NoResultSubmittedError` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
 | `parseModelId` | value |
@@ -421,6 +423,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `RefreshModelCatalogOptions` | type |
 | `RefreshModelCatalogResult` | type |
 | `ResolvedCompatSource` | type |
+| `ResultCapture` | type |
 | `RetryOptions` | type |
 | `RoundStreamFactory` | type |
 | `RunAgentTurnOptions` | type |
@@ -512,6 +515,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createApiErrorHandler` | value |
 | `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
+| `createResultCapture` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
@@ -551,6 +555,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `mcpRegistry` | value |
 | `mcpSecretValues` | value |
 | `mcpToolApprovals` | value |
+| `NoResultSubmittedError` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
 | `readCappedBody` | value |
@@ -646,6 +651,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
 | `ResolvedCompatSource` | type |
+| `ResultCapture` | type |
 | `RunAgentTurnOptions` | type |
 | `RunStartedEvent` | type |
 | `ScoredDelegation` | type |
@@ -941,6 +947,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `expandCommandTemplate` | value |
 | `expandInstructionImports` | value |
 | `FILE_INLINE_CAP` | value |
+| `findFileMentions` | value |
 | `firstSettingsFile` | value |
 | `FOREIGN_KEY_DECISIONS` | value |
 | `frontmatterValue` | value |
@@ -962,6 +969,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `projectEnvStep` | value |
 | `readSettingsFile` | value |
 | `resolveAgentMemory` | value |
+| `resolveFileMentions` | value |
 | `resolveOperatorRoots` | value |
 | `resolveOutputStyle` | value |
 | `SETTINGS_LAYERS` | value |
@@ -989,6 +997,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `EnvOptOut` | type |
 | `EnvReachabilityAudit` | type |
 | `ExpandImportsInput` | type |
+| `FileMentionOptions` | type |
 | `InstructionBlock` | type |
 | `InstructionCut` | type |
 | `InstructionSource` | type |
@@ -1018,6 +1027,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProvenancePerKey` | type |
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
+| `ResolvedFileMentions` | type |
 | `Settings` | type |
 | `SettingsCandidate` | type |
 | `SettingsCandidates` | type |
