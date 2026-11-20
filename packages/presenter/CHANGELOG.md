@@ -1,5 +1,16 @@
 # @theokit/presenter
 
+## 0.17.0
+
+### Minor Changes
+
+- 4a234f3: Add `foldTranscript`, `EMPTY_TRANSCRIPT` and the `TranscriptState`, `TranscriptItem` and `TranscriptTool` types: a pure, terminal-final fold of `AgentOutputEvent` into render state (messages, reasoning, tool cards with a status and a `ToolResultView`, and an error).
+- c5e3952: Added `readTurnMetadata` to `@theokit/presenter/wire`, which reads a `finish` chunk's usage, cost, model and `stopReason` as a typed `WireTurnMetadata`, dropping fields of the wrong type. A client can now tell a turn cut at `step_limit` or `no_progress` from one that finished.
+
+### Patch Changes
+
+- e28f5b8: Tighten the SDK `RunTimelineEvent` compatibility test so it translates a real event.
+
 ## 0.16.0
 
 ### Minor Changes

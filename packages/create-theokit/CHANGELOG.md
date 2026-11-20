@@ -1,5 +1,12 @@
 # create-theo
 
+## 3.2.0
+
+### Minor Changes
+
+- 98c8145: Add `--surface=cli`: scaffolds a one-shot command that takes a prompt (argument and/or stdin), runs one in-process agent turn through `runHeadlessTurn`, prints the answer, supports `--json` and `-o <file>`, and sets the exit code.
+- ba10ee8: `vite`, `@vitejs/plugin-react`, `typescript` and `tsx` are now optional peer dependencies of `theokit`, so apps that only use `theokit/server/*` no longer install them. Apps that run the CLI must list them in `devDependencies`; `theokit dev`, `build` and `preview` exit with a message naming the missing package and the install command. `create-theokit` templates now list them. `theokit start` needs `tsx` too and names it if missing; the CLI no longer loads `tsx` at startup, only after this check.
+
 ## 3.1.7
 
 ### Patch Changes
