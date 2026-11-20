@@ -17,6 +17,8 @@ import type { TimeoutAction } from '@theokit/agents'
 
 import { processSingleton } from '../../core/process-singleton.js'
 
+import type { ApprovalStore } from './approval-store.js'
+
 export interface RegisterOptions {
   /** Milliseconds before the approval auto-settles per `onTimeout`. */
   timeoutMs: number
@@ -127,6 +129,12 @@ export interface ApprovalRegistry {
    * speaking for a deployment.
    */
   readonly scope?: ApprovalRegistryScope
+  /**
+   * Present on a durable registry: the store holding the pending records. The listing and approve
+   * routes read it asynchronously instead of going through the synchronous methods above, which a
+   * durable registry cannot answer (it never holds a live Promise).
+   */
+  readonly store?: ApprovalStore
 }
 
 /**
@@ -146,6 +154,18 @@ interface Pending {
   owner?: string
 }
 
+const CONFIGURED_SLOT = Symbol.for('theokit.singleton.approval-registry.configured')
+
+/**
+ * Replace the registry every route and the agent streamer use — pass
+ * `createDurableApprovalRegistry(store)` to keep pending approvals across restarts and instances.
+ * `undefined` restores the in-process default. Call it once at startup, before the first request.
+ */
+export function configureApprovalRegistry(registry: ApprovalRegistry | undefined): void {
+  ;(globalThis as unknown as Record<symbol, ApprovalRegistry | undefined>)[CONFIGURED_SLOT] =
+    registry
+}
+
 /**
  * The one process-wide registry the stream mount (`mountAgent`) and the approve route share.
  *
@@ -156,6 +176,10 @@ interface Pending {
  * Tests use {@link createInProcessApprovalRegistry} directly — never this singleton.
  */
 export function getApprovalRegistry(): ApprovalRegistry {
+  const configured = (globalThis as unknown as Record<symbol, ApprovalRegistry | undefined>)[
+    CONFIGURED_SLOT
+  ]
+  if (configured !== undefined) return configured
   // Per PROCESS, not per module instance (usetheokit/theokit#401). The paragraph above calls a
   // single instance "not a convenience but a correctness requirement", and a module-level `let`
   // does not deliver that: it gives one instance per MODULE INSTANCE, and this module is emitted

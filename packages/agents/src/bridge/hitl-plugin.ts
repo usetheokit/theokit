@@ -25,6 +25,8 @@ interface PreToolCallContext {
   runId: string
   /** Id of the tool call (SDK `PreToolCallContext.toolUseId`); optional in the SDK contract. */
   toolUseId?: string
+  /** Set by the SDK when this call was deferred earlier and a person approved it on resume. */
+  approvedOnResume?: boolean
 }
 interface PreToolCallVeto {
   block: true
@@ -161,6 +163,8 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
       ctx.on('pre_tool_call', async (c): Promise<PreToolCallResult> => {
         const opts = wiring.gated.get(c.name)
         if (!opts) return undefined // not gated — allow
+        // A call a person already approved on resume must not be gated a second time.
+        if (c.approvedOnResume === true) return undefined
         const approvalId = crypto.randomUUID()
         wiring.emit({
           type: 'approval_required',

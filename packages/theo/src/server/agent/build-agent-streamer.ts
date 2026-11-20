@@ -7,6 +7,7 @@
 
 import {
   compileLoadedAgentModule,
+  type DeferredApproval,
   type HumanInTheLoopOptions,
   resolveEnabledSkills,
   streamAgentUIMessages,
@@ -25,12 +26,39 @@ type Compiled = ReturnType<typeof compileLoadedAgentModule>
  * when the agent has no `@HumanInTheLoop`-gated tools. Extracted verbatim from
  * `mountAgent` so both the plain POST and the thread routes wire HITL identically.
  */
-export function buildAgentHitl(compiled: Compiled, owner?: string) {
+export function buildAgentHitl(
+  compiled: Compiled,
+  owner?: string,
+  durable?: { agentName: string; sessionId: string },
+) {
   const gated = compiled.hitl
   if (gated === undefined || gated.size === 0) return undefined
   const registry = getApprovalRegistry()
+  const store = registry.store
   return {
     gated,
+    // A durable registry (#1960): record the pending call and let the run end deferred. The
+    // `tool-approval-request` chunk is already on the stream by the time the plugin calls this.
+    ...(store !== undefined && durable !== undefined
+      ? {
+          onDefer: (a: DeferredApproval) => {
+            const opts = gated.get(a.toolName)
+            return store.put({
+              schemaVersion: 1,
+              approvalId: a.approvalId,
+              agentName: durable.agentName,
+              sessionId: durable.sessionId,
+              toolUseId: a.toolUseId,
+              toolName: a.toolName,
+              ...(opts?.question !== undefined ? { question: opts.question } : {}),
+              ...(owner !== undefined ? { owner } : {}),
+              expiresAt: Date.now() + (opts?.timeout ?? 300_000),
+              onTimeout: opts?.onTimeout ?? 'abort',
+              ...(opts?.payloadSchema !== undefined ? { payloadSchema: opts.payloadSchema } : {}),
+            })
+          },
+        }
+      : {}),
     awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) =>
       registry.register(approvalId, {
         ...(owner !== undefined ? { owner } : {}),
@@ -89,7 +117,7 @@ export function makeThreadStartRun(
       // No owner on this path, and that is a stated limit rather than an oversight (B-016). A thread
       // continuation runs headless — there is no request whose identity could be resolved — so an
       // approval it raises records nobody, and the approve route treats it exactly as it did before.
-      const hitl = buildAgentHitl(compiled)
+      const hitl = buildAgentHitl(compiled, undefined, { agentName, sessionId })
       // Now that the model is known, let the caller pick the credential for THAT provider.
       const resolvedApiKey = typeof apiKey === 'function' ? apiKey(compiled.model) : apiKey
       const stream = streamAgentUIMessages(compiled, resolvedApiKey, { message, sessionId, hitl })

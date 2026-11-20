@@ -87,3 +87,9 @@ export {
   tryResolveProvider,
 } from './provider-resolver.js'
 export type { ProviderDescriptor, ResolvedProvider } from './provider-resolver.js'
+
+// Durable HITL approvals (#1960): keep pending approvals in a store so a restart or another
+// instance can list and resume them. Opt in with `configureApprovalRegistry(createDurableApprovalRegistry(store))`.
+export { createFileApprovalStore, createDurableApprovalRegistry } from './approval-store.js'
+export type { ApprovalStore, StoredApproval } from './approval-store.js'
+export { configureApprovalRegistry } from './approval-registry.js'

@@ -65,3 +65,33 @@ export function handleListApprovals(
     headers: { 'content-type': 'application/json; charset=utf-8' },
   })
 }
+
+/**
+ * The listing for a registry with a durable `store` (#1960): reads the store, drops records whose
+ * `expiresAt` passed (they are settled per `onTimeout` when someone approves, not listed), keeps the
+ * owner rule above, and never puts `owner` or the session in the response.
+ */
+export async function handleListDurableApprovals(
+  registry: ApprovalRegistry,
+  subject: string | undefined,
+  agentName: string,
+  now: number = Date.now(),
+): Promise<Response> {
+  const records = (await registry.store?.list()) ?? []
+  const approvals = records
+    .filter(
+      (r) => (r.schemaVersion as number) === 1 && r.agentName === agentName && r.expiresAt > now,
+    )
+    .filter((r) => r.owner === undefined || r.owner === subject)
+    .map((r) => ({
+      approvalId: r.approvalId,
+      toolName: r.toolName,
+      question: r.question,
+      expiresAt: r.expiresAt,
+      ...(r.payloadSchema !== undefined ? { payloadSchema: r.payloadSchema } : {}),
+    }))
+  return new Response(JSON.stringify({ approvals, scope: registry.scope ?? 'shared' }), {
+    status: 200,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  })
+}
