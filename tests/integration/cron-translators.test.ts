@@ -200,11 +200,16 @@ describe('Deno Deploy cron translator (T1.5)', () => {
     const entry = join(root, 'crons-entry.ts')
     translateCronToDeno(entry, [cron('a"); evil(); ("', '* * * * *')], {
       configImport: './cfg.js',
-      envConfigImports: { __proto__: './proto.js' } as never,
+      envConfigImports: Object.fromEntries([
+        ['__proto__', './proto.js'],
+        ['production', './prod.js'],
+      ]),
     })
     const content = readFileSync(entry, 'utf8')
     expect(content).toContain('Deno.cron("a\\"); evil(); (\\"", "* * * * *"')
     expect(content).not.toContain('Deno.cron("a"); evil()')
+    expect(content).toContain('["__proto__"]: () => import("./proto.js")')
+    expect(content).toContain('["production"]: () => import("./prod.js")')
   })
 
   it('overwrites existing entry file (managed file)', () => {
