@@ -16,11 +16,6 @@ const ENV = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k', THEOCLAW_TRANSCRIPTS
 const event = (platform: string) =>
   ({ platform, sender: { id: 'u' }, channel: { type: 'dm', id: 'u' } }) as unknown as MessageEvent
 
-interface Callable {
-  name: string
-  handler: (input: unknown) => Promise<string> | string
-}
-
 /** A scripted agent that answers `answer`. */
 function scripted(_options: AgentOptions, answer: string) {
   return {

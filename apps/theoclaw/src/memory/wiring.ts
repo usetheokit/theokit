@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { join } from 'node:path'
 
 import type { AgentOptions, CustomTool, MemorySettings } from '@theokit/sdk'
 
