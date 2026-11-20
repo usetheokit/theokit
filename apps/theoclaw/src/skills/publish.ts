@@ -53,7 +53,7 @@ function collect(root: string, rel: string, out: { path: string; data: Buffer }[
 
 /** Reads and validates a skill folder; throws `PublishError` before anything is sent. */
 export function buildSkillPackage(dir: string): SkillPackage {
-  let files: { path: string; data: Buffer }[] = []
+  const files: { path: string; data: Buffer }[] = []
   try {
     if (!lstatSync(dir).isDirectory()) throw new PublishError(`${dir} is not a directory`)
     collect(dir, '', files, { n: 0 })
@@ -61,7 +61,7 @@ export function buildSkillPackage(dir: string): SkillPackage {
     if (error instanceof PublishError) throw error
     throw new PublishError(`cannot read ${dir}`)
   }
-  files = files.sort((a, b) => (a.path < b.path ? -1 : 1))
+  files.sort((a, b) => (a.path < b.path ? -1 : 1))
   const skill = files.find((file) => file.path === 'SKILL.md')
   if (skill === undefined) throw new PublishError(`${dir} has no SKILL.md`)
   const text = skill.data.toString('utf8')
