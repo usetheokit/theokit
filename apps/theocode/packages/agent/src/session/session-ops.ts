@@ -5,7 +5,11 @@ import { dirname } from 'node:path'
 
 import { Agent, TheokitAgentError } from '@theokit/agents'
 import { forkTranscript, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
-import { deleteSession as deleteInFramework, protectedTranscriptPaths } from '@theokit/agents/session'
+import {
+  deleteSession as deleteInFramework,
+  protectedTranscriptPaths,
+  type RegistryOutcome as FrameworkRegistryOutcome,
+} from '@theokit/agents/session'
 
 import { listAgents } from './agent-list.js'
 import { readPointerId } from './gc/pointer.js'
@@ -120,24 +124,15 @@ export interface DeleteSessionResult {
 }
 
 /**
- * #125 — classify the registry half from the listing before and after.
- *
- * Its own function, and pure, so the RULE is testable without a registry on disk. The I/O around it
- * was never the part that was wrong: what was wrong is that nothing asked the question.
- *
- * Why not the SDK's `registryRemoved`: measured 2026-09-07, it is `true` even when the injected
- * removal returns `undefined` and removes nothing. It reports that the call did not REJECT, and with
- * `Agent.delete(id): Promise<void>` never throwing on a miss (theokit-sdk#612) that is
- * indistinguishable from success. Carrying it through would move the false assertion, not remove it.
+ * #125 — the framework measures the registry half (`isListedInRegistry` read before and after the
+ * removal, never the remover's own report). This only maps its vocabulary to this product's three
+ * states: `nothing-to-remove` and `unconfirmed` both mean "this method cannot tell", which is
+ * `unverified`. `failed` never reaches here (the caller rethrows it), `not-attempted` neither.
  */
-export function classifyRegistryOutcome(seen: {
-  before: readonly string[]
-  after: readonly string[]
-  id: string
-}): RegistryOutcome {
-  if (seen.after.includes(seen.id)) return 'still-present'
-  if (!seen.before.includes(seen.id)) return 'unverified'
-  return 'removed'
+export function registryEntryFrom(outcome: FrameworkRegistryOutcome): RegistryOutcome {
+  if (outcome === 'removed') return 'removed'
+  if (outcome === 'still-present') return 'still-present'
+  return 'unverified'
 }
 
 export interface DeleteSessionOptions {
@@ -172,40 +167,21 @@ export async function deleteSession(
   }
 
   const removeFromRegistry = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
-  // Read BEFORE, so a session that was never listed can be told apart from one that was removed.
-  const before = (await listAgents(cwd)).map((a) => a.agentId)
-  await removeFromRegistry(agentId)
-
-  // The transcript removal is the framework's — and not only to avoid a second copy.
-  //
-  // This used to be `existsSync(target)` followed by `rmSync(target, { force: true })`, reporting
-  // the FIRST call's answer. Between the two there is a window: a GC sweep or a second TUI can
-  // unlink the file, and the result then claims `transcriptRemoved: true` for a file this call did
-  // not remove. `deleteSession` in `@theokit/agents/session` derives the answer from whether its own
-  // `rmSync` threw, so what it reports is what happened.
-  //
-  // `force: true` is honest here rather than a bypass: the live check ran above, BEFORE the registry
-  // entry was removed, and it raised this product's typed error. Re-running it now would test a
-  // state that this function itself has already changed.
-  //
-  // A registry entry outliving its file stays a normal state (the GC removes transcripts by age),
-  // reported through the result rather than raised at someone deleting a session.
-  // `await` since @theokit/agents@10.0.0: `deleteSession` went async because the only agent registry
-  // in the ecosystem is `Agent.delete(id): Promise<void>`, and the registry half of a deletion is
-  // unreachable without awaiting it. Without the `await` this destructures a Promise and
-  // `transcriptRemoved` is `undefined` — reported to the caller as "not removed" for a file that was.
-  const { transcriptRemoved } = await deleteInFramework(agentId, {
+  // The framework runs the removal and measures the entry by listing before and after. `force` is
+  // honest here: the guard above (the framework set plus the TUI pointer) already ran, before the
+  // registry entry was touched, and raised this product's typed error.
+  const result = await deleteInFramework(agentId, {
     cwd,
     root: dir,
     force: true,
+    removeFromRegistry,
+    isListedInRegistry: async (id) => (await listAgents(cwd)).some((a) => a.agentId === id),
   })
-  // #125 — the registry half is MEASURED, not reported. The removal returns `Promise<void>` and does
-  // not throw when it removes nothing, so awaiting it is indistinguishable from success; the only
-  // evidence available is the listing itself.
-  const after = (await listAgents(cwd)).map((a) => a.agentId)
+  // A removal that threw leaves the transcript on disk; surface the failure as before.
+  if (result.registryOutcome === 'failed') throw result.registryError
   return {
-    transcriptRemoved,
-    registryEntry: classifyRegistryOutcome({ before, after, id: agentId }),
+    transcriptRemoved: result.transcriptRemoved,
+    registryEntry: registryEntryFrom(result.registryOutcome),
   }
 }
 

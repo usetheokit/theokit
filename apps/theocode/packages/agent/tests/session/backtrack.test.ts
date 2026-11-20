@@ -19,7 +19,10 @@ import { JsonlParseError, transcriptPath } from '@theokit/agents/persistence'
 import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { forkSessionBeforeUserTurn, readUserTurnPreviewsAsync } from '../../src/session/backtrack.js'
+import {
+  forkSessionBeforeUserTurn,
+  readUserTurnPreviewsAsync,
+} from '../../src/session/backtrack.js'
 
 let base: string
 let cwd: string
@@ -119,5 +122,15 @@ describe('forking before a turn (framework primitive, zero-based nth)', () => {
     const out = await forkSessionBeforeUserTurn('nope', 'nope-fork', 0, { cwd, baseDir: base })
     expect(out.copied).toBe(false)
     expect(existsSync(transcriptPath(base, cwd, 'nope-fork'))).toBe(false)
+  })
+
+  it('refuses to fork onto the session the TUI pointer names (#1905)', async () => {
+    writeTranscript('f4', [userTurn('first'), userTurn('second')])
+    mkdirSync(join(cwd, '.theokit'), { recursive: true })
+    writeFileSync(join(cwd, '.theokit', 'tui-session'), 'f4-live')
+    await expect(
+      forkSessionBeforeUserTurn('f4', 'f4-live', 1, { cwd, baseDir: base }),
+    ).rejects.toThrow(/live session/)
+    expect(existsSync(transcriptPath(base, cwd, 'f4-live'))).toBe(false)
   })
 })
