@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest'
-
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { describe, expect, it } from 'vitest'
 
 import { resolveEffectiveConfig as realResolve } from '@theocode/agent/config'
 
+import { drainAll } from '../../src/terminal-io/index.js'
 import { configHealthNotice, fallbackConfigPosture } from '../../src/config-health.js'
 
 /**
@@ -71,9 +74,10 @@ describe('a config that cannot be read', () => {
   it('test_the_session_still_starts', async () => {
     const { createTuiSession } = await import('../../src/agent-session/tui-session.js')
 
+    const dir = mkdtempSync(join(tmpdir(), 'config-health-'))
     const session = createTuiSession({
       cwd: '/nonexistent',
-      sessionPointer: '/nonexistent/.theokit/tui-session',
+      sessionPointer: join(dir, '.theokit', 'tui-session'),
       // Throws for the PROJECT directory and resolves for any other, which is the real shape: the
       // fallback reads a directory with no settings file in it. A stub that threw unconditionally
       // would assert that the fallback itself must survive an unreadable user config — a different
@@ -86,6 +90,8 @@ describe('a config that cannot be read', () => {
     })
 
     expect(session.cfg(), 'the session died instead of falling back').toBeDefined()
+    await drainAll()
+    rmSync(dir, { recursive: true, force: true })
   })
 
   it('test_it_falls_back_to_the_most_confined_posture', () => {

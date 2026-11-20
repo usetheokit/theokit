@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- A scheduled run's agent send now carries the untrusted content options itself, next to the scheduler's cancellation signal.
+
 ### Changed
 
 - The scheduler uses the framework's `createPostgresJobStore`, `copyJobs`, `agentRunPort` and `fileTransientJob` instead of TheoClaw's copies (#1835, parts of #1812 and #1813). `state port` now copies the jobs in one atomic statement; a scheduled run that fails reports `run ended with error: <code>`, `run ended with status cancelled` or `run finished without a result`. `THEOCLAW_HEARTBEAT` and `THEOCLAW_TEAM_REPORT` crons are checked with the SDK's `validateCron` (same refusal naming the variable, SDK wording of the cron problem), and workflow runs resume through the SDK's `WorkflowSet` without casts (an unknown token still answers as unknown; the failure message no longer names the workflow) (theokit-sdk#1028-1030).
