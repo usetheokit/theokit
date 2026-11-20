@@ -71,7 +71,6 @@ import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher
 import { NO_PROFILE, startLine, type TheoClawInstance } from './instance.js'
 import { browserLine } from './tools/browser-server.js'
 import { createSharedBrowser, type BrowserLauncher, type SharedBrowser } from './tools/shared-browser.js'
-import { saveMemoryTool } from './memory/memory-tools.js'
 import type { MemoryWiring } from './memory/wiring.js'
 import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
 import { Generations } from './sessions/generations.js'
@@ -701,10 +700,11 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
   const buildControlAgent = async (): Promise<TurnAgent> => {
     const relayGate = new RelayTurnGate()
     const control = controlAgentToolOptions(await withBrowserStarted(tools, shared.browser), buildWorker, [...extraTools, ...relayToolsFor(relayGate), ...(memory?.tools ?? [])], execApproval)
-    const recalled = (await memory?.recall()) ?? ''
-    const agent = relayGate.wrap(await options.agentFactory(recalled === '' ? control : { ...control, systemPromptSuffix: recalled }))
-    // TUI, desktop and `/control` turns share the chat surfaces' memory; the reviewer has `save_memory` alone.
-    return memory === undefined ? agent : memory.wrap(agent, 'control', 'control', async () => options.agentFactory({ tools: [saveMemoryTool(memory.store)], plugins: [] }))
+    // TUI, desktop and `/control` turns share the owner's SDK memory partition with the chat surfaces' owners.
+    const hosted = ((await memory?.agentOptions())?.plugins ?? []) as readonly Plugin[]
+    const memoryOptions = memory === undefined ? control : { ...control, memory: memory.settings(), plugins: [...control.plugins, ...hosted] }
+    const agent = relayGate.wrap(await options.agentFactory(memoryOptions))
+    return memory === undefined ? agent : memory.record(agent, 'control', 'control')
   }
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   if (mcpEventsSettings !== undefined) {
