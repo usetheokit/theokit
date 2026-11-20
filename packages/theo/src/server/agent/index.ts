@@ -54,7 +54,7 @@ export {
   type StdioStreams,
 } from './mcp-stdio.js'
 export { handleMcpToolsJsonRpc, handleMcpToolsHttp } from './mcp-handler.js'
-export type { McpHttpOptions } from './mcp-handler.js'
+export type { McpHttpOptions, McpToolsOptions } from './mcp-handler.js'
 export {
   defineAppResource,
   buildResourceDescriptors,
