@@ -16,7 +16,7 @@ async function setup(timeoutMs = 2000) {
   const path = grantsPath(v.io.env, v.io.homeDir)
   mkdirSync(dirname(path), { recursive: true })
   const store = new GrantStore(path)
-  const { token } = store.create('chatgpt', ['list_dir'])
+  const { token } = await store.create('chatgpt', ['list_dir'])
   const server = createMcpRelay({
     instanceToken: INSTANCE,
     grantsPath: path,
@@ -69,7 +69,7 @@ describe('mcp-relay server', () => {
     const bad = await r.post('/mcp', 'wrong', rpc)
     expect(bad.status).toBe(401)
     expect(bad.headers.get('www-authenticate')).toBe('Bearer')
-    r.store.revoke('chatgpt')
+    await r.store.revoke('chatgpt')
     expect((await r.post('/mcp', r.token, rpc)).status).toBe(401)
     const polled = (await (await r.post('/instance/poll', INSTANCE, {})).json()) as {
       jobs: unknown[]

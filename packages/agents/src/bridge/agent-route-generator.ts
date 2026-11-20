@@ -23,7 +23,8 @@ export interface AgentRouteContext {
    * `AgentWalkResult` satisfies this structurally, so the decorator path is unchanged.
    */
   walkResult: { route: string }
-  compiledOptions: CompiledAgentOptions
+  /** Not read by the generator. Kept optional so existing callers compile unchanged. */
+  compiledOptions?: CompiledAgentOptions
   /**
    * `signal` is the request's own: it aborts when the client leaves, so a run that spends model
    * tokens can stop instead of finishing for nobody (`mountAgent` forwards it the same way).

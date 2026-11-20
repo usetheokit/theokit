@@ -1,4 +1,15 @@
+import { existsSync } from 'node:fs'
 import process from 'node:process'
+import { Agent } from '@theokit/agents'
+import { exitAfterDrain } from '@theokit/agents/commands'
+import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
+import {
+  planTranscriptGC,
+  runTranscriptGC,
+  type RunTranscriptGCResult,
+  type TranscriptGCPlan,
+} from '@theokit/agents/session'
+
 import type { ExecSessions } from '../runtime/index.js'
 
 async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
@@ -12,7 +23,8 @@ async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
     })
   } catch (err) {
     process.stderr.write(`[sessions gc] ${err instanceof Error ? err.message : String(err)}\n`)
-    process.exit(1)
+    exitAfterDrain(1)
+    return
   }
   const result = await runAllProjectsOnDisk(plan, { apply: args.apply })
   if (args.json) {
@@ -22,48 +34,169 @@ async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
   } else {
     for (const l of formatReport(plan, result)) process.stderr.write(`${l}\n`)
   }
-  process.exit(plan.errors.length + result.errors.length > 0 ? 1 : 0)
+  exitAfterDrain(plan.errors.length + result.errors.length > 0 ? 1 : 0)
 }
 
-function humanReport(
-  plan: {
-    kept: unknown[]
-    pointer?: string
-    mostRecent?: string
-    candidates: { id: string; ageDays: number; inRegistry: boolean }[]
-  },
-  result: { dryRun: boolean; removed: unknown[]; errors: string[] },
-): string[] {
+export function humanReport(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string[] {
+  const failed = new Set(result.errors.map((e) => e.id))
+  // Per transcript FILE, not per session id: a current and a legacy file can share an id, and one
+  // can be removed while the other fails. An applied run is judged by what is left on disk.
+  const gone = (c: TranscriptGCPlan['candidates'][number]): boolean =>
+    result.dryRun || !existsSync(c.transcript)
+  const removedCount = plan.candidates.filter(gone).length
   const verb = result.dryRun ? 'would remove' : 'removed'
-  const pointer = plan.pointer?.slice(0, 16) ?? 'none'
-  const mostRecent = plan.mostRecent?.slice(0, 16) ?? 'none'
   const lines = [
-    `[sessions gc] ${result.dryRun ? 'DRY-RUN' : 'APPLIED'} — ${result.removed.length} ${verb}; ${plan.kept.length} kept (pointer=${pointer}, most-recent=${mostRecent})`,
-    ...plan.candidates.map(
-      (c) =>
-        `  - ${c.id} (${Math.round(c.ageDays)}d, ${c.inRegistry ? 'registry' : 'orphan'}) [${verb}]`,
-    ),
+    `[sessions gc] ${result.dryRun ? 'DRY-RUN' : 'APPLIED'} — ${removedCount} ${verb}; ${plan.kept.length + plan.candidates.length - removedCount} kept`,
+    ...plan.candidates.map((c) => {
+      const ageDays = Math.round((Date.now() - c.modifiedAt.getTime()) / 86_400_000)
+      const outcome = gone(c)
+        ? `[${verb}]`
+        : failed.has(c.id)
+          ? '[NOT removed — see errors]'
+          : '[kept — became protected]'
+      return `  - ${c.id ?? c.transcript} (${ageDays}d) ${outcome}`
+    }),
   ]
   if (result.dryRun && plan.candidates.length > 0) lines.push('  → re-run with --apply to delete')
-  return [...lines, ...result.errors.map((e) => `  ! ${e}`)]
+  return [
+    ...lines,
+    ...result.errors.map((e) => `  ! ${e.id ?? 'unnamed transcript'}: ${e.message}`),
+  ]
+}
+
+export interface CurrentProjectGCOptions {
+  cwd: string
+  keepLast?: number
+  maxAgeDays?: number
+  apply: boolean
+  /** Test seams: the transcript root, the clock, the registry listing and its remover. */
+  root?: string
+  now?: number
+  listRegistry?: (cwd: string) => Promise<{ agentId: string; archived?: boolean }[]>
+  removeFromRegistry?: (id: string) => unknown
+}
+
+/**
+ * A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
+ * first row, and registry removal would then hit the source. Each candidate gets its OWN identity
+ * instead: the registered session (archived or not) whose transcript file this is. A transcript no
+ * registry entry owns has no identity and is collected by path, never as its source.
+ */
+function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): TranscriptGCPlan {
+  const own = new Map(registryIds.map((id) => [transcriptPath(planned.root, planned.cwd, id), id]))
+  return {
+    ...planned,
+    candidates: planned.candidates.map((c) => ({ ...c, id: own.get(c.transcript) })),
+  }
+}
+
+/**
+ * The framework maps a protected id to its hashed transcript only, but 4.x named the file after the
+ * id and an upgraded machine has both. Move out of `candidates` every transcript carrying the legacy
+ * name of a protected id (registered session or TUI pointer), so a live session's old file is kept.
+ */
+function withholdLegacyNamed(planned: TranscriptGCPlan, liveIds: string[]): TranscriptGCPlan {
+  const legacy = new Set(liveIds.map((id) => legacyTranscriptPath(planned.root, planned.cwd, id)))
+  const held = planned.candidates.filter((c) => legacy.has(c.transcript))
+  if (held.length === 0) return planned
+  return {
+    ...planned,
+    candidates: planned.candidates.filter((c) => !held.includes(c)),
+    kept: [
+      ...planned.kept,
+      ...held.map((c) => ({ id: c.id, reason: 'legacy-named transcript of a live session' })),
+    ],
+  }
+}
+
+/** The framework's note for a candidate with no id; here that is expected, not a failure. */
+const UNNAMEABLE = 'transcript collected without a registry removal'
+
+/**
+ * The project's registry listing INCLUDING archived sessions. The default listing hides them, and
+ * an archived session's transcript would then look unregistered and be unlinked with its entry kept.
+ */
+export async function listIncludingArchived(
+  cwd: string,
+  list: (o: { runtime: 'local'; cwd: string; includeArchived: true }) => Promise<{
+    items: { agentId: string; archived?: boolean }[]
+    nextCursor?: string
+  }> = (o) => Agent.list(o),
+): Promise<{ agentId: string; archived?: boolean }[]> {
+  const r = await list({ runtime: 'local', cwd, includeArchived: true })
+  if (r.nextCursor !== undefined) {
+    throw new Error(
+      `the agent listing returned a cursor (${r.nextCursor}) this version cannot drain`,
+    )
+  }
+  return r.items
+}
+
+/**
+ * `sessions gc` for one project: the framework's planner with TheoCode's protection added — the TUI
+ * pointer, and every non-archived registry session. Throws what
+ * the framework throws (`GCFloorError`, `GCProtectionUnavailableError`); the caller prints it.
+ */
+export async function planAndRunCurrentProjectGC(
+  opts: CurrentProjectGCOptions,
+): Promise<{ plan: TranscriptGCPlan; result: RunTranscriptGCResult }> {
+  const { gcProtectedIds } = await import('@theocode/agent/session')
+  const { cwd } = opts
+  const everyone = await (opts.listRegistry ?? listIncludingArchived)(cwd)
+  const protectedIds = gcProtectedIds(
+    cwd,
+    everyone.filter((a) => a.archived !== true).map((a) => a.agentId),
+  )
+  const planned = planTranscriptGC({
+    cwd,
+    keepLast: opts.keepLast ?? 10,
+    maxAgeDays: opts.maxAgeDays ?? 30,
+    protectedIds,
+    ...(opts.root !== undefined ? { root: opts.root } : {}),
+    ...(opts.now !== undefined ? { now: opts.now } : {}),
+  })
+  const plan = assignOwnIdentities(
+    withholdLegacyNamed(planned, [...protectedIds().keys()]),
+    everyone.map((a) => a.agentId),
+  )
+  const remove = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
+  const result = await runTranscriptGC(plan, {
+    apply: opts.apply,
+    protectedIds,
+    removeFromRegistry: remove,
+  })
+  return {
+    plan,
+    result: {
+      ...result,
+      errors: result.errors.filter((e) => !e.message.startsWith(UNNAMEABLE)),
+    },
+  }
 }
 
 async function gcForCurrentProject(args: ExecSessions): Promise<void> {
-  const { planSessionGC, runSessionGC } = await import('@theocode/agent/session')
-  const plan = await planSessionGC({
-    cwd: process.cwd(),
-    ...(args.keepLast !== undefined ? { keepLast: args.keepLast } : {}),
-    ...(args.maxAgeDays !== undefined ? { maxAgeDays: args.maxAgeDays } : {}),
-  })
-  const result = await runSessionGC(plan, { apply: args.apply })
+  let outcome: Awaited<ReturnType<typeof planAndRunCurrentProjectGC>>
+  try {
+    outcome = await planAndRunCurrentProjectGC({
+      cwd: process.cwd(),
+      apply: args.apply,
+      ...(args.keepLast !== undefined ? { keepLast: args.keepLast } : {}),
+      ...(args.maxAgeDays !== undefined ? { maxAgeDays: args.maxAgeDays } : {}),
+    })
+  } catch (err) {
+    process.stderr.write(`[sessions gc] ${err instanceof Error ? err.message : String(err)}\n`)
+    exitAfterDrain(1)
+    return
+  }
+  const { plan, result } = outcome
   if (args.json) {
     process.stdout.write(
-      `${JSON.stringify({ type: 'sessions.gc', dryRun: result.dryRun, removed: result.removed, kept: plan.kept.length, pointer: plan.pointer, mostRecent: plan.mostRecent, errors: result.errors })}\n`,
+      `${JSON.stringify({ type: 'sessions.gc', dryRun: result.dryRun, removed: [...result.removed, ...result.orphaned], kept: plan.kept.length, keptReasons: plan.kept, errors: result.errors.map((e) => `${e.id ?? 'unnamed transcript'}: ${e.message}`) })}\n`,
     )
   } else {
     for (const l of humanReport(plan, result)) process.stderr.write(`${l}\n`)
   }
-  process.exit(result.errors.length > 0 ? 1 : 0)
+  exitAfterDrain(result.errors.length > 0 ? 1 : 0)
 }
 
 /**
@@ -117,13 +250,14 @@ async function runTargeted(args: ExecSessions, ops: SessionOps, say: Say): Promi
     )
     // #125 — a delete that left the entry behind must reach the exit code. A script deleting in a
     // loop has no other way to learn that nothing was deleted.
-    if (report.failed) process.exit(1)
+    if (report.failed) exitAfterDrain(1)
     return
   }
-  const r = ops.forkSession(target, `${target}-fork-${String(process.pid)}`)
+  const r = await ops.forkSession(target, `${target}-fork-${String(process.pid)}`)
   if (!r.copied) {
     process.stderr.write(`[sessions fork] no transcript for ${target}\n`)
-    process.exit(1)
+    exitAfterDrain(1)
+    return
   }
   // MEASURED (B-074): a fork copies the TRANSCRIPT; the agent registry only learns the id when
   // something opens it. The TUI hides this because `/fork` immediately points the live session at
@@ -151,7 +285,7 @@ async function sessionOperation(args: ExecSessions): Promise<void> {
     process.stderr.write(
       `[sessions ${args.action}] ${err instanceof Error ? err.message : String(err)}\n`,
     )
-    process.exit(1)
+    exitAfterDrain(1)
   }
 }
 

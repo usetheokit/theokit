@@ -1,8 +1,8 @@
 /**
  * The collection window, and the one rule both planners obey about it.
  *
- * `sessions gc` has two implementations — `per-session.ts` for the current project and
- * `all-sessions.ts` for `--all-projects` — and the window is the argument the operator actually
+ * `sessions gc --all-projects` is planned by `all-sessions.ts`; the current project uses the
+ * framework's `planTranscriptGC` — and the window is the argument the operator actually
  * types. The floor lived inside the all-projects planner, so the SAME number was refused with the
  * flag and executed without it: `--max-age-days 0` made the predicate `ageDays > 0`, which plans
  * every transcript outside the protected set for unlink.

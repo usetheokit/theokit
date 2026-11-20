@@ -25,8 +25,10 @@ const STAND_IN = `
 import { createInterface } from 'node:readline'
 import { writeFileSync } from 'node:fs'
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n')
+const seen = []
 createInterface({ input: process.stdin }).on('line', (line) => {
   const message = JSON.parse(line)
+  if (message.method === 'tools/call') seen.push(message.params?.name + ':' + (message.params?.arguments?.action ?? ''))
   if (Array.isArray(message)) return send({ jsonrpc: '2.0', id: 99, result: { leakedBatch: message.length } })
   if (message.id === undefined) return
   if (message.method === 'initialize') send({ jsonrpc: '2.0', id: message.id, result: { seen: message.params } })
@@ -38,7 +40,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     send({ jsonrpc: '2.0', id: message.id, result: { content: [{ type: 'text', text: '### Page\\n- Page URL: x\\n### Snapshot\\n- [Snapshot](' + message.params.arguments.link + ')' }] } })
   } else {
     const env = Object.keys(process.env).filter((key) => key.startsWith('PLAYWRIGHT_MCP_'))
-    send({ jsonrpc: '2.0', id: message.id, result: { called: message.params?.name, cwd: process.cwd(), argv: process.argv.slice(2), env, pid: process.pid } })
+    send({ jsonrpc: '2.0', id: message.id, result: { called: message.params?.name, cwd: process.cwd(), argv: process.argv.slice(2), seen, env, pid: process.pid } })
   }
 })
 `
@@ -58,8 +60,8 @@ interface Answer {
 }
 
 /** Start the configured server, send `requests` (ids 1..n), and resolve with each answer by id once the child has closed. */
-async function exchange(requests: readonly object[], env: NodeJS.ProcessEnv = process.env, raw: readonly string[] = []): Promise<Map<number, Answer>> {
-  const server = browserServer({ cliPath: standInCli() }) as { command: string; args: string[] }
+async function exchange(requests: readonly object[], env: NodeJS.ProcessEnv = process.env, raw: readonly string[] = [], cdpEndpoint?: string): Promise<Map<number, Answer>> {
+  const server = browserServer({ cliPath: standInCli(), ...(cdpEndpoint === undefined ? {} : { cdpEndpoint }) }) as { command: string; args: string[] }
   const child = spawn(server.command, server.args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
   let stderr = ''
   child.stderr.on('data', (chunk: Buffer) => {
@@ -118,6 +120,26 @@ describe('the browser server wrapper', () => {
     const answers = await exchange([{ method: 'tools/list' }])
     const tools = (answers.get(1)?.result?.tools ?? []) as { name: string }[]
     expect(tools.map((tool) => tool.name)).toEqual(['browser_navigate', 'browser_snapshot'])
+  })
+
+  it('opens a page of its own before the first call of a server attached to a shared browser, and hides that call', async () => {
+    const answers = await exchange(
+      [
+        { method: 'tools/call', params: { name: 'browser_navigate', arguments: {} } },
+        { method: 'tools/call', params: { name: 'browser_snapshot', arguments: {} } },
+      ],
+      process.env,
+      [],
+      'http://127.0.0.1:1',
+    )
+    expect([...answers.keys()].sort()).toEqual([1, 2])
+    // The new tab comes first, once, and the held calls follow in the order they came.
+    expect((answers.get(2)?.result as { seen: string[] }).seen).toEqual(['browser_tabs:new', 'browser_navigate:', 'browser_snapshot:'])
+  })
+
+  it('opens no page for a server with its own isolated browser', async () => {
+    const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: {} } }])
+    expect((answers.get(1)?.result as { seen: string[] }).seen).toEqual(['browser_navigate:'])
   })
 
   it('refuses a call to browser_run_code_unsafe without passing it to the server', async () => {

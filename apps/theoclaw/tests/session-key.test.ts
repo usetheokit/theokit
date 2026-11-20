@@ -1,3 +1,4 @@
+import { scopedStrategy } from '@theokit/gateway'
 import type { MessageEvent, PlatformName } from '@theokit/gateway'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -130,5 +131,27 @@ describe('createSessionRouter', () => {
   it('resolves an agent id through the session key', () => {
     const router = createSessionRouter(DEFAULT)
     expect(router.resolveAgentId(event({ type: 'group', channel: 'g1' }))).toBe('telegram-grp-g1')
+  })
+})
+
+describe('parity with the gateway scopedStrategy (why the keys stay in TheoClaw)', () => {
+  const peerLinks = new Map([['telegram:u1', 'ann']])
+  const mine = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) => sessionKeyFor(event(shape), { dmScope, peerLinks })
+  const gateway = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) => scopedStrategy({ dmScope, peerLinks })(event(shape))
+
+  it('agrees where a key has no scope-specific form, escaping `-` and `_` the same way', () => {
+    for (const shape of [{ sender: 'a-b_c' }, { type: 'group' as const, channel: 'g-1_x' }, { type: 'thread' as const, topicId: 't-1' }]) {
+      expect(gateway('per-channel-peer', shape), JSON.stringify(shape)).toBe(mine('per-channel-peer', shape))
+    }
+  })
+
+  it('differs for `main`, so adopting it would orphan the history stored under `main`', () => {
+    expect(mine('main')).toBe('main')
+    expect(gateway('main')).not.toBe('main')
+  })
+
+  it('differs for a linked peer, so adopting it would orphan the history stored under `peer-<name>`', () => {
+    expect(mine('per-peer')).toBe('peer-ann')
+    expect(gateway('per-peer')).not.toBe('peer-ann')
   })
 })

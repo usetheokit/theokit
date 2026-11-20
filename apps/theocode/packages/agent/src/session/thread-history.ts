@@ -6,6 +6,8 @@ type Reader = (options: {
   cwd: string
 }) => Promise<readonly SessionMessage[]> | readonly SessionMessage[]
 
+// Kept local rather than `readThreadHistory` from `@theokit/agents/session`: that returns raw
+// transcript rows (`Record<string, unknown>`), not the display-shaped `SessionMessage` the TUI renders.
 /**
  * What a session already contains, for a surface that just repointed to it (#70).
  *
