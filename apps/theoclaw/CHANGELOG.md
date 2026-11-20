@@ -13,6 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The live session tests keep their memory in a state directory of their own, so a code word saved by another case or an earlier run is no longer recalled in place of the one the test sent (#2504).
 - A scheduled run's agent send now carries the untrusted content options itself, next to the scheduler's cancellation signal.
 - The CI live and container checks route `THEOCLAW_MODEL` through OpenRouter (`openrouter/` prefix) instead of sending the OpenRouter key to Google's own endpoint (#2482).
 
