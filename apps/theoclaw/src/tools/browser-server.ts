@@ -7,11 +7,14 @@ import { fileURLToPath } from 'node:url'
 import type { McpServerConfig } from '@theokit/sdk'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import type { BrowserLauncher } from './shared-browser.js'
 
 /** What the browser server is started from, resolved once at start. */
 export interface BrowserSettings {
   /** The `playwright-mcp` CLI of the pinned `@playwright/mcp`. */
   readonly cliPath: string
+  /** The loopback CDP endpoint of the instance's shared browser; absent, each session starts an isolated one. */
+  readonly cdpEndpoint?: string
 }
 
 /** What the tests inject; the process passes nothing. */
@@ -19,6 +22,8 @@ export interface BrowserDeps {
   readonly resolveCli?: () => string
   /** Where Playwright keeps its browsers. Default: `PLAYWRIGHT_BROWSERS_PATH`, else `~/.cache/ms-playwright`. */
   readonly browsersDir?: string
+  /** Starts the shared Chromium; the tests inject one so no browser is needed. */
+  readonly launch?: BrowserLauncher
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -114,9 +119,10 @@ export function readBrowser(env: Env, deps: BrowserDeps = {}): BrowserSettings |
 
 /** The start line that says whether the browser is on. */
 export function browserLine(settings: BrowserSettings | undefined): string {
-  return settings === undefined
-    ? 'tools: browser is off (THEOCLAW_BROWSER unset)'
-    : 'tools: browser is on (headless chromium, isolated profile)'
+  if (settings === undefined) return 'tools: browser is off (THEOCLAW_BROWSER unset)'
+  return settings.cdpEndpoint === undefined
+    ? 'tools: browser is on (headless chromium, isolated profile)'
+    : 'tools: browser is on (headless chromium, persistent profile shared by sessions, started on first use)'
 }
 
 /**
@@ -129,7 +135,10 @@ export function browserServer(settings: BrowserSettings): McpServerConfig {
   return {
     type: 'stdio',
     command: process.execPath,
-    args: [PROXY_PATH, settings.cliPath, '--headless', '--isolated', '--config', CONFIG_PATH],
+    args:
+      settings.cdpEndpoint === undefined
+        ? [PROXY_PATH, settings.cliPath, '--headless', '--isolated', '--config', CONFIG_PATH]
+        : [PROXY_PATH, settings.cliPath, '--cdp-endpoint', settings.cdpEndpoint],
     // One step's calls run in the order listed: a wait or snapshot must not run while a navigate loads.
     sequential: true,
   }

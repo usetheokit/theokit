@@ -69,6 +69,8 @@ import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
 import { NO_PROFILE, startLine, type TheoClawInstance } from './instance.js'
+import { browserLine } from './tools/browser-server.js'
+import { createSharedBrowser, type BrowserLauncher, type SharedBrowser } from './tools/shared-browser.js'
 import { saveMemoryTool } from './memory/memory-tools.js'
 import type { MemoryWiring } from './memory/wiring.js'
 import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
@@ -448,6 +450,27 @@ function pairingStoreFor(
   return policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write })
 }
 
+/**
+ * With the browser on, makes the instance's one Chromium, on a persistent profile in the workspace
+ * state directory, without starting it: it starts with the first `/control` session, so an instance
+ * that never uses the browser never launches one. Every session's browser server attaches to it, so
+ * a login outlives a turn and sessions do not fight over the profile.
+ */
+function withSharedBrowser(settings: ToolSettings, launch: BrowserLauncher | undefined, adopt: (browser: SharedBrowser) => void): ToolSettings {
+  if (settings.browser === undefined) return settings
+  adopt(createSharedBrowser(join(settings.workspace, '.theoclaw', 'browser-profile'), launch))
+  const was = browserLine(settings.browser)
+  const line = browserLine({ ...settings.browser, cdpEndpoint: 'shared' })
+  if (!settings.offLines.includes(was)) throw new Error('theoclaw: the browser start line is missing from the start lines')
+  return { ...settings, offLines: settings.offLines.map((l) => (l === was ? line : l)) }
+}
+
+/** The tools of one `/control` session: the browser server attached to the shared browser, started on first use. */
+async function withBrowserStarted(settings: ToolSettings, browser: SharedBrowser | undefined): Promise<ToolSettings> {
+  if (settings.browser === undefined || browser === undefined) return settings
+  return { ...settings, browser: { ...settings.browser, cdpEndpoint: await browser.start() } }
+}
+
 /** What the start says about the tools: what is off and why, the shell's reach, the external tools by name. */
 function writeToolLines(tools: ToolSettings, write: (line: string) => void): void {
   for (const line of tools.offLines) write(line)
@@ -521,6 +544,17 @@ function startWebchat(
  * and the shutdown withdraws that announcement before it closes the listener.
  */
 export async function startTheoClaw(given: StartOptions): Promise<RunningTheoClaw> {
+  const shared: { browser?: SharedBrowser } = {}
+  try {
+    return await startComposed(given, shared)
+  } catch (error) {
+    // Whatever failed after the browser launched, the entry exits 1: the browser must not outlive it.
+    await shared.browser?.close()
+    throw error
+  }
+}
+
+async function startComposed(given: StartOptions, shared: { browser?: SharedBrowser }): Promise<RunningTheoClaw> {
   // Secret references are resolved once, first, so every reader and the masks see the values (B-711).
   // No await when nothing is a reference: the start stays as synchronous as it was up to its first real await.
   const hasRefs = Object.values(given.env).some((value) => value !== undefined && secretRefKind(value.trim()) !== undefined)
@@ -591,6 +625,8 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     await acpSessions?.stopAll()
     await composedApp?.loop.stopAll()
     await composedApp?.sessions.disposeAll()
+    // After the sessions: their browser servers are gone before the browser they were attached to.
+    await shared.browser?.close()
   }
   const removeShutdown = installShutdown({
     signals: options.signals,
@@ -607,6 +643,9 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   })
   // After the shutdown hook is in place, so a signal during the probe still closes cleanly. Nothing reads `tools` before this.
   tools = await withInteractiveShell(tools, options.toolDeps)
+  tools = withSharedBrowser(tools, options.toolDeps?.browser?.launch, (browser) => {
+    shared.browser = browser
+  })
   writeToolLines(tools, stderr)
   const acp = createAcpSessions({ agents: tools.external.acpAgents, cwd: tools.toolRoot })
   acpSessions = acp
@@ -661,7 +700,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const controlExtras = [...extraTools, ...relayToolsFor(), ...(memory?.tools ?? [])]
   const buildControlAgent = async (): Promise<TurnAgent> => {
     const relayGate = new RelayTurnGate()
-    const control = controlAgentToolOptions(tools, buildWorker, [...extraTools, ...relayToolsFor(relayGate), ...(memory?.tools ?? [])], execApproval)
+    const control = controlAgentToolOptions(await withBrowserStarted(tools, shared.browser), buildWorker, [...extraTools, ...relayToolsFor(relayGate), ...(memory?.tools ?? [])], execApproval)
     const recalled = (await memory?.recall()) ?? ''
     const agent = relayGate.wrap(await options.agentFactory(recalled === '' ? control : { ...control, systemPromptSuffix: recalled }))
     // TUI, desktop and `/control` turns share the chat surfaces' memory; the reviewer has `save_memory` alone.
