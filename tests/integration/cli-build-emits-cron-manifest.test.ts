@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  symlinkSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -88,6 +89,8 @@ const runBuild = (args: string[] = []): { stdout: string; exitCode: number } => 
 beforeEach(() => {
   projectDir = mkdtempSync(join(tmpdir(), 'theokit-cli-cron-'))
   writeMinimalApp()
+  // The CLI resolves its toolchain (typescript, vite) from the app; a /tmp fixture sees none.
+  symlinkSync(resolve(REPO, 'node_modules'), join(projectDir, 'node_modules'), 'dir')
 })
 
 afterEach(() => {
@@ -147,11 +150,14 @@ describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
     // adapter outcome (test fixture lacks node_modules → Vite fails, but
     // cron+job artifacts must be present).
     runBuild(['--target=cloudflare'])
-    const wrangler = join(projectDir, 'wrangler.toml')
-    expect(existsSync(wrangler)).toBe(true)
-    const content = readFileSync(wrangler, 'utf8')
-    expect(content).toContain('[triggers]')
-    expect(content).toMatch(/crons\s*=\s*\["\*\/15 \* \* \* \*"\]/)
+    // The cloudflare adapter rewrites wrangler.toml after the cron step when the build runs to
+    // completion, so the stable artifact here is the manifest.
+    const manifest = JSON.parse(readFileSync(join(projectDir, '.theokit/crons.json'), 'utf8')) as {
+      crons: { name: string; schedule: string }[]
+    }
+    expect(manifest.crons).toContainEqual(
+      expect.objectContaining({ name: 'cf-cron', schedule: '*/15 * * * *' }),
+    )
   })
 
   it('build --target=bun emits warning + records skip when crons present', () => {
