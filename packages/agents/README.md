@@ -314,7 +314,7 @@ AgentBuilder.create()
   .onWired((w) => console.log(w.tools, w.skills.listed, w.skills.readable, w.mcpServers))
 ```
 
-- `tools`: tool names handed to `Agent.create`, with `withheldBuiltinTools` removed. SDK default builtins are not enumerated.
+- `tools`: caller-supplied tool names handed to `Agent.create`. Withheld builtins are listed in `withheldBuiltinTools`; a caller tool sharing a withheld name stays in `tools`. SDK default builtins are not enumerated.
 - `skills.listed` / `skills.readable`: the skills the created agent resolved (`agent.skills.list()`, so a withheld project source or an unknown name is absent; SDK 5.17 discovers no user skills and lists an inline skill only when it is also in `skills.enabled`), and, separately, the inline skills a `skill_read` wired by this build serves. A `skill_read` you supply yourself reports none as readable. The listener runs only when the call created the agent, not on a cache hit, a resume, or a concurrent call that shared another's creation.
 - `mcpServers`, `subagents`, `settingSources` (`project` / `user`), `withheldBuiltinTools`.
 - `hooks`: events registered through `.hooks()`. Hooks inside your own plugins are opaque and not listed.
