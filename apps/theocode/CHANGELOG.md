@@ -16,6 +16,17 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Fixed
+
+- `sessions gc` (current project) awaits the framework's async `planTranscriptGC`; it was reading a
+  promise as the plan. Transcripts no registry entry owns now keep the id of the file they are named
+  for (a fork still gets none), and a transcript whose id cannot be read is **kept** and reported,
+  not unlinked as an orphan. Registry removal is only asked for ids the registry lists.
+- The cross-project collector (`gc/all-sessions*`, `filesystem`, `auto*`, `spawn-sweep`,
+  `guarded-start`) is not yet moved onto the framework's `planProjectsGC`, `scheduleSessionSweep` and
+  `claimCollectorRoot`: they are in the workspace `@theokit/agents` 16.12.0 source but not in the
+  published 16.13.0 the standalone build pins, so the migration waits for a release.
+
 ### Changed
 - **`@theokit/agents` is now pinned to the released `16.12.0` as `workspace:16.12.0` in all five TheoCode manifests (still linked to this checkout, which the own-package-duplicates guard requires, and published as `16.12.0`) instead of `workspace:*`.** A new consumer test (`tools/released-auth-consumer.test.mjs`) installs that exact version with npm into an empty temp directory and exercises `loginWithApiKey`, `ensureFreshCredential` and `refreshOAuthTokens` through `@theokit/agents/auth`. The standalone `pnpm-lock.yaml` is untouched; its fate is #2276. (#2243)
 - **The headless commands (`exec`, `review`, `sessions`, `doctor`, `goal`) now end through the framework's `exitAfterDrain`.** The exit code is the same, but the process exits only after stdout and stderr have drained, so piped output is no longer cut short. `sessions gc` also stops cleanly after a planning error instead of falling through to the report.

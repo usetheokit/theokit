@@ -5,7 +5,7 @@
  * TheoKit devtools + SSE handler expect AgentStreamEvent (run_started/text_delta/tool_call/done).
  * This module bridges the two — Adapter pattern (per sdk-integration-blueprint ADR-D2).
  */
-import type { CostBreakdown, InteractionUpdate } from '@theokit/sdk'
+import type { CostBreakdown, InteractionUpdate, SDKMessage } from '@theokit/sdk'
 
 import type { StreamEvent } from './agent-sse-handler.js'
 
@@ -245,7 +245,10 @@ const INTERACTION_UPDATE_IGNORED: ReadonlySet<string> = new Set([
  * Translate a single SDK message to zero or more TheoKit stream events.
  * Returns an array because one SDK message may map to multiple TheoKit events.
  */
-export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[] {
+export function translateSdkEvent(input: SdkMessage | SDKMessage, runId: string): StreamEvent[] {
+  // The SDK's message interfaces have no string index signature, so they are not assignable to
+  // `SdkMessage`; the translator reads fields defensively, so one cast at the boundary is enough.
+  const msg = input as SdkMessage
   switch (msg.type) {
     case 'system':
       return translateSystemEvent(msg, runId)
