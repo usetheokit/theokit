@@ -11,7 +11,7 @@ export function handlerOf(plugin: GeneralPlugin, hook: Parameters<PluginContext[
     registerTool: () => undefined,
     registerCommand: () => undefined,
     injectMessage: () => undefined,
-    on: (name, fn) => {
+    on: (name: string, fn: HookFn) => {
       if (name === hook) handler = fn
       return () => undefined
     },
