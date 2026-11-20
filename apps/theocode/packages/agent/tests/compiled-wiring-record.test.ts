@@ -56,6 +56,12 @@ describe('withCompiledWiring', () => {
     expect(w.hooks.active).toEqual(['PreToolUse  ./check.sh', 'SessionStart  ./start.sh'])
   })
 
+  it('lists no server and no hook for an agent that got none', () => {
+    const w = withCompiledWiring(requested, compiled({}))
+    expect(w.mcp.active).toEqual([])
+    expect(w.hooks.active.filter((row) => !row.startsWith('SessionStart'))).toEqual([])
+  })
+
   it('keeps the facts that are ours', () => {
     const w = withCompiledWiring(requested, compiled({}))
     expect(w.agentsMd).toEqual(requested.agentsMd)
