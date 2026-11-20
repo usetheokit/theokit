@@ -157,7 +157,7 @@ describe('sessions gc floors and legacy names', () => {
     expect(existsSync(old)).toBe(true)
   })
 
-  // Known gap, tracked by #2410: the framework maps a protected id to its hashed transcript only, so
+  // Known gap, tracked by #2444: the framework maps a protected id to its hashed transcript only, so
   // the 4.x-named file of a live session is not protected until the framework does it.
   it.fails('test_both_naming_conventions_of_the_tui_pointer_session_are_protected', async () => {
     writeTranscript(fx, 'decoy-newer', 1)
@@ -173,7 +173,7 @@ describe('sessions gc floors and legacy names', () => {
     )
   })
 
-  // Known gap, tracked by #2410: the framework maps a protected id to its hashed transcript only, so
+  // Known gap, tracked by #2444: the framework maps a protected id to its hashed transcript only, so
   // the 4.x-named file of a live session is not protected until the framework does it.
   it.fails('test_a_legacy_name_the_sdk_sanitises_is_still_protected', async () => {
     // `a.b` is filed as `a-b.jsonl` on 4.x: a stem comparison with the raw id would miss it.

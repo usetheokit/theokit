@@ -87,7 +87,7 @@ describe('#102 — deletion speaks the registry vocabulary', () => {
     expect(deleted, 'Agent.delete was handed a transcript filename').toEqual([agentId])
   })
 
-  // Known gap, tracked by #2410: the framework maps a protected id to its hashed transcript only, so
+  // Known gap, tracked by #2444: the framework maps a protected id to its hashed transcript only, so
   // the 4.x-named file of a live session is not protected until the framework does it.
   it.fails('test_both_naming_conventions_of_a_live_session_are_protected', async () => {
     // #102, the half `ca3db5c` broke while fixing the other half. 5.x hashes the session id into
