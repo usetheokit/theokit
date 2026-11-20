@@ -59,6 +59,7 @@ const INTENTIONALLY_ONE_SIDED: Readonly<Record<string, string>> = {
   cwd: 'an in-process caller already IS in its working directory',
   baseDir: 'same: the in-process caller resolves its own paths',
   hitl: 'the HTTP surface models approval as a request/response flag',
+  toolDecisions: 'resumes a deferred session; only the approve route of a served app sends it',
   // In-process only — plumbing a transport cannot carry.
   awaitApproval: 'a callback; an HTTP body cannot carry a function',
   approvals: 'an in-process approval channel, not a serialisable field',

@@ -18,6 +18,7 @@ interface PreToolCallContext {
   agentId: string
   runId: string
   toolUseId?: string
+  approvedOnResume?: boolean
 }
 type PreToolHandler = (c: PreToolCallContext) => unknown
 
@@ -189,5 +190,26 @@ describe('createHitlPlugin onDefer', () => {
     }
     expect(out.block).toBe(true)
     expect(onDefer).not.toHaveBeenCalled()
+  })
+})
+
+describe('createHitlPlugin on resume', () => {
+  it('does_not_gate_a_call_a_person_already_approved_on_resume', async () => {
+    const onDefer = vi.fn(async () => {})
+    const w: HitlWiring = {
+      gated: new Map([['deploy', { question: 'Deploy?' }]]),
+      emit: vi.fn(),
+      awaitApproval: vi.fn(),
+      onDefer,
+    }
+    const out = await captureHandler(w)({
+      ...CTX('deploy'),
+      toolUseId: 'tu1',
+      approvedOnResume: true,
+    })
+    expect(out).toBeUndefined()
+    expect(w.emit).not.toHaveBeenCalled()
+    expect(onDefer).not.toHaveBeenCalled()
+    expect(w.awaitApproval).not.toHaveBeenCalled()
   })
 })
