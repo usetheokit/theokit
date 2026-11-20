@@ -1,5 +1,5 @@
 ---
-'theokit': major
+'theokit': minor
 'create-theokit': minor
 ---
 
