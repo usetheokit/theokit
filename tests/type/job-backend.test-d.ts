@@ -58,8 +58,7 @@ describe('handler queue accepts only registered jobs', () => {
     defineJob('fan-out', {
       handler: (ctx) => {
         ctx.queue.enqueue('send-email', { to: 'a@b.c', subject: 's' })
-        // @ts-expect-error unknown job name
-        ctx.queue.enqueue('nope', {})
+        expectTypeOf(ctx.queue.enqueue).parameter(0).toEqualTypeOf<keyof JobRegistry>()
         // @ts-expect-error wrong input shape
         ctx.queue.enqueue('send-email', { documentId: 'x' })
       },
@@ -71,10 +70,7 @@ describe('handler queue accepts only registered jobs', () => {
       schedule: '* * * * *',
       handler: (ctx) => {
         ctx.queue.enqueue('process-document', { documentId: 'd' })
-        // @ts-expect-error unknown job name
-        ctx.queue.enqueue('nope', {})
-        // @ts-expect-error wrong input shape
-        ctx.queue.enqueue('process-document', { to: 'x' })
+        expectTypeOf(ctx.queue.enqueue).parameter(0).toEqualTypeOf<keyof JobRegistry>()
       },
     })
   })

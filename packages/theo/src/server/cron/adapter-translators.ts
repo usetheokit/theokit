@@ -278,7 +278,8 @@ export function translateCronToDeno(
   const prelude = wired
     ? `import { createHandlerQueue } from "npm:theokit/server/jobs";
 import * as configModule from ${JSON.stringify(options.configImport)};
-type ConfigModule = { default?: { jobs?: { backend?: unknown } } };
+type CronBackend = NonNullable<Parameters<typeof createHandlerQueue>[0]>;
+type ConfigModule = { default?: { jobs?: { backend?: CronBackend } } };
 // Only the override selected by NODE_ENV is loaded, as loadConfig does: the others may need
 // dependencies or variables of their own environment.
 const envLoaders: Record<string, () => Promise<ConfigModule>> = {
@@ -288,8 +289,7 @@ const envName = Deno.env.get("NODE_ENV");
 const envConfig = envName !== undefined && Object.hasOwn(envLoaders, envName)
   ? await envLoaders[envName]()
   : undefined;
-// deno-lint-ignore no-explicit-any
-const backend = (envConfig?.default?.jobs?.backend ?? (configModule as ConfigModule).default?.jobs?.backend) as any;
+const backend: CronBackend | undefined = envConfig?.default?.jobs?.backend ?? (configModule as ConfigModule).default?.jobs?.backend;
 // Node startup runs migrate() before any cron can enqueue; the Deno entry must too.
 await backend?.migrate?.();`
     : DENO_UNAVAILABLE_QUEUE

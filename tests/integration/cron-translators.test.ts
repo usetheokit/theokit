@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
@@ -474,5 +475,59 @@ describe('generated Deno cron entry, executed', () => {
     expect(pkg.exports['./server/jobs']).toBeDefined()
     expect(generate()).toContain('import { createHandlerQueue } from "npm:theokit/server/jobs"')
     expect(jobsEntry.createHandlerQueue).toBe(createHandlerQueue)
+  })
+
+  it('resolves every import specifier of the generated entry to a built file exporting the imported names', () => {
+    const entry = join(root, 'crons-resolve-entry.ts')
+    translateCronToDeno(entry, [cron('q', '* * * * *')], { configImport: '../theo.config.ts' })
+    const content = readFileSync(entry, 'utf8')
+    const pkgDir = resolve('packages/theo')
+    const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')) as {
+      exports: Record<string, unknown>
+    }
+    const target = (v: unknown): string | undefined => {
+      if (typeof v === 'string') return v
+      if (v && typeof v === 'object') {
+        const o = v as Record<string, unknown>
+        for (const k of ['import', 'default', 'types']) {
+          const r = target(o[k])
+          if (r) return r
+        }
+      }
+      return undefined
+    }
+    const imports = [
+      ...content.matchAll(/import\s+(?:\{([^}]*)\}|\*\s+as\s+\w+)\s+from\s+("[^"]+")/g),
+    ].map((m) => ({
+      names: (m[1] ?? '')
+        .split(',')
+        .map((n) => n.trim())
+        .filter(Boolean),
+      spec: JSON.parse(m[2]) as string,
+    }))
+    const npm = imports.filter((i) => i.spec.startsWith('npm:theokit/'))
+    expect(npm.length).toBeGreaterThan(0)
+    for (const { spec, names } of npm) {
+      const key = './' + spec.slice('npm:theokit/'.length)
+      const rel = target(pkg.exports[key])
+      expect(rel, `exports["${key}"]`).toBeDefined()
+      const file = join(pkgDir, rel!)
+      expect(existsSync(file), `${file} must be built (pnpm build:packages)`).toBe(true)
+      const code = readFileSync(file, 'utf8')
+      for (const name of names)
+        expect(code, `${name} exported from ${rel}`).toMatch(new RegExp(`\\b${name}\\b`))
+    }
+    expect(
+      npm.some(
+        (i) => i.names.includes('createHandlerQueue') && i.spec === 'npm:theokit/server/jobs',
+      ),
+    ).toBe(true)
+    expect(imports.some((i) => i.spec === '../theo.config.ts')).toBe(true)
+    expect(content).toContain('import * as configModule from "../theo.config.ts"')
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- optional dev tool lookup
+    if (spawnSync('deno', ['--version']).status === 0) {
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- optional dev tool
+      expect(spawnSync('deno', ['check', entry], { encoding: 'utf8' }).status).toBe(0)
+    }
   })
 })
