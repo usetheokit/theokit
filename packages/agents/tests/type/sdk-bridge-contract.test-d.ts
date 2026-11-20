@@ -1,69 +1,132 @@
 /**
- * #1802 — the bridge returns the typed event union and accepts the SDK's own types without a cast.
+ * Consumer-facing compile-time contract (TheoClaw): a real SDK `Run` / `SDKAgent` is assignable to
+ * the bridge's structural handles, and stream/timeline/outcome types narrow without casts.
+ * Checked by `tsc -p packages/agents/tsconfig.test.json --noEmit`.
  */
-import type { Agent, SDKAgent, SDKMessage } from '@theokit/sdk'
+import type { Run, SDKAgent, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
 import { describe, expectTypeOf, it } from 'vitest'
+import { z } from 'zod'
 
-import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
 import {
-  translateInteractionUpdate,
+  isDeltaTimelineEvent,
+  isMessageTimelineEvent,
+  type SdkAgentHandle,
+  type SdkSendOptions,
+  type SdkStreamMessage,
+  type SdkTimelineEvent,
+  type SdkTurnHandle,
+  type SdkTurnOutcome,
+  type SdkRun,
+  type SdkRunAgent,
   translateSdkEvent,
-  type SdkMessageLike,
-} from '../../src/bridge/event-translator.js'
-import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from '../../src/bridge/sdk-adapter.js'
+  translateTimelineEvent,
+  createToolSeen,
+} from '../../src/bridge/index.js'
 
-type Resolved = Awaited<ReturnType<SdkTurnHandle['wait']>>
-
-describe('the bridge types', () => {
-  it('translateSdkEvent returns AgentStreamEvent', () => {
-    const m: SdkMessageLike = { type: 'system' }
-    expectTypeOf(translateSdkEvent(m, 'r')).toEqualTypeOf<AgentStreamEvent[]>()
-    expectTypeOf(translateInteractionUpdate).returns.toEqualTypeOf<AgentStreamEvent[]>()
+describe('bridge contract vs the real SDK', () => {
+  it('a real Run is assignable to SdkTurnHandle', () => {
+    expectTypeOf<Run>().toExtend<SdkTurnHandle>()
   })
 
-  it('an @theokit/sdk SDKMessage is assignable to the translator input', () => {
-    expectTypeOf<SDKMessage>().toMatchTypeOf<Parameters<typeof translateSdkEvent>[0]>()
-    expectTypeOf<SDKMessage>().toMatchTypeOf<SdkMessageLike>()
+  it('a real SDKAgent send is accepted by SdkAgentHandle', () => {
+    expectTypeOf<SDKAgent['send']>().toExtend<SdkAgentHandle['send']>()
   })
 
-  it('an @theokit/sdk Agent is assignable to SdkAgentHandle', () => {
-    expectTypeOf<SDKAgent>().toMatchTypeOf<SdkAgentHandle>()
-    expectTypeOf<Agent>().not.toBeAny()
+  it('send takes structured messages and the SDK send options', () => {
+    expectTypeOf<Parameters<SdkAgentHandle['send']>[0]>().toEqualTypeOf<string | SDKUserMessage>()
+    expectTypeOf<SdkSendOptions>().toEqualTypeOf<SendOptions>()
   })
 
-  it('types the send options and the run', () => {
-    expectTypeOf<SdkSendOptions['signal']>().toEqualTypeOf<AbortSignal | undefined>()
-    expectTypeOf<SdkSendOptions['queueMode']>().toEqualTypeOf<
-      'followup' | 'steer' | 'collect' | undefined
-    >()
-    expectTypeOf<SdkSendOptions>().toHaveProperty('onDelta')
-    expectTypeOf<SdkTurnHandle>().toHaveProperty('cancel')
-    expectTypeOf<Resolved['usage']>().toEqualTypeOf<
-      { inputTokens?: number; outputTokens?: number; totalTokens?: number } | undefined
-    >()
-    expectTypeOf<Resolved['cost']>().toEqualTypeOf<{ amountUsd?: number } | undefined>()
-    expectTypeOf<Resolved['error']>().toEqualTypeOf<
-      { code?: string; message: string } | undefined
-    >()
+  it('the turn exposes typed stream, timeline, cancel and outcome', () => {
+    expectTypeOf<SdkStreamMessage>().toEqualTypeOf<SDKMessage>()
+    expectTypeOf<ReturnType<SdkRun['stream']>>().toEqualTypeOf<AsyncIterable<SdkStreamMessage>>()
+    expectTypeOf<ReturnType<SdkRun['events']>>().toEqualTypeOf<AsyncIterable<SdkTimelineEvent>>()
+    expectTypeOf<ReturnType<SdkRun['cancel']>>().toEqualTypeOf<Promise<void>>()
+    expectTypeOf<SdkTurnOutcome>().toHaveProperty('stoppedByDoomLoop')
+    expectTypeOf<SdkTurnOutcome>().toHaveProperty('stoppedAtIterationLimit')
   })
 
-  it('still accepts a Record<string, unknown> as send options', () => {
-    expectTypeOf<Record<string, unknown>>().toMatchTypeOf<SdkSendOptions>()
+  it('timeline events narrow and feed the translator without casts', () => {
+    const f = (ev: SdkTimelineEvent): void => {
+      if (isDeltaTimelineEvent(ev)) expectTypeOf(ev.update.type).toBeString()
+      if (isMessageTimelineEvent(ev)) {
+        expectTypeOf(ev.message).not.toBeAny()
+        translateSdkEvent(ev.message, 'r')
+      }
+      translateTimelineEvent(ev, 'r', createToolSeen())
+    }
+    expectTypeOf(f).toBeFunction()
+    // A raw SDK message is accepted by the translator directly.
+    expectTypeOf(translateSdkEvent).parameter(0).toExtend<SDKMessage | { type: string }>()
   })
 })
 
-describe('existing handle contracts still compile', () => {
-  it('accepts a generate call with extra option keys', () => {
-    const handle = {} as SdkAgentHandle
-    void handle.generate?.('m', { output: 1, extra: true })
-    expectTypeOf(handle.generate).not.toBeAny()
+/** What TheoClaw's `TurnRun` (apps/theoclaw/src/agent-port.ts) requires of a run, restated. */
+interface TheoClawTurnRun {
+  stream(): AsyncIterable<{ readonly type: string }>
+  wait(): Promise<{
+    readonly status: string
+    readonly result?: string
+    readonly error?: { readonly code?: string }
+    readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number }
+    readonly cost?: { readonly amountUsd?: number }
+  }>
+  cancel(): Promise<void>
+  events?(): AsyncIterable<{ readonly kind: 'message' | 'delta' }>
+}
+
+describe('bridge contract vs TheoClaw requirements', () => {
+  it('SdkRun and a real SDK Run are assignable to the TheoClaw run port', () => {
+    expectTypeOf<SdkRun>().toExtend<TheoClawTurnRun>()
+    expectTypeOf<Run>().toExtend<SdkRun>()
   })
 
-  it('passes a streamed message to the translator without a cast', async () => {
-    const turn = {} as SdkTurnHandle
-    for await (const streamed of turn.stream?.() ?? []) {
-      const message: SdkMessageLike = streamed
-      expectTypeOf(translateSdkEvent(message, 'r')).toEqualTypeOf<AgentStreamEvent[]>()
-    }
+  it('the outcome carries cost and error.code', () => {
+    expectTypeOf<SdkTurnOutcome>().toHaveProperty('cost')
+    expectTypeOf<NonNullable<SdkTurnOutcome['error']>>().toHaveProperty('code')
+  })
+})
+
+/** TheoClaw's `TurnAgent.send` (apps/theoclaw/src/agent-port.ts), restated. */
+interface TheoClawTurnAgent {
+  send(
+    message:
+      | string
+      | { readonly text: string; readonly images: { data: string; mimeType: string }[] },
+    options?: {
+      readonly signal?: AbortSignal
+      readonly toolResultGuard?: { readonly delimit?: boolean }
+      readonly queueMode?: 'followup' | 'steer' | 'collect'
+      readonly onDelta?: (args: { readonly update: { readonly type: string } }) => void
+    },
+  ): Promise<TheoClawTurnRun>
+}
+
+describe('SdkRunAgent vs TheoClaw TurnAgent', () => {
+  it('a real SDKAgent send and SdkRunAgent can replace the TheoClaw agent port', () => {
+    expectTypeOf<SDKAgent['send']>().toExtend<SdkRunAgent['send']>()
+    expectTypeOf<SdkRunAgent>().toExtend<TheoClawTurnAgent>()
+  })
+
+  it('a complete real SDKAgent is assignable to SdkRunAgent and SdkAgentHandle', () => {
+    expectTypeOf<SDKAgent>().toExtend<SdkRunAgent>()
+    expectTypeOf<SDKAgent>().toExtend<SdkAgentHandle>()
+    expectTypeOf<SDKAgent['generate']>().toExtend<NonNullable<SdkRunAgent['generate']>>()
+    expectTypeOf<SDKAgent['dispose']>().toExtend<SdkRunAgent['dispose']>()
+    expectTypeOf<SDKAgent['agentId']>().toExtend<SdkRunAgent['agentId']>()
+    expectTypeOf<ReturnType<SDKAgent['send']>>().toExtend<Promise<SdkRun>>()
+  })
+
+  it('generate keeps the SDK generic signature: infers the result, rejects bad options', () => {
+    type Gen = NonNullable<SdkRunAgent['generate']>
+    expectTypeOf<Gen>().toEqualTypeOf<SDKAgent['generate']>()
+    const agent = {} as SdkRunAgent
+    const schema = z.object({ n: z.number() })
+    const r = agent.generate?.('x', { output: schema })
+    expectTypeOf(r).not.toBeAny()
+    // @ts-expect-error — `output` must be a Zod schema
+    void agent.generate?.('x', { output: 'nope' })
+    // @ts-expect-error — `output` is required
+    void agent.generate?.('x', {})
   })
 })

@@ -12,11 +12,12 @@ import type { ToolRefusal } from '@theokit/presenter'
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, QueueMode, RunEventSink, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SDKAgent, SDKMessage, SDKUserMessage, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
+import type { Guardrail } from '../guardrails/index.js'
 import { resolveEnabledSkills } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
@@ -26,12 +27,13 @@ import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStreamEvent } from './agent-stream-events.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
-import { getOrCreateReporting } from './compiled-wiring.js'
+import { acquireSharedAgent, releaseSharedAgent } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage, type SdkMessageLike } from './event-translator.js'
-import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
+import { withGuardrails } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
+import { dropRunRefusals, retainRun, takeRefusal } from './refusal-ledger.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
 import type { SdkRunUsage } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
@@ -614,24 +616,62 @@ function resolveCreateOptions(
 }
 
 /** SDK `permission_denied` `source` → who refused. `file_hook` is a hook; the rest are plugin vetoes. */
-function refusalFromRunEvent(ev: unknown): { callId: string; refusal: ToolRefusal } | undefined {
+function refusalFromRunEvent(ev: unknown): PendingRefusal | undefined {
   if (typeof ev !== 'object' || ev === null) return undefined
-  const e = ev as { type?: unknown; toolCallId?: unknown; source?: unknown; message?: unknown }
+  const e = ev as {
+    type?: unknown
+    toolCallId?: unknown
+    toolName?: unknown
+    runId?: unknown
+    source?: unknown
+    message?: unknown
+  }
   if (e.type !== 'permission_denied' || typeof e.toolCallId !== 'string' || e.toolCallId === '') {
     return undefined
   }
   const by = e.source === 'file_hook' ? 'hook' : 'plugin'
   return {
     callId: e.toolCallId,
-    refusal: { by, ...(typeof e.message === 'string' ? { reason: e.message } : {}) },
+    toolName: typeof e.toolName === 'string' ? e.toolName : '',
+    ...(typeof e.runId === 'string' ? { runId: e.runId } : {}),
+    ...(typeof e.message === 'string' ? { message: e.message } : {}),
+    ...(typeof e.source === 'string' ? { source: e.source } : {}),
+    fallback: { by, ...(typeof e.message === 'string' ? { reason: e.message } : {}) },
   }
+}
+
+/**
+ * A `permission_denied` the run reported. `fallback` is source-derived; a framework veto recorded in
+ * the refusal ledger for the same run and tool replaces it (see `resolveRefusal`).
+ */
+interface PendingRefusal {
+  callId: string
+  toolName: string
+  runId?: string
+  fallback: ToolRefusal
+  message?: string
+  /** The SDK's denial source: only a `plugin` denial can be a framework veto. */
+  source?: string
+  resolved?: ToolRefusal
+}
+
+/** Ledger entry for this denial when the framework made the veto, else the source-derived guess. */
+function resolveRefusal(p: PendingRefusal, handleRunId: string | undefined): ToolRefusal {
+  if (p.resolved !== undefined) return p.resolved
+  const runId = p.runId ?? handleRunId
+  p.resolved =
+    (runId !== undefined && p.message !== undefined && p.source === 'plugin'
+      ? takeRefusal(runId, p.toolName, p.message)
+      : undefined) ?? p.fallback
+  return p.resolved
 }
 
 function buildSendOptions(
   overrides: RuntimeOverrides,
   factoryOpts: { disableTools?: boolean } | undefined,
   compiled: CompiledAgentOptions,
-  refusals: Map<string, ToolRefusal>,
+  refusals: Map<string, PendingRefusal>,
+  handle: { id?: string },
 ): SendOptions {
   const sendOptions: SendOptions = {}
   if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
@@ -642,7 +682,16 @@ function buildSendOptions(
   const callerSink = overrides.onRunEvent
   sendOptions.onRunEvent = (ev) => {
     const found = refusalFromRunEvent(ev)
-    if (found !== undefined) refusals.set(found.callId, found.refusal)
+    if (found !== undefined) {
+      // Take the ledger entry now, at the denial event: a framework veto records its entry before
+      // the SDK reports the denial, so a later external denial of the same tool cannot claim it.
+      // The SDK event carries no runId, so the run handle's id is used; `streamTimeline` resolves
+      // anything seen before the handle was known.
+      // No retainRun here: `streamTimeline` owns the retention for the stream's lifetime, and a
+      // denial reported after the consumer closed the stream must not re-retain a dropped run.
+      if (handle.id !== undefined) resolveRefusal(found, handle.id)
+      refusals.set(found.callId, found)
+    }
     return callerSink?.(ev)
   }
   return sendOptions
@@ -662,46 +711,64 @@ async function* streamTimeline(
   runId: string,
   state: { sawError: boolean; lastEventType: string },
   outcome: TurnOutcome | undefined,
-  refusals: ReadonlyMap<string, ToolRefusal>,
+  refusals: ReadonlyMap<string, PendingRefusal>,
 ): AsyncGenerator<StreamEvent> {
   const run = (await sendPromise) as {
     events: () => AsyncGenerator<SdkTimelineEvent>
+    id?: unknown
+    runId?: unknown
   }
-  const seen = createToolSeen()
-  const emit = function* (events: AgentStreamEvent[]): Generator<StreamEvent> {
-    for (const event of events) {
-      if (event.type === 'error') state.sawError = true
-      // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
-      if (event.type === 'done') continue
-      state.lastEventType = event.type
-      const callId = (event as { callId?: unknown }).callId
-      const refusal =
-        event.type === 'tool_result' && typeof callId === 'string'
-          ? refusals.get(callId)
-          : undefined
-      yield refusal !== undefined ? { ...event, refusal } : (event as StreamEvent)
+  const handleId = [run.id, run.runId].find((v): v is string => typeof v === 'string')
+  if (handleId !== undefined) retainRun(handleId)
+  try {
+    yield* timelineBody()
+  } finally {
+    // Entries a run left unmatched must not outlive it.
+    if (handleId !== undefined) dropRunRefusals(handleId)
+    for (const p of refusals.values()) if (p.runId !== undefined) dropRunRefusals(p.runId)
+  }
+
+  async function* timelineBody(): AsyncGenerator<StreamEvent> {
+    const seen = createToolSeen()
+    const emit = function* (events: AgentStreamEvent[]): Generator<StreamEvent> {
+      for (const event of events) {
+        if (event.type === 'error') state.sawError = true
+        // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
+        if (event.type === 'done') continue
+        state.lastEventType = event.type
+        const callId = (event as { callId?: unknown }).callId
+        const pending =
+          event.type === 'tool_result' && typeof callId === 'string'
+            ? refusals.get(callId)
+            : undefined
+        const refusal = pending !== undefined ? resolveRefusal(pending, handleId) : undefined
+        yield refusal !== undefined ? { ...event, refusal } : (event as StreamEvent)
+      }
     }
-  }
-  for await (const ev of run.events()) {
-    const translated = translateTimelineEvent(ev, runId, seen)
-    // theokit#474 — recover the run's TYPED failure, but ONLY for a turn that failed before
-    // yielding anything (`lastEventType === ''`): the one case the retry seam can act on, and one
-    // where `wait()` is already resolved. Awaiting it for a NON-terminal error could hang.
-    if (
-      outcome !== undefined &&
-      state.lastEventType === '' &&
-      translated.some((e) => e.type === 'error')
-    ) {
-      outcome.failure = (
-        await (
-          (await sendPromise) as { wait: () => Promise<{ error?: { cause?: unknown } }> }
-        ).wait()
-      ).error?.cause
+    for await (const ev of run.events()) {
+      // Denials seen so far take their ledger entries in the order they were reported, before any
+      // later tool_result could consume one out of order.
+      for (const p of refusals.values()) resolveRefusal(p, handleId)
+      const translated = translateTimelineEvent(ev, runId, seen)
+      // theokit#474 — recover the run's TYPED failure, but ONLY for a turn that failed before
+      // yielding anything (`lastEventType === ''`): the one case the retry seam can act on, and one
+      // where `wait()` is already resolved. Awaiting it for a NON-terminal error could hang.
+      if (
+        outcome !== undefined &&
+        state.lastEventType === '' &&
+        translated.some((e) => e.type === 'error')
+      ) {
+        outcome.failure = (
+          await (
+            (await sendPromise) as { wait: () => Promise<{ error?: { cause?: unknown } }> }
+          ).wait()
+        ).error?.cause
+      }
+      yield* emit(translated)
     }
-    yield* emit(translated)
+    // #388 — a tool result held for a second report the run never sent still belongs on the wire.
+    yield* emit(flushPendingToolResults(seen))
   }
-  // #388 — a tool result held for a second report the run never sent still belongs on the wire.
-  yield* emit(flushPendingToolResults(seen))
 }
 
 interface StreamSdkAgentOpts {
@@ -762,7 +829,7 @@ async function* streamSdkAgent(
     ...m8,
     ...extra,
   }
-  const agent = (await getOrCreateReporting(Agent, sessionId, createOptions)) as Awaited<
+  const agent = (await acquireSharedAgent(Agent, sessionId, createOptions)) as Awaited<
     ReturnType<typeof Agent.getOrCreate>
   >
   try {
@@ -771,9 +838,17 @@ async function* streamSdkAgent(
     // model order, and `textAlreadyStreamed` tells us which text is a repeat instead of leaving us
     // to compare content. `state` survives only to carry the two facts the tail block below needs.
     const state = { sawError: false, lastEventType: '' }
-    const refusals = new Map<string, ToolRefusal>()
-    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled, refusals)
+    const refusals = new Map<string, PendingRefusal>()
+    const handle: { id?: string } = {}
+    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled, refusals, handle)
     const sendPromise = agent.send(buildSendInput(message, overrides), sendOptions)
+    void Promise.resolve(sendPromise).then(
+      (run) => {
+        const r = run as { id?: unknown; runId?: unknown }
+        handle.id = [r.id, r.runId].find((v): v is string => typeof v === 'string')
+      },
+      () => undefined,
+    )
     // The generator is opened lazily so consumption starts only when the caller pulls — the loop is
     // detached inside the SDK (`setTimeout(() => void driveLoop())`), so the run handle is available
     // long before the turn finishes and the timeline streams live.
@@ -813,7 +888,7 @@ async function* streamSdkAgent(
       yield realUsageDone(await (await sendPromise).wait(), t0, modelIdOf(model))
     }
   } finally {
-    await agent.dispose()
+    await releaseSharedAgent(agent)
   }
 }
 
@@ -836,30 +911,49 @@ async function* streamSdkAgent(
  * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
 export interface SdkTurnHandle {
-  wait(): Promise<{
-    result?: string
-    status?: string
-    error?: { code?: string; message: string }
-    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
-    cost?: { amountUsd?: number }
-  }>
-  /** Yields SDK messages that feed `translateSdkEvent` directly, no cast. */
-  stream?(): AsyncIterable<SdkMessageLike>
+  /** The SDK run id, when the handle has one (`Run.id`). */
+  readonly id?: string
+  wait: () => Promise<SdkTurnOutcome>
+  /** Optional: a wait-only handle has none. Yields messages that feed `translateSdkEvent` without a cast; {@link SdkRun} narrows them to the SDK's. */
+  stream?: () => AsyncIterable<SdkMessageLike>
+  /** The SDK's ordered timeline (`Run.events()`): messages and deltas interleaved. */
+  events?: () => AsyncIterable<SdkTimelineEvent>
   /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
-  cancel?(): unknown
+  cancel?: () => unknown
+}
+
+/** A message on the SDK's raw `Run.stream()`; discriminate on `type`. */
+export type SdkStreamMessage = SDKMessage
+
+/** What `wait()` resolves: the fields of the SDK's `RunResult` this layer and its consumers read. */
+export interface SdkTurnOutcome {
+  result?: string
+  usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number }
+  status?: string
+  error?: { message: string; code?: string }
+  /** The SDK's priced cost; an undefined `amountUsd` means unpriced, never free. */
+  cost?: CostBreakdown
+  durationMs?: number
+  /** theokit#379 — the doom-loop guard stopped the run. */
+  stoppedByDoomLoop?: boolean
+  /** theokit#379 — the run reached its iteration ceiling. */
+  stoppedAtIterationLimit?: boolean
 }
 
 /**
- * Per-turn options, typed for what an app drives a turn with. The index signature keeps the type
- * open (the SDK accepts more than the layer declares), so a caller passing a
- * `Record<string, unknown>` still compiles.
+ * A full SDK run, as a consumer that streams, cancels and reads the timeline needs it: every member
+ * is required and `status` is always set. A real SDK `Run` satisfies it; `SdkTurnHandle` stays the
+ * lenient shape for injected doubles that implement only `wait()`.
  */
-export interface SdkSendOptions {
-  signal?: AbortSignal
-  onDelta?: (delta: { update: InteractionUpdate }) => void
-  queueMode?: QueueMode
-  [key: string]: unknown
+export interface SdkRun extends SdkTurnHandle {
+  wait: () => Promise<SdkTurnOutcome & { status: string }>
+  stream: () => AsyncIterable<SdkStreamMessage>
+  events: () => AsyncIterable<SdkTimelineEvent>
+  cancel: () => Promise<void>
 }
+
+/** Per-turn options: the SDK's own `SendOptions`. */
+export type SdkSendOptions = SendOptions
 
 export interface SdkAgentHandle {
   readonly agentId: string
@@ -888,10 +982,8 @@ export interface SdkAgentHandle {
    * decision about what a redaction means to a schema, and inventing one would be the gate that
    * reports without gating this module already refuses to build.
    */
-  // Method syntax on purpose: its parameters are bivariant, so the SDK's `generate` (whose `output`
-  // is a Zod schema, narrower than `unknown`) is assignable without a cast.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `any` values are what let an interface-typed SDK `GenerateOptions` match an index signature
-  generate?(message: string, options: { output: unknown; [key: string]: any }): Promise<unknown>
+  // The SDK's own generic signature: schema-validated options and the inferred result type.
+  generate?: SDKAgent['generate']
   readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.
@@ -908,8 +1000,17 @@ export interface SdkAgentHandle {
    * `as never` absorbed the difference. It is literally the divergence the facade's docstring
    * described, met again while trying to remove it.
    */
-  send: (msg: string, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
+  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
   dispose: () => Promise<void>
+}
+
+/**
+ * An agent whose `send` resolves the strict {@link SdkRun}: what a consumer that streams, cancels
+ * and reads priced outcomes (TheoClaw) needs. A real SDK agent satisfies it; `SdkAgentHandle` stays
+ * the lenient shape for injected doubles.
+ */
+export type SdkRunAgent = Omit<SdkAgentHandle, 'send'> & {
+  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkRun>
 }
 
 /**
@@ -969,12 +1070,77 @@ export function toAgentFactory(
       ...extra,
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     }
-    const agent = await getOrCreateReporting(skillRt.Agent, sessionId, createOptions)
-    return withGuardrails(
-      withStepCeiling(agent as SdkAgentHandle, compiled.maxIterations),
-      compiled.guardrails,
-    )
+    // The owner's `dispose()` releases its hold; a stream sharing the handle keeps it alive.
+    const entry: ServedEntry = { guards: compiled.guardrails ?? [], max: compiled.maxIterations }
+    const agent = (await acquireSharedAgent(
+      skillRt.Agent,
+      sessionId,
+      createOptions,
+      'served',
+      () => {
+        releaseServedEntry(agent, entry)
+      },
+    )) as SdkAgentHandle
+    return servedHandle(agent, entry)
   }
+}
+
+interface ServedEntry {
+  guards: readonly Guardrail[]
+  max: number | undefined
+}
+interface ServedConfig {
+  send: SdkAgentHandle['send']
+  /** Active served holders, oldest first; releases (`dispose()`) drop the oldest. */
+  entries: ServedEntry[]
+}
+const served = new WeakMap<object, ServedConfig>()
+
+/** A served holder released: its guardrails and ceiling stop applying; the others' remain. */
+function releaseServedEntry(agent: object, entry: ServedEntry): void {
+  const cfg = served.get(agent)
+  if (cfg === undefined) return
+  const at = cfg.entries.indexOf(entry)
+  if (at >= 0) cfg.entries.splice(at, 1)
+}
+
+/**
+ * The SDK's own handle, always: declared guardrails and a step ceiling are installed on it as its
+ * `send`, so every served caller gets the object `Agent.registry.get(id)` returns. As the handle is
+ * shared, its `send` enforces what the ACTIVE served holders declared (all their guardrails, the
+ * lowest ceiling), recomputed on every send: a caller without guards cannot strip another's, and a
+ * released caller's constraints stop applying.
+ */
+function servedHandle(agent: SdkAgentHandle, entry: ServedEntry): SdkAgentHandle {
+  let cfg = served.get(agent)
+  if (cfg === undefined) {
+    const live: ServedConfig = { send: agent.send.bind(agent), entries: [] }
+    cfg = live
+    served.set(agent, live)
+    const base = {
+      agentId: agent.agentId,
+      dispose: () => agent.dispose(),
+      send: (msg: string, sendOpts?: SdkSendOptions) => {
+        const ceilings = live.entries.flatMap((e) => (e.max === undefined ? [] : [e.max]))
+        return live.send(
+          msg,
+          ceilings.length === 0 ? sendOpts : { maxIterations: Math.min(...ceilings), ...sendOpts },
+        )
+      },
+    } as SdkAgentHandle
+    Object.defineProperty(agent, 'send', {
+      value: (msg: string, sendOpts?: SdkSendOptions) =>
+        withGuardrails(base, [...new Set(live.entries.flatMap((e) => e.guards))]).send(
+          msg,
+          sendOpts,
+        ),
+      configurable: true,
+      writable: true,
+      enumerable: false,
+    })
+  }
+  cfg.entries.push(entry)
+  return agent
 }
 
 /**

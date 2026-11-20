@@ -2,13 +2,13 @@ import { randomUUID } from 'node:crypto'
 
 import {
   type AgentStreamEvent,
-  type SdkMessage,
-  type StreamEvent,
   translateInteractionUpdate,
   translateSdkEvent,
 } from '@theokit/agents/bridge'
 
-import type { TurnAgent, TurnRun } from '../agent-port.js'
+import type { InteractionUpdate } from '@theokit/sdk'
+
+import { type SdkMessageLike, toSdkMessage, type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { type TurnUsage, usageOf } from '../usage/turn-usage.js'
@@ -17,13 +17,8 @@ import { createEventMask } from './event-mask.js'
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
-/** One event as the wire carries it: the typed bridge event, read with an index signature. */
-export type TurnEvent = StreamEvent
-
-/** The typed bridge event as a wire event; the same object, widened. */
-export function toTurnEvent(event: AgentStreamEvent): TurnEvent {
-  return event as TurnEvent
-}
+/** One event of a turn: the bridge's typed `AgentStreamEvent`. */
+export type TurnEvent = AgentStreamEvent
 
 /**
  * How a turn ended. `reason` says why a failed or cancelled one ended, for stderr; it is never sent
@@ -66,8 +61,12 @@ function failed(reason: string): TurnOutcome {
 function ignore(): void {}
 
 /** A streamed error as the turn's reason shows it: its code, and the message when it has one. */
-export function describeStreamedError(event: object): string {
-  const { code, message } = event as { code?: unknown; message?: unknown }
+export function describeStreamedError(event: {
+  readonly type: string
+  readonly code?: unknown
+  readonly message?: unknown
+}): string {
+  const { code, message } = event
   const text = String(code ?? 'error')
   return typeof message === 'string' && message !== '' ? `${text}: ${message}` : text
 }
@@ -133,7 +132,7 @@ function nextOrAbort(
  * the code of the first error among them, if any.
  */
 function emitMessage(
-  message: { readonly type: string },
+  message: SdkMessageLike,
   options: TurnOptions,
   delta: DeltaState,
 ): string | undefined {
@@ -141,7 +140,7 @@ function emitMessage(
   // The step's finished `assistant` message repeats text its deltas already sent.
   const textStreamed = message.type === 'assistant' && delta.streamed
   if (message.type === 'assistant') delta.streamed = false
-  for (const event of translateSdkEvent(message as SdkMessage, options.runId)) {
+  for (const event of typedEvents(translateSdkEvent(toSdkMessage(message), options.runId))) {
     if (options.signal?.aborted === true) break
     if (textStreamed && event.type === 'text_delta') continue
     if (event.type === 'error') streamedError ??= describeStreamedError(event)
@@ -212,14 +211,12 @@ async function runWith(
 ): Promise<TurnOutcome> {
   const delta: DeltaState = { streamed: false }
   // Text and thinking reach the surface as the model writes them; tool events keep their stream path.
-  const onDelta = ({ update }: { readonly update: { readonly type: string } }): void => {
+  const onDelta = ({ update }: { readonly update: InteractionUpdate }): void => {
     if (options.signal?.aborted === true) return
     if (update.type !== 'text-delta' && update.type !== 'thinking-delta') return
-    for (const event of translateInteractionUpdate(
-      update as Parameters<typeof translateInteractionUpdate>[0],
-    )) {
+    for (const event of typedEvents(translateInteractionUpdate(update))) {
       if (event.type === 'text_delta') delta.streamed = true
-      options.emit(toTurnEvent(event))
+      options.emit(event)
     }
   }
   const run = await agent.send(options.message, { ...untrustedContentSendOptions(), onDelta })

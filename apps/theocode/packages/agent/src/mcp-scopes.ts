@@ -1,4 +1,4 @@
-import { loadMcpJson } from '@theokit/agents'
+import { loadMcpScopes, type McpScopesResult } from '@theokit/agents'
 
 import { homedir } from 'node:os'
 
@@ -18,7 +18,7 @@ import type { TrustPosture } from './config/index.js'
  */
 export interface McpScopes {
   /** Both scopes, merged — the map handed to `.mcp()`. */
-  readonly servers: ReturnType<typeof loadMcpJson>
+  readonly servers: McpScopesResult['servers']
   /** The names that came from the operator's own file, so the wiring record can report them apart. */
   readonly personal: readonly string[]
   /**
@@ -43,45 +43,37 @@ export function mcpServersFor(opts: {
   readonly env: Record<string, string | undefined>
   readonly onWarn?: (warning: string) => void
 }): McpScopes {
-  const personal = scope(homeStateDir(opts.env, opts.home), opts.onWarn)
-  const projectScope = scope(opts.cwd, opts.onWarn)
-  const project = opts.posture.allows.mcp ? projectScope : {}
-  const projectWithheld = opts.posture.allows.mcp ? [] : Object.keys(projectScope)
-
-  const merged: Record<string, unknown> = { ...project }
-  for (const [name, server] of Object.entries(personal)) {
-    // The personal definition wins. Project-wins would let a repository shadow a server the operator
-    // trusts by reusing its name with a different command — a hijack whose only symptom is that the
-    // right tool does the wrong thing. Warned rather than silent, because a server that vanished
-    // without explanation is debugged as a product defect.
-    if (name in merged) {
+  const personalDir = homeStateDir(opts.env, opts.home)
+  const base = {
+    cwd: opts.cwd,
+    home: opts.home,
+    personalFiles: [personalDir],
+    onClash: 'personal-wins' as const,
+    ...(opts.onWarn === undefined ? {} : { onWarn: opts.onWarn }),
+  }
+  const load = (projectAllowed: boolean): McpScopesResult => {
+    try {
+      return loadMcpScopes({ ...base, projectAllowed })
+    } catch (error) {
+      // The framework throws on a malformed PROJECT file; this product warns and carries on with
+      // the personal scope, so one bad file never takes the operator's own servers down with it.
       opts.onWarn?.(
-        `mcp: the project also declares a server named "${name}"; using yours and ignoring the project's`,
+        `mcp: ignoring ${opts.cwd}/.mcp.json — ${error instanceof Error ? error.message : String(error)}`,
       )
+      return loadMcpScopes({ ...base, cwd: personalDir, projectAllowed })
     }
-    merged[name] = server
+  }
+  const result = load(opts.posture.allows.mcp)
+  // Wording is ours: the framework reports the clash as data, the operator reads this sentence.
+  for (const { name } of result.shadowed) {
+    opts.onWarn?.(
+      `mcp: the project also declares a server named "${name}"; using yours and ignoring the project's`,
+    )
   }
   return {
-    servers: merged as ReturnType<typeof loadMcpJson>,
-    personal: Object.keys(personal),
-    projectWithheld,
-  }
-}
-
-/**
- * One scope's servers, or none.
- *
- * `loadMcpJson` THROWS on a read failure, invalid JSON, or a shape violation. Caught per scope so a
- * malformed file in one does not silence the other: an unreadable personal file must not take the
- * project's servers down with it, and the reverse holds too. The failure is reported, never
- * swallowed — that is the difference between a caught error and an ignored one.
- */
-function scope(dir: string, onWarn?: (warning: string) => void): Record<string, unknown> {
-  try {
-    return loadMcpJson(dir, ...(onWarn === undefined ? [] : [{ onWarn }])) as Record<string, unknown>
-  } catch (error) {
-    onWarn?.(`mcp: ignoring ${dir}/.mcp.json — ${error instanceof Error ? error.message : String(error)}`)
-    return {}
+    servers: result.servers,
+    personal: result.personal,
+    projectWithheld: result.projectWithheld,
   }
 }
 

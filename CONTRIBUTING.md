@@ -66,6 +66,18 @@ answered about a different package than the one the sentence named.
 "Verify against the artifact, not the indicator" presumes there is ONE artifact. Two trees, one
 name, on one machine is the case where that rule fails silently.
 
+## Regenerating the `@theokit/agents` capability map
+
+`packages/agents/docs/capability-map.md` is generated from the built declarations; never edit it. From `packages/agents`:
+
+```bash
+pnpm build                                    # an unbuilt entry aborts the run
+pnpm exec tsx scripts/capability-map.mts      # rewrite the map
+pnpm exec tsx scripts/capability-map.mts --check   # verify, byte for byte
+```
+
+Review the diff for export changes you did not intend. The map is stamped with the `@theokit/sdk` version it was measured against: `--check` compares bytes strictly, while `capability-map-is-current.test.ts` skips the drift comparison when the installed SDK differs from the stamp.
+
 ## How to add a feature
 
 1. Open an issue (or comment on an existing one). Confirm scope before

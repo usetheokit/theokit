@@ -1,3 +1,4 @@
+
 import { commandOf, CHAT_COMMANDS, infoReply } from '../channels/info-commands.js'
 import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
 import { STEER_USAGE_REPLY } from '../channels/reply-handler.js'
@@ -55,7 +56,7 @@ export function withLocalCommands(runner: TurnRunner, context: LocalCommandConte
     const reply = await answer(message, context)
     if (reply === undefined) return runner(message, emit, signal)
     emit({ type: 'text_delta', content: reply })
-    emit({ type: 'done' })
+    emit({ type: 'done', result: reply, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 0 })
     return { ok: true }
   }
 }

@@ -16,7 +16,23 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Fixed
+
+- `sessions gc` (current project) awaits the framework's async `planTranscriptGC`; it was reading a
+  promise as the plan. Transcripts no registry entry owns now keep the id of the file they are named
+  for (a fork still gets none), and a transcript whose id cannot be read is **kept** and reported,
+  not unlinked as an orphan. Registry removal is only asked for ids the registry lists.
+- The cross-project collector (`gc/all-sessions*`, `filesystem`, `auto*`, `spawn-sweep`,
+  `guarded-start`) is not yet moved onto the framework's `planProjectsGC`, `scheduleSessionSweep` and
+  `claimCollectorRoot`: they are in the workspace `@theokit/agents` 16.12.0 source but not in the
+  published 16.13.0 the standalone build pins, so the migration waits for a release.
+
 ### Changed
+- **Startup, the `exec` turn loop and event reading now use the framework (#2432).** Every entry (CLI, TUI, ACP) awaits one `bootstrapSurface`, built on `defineAppBootstrap` and `projectEnvStep` with TheoCode's extra protected keys restored afterwards; `exec` drains its stream through `runHeadlessTurn` and `streamTurnForkingIfBusy` (output formats, `[exec]` line and exit codes unchanged); the event processors read chunks with `createWireReader` and `readTurnMetadata`. `session-busy.ts` and `project-env.ts` are deleted; the standalone pins move to `@theokit/agents` 16.12.0.
+- **`@theokit/agents` is now pinned to the released `16.12.0` as `workspace:16.12.0` in all five TheoCode manifests (still linked to this checkout, which the own-package-duplicates guard requires, and published as `16.12.0`) instead of `workspace:*`.** A new consumer test (`tools/released-auth-consumer.test.mjs`) installs that exact version with npm into an empty temp directory and exercises `loginWithApiKey`, `ensureFreshCredential` and `refreshOAuthTokens` through `@theokit/agents/auth`. The standalone `pnpm-lock.yaml` is untouched; its fate is #2276. (#2243)
+- **The headless commands (`exec`, `review`, `sessions`, `doctor`, `goal`) now end through the framework's `exitAfterDrain`.** The exit code is the same, but the process exits only after stdout and stderr have drained, so piped output is no longer cut short. `sessions gc` also stops cleanly after a planning error instead of falling through to the report.
+- **MCP scopes, doctor rows, foreign-surface counts, the diagnostics variable and the wiring record now come from the framework (#1927).** `mcp-scopes.ts` is a thin adapter over `loadMcpScopes` (personal servers still win a name clash, a malformed project file still warns and leaves your own servers loaded); the `credential` and capability doctor rows take their status from `checks.credential` / `checks.capability` with TheoCode's wording; `foreignSurfacesOnDisk` reads `foreignSurfaceInventory`; `THEOCODE_DIAGNOSTICS` is passed as the sink's `envVar`. When the agent is created, the wiring record is re-published from what the framework compiled (`onWired`), so `/status`, `/mcp`, `/skills` and `/hooks` list the servers, skills and hooks the agent actually got.
+- **Deferred from #1927 (no code change):** the `@theokit/sdk` pin stays at 5.17.0, `memory/memory-facts.ts` keeps its own fact store and the `as never` / `as unknown as readonly CustomTool[]` casts in `composition/agent-spec.ts` stay. The SDK fact API (theokit-sdk#1062) is not public in the published 5.31.0 (only an internal `removeFacts`), so the `/forget`-removes-an-SDK-fact test cannot be written yet; the casts and the pin move together with that release and a lockfile regeneration across the monorepo.
 - **`-c key=value` parsing and environment-variable coercion now come from the framework (`@theokit/agents/config`: `parseDottedOverrides`, `envLayerFrom`, `coerceEnvValue`).** `config/cli-overrides.ts` shrinks to the coercion table and this product's error wording, which is unchanged; `config/config.ts` declares each knob as `envKnob(variable, kind)` instead of its own coercers. Not migrated, because the framework has no equivalent yet: the `.theocode`/`.claude` settings readers and key translation (`settings-load.ts`, `settings-json.ts`) and the managed-file reader (`managed-settings.ts`) — the framework's `loadSettings` reads only `.claude/` with a fixed schema and its operator-policy reader is internal and memoised. The layer chain and security floor already use the framework's fold and floor; what remains in them is this product's vocabulary.
 
 ### Removed

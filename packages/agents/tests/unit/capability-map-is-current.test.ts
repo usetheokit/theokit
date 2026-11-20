@@ -35,6 +35,11 @@ describe('the committed capability map is what the package implies', () => {
     expect(rendered).not.toContain('npx tsx')
   })
 
+  it('test_the_map_says_where_to_run_it_and_to_build_first', () => {
+    expect(rendered).toContain('From `packages/agents`, run `pnpm build`')
+    expect(rendered).toContain('(add `--check` to verify only)')
+  })
+
   it('test_the_map_EXISTS_and_is_published', () => {
     // It is in `files`; a map that ships nowhere is the state this replaced, where the README pointed
     // at a path that was empty after install.

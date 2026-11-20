@@ -1,18 +1,15 @@
 import {
-  type AgentStreamEvent,
   createToolSeen,
   flushPendingToolResults,
-  type SdkMessage,
-  type SdkTimelineEvent,
   translateSdkEvent,
   translateTimelineEvent,
 } from '@theokit/agents/bridge'
 
-import type { TurnAgent, TurnRun } from '../agent-port.js'
+import { toSdkMessage, toSdkTimelineEvent, type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { createEventMask } from './event-mask.js'
-import { describeStreamedError, outcomeOf, toTurnEvent, type TurnEvent, type TurnOutcome } from './turn.js'
+import { describeStreamedError, outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
 
 /** Where a session turn's translated events go, and who learns of the run once it exists. */
 export interface SessionTurnOptions {
@@ -34,23 +31,22 @@ export interface SessionTurnOptions {
 /** Every translated event of the run, live text deltas included; the first streamed error's code. */
 async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<string | undefined> {
   let streamedError: string | undefined
-  const forward = (events: readonly (AgentStreamEvent | TurnEvent)[]): void => {
-    for (const typed of events) {
-      const event = toTurnEvent(typed as AgentStreamEvent)
+  const forward = (events: readonly TurnEvent[]): void => {
+    for (const event of events) {
       if (event.type === 'error') streamedError ??= describeStreamedError(event)
       options.emit(event)
     }
   }
   if (run.events === undefined) {
     // A run with no timeline (a port implementer older than B-376) still answers, without deltas.
-    for await (const message of run.stream()) forward(translateSdkEvent(message as SdkMessage, options.runId))
+    for await (const message of run.stream()) forward(typedEvents(translateSdkEvent(toSdkMessage(message), options.runId)))
     return streamedError
   }
   const seen = createToolSeen()
   for await (const event of run.events()) {
-    forward(translateTimelineEvent(event as SdkTimelineEvent, options.runId, seen))
+    forward(typedEvents(translateTimelineEvent(toSdkTimelineEvent(event), options.runId, seen)))
   }
-  forward(flushPendingToolResults(seen))
+  forward(typedEvents(flushPendingToolResults(seen)))
   return streamedError
 }
 

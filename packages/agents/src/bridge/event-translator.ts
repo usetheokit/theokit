@@ -258,12 +258,9 @@ const INTERACTION_UPDATE_IGNORED: ReadonlySet<string> = new Set([
  * Returns an array because one SDK message may map to multiple TheoKit events.
  */
 // Overloads, in this order, so no existing caller needs an edit to compile:
-// 1. a message typed with the open `SdkMessage` index signature (every object literal, and the
-//    casts apps already write) keeps the open `StreamEvent[]` it always returned;
-// 2. a message typed only by its discriminant (an `@theokit/sdk` `SDKMessage`) gets the typed
-//    `AgentStreamEvent[]`;
-// 3. a catch-all that never wins resolution (2 accepts everything it does) and exists so that
-//    `ReturnType<typeof translateSdkEvent>` stays the open `StreamEvent[]` for existing consumers.
+// 1. a message typed with the open `SdkMessage` index signature keeps the open `StreamEvent[]`;
+// 2. a message typed only by its discriminant (an `@theokit/sdk` `SDKMessage`) gets `AgentStreamEvent[]`;
+// 3. a catch-all that never wins resolution and keeps `ReturnType<typeof translateSdkEvent>` open.
 export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
 export function translateSdkEvent(msg: SdkMessageLike, runId: string): AgentStreamEvent[]
 // eslint-disable-next-line @typescript-eslint/unified-signatures -- the separate signature is what keeps `ReturnType` open
@@ -272,7 +269,8 @@ export function translateSdkEvent(
   input: TranslatorInput,
   runId: string,
 ): StreamEvent[] | AgentStreamEvent[] {
-  // The reads below are all `unknown`-guarded; the index-signature view is internal only.
+  // The SDK's message interfaces have no string index signature; the reads below are all
+  // `unknown`-guarded, so one cast at the boundary is enough.
   const msg = input as SdkMessage
   switch (msg.type) {
     case 'system':

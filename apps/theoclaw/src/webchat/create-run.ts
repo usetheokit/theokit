@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@theokit/agents/bridge'
+import type { DoneEvent, StreamEvent } from '@theokit/agents/bridge'
 
 import { describeError } from '../control-plane/errors.js'
 import type { TurnEvent, TurnOutcome, TurnRunner } from '../control-plane/turn.js'
@@ -9,8 +9,13 @@ import { formatUsageLine, type TurnUsage } from '../usage/turn-usage.js'
  * then sees one error, never a stream that simply stops. The presenter masks the message for the
  * client and writes it, unmasked, to the server's stderr.
  */
-function turnFailed(reason: string): StreamEvent {
+function turnFailed(reason: string): TurnEvent {
   return { type: 'error', code: 'turn_failed', message: `the turn failed: ${reason}`, retryable: false }
+}
+
+/** The turn's typed event as the wire's `StreamEvent`; the copy carries the index signature the interfaces lack. */
+function toStreamEvent(event: TurnEvent): StreamEvent {
+  return { ...event }
 }
 
 const DONE: IteratorReturnResult<undefined> = { done: true, value: undefined }
@@ -19,11 +24,16 @@ const DONE: IteratorReturnResult<undefined> = { done: true, value: undefined }
  * The run's `done` with the turn's usage record (FR-003): the token counts and cost the run
  * reported, the cost left out when the run was unpriced, and the model.
  */
-function withUsage(done: StreamEvent, usage: TurnUsage): StreamEvent {
+function withUsage(done: StreamEvent, usage: TurnUsage): DoneEvent {
   const { inputTokens, outputTokens } = usage
+  // A runner's `done` may carry less than the typed event; the missing fields are filled so the
+  // event that leaves is always a complete `DoneEvent`.
   const prior = typeof done.usage === 'object' && done.usage !== null ? done.usage : {}
-  const enriched: StreamEvent = {
+  const enriched: DoneEvent = {
     ...done,
+    type: 'done',
+    result: typeof done.result === 'string' ? done.result : '',
+    durationMs: typeof done.durationMs === 'number' ? done.durationMs : 0,
     usage: { ...prior, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
     model: usage.model,
   }
@@ -64,14 +74,16 @@ function startTurn(
     if (closed) return
     sawError ||= event.type === 'error'
     answered ||= event.type === 'error' || event.type === 'done'
-    if (held !== undefined) held.after.push(event)
-    else if (event.type === 'done') held = { done: event, after: [] }
-    else queue.push(event)
+    const wire = toStreamEvent(event)
+    if (held !== undefined) held.after.push(wire)
+    else if (event.type === 'done') held = { done: wire, after: [] }
+    else queue.push(wire)
     notify()
   }
   const release = (usage?: TurnUsage): void => {
     if (held === undefined) return
-    queue.push(usage === undefined ? held.done : withUsage(held.done, usage), ...held.after)
+    // Spread: `DoneEvent` is an interface with no index signature, which `StreamEvent` requires.
+    queue.push(usage === undefined ? held.done : { ...withUsage(held.done, usage) }, ...held.after)
     held = undefined
     notify()
   }

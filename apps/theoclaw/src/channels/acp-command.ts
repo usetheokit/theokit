@@ -1,12 +1,17 @@
-import type { GatewayHook, MessageEvent } from '@theokit/gateway'
+import { parseChatCommand } from '@theokit/gateway'
+import type { ChatCommand, GatewayHook, MessageEvent } from '@theokit/gateway'
 import type { AcpToolTransport } from 'theokit/server/agent'
 
 import type { AcpAgentConfig } from '../tools/external-tools.js'
 import { acpAgentEnv, agentTransport } from '../tools/acp-transport.js'
 
 const HOOK_NAME = 'theoclaw-acp-command'
-const MENTION = '(?:(?:<@[^>]+>|@\\S+)\\s+)?'
-const ACP_COMMAND = new RegExp(`^${MENTION}/acp(?:@\\S+)?(?:\\s+(.*))?$`, 's')
+/** What `/help` says about the command this hook answers. */
+export const ACP_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
+  name: 'acp',
+  usage: '/acp start <agent>|list|stop <id>',
+  description: 'run, list and stop ACP agent sessions',
+}
 const USAGE = 'Use /acp start <agent>, /acp list or /acp stop <id>.'
 
 /** One running ACP agent session the owner started. */
@@ -94,10 +99,10 @@ export function createAcpCommandHook(options: AcpCommandOptions): GatewayHook {
   return {
     name: HOOK_NAME,
     async pre_inbound({ event }) {
-      const match = ACP_COMMAND.exec(event.text.trim())
-      if (match === null) return undefined
+      const command = parseChatCommand(event.text)
+      if (command?.name !== 'acp') return undefined
       if (!isOwner(event)) return reply('Only an owner can do that.')
-      const [verb = '', argument = ''] = (match[1] ?? '').trim().split(/\s+/)
+      const [verb = '', argument = ''] = command.arg.split(/\s+/)
       if (verb === 'list') {
         const running = sessions.list()
         return reply(running.length === 0 ? 'No ACP session is running.' : running.map((s) => `${s.id} ${s.agent}`).join('\n'))

@@ -395,6 +395,8 @@ the listener. `GET /health` answers `{"status":"ok"}`.
 
 ### The `/control` socket
 
+Turns read the SDK agent through the typed port in `src/agent-port.ts` (`TurnAgent`, `TurnRun`, `TurnTimelineEvent`, with `InteractionUpdate` from `@theokit/sdk`) and the bridge's `SdkMessage`, `SdkTimelineEvent` and `AgentStreamEvent`; the typed helpers `toSdkMessage`, `toSdkTimelineEvent` and `isAgentStreamEvent` replace every cast.
+
 Connect to `ws://127.0.0.1:<port>/control` with `Authorization: Bearer <THEOCLAW_CONTROL_TOKEN>`;
 any other path answers 404 and a missing or wrong token 401, before any agent is built. Send
 `{"type":"chat","message":"..."}` as a text frame. Each event of the turn arrives as
@@ -539,7 +541,13 @@ DISPLAY=:99 THEOCLAW_HOST_TOOLS=on THEOCLAW_COMPUTER=on THEOCLAW_COMPUTER_FRAMEB
 ### The `/control` agent's browser
 
 With `THEOCLAW_BROWSER=on`, `/control` agents also get a headless Chromium through the pinned
-`@playwright/mcp` server, spawned over stdio with an isolated profile per session. Its tools reach
+`@playwright/mcp` server, spawned over stdio. The instance starts one headless Chromium, with the first `/control` session and again if it dies, on
+a persistent profile in `<workspace>/.theoclaw/browser-profile`, listening for DevTools only on
+loopback, and every session's server attaches to it, so a site signed in once stays signed in on
+later turns and for every agent, and two sessions can use the browser at once (they share cookies
+and the browser; each session opens and drives its own tab). The browser stops with the instance. A profile belongs to
+one browser process, so two TheoClaw processes cannot share a workspace's browser. Cookies a site
+marks as session cookies may not survive an instance restart; persistent cookies do. Its tools reach
 the model as `mcp_browser_<tool>` (`mcp_browser_browser_navigate`, `mcp_browser_browser_snapshot`
 and the others the server lists), so the agent can read what a page renders with JavaScript, which
 `web_fetch` cannot. Chat agents never get it. The browser can open any URL the process can reach,

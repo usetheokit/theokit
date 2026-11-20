@@ -123,7 +123,14 @@ describe('runSessionGC', () => {
     seed('newest', 1)
     const late = seed(LIVE, 99)
     const protectedIds = gcProtectedIds(cwd)
-    const plan = planTranscriptGC({ cwd, root, now: NOW, keepLast: 1, maxAgeDays: 1, protectedIds })
+    const plan = await planTranscriptGC({
+      cwd,
+      root,
+      now: NOW,
+      keepLast: 1,
+      maxAgeDays: 1,
+      protectedIds,
+    })
     expect(plan.candidates.map((c) => c.id)).toEqual([LIVE])
     point(LIVE)
 
