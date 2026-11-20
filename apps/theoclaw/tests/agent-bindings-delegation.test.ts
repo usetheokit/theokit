@@ -21,9 +21,16 @@ describe('the agent router delegates to the gateway bindings', () => {
       ],
       routes,
     })
-    expect(createAgentBindings).toHaveBeenCalledWith({ defaultAgent: 'main', agents: ['main', 'work'], rules: routes })
+    expect(createAgentBindings).toHaveBeenCalledWith({
+      defaultAgent: 'main',
+      agents: ['main', 'work'],
+      rules: routes,
+      accountOf: expect.any(Function),
+    })
     // The platform here has no rule of its own: only the bindings can have answered "work".
     expect(router.route({ platform: 'telegram', peer: 'u1' }).id).toBe('work')
-    expect(agentFor).toHaveBeenCalledWith(expect.objectContaining({ platform: 'telegram', sender: { id: 'u1' } }))
+    expect(agentFor).toHaveBeenCalledWith(
+      expect.objectContaining({ platform: 'telegram', sender: { id: 'u1' } }),
+    )
   })
 })

@@ -245,3 +245,12 @@ describe('readAckReaction', () => {
     expect(readAckReaction({ THEOCLAW_ACK_REACTION: 'OFF' })).toBeUndefined()
   })
 })
+
+describe('help lines are generated from the registered commands', () => {
+  it('shows each chat command with the description it was defined with', () => {
+    for (const command of CHAT_COMMANDS) {
+      if (command.name === 'model') continue // listed under /status
+      expect(HELP_TEXT, command.name).toContain(command.description ?? '')
+    }
+  })
+})

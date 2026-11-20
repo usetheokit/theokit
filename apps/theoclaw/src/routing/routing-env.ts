@@ -6,10 +6,11 @@ import type { AgentBindingRule, MessageEvent } from '@theokit/gateway'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { clawRouting } from './claws.js'
 
-/** One binding rule: a platform, or one peer (sender) of it, to an agent. The most specific rule wins. */
+/** One binding rule: a platform, a bot account, or one peer (sender) of it, to an agent. The most specific rule wins. */
 export interface AgentRoute {
   readonly agent: string
   readonly platform?: string
+  readonly account?: string
   readonly peer?: string
 }
 
@@ -21,7 +22,11 @@ export interface AgentProfile {
 
 export interface AgentRouter {
   /** The profile of the agent that must answer a message from `peer` on `platform`. */
-  route(message: { readonly platform: string; readonly peer?: string }): AgentProfile
+  route(message: {
+    readonly platform: string
+    readonly account?: string
+    readonly peer?: string
+  }): AgentProfile
 }
 
 /**
@@ -40,6 +45,7 @@ export function createAgentRouter(config: {
       defaultAgent: config.defaultAgent,
       agents: config.agents.map((agent) => agent.id),
       rules: config.routes as readonly AgentBindingRule[],
+      accountOf: (event) => (event as MessageEvent & { account?: string }).account,
     })
   } catch (error) {
     const { code, detail } = error as { code?: unknown; detail?: unknown }
@@ -48,8 +54,13 @@ export function createAgentRouter(config: {
     throw new Error(`routing names an unconfigured agent: ${String(detail)}`)
   }
   return {
-    route({ platform, peer }) {
-      const event = { platform, sender: { id: peer ?? '' }, channel: { id: '', type: 'dm' } } as unknown as MessageEvent
+    route({ platform, account, peer }) {
+      const event = {
+        platform,
+        account,
+        sender: { id: peer ?? '' },
+        channel: { id: '', type: 'dm' },
+      } as unknown as MessageEvent
       return profiles.get(bindings.agentFor(event))!
     },
   }
@@ -61,7 +72,10 @@ type Env = Readonly<Record<string, string | undefined>>
 export const MAIN_AGENT = 'main'
 
 function entries(value: string | undefined): readonly string[] {
-  return (value ?? '').split(',').map((entry) => entry.trim()).filter((entry) => entry !== '')
+  return (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '')
 }
 
 function bad(variable: string, detail: string): TheoClawConfigError {
@@ -83,12 +97,16 @@ export function readAgentRouter(env: Env, mainWorkspace: string): AgentRouter | 
     const id = entry.slice(0, at).trim()
     const workspace = entry.slice(at + 1).trim()
     if (at < 1 || !/^\w+$/.test(id) || id === MAIN_AGENT || !isAbsolute(workspace)) {
-      throw bad('THEOCLAW_AGENTS', 'must be <id>=<absolute workspace> pairs separated by commas; the id is not "main"')
+      throw bad(
+        'THEOCLAW_AGENTS',
+        'must be <id>=<absolute workspace> pairs separated by commas; the id is not "main"',
+      )
     }
     agents.push({ id, workspace })
   }
   for (const claw of claws.agents) {
-    if (agents.some((agent) => agent.id === claw.id)) throw bad('THEOCLAW_AGENTS', `names ${claw.id}, which an installed claw already uses`)
+    if (agents.some((agent) => agent.id === claw.id))
+      throw bad('THEOCLAW_AGENTS', `names ${claw.id}, which an installed claw already uses`)
     agents.push(claw)
   }
   const routes: AgentRoute[] = routeEntries.map((entry) => {
@@ -103,7 +121,11 @@ export function readAgentRouter(env: Env, mainWorkspace: string): AgentRouter | 
     return { agent: entry.slice(equals + 1).trim(), platform, ...(peer === '' ? {} : { peer }) }
   })
   try {
-    return createAgentRouter({ defaultAgent: MAIN_AGENT, agents, routes: [...routes, ...claws.routes] })
+    return createAgentRouter({
+      defaultAgent: MAIN_AGENT,
+      agents,
+      routes: [...routes, ...claws.routes],
+    })
   } catch (error) {
     throw bad('THEOCLAW_ROUTES', (error as Error).message)
   }
