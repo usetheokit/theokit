@@ -6,50 +6,19 @@
  * session holds the pending call, and the only thing left to keep is this record, enough to list the
  * approval and to resume the session once a person answers.
  */
-import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-
-import type { TimeoutAction } from '@theokit/agents'
 
 import type {
   ApprovalDecision,
   ApprovalRegistry,
+  ApprovalStore,
   PendingApproval,
   RegisterOptions,
-} from './approval-registry.js'
+  StoredApproval,
+} from './approval-types.js'
 
-/** One pending approval, as persisted. `schemaVersion` lets a later release change the shape. */
-export interface StoredApproval {
-  readonly schemaVersion: 1
-  readonly approvalId: string
-  readonly agentName: string
-  readonly sessionId: string
-  readonly toolUseId: string
-  readonly toolName: string
-  readonly question?: string
-  readonly owner?: string
-  /** Epoch ms after which `onTimeout` applies. */
-  readonly expiresAt: number
-  readonly onTimeout: TimeoutAction
-  readonly payloadSchema?: Record<string, unknown>
-}
-
-/**
- * Where pending approvals live. Implement it over Redis or a database for a deploy whose instances
- * share no filesystem.
- *
- * `claim` is optional: it removes the record and returns it ONLY to the one caller that got there
- * first, which is what stops two instances resuming the same approval. A store without it falls
- * back to `get` + `delete`, which is not atomic.
- */
-export interface ApprovalStore {
-  put(record: StoredApproval): Promise<void>
-  get(approvalId: string): Promise<StoredApproval | undefined>
-  delete(approvalId: string): Promise<void>
-  list(): Promise<readonly StoredApproval[]>
-  claim?(approvalId: string): Promise<StoredApproval | undefined>
-}
+export type { ApprovalStore, StoredApproval } from './approval-types.js'
 
 const SAFE_ID = /^[A-Za-z0-9._-]+$/
 
@@ -94,7 +63,7 @@ export function createFileApprovalStore(dir: string): ApprovalStore {
     async put(record) {
       await mkdir(dir, { recursive: true, mode: 0o700 })
       const file = fileFor(dir, record.approvalId)
-      const tmp = `${file}.${randomUUID()}.tmp`
+      const tmp = `${file}.${crypto.randomUUID()}.tmp`
       await writeFile(tmp, JSON.stringify(record), { mode: 0o600 })
       await rename(tmp, file)
     },
@@ -124,7 +93,7 @@ export function createFileApprovalStore(dir: string): ApprovalStore {
     async claim(approvalId) {
       if (!SAFE_ID.test(approvalId)) return undefined
       const file = fileFor(dir, approvalId)
-      const mine = `${file}.${randomUUID()}.claimed`
+      const mine = `${file}.${crypto.randomUUID()}.claimed`
       // `rename` is atomic: of several callers, exactly one moves the file.
       try {
         await rename(file, mine)
