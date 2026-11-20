@@ -107,4 +107,22 @@ describe('a fork of a registered session', () => {
     expect(existsSync(source)).toBe(true)
     expect(removed, 'the protected source lost its registry entry').toEqual(['the-fork'])
   })
+
+  it('test_an_unregistered_fork_of_a_registered_source_is_collected_by_path_only', async () => {
+    writeTranscript(fx, 'newest', 1)
+    const source = writeTranscript(fx, 'source-live', 2)
+    const fork = writeTranscript(fx, 'the-fork', 90, {
+      content: `${JSON.stringify({ type: 'user', sessionId: 'source-live' })}\n`,
+    })
+    const removed: string[] = []
+
+    await run(true, {
+      listRegistry: async () => [{ agentId: 'source-live', archived: true }],
+      removeFromRegistry: (id: string) => void removed.push(id),
+    })
+
+    expect(existsSync(fork)).toBe(false)
+    expect(existsSync(source)).toBe(true)
+    expect(removed, 'the source lost its registry entry').toEqual([])
+  })
 })

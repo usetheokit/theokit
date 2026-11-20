@@ -78,15 +78,21 @@ export interface CurrentProjectGCOptions {
 
 /**
  * A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
- * first row, and registry removal would then hit the source. Each candidate gets its OWN identity
- * instead: the registered session (archived or not) whose transcript file this is. A transcript no
- * registry entry owns has no identity and is collected by path, never as its source.
+ * first row, and registry removal would then hit the source. A candidate keeps the framework's id
+ * unless that id names a registered session whose transcript is a different file; then the candidate
+ * takes the id of the registry entry owning its own file, or none (collected by path).
  */
 function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): TranscriptGCPlan {
+  const registered = new Set(registryIds)
   const own = new Map(registryIds.map((id) => [transcriptPath(planned.root, planned.cwd, id), id]))
   return {
     ...planned,
-    candidates: planned.candidates.map((c) => ({ ...c, id: own.get(c.transcript) })),
+    candidates: planned.candidates.map((c) => {
+      const owner = own.get(c.transcript)
+      if (owner !== undefined) return { ...c, id: owner }
+      if (c.id !== undefined && registered.has(c.id)) return { ...c, id: undefined }
+      return c
+    }),
   }
 }
 
