@@ -26,7 +26,7 @@ import {
 
 import { widgetTool } from '../canvas/widget.js'
 import type { TurnAgent } from '../agent-port.js'
-import { scrubbedAgentTransport } from './acp-transport.js'
+import { acpAgentEnv, agentTransport } from './acp-transport.js'
 import { acpPermissionHandler, type AcpPermissionOptions } from './acp-permission.js'
 import { browserServer } from './browser-server.js'
 import { codeModeTool, delegateAllTool, delegateTool, runWorker, type CreateWorker } from './code-mode-tools.js'
@@ -63,7 +63,8 @@ function acpTools(settings: ToolSettings, permission: AcpPermissionOptions): Cus
       ...(agent.timeoutMs === undefined ? {} : { timeoutMs: agent.timeoutMs }),
       cwd: settings.toolRoot,
       onPermissionRequest: acpPermissionHandler(agent.name, permission),
-      transportFactory: scrubbedAgentTransport,
+      env: acpAgentEnv(),
+      transportFactory: agentTransport,
     }),
   )
 }

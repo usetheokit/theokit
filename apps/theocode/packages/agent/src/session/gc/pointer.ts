@@ -45,3 +45,25 @@ export function readPointerId(
   const id = raw.trim()
   return id === '' ? undefined : id
 }
+
+/**
+ * The `protectedIds` provider `theocode sessions gc` hands to the framework's `planTranscriptGC` and
+ * `runTranscriptGC`: the TUI pointer, plus every non-archived registry session in `registryIds`.
+ *
+ * The framework derives protection from its own pointer convention and cannot see
+ * `<cwd>/.theokit/tui-session` (#1905), so the pointer is passed in until it moves there. A read
+ * error from `readPointerId` propagates on purpose: the framework turns a throwing provider into
+ * `GCProtectionUnavailableError` and refuses the run.
+ */
+export function gcProtectedIds(
+  cwd: string,
+  registryIds: readonly string[] = [],
+): () => ReadonlyMap<string, string> {
+  return () => {
+    const out = new Map<string, string>()
+    for (const id of registryIds) out.set(id, 'registered session')
+    const pointer = readPointerId(cwd)
+    if (pointer !== undefined) out.set(pointer, 'TUI live-session pointer')
+    return out
+  }
+}

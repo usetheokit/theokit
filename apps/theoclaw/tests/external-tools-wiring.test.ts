@@ -41,6 +41,7 @@ const AGENTS = [
 const cleanups: (() => void)[] = []
 const started: ToolStart[] = []
 afterEach(async () => {
+  vi.unstubAllEnvs()
   acpConfigs.splice(0)
   for (const start of started.splice(0)) await stop(start)
   for (const cleanup of cleanups.splice(0)) cleanup()
@@ -99,6 +100,9 @@ describe('the external tools reach the /control agent only', () => {
   })
 
   it('the control agent gets one ACP tool per configured agent, with its cwd in the tool root', () => {
+    vi.stubEnv('THEOCLAW_TELEGRAM_TOKEN', 'telegram-0123456789')
+    vi.stubEnv('TZ', 'Europe/Berlin')
+    vi.stubEnv('LOGNAME', 'claw')
     const settings = settingsWith({ acpAgents: AGENTS })
     const built = agentToolOptions(settings)
     const names = built.tools.map((tool) => tool.name)
@@ -109,6 +113,12 @@ describe('the external tools reach the /control agent only', () => {
       ['reviewer', settings.toolRoot, 'reviewer'],
     ])
     expect(acpConfigs[1]?.timeoutMs).toBe(1000)
+    // createACPTool is handed the allowlisted environment itself: the parent's secrets are not in it.
+    for (const config of acpConfigs) {
+      expect(config.env).toBeDefined()
+      expect(Object.keys(config.env ?? {})).not.toContain('THEOCLAW_TELEGRAM_TOKEN')
+      expect(config.env).toMatchObject({ TZ: 'Europe/Berlin', LOGNAME: 'claw' })
+    }
   })
 
   it('a start without THEOCLAW_EXTERNAL_TOOLS passes no mcpServers key to Agent.create', async () => {

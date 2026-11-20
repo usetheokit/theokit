@@ -252,6 +252,26 @@ const Roles = createDecorator<string[]>()
 | `./app` | App-level composition |
 | `./runtime/node` | The Node runtime adapter |
 | `./action-encryption`, `./server-inserted-html`, `./css-resource` | Opt-in capabilities kept off the main bundle |
+| `./guards` | Bearer token and loopback bind guards (see below) |
+
+## Guards: bearer token and loopback bind
+
+`@theokit/http/guards` is the one reviewed copy of the checks a self-hosted app needs (Node built-ins only).
+
+```ts
+import { bearerGuard, readBearerToken, resolveBindAddress, parsePort } from '@theokit/http/guards'
+
+const token = readBearerToken(process.env, 'APP_TOKEN') // undefined = surface off
+const guard = token && bearerGuard(token) // (request) => Response | undefined
+const host = resolveBindAddress(process.env, { hostVariable: 'APP_HOST', consentVariable: 'APP_PUBLIC_BIND' })
+const port = parsePort(process.env, 'APP_PORT')
+```
+
+- `readBearerToken(env, variable, { minLength? })`: unset or empty returns `undefined`; padding whitespace or fewer than 32 characters (`minLength`, never below 16) throws `GuardConfigError`, naming the variable and never the value.
+- `bearerCheck(token)` compares SHA-256 digests with `timingSafeEqual`; the scheme matches in any case. `bearerGuard(token)` returns `undefined` or a 401 with `www-authenticate: Bearer`.
+- `isLoopback(host)` accepts only `localhost`, `::1` and dotted IPv4 in 127.0.0.0/8. `LOCALHOST`, `[::1]`, `::ffff:127.0.0.1` and `127.1` count as public.
+- `resolveBindAddress` defaults to `127.0.0.1`; a non-loopback host needs `consentVariable` set to `consentValue` (default `yes`) or it throws `BindRefusedError`. The generic `HOST` is never read.
+- `parsePort` accepts digits only, 0 to 65535; otherwise `GuardConfigError`.
 
 ## Node server with a disconnect signal
 
@@ -284,6 +304,35 @@ await node.close({ force: true }) // memoized; force ends open and upgraded sock
 - When the client leaves mid-body, the response body is cancelled so its producer stops.
 - `listen` rejects with `BindError` (`code`, `host`, `port`); after binding, server errors go to `onError(error, 'server')`.
 - `close()` is memoized: concurrent calls share one promise, and the first call decides whether it is forced.
+
+
+The server lives in `src/bridge/runtime/node-server.ts`; the request/response conversion and `createNodeAdapter` stay in `node.ts`. Its integration tests run with:
+
+```sh
+THEOKIT_TEST_RUN_ID=1 pnpm exec vitest run packages/http/tests/integration/node-server-*.test.ts
+```
+
+(Run it from the repository root: the root `vitest.config.ts` owns the package projects.) They cover bind errors, memoized and forced close, client-disconnect aborts and upgrade handling.
+### Trusted proxy identity
+
+When a reverse proxy authenticates the user (Tailscale serve, Caddy, nginx with auth) and forwards the identity in a header, believe it only from the proxy's address:
+
+```ts
+import { createNodeServer, trustedIdentity, peerAddress } from '@theokit/http/runtime/node'
+
+const node = createNodeServer(
+  (request) => new Response(`hello ${trustedIdentity(request) ?? 'anonymous'}`),
+  { trustedProxy: { identityHeader: 'tailscale-user-login', addresses: ['127.0.0.1', '::1'] } },
+)
+```
+
+Caddy: `reverse_proxy 127.0.0.1:3000 { header_up X-Auth-User {http.auth.user.id} }` with `identityHeader: 'x-auth-user'`.
+
+- A request from an allowlisted peer with a non-empty identity header gets `trustedIdentity(request)`; from any other peer it is `undefined`, and the identity header is removed.
+- `x-theokit-peer` and `x-theokit-trusted-identity` supplied by a client are always removed; `peerAddress(request)` is the socket address.
+- `x-forwarded-proto` is honoured only from an allowlisted peer; otherwise the URL protocol is `http:`.
+- `identityHeader` must match `[a-z0-9-]+` and not be `authorization`; `addresses` must be non-empty (`::ffff:` is ignored, case is ignored). Invalid options throw a `TypeError` naming the option.
+- `onUpgrade` receives the raw `IncomingMessage`; use `request.socket.remoteAddress` there.
 
 ## `registerControllers` (low-level)
 

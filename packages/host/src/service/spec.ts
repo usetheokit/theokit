@@ -1,4 +1,4 @@
-import { isAbsolute } from 'node:path'
+import { isAbsolute, win32 } from 'node:path'
 
 import { ServiceDefinitionError } from './errors.js'
 import type { Runner } from './runner.js'
@@ -19,7 +19,7 @@ export type ServiceState = 'running' | 'stopped' | 'not-installed' | 'unknown'
 export interface ServiceBackend {
   readonly platform: NodeJS.Platform
   definitionPath(spec: Pick<ServiceSpec, 'label'>): string
-  /** Throws ServiceCommandError; the previous definition is restored. */
+  /** Throws ServiceCommandError; systemd restores the previous definition; launchd removes the new one. */
   install(spec: ServiceSpec): Promise<void>
   uninstall(label: string): Promise<void>
   status(label: string): Promise<ServiceState>
@@ -31,6 +31,8 @@ export interface ServiceBackendOptions {
   readonly homeDir?: string
   readonly env?: NodeJS.ProcessEnv
   readonly uid?: number
+  /** launchd: the file stdout and stderr go to; defaults to ~/Library/Logs/<label>.log. */
+  readonly logFile?: string
 }
 
 const LABEL = /^[A-Za-z0-9._-]+$/
@@ -52,21 +54,27 @@ function assertNoTrailingBackslash(field: string, value: string): void {
   if (value.endsWith('\\')) throw new ServiceDefinitionError(field, 'cannot end with a backslash')
 }
 
-function assertAbsolute(field: string, value: string): void {
+function assertAbsolute(field: string, value: string, windows: boolean): void {
   assertNoLineBreak(field, value)
-  if (!isAbsolute(value)) throw new ServiceDefinitionError(field, 'must be an absolute path')
+  if (!(windows ? win32.isAbsolute(value) : isAbsolute(value)))
+    throw new ServiceDefinitionError(field, 'must be an absolute path')
 }
 
 /** Check every field of a spec; throws ServiceDefinitionError naming the field, never the value. */
-export function validateSpec(spec: ServiceSpec): void {
+export function validateSpec(
+  spec: ServiceSpec,
+  options: { readonly windows?: boolean } = {},
+): void {
+  const windows = options.windows === true
   assertLabel(spec.label)
   if (spec.description !== undefined) {
     assertNoLineBreak('description', spec.description)
     assertNoTrailingBackslash('description', spec.description)
   }
-  assertAbsolute('command', spec.command)
-  assertAbsolute('workingDirectory', spec.workingDirectory)
-  assertNoTrailingBackslash('workingDirectory', spec.workingDirectory)
+  assertAbsolute('command', spec.command, windows)
+  assertAbsolute('workingDirectory', spec.workingDirectory, windows)
+  // A trailing backslash continues a systemd line; a Windows directory may end with one.
+  if (!windows) assertNoTrailingBackslash('workingDirectory', spec.workingDirectory)
   for (const [index, arg] of (spec.args ?? []).entries()) assertNoLineBreak(`args[${index}]`, arg)
   for (const [name, value] of Object.entries(spec.env ?? {})) {
     if (!ENV_NAME.test(name))
