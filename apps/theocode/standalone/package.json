@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@theokit/agents": "16.13.0",
+    "@theokit/agents": "17.0.0",
     "@theokit/agents-pty": "0.2.1",
     "@theokit/sdk": "5.17.0",
     "@types/node": "^22.0.0",

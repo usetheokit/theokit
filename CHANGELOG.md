@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents-pty 0.3.0, @theokit/agents 17.0.0, create-theokit 3.2.0, @theokit/host 0.2.0, @theokit/http 2.8.0, @theokit/presenter 0.17.0, theokit 0.84.0] - 2026-11-20
+
 ### Added
 
 - `@theokit/host`: `@theokit/host/backup` keeps backups in named storage locations, optionally encrypted with AES-256-GCM (`createStorageRegistry`).
