@@ -135,7 +135,7 @@ function translateMessage(message: SdkMessage, runId: string): AgentStreamEvent[
       },
     ]
   }
-  return translateSdkEvent(message, runId) as unknown as AgentStreamEvent[]
+  return translateSdkEvent(message, runId)
 }
 
 interface TurnState {
@@ -207,7 +207,7 @@ async function runTurn(
       update as Parameters<typeof translateInteractionUpdate>[0],
     )) {
       if (event.type === 'text_delta') textStreamed = true
-      send(event as unknown as AgentStreamEvent)
+      send(event)
     }
   }
   const sending = options.agent.send(options.message, {

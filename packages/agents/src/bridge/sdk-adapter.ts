@@ -965,7 +965,7 @@ export function toAgentFactory(
     }
     const agent = await getOrCreateReporting(skillRt.Agent, sessionId, createOptions)
     return withGuardrails(
-      withStepCeiling(agent as unknown as SdkAgentHandle<SdkMessage>, compiled.maxIterations),
+      withStepCeiling(agent as SdkAgentHandle<SdkMessage>, compiled.maxIterations),
       compiled.guardrails,
     )
   }

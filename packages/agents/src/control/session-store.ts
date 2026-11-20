@@ -8,8 +8,8 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentStreamEvent } from '../bridge/agent-stream-events.js'
-import { runAgentTurn, type AgentTurnOutcome } from '../bridge/run-agent-turn.js'
 import type { SdkMessage } from '../bridge/event-translator.js'
+import { runAgentTurn, type AgentTurnOutcome } from '../bridge/run-agent-turn.js'
 import type { SdkAgentHandle, SdkSendOptions } from '../bridge/sdk-adapter.js'
 
 /** How a session turn ended: the turn's own outcome, or a refusal the store made. */
