@@ -17,6 +17,7 @@ import type { RetryOptions } from '@theokit/sdk/retry'
 import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
+import type { Guardrail } from '../guardrails/index.js'
 import { resolveEnabledSkills } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
@@ -25,11 +26,11 @@ import { wireInlineSkillRead } from './advertised-skill-read.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
-import { getOrCreateReporting } from './compiled-wiring.js'
+import { acquireSharedAgent, releaseSharedAgent } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
-import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
+import { withGuardrails } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
 import type { SdkRunUsage } from './sdk-adapter-create-options.js'
@@ -761,7 +762,7 @@ async function* streamSdkAgent(
     ...m8,
     ...extra,
   }
-  const agent = (await getOrCreateReporting(Agent, sessionId, createOptions)) as Awaited<
+  const agent = (await acquireSharedAgent(Agent, sessionId, createOptions)) as Awaited<
     ReturnType<typeof Agent.getOrCreate>
   >
   try {
@@ -812,7 +813,7 @@ async function* streamSdkAgent(
       yield realUsageDone(await (await sendPromise).wait(), t0, modelIdOf(model))
     }
   } finally {
-    await agent.dispose()
+    await releaseSharedAgent(agent)
   }
 }
 
@@ -958,12 +959,77 @@ export function toAgentFactory(
       ...extra,
       ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: withShell(m8) } : {}),
     }
-    const agent = await getOrCreateReporting(skillRt.Agent, sessionId, createOptions)
-    return withGuardrails(
-      withStepCeiling(agent as SdkAgentHandle, compiled.maxIterations),
-      compiled.guardrails,
-    )
+    // The owner's `dispose()` releases its hold; a stream sharing the handle keeps it alive.
+    const entry: ServedEntry = { guards: compiled.guardrails ?? [], max: compiled.maxIterations }
+    const agent = (await acquireSharedAgent(
+      skillRt.Agent,
+      sessionId,
+      createOptions,
+      'served',
+      () => {
+        releaseServedEntry(agent, entry)
+      },
+    )) as SdkAgentHandle
+    return servedHandle(agent, entry)
   }
+}
+
+interface ServedEntry {
+  guards: readonly Guardrail[]
+  max: number | undefined
+}
+interface ServedConfig {
+  send: SdkAgentHandle['send']
+  /** Active served holders, oldest first; releases (`dispose()`) drop the oldest. */
+  entries: ServedEntry[]
+}
+const served = new WeakMap<object, ServedConfig>()
+
+/** A served holder released: its guardrails and ceiling stop applying; the others' remain. */
+function releaseServedEntry(agent: object, entry: ServedEntry): void {
+  const cfg = served.get(agent)
+  if (cfg === undefined) return
+  const at = cfg.entries.indexOf(entry)
+  if (at >= 0) cfg.entries.splice(at, 1)
+}
+
+/**
+ * The SDK's own handle, always: declared guardrails and a step ceiling are installed on it as its
+ * `send`, so every served caller gets the object `Agent.registry.get(id)` returns. As the handle is
+ * shared, its `send` enforces what the ACTIVE served holders declared (all their guardrails, the
+ * lowest ceiling), recomputed on every send: a caller without guards cannot strip another's, and a
+ * released caller's constraints stop applying.
+ */
+function servedHandle(agent: SdkAgentHandle, entry: ServedEntry): SdkAgentHandle {
+  let cfg = served.get(agent)
+  if (cfg === undefined) {
+    const live: ServedConfig = { send: agent.send.bind(agent), entries: [] }
+    cfg = live
+    served.set(agent, live)
+    const base = {
+      agentId: agent.agentId,
+      dispose: () => agent.dispose(),
+      send: (msg: string, sendOpts?: SdkSendOptions) => {
+        const ceilings = live.entries.flatMap((e) => (e.max === undefined ? [] : [e.max]))
+        return live.send(
+          msg,
+          ceilings.length === 0 ? sendOpts : { maxIterations: Math.min(...ceilings), ...sendOpts },
+        )
+      },
+    } as SdkAgentHandle
+    Object.defineProperty(agent, 'send', {
+      value: (msg: string, sendOpts?: SdkSendOptions) =>
+        withGuardrails(base, [...new Set(live.entries.flatMap((e) => e.guards))]).send(
+          msg,
+          sendOpts,
+        ),
+      configurable: true,
+      writable: true,
+      enumerable: false,
+    })
+  }
+  cfg.entries.push(entry)
+  return agent
 }
 
 /**
