@@ -26,7 +26,7 @@ import {
 } from '@theokit/agents/bridge'
 import { afterAll, describe, expect, it } from 'vitest'
 
-import { DEFAULT_LIVE_MODEL, resolveLiveModel } from './live-model.js'
+import { DEFAULT_LIVE_MODEL, resolveLiveModel, resolveSdkLiveModel } from './live-model.js'
 
 const MODEL = resolveLiveModel(process.env)
 // The default model id is an OpenRouter id, so on the default model (LIVE_MODEL unset, empty or
@@ -91,7 +91,7 @@ function withAbortSignal(
 describe.skipIf(!HAS_KEY)('an A2A call against a route answered by a real model', () => {
   it('test_an_a2a_call_reaches_a_real_model', async () => {
     const compiled: CompiledAgentOptions = {
-      model: MODEL,
+      model: resolveSdkLiveModel(MODEL, selectedKeyName()),
       systemPrompt: 'Answer in one short sentence.',
       tools: [],
       agents: {},

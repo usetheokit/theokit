@@ -25,6 +25,8 @@ export default defineConfig({
     // Preserve explicit factory exclusions when it supplies repository-relative paths.
     exclude: [...configDefaults.exclude, ...projectRelativeExcludes(process.argv)],
     environment: 'node',
+    // Routes the CI live and container model through OpenRouter before any test reads it.
+    setupFiles: ['tests/support/live-model-setup.ts'],
     // Read only by a `--coverage` run, so the plain suite is unchanged. The control plane is the
     // code B-372 adds, and its plan bounds it at 90% on all three counters.
     coverage: {
