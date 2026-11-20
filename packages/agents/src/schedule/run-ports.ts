@@ -20,7 +20,8 @@ export function agentRunPort(
     withAgent(async (agent) => {
       const turn = await agent.send(prompt, { ...options.sendOptions, signal })
       if (turn.stream) {
-        for await (const event of turn.stream()) if (event === undefined) continue
+        // Drained only so the turn can finish; the result arrives through `wait()`.
+        for await (const _event of turn.stream()) continue
       }
       const outcome = await turn.wait()
       if (outcome.status === 'error' || outcome.error) {
