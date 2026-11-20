@@ -57,10 +57,7 @@ export default defineCron('${name}', { schedule: '${schedule}', handler: () => {
   )
 }
 
-const runBuild = (
-  args: string[] = [],
-  extraEnv: Record<string, string> = {},
-): { stdout: string; exitCode: number } => {
+const runBuild = (args: string[] = []): { stdout: string; exitCode: number } => {
   try {
     // T5a.2 prerequisite: THEOKIT_SKIP_NATIVE_PREFLIGHT=1 tells the CLI to
     // skip the native-binding ABI check. Test fixtures don't install
@@ -76,7 +73,7 @@ const runBuild = (
       cwd: projectDir,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, THEOKIT_SKIP_NATIVE_PREFLIGHT: '1', ...extraEnv },
+      env: { ...process.env, THEOKIT_SKIP_NATIVE_PREFLIGHT: '1' },
     })
     return { stdout, exitCode: 0 }
   } catch (err) {
@@ -165,90 +162,6 @@ describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
     // cron+job artifacts must be present).
     const { stdout } = runBuild(['--target=bun'])
     expect(stdout.toLowerCase()).toMatch(/cron.*skip|cron.*not supported|warn/)
-  })
-
-  it('build --target=deno-deploy wires the NODE_ENV override and a version-pinned theokit into the cron entry', () => {
-    writeConfig()
-    writeCron('foo', '* * * * *')
-    writeFileSync(join(projectDir, 'theo.config.production.ts'), `export default { port: 3001 }\n`)
-    runBuild(['--target=deno-deploy'], { NODE_ENV: 'production' })
-    const entry = readFileSync(join(projectDir, '.theokit/crons-entry.ts'), 'utf8')
-    const version = (
-      JSON.parse(readFileSync(resolve(REPO, 'packages/theo/package.json'), 'utf8')) as {
-        version: string
-      }
-    ).version
-    expect(entry).toContain('["../theo.config.ts","../theo.config.production.ts"]')
-    expect(entry).toContain(`"npm:theokit@${version}/server/jobs"`)
-  })
-
-  it('deno-deploy: every bare import reachable from the entry configs (override dependency included) resolves through the emitted import map', async () => {
-    writeConfig()
-    writeCron('foo', '* * * * *')
-    mkdirSync(join(projectDir, 'lib'), { recursive: true })
-    writeFileSync(
-      join(projectDir, 'theo.config.production.ts'),
-      `import { backend } from './lib/backend.js'\nexport default { jobs: { backend } }\n`,
-    )
-    writeFileSync(
-      join(projectDir, 'lib/backend.ts'),
-      `import pg from 'pg'\nconst noop = async () => undefined\nexport const backend = { name: 'x', pg, enqueue: noop, dequeue: noop, ack: noop, nack: noop }\n`,
-    )
-    // Node loads the config too, so `pg` has to exist there; Deno resolves it through the map.
-    mkdirSync(join(projectDir, 'node_modules/pg'), { recursive: true })
-    writeFileSync(join(projectDir, 'node_modules/pg/index.js'), 'module.exports = {}')
-    writeFileSync(
-      join(projectDir, 'node_modules/pg/package.json'),
-      '{"name":"pg","main":"index.js"}',
-    )
-    runBuild(['--target=deno-deploy'], { NODE_ENV: 'production' })
-    const entry = readFileSync(join(projectDir, '.theokit/crons-entry.ts'), 'utf8')
-    const configModules = JSON.parse(
-      /CONFIG_MODULES: string\[\] = (\[.*\]);/u.exec(entry)![1]!,
-    ) as string[]
-
-    // The map the adapter writes for this project, built in-process through its own wiring.
-    const { buildDeno } = await import('../../packages/theo/src/adapters/deno-deploy.js')
-    const { theoConfigSchema } = await import('../../packages/theo/src/config/schema.js')
-    const written = new Map<string, string>()
-    const prevEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'production'
-    try {
-      await buildDeno(
-        theoConfigSchema.parse({ serverDir: 'server', agentsDir: 'agents' }),
-        projectDir,
-        {
-          runNodeBuild: async () => {},
-          ensureDir: () => {},
-          copyClient: () => {},
-          writeEntry: (path, content) => {
-            written.set(path, content)
-          },
-        },
-      )
-    } finally {
-      process.env.NODE_ENV = prevEnv
-    }
-    const map = (
-      JSON.parse(written.get(join(projectDir, 'deno.json'))!) as { imports: Record<string, string> }
-    ).imports
-
-    // Emulated resolution: walk the entry's config modules and demand each bare specifier resolves.
-    const bare = new Set<string>()
-    const walk = (file: string, seen = new Set<string>()): void => {
-      const real = [file, file.replace(/\.js$/u, '.ts')].find((f) => existsSync(f))
-      if (!real || seen.has(real)) return
-      seen.add(real)
-      const text = readFileSync(real, 'utf8')
-      for (const m of text.matchAll(/from\s+'([^']+)'/gu)) {
-        if (m[1]!.startsWith('.')) walk(resolve(real, '..', m[1]!), seen)
-        else bare.add(m[1]!)
-      }
-    }
-    expect(configModules.some((m) => m.endsWith('theo.config.production.ts'))).toBe(true)
-    for (const m of configModules) walk(resolve(projectDir, '.theokit', m))
-    expect([...bare].sort((a, b) => a.localeCompare(b, 'en'))).toEqual(['pg'])
-    expect(map.pg).toBe('npm:pg')
   })
 
   // EC-105: existing vercel.json fields preserved

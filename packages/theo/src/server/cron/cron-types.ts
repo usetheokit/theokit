@@ -7,14 +7,18 @@ import type { QueueClient } from '../jobs/queue-client.js'
 export type CronConcurrencyPolicy = 'forbid' | 'allow'
 
 export interface CronContext {
+  /**
+   * Enqueue jobs from this cron. Jobs buffered with `enqueue` are dispatched after the handler
+   * returns and dropped if it throws; they carry this run's trace. Use `enqueueInTransaction` to
+   * tie a job to your own database transaction. Without `jobs.backend`, calls reject.
+   */
+  readonly queue: QueueClient
   /** W3C trace_id propagated from the scheduler invocation. */
   readonly traceId: string
   /** UTC instant the cron was scheduled to fire. */
   readonly scheduledAt: Date
   /** Abort signal triggered when the scheduler stops or shuts down. */
   readonly signal: AbortSignal
-  /** Present when `jobs.backend` is configured (Deno entry); jobs flush after the handler succeeds. */
-  readonly queue?: QueueClient
 }
 
 export interface CronOptions {

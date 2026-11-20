@@ -1,5 +1,7 @@
 import { homedir } from 'node:os'
 
+import type { CompiledWiring } from '@theokit/agents'
+import { CLAUDE_HOOK_EVENT_ALIASES } from '@theokit/agents/hooks'
 import type { InlineSkill } from '@theokit/sdk'
 
 import type { EffectiveConfig, TrustPosture } from '../config/index.js'
@@ -137,30 +139,72 @@ export function publishWiring(
     mcp: McpScopes
     operatorSkills: readonly InlineSkill[]
     rules: ReturnType<typeof bothRuleRoots>
-    /** B-173 — what the aggregate ceiling cut, from the build that applied it. */
     aggregateCuts?: readonly InstructionCut[]
   },
+  compiled?: CompiledWiring,
 ): void {
-  onWired?.(
-    wiringRecord(
-      from.posture,
-      from.cwd,
-      from.cfg,
-      from.mcp,
-      from.operatorSkills.map((s) => s.name),
-      withAggregateCut(from.rules.record, from.aggregateCuts ?? []),
-    ),
+  const record = wiringRecord(
+    from.posture,
+    from.cwd,
+    from.cfg,
+    from.mcp,
+    from.operatorSkills.map((s) => s.name),
+    withAggregateCut(from.rules.record, from.aggregateCuts ?? []),
   )
+  onWired?.(compiled === undefined ? record : withCompiledWiring(record, compiled))
 }
 
 /**
- * #91 — the two loads as one figure, because the operator asks one question: *is what I wrote in
- * the prompt?*
- *
- * The sums are addition over two DISJOINT loads, not an invented aggregate: each root is read once
- * and sliced against its own ceiling, so `read` and `chars` add cleanly. `truncated` is a
- * disjunction — either root losing content is the answer "no".
+ * Publishes the build-time record now and returns the listener that re-publishes it from what the
+ * framework compiled when the agent is created.
  */
+export function publishWiringAndListen(
+  onWired: ((wired: WiredCapabilities) => void) | undefined,
+  from: Parameters<typeof publishWiring>[1],
+): (compiled: CompiledWiring) => void {
+  publishWiring(onWired, from)
+  return (compiled) => publishWiring(onWired, from, compiled)
+}
+
+/**
+ * Whether a listed hook row (`<config event>  <command>`) reached the agent.
+ *
+ * A config event is the dialect's name; the framework reports its own, so this product's event table
+ * translates. An event the table maps to nothing is one this product delivers itself (`SessionStart`)
+ * and never goes to the agent, so its row is not contradicted by the agent's list.
+ */
+function reachedAgent(row: string, delivered: ReadonlySet<string>): boolean {
+  const event = row.split('  ')[0] ?? ''
+  // `SessionStart` is delivered by this product, never by the agent (see `build-handlers.ts`).
+  if (event === 'SessionStart') return true
+  const mapped = (CLAUDE_HOOK_EVENT_ALIASES as Readonly<Record<string, string | undefined>>)[event]
+  return mapped === undefined ? true : delivered.has(mapped)
+}
+
+/**
+ * The record with what the framework says the CREATED agent got, where it knows.
+ *
+ * The record is first derived from the inputs at build time, which is what the doctor needs without
+ * creating an agent. Once an agent IS created the framework reports its compiled options through
+ * `onWired`, and that is the truth: servers and skills are taken from it, and a hook row is
+ * listed only if its framework event is among the agent's hooks. Trust, rule and AGENTS.md facts stay ours.
+ */
+export function withCompiledWiring(
+  record: WiredCapabilities,
+  compiled: CompiledWiring,
+): WiredCapabilities {
+  const events = new Set(compiled.hooks.map((h) => h.event))
+  return {
+    ...record,
+    mcp: { ...record.mcp, active: [...compiled.mcpServers].sort() },
+    skills: { ...record.skills, active: [...compiled.skills.listed].sort() },
+    hooks: {
+      ...record.hooks,
+      active: record.hooks.active.filter((row) => reachedAgent(row, events)),
+    },
+  }
+}
+
 function rulesLoad(both: readonly RulesLoad[]): WiredCapabilities['rules'] {
   return {
     count: both.reduce((n, r) => n + r.count, 0),

@@ -2,7 +2,8 @@
 
 Every public symbol this package publishes, and the exact specifier to import it from.
 
-**Generated — do not edit.** `pnpm exec tsx scripts/capability-map.mts` rewrites it, and
+**Generated — do not edit.** From `packages/agents`, run `pnpm build` and then
+`pnpm exec tsx scripts/capability-map.mts` to rewrite it (add `--check` to verify only), and
 `tests/unit/capability-map-is-current.test.ts` fails when the committed copy has drifted. A
 hand-edited map is a second copy of the export list, and the copy is the one that goes stale.
 
@@ -10,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1387 export(s) across 26 entry point(s).
+1448 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -25,6 +26,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `Agent` | value |
 | `AGENT_BRAND` | value |
 | `AgentBuilder` | value |
+| `agentCardPath` | value |
 | `AgentConfigCapability` | value |
 | `AgentDefinitionError` | value |
 | `AgentDisposedError` | value |
@@ -99,6 +101,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
 | `describeTurnFailure` | value |
+| `detectWorkspaceRecipe` | value |
 | `discoverSubagents` | value |
 | `encodeAcpMessage` | value |
 | `ERROR_CODE_DATA_PART` | value |
@@ -129,12 +132,17 @@ Measured against `@theokit/sdk@5.17.0`.
 | `InvalidTaskIdError` | value |
 | `isAgentContext` | value |
 | `isAgentDefinition` | value |
+| `isAgentStreamEvent` | value |
 | `isApprovalRequired` | value |
+| `isDeltaTimelineEvent` | value |
 | `isDone` | value |
 | `isError` | value |
 | `isForbiddenPath` | value |
+| `isInputRequested` | value |
+| `isMessageTimelineEvent` | value |
 | `isPartialToolCall` | value |
 | `isTextDelta` | value |
+| `isThinking` | value |
 | `isToolCall` | value |
 | `isToolResult` | value |
 | `isTransientError` | value |
@@ -173,6 +181,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `Plugin` | value |
 | `PluginsCapability` | value |
 | `PreCompactionHandlerError` | value |
+| `prepareWorkspace` | value |
 | `presentUIMessageStream` | value |
 | `ProjectContextCapability` | value |
 | `projectContextMetadataOnlyKnobs` | value |
@@ -229,6 +238,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `textPayloadExtractor` | value |
 | `TheokitAgentError` | value |
 | `toAgentFactory` | value |
+| `toAgentStreamEvent` | value |
 | `tokenBudgetCompactionStrategy` | value |
 | `toModelOption` | value |
 | `Tool` | value |
@@ -258,6 +268,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `WithheldBuiltinToolsCapability` | value |
 | `withPreCompaction` | value |
 | `WorkspaceProviderError` | value |
+| `WorkspaceRecipeError` | value |
 | `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `A2ACapabilities` | type |
@@ -407,6 +418,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PartialToolCallEvent` | type |
 | `PermissionsPluginOptions` | type |
 | `PiiOptions` | type |
+| `PlainAgentCardInput` | type |
 | `PluginsSettings` | type |
 | `PolicyHandler` | type |
 | `PreCompactionHandler` | type |
@@ -417,6 +429,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProvenanceEntry` | type |
 | `ProviderRoutingSettings` | type |
 | `ReasoningEffort` | type |
+| `RecipeExec` | type |
 | `ReflectionContext` | type |
 | `ReflectionResult` | type |
 | `ReflectionStrategy` | type |
@@ -437,9 +450,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SDKAgent` | type |
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
+| `SdkRun` | type |
+| `SdkRunAgent` | type |
 | `SdkSendOptions` | type |
+| `SdkStreamMessage` | type |
 | `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
+| `SdkTurnOutcome` | type |
 | `Segment` | type |
 | `SessionRecord` | type |
 | `SessionStore` | type |
@@ -491,6 +508,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `WireDataPart` | type |
 | `WiredEntity` | type |
 | `WorkspaceProvider` | type |
+| `WorkspaceRecipe` | type |
 
 ## `@theokit/agents/bridge`
 
@@ -532,6 +550,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationError` | value |
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
+| `detectWorkspaceRecipe` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
@@ -542,11 +561,16 @@ Measured against `@theokit/sdk@5.17.0`.
 | `generateAgentRoutes` | value |
 | `isAgentContext` | value |
 | `isAgentDefinition` | value |
+| `isAgentStreamEvent` | value |
 | `isApprovalRequired` | value |
+| `isDeltaTimelineEvent` | value |
 | `isDone` | value |
 | `isError` | value |
+| `isInputRequested` | value |
+| `isMessageTimelineEvent` | value |
 | `isPartialToolCall` | value |
 | `isTextDelta` | value |
+| `isThinking` | value |
 | `isToolCall` | value |
 | `isToolResult` | value |
 | `loadMcpJson` | value |
@@ -559,6 +583,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `mcpSecretValues` | value |
 | `mcpToolApprovals` | value |
 | `NoResultSubmittedError` | value |
+| `prepareWorkspace` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
 | `readCappedBody` | value |
@@ -576,6 +601,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SURFACE_FOLDERS` | value |
 | `surfaceOfFolder` | value |
 | `toAgentFactory` | value |
+| `toAgentStreamEvent` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
@@ -584,6 +610,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
 | `WorkspaceProviderError` | value |
+| `WorkspaceRecipeError` | value |
 | `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `AfterToolCallContext` | type |
@@ -656,6 +683,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PermissionsPluginOptions` | type |
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
+| `RecipeExec` | type |
 | `ResolvedCompatSource` | type |
 | `ResultCapture` | type |
 | `RunAgentTurnOptions` | type |
@@ -665,9 +693,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ScoreVerdict` | type |
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
+| `SdkRun` | type |
+| `SdkRunAgent` | type |
 | `SdkSendOptions` | type |
+| `SdkStreamMessage` | type |
 | `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
+| `SdkTurnOutcome` | type |
 | `Segment` | type |
 | `SettingSourceCapability` | type |
 | `SettingSourcesSelection` | type |
@@ -689,17 +721,27 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
 | `WorkspaceProvider` | type |
+| `WorkspaceRecipe` | type |
 
 ## `@theokit/agents/control`
 
 | Symbol | Kind |
 |---|---|
 | `attachControlSocket` | value |
+| `ControlConnectionError` | value |
+| `createControlClient` | value |
+| `createDevicePairing` | value |
 | `createSessionStore` | value |
+| `pairRoute` | value |
 | `AgentTurnUsage` | type |
+| `ControlClient` | type |
 | `ControlClientFrame` | type |
 | `ControlServerFrame` | type |
 | `ControlSocketOptions` | type |
+| `DevicePairing` | type |
+| `DevicePairingOptions` | type |
+| `PairingApproval` | type |
+| `PairingRequestResult` | type |
 | `SessionOutcome` | type |
 | `SessionStore` | type |
 | `SessionStoreOptions` | type |
@@ -1272,7 +1314,11 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `claimCollectorRoot` | value |
 | `classifyProjects` | value |
+| `CollectorRootError` | value |
+| `CollectorRootNotOwnedError` | value |
+| `collectorRootOwner` | value |
 | `deleteSession` | value |
 | `forkBeforeUserTurn` | value |
 | `ForkedSessionBusyError` | value |
@@ -1292,11 +1338,14 @@ Measured against `@theokit/sdk@5.17.0`.
 | `readThreadHistory` | value |
 | `recordProjectDir` | value |
 | `resolveProjectDir` | value |
+| `runProjectsGC` | value |
 | `runTranscriptGC` | value |
+| `scheduleSessionSweep` | value |
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
 | `streamTurnForkingIfBusy` | value |
+| `sweepDecision` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
 | `ClassifyProjectsOptions` | type |
@@ -1317,8 +1366,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProjectsGCRegistryEntry` | type |
 | `ReadThreadHistoryOptions` | type |
 | `RegistryOutcome` | type |
+| `RunProjectsGCOptions` | type |
+| `RunProjectsGCResult` | type |
 | `RunTranscriptGCResult` | type |
+| `ScheduleSessionSweepOptions` | type |
 | `SessionSummary` | type |
+| `SweepDecision` | type |
+| `SweepScheduleResult` | type |
 | `ThreadHistory` | type |
 | `ThreadHistoryState` | type |
 | `TranscriptGCOptions` | type |
@@ -1401,11 +1455,19 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `A2ATimeoutError` | value |
+| `agentCardPath` | value |
+| `buildAgentCard` | value |
 | `createA2AJsonRpcHandler` | value |
 | `createA2ATool` | value |
+| `wellKnownCardPath` | value |
 | `A2AAuth` | type |
+| `A2ACapabilities` | type |
 | `A2AJsonRpcHandlerOptions` | type |
+| `A2ASkill` | type |
 | `A2AToolConfig` | type |
+| `AgentCard` | type |
+| `BuildAgentCardOptions` | type |
+| `PlainAgentCardInput` | type |
 
 ## `@theokit/agents/evals`
 

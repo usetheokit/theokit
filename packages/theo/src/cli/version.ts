@@ -14,14 +14,6 @@ import { createRequire } from 'node:module'
  */
 export function cliVersion(): string {
   const require = createRequire(import.meta.url)
-  // Code-split chunks sit at varying depths under dist/, so walk up to the package manifest.
-  for (const rel of ['../../package.json', '../package.json', '../../../package.json']) {
-    try {
-      const pkg = require(rel) as { name?: string; version?: string }
-      if (pkg.name === 'theokit' && pkg.version) return pkg.version
-    } catch {
-      // try the next candidate
-    }
-  }
-  throw new Error('theokit: cannot locate package.json to read the CLI version')
+  const pkg = require('../../package.json') as { version: string }
+  return pkg.version
 }

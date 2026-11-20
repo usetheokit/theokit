@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readdirSync } from 'node:fs'
+import { relative, resolve, sep } from 'node:path'
 
 // T1.1 (architecture-medium-deferrals) — nodeAdapter no longer static-imported.
 // All adapters dispatch via `adapterRegistry` (lazy-imported within runAdapterBuild).
@@ -38,7 +38,6 @@ import { emitOpenApi } from '../../vite-plugin/openapi-emit/emit.js'
 import { loadRoutesForOpenApi } from '../../vite-plugin/openapi-emit/load-routes.js'
 import { cleanBuildOutput } from '../cleanup/cleanup.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
-import { cliVersion } from '../version.js'
 
 import { describeServicesManifest } from './build/describe-services-manifest.js'
 import { describeControllerArtifacts, emitControllerArtifacts } from './build/emit-controllers.js'
@@ -264,15 +263,6 @@ async function runAdapterBuild(
   await adapter.build(config, cwd, ctx)
 }
 
-/** The base config and, when `NODE_ENV` selects one, its override — the files `loadConfig` merges. */
-export function denoCronConfigPaths(cwd: string): string[] {
-  // `loadConfig` returns the defaults when the base file is missing, never reading an override.
-  if (!existsSync(resolve(cwd, 'theo.config.ts'))) return []
-  const names = ['theo.config.ts']
-  if (process.env.NODE_ENV) names.push(`theo.config.${process.env.NODE_ENV}.ts`)
-  return names.map((n) => resolve(cwd, n)).filter((p) => existsSync(p))
-}
-
 async function emitCronArtifacts(opts: {
   cwd: string
   serverDir: string
@@ -324,9 +314,8 @@ async function emitCronArtifacts(opts: {
         break
       case 'deno-deploy':
         translateCronToDeno(resolve(opts.distDir, 'crons-entry.ts'), manifestEntries, {
-          projectRoot: opts.cwd,
-          configPaths: denoCronConfigPaths(opts.cwd),
-          theokitVersion: cliVersion(),
+          configImport: denoConfigImport(opts.cwd, opts.distDir),
+          envConfigImports: denoEnvConfigImports(opts.cwd, opts.distDir),
         })
         console.log(`  ✓ Cron → ${opts.distDir}/crons-entry.ts (Deno.cron)`)
         break
@@ -338,6 +327,28 @@ async function emitCronArtifacts(opts: {
     if (err instanceof ExistingConfigUnparseableError) throw err
     throw err
   }
+}
+
+/** Import specifier of theo.config.ts as seen from the Deno cron entry, or undefined without one. */
+function denoConfigImport(cwd: string, distDir: string): string | undefined {
+  return denoImportOf(resolve(cwd, 'theo.config.ts'), distDir)
+}
+
+/** `theo.config.<env>.ts` overrides next to theo.config.ts, keyed by env, for the Deno cron entry. */
+function denoEnvConfigImports(cwd: string, distDir: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const file of readdirSync(cwd)) {
+    const m = /^theo\.config\.([^.]+)\.ts$/.exec(file)
+    const imp = m?.[1] === undefined ? undefined : denoImportOf(resolve(cwd, file), distDir)
+    if (m?.[1] !== undefined && imp !== undefined) out[m[1]] = imp
+  }
+  return out
+}
+
+function denoImportOf(config: string, distDir: string): string | undefined {
+  if (!existsSync(config)) return undefined
+  const rel = relative(resolve(distDir), config).split(sep).join('/')
+  return rel.startsWith('.') ? rel : `./${rel}`
 }
 
 async function emitJobArtifacts(opts: {

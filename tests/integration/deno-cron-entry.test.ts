@@ -5,8 +5,6 @@ import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 import { join, resolve } from 'node:path'
 
-import { translateCronToDeno } from '../../packages/theo/src/server/cron/adapter-translators.js'
-
 const execFileAsync = promisify(execFile)
 const RUNNER = `
 import { registerHooks } from 'node:module'
@@ -15,7 +13,7 @@ import { resolve } from 'node:path'
 const [root, mapJson, jobs, entry, distJobs] = process.argv.slice(2)
 const map = JSON.parse(mapJson)
 const cbs = new Map()
-globalThis.Deno = { cron: (n, _s, cb) => cbs.set(n, cb) }
+globalThis.Deno = { cron: (n, _s, cb) => cbs.set(n, cb), env: { get: (k) => process.env[k] } }
 const mapped = (spec) => {
   if (map[spec] !== undefined) return map[spec]
   const prefix = Object.keys(map).filter((k) => k.endsWith('/') && spec.startsWith(k)).sort((a, b) => b.length - a.length)[0]
@@ -49,7 +47,6 @@ console.log(JSON.stringify({ error, calls: globalThis.__calls ?? [], trace: glob
 const CLI = resolve(__dirname, '../../packages/theo/src/cli/index.ts')
 const TSX = resolve(__dirname, '../../node_modules/.bin/tsx')
 const JOBS = resolve(__dirname, '../../packages/theo/src/server/jobs/index.ts')
-const DIST_JOBS = resolve(__dirname, '../../packages/theo/dist/server/jobs/index.js')
 
 let root: string
 type Callback = () => Promise<void>
@@ -172,14 +169,10 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
   const runner = join(mkdtempSync(join(tmpdir(), 'deno-cron-runner-')), 'run.mjs')
   writeFileSync(runner, RUNNER)
   callbacks.set('job', async () => {
-    const out = await execFileAsync(
-      TSX,
-      [runner, root, JSON.stringify(map), JOBS, entry, existsSync(DIST_JOBS) ? DIST_JOBS : ''],
-      {
-        cwd: root,
-        env: { ...process.env },
-      },
-    )
+    const out = await execFileAsync(TSX, [runner, root, JSON.stringify(map), JOBS, entry, ''], {
+      cwd: root,
+      env: { ...process.env },
+    })
     const res = JSON.parse(out.stdout.trim().split('\n').pop() ?? '{}') as {
       error?: string
       calls: never[]
@@ -203,7 +196,7 @@ describe('generated entry loaded through the build wiring', () => {
     write(`node_modules/${name}/index.js`, `export const Pool = class { name = 'pg' }\n`)
   }
 
-  it('resolves a deno.json alias and the override dependency, merging a partial backend override', async () => {
+  it('resolves a deno.json alias and the override dependency, the override backend winning', async () => {
     write('deno.json', JSON.stringify({ imports: { '@app/backend': './lib/backend.ts' } }))
     stubPackage('pg')
     // Node (which loads the config during the CLI build) has no import map: give it the alias too.
@@ -220,17 +213,14 @@ describe('generated entry loaded through the build wiring', () => {
       'theo.config.ts',
       `import { backend } from '@app/backend'\nexport default { jobs: { backend } }\n`,
     )
-    // The override supplies only `enqueue`; `enqueueInTransaction` and `name` come from the base.
     write(
       'theo.config.production.ts',
       `const { Pool } = await import('pg')\nexport default { jobs: { backend: { async enqueue(input) { (globalThis.__calls ??= []).push({ backend: new Pool().name, input }); return { jobId: 'p' } } } } }\n`,
     )
     vi.stubEnv('NODE_ENV', 'production')
-    await loadBuiltEntry(
-      `ctx.queue.enqueue('a', {}); await ctx.queue.enqueueInTransaction({ tx: 1 }, 't', {})`,
-    )
+    await loadBuiltEntry(`ctx.queue.enqueue('a', {})`)
     await callbacks.get('job')!()
-    expect(calls().map((c) => c.backend)).toEqual(['aliased-tx', 'pg'])
+    expect(calls().map((c) => c.backend)).toEqual(['pg'])
   })
 })
 
@@ -274,7 +264,7 @@ describe('bareSpecifiersOf', () => {
 })
 
 describe('environment override without a base config', () => {
-  it('is not read: loadConfig returns the defaults, so neither the entry nor the map use it', async () => {
+  it('is not read: loadConfig returns the defaults, so the map does not use it', async () => {
     rmSync(join(root, 'theo.config.ts'))
     write('theo.config.test.ts', `import 'only-in-override'\nexport default {}\n`)
     vi.stubEnv('NODE_ENV', 'test')
@@ -283,8 +273,6 @@ describe('environment override without a base config', () => {
     expect(
       readProjectSourcesFromDisk(root, { serverDir: 'server', agentsDir: 'agents' } as never),
     ).toEqual([])
-    const { denoCronConfigPaths } = await import('../../packages/theo/src/cli/commands/build.js')
-    expect(denoCronConfigPaths(root)).toEqual([])
   })
 })
 
@@ -304,12 +292,6 @@ describe('renderDenoConfig', () => {
 })
 
 describe('generated Deno cron entry', () => {
-  it('pins the jobs import to the given theokit version', () => {
-    const entry = join(root, '.theokit', 'crons-entry.ts')
-    translateCronToDeno(entry, [], { theokitVersion: '1.2.3' })
-    expect(readFileSync(entry, 'utf8')).toContain('"npm:theokit@1.2.3/server/jobs"')
-  })
-
   it('enqueues buffered jobs on the configured backend after the handler succeeds', async () => {
     await loadBuiltEntry(`ctx.queue.enqueue('a', { n: 1 }); ctx.queue.enqueue('b', {})`)
     await callbacks.get('job')!()
@@ -351,10 +333,9 @@ describe('generated Deno cron entry', () => {
     expect(calls()[0]?.client).toEqual({ tx: 1 })
   })
 
-  it('runs without ctx.queue when no backend is configured', async () => {
+  it('fails ctx.queue use when no backend is configured', async () => {
     write('theo.config.ts', `export default {}\n`)
-    await loadBuiltEntry(`globalThis.__q = ctx.queue`)
-    await callbacks.get('job')!()
-    expect((globalThis as { __q?: unknown }).__q).toBeUndefined()
+    await loadBuiltEntry(`ctx.queue.enqueue('a', {})`)
+    await expect(callbacks.get('job')!()).rejects.toThrow('ctx.queue is unavailable')
   })
 })

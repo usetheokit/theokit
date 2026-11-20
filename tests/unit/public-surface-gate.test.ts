@@ -29,8 +29,13 @@ interface Baseline {
 interface Gate {
   DEPRECATION_WINDOW_DAYS: number
   extractSurface: (dir: string) => Baseline
-  comparePolicy: (prev: Baseline, next: Baseline, o: { major: boolean; now: number }) => string[]
-  declaresMajor: (texts: string[], pkg: string) => boolean
+  comparePolicy: (
+    prev: Baseline,
+    next: Baseline,
+    o: { major: boolean; now: number; level?: string },
+  ) => string[]
+  declaresMajor: (texts: string[], pkg: string, level?: 'major' | 'minor') => boolean
+  breakingLevel: (version: string) => 'major' | 'minor'
 }
 
 const path: string = resolve(import.meta.dirname, '..', '..', 'scripts', 'check-public-surface.mjs')
@@ -288,6 +293,30 @@ describe('public surface gate', () => {
     ])
   })
 
+  it('treats minor as the breaking bump for a 0.x package only', () => {
+    expect(gate.breakingLevel('0.83.0')).toBe('minor')
+    expect(gate.breakingLevel('1.2.0')).toBe('major')
+    const minor = ["---\n'theokit': minor\n---\n"]
+    expect(gate.declaresMajor(minor, 'theokit', 'minor')).toBe(true)
+    expect(gate.declaresMajor(minor, 'theokit', 'major')).toBe(false)
+    expect(gate.declaresMajor(["---\n'theokit': patch\n---\n"], 'theokit', 'minor')).toBe(false)
+    const prev = surface(BASE)
+    const next = surface('export interface Opts { a: string }\n')
+    expect(gate.comparePolicy(prev, next, { major: false, now: NOW, level: 'minor' })[0]).toContain(
+      '"@x/pkg": minor',
+    )
+  })
+
+  it('refuses a removal inside the window for a 0.x package even with a minor changeset', () => {
+    const dep = surface(
+      '/** @deprecated since 2026-11-10 use g */\nexport declare function f(): void\n',
+    )
+    const gone = surface('export declare function g(): void\n')
+    const out = gate.comparePolicy(dep, gone, { major: true, now: NOW, level: 'minor' })
+    expect(out).toHaveLength(1)
+    expect(out[0]).toContain('window is')
+  })
+
   it('reads a major declaration from changeset frontmatter', () => {
     expect(gate.declaresMajor(["---\n'@x/pkg': major\n---\n\nx"], '@x/pkg')).toBe(true)
     expect(gate.declaresMajor(["---\n'@x/pkg': minor\n---\n"], '@x/pkg')).toBe(false)
@@ -299,7 +328,7 @@ describe('public surface gate CLI', () => {
   const REPO = resolve(import.meta.dirname, '..', '..')
   const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')))
 
-  function repo(): string {
+  function repo(version?: string): string {
     const root = mkdtempSync(join(tmpdir(), 'surface-cli-'))
     dirs.push(root)
     mkdirSync(join(root, 'scripts'))
@@ -309,7 +338,7 @@ describe('public surface gate CLI', () => {
     symlinkSync(join(REPO, 'node_modules'), join(root, 'node_modules'))
     writeFileSync(
       join(root, 'packages', 'pkg', 'package.json'),
-      JSON.stringify({ name: '@x/pkg', exports: { '.': { types: './dist/index.d.ts' } } }),
+      JSON.stringify({ name: '@x/pkg', version, exports: { '.': { types: './dist/index.d.ts' } } }),
     )
     git(root, 'init', '-q', '-b', 'main')
     return root
@@ -338,8 +367,8 @@ describe('public surface gate CLI', () => {
     git(root, 'commit', '-q', '-m', msg)
   }
   /** main holds a baseline with `f` and `g`; a branch removes `g` and may add a changeset. */
-  function removal(changeset?: string, changesetOnMain = false): string {
-    const root = repo()
+  function removal(changeset?: string, changesetOnMain = false, version?: string): string {
+    const root = repo(version)
     setDts(root, 'export declare function f(): void\nexport declare function g(): void\n')
     expect(gate(root, 'pkg', '--write').status).toBe(0)
     if (changesetOnMain && changeset) writeFileSync(join(root, '.changeset', 'old.md'), changeset)
@@ -385,6 +414,21 @@ describe('public surface gate CLI', () => {
 
   it('ignores a major changeset that was already on the base', () => {
     expect(gate(removal(MAJOR, true), 'pkg', '--base', 'main').status).toBe(1)
+  })
+
+  it('for a 0.x package a minor changeset passes a removal and a patch one fails', () => {
+    const MINOR = "---\n'@x/pkg': minor\n---\n\nx\n"
+    const PATCH = "---\n'@x/pkg': patch\n---\n\nx\n"
+    expect(gate(removal(MINOR, false, '0.5.0'), 'pkg', '--base', 'main').status).toBe(0)
+    const none = gate(removal(undefined, false, '0.5.0'), 'pkg', '--base', 'main')
+    expect(none.status).toBe(1)
+    expect(none.stderr).toContain('"@x/pkg": minor')
+    expect(gate(removal(PATCH, false, '0.5.0'), 'pkg', '--base', 'main').status).toBe(1)
+  })
+
+  it('for a 1.x package a minor changeset does not cover a removal', () => {
+    const MINOR = "---\n'@x/pkg': minor\n---\n\nx\n"
+    expect(gate(removal(MINOR, false, '1.5.0'), 'pkg', '--base', 'main').status).toBe(1)
   })
 
   it('exits 2 for an unknown package and for an unreadable base', () => {

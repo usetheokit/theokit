@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import type { TheoConfig } from '../../../config/schema.js'
 import { cronLockFromConfig } from '../../../server/cron/cron-lock-from-config.js'
 import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
+import { jobBackendFromConfig } from '../../../server/jobs/job-backend-from-config.js'
 
 import { loadCronDefinitions } from './cron-bootstrap.js'
 import { loadJobDefinitions, prepareJobBackend, startJobWorker } from './job-bootstrap.js'
@@ -40,7 +41,10 @@ export async function startBackgroundWork(
   if (cronDefinitions.length > 0) {
     // #1016 — each replica runs this scheduler; the lock decides which one runs a tick.
     const { lock, description } = cronLockFromConfig(config)
-    scheduler = createCronScheduler(cronDefinitions, { lock })
+    scheduler = createCronScheduler(cronDefinitions, {
+      lock,
+      backend: jobBackendFromConfig(config),
+    })
     scheduler.start()
     summaries.push(`Crons: ${String(cronDefinitions.length)} scheduled in-process, ${description}`)
   }

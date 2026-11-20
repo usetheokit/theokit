@@ -32,7 +32,10 @@
  * Dropping unbuilt entries would write a map missing a whole subpath, and `--check` would then agree
  * with it. A gate that passes because the input was incomplete is worse than one that fails.
  *
- * Usage: pnpm exec tsx scripts/capability-map.mts [--check]
+ * Usage, from `packages/agents` (build first — an unbuilt entry aborts):
+ *   pnpm build
+ *   pnpm exec tsx scripts/capability-map.mts            # rewrite the map
+ *   pnpm exec tsx scripts/capability-map.mts --check    # fail on drift, byte for byte
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -151,7 +154,8 @@ export function renderCapabilityMap(entries: Entry[], symbols: Map<string, Symbo
     '',
     'Every public symbol this package publishes, and the exact specifier to import it from.',
     '',
-    '**Generated — do not edit.** `pnpm exec tsx scripts/capability-map.mts` rewrites it, and',
+    '**Generated — do not edit.** From `packages/agents`, run `pnpm build` and then',
+    '`pnpm exec tsx scripts/capability-map.mts` to rewrite it (add `--check` to verify only), and',
     '`tests/unit/capability-map-is-current.test.ts` fails when the committed copy has drifted. A',
     'hand-edited map is a second copy of the export list, and the copy is the one that goes stale.',
     '',
@@ -203,7 +207,9 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes('--check')) {
     const committed = existsSync(OUT) ? readFileSync(OUT, 'utf8') : ''
     if (committed !== rendered) {
-      console.error('✗ docs/capability-map.md has drifted. Re-run without --check.')
+      console.error(
+        '✗ docs/capability-map.md has drifted. From packages/agents run `pnpm build`, then `pnpm exec tsx scripts/capability-map.mts` (without --check).',
+      )
       process.exit(1)
     }
     console.log('✓ docs/capability-map.md is current.')

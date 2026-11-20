@@ -73,3 +73,30 @@ describe('a config override cannot reach Object.prototype', () => {
     expect(cliOverridesLayer(['a.b=1'])).toEqual({ a: { b: '1' } })
   })
 })
+
+describe('a -c override that clashes with another keeps this product’s wording', () => {
+  it('names a key already set as a value on the same command line', () => {
+    expect(() => cliOverridesLayer(['a=1', 'a.b=2'])).toThrow(ConfigError)
+    expect(() => cliOverridesLayer(['a=1', 'a.b=2'])).toThrow(
+      '-c a.b=2: `a` was already set as a value on this same command line',
+    )
+  })
+
+  it('names a branch overwritten by a value on the same command line', () => {
+    expect(() => cliOverridesLayer(['a.b=1', 'a=2'])).toThrow(ConfigError)
+    expect(() => cliOverridesLayer(['a.b=1', 'a=2'])).toThrow(
+      '-c a=2: `a` was already built as a branch on this same command line',
+    )
+  })
+
+  it('refuses a whitespace-only segment as an empty segment', () => {
+    expect(() => cliOverridesLayer(['a. .b=1'])).toThrow(ConfigError)
+    expect(() => cliOverridesLayer(['a. .b=1'])).toThrow(
+      '-c a. .b=1: config key path has an empty segment',
+    )
+  })
+
+  it('refuses a pair with no equals sign', () => {
+    expect(() => cliOverridesLayer(['model'])).toThrow(/expected `key=value`/)
+  })
+})
