@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryStore } from '../src/memory/memory-store.js'
 import { sessionSearchTool } from '../src/memory/memory-tools.js'
 import { recordTurn } from '../src/memory/wiring.js'
-import { say, seen } from './memory-sdk-support.js'
+import { FACT, say, seen } from './memory-sdk-support.js'
 
 interface Callable {
   name: string
@@ -43,16 +43,19 @@ describe('memory across surfaces (OC-56, Hermes row 3)', () => {
   })
 })
 
-describe('the SDK reviewer (#1834)', () => {
-  it('has a reviewer save a fact the next session recalls; a fresh store recalls nothing', { timeout: 60_000 }, async () => {
+describe('memory across surfaces, the reviewer (#1834)', () => {
+  it('has a reviewer save a fact the next session recalls, and a failing reviewer does not reject', { timeout: 60_000 }, async () => {
     const state = dir()
-    const saving = await say(state, 'tui', 'owner', true)
+    // The reviewer saves the same fact twice in one review: it is kept once.
+    const twice = { toolCalls: [{ name: 'save_memory', args: { fact: FACT } }, { name: 'save_memory', args: { fact: FACT } }] }
+    const saving = await say(state, 'tui', 'owner', true, {}, { replies: [{ text: 'noted' }, twice, { text: 'done' }], message: 'I work in Lisbon' })
+    // The reviewer was told the turn it reviews.
+    expect(JSON.stringify(saving.requests[1])).toContain('I work in Lisbon')
     // The second turn's review fails inside the SDK (the reviewer id is taken); the turn still ends.
     const next = await say(state, 'tui', 'owner', false)
     const fresh = await say(dir(), 'tui', 'owner', false)
     try {
-      expect(saving.requests.length).toBeGreaterThanOrEqual(3)
-      expect(seen(next)).toContain('Quillon-7731')
+      expect(JSON.stringify(next.requests[0]).split('Quillon-7731')).toHaveLength(2)
       expect(seen(fresh)).not.toContain('Quillon-7731')
     } finally {
       await Promise.all([saving.close(), next.close(), fresh.close()])
@@ -61,6 +64,23 @@ describe('the SDK reviewer (#1834)', () => {
 })
 
 describe('a failed turn append (#1462)', () => {
+  it('reaches onError and the next turn is still recorded and reviewed', { timeout: 60_000 }, async () => {
+    const state = dir()
+    // The turn log's file is a directory, so every append fails.
+    mkdirSync(join(state, 'memory', 'turns.jsonl'), { recursive: true })
+    const lines: string[] = []
+    const saving = await say(state, 'webchat', 'guest', true, {}, { lines })
+    const next = await say(state, 'webchat', 'guest', false, {}, { lines })
+    try {
+      expect(lines.filter((line) => line.includes('memory turn record failed'))).toHaveLength(2)
+      // Reviewed despite the failed append, and recalled by the next turn.
+      expect(saving.requests.length).toBeGreaterThanOrEqual(3)
+      expect(seen(next)).toContain('Quillon-7731')
+    } finally {
+      await Promise.all([saving.close(), next.close()])
+    }
+  })
+
   it('is reported and never throws, and the next turn is still recorded', () => {
     const appended: unknown[] = []
     let calls = 0

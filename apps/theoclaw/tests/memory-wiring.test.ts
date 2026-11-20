@@ -96,6 +96,18 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
     await sessions.disposeAll()
   })
 
+  it('opens a fresh session, on any surface, with the fact earlier sessions kept in its prompt', { timeout: 60_000 }, async () => {
+    const state = stateOf()
+    const owners = { THEOCLAW_OWNERS: 'telegram:u,line:u' }
+    const saving = await say(state, 'telegram', 'u', true, owners)
+    const next = await say(state, 'line', 'u', false, owners)
+    try {
+      expect(JSON.stringify(next.requests[0])).toContain('Quillon-7731')
+    } finally {
+      await Promise.all([saving.close(), next.close()])
+    }
+  })
+
   it('recalls a fact only to the sender who said it; an owner shares one scope across platforms (#1508)', async () => {
     const memories = new Map<string, string>()
     const { sessions, withAgent } = chatSessions({
@@ -188,6 +200,23 @@ describe('persona in the chat session prompt (#1511)', () => {
 })
 
 describe('memory block with the persona files in a new session prompt (#1731)', () => {
+  it('carries the saved fact, the standing order and SOUL.md together', { timeout: 60_000 }, async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-all-'))
+    writeFileSync(join(workspace, 'SOUL.md'), 'Always answer in pirate speak.')
+    writeFileSync(join(workspace, 'STANDING-ORDERS.md'), 'Never discuss the weather.')
+    const state = stateOf()
+    const env = { THEOCLAW_WORKSPACE: workspace, THEOCLAW_OWNERS: 'telegram:v,line:v' }
+    const saving = await say(state, 'telegram', 'v', true, env)
+    const next = await say(state, 'line', 'v', false, env)
+    try {
+      const prompt = JSON.stringify(next.requests[0])
+      for (const part of ['Quillon-7731', 'pirate speak', 'Never discuss the weather.']) expect(prompt).toContain(part)
+    } finally {
+      await Promise.all([saving.close(), next.close()])
+    }
+  })
+
+
   it('opens the owner SDK memory with the standing order and SOUL.md in the prompt', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-all-'))
     writeFileSync(join(workspace, 'SOUL.md'), 'Always answer in pirate speak.')
