@@ -65,7 +65,7 @@ describe('agentRunPort', () => {
     const b = boundary(async () => ({
       stream: async function* () {
         order.push('stream')
-        yield 1
+        yield { type: 'assistant' }
       },
       wait: async () => {
         order.push('wait')
