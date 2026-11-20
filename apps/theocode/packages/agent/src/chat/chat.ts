@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { AgentBuilder, ConfigurationError, loadMcpJson } from '@theokit/agents'
 
 import { mcpScopes } from '../mcp-scopes.js'
-import { bothRuleRoots, publishWiring } from '../composition/composition-record.js'
+import { bothRuleRoots, publishWiringAndListen } from '../composition/composition-record.js'
 import type { WiredCapabilities } from '../wired-capabilities.js'
 import { memoryEnabledForSession } from '../memory/memory-switch.js'
 import { sandboxModeForSession } from '../sandbox-switch.js'
@@ -185,7 +185,7 @@ export async function buildChatAgent(overrides: {
     searchConfigured,
   })
 
-  publishWiring(overrides?.onWired, { posture, cwd, cfg, mcp, operatorSkills: disk.operatorSkills, rules, aggregateCuts })
+  const onCompiled = publishWiringAndListen(overrides?.onWired, { posture, cwd, cfg, mcp, operatorSkills: disk.operatorSkills, rules, aggregateCuts })
 
   // M70 — the two registrations that depend on the surface PROFILE, applied here because the builder
   // is a fluent chain with no `.tools([...])`: there is no way to skip a link in the middle of it.
@@ -215,7 +215,7 @@ export async function buildChatAgent(overrides: {
     ...(await skillReadTool(overrides.cwd, operatorHome, posture.allows.skills)),
     ...(overrides?.extraTools ?? []),
   ]
-  return chain.tools(allTools).build()
+  return chain.tools(allTools).onWired(onCompiled).build()
 }
 
 /**

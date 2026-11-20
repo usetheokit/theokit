@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Changed
+- **MCP scopes, doctor rows, foreign-surface counts, the diagnostics variable and the wiring record now come from the framework (#1927).** `mcp-scopes.ts` is a thin adapter over `loadMcpScopes` (personal servers still win a name clash, a malformed project file still warns and leaves your own servers loaded); the `credential` and capability doctor rows take their status from `checks.credential` / `checks.capability` with TheoCode's wording; `foreignSurfacesOnDisk` reads `foreignSurfaceInventory`; `THEOCODE_DIAGNOSTICS` is passed as the sink's `envVar`. When the agent is created, the wiring record is re-published from what the framework compiled (`onWired`), so `/status`, `/mcp`, `/skills` and `/hooks` list the servers, skills and hooks the agent actually got.
+
 ### Removed
 - **The unused `writeCredential` wrapper and `StoredOAuthCredential` type in `auth/credentials.ts`.** Sign-in already writes through the framework's `loginWithApiKey`; nothing called the wrapper, and `knip` flagged both.
 

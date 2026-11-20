@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 
+import type { CompiledWiring } from '@theokit/agents'
 import type { InlineSkill } from '@theokit/sdk'
 
 import type { EffectiveConfig, TrustPosture } from '../config/index.js'
@@ -137,30 +138,59 @@ export function publishWiring(
     mcp: McpScopes
     operatorSkills: readonly InlineSkill[]
     rules: ReturnType<typeof bothRuleRoots>
-    /** B-173 — what the aggregate ceiling cut, from the build that applied it. */
     aggregateCuts?: readonly InstructionCut[]
   },
+  compiled?: CompiledWiring,
 ): void {
-  onWired?.(
-    wiringRecord(
-      from.posture,
-      from.cwd,
-      from.cfg,
-      from.mcp,
-      from.operatorSkills.map((s) => s.name),
-      withAggregateCut(from.rules.record, from.aggregateCuts ?? []),
-    ),
+  const record = wiringRecord(
+    from.posture,
+    from.cwd,
+    from.cfg,
+    from.mcp,
+    from.operatorSkills.map((s) => s.name),
+    withAggregateCut(from.rules.record, from.aggregateCuts ?? []),
   )
+  onWired?.(compiled === undefined ? record : withCompiledWiring(record, compiled))
 }
 
 /**
- * #91 — the two loads as one figure, because the operator asks one question: *is what I wrote in
- * the prompt?*
- *
- * The sums are addition over two DISJOINT loads, not an invented aggregate: each root is read once
- * and sliced against its own ceiling, so `read` and `chars` add cleanly. `truncated` is a
- * disjunction — either root losing content is the answer "no".
+ * Publishes the build-time record now and returns the listener that re-publishes it from what the
+ * framework compiled when the agent is created.
  */
+export function publishWiringAndListen(
+  onWired: ((wired: WiredCapabilities) => void) | undefined,
+  from: Parameters<typeof publishWiring>[1],
+): (compiled: CompiledWiring) => void {
+  publishWiring(onWired, from)
+  return (compiled) => publishWiring(onWired, from, compiled)
+}
+
+/**
+ * The record with what the framework says the CREATED agent got, where it knows.
+ *
+ * The record is first derived from the inputs at build time, which is what the doctor needs without
+ * creating an agent. Once an agent IS created the framework reports its compiled options through
+ * `onWired`, and that is the truth: servers and skills are taken from it, and configured hooks are
+ * listed only if the agent got any. Trust, rule and AGENTS.md facts stay ours.
+ */
+export function withCompiledWiring(
+  record: WiredCapabilities,
+  compiled: CompiledWiring,
+): WiredCapabilities {
+  return {
+    ...record,
+    mcp: { ...record.mcp, active: [...compiled.mcpServers].sort() },
+    skills: { ...record.skills, active: [...compiled.skills.listed].sort() },
+    hooks: {
+      ...record.hooks,
+      // The framework names hooks by the SDK's event, this product by its config's: the two
+      // vocabularies differ, so rows are kept or dropped as a set — a hook that never reached the
+      // agent must not be listed, but a row is not matched to an SDK event by name.
+      active: compiled.hooks.length === 0 ? [] : record.hooks.active,
+    },
+  }
+}
+
 function rulesLoad(both: readonly RulesLoad[]): WiredCapabilities['rules'] {
   return {
     count: both.reduce((n, r) => n + r.count, 0),
