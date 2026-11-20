@@ -146,7 +146,7 @@ export async function planAndRunCurrentProjectGC(
     cwd,
     everyone.filter((a) => a.archived !== true).map((a) => a.agentId),
   )
-  const planned = planTranscriptGC({
+  const planned = await planTranscriptGC({
     cwd,
     keepLast: opts.keepLast ?? 10,
     maxAgeDays: opts.maxAgeDays ?? 30,
