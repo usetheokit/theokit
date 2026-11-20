@@ -1,5 +1,6 @@
 import { CONFIG_SCHEMA_KEYS, ConfigError, type SchemaKey } from './config-contract.js'
 import { auditEnvReachability } from '@theokit/agents'
+import { envKnob, envLayerFrom, type EnvKnob } from '@theokit/agents/config'
 import { homedir } from 'node:os'
 import process from 'node:process'
 import { join } from 'node:path'
@@ -149,43 +150,18 @@ export interface AgentConfig {
   profile?: string
 }
 
-interface EnvPath {
-  readonly knob: string
-  readonly coerce: (raw: string) => unknown
-}
-
-/**
- * `1`/`true`/`yes`/`on` and their negatives, case-insensitively; anything else is returned VERBATIM.
- *
- * Returning the raw string on a value it does not recognise is deliberate and matches
- * `numberFromEnv`: the scalar schema then rejects it by name, so `THEOCODE_MEMORY=maybe` fails loud
- * instead of being silently read as `false`. A boolean knob that quietly treats every typo as "off"
- * is the shape where an operator believes a capability is on and it is not.
- */
-function booleanFromEnv(raw: string): unknown {
-  const v = raw.trim().toLowerCase()
-  if (['1', 'true', 'yes', 'on'].includes(v)) return true
-  if (['0', 'false', 'no', 'off'].includes(v)) return false
-  return raw
-}
-
-function numberFromEnv(raw: string): unknown {
-  const n = Number(raw)
-  return raw.trim().length > 0 && Number.isFinite(n) ? n : raw
-}
-
-export const ENV_BY_KEY: Readonly<Partial<Record<SchemaKey, EnvPath>>> = {
-  model: { knob: ENV_MODEL, coerce: (s) => s },
-  reasoning_effort: { knob: ENV_REASONING_EFFORT, coerce: (s) => s },
-  sandbox_mode: { knob: ENV_SANDBOX_MODE, coerce: (s) => s },
-  approval_policy: { knob: ENV_APPROVAL_POLICY, coerce: (s) => s },
-  goal_oracle: { knob: ENV_GOAL_ORACLE, coerce: (s) => s },
-  context_window: { knob: ENV_CONTEXT_WINDOW, coerce: numberFromEnv },
-  shell_timeout_ms: { knob: ENV_SHELL_TIMEOUT_MS, coerce: numberFromEnv },
-  memory: { knob: ENV_MEMORY, coerce: booleanFromEnv },
-  session_gc: { knob: ENV_SESSION_GC, coerce: booleanFromEnv },
-  session_gc_max_age_days: { knob: ENV_SESSION_GC_MAX_AGE_DAYS, coerce: numberFromEnv },
-  output_style: { knob: ENV_OUTPUT_STYLE, coerce: (s) => s },
+export const ENV_BY_KEY: Readonly<Partial<Record<SchemaKey, EnvKnob>>> = {
+  model: envKnob(ENV_MODEL, 'string'),
+  reasoning_effort: envKnob(ENV_REASONING_EFFORT, 'string'),
+  sandbox_mode: envKnob(ENV_SANDBOX_MODE, 'string'),
+  approval_policy: envKnob(ENV_APPROVAL_POLICY, 'string'),
+  goal_oracle: envKnob(ENV_GOAL_ORACLE, 'string'),
+  context_window: envKnob(ENV_CONTEXT_WINDOW, 'number'),
+  shell_timeout_ms: envKnob(ENV_SHELL_TIMEOUT_MS, 'number'),
+  memory: envKnob(ENV_MEMORY, 'boolean'),
+  session_gc: envKnob(ENV_SESSION_GC, 'boolean'),
+  session_gc_max_age_days: envKnob(ENV_SESSION_GC_MAX_AGE_DAYS, 'number'),
+  output_style: envKnob(ENV_OUTPUT_STYLE, 'string'),
 }
 
 interface EnvOptOut {
@@ -414,13 +390,7 @@ function chosenProfile(layers: readonly z.infer<typeof configSchema>[]): {
 
 /** The environment layer: only the keys `ENV_BY_KEY` declares a knob for, coerced and validated. */
 function envLayer(env: Record<string, string | undefined>): RawScalars {
-  const scalars: Record<string, unknown> = {}
-  for (const key of CONFIG_SCHEMA_KEYS) {
-    const path = ENV_BY_KEY[key]
-    if (path === undefined) continue
-    const raw = env[path.knob]
-    if (raw !== undefined) scalars[key] = path.coerce(raw)
-  }
+  const scalars = envLayerFrom(env, ENV_BY_KEY as Readonly<Record<string, EnvKnob>>)
   try {
     return scalarSchema.parse(scalars)
   } catch (err) {
