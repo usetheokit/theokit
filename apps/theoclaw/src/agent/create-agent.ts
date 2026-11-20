@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { Agent, SkillReadTool } from '@theokit/sdk'
-import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
+import type { CustomTool, HookApprovalGate, MemorySettings, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 import type { Skill } from '@theokit/sdk/skills'
 
 import { custodianSkills } from '../skills/custodian.js'
@@ -47,8 +47,8 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
   readonly apiKey: string
   /** The SDK registers an unsandboxed `shell` on every local agent; no TheoClaw agent gets it. */
   readonly withheldBuiltinTools: readonly 'shell'[]
-  /** Off, so a finished turn writes no transcript under `.theokit/memory/sessions/` in the cwd. */
-  readonly memory: { readonly enabled: false }
+  /** Off unless the caller passes SDK memory settings with a `directory`: a default would write transcripts under `.theokit/memory/` in the cwd. */
+  readonly memory: MemorySettings
   readonly local: TheoClawLocalOptions
   readonly tools?: CustomTool[]
   readonly plugins?: Plugin[]
@@ -121,7 +121,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     model: input.model,
     apiKey: input.apiKey,
     withheldBuiltinTools: ['shell'] as const,
-    memory: { enabled: false } as const,
+    memory: input.toolOptions?.memory ?? ({ enabled: false } as const),
     systemPrompt: UNTRUSTED_CONTENT_NOTICE,
     local: {
       hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
