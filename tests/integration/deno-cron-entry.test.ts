@@ -42,15 +42,13 @@ try {
 } catch (e) {
   error = e.message
 }
-console.log(JSON.stringify({ error, calls: globalThis.__calls ?? [], trace: globalThis.__trace, queueDefined: globalThis.__q !== undefined }))
+console.log(JSON.stringify({ error, calls: globalThis.__calls ?? [], trace: globalThis.__trace }))
 `
 const CLI = resolve(__dirname, '../../packages/theo/src/cli/index.ts')
 const TSX = resolve(__dirname, '../../node_modules/.bin/tsx')
 const JOBS = resolve(__dirname, '../../packages/theo/src/server/jobs/index.ts')
 
 let root: string
-type Callback = () => Promise<void>
-let callbacks: Map<string, Callback>
 
 /** An in-memory backend that records what reaches it. */
 const backendSource = (label: string): string => `
@@ -75,11 +73,7 @@ const calls = (): { backend: string; input: Record<string, unknown>; client?: un
 
 beforeEach(() => {
   root = mkdtempSync(join(__dirname, '.deno-cron-'))
-  callbacks = new Map()
   ;(globalThis as { __calls?: unknown[] }).__calls = []
-  vi.stubGlobal('Deno', {
-    cron: (name: string, _schedule: string, cb: Callback) => callbacks.set(name, cb),
-  })
   write('backend-base.ts', backendSource('base'))
   write('backend-env.ts', backendSource('env'))
   write(
@@ -89,7 +83,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  vi.unstubAllGlobals()
   vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
 })
@@ -117,7 +110,7 @@ describe('Deno import map for the cron entry configs', () => {
  * the cron entry), then load the entry resolving every bare import through the EMITTED map —
  * what Deno does. `npm:` targets resolve to stubs in node_modules; theokit to the workspace.
  */
-async function loadBuiltEntry(handlerBody: string): Promise<void> {
+async function loadBuiltEntry(handlerBody: string): Promise<() => Promise<void>> {
   const { buildDeno, readProjectSourcesFromDisk, bareSpecifiersOf } =
     await import('../../packages/theo/src/adapters/deno-deploy.js')
   const written = new Map<string, string>()
@@ -168,7 +161,7 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
   expect(entryText).toMatch(/from\s+['"]npm:theokit/u)
   const runner = join(mkdtempSync(join(tmpdir(), 'deno-cron-runner-')), 'run.mjs')
   writeFileSync(runner, RUNNER)
-  callbacks.set('job', async () => {
+  return async () => {
     const out = await execFileAsync(TSX, [runner, root, JSON.stringify(map), JOBS, entry, ''], {
       cwd: root,
       env: { ...process.env },
@@ -177,14 +170,12 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
       error?: string
       calls: never[]
       trace?: string
-      queueDefined: boolean
     }
     const g = globalThis as Record<string, unknown>
     g.__calls = res.calls
     g.__trace = res.trace
-    g.__q = res.queueDefined ? {} : undefined
     if (res.error !== undefined) throw new Error(res.error)
-  })
+  }
 }
 
 describe('generated entry loaded through the build wiring', () => {
@@ -218,8 +209,8 @@ describe('generated entry loaded through the build wiring', () => {
       `const { Pool } = await import('pg')\nexport default { jobs: { backend: { async enqueue(input) { (globalThis.__calls ??= []).push({ backend: new Pool().name, input }); return { jobId: 'p' } } } } }\n`,
     )
     vi.stubEnv('NODE_ENV', 'production')
-    await loadBuiltEntry(`ctx.queue.enqueue('a', {})`)
-    await callbacks.get('job')!()
+    const run = await loadBuiltEntry(`ctx.queue.enqueue('a', {})`)
+    await run()
     expect(calls().map((c) => c.backend)).toEqual(['pg'])
   })
 })
@@ -293,8 +284,8 @@ describe('renderDenoConfig', () => {
 
 describe('generated Deno cron entry', () => {
   it('enqueues buffered jobs on the configured backend after the handler succeeds', async () => {
-    await loadBuiltEntry(`ctx.queue.enqueue('a', { n: 1 }); ctx.queue.enqueue('b', {})`)
-    await callbacks.get('job')!()
+    const run = await loadBuiltEntry(`ctx.queue.enqueue('a', { n: 1 }); ctx.queue.enqueue('b', {})`)
+    await run()
     expect(calls().map((c) => [c.backend, c.input.name])).toEqual([
       ['base', 'a'],
       ['base', 'b'],
@@ -306,36 +297,36 @@ describe('generated Deno cron entry', () => {
       'theo.config.test.ts',
       `import { backend } from './backend-env.ts'\nexport default { jobs: { backend } }\n`,
     )
-    await loadBuiltEntry(`ctx.queue.enqueue('a', {})`)
-    await callbacks.get('job')!()
+    const run = await loadBuiltEntry(`ctx.queue.enqueue('a', {})`)
+    await run()
     expect(calls().map((c) => c.backend)).toEqual(['env'])
   })
 
   it('discards buffered jobs when the handler throws', async () => {
-    await loadBuiltEntry(`ctx.queue.enqueue('a', {}); throw new Error('boom')`)
-    await expect(callbacks.get('job')!()).rejects.toThrow('boom')
+    const run = await loadBuiltEntry(`ctx.queue.enqueue('a', {}); throw new Error('boom')`)
+    await expect(run()).rejects.toThrow('boom')
     expect(calls()).toEqual([])
   })
 
   it('propagates the trace id as a traceparent on enqueued jobs', async () => {
-    await loadBuiltEntry(`globalThis.__trace = ctx.traceId; ctx.queue.enqueue('a', {})`)
-    await callbacks.get('job')!()
+    const run = await loadBuiltEntry(`globalThis.__trace = ctx.traceId; ctx.queue.enqueue('a', {})`)
+    await run()
     const trace = (globalThis as { __trace?: string }).__trace
     expect(calls()[0]?.input.traceparent).toMatch(new RegExp(`^00-${trace}-[0-9a-f]{16}-01$`))
   })
 
   it('forwards enqueueInTransaction to the configured backend immediately', async () => {
-    await loadBuiltEntry(
+    const run = await loadBuiltEntry(
       `await ctx.queue.enqueueInTransaction({ tx: 1 }, 'a', {}); throw new Error('later')`,
     )
-    await expect(callbacks.get('job')!()).rejects.toThrow('later')
+    await expect(run()).rejects.toThrow('later')
     expect(calls()).toHaveLength(1)
     expect(calls()[0]?.client).toEqual({ tx: 1 })
   })
 
   it('fails ctx.queue use when no backend is configured', async () => {
     write('theo.config.ts', `export default {}\n`)
-    await loadBuiltEntry(`ctx.queue.enqueue('a', {})`)
-    await expect(callbacks.get('job')!()).rejects.toThrow('ctx.queue is unavailable')
+    const run = await loadBuiltEntry(`ctx.queue.enqueue('a', {})`)
+    await expect(run()).rejects.toThrow('ctx.queue is unavailable')
   })
 })
