@@ -32,6 +32,8 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Fixed
 
+- The sweep's spawn-options test removes its temporary directory through `tempRoot`, so
+  `no-leaked-temp-dirs.test.ts` passes on the promotion pull request (#2489).
 - The standalone consumer pins `@theokit/sdk` at 5.32.0 again, in step with the real manifests, so
   `tools/standalone-consumer.test.mjs` passes on the promotion pull request (#2467).
 - The workspace manifests declare `@theokit/agents` as `workspace:*` rather than an exact

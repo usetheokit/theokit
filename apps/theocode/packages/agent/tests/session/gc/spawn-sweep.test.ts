@@ -17,8 +17,6 @@
  * first-run-is-a-dry-run); the child only does the work.
  */
 import { EventEmitter } from 'node:events'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -27,6 +25,7 @@ import {
   buildSweepCommand,
   startSessionSweepInBackground,
 } from '../../../src/session/gc/sweep-wiring.js'
+import { tempRoot } from '../../helpers/temp-root.js'
 
 describe('buildSweepCommand', () => {
   it('test_it_runs_the_command_that_already_exists', () => {
@@ -89,7 +88,7 @@ describe('the child process is bounded', () => {
       child.unref = () => {}
       return child
     }) as unknown as NonNullable<Parameters<typeof startSessionSweepInBackground>[0]['spawn']>
-    const base = mkdtempSync(join(tmpdir(), 'theocode-spawnopts-'))
+    const base = tempRoot('theocode-spawnopts-')
     startSessionSweepInBackground({
       enabled: true,
       onReport: () => {},
