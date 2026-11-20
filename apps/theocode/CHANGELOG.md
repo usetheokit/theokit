@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Changed
+- **`-c key=value` parsing and environment-variable coercion now come from the framework (`@theokit/agents/config`: `parseDottedOverrides`, `envLayerFrom`).** `config/cli-overrides.ts` shrinks to the coercion table and this product's error wording; `config/config.ts` declares each knob as `envKnob(variable, kind)` instead of its own coercers. Behaviour is unchanged, except that a whitespace-only key segment is no longer named in the error and is left to schema validation. The layer chain, security floor and settings readers are unchanged: the SDK releases they depend on (theokit-sdk#1058) could not be confirmed, so those parts are not migrated yet.
+
 ### Removed
 - **The unused `writeCredential` wrapper and `StoredOAuthCredential` type in `auth/credentials.ts`.** Sign-in already writes through the framework's `loginWithApiKey`; nothing called the wrapper, and `knip` flagged both.
 
