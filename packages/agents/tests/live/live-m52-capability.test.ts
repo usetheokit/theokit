@@ -20,11 +20,11 @@ import { ModelCapability, SkillsCapability } from '../../src/capability/capabili
 import { applyCapabilities } from '../../src/capability/capability.js'
 import { CapabilityRegistry } from '../../src/capability/registry.js'
 
-import { resolveLiveModel } from '../../../../scripts/live-model.mjs'
+import { resolveSdkLiveModel } from '../../../../scripts/live-model.mjs'
 
 import { redactThenCut } from './provider-text.js'
 
-const MODEL = resolveLiveModel(process.env)
+const MODEL = resolveSdkLiveModel(process.env)
 
 function keyPresence(): string {
   const names = ['OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'THEOKIT_API_KEY']
