@@ -1,5 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { reviewCommand } from '../../src/commands/review.js'
+
+/** A project directory of the test's own: the build is refused before it reads it, but never the checkout (B-161). */
+const project = mkdtempSync(join(tmpdir(), 'drained-exit-'))
+afterAll(() => {
+  rmSync(project, { recursive: true, force: true })
+})
 
 describe('headless commands end through the framework drain', () => {
   afterEach(() => {
@@ -63,7 +73,7 @@ describe('run and goal end through the framework drain', () => {
   it('test_goal_failure_records_1_and_exits_after_the_drain_cap', async () => {
     vi.doMock('../../src/run-composition.js', () => ({
       resolveCompositionContext: () => ({
-        cwd: process.cwd(),
+        cwd: project,
         env: {},
         posture: {},
         cfg: { model: 'm', goal_oracle: 'judge' },
