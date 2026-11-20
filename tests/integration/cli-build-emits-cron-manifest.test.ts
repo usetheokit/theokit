@@ -88,6 +88,15 @@ const runBuild = (args: string[] = []): { stdout: string; exitCode: number } => 
 beforeEach(() => {
   projectDir = mkdtempSync(join(tmpdir(), 'theokit-cli-cron-'))
   writeMinimalApp()
+  // The CLI only checks that its toolchain resolves from the app. Bare stubs satisfy that check
+  // without a usable vite, so the build still stops after the cron/job artifacts, as these tests assume.
+  for (const name of ['typescript', 'vite', '@vitejs/plugin-react', 'tsx']) {
+    mkdirSync(join(projectDir, 'node_modules', name), { recursive: true })
+    writeFileSync(
+      join(projectDir, 'node_modules', name, 'package.json'),
+      JSON.stringify({ name, version: '0.0.0' }),
+    )
+  }
 })
 
 afterEach(() => {

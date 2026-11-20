@@ -16,6 +16,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync }
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
+import { linkToolchain } from '../helpers/link-toolchain'
+
 import { scaffold } from '../../packages/create-theokit/src/index.js'
 
 const REPO = resolve(__dirname, '../..')
@@ -38,6 +40,7 @@ beforeAll(() => {
   const nodeModulesDir = join(projectDir, 'node_modules')
   mkdirSync(nodeModulesDir, { recursive: true })
   symlinkSync(resolve(REPO, 'packages/theo'), join(nodeModulesDir, 'theokit'), 'dir')
+  linkToolchain(projectDir)
 }, 30_000)
 
 afterAll(() => {

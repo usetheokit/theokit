@@ -32,6 +32,7 @@
 import type { ToolResultTransformContext } from '@theokit/sdk'
 
 import type { HookHandlers } from './hook-handlers.js'
+import { recordRefusal } from './refusal-ledger.js'
 
 /** Both sides declared this event, or no composition is needed. */
 function bothOf<T>(parent: T | undefined, own: T | undefined): readonly [T, T] | undefined {
@@ -75,7 +76,11 @@ function chainVeto(...gates: readonly PreToolCall[]): PreToolCall {
         // Fail CLOSED. The message carries the cause so an operator can tell "refused by policy"
         // from "the policy could not be consulted" — two different problems with the same outcome.
         const reason = cause instanceof Error ? cause.message : String(cause)
-        return { block: true, message: `hook gate failed and refused the call: ${reason}` }
+        const message = `hook gate failed and refused the call: ${reason}`
+        return {
+          block: true,
+          message: recordRefusal(ctx.runId, ctx.name, { by: 'hook', reason }, message),
+        }
       }
       if (decision?.block === true) return decision
     }

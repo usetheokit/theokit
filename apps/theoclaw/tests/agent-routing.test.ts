@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createAgentRouter } from '../src/routing/agent-routes.js'
+import { createAgentRouter } from '../src/routing/routing-env.js'
 import { createWorktreeRunner } from '../src/routing/task-worktree.js'
 
 const config = {

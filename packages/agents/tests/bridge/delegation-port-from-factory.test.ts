@@ -9,10 +9,11 @@ import {
   DelegationError,
 } from '../../src/bridge/delegation-types.js'
 import { withGuardrails } from '../../src/bridge/handle-wrappers.js'
+import type { SdkMessage } from '../../src/bridge/event-translator.js'
 import type { SdkAgentHandle, SdkTurnHandle } from '../../src/bridge/sdk-adapter.js'
 
 interface Fake {
-  agent: SdkAgentHandle
+  agent: SdkAgentHandle<SdkMessage>
   dispose: ReturnType<typeof vi.fn>
   cancel: ReturnType<typeof vi.fn>
 }
@@ -34,8 +35,12 @@ function fake(
       for (const e of opts.events ?? []) yield e
     },
     cancel,
-  } as unknown as SdkTurnHandle
-  const agent = { agentId: 'a', send: vi.fn(async () => run), dispose } as unknown as SdkAgentHandle
+  } as unknown as SdkTurnHandle<SdkMessage>
+  const agent = {
+    agentId: 'a',
+    send: vi.fn(async () => run),
+    dispose,
+  } as unknown as SdkAgentHandle<SdkMessage>
   return { agent, dispose, cancel }
 }
 

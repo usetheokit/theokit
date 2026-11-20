@@ -6,6 +6,16 @@
 
 - `createNodeServer({ trustedProxy: { identityHeader, addresses } })`: the identity header and `x-forwarded-proto` are believed only from an allowlisted peer. New exports `trustedIdentity`, `peerAddress`, `PEER_ADDRESS_HEADER`, `TRUSTED_IDENTITY_HEADER`, `TrustedProxyOptions`.
 
+## 2.7.0
+
+### Minor Changes
+
+- 1c93a6d: Add `createNodeServer` and `BindError` to `@theokit/http/runtime/node`: a Node server whose `Request.signal` aborts when the client disconnects, with an `onUpgrade` hook (404 by default), a memoized `close({ force })` that ends open and upgraded connections, and a `listen` that rejects with a typed `BindError`. `writeResponseToNode` now cancels the response body when the client leaves.
+
+### Patch Changes
+
+- 72370bb: The `AgentRuntime.generateAgentRoutes` input type declares `compiledOptions` optional, matching `@theokit/agents`, which never reads it.
+
 ## 2.6.0
 
 ### Minor Changes

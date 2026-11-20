@@ -20,7 +20,8 @@ const CONFIG = {
 async function failWith(err: Error): Promise<unknown> {
   const home = mkdtempSync(join(tmpdir(), 'refresh-failure-'))
   const store = { home, dirName: '.rf', fileName: 'auth.json' }
-  mkdirSync(join(home, '.rf'), { recursive: true })
+  // 0o700 explicitly: under a umask of 002 the default is 775, which the store refuses.
+  mkdirSync(join(home, '.rf'), { recursive: true, mode: 0o700 })
   writeFileSync(
     join(home, '.rf', 'auth.json'),
     JSON.stringify({ type: 'oauth', provider: 'openai', access: 'old', refresh: 'r', expires: 1 }),

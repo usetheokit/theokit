@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.83.0",
+  "version": "0.83.1",
   "description": "The TheoKit web framework — file-based routing, typed server surfaces, the Vite plugin, the CLI and the deploy adapters, around agents served from agents/*.ts.",
   "repository": {
     "type": "git",
@@ -148,7 +148,6 @@
     "@theokit/agents": "workspace:^",
     "@theokit/http": "workspace:^",
     "@theokit/presenter": "workspace:^",
-    "@vitejs/plugin-react": "^4.7.0",
     "busboy": "^1.6.0",
     "cac": "^6.7.14",
     "cron-parser": "^5.5.0",
@@ -158,19 +157,20 @@
     "goober": "^2.1.19",
     "picomatch": "^4.0.4",
     "reflect-metadata": "^0.2.2",
-    "superjson": "^2.2.6",
-    "tsx": "^4.22.4",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.7"
+    "superjson": "^2.2.6"
   },
   "peerDependencies": {
     "@theokit/sdk": "^5.17.0",
     "@theokit/ui": "^1.1.0",
+    "@vitejs/plugin-react": "^4.7.0",
     "db0": "^0.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "^7.0.0 || ^8.0.0",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3",
     "unstorage": "^1.10.0",
+    "vite": "^7.3.7",
     "ws": "^8.20.1",
     "zod": "^4.0.0"
   },
@@ -181,10 +181,22 @@
     "@theokit/ui": {
       "optional": true
     },
+    "@vitejs/plugin-react": {
+      "optional": true
+    },
     "db0": {
       "optional": true
     },
+    "tsx": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    },
     "unstorage": {
+      "optional": true
+    },
+    "vite": {
       "optional": true
     },
     "ws": {
@@ -196,9 +208,13 @@
     "@theokit/sdk": "^5.17.0",
     "@types/busboy": "^1.5.4",
     "@types/picomatch": "^4.0.3",
+    "@vitejs/plugin-react": "^4.7.0",
     "better-sqlite3": "^12.11.1",
     "db0": "^0.3.4",
-    "unstorage": "^1.17.5"
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3",
+    "unstorage": "^1.17.5",
+    "vite": "^7.3.7"
   },
   "publishConfig": {
     "provenance": true,

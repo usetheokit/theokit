@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@theokit/agents/bridge'
+import { streamFromEmitter, type DoneEvent, type StreamEvent } from '@theokit/agents/bridge'
 
 import { describeError } from '../control-plane/errors.js'
 import type { TurnEvent, TurnOutcome, TurnRunner } from '../control-plane/turn.js'
@@ -9,21 +9,29 @@ import { formatUsageLine, type TurnUsage } from '../usage/turn-usage.js'
  * then sees one error, never a stream that simply stops. The presenter masks the message for the
  * client and writes it, unmasked, to the server's stderr.
  */
-function turnFailed(reason: string): StreamEvent {
+function turnFailed(reason: string): TurnEvent {
   return { type: 'error', code: 'turn_failed', message: `the turn failed: ${reason}`, retryable: false }
 }
 
-const DONE: IteratorReturnResult<undefined> = { done: true, value: undefined }
+/** The turn's typed event as the wire's `StreamEvent`; the copy carries the index signature the interfaces lack. */
+function toStreamEvent(event: TurnEvent): StreamEvent {
+  return { ...event }
+}
 
 /**
  * The run's `done` with the turn's usage record (FR-003): the token counts and cost the run
  * reported, the cost left out when the run was unpriced, and the model.
  */
-function withUsage(done: StreamEvent, usage: TurnUsage): StreamEvent {
+function withUsage(done: StreamEvent, usage: TurnUsage): DoneEvent {
   const { inputTokens, outputTokens } = usage
+  // A runner's `done` may carry less than the typed event; the missing fields are filled so the
+  // event that leaves is always a complete `DoneEvent`.
   const prior = typeof done.usage === 'object' && done.usage !== null ? done.usage : {}
-  const enriched: StreamEvent = {
+  const enriched: DoneEvent = {
     ...done,
+    type: 'done',
+    result: typeof done.result === 'string' ? done.result : '',
+    durationMs: typeof done.durationMs === 'number' ? done.durationMs : 0,
     usage: { ...prior, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
     model: usage.model,
   }
@@ -33,88 +41,44 @@ function withUsage(done: StreamEvent, usage: TurnUsage): StreamEvent {
 }
 
 /**
- * One turn's events as an async source: a queue the turn's synchronous `emit` fills and the reader
- * drains. Hand-written rather than an async generator (EC-2): a generator suspended on an empty
- * queue would hold a `return()` until its next yield, and a silent model never yields.
- *
- * `return()` resolves at once. It cancels the turn only while the turn has not answered yet: the
- * framework's presenter stops reading at the first `done` or `error` and calls `return()` then, and
- * a turn that has given its answer must not be cancelled for it. The queue is unbounded (EC-12):
- * `emit` cannot wait, and one turn's events are what the model streams for one answer.
+ * One turn's events as an async source (`streamFromEmitter`: `return()` stops the turn at once, even
+ * while a read waits on a silent model, and a turn that has already answered is not cancelled for it).
+ * The run's `done` and whatever follows it wait for the turn's outcome, which carries the usage.
  */
 function startTurn(
   runTurn: TurnRunner,
   message: string,
   signal: AbortSignal,
   write: (line: string) => void,
-): AsyncIterator<StreamEvent> {
-  const controller = new AbortController()
-  const queue: StreamEvent[] = []
-  // The run's `done` and whatever follows it wait for the turn's outcome, which carries the usage.
-  let held: { readonly done: StreamEvent; readonly after: StreamEvent[] } | undefined
-  let closed = false
-  let answered = false
-  let sawError = false
-  let wake: (() => void) | undefined
-  const notify = (): void => {
-    wake?.()
-    wake = undefined
-  }
-  const push = (event: TurnEvent): void => {
-    if (closed) return
-    sawError ||= event.type === 'error'
-    answered ||= event.type === 'error' || event.type === 'done'
-    if (held !== undefined) held.after.push(event)
-    else if (event.type === 'done') held = { done: event, after: [] }
-    else queue.push(event)
-    notify()
-  }
-  const release = (usage?: TurnUsage): void => {
-    if (held === undefined) return
-    queue.push(usage === undefined ? held.done : withUsage(held.done, usage), ...held.after)
-    held = undefined
-    notify()
-  }
-  const abort = (): void => controller.abort()
-  const close = (): void => {
-    release()
-    closed = true
-    signal.removeEventListener('abort', abort)
-    notify()
-  }
-  controller.signal.addEventListener('abort', close, { once: true })
-  if (signal.aborted) abort()
-  else signal.addEventListener('abort', abort, { once: true })
-
-  void Promise.resolve()
-    .then(() => runTurn(message, push, controller.signal))
-    .catch((error: unknown): TurnOutcome => ({ ok: false, code: 'turn_failed', reason: describeError(error) }))
-    .then((outcome) => {
+): AsyncIterable<StreamEvent> {
+  return streamFromEmitter<StreamEvent>(
+    async (emit, turnSignal) => {
+      let held: { readonly done: StreamEvent; readonly after: StreamEvent[] } | undefined
+      let sawError = false
+      const push = (event: TurnEvent): void => {
+        sawError ||= event.type === 'error'
+        const wire = toStreamEvent(event)
+        if (held !== undefined) held.after.push(wire)
+        else if (event.type === 'done') held = { done: wire, after: [] }
+        else emit(wire)
+      }
+      const release = (usage?: TurnUsage): void => {
+        if (held === undefined) return
+        // Spread: `DoneEvent` is an interface with no index signature, which `StreamEvent` requires.
+        emit(usage === undefined ? held.done : { ...withUsage(held.done, usage) })
+        for (const event of held.after) emit(event)
+        held = undefined
+      }
+      const outcome = await Promise.resolve()
+        .then(() => runTurn(message, push, turnSignal))
+        .catch((error: unknown): TurnOutcome => ({ ok: false, code: 'turn_failed', reason: describeError(error) }))
       const usage = outcome.ok ? outcome.usage : undefined
       if (usage !== undefined) write(formatUsageLine('webchat', usage))
       release(usage)
-      if (!outcome.ok && outcome.code === 'turn_failed' && !sawError) push(turnFailed(outcome.reason))
-      close()
-    })
-
-  return {
-    async next(): Promise<IteratorResult<StreamEvent, undefined>> {
-      for (;;) {
-        const event = queue.shift()
-        if (event !== undefined) return { done: false, value: event }
-        if (closed) return DONE
-        await new Promise<void>((resolve) => {
-          wake = resolve
-        })
-      }
+      if (!outcome.ok && outcome.code === 'turn_failed' && !sawError) emit(toStreamEvent(turnFailed(outcome.reason)))
     },
-    async return(): Promise<IteratorResult<StreamEvent, undefined>> {
-      if (!answered) abort()
-      queue.length = 0
-      close()
-      return DONE
-    },
-  }
+    { signal },
+  )
 }
 
 /**
@@ -126,5 +90,5 @@ export function createWebchatRun(
   signal: AbortSignal,
   write: (line: string) => void = () => undefined,
 ): (message: string, sessionId: string) => AsyncIterable<StreamEvent> {
-  return (message, chatId) => ({ [Symbol.asyncIterator]: () => startTurn(turnFor(chatId), message, signal, write) })
+  return (message, chatId) => (startTurn(turnFor(chatId), message, signal, write))
 }

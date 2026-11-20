@@ -8,11 +8,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { withGuardrails } from '../../src/bridge/handle-wrappers.js'
+import type { SdkMessage } from '../../src/bridge/event-translator.js'
 import type { SdkAgentHandle } from '../../src/bridge/sdk-adapter.js'
 import { MalformedGuardrailResultError } from '../../src/guardrails/index.js'
 import type { Guardrail } from '../../src/guardrails/index.js'
 
-function finishedHandle(result: string): SdkAgentHandle {
+function finishedHandle(result: string): SdkAgentHandle<SdkMessage> {
   return {
     agentId: 'fake-agent',
     dispose: () => Promise.resolve(),

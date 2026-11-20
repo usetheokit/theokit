@@ -56,6 +56,7 @@ vi.mock('@theokit/sdk', () => ({
   Tool: { create: (spec: unknown) => spec },
 }))
 
+const { takeRefusal } = await import('../../src/bridge/refusal-ledger.js')
 const { defineAgent } = await import('../../src/bridge/define-agent.js')
 const { toAgentFactory } = await import('../../src/bridge/sdk-adapter.js')
 const { streamAgentTurnInProcess, InProcessApprovalRequiredError } =
@@ -157,6 +158,12 @@ describe('M96 U1 — toAgentFactory requires the approval posture', () => {
     ).toBe(false)
     expect(executor, 'the executor must not have been reached').toHaveBeenCalledTimes(0)
     expect(outcome.message).toContain('an unattended surface')
+  })
+
+  it('an auto-reject veto is recorded as a policy refusal with the bare reason', async () => {
+    await materialize({ kind: 'auto-reject', reason: 'an unattended surface' })
+    await dispatchToolAsTheSdkWould('run_shell')
+    expect(takeRefusal('r', 'run_shell')).toEqual({ by: 'policy', reason: 'an unattended surface' })
   })
 
   it('test_under_auto_approve_the_tool_runs_and_NO_request_is_emitted', async () => {

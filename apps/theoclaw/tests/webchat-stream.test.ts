@@ -6,7 +6,7 @@ import { type AgentRouteContext, generateAgentRoutes } from "@theokit/agents/bri
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createContainer } from "../src/composition.js";
-import { createTurnRunner, type TurnAgent, type TurnRun } from "../src/control-plane/turn.js";
+import { createTurnRunner, type TurnAgent, type TurnRun, type TurnRunner } from "../src/control-plane/turn.js";
 import { createWebchatRun } from "../src/webchat/create-run.js";
 import { TheoClawConfigError } from "../src/control-plane/errors.js";
 import { MAX_MESSAGE_BYTES } from "../src/control-plane/limits.js";
@@ -398,6 +398,33 @@ describe("the WebChat finish event (OC-97)", () => {
       usage: { inputTokens: 81, outputTokens: 11 },
       model: "openai-chatgpt/gpt-5.6-luna",
     });
+  });
+});
+
+describe("the WebChat terminal event is a complete typed done", () => {
+  const usage = { ok: true, usage: { inputTokens: 5, outputTokens: 2, model: "m-1" } } as never;
+  const drain = async (runTurn: TurnRunner): Promise<Array<Record<string, unknown>>> => {
+    const events: Array<Record<string, unknown>> = [];
+    for await (const event of createWebchatRun(() => runTurn, new AbortController().signal)("hi", "c")) events.push(event);
+    return events;
+  };
+
+  it("enriches a bare done with usage and fills result and durationMs", async () => {
+    const events = await drain(async (_m, emit) => (emit({ type: "done" } as never), usage));
+    expect(events).toEqual([
+      { type: "done", result: "", durationMs: 0, usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 }, model: "m-1" },
+    ]);
+  });
+
+  it("keeps the result and duration a typed done already has", async () => {
+    const done = { type: "done", result: "ok", durationMs: 40, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, reasoningTokens: 3 } };
+    const events = await drain(async (_m, emit) => (emit(done as never), usage));
+    expect(events[0]).toMatchObject({ result: "ok", durationMs: 40, usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 3 } });
+  });
+
+  it("forwards a done unchanged when the turn failed", async () => {
+    const events = await drain(async (_m, emit) => (emit({ type: "done" } as never), { ok: false, code: "turn_failed", reason: "x" } as never));
+    expect(events[0]).toEqual({ type: "done" });
   });
 });
 

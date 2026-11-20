@@ -17,7 +17,7 @@ import { translateSdkEvent } from '../../src/bridge/event-translator.js'
 
 const RUN = 'run-1'
 
-function doneOf(status: string, result?: unknown) {
+function doneOf(status: 'FINISHED' | 'CANCELLED' | 'ERROR' | 'EXPIRED', result?: unknown) {
   const events = translateSdkEvent(
     { type: 'status', agent_id: 'a', run_id: RUN, status, ...(result ? { result } : {}) },
     RUN,
