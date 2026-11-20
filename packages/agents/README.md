@@ -910,6 +910,23 @@ plan is a separate step. Each candidate is `{ project, kind, target, sessionId?,
 
 The plan also reports `touchedProjects`, `liveCwds` and `countByKind`. `listRegistry` defaults to `Agent.list`.
 
+### Applying a cross-project plan
+
+`runProjectsGC(plan, { apply, owner, removeFromRegistry?, registryTimeoutMs?, protectedIds? })` applies a plan. Without
+`apply: true` it is a dry run: nothing is removed and `removed` lists every candidate. When applying, it re-reads each
+live project's pointer, `protectedIds(cwd)` and the writer lease before EACH removal, and puts a candidate in `refused`
+(with the reason) when it changed since the plan. A registered transcript goes through `removeFromRegistry` (default
+`Agent.delete`, bounded by `registryTimeoutMs`) before its file is unlinked; a lock directory goes through `rmdir`. An
+already-missing target is not an error, other failures land in `errors` per target, and a project directory left empty
+is removed.
+
+Applying requires the root to be owned by `owner.app`. `claimCollectorRoot(projectsRoot, { app })` writes the marker
+`.theokit-collector.json` (`{ app, version }`) next to `projects/`; it never replaces another app's marker
+(`CollectorRootNotOwnedError`) and throws `CollectorRootError` when the marker cannot be written.
+`collectorRootOwner(projectsRoot)` reads it (`undefined` when absent or malformed). Whether to claim a root is the
+app's call: claim the default root, and a custom one only if it holds no projects yet. `runProjectsGC` throws
+`CollectorRootNotOwnedError` (code `collector_root_not_owned`) when the marker is missing or names another app.
+
 ## Refused tool calls
 
 When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
