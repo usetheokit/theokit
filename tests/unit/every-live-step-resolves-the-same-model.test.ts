@@ -3,7 +3,10 @@ import { basename, join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { resolveLiveModel as resolveInTheoCode } from '../../apps/theocode/packages/agent/tests/live/live-model.js'
+import {
+  resolveLiveModel as resolveInTheoCode,
+  resolveSdkLiveModel as resolveSdkInTheoCode,
+} from '../../apps/theocode/packages/agent/tests/live/live-model.js'
 import { DEFAULT_LIVE_MODEL as PREFLIGHT_DEFAULT } from '../../scripts/live-model-preflight.mjs'
 import {
   DEFAULT_LIVE_MODEL,
@@ -79,6 +82,21 @@ describe('resolveSdkLiveModel', () => {
     [{ LIVE_MODEL: 'openrouter/anthropic/claude-x' }, 'openrouter/anthropic/claude-x'],
   ] as [Record<string, string | undefined>, string][])('resolves %j to %j', (env, model) => {
     expect(resolveSdkLiveModel(env)).toBe(model)
+  })
+})
+
+describe('TheoCode resolveSdkLiveModel', () => {
+  it('routes an OpenRouter key through OpenRouter', () => {
+    expect(resolveSdkInTheoCode('google/gemini-2.5-flash', 'OPENROUTER_API_KEY')).toBe(
+      'openrouter/google/gemini-2.5-flash',
+    )
+    expect(resolveSdkInTheoCode('openrouter/x/y', 'OPENROUTER_API_KEY')).toBe('openrouter/x/y')
+  })
+
+  it('keeps the model for another provider key', () => {
+    expect(resolveSdkInTheoCode('anthropic/claude-x', 'ANTHROPIC_API_KEY')).toBe(
+      'anthropic/claude-x',
+    )
   })
 })
 

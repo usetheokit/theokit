@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -31,6 +31,9 @@ const pickCity = (): string => {
   const name = `${syllable()}${syllable()}${syllable()}${syllable()}`
   return `${name[0]?.toUpperCase()}${name.slice(1)}-${randomInt(1000, 10000)}`
 }
+/** Every file under `directory`, walked. */
+const filesUnder = (directory: string): string[] =>
+  existsSync(directory) ? readdirSync(directory, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? filesUnder(join(directory, entry.name)) : [join(directory, entry.name)])) : []
 const lower = (text: string): string => text.toLowerCase()
 
 describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', () => {
@@ -39,8 +42,8 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
     async () => {
       const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-live-'))
       const city = pickCity()
-      const env = { ...process.env, THEOCLAW_WORKSPACE: workspace, THEOCLAW_TRANSCRIPTS: 'on', THEOCLAW_MEMORY: 'on', THEOCLAW_OWNERS: 'telegram:u,line:u' }
-      const { sessions, withAgent, memory } = chatSessions({
+      const env = { ...process.env, THEOCLAW_WORKSPACE: workspace, THEOCLAW_STATE_DIR: join(workspace, '..', `${city}-state`), THEOCLAW_TRANSCRIPTS: 'on', THEOCLAW_MEMORY: 'on', THEOCLAW_OWNERS: 'telegram:u,line:u' }
+      const { sessions, withAgent } = chatSessions({
         env,
         write: () => undefined,
         getOrCreate: (id: string, options: AgentOptions) => Agent.getOrCreate(id, options) as unknown as Promise<SessionAgent>,
@@ -52,14 +55,14 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
         await run.wait()
         lease.release()
       })
-      await memory?.idle()
+      // `disposeAll` waits for the SDK's queued post-turn review.
       await sessions.disposeAll()
 
-      const store = new MemoryStore(join(workspace, '.theoclaw', 'memory'))
-      // A fact the forked reviewer saved with a real model call.
-      expect(lower(store.facts().join(' '))).toContain(lower(city))
+      const store = new MemoryStore(join(env.THEOCLAW_STATE_DIR, 'memory'))
+      // A fact the SDK reviewer saved with a real model call: a file in the owner's partition of the SDK store.
+      expect(lower(filesUnder(join(env.THEOCLAW_STATE_DIR, 'memory', 'users', 'owner')).map((file) => readFileSync(file, 'utf8')).join(' '))).toContain(lower(city))
 
-      // A fresh session on another surface recalls the fact from its prompt alone: it has no tool.
+      // A fresh session on another surface recalls the SDK reviewer's fact from the owner partition: it has no tool.
       const other = chatSessions({
         env,
         write: () => undefined,
@@ -73,7 +76,6 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
         lease.release()
         return result.result ?? ''
       })
-      await other.memory?.idle()
       await other.sessions.disposeAll()
       expect(lower(recalled)).toContain(lower(city))
 

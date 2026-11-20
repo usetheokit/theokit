@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { PERSONA_FILE_LIMIT, readPersonaPrompt } from '../src/agent/persona-files.js'
+import { PERSONA_FILE_LIMIT, readPersonaPrompt } from '../src/control-plane/agent-factory.js'
 
 const dirs: string[] = []
 const workspace = (): string => {
@@ -33,5 +33,16 @@ describe('readPersonaPrompt', () => {
     const dir = workspace()
     writeFileSync(join(dir, 'SOUL.md'), 'x'.repeat(PERSONA_FILE_LIMIT + 5))
     expect(readPersonaPrompt(dir)).toBe(`## SOUL.md\n\n${'x'.repeat(PERSONA_FILE_LIMIT)}\n[truncated]`)
+  })
+
+  it('loads all five files in the fixed order, each capped on its own', () => {
+    const dir = workspace()
+    for (const name of ['STANDING-ORDERS.md', 'AGENTS.md', 'USER.md', 'IDENTITY.md', 'SOUL.md']) {
+      writeFileSync(join(dir, name), 'y'.repeat(PERSONA_FILE_LIMIT + 1))
+    }
+    const cut = `${'y'.repeat(PERSONA_FILE_LIMIT)}\n[truncated]`
+    expect(readPersonaPrompt(dir)).toBe(
+      ['SOUL.md', 'IDENTITY.md', 'USER.md', 'AGENTS.md', 'STANDING-ORDERS.md'].map((n) => `## ${n}\n\n${cut}`).join('\n\n'),
+    )
   })
 })

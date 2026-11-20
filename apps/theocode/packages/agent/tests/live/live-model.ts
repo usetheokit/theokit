@@ -11,3 +11,14 @@ export function resolveLiveModel(env: Record<string, string | undefined>): strin
   const configured = (env.LIVE_MODEL ?? '').trim()
   return configured === '' ? DEFAULT_LIVE_MODEL : configured
 }
+
+/**
+ * The model id the SDK is given. The SDK reads a bare `google/` prefix as the Google provider, so an
+ * OpenRouter key sent with it is refused. When the selected key is the OpenRouter one, the id is
+ * prefixed `openrouter/` to route it there.
+ */
+export function resolveSdkLiveModel(model: string, keyName: string): string {
+  return keyName === 'OPENROUTER_API_KEY' && !model.startsWith('openrouter/')
+    ? `openrouter/${model}`
+    : model
+}
