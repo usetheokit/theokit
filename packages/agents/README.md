@@ -334,6 +334,19 @@ AgentBuilder.create()
 
 A listener that throws is reported with `console.warn` and does not fail the build. `recordWiring` is unchanged; feed it from `CompiledWiring` if you want trust suppression.
 
+## Deferring a gated tool call
+
+By default a `@HumanInTheLoop` call pauses the run on `awaitApproval`, so a pending approval lives as long as the process. Set `onDefer` on the HITL wiring to end the run instead: the plugin emits the same approval event, awaits `onDefer(approval)`, then returns the SDK defer veto (`{ defer: true }`) and never calls `awaitApproval`.
+
+```ts
+createHitlPlugin({
+  gated, emit, awaitApproval,
+  onDefer: async (a) => { await store.save(a) }, // a: DeferredApproval — approvalId, toolUseId, toolName, input, question, runId, agentId
+})
+```
+
+Persisting the approval is the host's job. If `onDefer` rejects (or the call has no `toolUseId`), the call is blocked with `approval could not be recorded: <reason>` rather than run unapproved. Resuming the run is not part of this plugin.
+
 ## Reading skills with `skill_read`
 
 By default only inline skills (`createSkill(...)`) get a `skill_read` tool; a skill enabled by name or found on disk is listed in the `<skills>` block but its body is not readable. Opt in with `read: 'advertised'`:

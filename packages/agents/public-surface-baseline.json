@@ -1965,6 +1965,14 @@
           "references": [],
           "internals": {}
         },
+        "DeferredApproval": {
+          "tier": "stable",
+          "declaration": "interface DeferredApproval {\n    readonly approvalId: string;\n    readonly toolUseId: string;\n    readonly toolName: string;\n    readonly input: Record<string, unknown>;\n    readonly question?: string;\n    readonly runId: string;\n    readonly agentId: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "DefineAgentConfig": {
           "tier": "stable",
           "declaration": "interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {\n    input?: TInput;\n    model?: string;\n    system?: string;\n    reasoningEffort?: ReasoningEffort;\n    maxIterations?: number;\n    tools?: readonly CustomTool[];\n    context?: Record<string, unknown>;\n    guardrails?: readonly Guardrail[];\n    approvals?: Record<string, HumanInTheLoopOptions>;\n    skills?: SkillsSelection;\n    skillsRead?: 'inline' | 'advertised';\n    subagents?: Record<string, SubagentAgentDefinition>;\n    settingSources?: SettingSourcesSelection;\n    hookApproval?: HookApprovalGate;\n    withheldBuiltinTools?: readonly BuiltinToolName[];\n    memory?: MemorySettings;\n    telemetry?: TelemetrySettings;\n    plugins?: readonly CodePlugin[];\n    hooks?: HookHandlers | Readonly<Record<string, unknown>>;\n    onWired?: (wiring: CompiledWiring) => void;\n    mcpServers?: McpServersMap;\n}",
@@ -3436,7 +3444,7 @@
         },
         "McpHttpServerConfig": {
           "tier": "stable",
-          "declaration": "type McpHttpServerConfig = {\n    type?: \"http\" | \"sse\";\n    url: string;\n    headers?: Record<string, string>;\n    auth?: McpAuthConfig;\n    requestTimeoutMs?: number;\n    sequential?: boolean;\n};",
+          "declaration": "type McpHttpServerConfig = {\n    type?: \"http\" | \"sse\";\n    url: string;\n    headers?: Record<string, string>;\n    auth?: McpAuthConfig;\n    requestTimeoutMs?: number;\n    sequential?: boolean;\n    tools?: {\n        include?: string[];\n        exclude?: string[];\n    };\n};",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -3602,7 +3610,7 @@
         },
         "McpStdioServerConfig": {
           "tier": "stable",
-          "declaration": "type McpStdioServerConfig = {\n    type?: \"stdio\";\n    command: string;\n    args?: string[];\n    env?: Record<string, string>;\n    cwd?: string;\n    requestTimeoutMs?: number;\n    envPolicy?: EnvPolicy;\n    sequential?: boolean;\n};",
+          "declaration": "type McpStdioServerConfig = {\n    type?: \"stdio\";\n    command: string;\n    args?: string[];\n    env?: Record<string, string>;\n    cwd?: string;\n    requestTimeoutMs?: number;\n    envPolicy?: EnvPolicy;\n    sequential?: boolean;\n    tools?: {\n        include?: string[];\n        exclude?: string[];\n    };\n};",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -3704,6 +3712,22 @@
             "dist/types-<hash>.d.ts#TimeoutAction": "type TimeoutAction = 'abort' | 'proceed' | 'retry';"
           }
         },
+        "MemoryFactAmbiguousError": {
+          "tier": "stable",
+          "declaration": "declare class MemoryFactAmbiguousError extends TheokitAgentError {\n    readonly name: string;\n    readonly factId: string;\n    readonly roots: readonly string[];\n    constructor(factId: string, roots: readonly string[]);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "MemoryFactNotRemovableError": {
+          "tier": "stable",
+          "declaration": "declare class MemoryFactNotRemovableError extends TheokitAgentError {\n    readonly name: string;\n    readonly factId: string;\n    readonly root: string;\n    constructor(factId: string, root: string);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "Modality": {
           "tier": "stable",
           "declaration": "export type Modality = (typeof MODALITIES)[number];",
@@ -3787,6 +3811,22 @@
             "dist/types-<hash>.d.ts#RelevanceStrategy": "type RelevanceStrategy = 'git-history' | 'import-graph' | 'semantic' | 'manual';",
             "dist/types-<hash>.d.ts#TimeoutAction": "type TimeoutAction = 'abort' | 'proceed' | 'retry';"
           }
+        },
+        "ModelFallbackAttempt": {
+          "tier": "stable",
+          "declaration": "interface ModelFallbackAttempt {\n    model: string;\n    errorCode?: string;\n    message?: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ModelFallbackExhaustedError": {
+          "tier": "stable",
+          "declaration": "declare class ModelFallbackExhaustedError extends TheokitAgentError {\n    readonly name: string;\n    readonly attempts: readonly ModelFallbackAttempt[];\n    constructor(attempts: readonly ModelFallbackAttempt[], cause?: unknown);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
         },
         "ModelOption": {
           "tier": "stable",
@@ -4060,6 +4100,14 @@
           "tier": "stable",
           "declaration": "type ProcessInputContext = Pick<PreUserSendContext, 'prompt' | 'agentId' | 'runId'>;",
           "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ProfileConflictError": {
+          "tier": "stable",
+          "declaration": "declare class ProfileConflictError extends ConfigurationError {\n    readonly name: string;\n    readonly variables: readonly string[];\n    constructor(variables: readonly string[]);\n}",
+          "runtime": true,
           "deprecatedSince": null,
           "references": [],
           "internals": {}
@@ -4842,7 +4890,7 @@
         },
         "SessionRecord": {
           "tier": "stable",
-          "declaration": "interface SessionRecord {\n    type: \"user\" | \"assistant\" | \"system\";\n    uuid: string;\n    parentUuid: string | null;\n    sessionId: string;\n    timestamp: string;\n    isSidechain?: boolean;\n    userType?: string;\n    cwd?: string;\n    version?: string;\n    subtype?: string;\n    compactMetadata?: {\n        preTokens: number;\n        trigger: string;\n    };\n    message?: TranscriptMessage;\n}",
+          "declaration": "interface SessionRecord {\n    type: \"user\" | \"assistant\" | \"system\";\n    uuid: string;\n    parentUuid: string | null;\n    sessionId: string;\n    timestamp: string;\n    isSidechain?: boolean;\n    userType?: string;\n    cwd?: string;\n    version?: string;\n    subtype?: string;\n    compactMetadata?: {\n        preTokens: number;\n        trigger: string;\n    };\n    deferredToolCalls?: Array<{\n        toolUseId: string;\n        schemaVersion: number;\n    }>;\n    message?: TranscriptMessage;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -5268,7 +5316,7 @@
         },
         "Squad": {
           "tier": "stable",
-          "declaration": "interface Squad {\n    run(input: unknown): Promise<SquadRun>;\n}\ndeclare class Squad {\n    private constructor();\n    static create(options: SquadOptions): Squad;\n}",
+          "declaration": "interface Squad {\n    run(input: unknown, options?: SquadRunOptions): Promise<SquadRun>;\n}\ndeclare class Squad {\n    private constructor();\n    static create(options: SquadOptions): Squad;\n}",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -5305,6 +5353,7 @@
             "dist/bridge-entry-<hash>.d.ts#streamAgentUIMessages",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision",
             "dist/sdk-adapter-<hash>.d.ts#HitlWiring",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides",
@@ -5343,8 +5392,9 @@
             "dist/bridge-entry-<hash>.d.ts#streamAgentUIMessages": "declare function streamAgentUIMessages(compiled: CompiledAgentOptions, apiKey: string, input: StreamAgentOptions): AsyncGenerator<WireChunk>;",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest": "interface ApprovalRequest {\n    approvalId: string;\n    toolName: string;\n    question: string;\n    input: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n}",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage": "type BridgeImage = {\n    url: string;\n} | {\n    data: string;\n    mimeType: string;\n};",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval": "interface DeferredApproval {\n    readonly approvalId: string;\n    readonly toolUseId: string;\n    readonly toolName: string;\n    readonly input: Record<string, unknown>;\n    readonly question?: string;\n    readonly runId: string;\n    readonly agentId: string;\n}",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision": "interface HitlDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n    settledBy?: 'timeout';\n}",
-            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n    onDefer?: (approval: DeferredApproval) => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides": "interface RuntimeOverrides {\n    model?: string | ModelSelection;\n    images?: readonly BridgeImage[];\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    cwd?: string;\n    runContext?: Record<string, unknown>;\n    plugins?: PluginsSettings | readonly Plugin[];\n    providers?: ProviderRoutingSettings;\n    agents?: Record<string, AgentDefinition$1>;\n    budgetTracker?: BudgetTracker;\n    baseDir?: string;\n    sdkTools?: readonly CustomTool[];\n    onRunEvent?: RunEventSink;\n    retry?: RetryOptions;\n    exposeUsageToTools?: boolean;\n}",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
@@ -5390,6 +5440,7 @@
             "dist/sdk-adapter-<hash>.d.ts#ApprovalPosture",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision",
             "dist/sdk-adapter-<hash>.d.ts#HitlWiring",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides",
@@ -5431,8 +5482,9 @@
             "dist/sdk-adapter-<hash>.d.ts#ApprovalPosture": "type ApprovalPosture = {\n    kind: 'interactive';\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n} | {\n    kind: 'auto-approve';\n    confinedBy: SandboxPosture;\n    reason: string;\n} | {\n    kind: 'auto-reject';\n    reason: string;\n} | {\n    kind: 'owned-by-surface';\n    reason: string;\n};",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest": "interface ApprovalRequest {\n    approvalId: string;\n    toolName: string;\n    question: string;\n    input: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n}",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage": "type BridgeImage = {\n    url: string;\n} | {\n    data: string;\n    mimeType: string;\n};",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval": "interface DeferredApproval {\n    readonly approvalId: string;\n    readonly toolUseId: string;\n    readonly toolName: string;\n    readonly input: Record<string, unknown>;\n    readonly question?: string;\n    readonly runId: string;\n    readonly agentId: string;\n}",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision": "interface HitlDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n    settledBy?: 'timeout';\n}",
-            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n    onDefer?: (approval: DeferredApproval) => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides": "interface RuntimeOverrides {\n    model?: string | ModelSelection;\n    images?: readonly BridgeImage[];\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    cwd?: string;\n    runContext?: Record<string, unknown>;\n    plugins?: PluginsSettings | readonly Plugin[];\n    providers?: ProviderRoutingSettings;\n    agents?: Record<string, AgentDefinition$1>;\n    budgetTracker?: BudgetTracker;\n    baseDir?: string;\n    sdkTools?: readonly CustomTool[];\n    onRunEvent?: RunEventSink;\n    retry?: RetryOptions;\n    exposeUsageToTools?: boolean;\n}",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
@@ -5844,6 +5896,14 @@
           "tier": "stable",
           "declaration": "type ToolArgsValidator = (tool: CustomTool, args: Record<string, unknown>) => string | undefined;",
           "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ToolCallBlockedError": {
+          "tier": "stable",
+          "declaration": "declare class ToolCallBlockedError extends TheokitAgentError {\n    readonly name: string;\n    readonly toolName: string;\n    readonly pluginMessage: string;\n    constructor(toolName: string, pluginMessage: string);\n}",
+          "runtime": true,
           "deprecatedSince": null,
           "references": [],
           "internals": {}
@@ -9715,6 +9775,7 @@
             "dist/sdk-adapter-<hash>.d.ts#ApprovalPosture",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision",
             "dist/sdk-adapter-<hash>.d.ts#HitlWiring",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides",
@@ -9768,8 +9829,9 @@
             "dist/sdk-adapter-<hash>.d.ts#ApprovalPosture": "type ApprovalPosture = {\n    kind: 'interactive';\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n} | {\n    kind: 'auto-approve';\n    confinedBy: SandboxPosture;\n    reason: string;\n} | {\n    kind: 'auto-reject';\n    reason: string;\n} | {\n    kind: 'owned-by-surface';\n    reason: string;\n};",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest": "interface ApprovalRequest {\n    approvalId: string;\n    toolName: string;\n    question: string;\n    input: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n}",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage": "type BridgeImage = {\n    url: string;\n} | {\n    data: string;\n    mimeType: string;\n};",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval": "interface DeferredApproval {\n    readonly approvalId: string;\n    readonly toolUseId: string;\n    readonly toolName: string;\n    readonly input: Record<string, unknown>;\n    readonly question?: string;\n    readonly runId: string;\n    readonly agentId: string;\n}",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision": "interface HitlDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n    settledBy?: 'timeout';\n}",
-            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n    onDefer?: (approval: DeferredApproval) => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides": "interface RuntimeOverrides {\n    model?: string | ModelSelection;\n    images?: readonly BridgeImage[];\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    cwd?: string;\n    runContext?: Record<string, unknown>;\n    plugins?: PluginsSettings | readonly Plugin[];\n    providers?: ProviderRoutingSettings;\n    agents?: Record<string, AgentDefinition$1>;\n    budgetTracker?: BudgetTracker;\n    baseDir?: string;\n    sdkTools?: readonly CustomTool[];\n    onRunEvent?: RunEventSink;\n    retry?: RetryOptions;\n    exposeUsageToTools?: boolean;\n}",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
@@ -9814,6 +9876,7 @@
             "dist/bridge-entry-<hash>.d.ts#StreamHitlOptions",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision",
             "dist/sdk-adapter-<hash>.d.ts#HitlWiring",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides",
@@ -9851,8 +9914,9 @@
             "dist/bridge-entry-<hash>.d.ts#StreamHitlOptions": "interface StreamHitlOptions {\n    gated: HitlWiring['gated'];\n    awaitApproval: HitlWiring['awaitApproval'];\n}",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest": "interface ApprovalRequest {\n    approvalId: string;\n    toolName: string;\n    question: string;\n    input: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n}",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage": "type BridgeImage = {\n    url: string;\n} | {\n    data: string;\n    mimeType: string;\n};",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval": "interface DeferredApproval {\n    readonly approvalId: string;\n    readonly toolUseId: string;\n    readonly toolName: string;\n    readonly input: Record<string, unknown>;\n    readonly question?: string;\n    readonly runId: string;\n    readonly agentId: string;\n}",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision": "interface HitlDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n    settledBy?: 'timeout';\n}",
-            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n    onDefer?: (approval: DeferredApproval) => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides": "interface RuntimeOverrides {\n    model?: string | ModelSelection;\n    images?: readonly BridgeImage[];\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    cwd?: string;\n    runContext?: Record<string, unknown>;\n    plugins?: PluginsSettings | readonly Plugin[];\n    providers?: ProviderRoutingSettings;\n    agents?: Record<string, AgentDefinition$1>;\n    budgetTracker?: BudgetTracker;\n    baseDir?: string;\n    sdkTools?: readonly CustomTool[];\n    onRunEvent?: RunEventSink;\n    retry?: RetryOptions;\n    exposeUsageToTools?: boolean;\n}",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
@@ -16363,6 +16427,7 @@
             "dist/bridge-entry-<hash>.d.ts#StreamHitlOptions",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision",
             "dist/sdk-adapter-<hash>.d.ts#HitlWiring",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides",
@@ -16400,8 +16465,9 @@
             "dist/bridge-entry-<hash>.d.ts#StreamHitlOptions": "interface StreamHitlOptions {\n    gated: HitlWiring['gated'];\n    awaitApproval: HitlWiring['awaitApproval'];\n}",
             "dist/sdk-adapter-<hash>.d.ts#ApprovalRequest": "interface ApprovalRequest {\n    approvalId: string;\n    toolName: string;\n    question: string;\n    input: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n}",
             "dist/sdk-adapter-<hash>.d.ts#BridgeImage": "type BridgeImage = {\n    url: string;\n} | {\n    data: string;\n    mimeType: string;\n};",
+            "dist/sdk-adapter-<hash>.d.ts#DeferredApproval": "interface DeferredApproval {\n    readonly approvalId: string;\n    readonly toolUseId: string;\n    readonly toolName: string;\n    readonly input: Record<string, unknown>;\n    readonly question?: string;\n    readonly runId: string;\n    readonly agentId: string;\n}",
             "dist/sdk-adapter-<hash>.d.ts#HitlDecision": "interface HitlDecision {\n    approved: boolean;\n    reason?: string;\n    payload?: unknown;\n    settledBy?: 'timeout';\n}",
-            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#HitlWiring": "interface HitlWiring {\n    gated: Map<string, HumanInTheLoopOptions>;\n    emit: (event: ApprovalRequiredEvent) => void;\n    awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) => Promise<boolean | HitlDecision>;\n    onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>;\n    onDefer?: (approval: DeferredApproval) => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#RuntimeOverrides": "interface RuntimeOverrides {\n    model?: string | ModelSelection;\n    images?: readonly BridgeImage[];\n    reasoningEffort?: ReasoningEffort;\n    parseThinkTags?: boolean;\n    stripToolDialect?: boolean;\n    recoverLeakedToolCalls?: boolean;\n    cwd?: string;\n    runContext?: Record<string, unknown>;\n    plugins?: PluginsSettings | readonly Plugin[];\n    providers?: ProviderRoutingSettings;\n    agents?: Record<string, AgentDefinition$1>;\n    budgetTracker?: BudgetTracker;\n    baseDir?: string;\n    sdkTools?: readonly CustomTool[];\n    onRunEvent?: RunEventSink;\n    retry?: RetryOptions;\n    exposeUsageToTools?: boolean;\n}",
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';",
             "dist/setting-sources-gate-<hash>.d.ts#GATED": "GATED: unique symbol",
@@ -21675,7 +21741,7 @@
         },
         "DockerSandbox": {
           "tier": "stable",
-          "declaration": "export declare class DockerSandbox extends SandboxBackend {\n    readonly networkPolicy: SandboxNetworkPolicy;\n    private readonly image;\n    private readonly network;\n    private readonly runner;\n    private readonly hostDir;\n    private readonly user;\n    constructor(config?: DockerSandboxConfig);\n    private runArgs;\n    private run;\n    execute(command: string, opts?: {\n        timeoutMs?: number;\n    }): Promise<ExecuteResult>;\n    uploadFile(path: string, content: string | Buffer): Promise<void>;\n}",
+          "declaration": "export declare class DockerSandbox extends SandboxBackend {\n    readonly networkPolicy: SandboxNetworkPolicy;\n    private readonly image;\n    private readonly network;\n    private readonly runner;\n    private readonly hostDir;\n    private readonly user;\n    private readonly readOnlyWorkspace;\n    private readonly labels;\n    private readonly keepKey;\n    constructor(config?: DockerSandboxConfig);\n    private runArgs;\n    private run;\n    execute(command: string, opts?: {\n        timeoutMs?: number;\n    }): Promise<ExecuteResult>;\n    uploadFile(path: string, content: string | Buffer): Promise<void>;\n}",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -21683,7 +21749,7 @@
         },
         "DockerSandboxConfig": {
           "tier": "stable",
-          "declaration": "export interface DockerSandboxConfig extends SandboxConfig {\n    image?: string;\n    network?: boolean;\n    dockerBin?: string;\n    runner?: DockerRunner;\n    user?: string;\n}",
+          "declaration": "export interface DockerSandboxConfig extends SandboxConfig {\n    image?: string;\n    network?: boolean;\n    dockerBin?: string;\n    runner?: DockerRunner;\n    user?: string;\n    readOnlyWorkspace?: boolean;\n    labels?: Readonly<Record<string, string>>;\n    keepLast?: {\n        key: string;\n    };\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
