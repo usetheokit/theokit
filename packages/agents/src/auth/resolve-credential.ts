@@ -16,6 +16,7 @@ import { join } from 'node:path'
 // Still imported as the opaque type it is: this module only forwards it to the SDK, and
 // re-declaring the shape here would be a mirror that drifts.
 import {
+  DEFAULT_PROVIDER_CANDIDATES,
   providerFromApiKeyPrefix,
   readAuthFile,
   type CredentialStoreConfig,
@@ -538,29 +539,20 @@ export function requireCredential(input: ResolveCredentialInput): CredentialReso
 /**
  * The providers a TheoKit agent app starts with — so a new app writes no table at all.
  *
- * Measured against the closest real consumer: it opens with three hand-written tables (`PROVIDERS`,
- * `PREFIXES`, `ENV_KEYS`) saying what every terminal agent app says. That is not its domain; it is
- * the cost of shipping a resolver whose only input is the argument the app must build.
+ * Derived from the SDK's provider table (`DEFAULT_PROVIDER_CANDIDATES` in `@theokit/sdk/auth`), which
+ * owns the env var names and the default order. This package holds no env var name and no key
+ * prefix of its own: the coherence check in {@link assertKeyMatchesProvider} asks the SDK's
+ * `providerFromApiKeyPrefix`, so a key's vendor is decided in one place.
  *
- * ## Why the prefixes live here as well as in the SDK
- *
- * `providerFromApiKeyPrefix` owns the same knowledge, and one table would be better. It cannot be
- * the only one today: the symbol is exported at runtime and absent from the SDK's `auth/index.d.ts`
- * (measured against 4.52.0), so a typed import does not resolve. Rather than block, the table is
- * here AND a drift-guard test fails when the two disagree — the same hand-maintained-table hazard
- * that produced the longest-prefix bug is caught by CI instead of hoped away.
- *
- * ## Priorities, and why they are spaced
- *
- * Distinct and 10 apart: an app that wants to slot a provider between two defaults can, without
- * renumbering. Order is `openrouter → anthropic → openai`, matching the consumer's measured chain.
+ * `priority` is the SDK's own value, so the default order is the SDK's order.
  */
-
-export const DEFAULT_PROVIDERS: readonly ProviderDescriptor[] = [
-  { name: 'openrouter', envKey: 'OPENROUTER_API_KEY', priority: 10, keyPrefix: 'sk-or-' },
-  { name: 'anthropic', envKey: 'ANTHROPIC_API_KEY', priority: 20, keyPrefix: 'sk-ant-' },
-  { name: 'openai', envKey: 'OPENAI_API_KEY', priority: 30, keyPrefix: 'sk-' },
-]
+export const DEFAULT_PROVIDERS: readonly ProviderDescriptor[] = DEFAULT_PROVIDER_CANDIDATES.map(
+  (candidate) => ({
+    name: candidate.name,
+    envKey: candidate.envVar,
+    priority: candidate.priority,
+  }),
+)
 
 /** Everything {@link resolveAgentCredential} needs, and nothing an app has to invent. */
 export interface AgentCredentialInput {

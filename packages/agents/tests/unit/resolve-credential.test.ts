@@ -30,7 +30,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { providerFromApiKeyPrefix } from '@theokit/sdk/auth'
+import { DEFAULT_PROVIDER_CANDIDATES, resolveProviderCredential } from '@theokit/sdk/auth'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -380,7 +380,6 @@ describe('DEFAULT_PROVIDERS', () => {
   it('every_default_carries_what_the_resolver_needs', () => {
     for (const p of DEFAULT_PROVIDERS) {
       expect(p.envKey, `${p.name} has no env var`).toMatch(/_API_KEY$/)
-      expect(p.keyPrefix, `${p.name} has no key prefix`).toBeTruthy()
       expect(typeof p.priority).toBe('number')
     }
   })
@@ -393,16 +392,21 @@ describe('DEFAULT_PROVIDERS', () => {
   })
 
   it('the_prefixes_agree_with_the_sdk', () => {
-    // DRIFT GUARD, now with a typed import. The SDK owns the same knowledge, and a second
-    // hand-maintained copy is what produced the longest-prefix bug fixed in 4.52.0. The coherence
-    // check already ASKS the SDK rather than restating it; this keeps the descriptor table — which
-    // still names a prefix per provider for the escape-hatch path — from drifting away from it.
-    for (const p of DEFAULT_PROVIDERS) {
-      expect(
-        providerFromApiKeyPrefix(`${p.keyPrefix ?? ''}example-key`),
-        `our table says ${p.name} owns "${p.keyPrefix ?? ''}", the SDK disagrees`,
-      ).toBe(p.name)
-    }
+    // The table carries no key prefix of its own: the coherence check asks the SDK. What is left to
+    // guard is that every default is one of the SDK's candidates, with the SDK's variable and order.
+    expect(DEFAULT_PROVIDERS.map((p) => [p.name, p.envKey, p.priority])).toEqual(
+      DEFAULT_PROVIDER_CANDIDATES.map((c) => [c.name, c.envVar, c.priority]),
+    )
+    for (const p of DEFAULT_PROVIDERS) expect(p.keyPrefix).toBeUndefined()
+  })
+
+  it('test_the_default_order_is_the_sdk_order', async () => {
+    const env = { ANTHROPIC_API_KEY: 'sk-ant-x', OPENAI_API_KEY: 'sk-x' }
+
+    const ours = resolveAgentCredential({ env, model: 'gpt-4o-mini' })
+    const sdk = await resolveProviderCredential({ env, model: 'gpt-4o-mini' })
+
+    expect(ours.provider).toBe(sdk.provider)
   })
 })
 
@@ -464,7 +468,7 @@ describe('resolveAgentCredential — the one call a new app makes', () => {
 
   it('a_mis_pasted_key_is_caught_with_no_extra_wiring', () => {
     expect(() => resolveAgentCredential({ env: { ANTHROPIC_API_KEY: 'sk-proj-openai' } })).toThrow(
-      /sk-ant-/,
+      /openai/,
     )
   })
 })
