@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1452 export(s) across 26 entry point(s).
+1455 export(s) across 27 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -52,7 +52,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `CapabilityPreset` | value |
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
-| `classifyTurnFailure` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
 | `compileAgentDefinition` | value |
@@ -90,7 +89,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DEFAULT_HANDLER_TIMEOUT_MS` | value |
 | `DEFAULT_KEEP_TOKENS` | value |
 | `DEFAULT_MAX_ITERATIONS` | value |
-| `DEFAULT_TURN_FAILURE_HINTS` | value |
 | `delegate` | value |
 | `delegateBackground` | value |
 | `delegateWithScoring` | value |
@@ -100,7 +98,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
-| `describeTurnFailure` | value |
 | `detectWorkspaceRecipe` | value |
 | `discoverSubagents` | value |
 | `encodeAcpMessage` | value |
@@ -501,8 +498,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `TrustPosture` | type |
 | `TrustPostureInput` | type |
 | `TrustSource` | type |
-| `TurnFailure` | type |
-| `TurnFailureHints` | type |
 | `TurnLifecycle` | type |
 | `TurnOutcome` | type |
 | `Verdict` | type |
@@ -737,6 +732,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `createDevicePairing` | value |
 | `createSessionStore` | value |
 | `pairRoute` | value |
+| `Server` | value |
 | `AgentTurnUsage` | type |
 | `ControlClient` | type |
 | `ControlClientFrame` | type |
@@ -1473,6 +1469,17 @@ Measured against `@theokit/sdk@5.17.0`.
 | `BuildAgentCardOptions` | type |
 | `PlainAgentCardInput` | type |
 
+## `@theokit/agents/errors`
+
+| Symbol | Kind |
+|---|---|
+| `classifyTurnFailure` | value |
+| `DEFAULT_TURN_FAILURE_HINTS` | value |
+| `describeTurnFailure` | value |
+| `KnownAgentRunErrorCode` | type |
+| `TurnFailure` | type |
+| `TurnFailureHints` | type |
+
 ## `@theokit/agents/evals`
 
 | Symbol | Kind |
@@ -1545,6 +1552,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `Shutdown` | type |
 | `ShutdownDeps` | type |
 | `ShutdownOutcome` | type |
+| `WireTurnMetadata` | type |
 
 ## `@theokit/agents/doctor`
 

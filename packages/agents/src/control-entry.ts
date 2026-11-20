@@ -24,3 +24,6 @@ export {
   createControlClient,
   type ControlClient,
 } from './control/control-client.js'
+
+// `attachControlSocket` takes the `node:http` server it attaches to, so its type crosses this barrel.
+export type { Server } from 'node:http'

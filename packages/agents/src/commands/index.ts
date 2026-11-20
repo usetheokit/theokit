@@ -46,3 +46,6 @@ export type {
   HeadlessTurnOptions,
   HeadlessTurnResult,
 } from './headless-turn.js'
+
+// `runHeadlessTurn` reports the turn's metadata in the wire shape `@theokit/presenter` defines.
+export type { WireTurnMetadata } from '@theokit/presenter/wire'

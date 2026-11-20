@@ -10,6 +10,8 @@ export default defineConfig({
     'mcp-health': 'src/mcp-health-entry.ts',
     // B-407 (F-arch-5) — the A2A client: remote delegation most agents never import.
     a2a: 'src/a2a-entry.ts',
+    // The turn-failure classifier, off the root bundle (ADR 0033).
+    errors: 'src/errors-entry.ts',
     // B-413 — run cases against an agent and read a verdict per case; development-time tooling.
     evals: 'src/evals-entry.ts',
     // B-410 — a conversation one agent hands to another; an app-facing orchestrator.

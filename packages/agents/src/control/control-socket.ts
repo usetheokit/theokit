@@ -4,7 +4,6 @@
  *
  * Ported from TheoClaw's control socket. `ws` is an optional peer, loaded when this is called.
  */
-import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, Server } from 'node:http'
 import { createRequire } from 'node:module'
 import type { Duplex } from 'node:stream'
@@ -68,7 +67,7 @@ export function attachControlSocket(
   function serve(ws: WebSocket): void {
     const owner = {}
     /** Used when a chat names no session: private to this socket. */
-    const privateSession = `sock-${randomUUID()}`
+    const privateSession = `sock-${crypto.randomUUID()}`
     let turning = false
     const send = (frame: ControlServerFrame): void => {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame))
