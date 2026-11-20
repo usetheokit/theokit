@@ -27,6 +27,11 @@ const LIVE = process.env.THEOCLAW_LIVE === '1'
 const APP_DIR = fileURLToPath(new URL('../..', import.meta.url))
 const ENTRY = join(APP_DIR, 'dist', 'main.js')
 const HOME = homedir()
+
+/** The workflow's model is an OpenRouter API id; the SDK needs the `openrouter/` prefix to route it there. */
+function sdkModel(id: string): string {
+  return id.startsWith('openrouter/') ? id : `openrouter/${id}`
+}
 const SERVICE = platformService(process.platform)
 
 interface Run {
@@ -59,7 +64,7 @@ async function prepare(key: string): Promise<{ port: number; token: string }> {
   run = { profile, dir, io, output: () => output }
   const port = await freePort()
   await onboard(
-    { yes: true, force: false, model: process.env.THEOCLAW_MODEL!, apiKeyEnv: 'LIVE_KEY', port: String(port), owners: 'telegram:owner' },
+    { yes: true, force: false, model: sdkModel(process.env.THEOCLAW_MODEL!), apiKeyEnv: 'LIVE_KEY', port: String(port), owners: 'telegram:owner' },
     { env, homeDir: HOME, stdin: new PassThrough(), stdout: sink, isTTY: false },
   )
   // `onboard` always writes THEOCLAW_WORKSPACE, which a profile refuses to share a start with

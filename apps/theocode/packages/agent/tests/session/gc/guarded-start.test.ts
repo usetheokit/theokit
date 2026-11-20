@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { guardedSweepStart } from '../../../src/session/gc/guarded-start.js'
+import { guardedSweepStart } from '../../../src/session/gc/sweep-wiring.js'
 
 const ok = () => ({ started: true, reason: 'applying' })
 

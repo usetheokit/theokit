@@ -40,7 +40,8 @@ function fakeDatabase(): { rows: Map<string, string>; writes: number; deps: { ma
         })
       if (sql.startsWith('INSERT')) {
         state.writes++
-        rows.set(params[0] as string, params[1] as string)
+        // The framework copies as one statement whose only parameter is the JSON array of jobs.
+        for (const copied of JSON.parse(params[0] as string) as ScheduledJob[]) rows.set(copied.id, JSON.stringify(copied))
       }
       return Promise.resolve({ rows: [] })
     },

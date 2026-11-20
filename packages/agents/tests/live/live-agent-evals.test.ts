@@ -22,12 +22,12 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { AgentBuilder } from '../../src/bridge/agent-builder.js'
 import { Scorers, runAgentEvals } from '../../src/evals-entry.js'
 
-import { resolveLiveModel } from '../../../../scripts/live-model.mjs'
+import { resolveSdkLiveModel } from '../../../../scripts/live-model.mjs'
 
 import { redactThenCut } from './provider-text.js'
 import { LIVE_KEY_NAMES } from './require-provider-key.js'
 
-const MODEL = resolveLiveModel(process.env)
+const MODEL = resolveSdkLiveModel(process.env)
 const PRESENT_KEYS = LIVE_KEY_NAMES.filter((n) => (process.env[n]?.trim() ?? '') !== '')
 const HAS_KEY = PRESENT_KEYS.length > 0
 

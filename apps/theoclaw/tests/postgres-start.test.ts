@@ -23,7 +23,7 @@ function fakeDatabase(): { rows: Map<string, string>; makePool: () => PoolLike }
     query: (sql: string, params: unknown[] = []) => {
       if (sql.startsWith('SELECT')) {
         return Promise.resolve({
-          rows: [...rows.values()].map((job) => ({ job: JSON.parse(job) })) as never[],
+          rows: [...rows.values()].map((job) => ({ id: (JSON.parse(job) as { id: string }).id, job: JSON.parse(job) })) as never[],
         })
       }
       if (sql.startsWith('INSERT')) rows.set(params[0] as string, params[1] as string)

@@ -19,6 +19,7 @@ vi.mock('@theocode/agent/session', async (orig) => ({
 }))
 
 import { getTuiRoot } from '../../src/agent-session/composition-root.js'
+import { drainAll } from '../../src/terminal-io/index.js'
 import { noteTurnStart } from '../../src/persistence/fork-session.js'
 import { setWorkingDirectory } from '../../src/working-directory.js'
 
@@ -28,7 +29,10 @@ beforeAll(() => {
   mkdirSync(join(dir, '.theokit'))
   setWorkingDirectory(dir)
 })
-afterAll(() => rmSync(dir, { recursive: true, force: true }))
+afterAll(async () => {
+  await drainAll()
+  rmSync(dir, { recursive: true, force: true })
+})
 
 /** Read through a call: after `gate.release = undefined` and an await, TypeScript keeps the narrowing. */
 function release(): void {

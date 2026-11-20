@@ -1,17 +1,20 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MemoryStore } from '../src/memory/memory-store.js'
-import { saveMemoryTool, sessionSearchTool } from '../src/memory/memory-tools.js'
-import { afterTurn } from '../src/memory/turn-review.js'
+import { sessionSearchTool } from '../src/memory/memory-tools.js'
+import { recordTurn } from '../src/memory/wiring.js'
+import { FACT, say, seen } from './memory-sdk-support.js'
 
 interface Callable {
   name: string
   handler: (input: unknown) => Promise<string> | string
 }
+afterEach(() => vi.unstubAllEnvs())
+
 const dir = () => mkdtempSync(join(tmpdir(), 'theoclaw-memory-'))
 const turn = (surface: string, user: string) => ({
   surface,
@@ -38,28 +41,47 @@ describe('memory across surfaces (OC-56, Hermes row 3)', () => {
     expect(out).toContain('webchat')
     expect(out).toContain('deploy goes on Fridays')
   })
+})
 
-  it('has a reviewer save a fact the next session recalls, and a failing reviewer does not reject', async () => {
-    const d = dir()
-    const store = new MemoryStore(d)
-    const save = saveMemoryTool(store) as unknown as Callable
-    await afterTurn(store, turn('tui', 'I work in Lisbon'), async (prompt) => {
-      expect(prompt).toContain('I work in Lisbon')
-      await save.handler({ query: 'The owner works in Lisbon' })
-      await save.handler({ query: 'The owner works in Lisbon' })
-    })
-    expect(store.facts()).toEqual(['The owner works in Lisbon'])
-    expect(new MemoryStore(d).recallSection()).toContain('- The owner works in Lisbon')
-    expect(new MemoryStore(dir()).recallSection()).toBe('')
-
-    const errors: unknown[] = []
-    await afterTurn(store, turn('tui', 'x'), () => Promise.reject(new Error('boom')), (e) => errors.push(e))
-    expect(errors).toHaveLength(1)
+describe('memory across surfaces, the reviewer (#1834)', () => {
+  it('has a reviewer save a fact the next session recalls, and a failing reviewer does not reject', { timeout: 60_000 }, async () => {
+    const state = dir()
+    // The reviewer saves the same fact twice in one review: it is kept once.
+    const twice = { toolCalls: [{ name: 'save_memory', args: { fact: FACT } }, { name: 'save_memory', args: { fact: FACT } }] }
+    const saving = await say(state, 'tui', 'owner', true, {}, { replies: [{ text: 'noted' }, twice, { text: 'done' }], message: 'I work in Lisbon' })
+    // The reviewer was told the turn it reviews.
+    expect(JSON.stringify(saving.requests[1])).toContain('I work in Lisbon')
+    // The second turn's review fails inside the SDK (the reviewer id is taken); the turn still ends.
+    const next = await say(state, 'tui', 'owner', false)
+    const fresh = await say(dir(), 'tui', 'owner', false)
+    try {
+      expect(JSON.stringify(next.requests[0]).split('Quillon-7731')).toHaveLength(2)
+      expect(seen(fresh)).not.toContain('Quillon-7731')
+    } finally {
+      await Promise.all([saving.close(), next.close(), fresh.close()])
+    }
   })
 })
 
 describe('a failed turn append (#1462)', () => {
-  it('reaches onError and the next turn is still recorded and reviewed', async () => {
+  it('reaches onError and the next turn is still recorded and reviewed', { timeout: 60_000 }, async () => {
+    const state = dir()
+    // The turn log's file is a directory, so every append fails.
+    mkdirSync(join(state, 'memory', 'turns.jsonl'), { recursive: true })
+    const lines: string[] = []
+    const saving = await say(state, 'webchat', 'guest', true, {}, { lines })
+    const next = await say(state, 'webchat', 'guest', false, {}, { lines })
+    try {
+      expect(lines.filter((line) => line.includes('memory turn record failed'))).toHaveLength(2)
+      // Reviewed despite the failed append, and recalled by the next turn.
+      expect(saving.requests.length).toBeGreaterThanOrEqual(3)
+      expect(seen(next)).toContain('Quillon-7731')
+    } finally {
+      await Promise.all([saving.close(), next.close()])
+    }
+  })
+
+  it('is reported and never throws, and the next turn is still recorded', () => {
     const appended: unknown[] = []
     let calls = 0
     const store = {
@@ -68,13 +90,11 @@ describe('a failed turn append (#1462)', () => {
         appended.push(turn)
       },
     } as never
-    const errors: unknown[] = []
-    const reviewed: string[] = []
+    const errors: string[] = []
     const turn = { surface: 's', sessionKey: 'k', user: 'u', assistant: 'a', at: 't' }
-    await afterTurn(store, turn, async (p) => void reviewed.push(p), (e) => errors.push(e))
-    await afterTurn(store, turn, async (p) => void reviewed.push(p), (e) => errors.push(e))
+    recordTurn(store, turn, (line) => errors.push(line))
+    recordTurn(store, turn, (line) => errors.push(line))
     expect(errors).toHaveLength(1)
     expect(appended).toHaveLength(1)
-    expect(reviewed).toHaveLength(1)
   })
 })
