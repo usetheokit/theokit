@@ -2,7 +2,7 @@ import type { GatewayHook, MessageEvent } from '@theokit/gateway'
 import type { AcpToolTransport } from 'theokit/server/agent'
 
 import type { AcpAgentConfig } from '../tools/external-tools.js'
-import { scrubbedAgentTransport } from '../tools/acp-transport.js'
+import { acpAgentEnv, agentTransport } from '../tools/acp-transport.js'
 
 const HOOK_NAME = 'theoclaw-acp-command'
 const MENTION = '(?:(?:<@[^>]+>|@\\S+)\\s+)?'
@@ -21,8 +21,8 @@ export interface AcpSessionsOptions {
   readonly agents: readonly AcpAgentConfig[]
   /** The tool root the agent runs in. */
   readonly cwd: string
-  /** Default: the scrubbed `env -i` transport the ACP tools use. */
-  readonly transportFactory?: typeof scrubbedAgentTransport
+  /** Default: the direct-spawn transport the ACP tools use. */
+  readonly transportFactory?: typeof agentTransport
   readonly now?: () => number
 }
 
@@ -37,7 +37,7 @@ export interface AcpSessions {
 }
 
 export function createAcpSessions(options: AcpSessionsOptions): AcpSessions {
-  const factory = options.transportFactory ?? scrubbedAgentTransport
+  const factory = options.transportFactory ?? agentTransport
   const now = options.now ?? Date.now
   const running = new Map<string, { readonly session: AcpSession; readonly transport: AcpToolTransport }>()
   let counter = 0
@@ -61,6 +61,7 @@ export function createAcpSessions(options: AcpSessionsOptions): AcpSessions {
         command: agent.command,
         ...(agent.args === undefined ? {} : { args: [...agent.args] }),
         cwd: options.cwd,
+        env: acpAgentEnv(),
         // No client drives the session: whatever it asks to do is refused.
         onPermissionRequest: () => ({ granted: false }),
       })

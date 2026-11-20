@@ -54,9 +54,11 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
 | `./doctor` | Environment diagnostics: `credentialShape(value, { minLength? })` names a malformed credential (`edge_whitespace`, `inner_whitespace`, `quote_or_backslash`, `control_character`, `placeholder`, `too_short`) or returns `ok`, and `describeCredentialDefect` words it without echoing the value; `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
-| `./usage` | Token and cost accounting |
+| `./usage` | Token and cost accounting: `usageFromRun`, `formatUsd` and `InMemoryUsageStorage`. See the note below the table. |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
+
+`usageFromRun(result, { model })` builds a `UsageRecord` from a run result. `priced` is `false`, and `costUsd` is `0`, when the run has no finite `cost.amountUsd`, so an unpriced model is not read as a free run; `undefined` means priced. `InMemoryUsageStorage.getUsage` leaves unpriced runs out of `totalCostUsd` and counts them in `unpricedRuns`. `formatUsd` prints six significant digits with trailing zeros trimmed.
 
 A terminal command list, with aliases, hidden names and handlers, from `./commands`:
 
@@ -105,6 +107,14 @@ process.exitCode = result.exitCode
 
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
 
+## Stability tiers: experimental exports
+
+Every export without an `@experimental` tag on its own declaration is stable. `@theokit/agents/testing` is a utility subpath for your own tests (not a test-only seam), and its tier is stable except for the legacy snake_case mock stream listed below. The list below is checked against `public-surface-baseline.json` by `tests/unit/experimental-exports.test.ts`.
+
+<!-- experimental-exports:start -->
+- `@theokit/agents/testing`: `MockAgentStreamOptions`, `MockResponse`, `MockStreamEvent`, `createMockAgentStream`
+<!-- experimental-exports:end -->
+
 ## Testing: the live-suite guard
 
 A live (real-model) suite must not skip green in CI when the provider key is missing. `@theokit/agents/testing` exports `assertProviderKeyWhenRequired`, `requireProviderKeySetup`, `LIVE_KEY_NAMES` and `MissingProviderKeyError`: when `THEOKIT_LIVE_REQUIRED=1` and none of the key variables is set (whitespace-only counts as unset), the run fails with an error that names the variables, never a value. Without the flag it returns, so a local run keeps its skip.
@@ -140,6 +150,10 @@ import { assertBootstrapped } from '@theokit/agents/config'
 assertBootstrapped(bootstrap, 'openTranscriptStore')
 ```
 
+### `@file` mentions
+
+`resolveFileMentions(text, { cwd, perFileTokens?, totalTokens?, allowHome?, readFile? })` from `@theokit/agents/config` attaches the files a user message mentions with `@path`. `findFileMentions(text)` returns the `{ ref, index }` pairs and uses the same grammar as `expandCommandTemplate`: the `@` must start the text or follow whitespace, and a trailing `.` or `,` is punctuation. Paths resolve under `cwd` with `safePathJoin`, `assertNoSymlinkEscape` and `isForbiddenPath`; `~/` resolves under the home directory only with `allowHome: true`. Each file is capped at `perFileTokens` (default 2000, truncated with a marker) and the set at `totalTokens` (default 20000). The result is `{ message, attached, skipped }`; `skipped` carries `{ ref, reason }` with reason `forbidden`, `outside-root`, `not-found` or `budget` (`unreadable` is in the type but is not produced today), and the text of a skipped mention is left unchanged. Any other error, including a read error other than a missing file, is rethrown.
+
 ## Config keys set from the environment
 
 Declare which keys the environment may set, then build a layer for `LayeredConfig` from the variables that are set:
@@ -156,6 +170,15 @@ Booleans accept `1/true/yes/on` and `0/false/no/off` (trimmed, case-insensitive)
 Any other value is passed through unchanged, so the schema rejects `MYAPP_MEMORY=maybe` by key name instead of reading it as `false`.
 `auditEnvKnobs` reports keys with neither a knob nor an opt-out as unreachable.
 
+
+## Resolving every config layer
+
+`defineLayeredConfig({ schema, defaults, env?, accumulate?, floors?, profiles? })` from `@theokit/agents/config` returns `{ resolve }`. `resolve({ user, project, projectLocal, env, cli, managed })` folds the layers in this order, later winning: `defaults`, `user`, `project`, `project_local`, `profile`, `env`, `cli`, `managed`. It returns `{ values, profile, provenancePerKey }`.
+
+- Each file layer is checked against the schema (as a partial) and a failure names the layer.
+- `profiles: { selectKey, tableKey }`: the last name chosen by user, project, project-local or cli selects a profile; the tables merge per name across the file layers, and an unknown name throws a `ConfigurationError` naming it.
+- `floors: { key: { permissiveness, restricted, override } }`: a restricted layer (named from `project`, `project_local`, `profile`, `env`) can only tighten the key; the `override` layer (e.g. `cli`) can loosen it.
+- `managed` is applied after the floors, so a managed value for any key is final. For an `accumulate` key it replaces the accumulated list.
 
 ### `-c a.b=value` overrides
 
@@ -372,6 +395,30 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Isolated workspaces for coding sub-agents
+
+`worktreeProvider(repo, root)` (from `@theokit/agents/bridge`) gives each task its own
+`git worktree add -b task/<id> <root>/<id>`. Pass it as `isolation` to `delegate` (or on the
+`SubAgentSpec`; the option wins): `delegate` acquires a workspace, runs with `cwd` set to it and
+releases it afterwards, on failure too. If the release fails, the task's error is still the one
+thrown, with the cleanup failure on its `cleanupError`; when the error cannot carry a property (a
+primitive, or a frozen or non-extensible object), an `AggregateError` holding both is thrown instead. A `streamFactory` you supply does not read `cwd`.
+Task ids must match `^[A-Za-z0-9][A-Za-z0-9._-]*$` and may not contain `..`; anything else throws
+`WorkspaceProviderError`. Used directly, `workspace.release({ keep: true })` leaves the worktree and branch.
+
+Gitignored files are not in a fresh worktree. List them in `.worktreeinclude` at the repo root (one
+literal repo-relative file or directory per line, `#` comments allowed; the `include` option renames
+the file) and they are copied in. A path that escapes the repository is refused.
+
+## Reading a run's final answer as an object
+
+`createResultCapture(schema)` returns a `submit_result` tool whose input schema is your zod object schema. Add
+`cap.tool` to the agent, tell it to finish by calling the tool, then read `cap.result()` after `run.wait()`. A
+submission that fails validation goes back to the model as a tool error naming the issue paths, so it can fix
+it; the last valid submission wins. `result()` throws `NoResultSubmittedError` when none was valid, and
+`submitted()` tells you beforehand. The schema must be an object schema; `name` and `description` rename or
+reword the tool.
 
 ## Scheduled jobs: file or PostgreSQL
 
