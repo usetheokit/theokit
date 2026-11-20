@@ -4181,6 +4181,14 @@
           "references": [],
           "internals": {}
         },
+        "RecipeExec": {
+          "tier": "stable",
+          "declaration": "type RecipeExec = (command: string | string[], cwd: string, signal?: AbortSignal) => Promise<void>;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "ReflectionContext": {
           "tier": "stable",
           "declaration": "type ReflectionContext = Record<string, unknown>;",
@@ -6221,6 +6229,22 @@
           "references": [],
           "internals": {}
         },
+        "WorkspaceRecipe": {
+          "tier": "stable",
+          "declaration": "interface WorkspaceRecipe {\n    readonly kind: 'devcontainer' | 'setup-script' | 'lockfile';\n    readonly source: string;\n    readonly steps: readonly {\n        readonly stage: string;\n        readonly commands: readonly (string | string[])[];\n    }[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "WorkspaceRecipeError": {
+          "tier": "stable",
+          "declaration": "declare class WorkspaceRecipeError extends TheokitAgentError {\n    readonly name = \"WorkspaceRecipeError\";\n    readonly source: string;\n    readonly stage: string;\n    constructor(source: string, stage: string, detail: string, options?: {\n        cause?: unknown;\n    });\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "agentsPlugin": {
           "tier": "stable",
           "declaration": "declare function agentsPlugin(opts: AgentsPluginOptions): {\n    name: string;\n    register(app: PluginApp): void;\n};",
@@ -7532,6 +7556,16 @@
             "dist/index.d.ts#TurnFailureHints": "type TurnFailureHints = Partial<Record<KnownAgentRunErrorCode, string>>;"
           }
         },
+        "detectWorkspaceRecipe": {
+          "tier": "stable",
+          "declaration": "declare function detectWorkspaceRecipe(root: string, options?: {\n    setupScripts?: readonly string[];\n}): Promise<WorkspaceRecipe | undefined>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe"],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe": "interface WorkspaceRecipe {\n    readonly kind: 'devcontainer' | 'setup-script' | 'lockfile';\n    readonly source: string;\n    readonly steps: readonly {\n        readonly stage: string;\n        readonly commands: readonly (string | string[])[];\n    }[];\n}"
+          }
+        },
         "discoverSubagents": {
           "tier": "stable",
           "declaration": "declare function discoverSubagents(cwd: string, options?: DiscoverSubagentsOptions): Promise<Record<string, AgentDefinition>>;",
@@ -8420,6 +8454,20 @@
             "dist/agent-compiler-<hash>.d.ts#GuardrailAction": "type GuardrailAction = 'allow' | 'block' | 'redact';",
             "dist/agent-compiler-<hash>.d.ts#GuardrailResult": "interface GuardrailResult {\n    action: GuardrailAction;\n    reason?: string;\n    text?: string;\n}",
             "dist/index.d.ts#PiiOptions": "interface PiiOptions {\n    redact?: boolean;\n    placeholder?: string;\n}"
+          }
+        },
+        "prepareWorkspace": {
+          "tier": "stable",
+          "declaration": "declare function prepareWorkspace(path: string, options?: {\n    exec?: RecipeExec;\n    setupScripts?: readonly string[];\n    timeoutMs?: number;\n}): Promise<WorkspaceRecipe | undefined>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/bridge-entry-<hash>.d.ts#RecipeExec",
+            "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe"
+          ],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#RecipeExec": "type RecipeExec = (command: string | string[], cwd: string, signal?: AbortSignal) => Promise<void>;",
+            "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe": "interface WorkspaceRecipe {\n    readonly kind: 'devcontainer' | 'setup-script' | 'lockfile';\n    readonly source: string;\n    readonly steps: readonly {\n        readonly stage: string;\n        readonly commands: readonly (string | string[])[];\n    }[];\n}"
           }
         },
         "presentUIMessageStream": {
@@ -9422,7 +9470,7 @@
         },
         "worktreeProvider": {
           "tier": "stable",
-          "declaration": "declare function worktreeProvider(repo: string, root: string, options?: {\n    branchPrefix?: string;\n    include?: string;\n}): WorkspaceProvider;",
+          "declaration": "declare function worktreeProvider(repo: string, root: string, options?: {\n    branchPrefix?: string;\n    include?: string;\n    prepare?: boolean;\n}): WorkspaceProvider;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
@@ -12031,6 +12079,14 @@
             "dist/setting-sources-gate-<hash>.d.ts#SettingSourceCapability": "type SettingSourceCapability = 'projectSettings';"
           }
         },
+        "RecipeExec": {
+          "tier": "stable",
+          "declaration": "type RecipeExec = (command: string | string[], cwd: string, signal?: AbortSignal) => Promise<void>;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "ResolvedCompatSource": {
           "tier": "stable",
           "declaration": "type ResolvedCompatSource = 'claude-code' | {\n    readonly kind: 'claude-code';\n    readonly import: readonly CompatSurface[];\n};",
@@ -12524,6 +12580,22 @@
         "WorkspaceProviderError": {
           "tier": "stable",
           "declaration": "declare class WorkspaceProviderError extends TheokitAgentError {\n    readonly name = \"WorkspaceProviderError\";\n    constructor(message: string, options?: {\n        cause?: unknown;\n    });\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "WorkspaceRecipe": {
+          "tier": "stable",
+          "declaration": "interface WorkspaceRecipe {\n    readonly kind: 'devcontainer' | 'setup-script' | 'lockfile';\n    readonly source: string;\n    readonly steps: readonly {\n        readonly stage: string;\n        readonly commands: readonly (string | string[])[];\n    }[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "WorkspaceRecipeError": {
+          "tier": "stable",
+          "declaration": "declare class WorkspaceRecipeError extends TheokitAgentError {\n    readonly name = \"WorkspaceRecipeError\";\n    readonly source: string;\n    readonly stage: string;\n    constructor(source: string, stage: string, detail: string, options?: {\n        cause?: unknown;\n    });\n}",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -13475,6 +13547,16 @@
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle {\n    wait: () => Promise<{\n        result?: string;\n        usage?: {\n            totalTokens?: number;\n            inputTokens?: number;\n            outputTokens?: number;\n        };\n        cost?: {\n            amountUsd?: number;\n        };\n        status?: string;\n        error?: {\n            message: string;\n        };\n    }>;\n    stream?: () => AsyncIterable<unknown>;\n    cancel?: () => unknown;\n}"
           }
         },
+        "detectWorkspaceRecipe": {
+          "tier": "stable",
+          "declaration": "declare function detectWorkspaceRecipe(root: string, options?: {\n    setupScripts?: readonly string[];\n}): Promise<WorkspaceRecipe | undefined>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe"],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe": "interface WorkspaceRecipe {\n    readonly kind: 'devcontainer' | 'setup-script' | 'lockfile';\n    readonly source: string;\n    readonly steps: readonly {\n        readonly stage: string;\n        readonly commands: readonly (string | string[])[];\n    }[];\n}"
+          }
+        },
         "extractThinkTagStream": {
           "tier": "stable",
           "declaration": "declare function extractThinkTagStream(source: AsyncIterable<StreamEvent>): AsyncGenerator<StreamEvent>;",
@@ -14121,6 +14203,20 @@
             "dist/types-<hash>.d.ts#TimeoutAction": "type TimeoutAction = 'abort' | 'proceed' | 'retry';"
           }
         },
+        "prepareWorkspace": {
+          "tier": "stable",
+          "declaration": "declare function prepareWorkspace(path: string, options?: {\n    exec?: RecipeExec;\n    setupScripts?: readonly string[];\n    timeoutMs?: number;\n}): Promise<WorkspaceRecipe | undefined>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/bridge-entry-<hash>.d.ts#RecipeExec",
+            "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe"
+          ],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#RecipeExec": "type RecipeExec = (command: string | string[], cwd: string, signal?: AbortSignal) => Promise<void>;",
+            "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe": "interface WorkspaceRecipe {\n    readonly kind: 'devcontainer' | 'setup-script' | 'lockfile';\n    readonly source: string;\n    readonly steps: readonly {\n        readonly stage: string;\n        readonly commands: readonly (string | string[])[];\n    }[];\n}"
+          }
+        },
         "presentUIMessageStream": {
           "tier": "stable",
           "declaration": "declare function presentUIMessageStream(events: AsyncIterable<AgentStreamEvent>, opts: {\n    textId: string;\n    onError?: MaskError;\n}): AsyncGenerator<WireChunk, void, unknown>;",
@@ -14671,7 +14767,7 @@
         },
         "worktreeProvider": {
           "tier": "stable",
-          "declaration": "declare function worktreeProvider(repo: string, root: string, options?: {\n    branchPrefix?: string;\n    include?: string;\n}): WorkspaceProvider;",
+          "declaration": "declare function worktreeProvider(repo: string, root: string, options?: {\n    branchPrefix?: string;\n    include?: string;\n    prepare?: boolean;\n}): WorkspaceProvider;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
