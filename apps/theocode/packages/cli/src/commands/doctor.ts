@@ -135,7 +135,7 @@ export async function doctorCommand(opts: {
 }): Promise<void> {
   const agent = await import('@theocode/agent')
   const { authFilePath, strayCredentialFiles } = await import('@theocode/agent/auth')
-  const { skillsOnDisk, loadOutputStyle, foreignHookRefusals } = await import('@theocode/agent')
+  const { skillsOnDisk, outputStyleResolves, foreignHookRefusals } = await import('@theocode/agent')
   const { settingsReport } = await import('@theocode/agent/config')
   const { cwd, cfg, posture } = await resolveDoctorTarget(opts)
 
@@ -198,7 +198,7 @@ export async function doctorCommand(opts: {
       ? {
           outputStyle: {
             name: cfg.output_style,
-            resolved: loadOutputStyle(cfg.output_style, { project: cwd }) !== null,
+            resolved: outputStyleResolves(cfg.output_style, { project: cwd }),
           },
         }
       : {}),

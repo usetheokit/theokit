@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1373 export(s) across 26 entry point(s).
+1408 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -695,25 +695,20 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `attachControlSocket` | value |
+| `ControlConnectionError` | value |
+| `createControlClient` | value |
+| `createDevicePairing` | value |
 | `createSessionStore` | value |
+| `pairRoute` | value |
 | `AgentTurnUsage` | type |
+| `ControlClient` | type |
 | `ControlClientFrame` | type |
 | `ControlServerFrame` | type |
 | `ControlSocketOptions` | type |
-| `SessionOutcome` | type |
-| `SessionStore` | type |
-| `SessionStoreOptions` | type |
-
-## `@theokit/agents/control`
-
-| Symbol | Kind |
-|---|---|
-| `attachControlSocket` | value |
-| `createSessionStore` | value |
-| `AgentTurnUsage` | type |
-| `ControlClientFrame` | type |
-| `ControlServerFrame` | type |
-| `ControlSocketOptions` | type |
+| `DevicePairing` | type |
+| `DevicePairingOptions` | type |
+| `PairingApproval` | type |
+| `PairingRequestResult` | type |
 | `SessionOutcome` | type |
 | `SessionStore` | type |
 | `SessionStoreOptions` | type |
@@ -1286,7 +1281,11 @@ Measured against `@theokit/sdk@5.17.0`.
 
 | Symbol | Kind |
 |---|---|
+| `claimCollectorRoot` | value |
 | `classifyProjects` | value |
+| `CollectorRootError` | value |
+| `CollectorRootNotOwnedError` | value |
+| `collectorRootOwner` | value |
 | `deleteSession` | value |
 | `forkBeforeUserTurn` | value |
 | `ForkedSessionBusyError` | value |
@@ -1306,11 +1305,14 @@ Measured against `@theokit/sdk@5.17.0`.
 | `readThreadHistory` | value |
 | `recordProjectDir` | value |
 | `resolveProjectDir` | value |
+| `runProjectsGC` | value |
 | `runTranscriptGC` | value |
+| `scheduleSessionSweep` | value |
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
 | `streamTurnForkingIfBusy` | value |
+| `sweepDecision` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
 | `ClassifyProjectsOptions` | type |
@@ -1331,8 +1333,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProjectsGCRegistryEntry` | type |
 | `ReadThreadHistoryOptions` | type |
 | `RegistryOutcome` | type |
+| `RunProjectsGCOptions` | type |
+| `RunProjectsGCResult` | type |
 | `RunTranscriptGCResult` | type |
+| `ScheduleSessionSweepOptions` | type |
 | `SessionSummary` | type |
+| `SweepDecision` | type |
+| `SweepScheduleResult` | type |
 | `ThreadHistory` | type |
 | `ThreadHistoryState` | type |
 | `TranscriptGCOptions` | type |
