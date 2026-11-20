@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1399 export(s) across 26 entry point(s).
+1410 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -699,12 +699,18 @@ Measured against `@theokit/sdk@5.17.0`.
 | `attachControlSocket` | value |
 | `ControlConnectionError` | value |
 | `createControlClient` | value |
+| `createDevicePairing` | value |
 | `createSessionStore` | value |
+| `pairRoute` | value |
 | `AgentTurnUsage` | type |
 | `ControlClient` | type |
 | `ControlClientFrame` | type |
 | `ControlServerFrame` | type |
 | `ControlSocketOptions` | type |
+| `DevicePairing` | type |
+| `DevicePairingOptions` | type |
+| `PairingApproval` | type |
+| `PairingRequestResult` | type |
 | `SessionOutcome` | type |
 | `SessionStore` | type |
 | `SessionStoreOptions` | type |
@@ -1303,10 +1309,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveProjectDir` | value |
 | `runProjectsGC` | value |
 | `runTranscriptGC` | value |
+| `scheduleSessionSweep` | value |
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
 | `streamTurnForkingIfBusy` | value |
+| `sweepDecision` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
 | `ClassifyProjectsOptions` | type |
@@ -1330,7 +1338,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `RunProjectsGCOptions` | type |
 | `RunProjectsGCResult` | type |
 | `RunTranscriptGCResult` | type |
+| `ScheduleSessionSweepOptions` | type |
 | `SessionSummary` | type |
+| `SweepDecision` | type |
+| `SweepScheduleResult` | type |
 | `ThreadHistory` | type |
 | `ThreadHistoryState` | type |
 | `TranscriptGCOptions` | type |
