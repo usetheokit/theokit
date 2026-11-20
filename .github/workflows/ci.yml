@@ -130,6 +130,26 @@ jobs:
       # but the binstub points to dist/cli/index.js which doesn't exist
       # until the theo package finishes building → ordering blow-up).
       - run: pnpm build:packages
+      # Public-surface gate. It reads `dist/`, so it runs right after the build, and it compares with
+      # the baseline at the PR base, so it needs that ref and the history between base and HEAD (the
+      # changeset lookup uses `<base>...HEAD`). A shallow checkout has neither: fetch the base branch
+      # in full. Exit 1 (drift, or a stable export broken without a major changeset) fails the job;
+      # exit 2 (the check could not run) fails it too. Outside a pull request there is no base, so
+      # only the drift check runs, against the committed baseline.
+      - name: Public-surface gate (stable exports)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          base_args=()
+          if [ -n "$BASE_REF" ]; then
+            git fetch --no-tags --unshallow origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}" \
+              || git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+            base_args=(--base "origin/${BASE_REF}")
+          fi
+          for pkg in @theokit/agents theokit; do
+            node scripts/check-public-surface.mjs "$pkg" "${base_args[@]}"
+          done
       # `typecheck:only`, not `typecheck`: the latter is `pnpm build:packages && tsc --noEmit`,
       # and the step above already built. Measured on run 33179795266 — build:packages 51s, then
       # typecheck 67s, of which ~50s was that build running a second time.
