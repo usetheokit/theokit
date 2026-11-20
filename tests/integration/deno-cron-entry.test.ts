@@ -172,10 +172,14 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
   const runner = join(mkdtempSync(join(tmpdir(), 'deno-cron-runner-')), 'run.mjs')
   writeFileSync(runner, RUNNER)
   callbacks.set('job', async () => {
-    const out = await execFileAsync(TSX, [runner, root, JSON.stringify(map), JOBS, entry, existsSync(DIST_JOBS) ? DIST_JOBS : ''], {
-      cwd: root,
-      env: { ...process.env },
-    })
+    const out = await execFileAsync(
+      TSX,
+      [runner, root, JSON.stringify(map), JOBS, entry, existsSync(DIST_JOBS) ? DIST_JOBS : ''],
+      {
+        cwd: root,
+        env: { ...process.env },
+      },
+    )
     const res = JSON.parse(out.stdout.trim().split('\n').pop() ?? '{}') as {
       error?: string
       calls: never[]
