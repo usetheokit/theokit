@@ -25,27 +25,13 @@
  * `boundaries` cruises `src` and `tests` only, so `tools/` and the root config files are outside
  * every rule here; they are repository tooling, not proofs.
  */
+const {
+  proofImportsOnlyPublishedEntryPoints,
+} = require('../../tooling/depcruise/proof-boundary.cjs')
+
 module.exports = {
   forbidden: [
-    {
-      // REQ-15, B-416: a proof exercises the framework through what a consumer can reach, so an
-      // import, from source or test, that resolves into a package's `src/` proves nothing. The
-      // `from.pathNot` keeps the framework's own internal edges out: without it one violating
-      // import reported 139 errors, because the cruise follows into `packages/agents/src`. Armed by
-      // `tests/unit/a-proof-import-into-a-package-src-fails-the-boundary-check.test.ts`.
-      // `to.path` names only `../../packages/`: a workspace specifier such as
-      // `@theokit/agents/src/index.ts` resolves through the pnpm symlink to that path (measured
-      // 2026-10-09), and a module under `node_modules/` is dropped by `options.exclude` before any
-      // rule sees it, so a `node_modules/@theokit` alternative could never fire. Only `src/` is
-      // refused; an import of a dist file outside the exports map is not.
-      name: 'proof-imports-only-published-entry-points',
-      severity: 'error',
-      comment:
-        'A proof imports a theokit package only through its published entry points (the exports ' +
-        'map, which points into dist). Reaching into src tests code no consumer can import.',
-      from: { pathNot: '^(\\.\\./\\.\\./packages|node_modules)/' },
-      to: { path: '^\\.\\./\\.\\./packages/[^/]+/src/' },
-    },
+    proofImportsOnlyPublishedEntryPoints,
     {
       name: 'production-must-not-import-tests',
       severity: 'error',

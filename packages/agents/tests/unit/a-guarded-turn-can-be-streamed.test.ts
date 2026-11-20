@@ -19,6 +19,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { withGuardrails } from '../../src/bridge/handle-wrappers.js'
+import type { SdkMessage } from '../../src/bridge/event-translator.js'
 import type { SdkAgentHandle } from '../../src/bridge/sdk-adapter.js'
 import { GuardrailViolationError } from '../../src/guardrails/index.js'
 import type { Guardrail } from '../../src/guardrails/index.js'
@@ -30,7 +31,10 @@ interface TurnOutcome {
 }
 
 /** A fake handle whose turn resolves `outcome`, or rejects with `failure`, when `wait` is called. */
-function fakeHandle(behaviour: { outcome?: TurnOutcome; failure?: Error }): SdkAgentHandle {
+function fakeHandle(behaviour: {
+  outcome?: TurnOutcome
+  failure?: Error
+}): SdkAgentHandle<SdkMessage> {
   return {
     agentId: 'fake-agent',
     dispose: () => Promise.resolve(),

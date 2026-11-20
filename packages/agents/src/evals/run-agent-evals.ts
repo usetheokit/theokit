@@ -23,6 +23,7 @@ import {
 
 import type { ApprovalPosture } from '../bridge/approval-posture.js'
 import type { DefinitionOrThunk } from '../bridge/definition-or-thunk.js'
+import type { SdkMessage } from '../bridge/event-translator.js'
 import {
   toAgentFactory,
   type RuntimeOverrides,
@@ -99,9 +100,9 @@ export async function runAgentEvals(opts: RunAgentEvalsOptions): Promise<AgentEv
   // One uuid per call: the SDK caches agents by session id, so a name reused across sequential runs
   // must still give every case a fresh agent (EC-1).
   const runId = crypto.randomUUID()
-  const handles: SdkAgentHandle[] = []
+  const handles: SdkAgentHandle<SdkMessage>[] = []
   let caseNumber = 0
-  const agentFor = async (): Promise<SdkAgentHandle> => {
+  const agentFor = async (): Promise<SdkAgentHandle<SdkMessage>> => {
     // Incremented before the first await, so concurrent rows never share an id.
     caseNumber += 1
     const handle = await factory(`${name}-${runId}-case-${String(caseNumber)}`)
@@ -222,14 +223,19 @@ function describe(value: unknown): string {
 }
 
 /**
- * The one cast in this module. `EvalOptions.agent` is typed to return the SDK's full `SDKAgent`
- * (`model`, `close`, `reload`, …), which `SdkAgentHandle` is not; the runner's function-agent path
- * calls only `send(input)` and then `wait()` on the turn, and the handle provides both. The
- * integration tests drive the REAL runner with handles built by `toAgentFactory`, so a runner that
- * starts calling another member turns them red instead of a verdict wrong.
+ * The one cast in this module, now over an explicit typed surface. `EvalOptions.agent` is typed to
+ * return the SDK's full `SDKAgent` (`model`, `close`, `reload`, …), which `SdkAgentHandle<SdkMessage>` is not;
+ * the runner's function-agent path calls only `send(input)` and then `wait()` on the turn. The
+ * adapter therefore exposes exactly `send`, typed as the bridge's `SdkAgentHandle['send']`, and
+ * leaves disposal to the handles this module keeps. The integration tests drive the REAL runner, so
+ * a runner that starts calling another member turns them red instead of a verdict wrong.
  */
-function asEvalAgentFactory(agentFor: () => Promise<SdkAgentHandle>): EvalAgentFactory {
-  return agentFor as unknown as EvalAgentFactory
+function asEvalAgentFactory(agentFor: () => Promise<SdkAgentHandle<SdkMessage>>): EvalAgentFactory {
+  const factory = async (): Promise<Pick<SdkAgentHandle<SdkMessage>, 'send'>> => {
+    const handle = await agentFor()
+    return { send: (msg, opts) => handle.send(msg, opts) }
+  }
+  return factory as unknown as EvalAgentFactory
 }
 
 /** The function shape of `EvalOptions.agent`, the one this module hands the runner. */

@@ -10,6 +10,8 @@ export default defineConfig({
     'mcp-health': 'src/mcp-health-entry.ts',
     // B-407 (F-arch-5) — the A2A client: remote delegation most agents never import.
     a2a: 'src/a2a-entry.ts',
+    // The turn-failure classifier, off the root bundle (ADR 0033).
+    errors: 'src/errors-entry.ts',
     // B-413 — run cases against an agent and read a verdict per case; development-time tooling.
     evals: 'src/evals-entry.ts',
     // B-410 — a conversation one agent hands to another; an app-facing orchestrator.
@@ -19,6 +21,8 @@ export default defineConfig({
     pty: 'src/pty-entry.ts',
     'tool-scope': 'src/tools/index.ts',
     bridge: 'src/bridge-entry.ts',
+    // Named sessions with interrupt and steer over `runAgentTurn`; an app-facing control surface.
+    control: 'src/control-entry.ts',
     testing: 'src/testing/index.ts',
     // M58 — pass-through subpaths mirroring the SDK's own split.
     sandbox: 'src/sandbox-entry.ts',
@@ -68,6 +72,7 @@ export default defineConfig({
     '@theokit/sdk',
     '@theokit/sdk-tools',
     'quickjs-emscripten-core',
+    'ws',
     'zod',
   ],
 })

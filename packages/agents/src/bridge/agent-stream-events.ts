@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/consistent-type-definitions -- type aliases (unlike interfaces) get an implicit index signature, which keeps every variant assignable to the looser `StreamEvent` */
 import type { ToolRefusal } from '@theokit/presenter'
 
 /**
@@ -8,13 +9,13 @@ import type { ToolRefusal } from '@theokit/presenter'
  */
 
 /** Partial text content from the LLM. */
-export interface TextDeltaEvent {
+export type TextDeltaEvent = {
   type: 'text_delta'
   content: string
 }
 
 /** Agent started a tool call. */
-export interface ToolCallEvent {
+export type ToolCallEvent = {
   type: 'tool_call'
   callId: string
   toolName: string
@@ -27,7 +28,7 @@ export interface ToolCallEvent {
  * the later `tool_call` (args committed) and `tool_result`. Consumers opt in to render tool-input
  * progressively; those that don't simply ignore this variant (it never replaces `tool_call`).
  */
-export interface PartialToolCallEvent {
+export type PartialToolCallEvent = {
   type: 'partial_tool_call'
   callId: string
   toolName: string
@@ -35,7 +36,7 @@ export interface PartialToolCallEvent {
 }
 
 /** Tool execution completed. */
-export interface ToolResultEvent {
+export type ToolResultEvent = {
   type: 'tool_result'
   callId: string
   toolName: string
@@ -47,20 +48,20 @@ export interface ToolResultEvent {
 }
 
 /** Extended thinking / reasoning (when model supports it). */
-export interface ThinkingEvent {
+export type ThinkingEvent = {
   type: 'thinking'
   content: string
 }
 
 /** Agent loop iteration. */
-export interface IterationEvent {
+export type IterationEvent = {
   type: 'iteration'
   step: number
   totalSteps: number | null
 }
 
 /** Human approval required before proceeding. */
-export interface ApprovalRequiredEvent {
+export type ApprovalRequiredEvent = {
   type: 'approval_required'
   callId: string
   toolName: string
@@ -85,13 +86,13 @@ export interface ApprovalRequiredEvent {
  * A consumer that cannot resolve the request should still SHOW that the run is waiting. Silence is
  * the one response that is always wrong.
  */
-export interface InputRequestedEvent {
+export type InputRequestedEvent = {
   type: 'input_requested'
   requestId: string
 }
 
 /** Task-level milestone or summary — theokit#141. Both fields are optional at the source. */
-export interface TaskProgressEvent {
+export type TaskProgressEvent = {
   type: 'task_progress'
   status?: string
   text?: string
@@ -104,13 +105,13 @@ export interface TaskProgressEvent {
  * layer deliberately does not interpret or render it: guessing a shape here would be a second,
  * weaker oracle over a payload whose real contract lives upstream.
  */
-export interface ShellOutputEvent {
+export type ShellOutputEvent = {
   type: 'shell_output'
   event: Record<string, unknown>
 }
 
 /** Agent encountered an error. */
-export interface ErrorEvent {
+export type ErrorEvent = {
   type: 'error'
   code: string
   message: string
@@ -154,7 +155,7 @@ export interface ErrorEvent {
 export type AgentStopReason = 'step_limit' | 'no_progress'
 
 /** Agent completed with a final result. */
-export interface DoneEvent {
+export type DoneEvent = {
   type: 'done'
   result: string
   usage: {
@@ -186,6 +187,8 @@ export interface DoneEvent {
    * boundary. See {@link AgentStopReason} for why the caller needs to tell the two apart.
    */
   stopReason?: AgentStopReason
+  /** Why the last round ended (`'tool-calls'` ⇒ the model wants another round); set by custom adapters. */
+  finishReason?: string
   /**
    * The model this turn actually ran on — the EFFECTIVE id, not the declared one.
    *
@@ -233,7 +236,7 @@ export interface AgentTurnMetadata {
 }
 
 /** Agent run started. */
-export interface RunStartedEvent {
+export type RunStartedEvent = {
   type: 'run_started'
   runId: string
   agentName: string
@@ -241,7 +244,7 @@ export interface RunStartedEvent {
 }
 
 /** Artifact generation started (code, document, diagram). */
-export interface ArtifactStartEvent {
+export type ArtifactStartEvent = {
   type: 'artifact_start'
   artifactId: string
   mimeType: string
@@ -250,7 +253,7 @@ export interface ArtifactStartEvent {
 }
 
 /** Artifact content chunk (streamable artifacts). */
-export interface ArtifactChunkEvent {
+export type ArtifactChunkEvent = {
   type: 'artifact_chunk'
   artifactId: string
   chunk: string
@@ -258,14 +261,14 @@ export interface ArtifactChunkEvent {
 }
 
 /** Real-time state update from @Observable channels. */
-export interface StateUpdateEvent {
+export type StateUpdateEvent = {
   type: 'state_update'
   channel: string
   data: unknown
 }
 
 /** Checkpoint saved (resumable agents). */
-export interface CheckpointSavedEvent {
+export type CheckpointSavedEvent = {
   type: 'checkpoint_saved'
   checkpointId: string
   step: number
@@ -273,7 +276,7 @@ export interface CheckpointSavedEvent {
 }
 
 /** File edit produced by a code assistant tool. */
-export interface FileEditEvent {
+export type FileEditEvent = {
   type: 'file_edit'
   file: string
   format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range'
@@ -327,4 +330,107 @@ export function isError(e: AgentStreamEvent): e is ErrorEvent {
 }
 export function isApprovalRequired(e: AgentStreamEvent): e is ApprovalRequiredEvent {
   return e.type === 'approval_required'
+}
+export function isThinking(e: AgentStreamEvent): e is ThinkingEvent {
+  return e.type === 'thinking'
+}
+export function isInputRequested(e: AgentStreamEvent): e is InputRequestedEvent {
+  return e.type === 'input_requested'
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+const isStr = (v: unknown): v is string => typeof v === 'string'
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const isBool = (v: unknown): v is boolean => typeof v === 'boolean'
+const optional = (v: unknown, check: (x: unknown) => boolean): boolean =>
+  v === undefined || check(v)
+
+const FILE_EDIT_FORMATS = new Set(['search-replace', 'unified-diff', 'full-file', 'line-range'])
+
+const REFUSAL_SOURCES = new Set(['human', 'timeout', 'policy', 'hook', 'plugin'])
+
+function validRefusal(r: unknown): boolean {
+  return isRecord(r) && isStr(r.by) && REFUSAL_SOURCES.has(r.by) && optional(r.reason, isStr)
+}
+
+function validUsage(u: unknown): boolean {
+  return (
+    isRecord(u) &&
+    isNum(u.inputTokens) &&
+    isNum(u.outputTokens) &&
+    isNum(u.totalTokens) &&
+    optional(u.reasoningTokens, isNum) &&
+    optional(u.cacheReadTokens, isNum) &&
+    optional(u.cacheWriteTokens, isNum)
+  )
+}
+
+/** Per-variant field validators; each checks every field its interface promises. */
+const VALIDATORS: Record<AgentStreamEvent['type'], (e: Record<string, unknown>) => boolean> = {
+  run_started: (e) => isStr(e.runId) && isStr(e.agentName) && optional(e.model, isStr),
+  text_delta: (e) => isStr(e.content),
+  tool_call: (e) => isStr(e.callId) && isStr(e.toolName) && 'input' in e,
+  partial_tool_call: (e) => isStr(e.callId) && isStr(e.toolName) && 'input' in e,
+  tool_result: (e) =>
+    isStr(e.callId) &&
+    isStr(e.toolName) &&
+    isStr(e.output) &&
+    isNum(e.durationMs) &&
+    isBool(e.isError) &&
+    optional(e.refusal, validRefusal),
+  thinking: (e) => isStr(e.content),
+  iteration: (e) => isNum(e.step) && (e.totalSteps === null || isNum(e.totalSteps)),
+  approval_required: (e) =>
+    isStr(e.callId) &&
+    isStr(e.toolName) &&
+    isStr(e.question) &&
+    isStr(e.callbackUrl) &&
+    isNum(e.timeoutMs) &&
+    optional(e.payloadSchema, isRecord),
+  input_requested: (e) => isStr(e.requestId),
+  task_progress: (e) => optional(e.status, isStr) && optional(e.text, isStr),
+  shell_output: (e) => isRecord(e.event),
+  artifact_start: (e) =>
+    isStr(e.artifactId) &&
+    isStr(e.mimeType) &&
+    optional(e.filename, isStr) &&
+    optional(e.metadata, isRecord),
+  artifact_chunk: (e) => isStr(e.artifactId) && isStr(e.chunk) && isBool(e.isLast),
+  state_update: (e) => isStr(e.channel) && 'data' in e,
+  checkpoint_saved: (e) => isStr(e.checkpointId) && isNum(e.step) && isStr(e.resumeToken),
+  file_edit: (e) =>
+    isStr(e.file) &&
+    isStr(e.format) &&
+    FILE_EDIT_FORMATS.has(e.format) &&
+    optional(e.search, isStr) &&
+    optional(e.replace, isStr) &&
+    optional(e.content, isStr) &&
+    optional(e.diff, isStr) &&
+    optional(e.startLine, isNum) &&
+    optional(e.endLine, isNum),
+  error: (e) => isStr(e.code) && isStr(e.message) && isBool(e.retryable),
+  done: (e) =>
+    isStr(e.result) &&
+    validUsage(e.usage) &&
+    isNum(e.durationMs) &&
+    optional(e.cost, isNum) &&
+    optional(e.stopReason, (s) => s === 'step_limit' || s === 'no_progress') &&
+    optional(e.model, isStr),
+}
+
+/**
+ * Validate an untrusted value as an {@link AgentStreamEvent}. Returns the event, or `undefined`
+ * when the value is not an object, has an unknown `type`, or violates its variant's field types.
+ */
+export function toAgentStreamEvent(value: unknown): AgentStreamEvent | undefined {
+  if (!isRecord(value) || !isStr(value.type)) return undefined
+  if (!Object.prototype.hasOwnProperty.call(VALIDATORS, value.type)) return undefined
+  const validate = VALIDATORS[value.type as AgentStreamEvent['type']]
+  return validate(value) ? (value as unknown as AgentStreamEvent) : undefined
+}
+
+/** Type guard form of {@link toAgentStreamEvent} for untrusted input. */
+export function isAgentStreamEvent(value: unknown): value is AgentStreamEvent {
+  return toAgentStreamEvent(value) !== undefined
 }

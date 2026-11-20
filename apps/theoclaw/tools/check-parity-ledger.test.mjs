@@ -140,7 +140,10 @@ describe('check-parity-ledger: the id set', () => {
     ])
     const source = readFileSync(fileURLToPath(new URL('./check-parity-ledger.mjs', import.meta.url)), 'utf8')
     expect(collect(source).length).toBeGreaterThan(0)
-    expect(collect(source).filter((s) => !/^node:(fs|path|url)$/.test(s))).toEqual([])
+    // Node built-ins, plus the shared ledger scanner, which is itself dependency-free.
+    expect(
+      collect(source).filter((s) => !/^node:(fs|path|url)$/.test(s) && s !== '../../../scripts/lib/parity-ledger.mjs'),
+    ).toEqual([])
     expect(source).not.toMatch(/child_process|node:https?|\bfetch\(/)
   })
 })
@@ -499,6 +502,13 @@ describe('check-parity-ledger: the parity command', () => {
 })
 
 const MODULE_PATH = fileURLToPath(new URL('./check-parity-ledger.mjs', import.meta.url))
+
+/** The module imports the shared scanner from `../../../scripts/lib`; a copied tree needs it there too. */
+function copySharedLibrary(root) {
+  const target = join(root, 'scripts/lib/parity-ledger.mjs')
+  mkdirSync(dirname(target), { recursive: true })
+  copyFileSync(fileURLToPath(new URL('../../../scripts/lib/parity-ledger.mjs', import.meta.url)), target)
+}
 const COUNTS_LINE = /^shipped \d+ · out \d+ · open \d+$/
 
 function localDate() {
@@ -529,6 +539,7 @@ describe('check-parity-ledger: the command run by node', () => {
     const copy = join(root, 'apps/theoclaw/tools/check-parity-ledger.mjs')
     mkdirSync(dirname(copy), { recursive: true })
     copyFileSync(MODULE_PATH, copy)
+    copySharedLibrary(root)
     const result = runNode(copy, root)
     expect(result.stderr).toBe('')
     expect(result.status).toBe(1)
@@ -549,6 +560,7 @@ describe('check-parity-ledger: the command run by node', () => {
     const copy = join(root, 'apps/theoclaw/tools/check-parity-ledger.mjs')
     mkdirSync(dirname(copy), { recursive: true })
     copyFileSync(MODULE_PATH, copy)
+    copySharedLibrary(root)
     const result = runNode(copy, root)
     expect(result.stderr).toBe('')
     expect(result.status).toBe(0)

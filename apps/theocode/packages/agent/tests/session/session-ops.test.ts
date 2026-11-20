@@ -67,28 +67,28 @@ afterEach(() => {
 })
 
 describe('B-003 — protectedSessions covers what the caller can see', () => {
-  it('test_the_live_pointer_is_protected', () => {
+  it('test_the_live_pointer_is_protected', async () => {
     const pointed = writeTranscript('tui-pointed', 10)
     mkdirSync(join(cwd, '.theokit'), { recursive: true })
     writeFileSync(join(cwd, '.theokit', 'tui-session'), 'tui-pointed\n')
 
-    expect(protectedSessions(cwd, base)).toContain(pointed)
+    expect(await protectedSessions(cwd, base)).toContain(pointed)
   })
 
-  it('test_the_most_recent_transcript_is_protected_even_without_a_pointer', () => {
+  it('test_the_most_recent_transcript_is_protected_even_without_a_pointer', async () => {
     writeTranscript('older', 3600)
     const newest = writeTranscript('newest', 5)
 
     expect(
-      protectedSessions(cwd, base),
+      await protectedSessions(cwd, base),
       'the most recent transcript is the one a running session is most likely still appending to, ' +
         'and it was absent from the guard the SDK uses to refuse a fork onto a live session',
     ).toEqual([newest])
   })
 
-  it('test_an_empty_project_protects_nothing', () => {
+  it('test_an_empty_project_protects_nothing', async () => {
     // Anti-vacuity floor: a function returning a constant would satisfy the assertions above.
-    expect(protectedSessions(cwd, base)).toEqual([])
+    expect(await protectedSessions(cwd, base)).toEqual([])
   })
 
   it('test_an_ACTIVE_WRITER_LEASE_protects_a_transcript_that_is_neither', async () => {
@@ -110,12 +110,12 @@ describe('B-003 — protectedSessions covers what the caller can see', () => {
     // Anti-vacuity, in the same test: WITHOUT the lease this transcript is collectable. That is the
     // assertion the old implementation would satisfy, and it is what makes the one below meaningful
     // instead of true-by-construction.
-    expect(protectedSessions(cwd, base)).not.toContain(leased)
+    expect(await protectedSessions(cwd, base)).not.toContain(leased)
 
     const lease = await acquireSessionWriter(leased)
     try {
       expect(
-        protectedSessions(cwd, base),
+        await protectedSessions(cwd, base),
         'a transcript with a live writer lease was collectable — the category this file previously ' +
           'documented as out of reach',
       ).toContain(leased)
@@ -124,12 +124,12 @@ describe('B-003 — protectedSessions covers what the caller can see', () => {
     }
   })
 
-  it('test_the_pointer_and_the_most_recent_are_not_duplicated', () => {
+  it('test_the_pointer_and_the_most_recent_are_not_duplicated', async () => {
     writeTranscript('only-one', 5)
     mkdirSync(join(cwd, '.theokit'), { recursive: true })
     writeFileSync(join(cwd, '.theokit', 'tui-session'), 'only-one\n')
 
-    expect(protectedSessions(cwd, base)).toHaveLength(1)
+    expect(await protectedSessions(cwd, base)).toHaveLength(1)
   })
 })
 
@@ -308,13 +308,13 @@ describe('#1905 — the TUI pointer protects an idle, older session', () => {
     expect(existsSync(pointed)).toBe(true)
   })
 
-  it('test_forkSession_refuses_to_overwrite_the_pointed_session', () => {
+  it('test_forkSession_refuses_to_overwrite_the_pointed_session', async () => {
     writeTranscript('src', 4000)
     const pointed = writeTranscript('tui-pointed', 5000)
     writeTranscript('tui-newest', 1)
     point('tui-pointed')
 
-    expect(() => forkSession('src', 'tui-pointed', { cwd, baseDir: base })).toThrow(
+    await expect(forkSession('src', 'tui-pointed', { cwd, baseDir: base })).rejects.toThrow(
       /refusing to write over a live session/,
     )
     expect(readFileSync(pointed, 'utf8')).toBe('{}\n')

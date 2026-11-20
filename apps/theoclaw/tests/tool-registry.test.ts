@@ -15,6 +15,7 @@ import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-a
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { agentToolOptions, buildTools, controlAgentToolOptions, readOnlyTools } from '../src/tools/tool-registry.js'
 import { BUILT_TOOL_NAMES, CONTROL_TOOL_NAMES } from '../src/tools/tool-names.js'
+import { createInboxTool, ScheduleInbox } from '../src/scheduler/schedule-inbox.js'
 import { createWorkflowTools } from '../src/workflows/workflow-tools.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
@@ -63,7 +64,7 @@ describe('CONTROL_TOOL_NAMES', () => {
       run: () => Promise.reject(new Error('not used')),
       deliver: () => Promise.reject(new Error('not used')),
     })
-    const extra = [...workflows, ...createScheduleTools({ scheduler, platforms: ['telegram'] })]
+    const extra = [...workflows, ...createScheduleTools({ scheduler, platforms: ['telegram'] }), createInboxTool(new ScheduleInbox(join(tempWorkspace(), 'inbox.json')))]
     const options = controlAgentToolOptions(settings, () => ({ send: () => Promise.reject(new Error('not used')) }), extra)
     const built = new Set(buildTools(settings).map((tool) => tool.name))
     const added = options.tools.map((tool) => tool.name).filter((name) => !built.has(name))

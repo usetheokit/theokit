@@ -37,6 +37,14 @@ export interface ToolHooks {
   beforeToolCall?: (
     ctx: BeforeToolCallContext,
   ) => ToolCallVeto | undefined | Promise<ToolCallVeto | undefined>
+  /**
+   * Framework-internal twin of `beforeToolCall` that also receives the SDK run id, so a veto can be
+   * recorded in the refusal ledger. Kept separate so `beforeToolCall` callers see an unchanged call.
+   */
+  beforeToolCallInRun?: (
+    ctx: BeforeToolCallContext,
+    runId: string,
+  ) => ToolCallVeto | undefined | Promise<ToolCallVeto | undefined>
   /** Observe every tool call's result after it runs. */
   afterToolCall?: (ctx: AfterToolCallContext) => void | Promise<void>
   /**
@@ -104,6 +112,10 @@ export function createToolHooksPlugin(hooks: ToolHooks): ToolHooksPlugin {
     kind: 'general',
     register(ctx) {
       const { beforeToolCall, afterToolCall, beforeLLMCall, afterLLMCall, processInput } = hooks
+      if (hooks.beforeToolCallInRun) {
+        const inRun = hooks.beforeToolCallInRun
+        ctx.on('pre_tool_call', (c) => inRun({ name: c.name ?? '', args: c.args ?? {} }, c.runId))
+      }
       if (beforeToolCall) {
         ctx.on('pre_tool_call', (c) => beforeToolCall({ name: c.name ?? '', args: c.args ?? {} }))
       }

@@ -3,7 +3,11 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { type AgentRouteContext, generateAgentRoutes } from '@theokit/agents/bridge'
+import {
+  BodyTooLargeError,
+  generateAgentRoutes,
+  readCappedBody,
+} from '@theokit/agents/bridge'
 
 import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from '../control-plane/bearer.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -55,17 +59,6 @@ const SANDBOX_CSP =
 const SANDBOX_SHELL =
   '<!doctype html><meta charset="utf-8"><script>addEventListener("message",function(e){if(e.source!==parent)return;if(typeof e.data!=="string")return;document.open();document.write(e.data);document.close()})</script>'
 const MISSING_BUNDLE = 'run the build:web script of the theoclaw package\n'
-
-/**
- * Required by the generator's context and never read by it: TheoClaw has one agent, built elsewhere.
- * `webchat-stream.test.ts` pins that the stream does not change with these; B-510 (a per-request hook
- * on the generator) is the follow-up that removes this placeholder and the per-request rebuild.
- */
-const COMPILED_OPTIONS: AgentRouteContext['compiledOptions'] = {
-  tools: [],
-  agents: {},
-  stream: true,
-}
 
 function ignore(): void {}
 
@@ -188,27 +181,6 @@ function relay(body: ReadableStream<Uint8Array>, stopTurn: () => void): Readable
 }
 
 /**
- * The post's body, read up to `MAX_MESSAGE_BYTES` and no further, or `undefined` past it. Read
- * from the stream rather than trusted from `content-length`, which a chunked post does not send.
- * A read that fails while the client is still connected rejects with the stream's error.
- */
-async function boundedBody(request: Request): Promise<Uint8Array<ArrayBuffer> | undefined> {
-  if (request.body === null) return new Uint8Array()
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let size = 0
-  for (let read = await reader.read(); !read.done; read = await reader.read()) {
-    size += read.value.byteLength
-    if (size > MAX_MESSAGE_BYTES) {
-      reader.cancel().catch(ignore)
-      return undefined
-    }
-    chunks.push(read.value)
-  }
-  return new Uint8Array(Buffer.concat(chunks))
-}
-
-/**
  * One chat post: the generator's handler, built per request so this request's signal reaches its
  * own turn. A client that leaves (the listener aborts `request.signal`) or a cancelled body stops
  * the turn.
@@ -228,7 +200,6 @@ async function chat(
   else request.signal.addEventListener('abort', stopTurn, { once: true })
   const routes = generateAgentRoutes({
     walkResult: { route: WEBCHAT_ROUTE },
-    compiledOptions: COMPILED_OPTIONS,
     createRun: createWebchatRun(turnFor, turn.signal, write),
   })
   const post = routes.find((route) => route.method === 'POST' && route.path === WEBCHAT_CHAT_PATH)
@@ -317,6 +288,30 @@ function chatIdRefusal(body: Uint8Array): Response | undefined {
   }
 }
 
+/**
+ * The request, its body reader changed so that cancelling it past the bound does not wait: the
+ * 413 is answered at once, and a cancel that stalls or rejects reaches neither the answer nor
+ * the caller.
+ */
+function withoutCancelWait(request: Request): Request {
+  const stream = request.body
+  if (stream === null) return request
+  return {
+    body: {
+      getReader: () => {
+        const reader = stream.getReader()
+        return {
+          read: () => reader.read(),
+          cancel: () => {
+            reader.cancel().catch(ignore)
+            return Promise.resolve()
+          },
+        }
+      },
+    },
+  } as unknown as Request
+}
+
 /** An authorized chat post: its body read within the bound, then handed to `chat`. */
 async function boundedChat(
   request: Request,
@@ -324,12 +319,16 @@ async function boundedChat(
   write?: (line: string) => void,
   scope = '',
 ): Promise<Response> {
-  const body = await boundedBody(request).catch((error: unknown) => {
-    // A client that leaves mid-upload errors the body stream: answer, since the listener would
-    // otherwise log "request failed" and write a 500 to a socket that is already gone.
-    if (request.signal.aborted) return null
-    throw error
-  })
+  // The post's body, read up to `MAX_MESSAGE_BYTES`: `undefined` past it, `null` when the client left.
+  const body = await readCappedBody(withoutCancelWait(request), MAX_MESSAGE_BYTES).catch(
+    (error: unknown) => {
+      if (error instanceof BodyTooLargeError) return undefined
+      // A client that leaves mid-upload errors the body stream: answer, since the listener would
+      // otherwise log "request failed" and write a 500 to a socket that is already gone.
+      if (request.signal.aborted) return null
+      throw error
+    },
+  )
   if (body === null) return clientLeft()
   if (body === undefined) return tooLarge()
   const refused = chatIdRefusal(body)

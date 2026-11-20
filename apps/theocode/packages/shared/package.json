@@ -1,6 +1,6 @@
 {
   "name": "@theocode/shared",
-  "version": "0.1.21",
+  "version": "0.1.23",
   "private": true,
   "type": "module",
   "description": "Code both surfaces need. Neither owns it.",
@@ -13,6 +13,6 @@
     "./turn-failure-reporting": "./src/turn-failure-reporting.ts"
   },
   "dependencies": {
-    "@theokit/agents": "workspace:*"
+    "@theokit/agents": "workspace:16.13.0"
   }
 }

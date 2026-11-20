@@ -1,5 +1,6 @@
 import { BasePlatformAdapter } from '@theokit/gateway'
 import type { MessageEvent, OutboundMessage, PlatformName, SendResult } from '@theokit/gateway'
+import type { InteractionUpdate } from '@theokit/sdk'
 
 import type { TurnMessage } from '../src/agent-port.js'
 
@@ -179,7 +180,7 @@ const never = new Promise<void>(() => undefined)
 
 /** A timeline event as `run.events()` yields it. */
 export type FakeTimelineEvent =
-  | { readonly kind: 'delta'; readonly update: Readonly<Record<string, unknown>> }
+  | { readonly kind: 'delta'; readonly update: InteractionUpdate }
   | { readonly kind: 'message'; readonly message: SdkFrame; readonly textAlreadyStreamed: boolean }
 
 /**
@@ -218,7 +219,7 @@ export class FakeAgent {
         await until(turn.before, signal)
         if (turn.toolHeld === true) {
           if (aborted()) return
-          yield { kind: 'delta', update: { type: 'tool-call-started', callId: 'call-1', toolCall: { name: turn.toolName ?? 'read', args: {} } } }
+          yield { kind: 'delta', update: { type: 'tool-call-started', callId: 'call-1', modelCallId: 'call-1', toolCall: { callId: 'call-1', name: turn.toolName ?? 'read', args: {} } } }
           await until(never, signal)
           return
         }
