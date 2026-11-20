@@ -625,5 +625,67 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         await wide.end()
       }
     })
+
+    // Postgres returns rows in no promised order without ORDER BY, so a batch dequeue cannot show
+    // which job is first. Lease one job at a time after the commit and read the order off the leases.
+    const leaseOneByOne = async (): Promise<string[]> => {
+      const order: string[] = []
+      for (;;) {
+        const leases = await backend.dequeue({ batchSize: 1, lockSeconds: 60 })
+        if (leases.length === 0) return order
+        order.push(leases[0].jobId)
+      }
+    }
+
+    it('a reschedule waiting on a transaction goes ahead of the time that transaction left, leased in order', async () => {
+      const a = await backend.enqueue({ name: 'run-task', input: { taskId: 1 }, delaySeconds: 100 })
+      const b = await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 50 })
+      const c = await backend.enqueue({ name: 'run-task', input: { taskId: 3 }, delaySeconds: 80 })
+      const tx = await pool.connect()
+      try {
+        await tx.query('BEGIN')
+        expect(
+          await backend.reschedule(tx, a.jobId, {
+            ahead: { name: 'run-task', where: { taskId: [2] } },
+          }),
+        ).toBe(true)
+        let done = false
+        const competing = backend
+          .reschedule(pool, c.jobId, { ahead: { name: 'run-task', where: { taskId: [1] } } })
+          .then((ok) => {
+            done = true
+            return ok
+          })
+        await new Promise((r) => setTimeout(r, 200))
+        expect(done).toBe(false)
+        await backend.reschedule(tx, b.jobId, { availableAt: new Date(Date.now() + 10_000) })
+        await tx.query('COMMIT')
+        expect(await competing).toBe(true)
+      } finally {
+        tx.release()
+      }
+      // Make every job due without changing their relative order, then lease one at a time.
+      await pool.query(`UPDATE theokit_jobs_ci SET available_at = available_at - INTERVAL '1 day'`)
+      expect(await leaseOneByOne()).toEqual([b.jobId, c.jobId, a.jobId])
+    })
+
+    it('defers to infinity: an immediately available job is leased and the held one is not until restored', async () => {
+      const target = await backend.enqueue({ name: 'run-task', input: { taskId: 1 } })
+      const control = await backend.enqueue({ name: 'run-task', input: { taskId: 2 } })
+      const moved = await backend.defer(pool, {
+        name: 'run-task',
+        where: { taskId: [1] },
+        until: 'infinity',
+      })
+      expect(moved).toEqual([target.jobId])
+      // The control job is available now, so an empty queue could not be mistaken for a held target;
+      // the target is older, so a failed hold would lease it first.
+      const first = await backend.dequeue({ batchSize: 1, lockSeconds: 60 })
+      expect(first.map((l) => l.jobId)).toEqual([control.jobId])
+      expect(await backend.dequeue({ batchSize: 1, lockSeconds: 60 })).toEqual([])
+      expect(await backend.restore(pool, { name: 'run-task' })).toEqual([target.jobId])
+      const second = await backend.dequeue({ batchSize: 1, lockSeconds: 60 })
+      expect(second.map((l) => l.jobId)).toEqual([target.jobId])
+    })
   },
 )
