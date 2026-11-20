@@ -492,6 +492,12 @@ them.
 | `list_scheduled_jobs`  | lists the jobs with their id, name, cron and target                                                                                                                                                 |
 | `cancel_scheduled_job` | removes a job by id                                                                                                                                                                                 |
 
+A web-only instance with no chat platform can schedule too: give the job the platform `inbox` and any
+label as the channel id. The answer is stored in `<workspace>/.theoclaw/schedule-inbox.json` (mode 0600,
+secrets masked, the latest 100 messages kept, kept even when transcripts are off), and a `/control`
+agent reads it with `read_schedule_inbox` ("what did my morning job say?"). A failed write is reported
+as undelivered. Nothing is pushed to WebChat.
+
 Jobs are kept in `<workspace>/.theoclaw/schedules.json` (mode 0600), so they survive a restart; a
 file that does not parse refuses the start, as `sessions.json` does. At most 50 jobs are kept, and
 a platform that is not configured, a cron or a timezone the scheduler rejects is refused with
@@ -630,9 +636,13 @@ before any runner starts, and refuses it naming the file and the key:
 - An MCP server with `url` is HTTP (`type` `http` or `sse`), anything else stdio. The SDK names
   its tools `mcp_<server>_<tool>`, so a server name must match `^[a-z](?:[a-z0-9-]{0,62}[a-z0-9])?$`,
   and may not be `browser`, the server `THEOCLAW_BROWSER=on` adds beside them.
-- An HTTP server's `auth` is refused: `@theokit/sdk` 5.11.0 would send the request without the
-  credentials and say nothing (B-680). Put the token in `headers`, and put only credential values
-  there and in `env`: every header and env value of 8 characters or more is masked in the output.
+- An HTTP server may carry `auth` with `CLIENT_ID`, `scopes` and a required
+  `oauth` block (`authorizationEndpoint`, `tokenEndpoint`, `redirectMode`). `@theokit/sdk` sends
+  the OAuth bearer from its token store, refreshing it or running the PKCE flow when none is
+  stored (tested end to end against a local MCP server on 5.17.0). An `auth` without `oauth` is
+  refused, as the SDK refuses it. `CLIENT_SECRET` is refused too: 5.17.0 sends only `client_id` to the
+  token endpoint (code exchange and refresh), so a confidential client cannot get a token. Put any other token in `headers`, and put only credential values
+  there and in `env`: every such value of 8 characters or more is masked in the output.
 - `envPolicy: "all"` is refused, so a stdio server never inherits the model key; the SDK's default
   drops secret-like variables and `env` adds what the server needs.
 - A `command` with a `/` must be absolute; a bare name is looked up on `PATH` (an ACP agent's on
@@ -645,10 +655,10 @@ before any runner starts, and refuses it naming the file and the key:
   within 2 minutes or no asker refuses it. That stops only what the agent asks about: it runs as the
   TheoClaw user, outside the tool sandbox, and an agent that writes without asking (its own
   auto-accept mode or project settings) is not stopped by it.
-- An ACP agent starts through `env -i` with only `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
+- An ACP agent starts through the framework `env` option with only `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
   `TMPDIR`, `TZ`, the locale, terminal and XDG directory variables, so the model key and the channel
   and bearer tokens are not in the environment it receives or passes to its own children; an agent
-  that logs in through its home directory still finds its login. That is all `env -i` does, and it
+  that logs in through its home directory still finds its login. That is all the `env` option does, and it
   is not a secret boundary: the agent runs as the TheoClaw user, so it can still read TheoClaw's
   environment from `/proc/<TheoClaw pid>/environ` (and anything else that user can read). Only an
   agent you trust with those secrets belongs in `acpAgents`. A `command` may not contain `=`. A

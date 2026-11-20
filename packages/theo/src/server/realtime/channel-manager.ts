@@ -1,5 +1,10 @@
 import type { WebSocketLike } from '../define/define-websocket.js'
 
+/**
+ * In-memory room membership and broadcast for WebSocket clients.
+ *
+ * @experimental Undocumented and single-process only; its method set may change.
+ */
 export class ChannelManager {
   private rooms = new Map<string, Set<WebSocketLike>>()
   private wsRooms = new Map<WebSocketLike, Set<string>>()

@@ -264,3 +264,15 @@ describe('through the webhook router', () => {
     expect((await router(delivery(body))).status).toBe(202)
   })
 })
+
+describe('the remembered delivery ids', () => {
+  it('keeps the newest 1000 ids deduplicated and runs the oldest again once evicted', async () => {
+    const h = harness()
+    for (let n = 0; n <= 1000; n++) {
+      expect((await h.handle(delivery('{}', { 'x-theoclaw-delivery': `id-${n}` }))).status).toBe(202)
+    }
+    // id-0 was dropped by the 1001st id; id-1 is still remembered.
+    expect((await h.handle(delivery('{}', { 'x-theoclaw-delivery': 'id-1' }))).status).toBe(200)
+    expect((await h.handle(delivery('{}', { 'x-theoclaw-delivery': 'id-0' }))).status).toBe(202)
+  })
+})

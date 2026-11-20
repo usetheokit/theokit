@@ -1,3 +1,5 @@
+import { resolve } from 'node:path'
+
 import { writableRootsFor, type SandboxMode, type SandboxProvider } from '@theokit/sdk/sandbox'
 
 /**
@@ -121,6 +123,11 @@ export interface ToolScopeInput {
    * product never asks about write policy needs no mode.
    */
   readonly mode?: SandboxMode
+  /**
+   * Paths the path veto refuses to let a tool touch (sessions, approvals, credentials). Absolute, or
+   * relative to `projectRoot`. Defaults to none.
+   */
+  readonly protectedPaths?: readonly string[]
 }
 
 /** Any `sdk-tools` factory: takes an options object, returns a tool. */
@@ -137,6 +144,8 @@ type Overrides<TOptions> = Omit<TOptions, keyof ScopeFields> & Partial<ScopeFiel
 export interface ToolScope extends ScopeFields {
   /** The write policy of `mode`, when one was supplied. */
   readonly policy: SandboxWritePolicy
+  /** The protected paths, absolute, copied at bind time. */
+  readonly protectedPaths: readonly string[]
   /**
    * Scope a factory.
    *
@@ -166,11 +175,15 @@ class BoundToolScope implements ToolScope {
   readonly writeRoot: string
   readonly sandbox: SandboxProvider
   readonly policy: SandboxWritePolicy
+  readonly protectedPaths: readonly string[]
 
   constructor(input: ToolScopeInput) {
     this.projectRoot = input.projectRoot
     this.writeRoot = input.writeRoot ?? input.projectRoot
     this.sandbox = input.sandbox
+    this.protectedPaths = Object.freeze(
+      (input.protectedPaths ?? []).map((path) => resolve(this.projectRoot, path)),
+    )
     // No mode ⇒ report the safe answer rather than invent a permissive one. A product that never
     // declared a mode has not earned `writes: true`.
     this.policy =
