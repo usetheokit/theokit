@@ -159,7 +159,7 @@ function freePort(): Promise<number> {
 }
 
 /** A process snapshot that cannot be trusted as the whole table. */
-export class ProcessSnapshotError extends Error {
+class ProcessSnapshotError extends Error {
   constructor(
     readonly pid: number,
     detail: string,
