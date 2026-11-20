@@ -158,8 +158,32 @@ function freePort(): Promise<number> {
   })
 }
 
-/** The process table from PowerShell (Windows only); rejects when it fails or runs past `timeoutMs`. */
-function snapshotProcesses(timeoutMs: number): Promise<ProcTable> {
+/** A process snapshot that cannot be trusted as the whole table. */
+export class ProcessSnapshotError extends Error {
+  constructor(
+    readonly pid: number,
+    detail: string,
+  ) {
+    super(`process snapshot for pid ${String(pid)} rejected: ${detail}`)
+    this.name = 'ProcessSnapshotError'
+  }
+}
+
+/** @internal Parses PowerShell output into a table; rejects stderr output and any row that is not three integers. */
+export function parseProcessSnapshot(pid: number, out: string, err: string): ProcTable {
+  if (err.trim() !== '') throw new ProcessSnapshotError(pid, `stderr: ${err.trim().slice(0, 300)}`)
+  const table: ProcTable = new Map()
+  for (const line of out.split(/\r?\n/)) {
+    if (line.trim() === '') continue
+    const m = /^(\d+)\s+(\d+)\s+(-?\d+)$/.exec(line.trim())
+    if (m === null) throw new ProcessSnapshotError(pid, `malformed row ${JSON.stringify(line)}`)
+    table.set(Number(m[1]), { ppid: Number(m[2]), started: m[3] })
+  }
+  return table
+}
+
+/** The process table from PowerShell (Windows only); rejects when it fails, is incomplete, or runs past `timeoutMs`. */
+function snapshotProcesses(root: number, timeoutMs: number): Promise<ProcTable> {
   return new Promise((resolve, reject) => {
     const exe = join(
       process.env.SystemRoot ?? 'C:\\Windows',
@@ -169,25 +193,27 @@ function snapshotProcesses(timeoutMs: number): Promise<ProcTable> {
       'powershell.exe',
     )
     const cmd =
-      'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.CreationDate.ToFileTimeUtc())" }'
+      '$ErrorActionPreference=\'Stop\'; Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.CreationDate.ToFileTimeUtc())" }'
     const ps = spawn(exe, ['-NoProfile', '-NonInteractive', '-Command', cmd], {
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       timeout: timeoutMs,
     })
     let out = ''
+    let err = ''
     ps.stdout.on('data', (d: Buffer) => (out += d.toString()))
+    ps.stderr.on('data', (d: Buffer) => (err += d.toString()))
     ps.once('error', reject)
     ps.once('close', (code) => {
       if (code !== 0) {
-        reject(new Error(`process snapshot failed (exit ${String(code)})`))
+        const detail = err.trim() === '' ? '' : `: ${err.trim()}`
+        reject(new ProcessSnapshotError(root, `exit ${String(code)}${detail}`))
         return
       }
-      const table: ProcTable = new Map()
-      for (const line of out.split(/\r?\n/)) {
-        const m = /^(\d+)\s+(\d+)\s+(-?\d+)$/.exec(line.trim())
-        if (m !== null) table.set(Number(m[1]), { ppid: Number(m[2]), started: m[3] })
+      try {
+        resolve(parseProcessSnapshot(root, out, err))
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)))
       }
-      resolve(table)
     })
   })
 }
@@ -270,7 +296,8 @@ function createTreeTracker(
   const observe = (t: ProcTable): void => {
     const root = t.get(rootPid)
     if (root !== undefined && !tracked.has(rootPid)) tracked.set(rootPid, root.started)
-    const queue = [rootPid]
+    // Walk from every tracked pid, so descendants of an already-reparented branch are found too.
+    const queue = [rootPid, ...tracked.keys()]
     for (let pid = queue.pop(); pid !== undefined; pid = queue.pop()) {
       for (const [cpid, c] of t) {
         if (c.ppid === pid && cpid !== rootPid && !tracked.has(cpid)) {
@@ -297,6 +324,13 @@ function createTreeTracker(
         if (leaderRunning) await kill(rootPid)
         throw new Error(
           `could not confirm theokit ${mode} process tree is gone: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+      if (leaderRunning && !t.has(rootPid)) {
+        // The handle says the leader lives: a table without it is incomplete, not "tree gone".
+        await kill(rootPid)
+        throw new Error(
+          `could not confirm theokit ${mode} process tree is gone: ${new ProcessSnapshotError(rootPid, 'table lacks the running root pid').message}`,
         )
       }
       observe(t)
@@ -374,7 +408,9 @@ async function bootOnce(
           child.pid,
           () =>
             withTimeout(
-              (options.processTable ?? (() => snapshotProcesses(snapMs)))(child.pid ?? 0),
+              (options.processTable ?? (() => snapshotProcesses(child.pid ?? 0, snapMs)))(
+                child.pid ?? 0,
+              ),
               snapMs,
               'process snapshot',
             ),

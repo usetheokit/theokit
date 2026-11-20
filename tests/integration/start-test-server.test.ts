@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer as createHttp } from 'node:http'
 import { createServer as createTcp, type Server } from 'node:net'
@@ -6,7 +7,10 @@ import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { startTestServer, TestServerBootError } from '../../packages/theo/src/testing/index.js'
-import type { ProcTable } from '../../packages/theo/src/testing/start-test-server.js'
+import {
+  parseProcessSnapshot,
+  type ProcTable,
+} from '../../packages/theo/src/testing/start-test-server.js'
 
 /**
  * `startTestServer` runs the app's own theokit CLI, so the fixtures link `node_modules/theokit` to the
@@ -232,6 +236,7 @@ describe('startTestServer on platforms without /proc (simulated)', () => {
   )
 
   describe('Windows process tree', () => {
+    let closing = false
     const treeApp = (name: string, pidFile: string): string =>
       writeApp(
         name,
@@ -338,6 +343,74 @@ export default {}
       expect((err as Error).message).toMatch(/timed out after 200ms/)
       expect((err as Error).message).toMatch(/could not confirm/)
     }, 60_000)
+
+    it('kills a grandchild that appears only after readiness, found from a tracked descendant', async () => {
+      const pidFile = join(ROOT, 'descendant4.pid')
+      const killed: number[] = []
+      const late = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+        stdio: 'ignore',
+      })
+      const grandchild = late.pid ?? 0
+      let visible = false
+      const base = tableOf(pidFile)
+      const server = await startTestServer({
+        cwd: treeApp('tree4', pidFile),
+        platform: 'win32',
+        processTable: async (root) => {
+          const t = await base(root)
+          if (visible && alive(grandchild) && existsSync(pidFile)) {
+            const d = Number(readFileSync(pidFile, 'utf8'))
+            t.set(grandchild, { ppid: d, started: `s${String(grandchild)}` })
+          }
+          return t
+        },
+        killTree: singleKill(killed),
+      })
+      visible = true // started after readiness: only close()'s fresh snapshot can see it
+      await server.close()
+      expect(killed).toContain(grandchild)
+      await waitDead(grandchild)
+      expect(alive(grandchild)).toBe(false)
+    }, 120_000)
+
+    it('rejects close() when the snapshot has a malformed row or stderr output', async () => {
+      expect(() => parseProcessSnapshot(1, '1 0 5\nnot a row\n', '')).toThrow(/malformed row/)
+      expect(() => parseProcessSnapshot(1, '1 0 5\n', 'Access denied')).toThrow(/stderr: Access/)
+      for (const [out, err] of [
+        ['1 0 5\nnot a row\n', ''],
+        ['1 0 5\n', 'Access denied'],
+      ]) {
+        let bad = false
+        const server = await startTestServer({
+          cwd: app,
+          platform: 'win32',
+          processTable: async (root) => {
+            if (bad) return parseProcessSnapshot(root, out, err)
+            return liveTable(root)
+          },
+          killTree: async (pid) => {
+            killNow(pid)
+            return 0
+          },
+        })
+        bad = true
+        await expect(server.close()).rejects.toThrow(/could not confirm.*process snapshot/s)
+      }
+    }, 120_000)
+
+    it('rejects close() when the table lacks the running root', async () => {
+      const server = await startTestServer({
+        cwd: app,
+        platform: 'win32',
+        processTable: async (root) => (alive(root) && !closing ? liveTable(root) : new Map()),
+        killTree: async (pid) => {
+          killNow(pid)
+          return 0
+        },
+      })
+      closing = true
+      await expect(server.close()).rejects.toThrow(/lacks the running root pid/)
+    }, 120_000)
 
     it('surfaces a failed termination', async () => {
       const stuck = await startTestServer({
