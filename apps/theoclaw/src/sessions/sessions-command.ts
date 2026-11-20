@@ -1,14 +1,25 @@
-import { closeSync, constants, existsSync, fchmodSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fchmodSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
 import { listSessions } from '@theokit/agents/session'
+import { readSessionMessages } from '@theokit/sdk'
 
 import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { resolveInstance } from '../instance.js'
-import { readFullHistory } from './transcript-history.js'
 
 /**
  * `theoclaw sessions list|show|export` (OC-51): a read-only view over the chat transcripts the SDK
@@ -30,24 +41,28 @@ interface Message {
 
 const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [--json]'
 
+type ChatSession = Awaited<ReturnType<typeof listSessions>>[number] & {
+  id: string
+  workspace: string
+}
+
 /** The user and assistant turns of a session, read by the SDK; entries with no text are dropped. */
 async function readMessages(session: ChatSession): Promise<Message[]> {
-  const stored = await readFullHistory({
+  const stored = await readSessionMessages({
+    sessionId: session.id,
     cwd: session.workspace,
-    transcript: session.transcript,
-  })
+    sessionDir: join(session.workspace, '.theoclaw'),
+    // The reader throws on a record whose content is a string (older transcripts); one such
+    // session must not take down `list` or `resume`, so it reads as having no messages.
+  }).catch(() => [])
   // The reader's `text` also renders tool calls and results; the CLI shows only what was said.
   return stored
     .map((entry) => ({
       role: entry.role,
-      text: (entry.parts ?? [])
-        .map((part) => (part.type === 'text' ? part.text : ''))
-        .join(''),
+      text: (entry.parts ?? []).map((part) => (part.type === 'text' ? part.text : '')).join(''),
     }))
     .filter((entry) => entry.text !== '')
 }
-
-type ChatSession = Awaited<ReturnType<typeof listSessions>>[number] & { id: string; workspace: string }
 
 async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {
   const env: NodeJS.ProcessEnv = { ...io.env }
@@ -60,9 +75,10 @@ async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {
       { variable: 'THEOCLAW_WORKSPACE' },
     )
   }
-  return (await listSessions(workspace, join(workspace, '.theoclaw')))
-    .filter((entry) => entry.id !== undefined)
-    .map((entry) => ({ ...entry, id: entry.id!, workspace }))
+  const listed = await listSessions(workspace, join(workspace, '.theoclaw'))
+  return listed.flatMap((entry) =>
+    entry.id === undefined ? [] : [{ ...entry, id: entry.id, workspace }],
+  )
 }
 
 function matchSession(sessions: readonly ChatSession[], wanted: string): ChatSession[] {
@@ -152,9 +168,16 @@ async function shareCommand(
   // No check-then-use: drop any earlier copy (a read-only file, or a link planted in its place),
   // then create the file exclusively without following a link, and set its mode on the open handle.
   rmSync(file, { force: true })
-  const fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+  const fd = openSync(
+    file,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+    0o600,
+  )
   try {
-    writeFileSync(fd, `${JSON.stringify({ id: session.id, messages: (await readMessages(session)) })}\n`)
+    writeFileSync(
+      fd,
+      `${JSON.stringify({ id: session.id, messages: await readMessages(session) })}\n`,
+    )
     fchmodSync(fd, 0o444)
   } finally {
     closeSync(fd)
