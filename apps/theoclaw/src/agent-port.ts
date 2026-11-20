@@ -77,9 +77,29 @@ export interface SdkMessageLike {
   readonly type: string
 }
 
-/** A stream message as the bridge's `SdkMessage`; the copy carries the index signature the SDK's interfaces lack. */
+const SDK_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  'request',
+  'status',
+  'tool_call',
+  'thinking',
+  'assistant',
+  'system',
+  'user',
+  'task',
+  'object_delta',
+])
+
+/** Whether `message` is one of the bridge's `SdkMessage` kinds; the translators read the rest untrusted. */
+function isSdkMessage(message: SdkMessageLike): message is SdkMessage {
+  return SDK_MESSAGE_TYPES.has(message.type)
+}
+
+/** The stand-in for a message of a kind the bridge does not know: an empty assistant message, which translates to nothing. */
+const UNKNOWN_MESSAGE: SdkMessage = { type: 'assistant', message: { content: [] } }
+
+/** A stream message as the bridge's `SdkMessage` (no cast); a kind the bridge does not know becomes an empty message. */
 export function toSdkMessage(message: SdkMessageLike): SdkMessage {
-  return { ...message }
+  return isSdkMessage(message) ? message : UNKNOWN_MESSAGE
 }
 
 /** A timeline event as the bridge's `SdkTimelineEvent`, built field by field (no cast). */

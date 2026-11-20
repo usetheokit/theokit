@@ -24,6 +24,7 @@
  * `tool-dialect-stripper.test.ts:test_stripper_embedded_close_early_closes_then_text`.
  */
 import type { StreamEvent } from './agent-sse-handler.js'
+import type { TextDeltaEvent } from './agent-stream-events.js'
 
 /** The Hermes leak's open marker. Single change-point if a second tool-dialect opener ever appears. */
 const OPEN = '<function='
@@ -124,9 +125,9 @@ export function createToolDialectStripper(): {
  * never coerced). The `end()` flush runs in a `finally`, so a buffered unclosed leak is surfaced as text
  * even when the source errors mid-stream (delivered before the error re-propagates) — Rule 8: lose nothing.
  */
-export async function* stripToolDialectStream(
-  source: AsyncIterable<StreamEvent>,
-): AsyncGenerator<StreamEvent> {
+export async function* stripToolDialectStream<E extends StreamEvent>(
+  source: AsyncIterable<E>,
+): AsyncGenerator<E | TextDeltaEvent> {
   const stripper = createToolDialectStripper()
   try {
     for await (const event of source) {

@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentStreamEvent } from '../bridge/agent-stream-events.js'
+import type { SdkMessage } from '../bridge/event-translator.js'
 import { runAgentTurn, type AgentTurnOutcome } from '../bridge/run-agent-turn.js'
 import type { SdkAgentHandle, SdkSendOptions } from '../bridge/sdk-adapter.js'
 
@@ -36,7 +37,7 @@ export interface SessionStore {
 
 export interface SessionStoreOptions {
   /** Builds one session's agent, on that session's first turn. */
-  build: () => Promise<SdkAgentHandle>
+  build: () => Promise<SdkAgentHandle<SdkMessage>>
   /** The most sessions kept at once. Default 16. */
   max?: number
   /** How long a turn waits for a cancelled turn on its session to unwind. Default 5000. */
@@ -77,7 +78,7 @@ interface Turn {
 }
 
 interface Entry {
-  agent: SdkAgentHandle | undefined
+  agent: SdkAgentHandle<SdkMessage> | undefined
   /** The last turn was interrupted: the next message is a redirect. */
   interrupted: boolean
   lastUsed: number
@@ -166,7 +167,7 @@ export function createSessionStore(options: SessionStoreOptions): SessionStore {
     return { entry, evicted }
   }
 
-  async function disposeReported(agent: SdkAgentHandle): Promise<void> {
+  async function disposeReported(agent: SdkAgentHandle<SdkMessage>): Promise<void> {
     try {
       await agent.dispose()
     } catch (error) {

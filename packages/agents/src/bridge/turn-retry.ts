@@ -1,7 +1,7 @@
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
-import type { StreamEvent } from './agent-sse-handler.js'
+import type { AgentStreamEvent } from './agent-stream-events.js'
 
 /**
  * Per-turn transient retry for the SDK-adapter stream — the seam the SERVED path never had.
@@ -64,7 +64,7 @@ export interface TurnOutcome {
 
 /** One attempt at a turn: its event stream, and the box its typed failure lands in. */
 export interface TurnAttempt {
-  readonly stream: AsyncIterable<StreamEvent>
+  readonly stream: AsyncIterable<AgentStreamEvent>
   readonly outcome: TurnOutcome
 }
 
@@ -82,13 +82,14 @@ function asText(value: unknown): string | undefined {
  * policy nobody chose, stated by omission — the objection `in-process-turn.ts` already records
  * against defaulted retryability.
  */
-function startFailure(event: StreamEvent, outcome: TurnOutcome): unknown {
+function startFailure(event: AgentStreamEvent, outcome: TurnOutcome): unknown {
   if (outcome.failure !== undefined) return outcome.failure
+  const failed = event.type === 'error' ? event : undefined
   return new TheokitAgentError(
-    asText(event.message) ?? 'The turn failed before producing any output.',
+    asText(failed?.message) ?? 'The turn failed before producing any output.',
     {
-      code: asText(event.code) ?? 'TURN_START_FAILED',
-      isRetryable: event.retryable === true,
+      code: asText(failed?.code) ?? 'TURN_START_FAILED',
+      isRetryable: failed?.retryable === true,
     },
   )
 }
@@ -97,10 +98,10 @@ function startFailure(event: StreamEvent, outcome: TurnOutcome): unknown {
 async function startTurn(
   open: () => TurnAttempt,
   retry: RetryOptions,
-): Promise<{ it: AsyncIterator<StreamEvent>; first: IteratorResult<StreamEvent> }> {
+): Promise<{ it: AsyncIterator<AgentStreamEvent>; first: IteratorResult<AgentStreamEvent> }> {
   const attempt = async (): Promise<{
-    it: AsyncIterator<StreamEvent>
-    first: IteratorResult<StreamEvent>
+    it: AsyncIterator<AgentStreamEvent>
+    first: IteratorResult<AgentStreamEvent>
   }> => {
     const { stream, outcome } = open()
     const it = stream[Symbol.asyncIterator]()
@@ -134,7 +135,7 @@ async function startTurn(
 async function* withTurnStartRetry(
   open: () => TurnAttempt,
   retry: RetryOptions,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<AgentStreamEvent> {
   const { it, first } = await startTurn(open, retry)
   let next = first
   while (!next.done) {
@@ -155,9 +156,9 @@ async function* withTurnStartRetry(
  * the first failure decide the second — and `undefined` when there is no retry to inform.
  */
 export function runTurnWithRetry(
-  open: (outcome?: TurnOutcome) => AsyncIterable<StreamEvent>,
+  open: (outcome?: TurnOutcome) => AsyncIterable<AgentStreamEvent>,
   retry: RetryOptions | undefined,
-): AsyncIterable<StreamEvent> {
+): AsyncIterable<AgentStreamEvent> {
   if (retry === undefined) return open()
   return withTurnStartRetry(() => {
     const outcome: TurnOutcome = {}

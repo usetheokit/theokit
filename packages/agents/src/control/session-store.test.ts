@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { SdkMessage } from '../bridge/event-translator.js'
 import type { SdkAgentHandle } from '../bridge/sdk-adapter.js'
 import * as entry from '../control-entry.js'
 import { createSessionStore } from './session-store.js'
 
 interface Fake {
-  agent: SdkAgentHandle
+  agent: SdkAgentHandle<SdkMessage>
   sends: Array<{ message: string; opts: Record<string, unknown> }>
   dispose: ReturnType<typeof vi.fn>
   cancel: ReturnType<typeof vi.fn>
@@ -40,7 +41,7 @@ function fake(hold = false): Fake {
         },
       }
     },
-  } as unknown as SdkAgentHandle
+  } as unknown as SdkAgentHandle<SdkMessage>
   return { agent, sends, dispose, cancel, release, finish }
 }
 

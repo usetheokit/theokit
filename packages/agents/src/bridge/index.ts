@@ -68,6 +68,7 @@ export {
 export {
   createSdkAgentStream,
   toAgentFactory,
+  toTypedAgentFactory,
   type SdkAgentHandle,
   // M91 — the types that make `send` honest cross alongside it: without them the consumer cannot
   // name the return, and goes back to writing the adapter this milestone exists to delete.
@@ -78,6 +79,7 @@ export {
   type SdkRunAgent,
   type SdkStreamMessage,
 } from './sdk-adapter.js'
+export { withTypedStream } from './handle-wrappers.js'
 // M96 — the approval posture crosses the boundary: without it being nameable, the consumer cannot
 // declare what `toAgentFactory` now requires. `AgentDefinition` (a name already taken just below, by
 // the builder's branded type) is untouched — the posture has a name of its own.

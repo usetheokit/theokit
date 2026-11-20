@@ -24,13 +24,13 @@ import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
 import { wireInlineSkillRead } from './advertised-skill-read.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
-import type { StreamEvent } from './agent-sse-handler.js'
+import type { AgentStreamEvent } from './agent-stream-events.js'
 import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { acquireSharedAgent, releaseSharedAgent } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
-import { type SdkMessage } from './event-translator.js'
-import { withGuardrails } from './handle-wrappers.js'
+import type { SdkMessage } from './event-translator.js'
+import { withGuardrails, withTypedStream } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { dropRunRefusals, retainRun, takeRefusal } from './refusal-ledger.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
@@ -383,9 +383,9 @@ function resolveTextTransformFlags(
  * `text_delta`. Both default off ⇒ the merged stream is returned unchanged (byte-identical).
  */
 function applyTextTransforms(
-  events: AsyncIterable<StreamEvent>,
+  events: AsyncIterable<AgentStreamEvent>,
   opts: { parseThinkTags: boolean; stripToolDialect: boolean },
-): AsyncIterable<StreamEvent> {
+): AsyncIterable<AgentStreamEvent> {
   let out = opts.parseThinkTags ? extractThinkTagStream(events) : events
   if (opts.stripToolDialect) out = stripToolDialectStream(out)
   return out
@@ -500,7 +500,7 @@ export function createSdkAgentStream(
     message: string,
     sessionId: string,
     factoryOpts?: { disableTools?: boolean },
-  ): AsyncIterable<StreamEvent> => ({
+  ): AsyncIterable<AgentStreamEvent> => ({
     async *[Symbol.asyncIterator]() {
       const runId = `run-${Date.now()}`
       const t0 = Date.now()
@@ -711,7 +711,7 @@ async function* streamTimeline(
   state: { sawError: boolean; lastEventType: string },
   outcome: TurnOutcome | undefined,
   refusals: ReadonlyMap<string, PendingRefusal>,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<AgentStreamEvent> {
   const run = (await sendPromise) as {
     events: () => AsyncGenerator<SdkTimelineEvent>
     id?: unknown
@@ -727,21 +727,17 @@ async function* streamTimeline(
     for (const p of refusals.values()) if (p.runId !== undefined) dropRunRefusals(p.runId)
   }
 
-  async function* timelineBody(): AsyncGenerator<StreamEvent> {
+  async function* timelineBody(): AsyncGenerator<AgentStreamEvent> {
     const seen = createToolSeen()
-    const emit = function* (events: StreamEvent[]): Generator<StreamEvent> {
+    const emit = function* (events: AgentStreamEvent[]): Generator<AgentStreamEvent> {
       for (const event of events) {
         if (event.type === 'error') state.sawError = true
         // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
         if (event.type === 'done') continue
         state.lastEventType = event.type
-        const callId = (event as { callId?: unknown }).callId
-        const pending =
-          event.type === 'tool_result' && typeof callId === 'string'
-            ? refusals.get(callId)
-            : undefined
+        const pending = event.type === 'tool_result' ? refusals.get(event.callId) : undefined
         const refusal = pending !== undefined ? resolveRefusal(pending, handleId) : undefined
-        yield refusal !== undefined ? { ...event, refusal } : event
+        yield event.type === 'tool_result' && refusal !== undefined ? { ...event, refusal } : event
       }
     }
     for await (const ev of run.events()) {
@@ -802,7 +798,7 @@ async function* streamSdkAgent(
   compiled: CompiledAgentOptions,
   sdkTools: unknown[],
   opts: StreamSdkAgentOpts,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<AgentStreamEvent> {
   const { Agent } = rt
   const {
     apiKey,
@@ -909,12 +905,20 @@ async function* streamSdkAgent(
  * `wait` for output, theokit#139). The ACP server (4.0.1) answers that with JSON-RPC -32603 carrying
  * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
-export interface SdkTurnHandle {
+export interface SdkTurnHandle<M = AgentStreamEvent> {
   /** The SDK run id, when the handle has one (`Run.id`). */
   readonly id?: string
   wait: () => Promise<SdkTurnOutcome>
-  /** Optional: a wait-only handle has none. Lenient (`unknown`); {@link SdkRun} narrows it to the SDK's messages. */
-  stream?: () => AsyncIterable<unknown>
+  /**
+   * The turn's events. With the default `M`, the typed bridge contract: `AgentStreamEvent`.
+   *
+   * A handle served to an ACP host carries `SdkMessage` instead (`SdkAgentHandle<SdkMessage>`, what
+   * {@link toAgentFactory} returns): the ACP server dispatches exhaustively on `SDKMessage['type']`
+   * and throws on anything else, so that boundary keeps the SDK's own vocabulary.
+   * `withTypedStream` (`handle-wrappers.ts`) is the adapter between the two, built on
+   * `translateSdkEvent`. Optional: a wait-only handle has none.
+   */
+  stream?: () => AsyncIterable<M>
   /** The SDK's ordered timeline (`Run.events()`): messages and deltas interleaved. */
   events?: () => AsyncIterable<SdkTimelineEvent>
   /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
@@ -944,7 +948,7 @@ export interface SdkTurnOutcome {
  * is required and `status` is always set. A real SDK `Run` satisfies it; `SdkTurnHandle` stays the
  * lenient shape for injected doubles that implement only `wait()`.
  */
-export interface SdkRun extends SdkTurnHandle {
+export interface SdkRun extends SdkTurnHandle<SdkStreamMessage> {
   wait: () => Promise<SdkTurnOutcome & { status: string }>
   stream: () => AsyncIterable<SdkStreamMessage>
   events: () => AsyncIterable<SdkTimelineEvent>
@@ -954,7 +958,7 @@ export interface SdkRun extends SdkTurnHandle {
 /** Per-turn options: the SDK's own `SendOptions`. */
 export type SdkSendOptions = SendOptions
 
-export interface SdkAgentHandle {
+export interface SdkAgentHandle<M = AgentStreamEvent> {
   readonly agentId: string
   /**
    * B-062 — a tool-using run that returns schema-validated output.
@@ -999,7 +1003,7 @@ export interface SdkAgentHandle {
    * `as never` absorbed the difference. It is literally the divergence the facade's docstring
    * described, met again while trying to remove it.
    */
-  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
+  send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>
   dispose: () => Promise<void>
 }
 
@@ -1036,10 +1040,10 @@ export function toAgentFactory(
     /** Withhold the SDK default `shell`, which `approvals` does not gate. */
     withholdBuiltinShell?: boolean
   },
-): (sessionId: string) => Promise<SdkAgentHandle> {
+): (sessionId: string) => Promise<SdkAgentHandle<SdkMessage>> {
   const overrides = opts.overrides ?? {}
   const projectPerSession = resolveProjection(def, overrides)
-  return async (sessionId: string): Promise<SdkAgentHandle> => {
+  return async (sessionId: string): Promise<SdkAgentHandle<SdkMessage>> => {
     // OBJECT shape: returns the projection already built. THUNK shape: projects now, for this session.
     const { compiled, model, reasoningEffort, runContext } = await projectPerSession(sessionId)
     const rt = await loadSdkRuntime()
@@ -1079,7 +1083,7 @@ export function toAgentFactory(
       () => {
         releaseServedEntry(agent, entry)
       },
-    )) as SdkAgentHandle
+    )) as SdkAgentHandle<SdkMessage>
     return servedHandle(agent, entry)
   }
 }
@@ -1089,7 +1093,7 @@ interface ServedEntry {
   max: number | undefined
 }
 interface ServedConfig {
-  send: SdkAgentHandle['send']
+  send: SdkAgentHandle<SdkMessage>['send']
   /** Active served holders, oldest first; releases (`dispose()`) drop the oldest. */
   entries: ServedEntry[]
 }
@@ -1110,7 +1114,10 @@ function releaseServedEntry(agent: object, entry: ServedEntry): void {
  * lowest ceiling), recomputed on every send: a caller without guards cannot strip another's, and a
  * released caller's constraints stop applying.
  */
-function servedHandle(agent: SdkAgentHandle, entry: ServedEntry): SdkAgentHandle {
+function servedHandle(
+  agent: SdkAgentHandle<SdkMessage>,
+  entry: ServedEntry,
+): SdkAgentHandle<SdkMessage> {
   let cfg = served.get(agent)
   if (cfg === undefined) {
     const live: ServedConfig = { send: agent.send.bind(agent), entries: [] }
@@ -1126,7 +1133,7 @@ function servedHandle(agent: SdkAgentHandle, entry: ServedEntry): SdkAgentHandle
           ceilings.length === 0 ? sendOpts : { maxIterations: Math.min(...ceilings), ...sendOpts },
         )
       },
-    } as SdkAgentHandle
+    } as SdkAgentHandle<SdkMessage>
     Object.defineProperty(agent, 'send', {
       value: (msg: string, sendOpts?: SdkSendOptions) =>
         withGuardrails(base, [...new Set(live.entries.flatMap((e) => e.guards))]).send(
@@ -1140,6 +1147,20 @@ function servedHandle(agent: SdkAgentHandle, entry: ServedEntry): SdkAgentHandle
   }
   cfg.entries.push(entry)
   return agent
+}
+
+/**
+ * {@link toAgentFactory} with the typed bridge contract: the handle's `stream()` yields
+ * `AgentStreamEvent` (via `withTypedStream`) instead of the SDK messages ACP reads. Same projection,
+ * guards and step ceiling; only the stream's vocabulary differs. Use `toAgentFactory` for a host that
+ * dispatches on SDK messages (ACP), and this for a consumer that wants framework events.
+ */
+export function toTypedAgentFactory(
+  def: DefinitionOrThunk,
+  opts: Parameters<typeof toAgentFactory>[1],
+): (sessionId: string) => Promise<SdkAgentHandle> {
+  const served = toAgentFactory(def, opts)
+  return async (sessionId: string) => withTypedStream(await served(sessionId))
 }
 
 /**

@@ -65,7 +65,7 @@ describe('agentRunPort', () => {
     const b = boundary(async () => ({
       stream: async function* () {
         order.push('stream')
-        yield 1
+        yield { type: 'text_delta', content: 'x' } as const
       },
       wait: async () => {
         order.push('wait')

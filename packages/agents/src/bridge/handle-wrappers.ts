@@ -16,6 +16,9 @@ import type { SDKUserMessage } from '@theokit/sdk'
 import type { Guardrail } from '../guardrails/index.js'
 import { GuardrailViolationError, runInputGuards, runOutputGuards } from '../guardrails/index.js'
 
+import type { AgentStreamEvent } from './agent-stream-events.js'
+import { type SdkMessage, translateSdkEvent } from './event-translator.js'
+import { doneUsage } from './sdk-adapter-create-options.js'
 import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
 
 /**
@@ -30,9 +33,9 @@ import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapte
  * turn is the per-run override this layer already honors for `model` and `reasoningEffort`.
  */
 export function withStepCeiling(
-  handle: SdkAgentHandle,
+  handle: SdkAgentHandle<SdkMessage>,
   maxIterations: number | undefined,
-): SdkAgentHandle {
+): SdkAgentHandle<SdkMessage> {
   // Nothing declared ⇒ the original handle, untouched — no wrapper, no key, the SDK default stands.
   if (maxIterations === undefined) return handle
   return {
@@ -47,9 +50,9 @@ export function withStepCeiling(
 }
 
 export function withGuardrails(
-  handle: SdkAgentHandle,
+  handle: SdkAgentHandle<SdkMessage>,
   guardrails: readonly Guardrail[] | undefined,
-): SdkAgentHandle {
+): SdkAgentHandle<SdkMessage> {
   // No guards ⇒ the original handle, untouched. Wrapping unconditionally would put an await on the
   // hot path of every served agent to enforce an empty list.
   if (guardrails === undefined || guardrails.length === 0) return handle
@@ -62,7 +65,7 @@ export function withGuardrails(
     send: async (
       msg: string | SDKUserMessage,
       sendOpts?: SdkSendOptions,
-    ): Promise<SdkTurnHandle> => {
+    ): Promise<SdkTurnHandle<SdkMessage>> => {
       // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
       // not merely annotate it afterwards.
       const guarded =
@@ -84,7 +87,7 @@ export function withGuardrails(
  * SDK's LocalAgent reads `this` in it.
  */
 function forwardedMembers(
-  handle: SdkAgentHandle,
+  handle: SdkAgentHandle<SdkMessage>,
 ): Pick<SdkAgentHandle, 'generate' | 'pluginManager'> {
   return {
     ...(handle.generate === undefined ? {} : { generate: handle.generate.bind(handle) }),
@@ -116,7 +119,10 @@ function forwardedMembers(
  * includes a guard defect such as `MalformedGuardrailResultError` (a `redact` with no text): a guard
  * written wrong is not a guard refusing (B-457).
  */
-function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTurnHandle {
+function guardTurn(
+  turn: SdkTurnHandle<SdkMessage>,
+  guardrails: readonly Guardrail[],
+): SdkTurnHandle<SdkMessage> {
   let outcome: ReturnType<SdkTurnHandle['wait']> | undefined
   const guardedOutcome = (): ReturnType<SdkTurnHandle['wait']> =>
     (outcome ??= turn
@@ -137,13 +143,8 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
       let streamedError = false
       if (turn.stream !== undefined) {
         for await (const event of turn.stream()) {
-          if (
-            typeof event === 'object' &&
-            event !== null &&
-            (event as { type?: unknown }).type === 'error'
-          ) {
-            streamedError = true
-          }
+          const kind: string = event.type
+          if (kind === 'error') streamedError = true
         }
       }
       if (streamedError) yield errorStatus('run error')
@@ -165,6 +166,91 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
 }
 
 /** The SDK's terminal message for a failed run, less the agent and run ids this layer never sees. */
-function errorStatus(message: string): { type: 'status'; status: 'ERROR'; message: string } {
+function errorStatus(message: string): SdkMessage {
   return { type: 'status', status: 'ERROR', message }
+}
+
+/**
+ * The boundary adapter from the served vocabulary to the typed bridge contract.
+ *
+ * `toAgentFactory` serves handles whose `stream()` yields `SdkMessage` (what ACP reads). This returns
+ * the same handle with `stream()` yielding `AgentStreamEvent`, each message passed through
+ * {@link translateSdkEvent} (a message may become zero or several events, and the run's `done`
+ * arrives as the `FINISHED` status). Everything else is forwarded unchanged, bound to the original.
+ */
+export function withTypedStream(handle: SdkAgentHandle<SdkMessage>): SdkAgentHandle {
+  return {
+    get agentId() {
+      return handle.agentId
+    },
+    dispose: () => handle.dispose(),
+    ...forwardedMembers(handle),
+    send: async (
+      msg: string | SDKUserMessage,
+      sendOpts?: SdkSendOptions,
+    ): Promise<SdkTurnHandle> => {
+      const turn = await handle.send(msg, sendOpts)
+      const source = turn.stream
+      return {
+        ...(turn.id === undefined ? {} : { id: turn.id }),
+        ...(turn.cancel === undefined ? {} : { cancel: () => turn.cancel?.() }),
+        wait: () => turn.wait(),
+        ...(source === undefined
+          ? {}
+          : {
+              stream: async function* () {
+                let terminal = false
+                let failed = false
+                for await (const message of source.call(turn)) {
+                  for (const event of translateSdkEvent(message, message.run_id ?? '')) {
+                    if (event.type === 'error') failed = true
+                    if (event.type !== 'done') {
+                      yield event
+                      continue
+                    }
+                    terminal = true
+                    yield doneFromOutcome(event, await turn.wait())
+                  }
+                }
+                // A guarded turn's stream ends after its text without a FINISHED status; the typed
+                // contract still owes the reader a terminal event, built from the run outcome.
+                if (!terminal && !failed) {
+                  const out = await turn.wait()
+                  if (out.status === 'error') {
+                    yield {
+                      type: 'error',
+                      code: 'AGENT_ERROR',
+                      message: out.error?.message ?? 'run error',
+                      retryable: false,
+                    }
+                  } else if (out.status !== 'cancelled') {
+                    // A cancelled run ends without a terminal event; its outcome is the caller's.
+                    yield doneFromOutcome(
+                      {
+                        type: 'done',
+                        result: '',
+                        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+                        durationMs: 0,
+                      },
+                      out,
+                    )
+                  }
+                }
+              },
+            }),
+      }
+    },
+  }
+}
+
+/** A `done` event carrying what the run reported: its result text and token usage. */
+function doneFromOutcome(
+  done: Extract<AgentStreamEvent, { type: 'done' }>,
+  out: Awaited<ReturnType<SdkTurnHandle['wait']>>,
+): AgentStreamEvent {
+  if (out.usage === undefined) return { ...done, result: out.result ?? done.result }
+  const usage = doneUsage(out.usage)
+  // The total the run reported wins over the one derived from input + output.
+  if (out.usage.totalTokens !== undefined) usage.totalTokens = out.usage.totalTokens
+  return { ...done, result: out.result ?? done.result, usage }
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentStreamEvent } from './agent-stream-events.js'
 import { createOpenAICompatibleRoutes } from './openai-compatible-routes.js'
 import { completeFromTurn, runAgentTurn } from './run-agent-turn.js'
+import type { SdkMessage } from './event-translator.js'
 import type { SdkAgentHandle } from './sdk-adapter.js'
 
 type Delta = (arg: { update: unknown }) => void
@@ -18,7 +19,7 @@ interface FakeOptions {
 }
 
 function fakeAgent(options: FakeOptions = {}): {
-  agent: SdkAgentHandle
+  agent: SdkAgentHandle<SdkMessage>
   sent: { onDelta?: Delta }
 } {
   const sent: { onDelta?: Delta } = {}
@@ -44,7 +45,7 @@ function fakeAgent(options: FakeOptions = {}): {
         ...(options.cancel ? { cancel: options.cancel } : {}),
       }
     },
-  } as unknown as SdkAgentHandle
+  } as unknown as SdkAgentHandle<SdkMessage>
   return { agent, sent }
 }
 
@@ -173,7 +174,7 @@ describe('runAgentTurn', () => {
 })
 
 describe('completeFromTurn', () => {
-  const withFailing = <R>(work: (agent: SdkAgentHandle) => Promise<R>): Promise<R> =>
+  const withFailing = <R>(work: (agent: SdkAgentHandle<SdkMessage>) => Promise<R>): Promise<R> =>
     work(fakeAgent({ messages: [{ type: 'error', code: 'boom' }] }).agent)
 
   it('throws when the turn fails', async () => {

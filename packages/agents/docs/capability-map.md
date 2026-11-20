@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1448 export(s) across 26 entry point(s).
+1452 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -247,6 +247,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolsCapability` | value |
 | `Toolset` | value |
 | `ToolsetError` | value |
+| `toTypedAgentFactory` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
@@ -267,6 +268,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `withEphemeralAgent` | value |
 | `WithheldBuiltinToolsCapability` | value |
 | `withPreCompaction` | value |
+| `withTypedStream` | value |
 | `WorkspaceProviderError` | value |
 | `WorkspaceRecipeError` | value |
 | `worktreeProvider` | value |
@@ -602,6 +604,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `surfaceOfFolder` | value |
 | `toAgentFactory` | value |
 | `toAgentStreamEvent` | value |
+| `toTypedAgentFactory` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
@@ -609,6 +612,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `validateAgainstInputSchema` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
+| `withTypedStream` | value |
 | `WorkspaceProviderError` | value |
 | `WorkspaceRecipeError` | value |
 | `worktreeProvider` | value |

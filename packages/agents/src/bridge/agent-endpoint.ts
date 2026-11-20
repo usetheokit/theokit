@@ -20,7 +20,6 @@ import { moderateOutputStream, runInputGuards, textPayloadExtractor } from '../g
 import type { Guardrail } from '../guardrails/index.js'
 
 import { type CompiledAgentOptions } from './agent-compiler.js'
-import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStreamEvent } from './agent-stream-events.js'
 import { type AgentDefinition, compileAgentDefinition, isAgentDefinition } from './define-agent.js'
 import { createHitlPlugin, type HitlWiring } from './hitl-plugin.js'
@@ -139,21 +138,6 @@ export function compileLoadedAgentModule(
 }
 
 /**
- * Bridge the SDK stream (typed loosely as `StreamEvent`) to the strict `AgentStreamEvent`
- * union the translator consumes. `createSdkAgentStream` yields `AgentStreamEvent`-shaped
- * values (its `type` IS the union tag) — this is the single sanctioned narrowing boundary
- * (G3: via `unknown`); the translator ignores any variant it does not map.
- */
-async function* asAgentStream(
-  events: AsyncIterable<StreamEvent>,
-): AsyncGenerator<AgentStreamEvent> {
-  // The two unions do not structurally overlap (StreamEvent's index signature vs the
-  // discriminated AgentStreamEvent), so tsc requires the `unknown` hop; this is the one
-  // sanctioned narrowing point (the runtime values ARE AgentStreamEvents — same producer).
-  for await (const e of events) yield e as unknown as AgentStreamEvent
-}
-
-/**
  * A minimal single-consumer async queue for merging the SDK event stream with the HITL
  * plugin's out-of-band `approval_required` events (M4). Both the SDK-stream pump and the
  * plugin's `emit` push here; the translator drains it. When a gated tool pauses the SDK run
@@ -196,7 +180,7 @@ class EventQueue<T> {
  * persisted the turns via its conversation storage; this is the resume-handle signal, not a new store.
  */
 async function* appendCheckpointSaved(
-  source: AsyncGenerator<AgentStreamEvent>,
+  source: AsyncIterable<AgentStreamEvent>,
   sessionId: string,
 ): AsyncGenerator<AgentStreamEvent> {
   let emitted = false
@@ -425,7 +409,7 @@ function unguardedStream(
     overrides.exposeUsageToTools = input.exposeUsageToTools
   }
 
-  let source: AsyncGenerator<AgentStreamEvent>
+  let source: AsyncIterable<AgentStreamEvent>
   if (!input.hitl || input.hitl.gated.size === 0) {
     // M2 non-HITL path — unchanged.
     const events = createSdkAgentStream(
@@ -434,7 +418,7 @@ function unguardedStream(
       apiKey,
       overrides,
     )(input.message, input.sessionId)
-    source = asAgentStream(events)
+    source = events
   } else {
     // M4 HITL path — inject the plugin + merge its approval events with the SDK stream.
     const queue = new EventQueue<AgentStreamEvent>()
@@ -466,7 +450,7 @@ function unguardedStream(
     // a well-formed error chunk + a terminated stream instead of a silent clean end.
     void (async () => {
       try {
-        for await (const e of sdkStream) queue.push(e as unknown as AgentStreamEvent)
+        for await (const e of sdkStream) queue.push(e)
       } catch (err) {
         queue.push({
           type: 'error',
