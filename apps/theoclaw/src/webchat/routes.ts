@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
-  type AgentRouteContext,
   BodyTooLargeError,
   generateAgentRoutes,
   readCappedBody,
@@ -60,17 +59,6 @@ const SANDBOX_CSP =
 const SANDBOX_SHELL =
   '<!doctype html><meta charset="utf-8"><script>addEventListener("message",function(e){if(e.source!==parent)return;if(typeof e.data!=="string")return;document.open();document.write(e.data);document.close()})</script>'
 const MISSING_BUNDLE = 'run the build:web script of the theoclaw package\n'
-
-/**
- * Required by the generator's context and never read by it: TheoClaw has one agent, built elsewhere.
- * `webchat-stream.test.ts` pins that the stream does not change with these; B-510 (a per-request hook
- * on the generator) is the follow-up that removes this placeholder and the per-request rebuild.
- */
-const COMPILED_OPTIONS: AgentRouteContext['compiledOptions'] = {
-  tools: [],
-  agents: {},
-  stream: true,
-}
 
 function ignore(): void {}
 
@@ -212,7 +200,6 @@ async function chat(
   else request.signal.addEventListener('abort', stopTurn, { once: true })
   const routes = generateAgentRoutes({
     walkResult: { route: WEBCHAT_ROUTE },
-    compiledOptions: COMPILED_OPTIONS,
     createRun: createWebchatRun(turnFor, turn.signal, write),
   })
   const post = routes.find((route) => route.method === 'POST' && route.path === WEBCHAT_CHAT_PATH)
