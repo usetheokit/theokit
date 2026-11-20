@@ -13,6 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The live queued-turn test states its code word quoted and checks the first reply for it, so a model that garbles the word no longer reads as lost history.
 - A scheduled run's agent send now carries the untrusted content options itself, next to the scheduler's cancellation signal.
 - The CI live and container checks route `THEOCLAW_MODEL` through OpenRouter (`openrouter/` prefix) instead of sending the OpenRouter key to Google's own endpoint (#2482).
 

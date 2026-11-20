@@ -240,7 +240,7 @@ describe.skipIf(!LIVE)('chat sessions against a real model', () => {
     const sender = 'live-queue'
 
     void telegram.deliver(
-      messageEvent('telegram', `My code word is ${word}. Write four sentences about a lighthouse keeper, then repeat the code word.`, sender),
+      messageEvent('telegram', `My code word is "${word}". Remember it exactly, letter for letter. Write four sentences about a lighthouse keeper, then repeat the code word exactly as I wrote it.`, sender),
     )
     await waitFor(() => runs.length === 1, 60_000, 'the first send to be called on the session agent')
     const secondSentAt = Date.now()
@@ -252,6 +252,8 @@ describe.skipIf(!LIVE)('chat sessions against a real model', () => {
     // The second message left while the first turn still ran, so the turns were queued, not serial.
     expect(secondSentAt).toBeLessThan(first!.endedAt!)
     expect(second!.endedAt!).toBeGreaterThan(first!.endedAt!)
+    // The first reply must hold the word too: a model that garbled it there never had it to recall.
+    expect(telegram.sent[0]!.text.toLowerCase()).toContain(word)
     expect(telegram.sent[1]!.text.toLowerCase()).toContain(word)
     expectHealthy(runs, telegram)
   })
