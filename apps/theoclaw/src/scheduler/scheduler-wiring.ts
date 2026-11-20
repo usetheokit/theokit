@@ -4,6 +4,7 @@
 import { join } from 'node:path'
 
 import {
+  agentRunPort,
   createJobStore,
   createScheduler,
   createScheduleTools,
@@ -56,19 +57,11 @@ function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPo
   const { withAgent } = createContainer<TurnAgent>({
     factory: () => buildRunAgent(runAgentToolOptions(tools)),
   })
-  return (prompt, signal) =>
-    withAgent(async (agent) => {
-      const run = await agent.send(prompt, { ...untrustedContentSendOptions(), signal })
-      const outcome = await run.wait()
-      if (
-        outcome.status === 'error' ||
-        outcome.status === 'cancelled' ||
-        outcome.result === undefined
-      ) {
-        return { ok: false, error: outcome.error?.code ?? `the run ended ${outcome.status}` }
-      }
-      return { ok: true, text: outcome.result }
-    })
+  // `agentRunPort` uses only `send`; `TurnAgent` is that slice of the SDK handle, whose own
+  // lifetime members (`agentId`, `dispose`) the container, not the run port, owns.
+  return agentRunPort(withAgent as unknown as Parameters<typeof agentRunPort>[0], {
+    sendOptions: untrustedContentSendOptions(),
+  })
 }
 
 /**

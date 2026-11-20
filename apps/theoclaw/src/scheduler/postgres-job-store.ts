@@ -2,7 +2,7 @@
 // storage manager. Reads are served from the loaded rows, as the file store's are; every write goes
 // to the table first and enters memory only once the database took it. There is no fallback to the
 // file: a database that cannot be reached refuses the start.
-import type { JobStore, ScheduledJob } from '@theokit/agents/tools'
+import { copyJobs, createPostgresJobStore, JobCopyError, type JobStore } from '@theokit/agents/tools'
 import { getStorageManager, type StorageManager } from 'theokit/server/storage'
 import type { PoolLike } from 'theokit/server/storage'
 
@@ -109,57 +109,11 @@ export async function openPostgresJobStore(
 ): Promise<OpenedScheduleStore> {
   const pool = openPool(dsn, deps)
   try {
-    await pool.query(
-      `CREATE TABLE IF NOT EXISTS ${TABLE} (id text PRIMARY KEY, job jsonb NOT NULL)`,
-    )
-    const { rows } = await pool.query<{ job: ScheduledJob | string }>(`SELECT job FROM ${TABLE}`)
-    const jobs = new Map<string, ScheduledJob>()
-    for (const row of rows) {
-      const job = typeof row.job === 'string' ? (JSON.parse(row.job) as ScheduledJob) : row.job
-      jobs.set(job.id, job)
-    }
-    return { store: storeOver(pool, jobs), close: () => pool.end?.() ?? Promise.resolve() }
+    const store = await createPostgresJobStore(pool, { table: TABLE })
+    return { store, close: () => pool.end?.() ?? Promise.resolve() }
   } catch (error) {
     await pool.end?.().catch(() => undefined)
     throw new Error(`the schedule database is unreachable: ${(error as Error).message}`)
-  }
-}
-
-function storeOver(pool: PoolLike, jobs: Map<string, ScheduledJob>): JobStore {
-  let chain: Promise<unknown> = Promise.resolve()
-  const serialized = <T>(work: () => Promise<T>): Promise<T> => {
-    const done = chain.then(work)
-    chain = done.catch(() => undefined)
-    return done
-  }
-  const save = (job: ScheduledJob): Promise<unknown> =>
-    pool.query(
-      `INSERT INTO ${TABLE} (id, job) VALUES ($1, $2::jsonb) ON CONFLICT (id) DO UPDATE SET job = EXCLUDED.job`,
-      [job.id, JSON.stringify(job)],
-    )
-  return {
-    list: () => [...jobs.values()],
-    get: (id) => jobs.get(id),
-    put: (job) =>
-      serialized(async () => {
-        await save(job)
-        jobs.set(job.id, job)
-      }),
-    remove: (id) =>
-      serialized(async () => {
-        if (!jobs.has(id)) return false
-        await pool.query(`DELETE FROM ${TABLE} WHERE id = $1`, [id])
-        return jobs.delete(id)
-      }),
-    setPreviousOutput: (id, text) =>
-      serialized(async () => {
-        const held = jobs.get(id)
-        if (held === undefined) return false
-        const next = { ...held, previousOutput: text }
-        await save(next)
-        jobs.set(id, next)
-        return true
-      }),
   }
 }
 
@@ -169,26 +123,21 @@ export class StatePortRefusal extends Error {}
 /** #1640 — copy jobs into the table; refuses a table that has rows unless `force`. Never touches the source. */
 export async function portJobs(
   dsn: string,
-  jobs: readonly ScheduledJob[],
+  from: JobStore,
   options: { readonly force: boolean },
   deps: DatabaseDeps = {},
 ): Promise<number> {
   const pool = openPool(dsn, deps)
   try {
-    await pool.query(`CREATE TABLE IF NOT EXISTS ${TABLE} (id text PRIMARY KEY, job jsonb NOT NULL)`)
-    const { rows } = await pool.query<{ id: string }>(`SELECT id FROM ${TABLE}`)
-    if (rows.length > 0 && !options.force) {
+    const to = await createPostgresJobStore(pool, { table: TABLE })
+    return await copyJobs(from, to, options)
+  } catch (error) {
+    if (error instanceof JobCopyError) {
       throw new StatePortRefusal(
-        `the target already holds ${rows.length} theoclaw schedule rows; pass --force to copy over them`,
+        `the target already holds ${String(error.existing)} theoclaw schedule rows; pass --force to copy over them`,
       )
     }
-    for (const job of jobs) {
-      await pool.query(
-        `INSERT INTO ${TABLE} (id, job) VALUES ($1, $2::jsonb) ON CONFLICT (id) DO UPDATE SET job = EXCLUDED.job`,
-        [job.id, JSON.stringify(job)],
-      )
-    }
-    return jobs.length
+    throw error
   } finally {
     await pool.end?.().catch(() => undefined)
   }

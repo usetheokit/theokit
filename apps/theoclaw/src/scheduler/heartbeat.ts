@@ -1,7 +1,8 @@
 // B-396 (OC-85) — the heartbeat: a job kept out of the store, on `THEOCLAW_HEARTBEAT`, whose prompt
 // is `<workspace>/HEARTBEAT.md` read on each fire. An absent or blank file calls no model.
-import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+
+import { fileTransientJob } from '@theokit/agents/tools'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { PLATFORMS } from '../channels/platforms.js'
@@ -67,21 +68,13 @@ export function readScheduleVariable(
 
 /** The heartbeat as a transient schedule: its prompt is the workspace's `HEARTBEAT.md`, read on each fire. */
 export function heartbeatJob(workspace: string, settings: HeartbeatSettings): TransientSchedule {
-  const file = join(workspace, HEARTBEAT_FILE)
-  return {
+  const { job, transient } = fileTransientJob({
     id: 'heartbeat',
     cron: settings.cron,
     target: settings.target,
-    prompt: async () => {
-      try {
-        const text = (await readFile(file, 'utf8')).trim()
-        return text === '' ? undefined : text
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-        throw error
-      }
-    },
-  }
+    file: join(workspace, HEARTBEAT_FILE),
+  })
+  return { id: job.id, cron: job.cron, target: job.target, prompt: transient.prompt }
 }
 
 function refuseFor(variable: string, detail: string): TheoClawConfigError {
