@@ -2,7 +2,8 @@
 
 Every public symbol this package publishes, and the exact specifier to import it from.
 
-**Generated — do not edit.** `pnpm exec tsx scripts/capability-map.mts` rewrites it, and
+**Generated — do not edit.** From `packages/agents`, run `pnpm build` and then
+`pnpm exec tsx scripts/capability-map.mts` to rewrite it (add `--check` to verify only), and
 `tests/unit/capability-map-is-current.test.ts` fails when the committed copy has drifted. A
 hand-edited map is a second copy of the export list, and the copy is the one that goes stale.
 
