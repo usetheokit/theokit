@@ -13,6 +13,6 @@
     "./turn-failure-reporting": "./src/turn-failure-reporting.ts"
   },
   "dependencies": {
-    "@theokit/agents": "16.11.0"
+    "@theokit/agents": "16.13.0"
   }
 }

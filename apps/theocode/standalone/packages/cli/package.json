@@ -8,7 +8,7 @@
     "@theocode/agent": "link:../agent",
     "@theocode/shared": "link:../shared",
     "@theocode/tui": "link:../tui",
-    "@theokit/agents": "16.11.0",
+    "@theokit/agents": "16.13.0",
     "@theokit/presenter": "0.15.0"
   }
 }
