@@ -11,7 +11,7 @@
  * — the wrong trade for a session store". What changes is that the choice is now declared through a
  * documented flag instead of being re-derived by an index comparison.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -19,7 +19,7 @@ import { JsonlParseError, transcriptPath } from '@theokit/agents/persistence'
 import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { readUserTurnPreviewsAsync } from '../../src/session/backtrack.js'
+import { forkSessionBeforeUserTurn, readUserTurnPreviewsAsync } from '../../src/session/backtrack.js'
 
 let base: string
 let cwd: string
@@ -87,5 +87,37 @@ describe('goal continuation turns', () => {
     ])
     const previews = await readUserTurnPreviewsAsync('s2', { cwd, baseDir: base })
     expect(previews).toEqual(['real question'])
+  })
+})
+
+describe('forking before a turn (framework primitive, zero-based nth)', () => {
+  it('forks a session whose last line is torn, keeping everything before the turn', async () => {
+    writeTranscript('f1', [userTurn('first'), userTurn('second'), '{"type":"user","mess'])
+
+    const out = await forkSessionBeforeUserTurn('f1', 'f1-fork', 1, { cwd, baseDir: base })
+
+    expect(out).toEqual({ newId: 'f1-fork', copied: true, selectedText: 'second' })
+    const copy = readFileSync(transcriptPath(base, cwd, 'f1-fork'), 'utf8')
+    expect(copy).toContain('first')
+    expect(copy).not.toContain('second')
+  })
+
+  it('nth 0 selects the first turn', async () => {
+    writeTranscript('f2', [userTurn('first'), userTurn('second')])
+    const out = await forkSessionBeforeUserTurn('f2', 'f2-fork', 0, { cwd, baseDir: base })
+    expect(out.selectedText).toBe('first')
+  })
+
+  it('rejects an nth past the last turn', async () => {
+    writeTranscript('f3', [userTurn('only')])
+    await expect(
+      forkSessionBeforeUserTurn('f3', 'f3-fork', 1, { cwd, baseDir: base }),
+    ).rejects.toThrow()
+  })
+
+  it('reports copied:false when there is no transcript', async () => {
+    const out = await forkSessionBeforeUserTurn('nope', 'nope-fork', 0, { cwd, baseDir: base })
+    expect(out.copied).toBe(false)
+    expect(existsSync(transcriptPath(base, cwd, 'nope-fork'))).toBe(false)
   })
 })
