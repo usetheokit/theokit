@@ -96,4 +96,32 @@ describe('buildChatAgent registers the framework listener', () => {
     expect(seen).toHaveLength(2)
     expect(seen[1]?.mcp.active).toEqual([])
   })
+
+  it('re-publishes servers, skills and hooks together from the framework report', async () => {
+    const cwd = tempRoot('c1927-all-')
+    mkdirSync(cwd, { recursive: true })
+    writeFileSync(
+      join(cwd, '.mcp.json'),
+      JSON.stringify({ mcpServers: { declared: { command: 'x', args: [] } } }),
+    )
+    const seen: WiredCapabilities[] = []
+    const def = (await buildChatAgent({
+      cwd,
+      home: tempRoot('c1927-all-home-'),
+      surface: 'headless',
+      posture: { allows: { mcp: true, skills: true, hooks: true, agentsMd: true } } as never,
+      onWired: (w) => seen.push(w),
+    })) as unknown as { onWired?: (w: CompiledWiring) => void }
+
+    def.onWired?.(
+      compiled({
+        mcpServers: ['framework-server'],
+        skills: { listed: ['framework-skill'], readable: [] },
+        hooks: [{ event: 'pre_tool_call' }],
+      }),
+    )
+    const last = seen[seen.length - 1]
+    expect(last?.mcp.active).toEqual(['framework-server'])
+    expect(last?.skills.active).toEqual(['framework-skill'])
+  })
 })
