@@ -72,13 +72,12 @@ export async function runTeamWithCap<R>(
   return withEphemeralAgent(
     () => ({
       agent: undefined,
+      // The helper owns "a failing dispose never replaces the result"; this only gathers every
+      // member's disposal so one failure does not skip the others.
       dispose: async () => {
         const disposals = await Promise.allSettled(members.map((m) => m[Symbol.asyncDispose]()))
-        for (const d of disposals) {
-          if (d.status === 'rejected') {
-            report(`[delegation] a team member failed to dispose: ${String(d.reason)}\n`)
-          }
-        }
+        const reasons = disposals.flatMap((d) => (d.status === 'rejected' ? [d.reason] : []))
+        if (reasons.length > 0) throw new AggregateError(reasons, 'team members failed to dispose')
       },
     }),
     async () => {
@@ -88,6 +87,14 @@ export async function runTeamWithCap<R>(
         if (error instanceof DelegationTimeoutError) throw new DelegationExpiredError(capMs)
         throw error
       }
+    },
+    {
+      onDisposeError: (error) => {
+        const reasons = error instanceof AggregateError ? (error.errors as unknown[]) : [error]
+        for (const reason of reasons) {
+          report(`[delegation] a team member failed to dispose: ${String(reason)}\n`)
+        }
+      },
     },
   )
 }
