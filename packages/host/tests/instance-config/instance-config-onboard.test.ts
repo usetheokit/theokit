@@ -5,7 +5,11 @@ import { join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { defineInstanceConfig, InstanceConfigError } from '../../src/instance-config/index.js'
+import {
+  defineInstanceConfig,
+  InstanceConfigError,
+  type OnboardIo,
+} from '../../src/instance-config/index.js'
 
 function fakeTty() {
   const stdin = Object.assign(new EventEmitter(), {
@@ -16,7 +20,7 @@ function fakeTty() {
   })
   const out: string[] = []
   const stdout = { write: (s: string) => (out.push(s), true) }
-  return { stdin, stdout, out }
+  return { stdin: stdin as typeof stdin & OnboardIo['stdin'], stdout, out }
 }
 
 const setup = () => {
