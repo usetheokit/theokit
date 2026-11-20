@@ -16,7 +16,7 @@ import { generate } from '../../packages/theo/src/cli/commands/generate.js'
 import { importUserModule } from '../../packages/theo/src/config/import-user-module.js'
 import { createCronScheduler } from '../../packages/theo/src/server/cron/cron-runtime-node.js'
 import { scanCronDirs } from '../../packages/theo/src/server/cron/cron-scan.js'
-import type { CronDefinition } from '../../packages/theo/src/server/cron/cron-types.js'
+import type { CronContext, CronDefinition } from '../../packages/theo/src/server/cron/cron-types.js'
 
 /**
  * The schedule `theokit generate schedule` writes into a scaffolded app runs the app's `chat` agent
@@ -210,6 +210,7 @@ describe('a generated schedule runs the agent at its time', () => {
     const run = Promise.resolve(
       def.handler({
         traceId: 't-hold',
+        queue: {} as CronContext['queue'],
         scheduledAt: new Date('2026-10-06T09:00:00Z'),
         signal: new AbortController().signal,
       }),

@@ -5,6 +5,14 @@ export {
   type SessionStore,
   type SessionStoreOptions,
 } from './control/session-store.js'
+export {
+  createDevicePairing,
+  type DevicePairing,
+  type DevicePairingOptions,
+  type PairingApproval,
+  type PairingRequestResult,
+} from './control/device-pairing.js'
+export { pairRoute } from './control/pair-route.js'
 export { attachControlSocket, type ControlSocketOptions } from './control/control-socket.js'
 export {
   type AgentTurnUsage,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Public-surface gate: compare a package's exported declarations with a committed baseline and with
- * the baseline at the PR's base, and require a major changeset for a breaking change to a stable name.
+ * the baseline at the PR's base, and require a major changeset (minor for a 0.x package) for a breaking change to a stable name.
  *
  * node scripts/check-public-surface.mjs <package dir name | package name> [--write] [--base <ref>]
  *
@@ -322,7 +322,7 @@ function windowProblem(id, old, cur, now) {
 }
 
 /** Breaking changes (and window violations) from `prev` to `next`. `now` is epoch ms. */
-export function comparePolicy(prev, next, { major, now }) {
+export function comparePolicy(prev, next, { major, now, level = 'major' }) {
   const out = []
   for (const [entry, { names }] of Object.entries(prev.entries)) {
     for (const [name, old] of Object.entries(names)) {
@@ -332,7 +332,7 @@ export function comparePolicy(prev, next, { major, now }) {
       const what = breakage(old, cur)
       if (!what) continue
       if (!major)
-        out.push(`${id} ${what} and no changeset in the range declares "${prev.package}": major`)
+        out.push(`${id} ${what} and no changeset in the range declares "${prev.package}": ${level}`)
       const late = windowProblem(id, old, cur, now)
       if (late) out.push(late)
     }
@@ -340,9 +340,17 @@ export function comparePolicy(prev, next, { major, now }) {
   return out
 }
 
-/** True when any changeset text declares `pkg` as `major` in its frontmatter. */
-export function declaresMajor(texts, pkg) {
-  const wanted = new Set([`'${pkg}': major`, `"${pkg}": major`, `${pkg}: major`])
+/** The bump that is breaking for a package at `version`: `minor` while it is 0.x, else `major`. */
+export function breakingLevel(version) {
+  return /^0\./.test(String(version ?? '')) ? 'minor' : 'major'
+}
+
+/** True when any changeset text declares `pkg` as `major` (or `minor` for a 0.x package) in its frontmatter. */
+export function declaresMajor(texts, pkg, level = 'major') {
+  const levels = level === 'minor' ? ['minor', 'major'] : ['major']
+  const wanted = new Set(
+    levels.flatMap((l) => [`'${pkg}': ${l}`, `"${pkg}": ${l}`, `${pkg}: ${l}`]),
+  )
   return texts.some((text) => {
     const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
     if (!m) return false
@@ -413,8 +421,12 @@ function main(argv) {
     .split('\n')
     .filter((f) => /^\.changeset\/.+\.md$/.test(f) && !f.endsWith('README.md'))
     .map((f) => readFileSync(join(ROOT, f), 'utf8'))
+  const level = breakingLevel(
+    JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')).version,
+  )
   const problems = comparePolicy(prev, fresh, {
-    major: declaresMajor(added, fresh.package),
+    major: declaresMajor(added, fresh.package, level),
+    level,
     now: Date.now(),
   })
   for (const p of problems) console.error(`check-public-surface: ${p}`)

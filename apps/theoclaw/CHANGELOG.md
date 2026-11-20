@@ -13,12 +13,17 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `@theokit/gateway` is raised to 0.22.0. Chat commands (`/help`, `/usage`, `/activation`, `/approve`, `/deny`, `/elevated`, `/acp`) are now read with the gateway's `parseChatCommand`, so the command name is matched case-insensitively. Agent routes are chosen by the gateway's `createAgentBindings`. Session keys stay in TheoClaw: the gateway's `scopedStrategy` keys `main` as `_m-dm` and a linked peer as `_p-dm-<name>` (TheoClaw: `main`, `peer-<name>`), which would orphan stored history; `tests/session-key.test.ts` pins both differences. The owner policy and pairing store stay too: the gateway's access policy words the pairing code, invalid-code and failed-save replies differently (`tests/gateway-access-parity.test.ts`), so moving it would change what users see (#1831).
+- `/help` now builds its lines for `/status`, `/model`, `/think`, `/compact`, `/stop` and `/steer` from `CHAT_COMMANDS`, so their descriptions are the commands' own (`/think` and `/compact` lose their parenthetical notes). `/new` and `/goal` stay described in `help-hook.ts` because the reply handler answers them without a command definition. Account routing (`account` on a route, as before) goes through the gateway bindings' `accountOf`.
+- Skills cleanup (#2336): `skills publish` sorts its collected files in place. No behavior change.
 - ACP agents are spawned directly with the framework `env` option (`allowlistedEnv` plus the XDG variables) instead of through `env -i`, for `acpAgents` tools and `/acp` sessions alike; the interactive shell takes its variables from `allowlistedEnv` too (#1782).
 - The TUI folds a turn's text and tool status with `@theokit/tui`'s `useAgentStream` instead of its own reducer; `tui/frames.ts` keeps only the control-frame adapter and its interrupted/error notices (#1785).
 - Skills load through the SDK's `SkillsSettings` (`bundledDirs`: workspace, user, then the bundled `skills/` folder) instead of a TheoClaw loader. A skill's binaries now come from the `requires-bins:` key, as in every other TheoKit app. The old `requires:` key still works for one release and logs a deprecation warning naming the file.
 
 ### Fixed
 
+- With `THEOCLAW_BROWSER=on` the instance runs one Chromium, started with the first `/control` session and restarted if it dies, on a persistent profile (`.theoclaw/browser-profile`) that every `/control` session attaches to over loopback CDP, so a login survives between turns and two sessions can use the browser at once (#1152).
+- `sessions` (list, show, export, share) and `resume` read transcripts with the SDK's `readSessionMessages` instead of parsing the JSONL by hand, so a change in the transcript format no longer breaks them silently (#1780).
 - `/sessions` now lists through the SDK listing (async, newest first), so a transcript whose first line is malformed is identified by a later record. (#1943)
 - Trigger delivery ids use the framework `SeenIds`, WebChat reads its body with `readCappedBody`, and the Google Chat route no longer caps the body a second time after the webhook router (#1781).
 - The configuration file, the daemon unit and plist files, the pairing, device, exec-approval, MCP relay grant, visitor grant and relay state and mailbox files are written through `@theokit/sdk/persistence`, so two writers in one process no longer share a `<pid>.tmp` temporary name.
