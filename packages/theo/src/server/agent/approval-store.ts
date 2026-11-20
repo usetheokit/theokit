@@ -65,9 +65,23 @@ function isMissing(err: unknown): boolean {
   return (err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT'
 }
 
+function parseRecord(text: string): StoredApproval | undefined {
+  try {
+    const value: unknown = JSON.parse(text)
+    const ok =
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as { approvalId?: unknown }).approvalId === 'string'
+    return ok ? (value as StoredApproval) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The record in `file`; `undefined` when it is missing OR unreadable, so one bad file never fails a listing. */
 async function readRecord(file: string): Promise<StoredApproval | undefined> {
   try {
-    return JSON.parse(await readFile(file, 'utf8')) as StoredApproval
+    return parseRecord(await readFile(file, 'utf8'))
   } catch (err) {
     if (isMissing(err)) return undefined
     throw err
@@ -118,11 +132,14 @@ export function createFileApprovalStore(dir: string): ApprovalStore {
         if (isMissing(err)) return undefined
         throw err
       }
-      try {
-        return JSON.parse(await readFile(mine, 'utf8')) as StoredApproval
-      } finally {
-        await unlink(mine).catch(() => undefined)
+      const record = parseRecord(await readFile(mine, 'utf8'))
+      if (record === undefined) {
+        // Unreadable: keep the bytes for an operator rather than destroying the approval.
+        await rename(mine, `${file}.corrupt`)
+        return undefined
       }
+      await unlink(mine).catch(() => undefined)
+      return record
     },
   }
 }

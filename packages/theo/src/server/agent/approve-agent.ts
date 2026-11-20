@@ -182,29 +182,32 @@ async function handleDurableApproval(
     )
   }
 
-  let body: unknown = null
-  try {
-    body = await request.json()
-  } catch {
-    /* handled below as a 400 */
-  }
-  const parsed = parseApprovalBody(body)
-  if (parsed === null) {
-    return jsonError(400, 'BAD_REQUEST', 'Request body must contain a boolean `approved`.')
+  // An expired record is settled by its `onTimeout`, whatever the late caller said — so the body
+  // is only read (and only has to be well formed) when there is a live decision to take from it.
+  const expired = found.expiresAt <= Date.now()
+  let decision: ApprovalDecision
+  if (expired) {
+    decision = {
+      approved: found.onTimeout === 'proceed',
+      settledBy: 'timeout',
+      reason: `no decision before ${new Date(found.expiresAt).toISOString()}; onTimeout: '${found.onTimeout}' was applied`,
+    }
+  } else {
+    let body: unknown = null
+    try {
+      body = await request.json()
+    } catch {
+      /* handled below as a 400 */
+    }
+    const parsed = parseApprovalBody(body)
+    if (parsed === null) {
+      return jsonError(400, 'BAD_REQUEST', 'Request body must contain a boolean `approved`.')
+    }
+    decision = parsed
   }
   if (access.resume === undefined) {
     return jsonError(501, 'NOT_IMPLEMENTED', 'This server cannot resume a durable approval.')
   }
-
-  // An expired record is settled by its `onTimeout`, whatever the late caller said.
-  const expired = found.expiresAt <= Date.now()
-  const decision: ApprovalDecision = expired
-    ? {
-        approved: found.onTimeout === 'proceed',
-        settledBy: 'timeout',
-        reason: `no decision before ${new Date(found.expiresAt).toISOString()}; onTimeout: '${found.onTimeout}' was applied`,
-      }
-    : parsed
 
   // Take the record first, so two requests cannot both resume it.
   const claimed = store.claim !== undefined ? await store.claim(approvalId) : found
@@ -212,11 +215,15 @@ async function handleDurableApproval(
   if (store.claim === undefined) await store.delete(approvalId)
 
   try {
-    return await access.resume(claimed, {
+    const response = await access.resume(claimed, {
       toolUseId: claimed.toolUseId,
       behavior: decision.approved ? 'allow' : 'deny',
       ...(decision.reason !== undefined ? { message: decision.reason } : {}),
     })
+    // A refusal (CSRF, an agent that no longer compiles, no credential) is an answer, not a turn:
+    // the approval is still pending, so it goes back.
+    if (!response.ok) await store.put(claimed)
+    return response
   } catch (err) {
     await store.put(claimed) // the turn did not start: the approval is still pending
     throw err

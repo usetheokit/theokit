@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -135,5 +135,60 @@ describe('durable approvals', () => {
     expect(await (await handleListDurableApprovals(registry, 'bob', 'chat')).text()).not.toContain(
       'a-1',
     )
+  })
+
+  it('a_refused_resume_leaves_the_approval_pending', async () => {
+    const store = createFileApprovalStore(tmp())
+    await store.put(record())
+    const registry = createDurableApprovalRegistry(store)
+    const refused = await approve(
+      registry,
+      { approved: true },
+      () => new Response('no', { status: 403 }),
+    )
+    expect(refused.status).toBe(403)
+    expect(await store.get('a-1')).toBeDefined()
+    const thrown = approve(registry, { approved: true }, () => {
+      throw new Error('boom')
+    })
+    await expect(thrown).rejects.toThrow('boom')
+    expect(await store.get('a-1')).toBeDefined()
+    const ok = await approve(registry, { approved: true }, () => new Response('stream'))
+    expect(ok.status).toBe(200)
+    expect(await store.get('a-1')).toBeUndefined()
+  })
+
+  it('an_expired_approval_is_settled_even_when_the_body_is_malformed', async () => {
+    const store = createFileApprovalStore(tmp())
+    await store.put(record({ expiresAt: Date.now() - 1, onTimeout: 'proceed' }))
+    let seen: { behavior?: string } | undefined
+    const res = await approve(createDurableApprovalRegistry(store), 'not an object', (_r, d) => {
+      seen = d
+      return new Response('')
+    })
+    expect(res.status).toBe(200)
+    expect(seen?.behavior).toBe('allow')
+  })
+
+  it('a_corrupt_file_is_skipped_by_list_and_kept_by_claim', async () => {
+    const dir = tmp()
+    const store = createFileApprovalStore(dir)
+    await store.put(record())
+    writeFileSync(join(dir, 'bad.json'), '{not json')
+    expect((await store.list()).map((r) => r.approvalId)).toEqual(['a-1'])
+    expect(await store.get('bad')).toBeUndefined()
+    expect(await store.claim?.('bad')).toBeUndefined()
+    expect(readdirSync(dir)).toContain('bad.json.corrupt')
+  })
+
+  it('claim_hands_a_record_to_exactly_one_caller', async () => {
+    const store = createFileApprovalStore(tmp())
+    await store.put(record())
+    const got = await Promise.all([
+      store.claim?.('a-1'),
+      store.claim?.('a-1'),
+      store.claim?.('a-1'),
+    ])
+    expect(got.filter((r) => r !== undefined)).toHaveLength(1)
   })
 })
