@@ -76,12 +76,6 @@ export interface CurrentProjectGCOptions {
   removeFromRegistry?: (id: string) => unknown
 }
 
-/**
- * A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
- * first row, and registry removal would then hit the source. Each candidate gets its OWN identity
- * instead: the registered session (archived or not) whose transcript file this is. A transcript no
- * registry entry owns has no identity and is collected by path, never as its source.
- */
 function ownIdentity(
   planned: TranscriptGCPlan,
   own: Map<string, string>,
@@ -96,6 +90,12 @@ function ownIdentity(
     : undefined
 }
 
+/**
+ * A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
+ * first row, and registry removal would then hit the source. Each candidate gets its OWN identity
+ * instead: the registered session (archived or not) whose transcript file this is. A transcript no
+ * registry entry owns has no identity and is collected by path, never as its source.
+ */
 function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): TranscriptGCPlan {
   const own = new Map(registryIds.map((id) => [transcriptPath(planned.root, planned.cwd, id), id]))
   const named = planned.candidates.map((c) => ({ ...c, id: ownIdentity(planned, own, c) }))
@@ -111,7 +111,10 @@ function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): 
     candidates: named.filter((c) => !unreadable.includes(c)),
     kept: [
       ...planned.kept,
-      ...unreadable.map(() => ({ id: undefined, reason: 'transcript id unreadable' })),
+      ...unreadable.map((c) => ({
+        id: undefined,
+        reason: `transcript id unreadable: ${c.transcript}`,
+      })),
     ],
   }
 }
