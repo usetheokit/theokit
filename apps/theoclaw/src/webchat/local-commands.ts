@@ -1,4 +1,3 @@
-import type { DoneEvent } from '@theokit/agents/bridge'
 
 import { commandOf, CHAT_COMMANDS, infoReply } from '../channels/info-commands.js'
 import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
@@ -57,9 +56,7 @@ export function withLocalCommands(runner: TurnRunner, context: LocalCommandConte
     const reply = await answer(message, context)
     if (reply === undefined) return runner(message, emit, signal)
     emit({ type: 'text_delta', content: reply })
-    const done: DoneEvent = { type: 'done', result: reply, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 0 }
-    // Spread: `DoneEvent` is an interface with no index signature, which `StreamEvent` requires.
-    emit({ ...done })
+    emit({ type: 'done', result: reply, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 0 })
     return { ok: true }
   }
 }

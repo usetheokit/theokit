@@ -395,6 +395,8 @@ the listener. `GET /health` answers `{"status":"ok"}`.
 
 ### The `/control` socket
 
+Turns read the SDK agent through the typed port in `src/agent-port.ts` (`TurnAgent`, `TurnRun`, `TurnTimelineEvent`, with `InteractionUpdate` from `@theokit/sdk`) and the bridge's `SdkMessage`, `SdkTimelineEvent` and `AgentStreamEvent`; the typed helpers `toSdkMessage`, `toSdkTimelineEvent` and `isAgentStreamEvent` replace every cast.
+
 Connect to `ws://127.0.0.1:<port>/control` with `Authorization: Bearer <THEOCLAW_CONTROL_TOKEN>`;
 any other path answers 404 and a missing or wrong token 401, before any agent is built. Send
 `{"type":"chat","message":"..."}` as a text frame. Each event of the turn arrives as
