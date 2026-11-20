@@ -683,16 +683,25 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       }
       // Make every job due without changing their relative order, then lease one at a time.
       await pool.query(`UPDATE theokit_jobs_ci SET available_at = available_at - INTERVAL '1 day'`)
-      // Every job must be due and unleased before leasing, so a miss names the row at fault.
-      const rows = await pool.query<{ id: string; due: boolean; free: boolean }>(
-        `SELECT id, available_at <= NOW() AS due, (locked_until IS NULL OR locked_until < NOW()) AS free
+      // Every job must be present, due and unleased before leasing. A row that is not is printed
+      // with its raw times, so a far-future or locked row shows its value instead of a boolean.
+      const rows = await pool.query<{
+        id: string
+        available_at: string
+        locked_until: string | null
+        failed_at: string | null
+        now: string
+        due: boolean
+        free: boolean
+      }>(
+        `SELECT id, available_at::text, locked_until::text, failed_at::text, NOW()::text AS now,
+                available_at <= NOW() AS due, (locked_until IS NULL OR locked_until < NOW()) AS free
          FROM theokit_jobs_ci ORDER BY id`,
       )
-      expect(Object.fromEntries(rows.rows.map((r) => [r.id, [r.due, r.free]]))).toEqual({
-        [a.jobId]: [true, true],
-        [b.jobId]: [true, true],
-        [c.jobId]: [true, true],
-      })
+      expect(rows.rows.map((r) => r.id).sort((x, y) => x.localeCompare(y))).toEqual(
+        [a.jobId, b.jobId, c.jobId].sort((x, y) => x.localeCompare(y)),
+      )
+      expect(rows.rows.filter((r) => !r.due || !r.free || r.failed_at !== null)).toEqual([])
       expect(await leaseOneByOne()).toEqual([b.jobId, c.jobId, a.jobId])
     })
 
