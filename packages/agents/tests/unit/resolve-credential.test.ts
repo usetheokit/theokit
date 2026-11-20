@@ -35,6 +35,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   CredentialNotFoundError,
+  ProviderKeyMismatchError,
   DEFAULT_PROVIDERS,
   credentialSources,
   requireCredential,
@@ -403,10 +404,30 @@ describe('DEFAULT_PROVIDERS', () => {
   it('test_the_default_order_is_the_sdk_order', async () => {
     const env = { ANTHROPIC_API_KEY: 'sk-ant-x', OPENAI_API_KEY: 'sk-x' }
 
-    const ours = resolveAgentCredential({ env, model: 'gpt-4o-mini' })
-    const sdk = await resolveProviderCredential({ env, model: 'gpt-4o-mini' })
+    // A bare model id claims no provider in either resolver, so only the default order decides.
+    for (const model of [undefined, 'some-bare-model']) {
+      const ours = resolveAgentCredential({ env, ...(model === undefined ? {} : { model }) })
+      const sdk = await resolveProviderCredential({
+        env,
+        ...(model === undefined ? {} : { model }),
+      })
 
-    expect(ours.provider).toBe(sdk.provider)
+      expect(ours.provider).toBe(sdk.provider)
+    }
+    // And the order itself is the SDK's, name for name.
+    const byPriority = [...DEFAULT_PROVIDERS].sort((a, b) => a.priority - b.priority)
+    expect(byPriority.map((p) => p.name)).toEqual(
+      [...DEFAULT_PROVIDER_CANDIDATES].sort((a, b) => a.priority - b.priority).map((c) => c.name),
+    )
+  })
+
+  it('a_key_the_sdk_cannot_attribute_is_refused_in_a_default_provider_variable', () => {
+    expect(() =>
+      resolveAgentCredential({ env: { ANTHROPIC_API_KEY: 'not-a-vendor-key' } }),
+    ).toThrow(ProviderKeyMismatchError)
+    expect(() => resolveAgentCredential({ env: { OPENAI_API_KEY: 'not-a-vendor-key' } })).toThrow(
+      /recognises/,
+    )
   })
 })
 
@@ -468,7 +489,7 @@ describe('resolveAgentCredential — the one call a new app makes', () => {
 
   it('a_mis_pasted_key_is_caught_with_no_extra_wiring', () => {
     expect(() => resolveAgentCredential({ env: { ANTHROPIC_API_KEY: 'sk-proj-openai' } })).toThrow(
-      /openai/,
+      /looks like a "openai" key/,
     )
   })
 })
