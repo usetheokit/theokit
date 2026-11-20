@@ -129,7 +129,7 @@ describe('THEOCLAW_MEMORY_BACKEND', () => {
         'k',
       )
       await (await recorded.send('hello')).wait()
-      await recorded.dispose()
+      await (recorded as unknown as { dispose(): Promise<void> }).dispose()
       await first.stub.close()
       expect(written).toEqual([
         { content: 'The owner keeps a heron called Quillon-7731', userId: 'owner' },
