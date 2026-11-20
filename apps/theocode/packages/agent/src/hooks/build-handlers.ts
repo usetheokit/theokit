@@ -62,7 +62,7 @@ import type { HookEvent, HookSpec } from './hooks-spec.js'
  */
 type Delivery = FrameworkEvent | null
 
-const EVENT_TO_FRAMEWORK: Readonly<Record<HookEvent, Delivery>> = {
+export const EVENT_TO_FRAMEWORK: Readonly<Record<HookEvent, Delivery>> = {
   // The framework's dialect table owns the names, including the decision that `PostToolUse` is
   // `transform_tool_result` (its hooks append feedback the model reads), not `post_tool_call`.
   ...(CLAUDE_HOOK_EVENT_ALIASES as Readonly<Record<HookEvent, Delivery>>),

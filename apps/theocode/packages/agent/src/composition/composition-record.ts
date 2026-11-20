@@ -7,6 +7,7 @@ import type { EffectiveConfig, TrustPosture } from '../config/index.js'
 import { projectSourceAllowed } from '../config/project-source.js'
 import { agentsMdChain, loadRules, loadUserRules } from '../context/index.js'
 import type { RulesLoad } from '../context/rules.js'
+import { EVENT_TO_FRAMEWORK } from '../hooks/build-handlers.js'
 import { parseHooks } from '../hooks/index.js'
 import type { McpScopes } from '../mcp-scopes.js'
 import { wiredCapabilities } from '../wired-capabilities.js'
@@ -166,27 +167,37 @@ export function publishWiringAndListen(
 }
 
 /**
+ * Whether a listed hook row (`<config event>  <command>`) reached the agent.
+ *
+ * A config event is the dialect's name; the framework reports its own, so this product's event table
+ * translates. An event the table maps to nothing is one this product delivers itself (`SessionStart`)
+ * and never goes to the agent, so its row is not contradicted by the agent's list.
+ */
+function reachedAgent(row: string, delivered: ReadonlySet<string>): boolean {
+  const mapped = EVENT_TO_FRAMEWORK[row.split('  ')[0] as keyof typeof EVENT_TO_FRAMEWORK]
+  return mapped === null || mapped === undefined ? true : delivered.has(mapped)
+}
+
+/**
  * The record with what the framework says the CREATED agent got, where it knows.
  *
  * The record is first derived from the inputs at build time, which is what the doctor needs without
  * creating an agent. Once an agent IS created the framework reports its compiled options through
- * `onWired`, and that is the truth: servers and skills are taken from it, and configured hooks are
- * listed only if the agent got any. Trust, rule and AGENTS.md facts stay ours.
+ * `onWired`, and that is the truth: servers and skills are taken from it, and a hook row is
+ * listed only if its framework event is among the agent's hooks. Trust, rule and AGENTS.md facts stay ours.
  */
 export function withCompiledWiring(
   record: WiredCapabilities,
   compiled: CompiledWiring,
 ): WiredCapabilities {
+  const events = new Set(compiled.hooks.map((h) => h.event))
   return {
     ...record,
     mcp: { ...record.mcp, active: [...compiled.mcpServers].sort() },
     skills: { ...record.skills, active: [...compiled.skills.listed].sort() },
     hooks: {
       ...record.hooks,
-      // The framework names hooks by the SDK's event, this product by its config's: the two
-      // vocabularies differ, so rows are kept or dropped as a set — a hook that never reached the
-      // agent must not be listed, but a row is not matched to an SDK event by name.
-      active: compiled.hooks.length === 0 ? [] : record.hooks.active,
+      active: record.hooks.active.filter((row) => reachedAgent(row, events)),
     },
   }
 }
