@@ -7,6 +7,8 @@ export interface AgentDefinitionLike {
   readonly description: string
   readonly prompt: string
   readonly tools?: readonly string[]
+  /** The role's model from its file; absent means the parent's. */
+  readonly model?: Exclude<SubagentDefinition['model'], string | undefined>
 }
 
 /**
@@ -61,5 +63,8 @@ function definitionFrom(def: SubagentDefinition, name: string): AgentDefinitionL
     description: def.description !== undefined && def.description !== '' ? def.description : name,
     prompt: def.prompt,
     ...(def.tools !== undefined ? { tools: [...def.tools] } : {}),
+    ...(def.model === undefined
+      ? {}
+      : { model: typeof def.model === 'string' ? { id: def.model } : def.model }),
   }
 }

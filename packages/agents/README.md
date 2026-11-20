@@ -904,6 +904,23 @@ plan is a separate step. Each candidate is `{ project, kind, target, sessionId?,
 
 The plan also reports `touchedProjects`, `liveCwds` and `countByKind`. `listRegistry` defaults to `Agent.list`.
 
+### Applying a cross-project plan
+
+`runProjectsGC(plan, { apply, owner, removeFromRegistry?, registryTimeoutMs?, protectedIds? })` applies a plan. Without
+`apply: true` it is a dry run: nothing is removed and `removed` lists every candidate. When applying, it re-reads each
+live project's pointer, `protectedIds(cwd)` and the writer lease before EACH removal, and puts a candidate in `refused`
+(with the reason) when it changed since the plan. A registered transcript goes through `removeFromRegistry` (default
+`Agent.delete`, bounded by `registryTimeoutMs`) before its file is unlinked; a lock directory goes through `rmdir`. An
+already-missing target is not an error, other failures land in `errors` per target, and a project directory left empty
+is removed.
+
+Applying requires the root to be owned by `owner.app`. `claimCollectorRoot(projectsRoot, { app })` writes the marker
+`.theokit-collector.json` (`{ app, version }`) next to `projects/`; it never replaces another app's marker
+(`CollectorRootNotOwnedError`) and throws `CollectorRootError` when the marker cannot be written.
+`collectorRootOwner(projectsRoot)` reads it (`undefined` when absent or malformed). Whether to claim a root is the
+app's call: claim the default root, and a custom one only if it holds no projects yet. `runProjectsGC` throws
+`CollectorRootNotOwnedError` (code `collector_root_not_owned`) when the marker is missing or names another app.
+
 ## Refused tool calls
 
 When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
@@ -942,3 +959,23 @@ Server to client: `event` (`{ event, session? }`), `done` (`{ session?, usage? }
 `bad_frame` for an unparsable or unknown frame (the socket stays open), or the store's refusal
 (`busy`, `bad_session`, `turn_failed`, `turn_cancelled`). `interrupted` for a sessionless chat carries the
 private session id. When a socket closes, the turns it started are cancelled.
+
+### Client
+
+`createControlClient({ url, authorization })` (from `@theokit/agents/control`, also needs `ws`) opens a
+socket with the `authorization` header value you pass (include any `Bearer ` prefix). One chat runs at a time per client.
+
+```ts
+import { createControlClient } from '@theokit/agents/control'
+
+const client = await createControlClient({ url: 'ws://127.0.0.1:8080/control', authorization: `Bearer ${token}` })
+for await (const frame of client.chat('hello', 'main')) {
+  if (frame.type === 'event') render(frame.event) // ends after done, interrupted or error
+}
+client.interrupt('main') // or client.steer('main', 'use the other file')
+await client.close()
+```
+
+A URL that is not `ws://` or `wss://`, a refused upgrade (`HTTP <status>`) and a closed connection reject
+with `ControlConnectionError`; its message never contains the credential. A 1009 close reports the
+frame limit.

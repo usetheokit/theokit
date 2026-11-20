@@ -714,21 +714,6 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SessionStore` | type |
 | `SessionStoreOptions` | type |
 
-
-## `@theokit/agents/control`
-
-| Symbol | Kind |
-|---|---|
-| `attachControlSocket` | value |
-| `createSessionStore` | value |
-| `AgentTurnUsage` | type |
-| `ControlClientFrame` | type |
-| `ControlServerFrame` | type |
-| `ControlSocketOptions` | type |
-| `SessionOutcome` | type |
-| `SessionStore` | type |
-| `SessionStoreOptions` | type |
-
 ## `@theokit/agents/testing`
 
 | Symbol | Kind |
