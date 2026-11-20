@@ -55,6 +55,9 @@ export {
 
 export {
   planProjectsGC,
+  runProjectsGC,
+  type RunProjectsGCOptions,
+  type RunProjectsGCResult,
   type PlanProjectsGCOptions,
   type ProjectsGCCandidate,
   type ProjectsGCFs,
@@ -62,6 +65,21 @@ export {
   type ProjectsGCPlan,
   type ProjectsGCRegistryEntry,
 } from './gc/projects-gc.js'
+
+export {
+  scheduleSessionSweep,
+  sweepDecision,
+  type ScheduleSessionSweepOptions,
+  type SweepDecision,
+  type SweepScheduleResult,
+} from './gc/sweep-schedule.js'
+
+export {
+  claimCollectorRoot,
+  CollectorRootError,
+  collectorRootOwner,
+  CollectorRootNotOwnedError,
+} from './gc/collector-root.js'
 
 /**
  * T2.6 — why an empty session list can be empty. Framework-owned because it reads THEOKIT_HOME and

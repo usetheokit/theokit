@@ -81,6 +81,12 @@ function loadSqlite(): new (filename: string) => SqliteDatabase {
   }
 }
 
+/**
+ * Durable usage storage on Node's `node:sqlite`.
+ *
+ * @experimental Node still reports `node:sqlite` as experimental and it is missing at this package's
+ * engine floor, so this adapter's constructor and options may change.
+ */
 export class SqliteUsageStorage implements UsageStorageAdapter, StorageAdapter {
   readonly name = 'sqlite'
   readonly #db: SqliteDatabase

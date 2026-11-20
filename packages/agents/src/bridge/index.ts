@@ -206,6 +206,14 @@ export {
 } from './workspace-provider.js'
 
 export {
+  detectWorkspaceRecipe,
+  prepareWorkspace,
+  WorkspaceRecipeError,
+  type RecipeExec,
+  type WorkspaceRecipe,
+} from './prepare-workspace.js'
+
+export {
   createToolHooksPlugin,
   type ToolHooks,
   type ToolHooksPlugin,
