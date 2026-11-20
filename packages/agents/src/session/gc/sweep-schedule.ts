@@ -124,6 +124,7 @@ export function scheduleSessionSweep(options: ScheduleSessionSweepOptions): Swee
       )
     })
     child.unref()
+    ;(child.stdout as { unref?: () => void }).unref?.()
     return { started: true, reason: apply ? 'applying' : 'first-run-dry' }
   } catch (error) {
     report(`session sweep failed to start: ${message(error)}`)

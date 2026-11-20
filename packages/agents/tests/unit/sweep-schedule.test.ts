@@ -7,8 +7,14 @@ import { scheduleSessionSweep, sweepDecision } from '../../src/session/index.js'
 
 const now = new Date('2026-01-10T00:00:00Z')
 
-function fakeChild(): EventEmitter & { stdout: EventEmitter; unref: () => void } {
-  return Object.assign(new EventEmitter(), { stdout: new EventEmitter(), unref: vi.fn() })
+function fakeChild(): EventEmitter & {
+  stdout: EventEmitter & { unref: () => void }
+  unref: () => void
+} {
+  return Object.assign(new EventEmitter(), {
+    stdout: Object.assign(new EventEmitter(), { unref: vi.fn() }),
+    unref: vi.fn(),
+  })
 }
 
 function setup(stamp?: string) {
@@ -152,5 +158,19 @@ describe('scheduleSessionSweep', () => {
     child.stdout.emit('data', Buffer.from('noise\nremoved 3 of 4\n'))
     child.emit('close', 0)
     expect(onReport).toHaveBeenCalledExactlyOnceWith('removed 3 of 4')
+  })
+
+  it('unrefs the child and its stdout pipe so the parent can exit', () => {
+    const child = fakeChild()
+    scheduleSessionSweep({
+      enabled: true,
+      stampFile: setup().stampFile,
+      now,
+      onReport: () => {},
+      command: () => ({ command: 'node', args: [] }),
+      spawn: (() => child) as never,
+    })
+    expect(child.unref).toHaveBeenCalled()
+    expect(child.stdout.unref).toHaveBeenCalled()
   })
 })
