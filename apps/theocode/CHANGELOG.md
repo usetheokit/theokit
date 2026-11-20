@@ -18,6 +18,10 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Fixed
 
+- The workspace manifests declare `@theokit/agents` as `workspace:*` rather than an exact
+  `workspace:<version>` that went stale at every release and broke the dependency-floor build (#2452).
+  The released version the standalone build installs stays pinned in `standalone/`.
+
 - `sessions gc` (current project) awaits the framework's async `planTranscriptGC`; it was reading a
   promise as the plan. Transcripts no registry entry owns now keep the id of the file they are named
   for (a fork still gets none), and a transcript whose id cannot be read is **kept** and reported,
