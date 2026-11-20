@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1413 export(s) across 26 entry point(s).
+1428 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -100,6 +100,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationTimeoutError` | value |
 | `deriveConversationId` | value |
 | `describeTurnFailure` | value |
+| `detectWorkspaceRecipe` | value |
 | `discoverSubagents` | value |
 | `encodeAcpMessage` | value |
 | `ERROR_CODE_DATA_PART` | value |
@@ -174,6 +175,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `Plugin` | value |
 | `PluginsCapability` | value |
 | `PreCompactionHandlerError` | value |
+| `prepareWorkspace` | value |
 | `presentUIMessageStream` | value |
 | `ProjectContextCapability` | value |
 | `projectContextMetadataOnlyKnobs` | value |
@@ -259,6 +261,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `WithheldBuiltinToolsCapability` | value |
 | `withPreCompaction` | value |
 | `WorkspaceProviderError` | value |
+| `WorkspaceRecipeError` | value |
 | `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `A2ACapabilities` | type |
@@ -419,6 +422,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ProvenanceEntry` | type |
 | `ProviderRoutingSettings` | type |
 | `ReasoningEffort` | type |
+| `RecipeExec` | type |
 | `ReflectionContext` | type |
 | `ReflectionResult` | type |
 | `ReflectionStrategy` | type |
@@ -493,6 +497,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `WireDataPart` | type |
 | `WiredEntity` | type |
 | `WorkspaceProvider` | type |
+| `WorkspaceRecipe` | type |
 
 ## `@theokit/agents/bridge`
 
@@ -534,6 +539,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `DelegationError` | value |
 | `delegationPortFromAgentFactory` | value |
 | `DelegationTimeoutError` | value |
+| `detectWorkspaceRecipe` | value |
 | `ERROR_CODE_DATA_PART` | value |
 | `EVERY_SURFACE` | value |
 | `extractThinkTagStream` | value |
@@ -561,6 +567,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `mcpSecretValues` | value |
 | `mcpToolApprovals` | value |
 | `NoResultSubmittedError` | value |
+| `prepareWorkspace` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
 | `readCappedBody` | value |
@@ -586,6 +593,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
 | `WorkspaceProviderError` | value |
+| `WorkspaceRecipeError` | value |
 | `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `AfterToolCallContext` | type |
@@ -658,6 +666,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PermissionsPluginOptions` | type |
 | `ProcessInputContext` | type |
 | `ProjectSettingsGrant` | type |
+| `RecipeExec` | type |
 | `ResolvedCompatSource` | type |
 | `ResultCapture` | type |
 | `RunAgentTurnOptions` | type |
@@ -691,6 +700,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
 | `WorkspaceProvider` | type |
+| `WorkspaceRecipe` | type |
 
 ## `@theokit/agents/control`
 
@@ -1309,10 +1319,12 @@ Measured against `@theokit/sdk@5.17.0`.
 | `resolveProjectDir` | value |
 | `runProjectsGC` | value |
 | `runTranscriptGC` | value |
+| `scheduleSessionSweep` | value |
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
 | `streamTurnForkingIfBusy` | value |
+| `sweepDecision` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
 | `ClassifyProjectsOptions` | type |
@@ -1336,7 +1348,10 @@ Measured against `@theokit/sdk@5.17.0`.
 | `RunProjectsGCOptions` | type |
 | `RunProjectsGCResult` | type |
 | `RunTranscriptGCResult` | type |
+| `ScheduleSessionSweepOptions` | type |
 | `SessionSummary` | type |
+| `SweepDecision` | type |
+| `SweepScheduleResult` | type |
 | `ThreadHistory` | type |
 | `ThreadHistoryState` | type |
 | `TranscriptGCOptions` | type |

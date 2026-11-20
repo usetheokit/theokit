@@ -422,6 +422,25 @@ Gitignored files are not in a fresh worktree. List them in `.worktreeinclude` at
 literal repo-relative file or directory per line, `#` comments allowed; the `include` option renames
 the file) and they are copied in. A path that escapes the repository is refused.
 
+### Preparing a fresh checkout
+
+A fresh worktree usually cannot build until its dependencies are installed.
+`prepareWorkspace(path, { exec?, setupScripts?, timeoutMs? })` (from `@theokit/agents/bridge`) picks
+exactly one recipe and runs it; `detectWorkspaceRecipe(root, { setupScripts? })` only reports it. The
+order is:
+
+1. `.devcontainer/devcontainer.json`, then `.devcontainer.json` (JSONC). The host-side lifecycle runs
+   `onCreateCommand`, `updateContentCommand`, `postCreateCommand`, `postStartCommand` in that order; an
+   object value runs its commands in parallel and the next stage waits.
+2. The first existing path in `setupScripts` (relative to the checkout, run with `sh`). The default is
+   an empty list: the framework names no product's script.
+3. A lockfile (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lockb`, `bun.lock`), only when
+   `node_modules` is absent.
+
+Each command is bounded by `timeoutMs` (default 10 minutes). A failure throws `WorkspaceRecipeError`
+with `source` and `stage`, and the original error as `cause`. `worktreeProvider(repo, root, { prepare:
+true })` calls `prepareWorkspace` after acquiring; if it fails, the worktree and branch are removed.
+
 ## Reading a run's final answer as an object
 
 `createResultCapture(schema)` returns a `submit_result` tool whose input schema is your zod object schema. Add
@@ -927,6 +946,48 @@ Applying requires the root to be owned by `owner.app`. `claimCollectorRoot(proje
 `collectorRootOwner(projectsRoot)` reads it (`undefined` when absent or malformed). Whether to claim a root is the
 app's call: claim the default root, and a custom one only if it holds no projects yet. `runProjectsGC` throws
 `CollectorRootNotOwnedError` (code `collector_root_not_owned`) when the marker is missing or names another app.
+
+### Scheduling the sweep
+
+`scheduleSessionSweep({ enabled, stampFile, command, onReport, intervalHours?, timeoutMs? })` runs the cross-project GC
+in a detached child, at most once per `intervalHours` (default 24). It reads `stampFile` (an unparseable or missing
+stamp counts as a first run), writes it BEFORE spawning, and never blocks or throws: a failure goes to `onReport`.
+The first run is dry (`command({ apply: false })`), later ones apply. The child gets `timeoutMs` (default 600000) and
+`SIGTERM`; when it closes, its last stdout line is reported. The command is the app's: `sweepDecision` is the pure
+interval check.
+
+```ts
+import { dirname, join } from 'node:path'
+import { projectsRoot, scheduleSessionSweep } from '@theokit/agents/session'
+
+scheduleSessionSweep({
+  enabled: true,
+  stampFile: join(dirname(projectsRoot()), '.last-session-gc'),
+  command: ({ apply }) => ({
+    command: process.execPath,
+    args: [myScript, 'sessions-gc', ...(apply ? ['--apply'] : [])],
+  }),
+  onReport: (line) => console.error(line),
+})
+```
+
+```ts
+// the child (myScript sessions-gc): plan, then run
+import { claimCollectorRoot, planProjectsGC, projectsRoot, runProjectsGC } from '@theokit/agents/session'
+
+const root = projectsRoot()
+const apply = process.argv.includes('--apply')
+if (apply) claimCollectorRoot(root, { app: 'my-app' }) // only if the app owns this root
+const plan = await planProjectsGC({
+  projectsRoot: root,
+  keepLast: 20,
+  maxAgeDays: 30,
+  candidateCwds: () => knownWorkspaces(),
+  candidateCwdsComplete: true, // only if the list is truly complete
+})
+const result = await runProjectsGC(plan, { apply, owner: { app: 'my-app' } })
+console.log(`${result.dryRun ? 'would remove' : 'removed'} ${result.removed.length} of ${plan.candidates.length}`)
+```
 
 ## Refused tool calls
 
