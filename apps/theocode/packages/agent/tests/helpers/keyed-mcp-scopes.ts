@@ -4,6 +4,10 @@
  * The framework loads through a module-internal reader that a mock of the package's `loadMcpJson`
  * export cannot reach, so this feeds it that mock and applies the one decision under test:
  * `projectAllowed` is the trust gate.
+ *
+ * It models the PROJECT scope only: `personal` is always empty and no clash is ever `shadowed`, so a
+ * test using it cannot see the personal scope or the clash rule. Those are the framework's
+ * (`loadMcpScopes`) and are asserted through the real function in `mcp-scopes.test.ts`.
  */
 export function keyedMcpScopes(
   loadMcpJson: (dir: string) => Record<string, unknown>,

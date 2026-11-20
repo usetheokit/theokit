@@ -1,13 +1,13 @@
 import { homedir } from 'node:os'
 
 import type { CompiledWiring } from '@theokit/agents'
+import { CLAUDE_HOOK_EVENT_ALIASES } from '@theokit/agents/hooks'
 import type { InlineSkill } from '@theokit/sdk'
 
 import type { EffectiveConfig, TrustPosture } from '../config/index.js'
 import { projectSourceAllowed } from '../config/project-source.js'
 import { agentsMdChain, loadRules, loadUserRules } from '../context/index.js'
 import type { RulesLoad } from '../context/rules.js'
-import { EVENT_TO_FRAMEWORK } from '../hooks/build-handlers.js'
 import { parseHooks } from '../hooks/index.js'
 import type { McpScopes } from '../mcp-scopes.js'
 import { wiredCapabilities } from '../wired-capabilities.js'
@@ -174,8 +174,11 @@ export function publishWiringAndListen(
  * and never goes to the agent, so its row is not contradicted by the agent's list.
  */
 function reachedAgent(row: string, delivered: ReadonlySet<string>): boolean {
-  const mapped = EVENT_TO_FRAMEWORK[row.split('  ')[0] as keyof typeof EVENT_TO_FRAMEWORK]
-  return mapped === null || mapped === undefined ? true : delivered.has(mapped)
+  const event = row.split('  ')[0] ?? ''
+  // `SessionStart` is delivered by this product, never by the agent (see `build-handlers.ts`).
+  if (event === 'SessionStart') return true
+  const mapped = (CLAUDE_HOOK_EVENT_ALIASES as Readonly<Record<string, string | undefined>>)[event]
+  return mapped === undefined ? true : delivered.has(mapped)
 }
 
 /**

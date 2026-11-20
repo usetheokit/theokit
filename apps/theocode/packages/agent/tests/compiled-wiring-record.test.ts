@@ -56,6 +56,22 @@ describe('withCompiledWiring', () => {
     expect(w.hooks.active).toEqual(['PreToolUse  ./check.sh', 'SessionStart  ./start.sh'])
   })
 
+  it('keeps a hook whose event the agent got and drops one it did not', () => {
+    const w = withCompiledWiring(requested, compiled({ hooks: [{ event: 'pre_tool_call' }] }))
+    expect(w.hooks.active).toContain('PreToolUse  ./check.sh')
+    expect(w.hooks.active).not.toContain('Stop  ./stop.sh')
+    const both = withCompiledWiring(
+      requested,
+      compiled({ hooks: [{ event: 'pre_tool_call' }, { event: 'post_assistant_reply' }] }),
+    )
+    expect(both.hooks.active).toContain('Stop  ./stop.sh')
+  })
+
+  it('keeps a product-delivered hook (no framework event) even when the agent has no hooks', () => {
+    const w = withCompiledWiring(requested, compiled({ hooks: [] }))
+    expect(w.hooks.active).toEqual(['SessionStart  ./start.sh'])
+  })
+
   it('lists no server and no hook for an agent that got none', () => {
     const w = withCompiledWiring(requested, compiled({}))
     expect(w.mcp.active).toEqual([])
