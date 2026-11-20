@@ -98,17 +98,22 @@ export function chatSessions(options: ChatSessionsOptions): {
     ? createMemory(memoryDirectory(options.env), options.write, memoryBackend(options.env))
     : undefined
   const owners = ownerKeys(options.env)
-  const imported = new Set<string>()
+  const imported = new Map<string, Promise<void>>()
   // Facts earlier versions kept under the workspace move into the sender's SDK partition, once per scope.
-  const importLegacy = async (scope: string): Promise<void> => {
-    if (memory === undefined || imported.has(scope)) return
-    imported.add(scope)
-    await importLegacyFacts(
-      legacyFactsFile(settings.workspace),
-      memoryDirectory(options.env),
-      scope,
-      options.write,
-    )
+  // A session of the same scope that opens meanwhile waits for the copy rather than starting without it.
+  const importLegacy = (scope: string): Promise<void> => {
+    if (memory === undefined) return Promise.resolve()
+    let done = imported.get(scope)
+    if (done === undefined) {
+      done = importLegacyFacts(
+        legacyFactsFile(settings.workspace),
+        memoryDirectory(options.env),
+        scope,
+        options.write,
+      )
+      imported.set(scope, done)
+    }
+    return done
   }
   const currentEvent = new AsyncLocalStorage<MessageEvent>()
   const thinking = new Map<string, ThinkingLevel>()
@@ -152,7 +157,7 @@ export function chatSessions(options: ChatSessionsOptions): {
       try {
         const opened = await build(id, thinkingExtra(keyOf(id)))
         const agent =
-          memory === undefined ? opened : memory.record(opened, surfaceOf(id), keyOf(id))
+          memory === undefined ? opened : memory.record(opened, surfaceOf(id), keyOf(id), scope)
         return transient ? withIncognitoCleanup(agent, dir) : agent
       } catch (error) {
         if (transient) removeIncognitoDir(dir)

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
 import type { AgentOptions } from '@theokit/sdk'
+import { readFacts } from '@theokit/sdk/internal/memory-store'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
@@ -222,6 +223,38 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
       }
     },
   )
+
+  it('lets two sessions of one scope that open together both start with the carried facts (#1834)', async () => {
+    const state = stateOf()
+    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-legacy-'))
+    mkdirSync(join(workspace, '.theoclaw', 'memory'), { recursive: true })
+    writeFileSync(
+      join(workspace, '.theoclaw', 'memory', 'facts.jsonl'),
+      `${JSON.stringify({ fact: 'Legacy race fact Plinth-9' })}\n`,
+    )
+    const atOpen: string[][] = []
+    const { sessions, withAgent } = chatSessions({
+      env: {
+        ...ENV,
+        THEOCLAW_WORKSPACE: workspace,
+        THEOCLAW_STATE_DIR: state,
+        THEOCLAW_OWNERS: 'telegram:u,line:u',
+      },
+      write: () => undefined,
+      getOrCreate: async (_id, options) => {
+        const memory = memoryOf(options)
+        atOpen.push((await readFacts(memory.directory, memory)).map((fact) => fact.text))
+        return scripted(options, 'ok') as never
+      },
+    })
+    await Promise.all(
+      ['telegram', 'line'].map((platform) =>
+        withAgent(event(platform), async (lease) => lease.release()),
+      ),
+    )
+    await sessions.disposeAll()
+    expect(atOpen).toEqual([['Legacy race fact Plinth-9'], ['Legacy race fact Plinth-9']])
+  })
 
   it('never shares a partition between two senders, even ones that differ only in case or punctuation', () => {
     const scopes = [

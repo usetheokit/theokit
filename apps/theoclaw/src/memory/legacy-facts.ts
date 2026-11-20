@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+// NOTE for the owner: this sub-path is declared in the SDK's `exports` but is semver-exempt; replace it
+// with a public API once the SDK has one for writing facts into a partition.
 import { appendFact, readFacts } from '@theokit/sdk/internal/memory-store'
 
 import { OWNER_SCOPE } from './memory-store.js'

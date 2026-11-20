@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import type { AgentOptions, CustomTool, MemorySettings } from '@theokit/sdk'
+import { readFacts } from '@theokit/sdk/internal/memory-store'
 
 import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
@@ -20,13 +21,16 @@ export interface MemoryWiring {
   /** The SDK memory settings of one scope: its own partition, reviewed after each turn, mirrored to a hosted backend. */
   settings(scope?: string): MemorySettings
   /** `agent` whose finished turns are recorded under `surface` for `session_search`. */
-  record<A extends TurnAgent>(agent: A, surface: string, sessionKey: string): A
+  record<A extends TurnAgent>(agent: A, surface: string, sessionKey: string, scope?: string): A
   /** Agent options the selected backend adds to every agent (empty for the SDK store alone). */
   agentOptions(): Promise<Partial<AgentOptions>>
 }
 
 /** Off with `THEOCLAW_MEMORY=off`, and always under incognito, which keeps nothing. */
-export function memoryEnabled(env: Readonly<Record<string, string | undefined>>, incognito: boolean): boolean {
+export function memoryEnabled(
+  env: Readonly<Record<string, string | undefined>>,
+  incognito: boolean,
+): boolean {
   return !incognito && env.THEOCLAW_MEMORY?.trim().toLowerCase() !== 'off'
 }
 
@@ -49,7 +53,11 @@ function textOf(message: TurnMessage): string {
 }
 
 /** Records a turn for `session_search`; a failed append goes to `report` and never rejects. */
-export function recordTurn(store: MemoryStore, turn: StoredTurn, report: (line: string) => void): void {
+export function recordTurn(
+  store: MemoryStore,
+  turn: StoredTurn,
+  report: (line: string) => void,
+): void {
   try {
     store.appendTurn(turn)
   } catch (error) {
@@ -57,10 +65,61 @@ export function recordTurn(store: MemoryStore, turn: StoredTurn, report: (line: 
   }
 }
 
+/** The part of an SDK agent the reviewer mirror uses. */
+interface MirrorableAgent {
+  readonly memory?: {
+    write(content: string, ctx?: { userId?: string }): Promise<unknown>
+    reviewsIdle?(): Promise<void>
+  }
+}
+
 /** `dir` is where the SDK keeps facts and the turn log: outside every agent's cwd. */
-export function createMemory(dir: string, report: (line: string) => void, backend?: MemoryBackend): MemoryWiring {
+export function createMemory(
+  dir: string,
+  report: (line: string) => void,
+  backend?: MemoryBackend,
+): MemoryWiring {
   const store = new MemoryStore(dir)
-  const wrapRun = (run: TurnRun, message: string, surface: string, sessionKey: string): TurnRun => {
+  const mirrorsReviews = backend?.mirrored === true
+  /** Texts already sent to the hosted memory by this process, per partition. */
+  const mirrored = new Map<string, Set<string>>()
+  const pending = new Set<Promise<void>>()
+  const factsOf = async (userId: string): Promise<string[]> =>
+    (await readFacts(dir, { enabled: true, directory: dir, userId })).map((fact) => fact.text)
+  /**
+   * SDK 5.32.0 mirrors a `Remember:` fact but not the ones its post-turn reviewer saves. After the review
+   * settles, the facts that appeared in the partition since `before` go to the hosted memory here.
+   */
+  const mirrorReviewed = (
+    agent: MirrorableAgent,
+    userId: string,
+    before: ReadonlySet<string>,
+  ): void => {
+    const task: Promise<void> = (async () => {
+      try {
+        await agent.memory?.reviewsIdle?.()
+        const done = mirrored.get(userId) ?? new Set<string>()
+        mirrored.set(userId, done)
+        for (const text of await factsOf(userId)) {
+          if (before.has(text) || done.has(text)) continue
+          done.add(text)
+          await agent.memory?.write(text, { userId })
+        }
+      } catch (error) {
+        report(
+          `theoclaw: mirroring a reviewed fact to ${backend?.name ?? 'the hosted memory'} failed: ${String(error)}`,
+        )
+      }
+    })().finally(() => pending.delete(task))
+    pending.add(task)
+  }
+  const wrapRun = (
+    run: TurnRun,
+    message: string,
+    surface: string,
+    sessionKey: string,
+    afterRun: () => void,
+  ): TurnRun => {
     let recorded = false
     return new Proxy(run, {
       get(target, property) {
@@ -69,13 +128,26 @@ export function createMemory(dir: string, report: (line: string) => void, backen
             const result = await target.wait()
             if (!recorded && result.status !== 'error' && typeof result.result === 'string') {
               recorded = true
-              recordTurn(store, { surface, sessionKey, user: message, assistant: result.result, at: new Date().toISOString() }, report)
+              recordTurn(
+                store,
+                {
+                  surface,
+                  sessionKey,
+                  user: message,
+                  assistant: result.result,
+                  at: new Date().toISOString(),
+                },
+                report,
+              )
             }
+            if (result.status !== 'error') afterRun()
             return result
           }
         }
         const value: unknown = Reflect.get(target, property, target)
-        return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+        return typeof value === 'function'
+          ? (value as (...args: unknown[]) => unknown).bind(target)
+          : value
       },
     })
   }
@@ -87,7 +159,9 @@ export function createMemory(dir: string, report: (line: string) => void, backen
       directory: dir,
       userId: userIdOf(scope),
       review: { after: 'turn', instructions: REVIEW_INSTRUCTIONS },
-      ...(backend?.mirrored === true ? { mirror: { write: true, recall: 'adapters-first' as const } } : {}),
+      ...(backend?.mirrored === true
+        ? { mirror: { write: true, recall: 'adapters-first' as const } }
+        : {}),
     }),
     async agentOptions() {
       try {
@@ -98,15 +172,39 @@ export function createMemory(dir: string, report: (line: string) => void, backen
         return {}
       }
     },
-    record(agent, surface, sessionKey) {
+    record(agent, surface, sessionKey, scope = OWNER_SCOPE) {
+      const userId = userIdOf(scope)
       return new Proxy(agent, {
         get(target, property) {
           if (property === 'send') {
-            return async (message: TurnMessage, options?: Parameters<TurnAgent['send']>[1]) =>
-              wrapRun(await target.send(message, { ...options, ...untrustedContentSendOptions() }), textOf(message), surface, sessionKey)
+            return async (message: TurnMessage, options?: Parameters<TurnAgent['send']>[1]) => {
+              const run = await target.send(message, {
+                ...options,
+                ...untrustedContentSendOptions(),
+              })
+              let afterRun = (): void => undefined
+              if (mirrorsReviews) {
+                try {
+                  const before = new Set(await factsOf(userId))
+                  afterRun = () =>
+                    mirrorReviewed(target as unknown as MirrorableAgent, userId, before)
+                } catch (error) {
+                  report(`theoclaw: reading facts to mirror failed: ${String(error)}`)
+                }
+              }
+              return wrapRun(run, textOf(message), surface, sessionKey, afterRun)
+            }
+          }
+          if (property === 'dispose') {
+            return async (...args: unknown[]) => {
+              await Promise.all([...pending])
+              return (target as unknown as { dispose(...a: unknown[]): unknown }).dispose(...args)
+            }
           }
           const value: unknown = Reflect.get(target, property, target)
-          return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+          return typeof value === 'function'
+            ? (value as (...args: unknown[]) => unknown).bind(target)
+            : value
         },
       })
     },
