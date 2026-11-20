@@ -592,6 +592,7 @@ Step by step, with the traps a green build does not show: [`docs/wiki/sops/cloud
 | [`theokit`](https://www.npmjs.com/package/theokit) | ![npm](https://img.shields.io/npm/v/theokit?style=flat-square&label=) | Framework core — router, server, CLI, config, adapters, devtools, the agent mount + HITL/checkpoint harness |
 | [`@theokit/agents`](https://www.npmjs.com/package/@theokit/agents) | ![npm](https://img.shields.io/npm/v/@theokit/agents?style=flat-square&label=) | `AgentBuilder`, the SDK adapter, guardrails, skills, MCP, A2A/ACP, delegation |
 | [`@theokit/agents-pty`](https://www.npmjs.com/package/@theokit/agents-pty) | ![npm](https://img.shields.io/npm/v/@theokit/agents-pty?style=flat-square&label=) | The PTY/terminal backend, split out by ADR 0004 so a web app stops compiling one. **Install it only if you drive a terminal** — `@theokit/agents` no longer pulls it in |
+| [`@theokit/host`](https://www.npmjs.com/package/@theokit/host) | ![npm](https://img.shields.io/npm/v/@theokit/host?style=flat-square&label=) | Node-only utilities for long-running agent apps (daemon, config, backup). No web or agent runtime code |
 | [`@theokit/http`](https://www.npmjs.com/package/@theokit/http) | ![npm](https://img.shields.io/npm/v/@theokit/http?style=flat-square&label=) | NestJS-style HTTP decorators + pipeline + typed client |
 | [`@theokit/presenter`](https://www.npmjs.com/package/@theokit/presenter) | ![npm](https://img.shields.io/npm/v/@theokit/presenter?style=flat-square&label=) | The canonical `AgentOutputEvent` + presenters for web / terminal / JSON |
 | [`@theokit/tauri`](https://www.npmjs.com/package/@theokit/tauri) | ![npm](https://img.shields.io/npm/v/@theokit/tauri?style=flat-square&label=) | Desktop glue — the Channel/invoke transport + the JSONL sidecar |
@@ -630,6 +631,20 @@ TheoKit sits inside the [Theo](https://usetheo.dev) product family. It is
 Beta. The framework is used to build real apps, and the surface still moves between
 minor versions — breaking changes are recorded in [`CHANGELOG.md`](CHANGELOG.md)
 against the version that carried them.
+
+`theokit` is at `0.Y.Z`, so a `0.Y` bump is the breaking bump. Every export without an
+`@experimental` tag on its own declaration is stable: removing or changing it needs a `minor`
+changeset and a deprecation window first. The policy is recorded in
+[ADR 0035](docs/adr/0035-the-api-stability-policy-is-recorded-in-theokit-sdk.md). Experimental
+exports of `theokit`, by entry (checked against `packages/theo/public-surface-baseline.json` by
+`packages/theo/tests/experimental-exports.test.ts`). The set was chosen from what the source says about itself: `node:sqlite` is experimental in Node and absent at the engine floor; `theokit/boot` serves only reserved routes and 404s the rest; `ChannelManager` is undocumented and in-memory only. No other entry carries such a signal, so the rest stay stable:
+
+<!-- experimental-exports:start -->
+- `theokit/boot`: `ConventionFetchHandle`, `ConventionFetchHandlerOptions`, `createConventionFetchHandler`
+- `theokit/server`: `ChannelManager`
+- `theokit/server/cost/sqlite`: `SqliteUsageStorage`
+- `theokit/server/realtime`: `ChannelManager`
+<!-- experimental-exports:end -->
 
 - **7232 tests in 930 files** (7211 passing, 21 skipped, zero type errors) — unit, integration and type-level suites across `theokit`, `@theokit/http`, `@theokit/agents`, `@theokit/agents-pty`, `@theokit/presenter` and `create-theokit`. One command: `pnpm test`. Measured 2026-08-26; a number nobody re-measures is a claim, not a fact.
 - **Nine CI jobs gate every PR**: lint + format, typecheck + build, unit + type tests, a coverage floor of 80%, dead code (`knip`), package validation (`publint` + `attw` + an install smoke test), a production dependency audit, and license compliance. Alongside them run the architecture guards — `dependency-cruiser` rules, `ls-lint` filename conventions, SDK surface parity — plus CodeQL and a two-layer secret scan (pre-commit hook and workflow).

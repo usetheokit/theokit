@@ -25,6 +25,15 @@ const MCP_PATH = /^\/api\/agents\/([^/]+)\/mcp$/
  */
 const MCP_PROTOCOL_VERSION = '2025-06-18'
 
+/** Revisions negotiated by default, newest first. */
+const DEFAULT_PROTOCOL_VERSIONS: readonly string[] = ['2025-06-18', '2025-03-26', '2024-11-05']
+
+/** Options for {@link handleMcpToolsHttp}. */
+export interface McpHttpOptions {
+  /** Supported revisions, newest first. Default ['2025-06-18', '2025-03-26', '2024-11-05']. */
+  readonly protocolVersions?: readonly string[]
+}
+
 /** An MCP `tools/list` descriptor with the tool's REAL input schema retained (M34 — no longer dropped). */
 interface McpToolDescriptor {
   name: string
@@ -98,6 +107,16 @@ function isJsonRpcRequest(body: unknown): body is JsonRpcRequest {
   )
 }
 
+function isIdlessMessage(body: unknown): boolean {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    !Array.isArray(body) &&
+    (body as { jsonrpc?: unknown }).jsonrpc === '2.0' &&
+    !('id' in body)
+  )
+}
+
 function jsonResponse(payload: unknown): Response {
   return new Response(JSON.stringify(payload), {
     status: 200,
@@ -150,7 +169,7 @@ async function callTool(
   try {
     const result = await tool.handler(args)
     const text = typeof result === 'string' ? result : JSON.stringify(result)
-    return { content: [{ type: 'text', text }] }
+    return { content: [{ type: 'text', text }], isError: false }
   } catch (err) {
     return {
       content: [
@@ -192,17 +211,29 @@ interface McpServed {
   hitl?: ReadonlyMap<string, unknown>
   appResources: readonly AppResource[]
   options?: McpToolsOptions
+  protocolVersions?: readonly string[]
 }
 
 function rpcResult(id: JsonRpcId, result: unknown): Response {
   return jsonResponse({ jsonrpc: '2.0', id, result })
 }
 
-function initializeResult(name: string, appResources: readonly AppResource[]): unknown {
+/** The client's requested revision when supported, else the newest supported one. */
+function negotiateVersion(params: unknown, supported: readonly string[]): string {
+  const versions = supported.length > 0 ? supported : DEFAULT_PROTOCOL_VERSIONS
+  const asked = (params as { protocolVersion?: unknown } | null | undefined)?.protocolVersion
+  return typeof asked === 'string' && versions.includes(asked) ? asked : versions[0]
+}
+
+function initializeResult(
+  name: string,
+  appResources: readonly AppResource[],
+  protocolVersion: string,
+): unknown {
   const capabilities: Record<string, unknown> = { tools: {} }
   if (appResources.length > 0) capabilities.resources = {}
   return {
-    protocolVersion: MCP_PROTOCOL_VERSION,
+    protocolVersion,
     capabilities,
     serverInfo: { name, version: '1.0' },
   }
@@ -216,7 +247,16 @@ async function dispatchMcp(
 ): Promise<Response> {
   switch (method) {
     case 'initialize':
-      return rpcResult(id, initializeResult(name, served.appResources))
+      return rpcResult(
+        id,
+        initializeResult(
+          name,
+          served.appResources,
+          negotiateVersion(params, served.protocolVersions ?? [MCP_PROTOCOL_VERSION]),
+        ),
+      )
+    case 'ping':
+      return rpcResult(id, {})
     case 'tools/list':
       return rpcResult(id, { tools: toolDescriptors(served.tools) })
     case 'tools/call': {
@@ -256,6 +296,8 @@ async function runMcp(
   body: unknown,
   serve: (req: JsonRpcRequest) => Promise<Response>,
 ): Promise<Response> {
+  // A message without `id` (notification or client response) gets no JSON-RPC reply.
+  if (isIdlessMessage(body)) return new Response(null, { status: 202 })
   if (!isJsonRpcRequest(body)) {
     return jsonResponse({
       jsonrpc: '2.0',
@@ -290,7 +332,13 @@ export function handleMcpJsonRpc(
   return runMcp(body, (req) => {
     const compiled = compileLoadedAgentModule(mod, `mcp server for "${name}"`)
     return dispatchMcp(
-      { tools: compiled.tools, hitl: compiled.hitl, appResources, options },
+      {
+        tools: compiled.tools,
+        hitl: compiled.hitl,
+        appResources,
+        protocolVersions: DEFAULT_PROTOCOL_VERSIONS,
+        options,
+      },
       name,
       req,
     )
@@ -322,6 +370,64 @@ export function handleMcpToolsJsonRpc(
   options?: McpToolsOptions,
 ): Promise<Response> {
   assertUniqueToolNames(tools)
-  const served: McpServed = { tools: tools as readonly CompiledTool[], appResources: [], options }
+  const served: McpServed = {
+    tools: tools as readonly CompiledTool[],
+    appResources: [],
+    protocolVersions: DEFAULT_PROTOCOL_VERSIONS,
+    options,
+  }
   return runMcp(body, (req) => dispatchMcp(served, name, req))
+}
+
+function rpcErrorResponse(status: number, code: number, message: string): Response {
+  return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code, message } }), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  })
+}
+
+/**
+ * Parse an HTTP body as one JSON-RPC message: `-32700` (400) for bad JSON, `-32600` (400) for a
+ * batch. Returns the parsed message, or the error `Response` to send.
+ */
+export async function parseMcpHttpBody(
+  request: Request,
+): Promise<{ body: unknown } | { error: Response }> {
+  let body: unknown
+  try {
+    body = JSON.parse(await request.text())
+  } catch {
+    return { error: rpcErrorResponse(400, -32700, 'Parse error') }
+  }
+  if (Array.isArray(body)) {
+    return { error: rpcErrorResponse(400, -32600, 'Batch requests are not supported') }
+  }
+  return { body }
+}
+
+/**
+ * Full HTTP handling of one MCP request over a list of tools: 405 (`allow: POST`) for other
+ * methods, 400 for bad JSON (`-32700`) or a batch (`-32600`), 202 with an empty body for a
+ * notification, otherwise the JSON-RPC envelope. `initialize` negotiates the protocol version.
+ *
+ * @throws when two tools share a name.
+ */
+export async function handleMcpToolsHttp(
+  tools: readonly CustomTool[],
+  name: string,
+  request: Request,
+  options: McpHttpOptions = {},
+): Promise<Response> {
+  assertUniqueToolNames(tools)
+  if (request.method !== 'POST') {
+    return new Response(null, { status: 405, headers: { allow: 'POST' } })
+  }
+  const parsed = await parseMcpHttpBody(request)
+  if ('error' in parsed) return parsed.error
+  const served: McpServed = {
+    tools: tools as readonly CompiledTool[],
+    appResources: [],
+    protocolVersions: options.protocolVersions ?? DEFAULT_PROTOCOL_VERSIONS,
+  }
+  return runMcp(parsed.body, (req) => dispatchMcp(served, name, req))
 }

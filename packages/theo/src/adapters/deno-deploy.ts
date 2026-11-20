@@ -8,6 +8,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { resolve } from 'node:path'
@@ -408,7 +409,7 @@ export const DENO_DEPLOY_CONFIG_PATH = 'deno.json'
 export function bareSpecifiersOf(sources: Iterable<string>): string[] {
   const found = new Set<string>()
   for (const source of sources) {
-    for (const match of source.matchAll(/(?:from|import)\s+['"]([^'"]+)['"]/gu)) {
+    for (const match of source.matchAll(/(?:from|import)[\s(]*['"]([^'"]+)['"]/gu)) {
       // `match[1]` and not a guarded read: the capture group is not optional in this pattern,
       // so it participates in every match the loop yields.
       const specifier = match[1]
@@ -455,7 +456,13 @@ export function renderDenoConfig(opts: {
 }): DenoConfig {
   const config: DenoConfig = { ...(opts.existing ?? {}) }
   const imports: Record<string, string> = { ...(config.imports ?? {}) }
-  for (const specifier of opts.specifiers) imports[specifier] = `npm:${specifier}`
+  for (const specifier of opts.specifiers) {
+    // An entry the project already declared stays: its own alias (`@app/backend` → a local file)
+    // is not a registry package, and a trailing-slash prefix entry already resolves what it covers.
+    if (specifier in imports) continue
+    if (Object.keys(imports).some((key) => key.endsWith('/') && specifier.startsWith(key))) continue
+    imports[specifier] = `npm:${specifier}`
+  }
   config.imports = imports
   const unstable = [...(config.unstable ?? [])]
   if (!unstable.includes('sloppy-imports')) unstable.push('sloppy-imports')
@@ -470,7 +477,7 @@ export function renderDenoConfig(opts: {
  * must resolve is what the DEPLOYED code imports, and a specifier reachable only from a test
  * or a build script never runs on the platform.
  */
-function readProjectSourcesFromDisk(cwd: string, config: TheoConfig): string[] {
+export function readProjectSourcesFromDisk(cwd: string, config: TheoConfig): string[] {
   // No fallback: `config/schema.ts` gives both a zod `.default()`, so a parsed config always
   // carries them — and the defaults are `server`/`agents`, so the `src/`-prefixed guesses this
   // line used to hold would have read the wrong directories on any project that took them.
@@ -486,9 +493,77 @@ function readProjectSourcesFromDisk(cwd: string, config: TheoConfig): string[] {
       texts.push(readFileSync(resolve(entry.parentPath, entry.name), 'utf8'))
     }
   }
-  const themeConfig = resolve(cwd, 'theo.config.ts')
-  if (existsSync(themeConfig)) texts.push(readFileSync(themeConfig, 'utf8'))
+  // The base config, the NODE_ENV override the generated cron entry also imports, and every local
+  // module they reach: a backend file the config imports can itself import a bare package.
+  const nodeEnv = process.env.NODE_ENV
+  // As `loadConfig`: without the base file the defaults apply and the override is never read.
+  const base = existsSync(resolve(cwd, 'theo.config.ts'))
+  const configs = base ? ['theo.config.ts', ...(nodeEnv ? [`theo.config.${nodeEnv}.ts`] : [])] : []
+  const seen = new Set<string>()
+  const aliases = readLocalAliases(cwd)
+  for (const name of configs) collectLocalSources(resolve(cwd, name), seen, texts, aliases)
   return texts
+}
+
+/** Candidate files a relative specifier can name, mirroring sloppy-imports (`.js` → `.ts`, index files). */
+function localCandidates(base: string): string[] {
+  const stem = base.replace(/\.(?:m?js|jsx)$/u, '')
+  return [base, `${stem}.ts`, `${stem}.mts`, `${stem}.tsx`, `${base}.ts`, resolve(base, 'index.ts')]
+}
+
+/** Read `file` and, recursively, the local modules it imports. Texts are appended to `out`. */
+function collectLocalSources(
+  file: string,
+  seen: Set<string>,
+  out: string[],
+  aliases: ReadonlyMap<string, string>,
+): void {
+  if (seen.has(file) || !existsSync(file)) return
+  seen.add(file)
+  let text: string
+  try {
+    text = readFileSync(file, 'utf8')
+  } catch {
+    return // a directory or unreadable candidate: not a module
+  }
+  out.push(text)
+  for (const match of text.matchAll(/(?:from|import)[\s(]*['"]([^'"]+)['"]/gu)) {
+    const base = localTarget(file, match[1], aliases)
+    if (base === undefined) continue
+    const found = localCandidates(base).find((c) => existsSync(c) && statSync(c).isFile())
+    if (found !== undefined) collectLocalSources(found, seen, out, aliases)
+  }
+}
+
+/** The path a relative specifier or a local `deno.json` alias names, or undefined for a package. */
+function localTarget(
+  from: string,
+  specifier: string,
+  aliases: ReadonlyMap<string, string>,
+): string | undefined {
+  if (/^\.{1,2}\//u.test(specifier)) return resolve(from, '..', specifier)
+  // Import-map precedence: an exact key wins, otherwise the longest matching `/` prefix.
+  const exact = aliases.get(specifier)
+  if (exact !== undefined) return exact
+  let best: string | undefined
+  for (const key of aliases.keys()) {
+    if (key.endsWith('/') && specifier.startsWith(key) && key.length > (best?.length ?? 0)) {
+      best = key
+    }
+  }
+  if (best !== undefined) return (aliases.get(best) ?? '') + specifier.slice(best.length)
+  return undefined
+}
+
+/** The project's own `deno.json` import map entries that point at local files, as absolute paths. */
+function readLocalAliases(cwd: string): Map<string, string> {
+  const out = new Map<string, string>()
+  const imports = readDenoConfigFromDisk(cwd)?.imports ?? {}
+  for (const [key, value] of Object.entries(imports)) {
+    if (/^\.{1,2}\//u.test(value))
+      out.set(key, key.endsWith('/') ? `${resolve(cwd, value)}/` : resolve(cwd, value))
+  }
+  return out
 }
 
 function readDenoConfigFromDisk(cwd: string): DenoConfig | undefined {

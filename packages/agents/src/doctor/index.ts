@@ -13,3 +13,10 @@ export type { Check, Diagnosis, SecretPresence } from './diagnose.js'
 
 export { installDiagnosticSink } from './diagnostic-sink.js'
 export type { DiagnosticDestination, InstallDiagnosticSinkOptions } from './diagnostic-sink.js'
+
+export { credentialShape, describeCredentialDefect } from './credential-shape.js'
+export type { CredentialDefect } from './credential-shape.js'
+export { checks } from './checks.js'
+export type { CredentialState, SettingsFileReport } from './checks.js'
+export { writeDiagnosticBundle, DiagnosticBundleError } from './diagnostic-bundle.js'
+export type { WriteDiagnosticBundleOptions } from './diagnostic-bundle.js'

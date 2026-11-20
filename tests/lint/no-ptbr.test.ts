@@ -92,9 +92,6 @@ const FILE_ALLOWLIST = new Set<string>([
   // Translating them removes the cases the test exists for — the same reason this file exempts
   // itself one line above.
   'tests/lint/task-marker.test.ts', // english-only: the gate must name what it detects
-  // B-065 — `What&apos;s new` is an HTML apostrophe entity; the lexicon reads it as Portuguese
-  // "apos". Escaping it differently to satisfy the gate would change the rendered banner.
-  'packages/create-theokit/tests/unit/scaffold-surface.test.ts', // english-only: the gate must name what it detects
   // Two entries were removed on 2026-08-06, each on the condition its own comment had set. The
   // Portuguese course was decomposed into English documentation, and the recall probe that matched
   // a Brazilian city name in both spellings went with it. The gate now covers every word that
@@ -271,6 +268,12 @@ const NOT_PROSE =
   /\b(?:Africa|America|Antarctica|Asia|Atlantic|Australia|Europe|Indian|Pacific)\/[A-Za-z_]+/g
 
 /**
+ * Named character references (`&apos;`, `&amp;`): markup, not words. `&apos;` spells the
+ * unaccented `após`, so every XML or HTML escaper and its tests used to need a file exemption.
+ */
+const ENTITY = /&[A-Za-z]+;/g
+
+/**
  * Inline code spans — a symbol NAME is not prose in the language its letters happen to spell.
  *
  * The live case is the CHANGELOG announcing the renames this gate motivated: you cannot write
@@ -366,7 +369,9 @@ function stripDiacritics(word: string): string {
 
 /** Every word-part of a line, with allowlisted loanwords already dropped. */
 function candidateParts(line: string): string[] {
-  return (line.replace(INLINE_CODE, ' ').replace(NOT_PROSE, ' ').match(WORD) ?? [])
+  return (
+    line.replace(INLINE_CODE, ' ').replace(NOT_PROSE, ' ').replace(ENTITY, ' ').match(WORD) ?? []
+  )
     .filter((token) => !WORD_ALLOWLIST.has(token.toLowerCase()))
     .flatMap(identifierParts)
     .filter((part) => !WORD_ALLOWLIST.has(part.toLowerCase()))
@@ -461,6 +466,11 @@ describe('codebase is English-only (no PT-BR)', () => {
     },
     SWEEP_TIMEOUT_MS,
   )
+
+  it('reads a character reference as markup, and the bare word as Portuguese', () => {
+    expect(scanText('x.ts', "expect(xml).toContain('a&lt;b&apos;c')")).toEqual([])
+    expect(scanText('x.ts', 'apos o deploy')).toHaveLength(1) // english-only: the gate must name what it detects
+  })
 
   /**
    * The CHANGELOG exemption above is wider than the reason for it. Released entries are immutable

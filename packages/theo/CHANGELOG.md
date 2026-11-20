@@ -1,5 +1,21 @@
 # theo
 
+## 0.83.1
+
+### Patch Changes
+
+- dbb67ba: Fix `theokit build` failing with `Identifier "Page__id_" has already been declared` when two pages share a dynamic folder name under different parents (`tasks/[id]`, `plans/[id]`). The route manifest now suffixes a colliding component identifier.
+- Updated dependencies [c476d68]
+- Updated dependencies [64e2c77]
+- Updated dependencies [3159920]
+- Updated dependencies [5e016b1]
+- Updated dependencies [1c93a6d]
+- Updated dependencies [72370bb]
+- Updated dependencies [6e1791d]
+  - @theokit/agents@16.13.0
+  - @theokit/http@2.7.0
+  - @theokit/presenter@0.16.0
+
 ## 0.83.0
 
 ### Minor Changes
@@ -535,8 +551,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                        [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                        were found and every /api/agents/* route will 404.
+                                                          [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                          were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 

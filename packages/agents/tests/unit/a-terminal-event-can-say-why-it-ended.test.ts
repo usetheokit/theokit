@@ -54,10 +54,12 @@ interface Declared {
 
 function declaredEvents(): Declared[] {
   const src = readFileSync(events, 'utf8')
-  return [...src.matchAll(/export interface (\w+Event) \{(.*?)\n\}/gs)].map((m) => ({
-    name: m[1] ?? '',
-    body: m[2] ?? '',
-  }))
+  return [...src.matchAll(/export (?:interface|type) (\w+Event)(?: =)? \{(.*?)\n\}/gs)].map(
+    (m) => ({
+      name: m[1] ?? '',
+      body: m[2] ?? '',
+    }),
+  )
 }
 
 const isTerminal = (body: string): boolean =>

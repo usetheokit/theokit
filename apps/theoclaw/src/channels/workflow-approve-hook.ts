@@ -1,7 +1,7 @@
+import { parseChatCommand } from '@theokit/gateway'
 import type { GatewayHook } from '@theokit/gateway'
 
-const MENTION = '(?:(?:<@[^>]+>|@\\S+)\\s+)?'
-const COMMAND = new RegExp(`^${MENTION}/(approve|deny)(?:@\\S+)?\\s+(wfr-[A-Za-z0-9_-]+)$`)
+const TOKEN = /^wfr-[A-Za-z0-9_-]+$/
 
 export interface WorkflowApproveOptions {
   readonly isOwner: (platform: string, senderId: string) => boolean
@@ -14,11 +14,11 @@ export function createWorkflowApproveHook(options: WorkflowApproveOptions): Gate
   return {
     name: 'theoclaw-workflow-approve',
     async pre_inbound({ event }) {
-      const match = COMMAND.exec(event.text.trim())
-      if (match === null) return undefined
+      const command = parseChatCommand(event.text)
+      if ((command?.name !== 'approve' && command?.name !== 'deny') || !TOKEN.test(command.arg)) return undefined
       if (!options.isOwner(event.platform, event.sender.id)) return { block: true, message: 'Only an owner can do that.' }
       try {
-        const outcome = await options.resume(match[2]!, match[1] === 'approve')
+        const outcome = await options.resume(command.arg, command.name === 'approve')
         return { block: true, message: outcome ?? 'No suspended workflow run has that token.' }
       } catch (error) {
         return { block: true, message: error instanceof Error ? error.message : String(error) }

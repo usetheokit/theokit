@@ -12,6 +12,7 @@ export default defineConfig({
     'src/action-encryption.ts',
     'src/server-inserted-html.ts',
     'src/css-resource.ts',
+    'src/guards-entry.ts',
   ],
   format: ['esm'],
   dts: true,

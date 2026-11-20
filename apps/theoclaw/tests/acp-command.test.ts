@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createAcpCommandHook, createAcpSessions, type AcpSessions } from '../src/channels/acp-command.js'
 import { tempCwd } from './tool-start-fixtures.js'
@@ -63,6 +63,26 @@ describe('/acp (B-685)', () => {
     await waitFor(() => !alive(pid), 'the agent process to end')
     expect(await say('/acp list')).toBe('No ACP session is running.')
     expect(await say('/acp stop acp-1')).toBe('No ACP session acp-1 is running.')
+  })
+
+  it('starts the session without the channel tokens of the parent environment', async () => {
+    vi.stubEnv('THEOCLAW_TELEGRAM_TOKEN', 'telegram-0123456789')
+    try {
+      const cwd = tempCwd(cleanups)
+      const envFile = join(cwd, 'env.json')
+      const sessions = createAcpSessions({
+        agents: [{ name: 'coder', description: 'a coder', command: process.execPath, args: [FIXTURE, `--env-names=${envFile}`] }],
+        cwd,
+      })
+      open.push(sessions)
+      sessions.start('coder')
+      await waitFor(() => existsSync(envFile), 'the agent to start')
+      await waitFor(() => readFileSync(envFile, 'utf8').endsWith(']'), 'the agent to write its environment')
+      const names = JSON.parse(readFileSync(envFile, 'utf8')) as string[]
+      expect(names).not.toContain('THEOCLAW_TELEGRAM_TOKEN')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('refuses a non-owner, an unknown agent and a bare command, starting nothing', async () => {

@@ -9,6 +9,7 @@
  * Exits non-zero on a failure so it is usable in a script, and never prints a credential value.
  */
 import process from 'node:process'
+import { exitAfterDrain } from '@theokit/agents/commands'
 import { homedir } from 'node:os'
 import { existsSync, readFileSync } from 'node:fs'
 
@@ -134,7 +135,7 @@ export async function doctorCommand(opts: {
 }): Promise<void> {
   const agent = await import('@theocode/agent')
   const { authFilePath, strayCredentialFiles } = await import('@theocode/agent/auth')
-  const { skillsOnDisk, loadOutputStyle, foreignHookRefusals } = await import('@theocode/agent')
+  const { skillsOnDisk, outputStyleResolves, foreignHookRefusals } = await import('@theocode/agent')
   const { settingsReport } = await import('@theocode/agent/config')
   const { cwd, cfg, posture } = await resolveDoctorTarget(opts)
 
@@ -197,7 +198,7 @@ export async function doctorCommand(opts: {
       ? {
           outputStyle: {
             name: cfg.output_style,
-            resolved: loadOutputStyle(cfg.output_style, { project: cwd }) !== null,
+            resolved: outputStyleResolves(cfg.output_style, { project: cwd }),
           },
         }
       : {}),
@@ -210,5 +211,5 @@ export async function doctorCommand(opts: {
   // `result.exitCode`, not `result.failed ? 1 : 0`. The framework's diagnosis computes it, and it
   // carries a case the local version could not express: an EMPTY check list exits non-zero, because
   // "no checks ran" is a different fact from "everything passed" — and the boolean collapsed them.
-  process.exit(result.exitCode)
+  exitAfterDrain(result.exitCode)
 }

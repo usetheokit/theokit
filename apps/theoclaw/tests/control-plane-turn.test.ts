@@ -1,9 +1,18 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
+import type { SDKAgent, SDKMessage } from '@theokit/sdk'
+import {
+  isAgentStreamEvent,
+  toSdkMessage,
+  toSdkTimelineEvent,
+  type TurnTimelineEvent,
+} from '../src/agent-port.js'
 
 import type {
   TurnAgent as ReplyTurnAgent,
   TurnRun as ReplyTurnRun,
 } from '../src/channels/reply-handler.js'
+import { runSessionTurn } from '../src/control-plane/session-turn.js'
+import { createEventMask } from '../src/control-plane/event-mask.js'
 import { createContainer } from '../src/composition.js'
 import {
   createTurnRunner,
@@ -533,5 +542,275 @@ describe('the turn streams the reply as the model writes it', () => {
     expect(text.map((e) => (e as unknown as { content: string }).content).join('')).toBe(
       'Once upon a time',
     )
+  })
+})
+
+describe('typed SDK usage (#2317)', () => {
+  it('takes the SDK agent and its run as the port, with no cast', () => {
+    expectTypeOf<SDKAgent>().toExtend<TurnAgent>()
+    expectTypeOf<Awaited<ReturnType<SDKAgent['send']>>>().toExtend<TurnRun>()
+  })
+
+  it('translates a typed SDK message and a typed timeline event without a cast', async () => {
+    const message: SDKMessage = {
+      type: 'assistant',
+      agent_id: 'a',
+      run_id: 'r',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'typed' }] },
+    }
+    const timeline: TurnTimelineEvent = {
+      kind: 'delta',
+      update: { type: 'text-delta', text: 'ty' },
+    }
+    const run: TurnRun = {
+      async *stream() {
+        yield message
+      },
+      async *events() {
+        yield timeline
+      },
+      wait: async () => ({ status: 'finished' }),
+      cancel: async () => undefined,
+    }
+    const events: TurnEvent[] = []
+    const outcome = await runTheoClawTurn({
+      withAgent: (work) => work({ send: async () => run }),
+      message: 'hi',
+      runId: 'r1',
+      emit: (event) => events.push(event),
+    })
+    expect(outcome).toEqual({ ok: true })
+    expect(events.map((e) => ('content' in e ? e.content : undefined))).toContain('typed')
+  })
+})
+
+const THINKING = { type: 'thinking', text: 'hmm' }
+const ASSISTANT = { type: 'assistant', message: { content: [{ type: 'text', text: 'one ' }] } }
+const ASSISTANT_DONE = { type: 'assistant', message: { content: [{ type: 'text', text: 'done' }] } }
+
+/** A typed timeline: a live delta, a thinking message, then the completed text marked as already streamed. */
+const TIMELINE: readonly TurnTimelineEvent[] = [
+  { kind: 'delta', update: { type: 'text-delta', text: 'one ' } },
+  { kind: 'message', message: THINKING },
+  {
+    kind: 'message',
+    message: ASSISTANT,
+    textAlreadyStreamed: true,
+  },
+  { kind: 'delta', update: { type: 'text-delta', text: 'two' } },
+]
+
+const TIMELINE_EXPECTED: readonly TurnEvent[] = [
+  { type: 'text_delta', content: 'one ' },
+  { type: 'thinking', content: 'hmm' },
+  { type: 'text_delta', content: 'two' },
+]
+
+function timelineRun(): TurnRun {
+  return {
+    async *stream() {},
+    async *events() {
+      yield* TIMELINE
+    },
+    wait: async () => ({ status: 'finished' }),
+    cancel: async () => undefined,
+  }
+}
+
+describe('the typed conversions of the port (#2317)', () => {
+  it('copies a message and a timeline event into the bridge types', () => {
+    expect(toSdkMessage({ type: 'status' })).toEqual({ type: 'status' })
+    expect(
+      toSdkTimelineEvent({ kind: 'delta', update: { type: 'text-delta', text: 'x' } }),
+    ).toEqual({
+      kind: 'delta',
+      update: { type: 'text-delta', text: 'x' },
+    })
+    expect(
+      toSdkTimelineEvent({
+        kind: 'message',
+        message: { type: 'status' },
+        textAlreadyStreamed: true,
+      }),
+    ).toEqual({
+      kind: 'message',
+      message: { type: 'status' },
+      textAlreadyStreamed: true,
+    })
+  })
+
+  it('accepts only events whose required fields have their kinds', () => {
+    const wire = <T extends { readonly type: string }>(event: T): { readonly type: string } => event
+    const textDelta = { type: 'text_delta', content: 'a' }
+    const done = {
+      type: 'done',
+      result: 'r',
+      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+      durationMs: 4,
+    }
+    const toolCall = { type: 'tool_call', callId: 'c1', toolName: 'bash', input: {} }
+    expect(isAgentStreamEvent(wire(textDelta))).toBe(true)
+    expect(isAgentStreamEvent(wire(done))).toBe(true)
+    expect(isAgentStreamEvent(wire(toolCall))).toBe(true)
+    expect(isAgentStreamEvent(wire({ type: 'task_progress' }))).toBe(true)
+    // malformed variants
+    expect(isAgentStreamEvent(wire({ type: 'text_delta' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'done' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ ...done, durationMs: '4' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ ...done, usage: null }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'tool_call', toolName: 'bash' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ ...toolCall, callId: 1 }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'error', code: 'x', message: 'm' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'toString' }))).toBe(false)
+    expect(isAgentStreamEvent(wire({ type: 'not_an_event' }))).toBe(false)
+  })
+
+  const DONE = {
+    type: 'done',
+    result: 'r',
+    usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+    durationMs: 4,
+  }
+  const MALFORMED: readonly (readonly [
+    string,
+    { readonly type: string; readonly [key: string]: unknown },
+  ])[] = [
+    ['iteration without totalSteps', { type: 'iteration', step: 1 }],
+    ['iteration with a string totalSteps', { type: 'iteration', step: 1, totalSteps: '3' }],
+    ['done usage without totalTokens', { ...DONE, usage: { inputTokens: 1, outputTokens: 2 } }],
+    [
+      'done usage with a string inputTokens',
+      { ...DONE, usage: { inputTokens: '1', outputTokens: 2, totalTokens: 3 } },
+    ],
+    [
+      'done usage with a bad optional count',
+      { ...DONE, usage: { ...DONE.usage, reasoningTokens: 'x' } },
+    ],
+    ['done with an unknown stopReason', { ...DONE, stopReason: 'other' }],
+    ['done with a string cost', { ...DONE, cost: '1' }],
+    ['file_edit with an unknown format', { type: 'file_edit', file: 'a.ts', format: 'patch' }],
+    ['file_edit without a format', { type: 'file_edit', file: 'a.ts' }],
+    [
+      'file_edit with a numeric startLine as string',
+      { type: 'file_edit', file: 'a', format: 'full-file', startLine: '1' },
+    ],
+    ['task_progress with a numeric status', { type: 'task_progress', status: 1 }],
+    [
+      'run_started with a numeric model',
+      { type: 'run_started', runId: 'r', agentName: 'a', model: 1 },
+    ],
+    [
+      'tool_result with a string refusal',
+      {
+        type: 'tool_result',
+        callId: 'c',
+        toolName: 't',
+        output: '',
+        durationMs: 1,
+        isError: false,
+        refusal: 'no',
+      },
+    ],
+    [
+      'artifact_start with a numeric filename',
+      { type: 'artifact_start', artifactId: 'a', mimeType: 'm', filename: 1 },
+    ],
+    [
+      'approval_required without timeoutMs',
+      { type: 'approval_required', callId: 'c', toolName: 't', question: 'q', callbackUrl: 'u' },
+    ],
+    ['shell_output with a string event', { type: 'shell_output', event: 'x' }],
+    [
+      'checkpoint_saved without resumeToken',
+      { type: 'checkpoint_saved', checkpointId: 'c', step: 1 },
+    ],
+  ]
+
+  it.each(MALFORMED)('rejects %s', (_name, event) => {
+    expect(isAgentStreamEvent(event)).toBe(false)
+  })
+
+  const loose = <T extends { readonly type: string }>(event: T): { readonly type: string } => event
+
+  it('accepts the variants with their optional fields typed', () => {
+    expect(isAgentStreamEvent(loose({ type: 'iteration', step: 1, totalSteps: null }))).toBe(true)
+    expect(
+      isAgentStreamEvent(
+        loose({
+          ...DONE,
+          stopReason: 'step_limit',
+          cost: 1,
+          usage: { ...DONE.usage, reasoningTokens: 1 },
+        }),
+      ),
+    ).toBe(true)
+    expect(
+      isAgentStreamEvent(
+        loose({ type: 'file_edit', file: 'a', format: 'line-range', startLine: 1 }),
+      ),
+    ).toBe(true)
+  })
+
+  it('translates a typed timeline (deltas and messages) in order through a session turn', async () => {
+    const events: TurnEvent[] = []
+    const outcome = await runSessionTurn(
+      { send: async () => timelineRun() },
+      {
+        message: 'hi',
+        runId: 'r1',
+        signal: new AbortController().signal,
+        emit: (event) => events.push(event),
+        onRun: () => undefined,
+        onEventsEnded: () => undefined,
+      },
+    )
+    expect(outcome).toEqual({ ok: true })
+    expect(events).toEqual(TIMELINE_EXPECTED)
+  })
+
+  it('keeps the event type and the other fields through masking', () => {
+    const out: TurnEvent[] = []
+    const mask = createEventMask(['sekret'], (event) => out.push(event))
+    mask.emit({
+      type: 'tool_result',
+      callId: 'c1',
+      toolName: 'bash',
+      output: 'a sekret b',
+      durationMs: 5,
+      isError: false,
+    })
+    expect(out).toEqual([
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'bash',
+        output: 'a [redacted] b',
+        durationMs: 5,
+        isError: false,
+      },
+    ])
+  })
+})
+
+describe('typed messages through the sessionless turn (#2317)', () => {
+  it('translates the typed stream messages in order', async () => {
+    const run: TurnRun = {
+      async *stream() {
+        yield THINKING
+        yield ASSISTANT_DONE
+      },
+      wait: async () => ({ status: 'finished' }),
+      cancel: async () => undefined,
+    }
+    const events: TurnEvent[] = []
+    const outcome = await runTheoClawTurn({
+      withAgent: (work) => work({ send: async () => run }),
+      message: 'hi',
+      runId: 'r1',
+      emit: (event) => events.push(event),
+    })
+    expect(outcome).toEqual({ ok: true })
+    expect(events.map((e) => e.type)).toEqual(['thinking', 'text_delta'])
+    expect(events.map((e) => ('content' in e ? e.content : undefined))).toEqual(['hmm', 'done'])
   })
 })

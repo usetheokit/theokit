@@ -1,0 +1,25 @@
+# {{name}} — TheoKit agent (one-shot CLI surface)
+
+A command that takes a prompt and prints the answer, scaffolded by `create-theokit --surface cli`.
+It runs the agent **in-process** (no HTTP server, no port) for one turn, then exits.
+
+## Run
+
+```bash
+export OPENROUTER_API_KEY=...   # or ANTHROPIC_API_KEY / OPENAI_API_KEY (or put it in .env)
+npm start -- "summarise README.md"
+npm start -- --json "summarise README.md"      # one JSON event per line on stdout
+npm start -- -o last.txt "summarise README.md" # also write the final answer to last.txt
+echo "some text" | npm start -- "explain"      # piped stdin is appended to the prompt
+```
+
+Progress and errors go to stderr, the answer to stdout.
+
+## Exit codes
+
+`0` answered · `1` error or empty prompt/answer · `2` the turn was cut (for example by a step limit).
+
+## Files
+
+- `cli/main.ts` — argument parsing, then `runHeadlessTurn` over `streamAgentTurnInProcess`.
+- `agents/chat.ts` — the agent's model and system prompt.

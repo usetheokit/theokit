@@ -20,6 +20,7 @@ export {
   DEFAULT_ACP_TIMEOUT_MS,
 } from './acp-tool.js'
 export type { AcpToolConfig, AcpToolTransport } from './acp-tool.js'
+export { resolveAgentCommand } from './resolve-agent-command.js'
 export { createVendorAgentTool } from './vendor-agent-tool.js'
 export type { VendorAgentClient, VendorAgentToolConfig } from './vendor-agent-tool.js'
 
@@ -52,7 +53,8 @@ export {
   handleMcpStdioLine,
   type StdioStreams,
 } from './mcp-stdio.js'
-export { handleMcpToolsJsonRpc, type McpToolsOptions } from './mcp-handler.js'
+export { handleMcpToolsJsonRpc, handleMcpToolsHttp } from './mcp-handler.js'
+export type { McpHttpOptions, McpToolsOptions } from './mcp-handler.js'
 export {
   defineAppResource,
   buildResourceDescriptors,
