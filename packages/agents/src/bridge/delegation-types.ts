@@ -159,7 +159,6 @@ export class DelegationBudgetCostUnknownError extends DelegationBudgetExceededEr
  * knip reports the value/type pair as a duplicate export, which is exactly what a deprecation
  * alias is; `rules.duplicates` is "warn" for that reason. Removing it is the breaking change it
  * exists to avoid.
- * @alias
  */
 export const BudgetExceededError = DelegationBudgetExceededError
 /** @deprecated Use {@link DelegationBudgetExceededError}. */
