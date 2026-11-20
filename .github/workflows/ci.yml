@@ -118,9 +118,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # `fetch-depth: 0`: a pull_request run checks out `refs/pull/N/merge` at depth 1, and fetching
+      # only the base branch afterwards leaves that merge commit a shallow root (it is not reachable
+      # from the fetched ref), so `origin/<base>...HEAD` would have no merge base. Full history is
+      # what the public-surface gate below needs to find the base and the changesets in between.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
       # imports from `packages/theo/dist/*` to validate the npm publish
@@ -130,6 +135,27 @@ jobs:
       # but the binstub points to dist/cli/index.js which doesn't exist
       # until the theo package finishes building → ordering blow-up).
       - run: pnpm build:packages
+      # Public-surface gate. It reads `dist/`, so it runs right after the build. On a pull request it
+      # compares with the baseline at the PR base (`--base origin/<base>`) and requires a major
+      # changeset in `<base>...HEAD` for a breaking change to a stable export; the history it needs
+      # comes from `fetch-depth: 0` on the checkout, and the base ref is fetched again here so it
+      # exists even if the checkout's refspec changes. Exit 1 (drift, or a break without a major
+      # changeset) and exit 2 (the check could not run) both fail the job. Outside a pull request
+      # there is no base, so only the drift check against the committed baseline runs.
+      - name: Public-surface gate (stable exports)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          base_args=()
+          if [ -n "$BASE_REF" ]; then
+            git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+            git merge-base "origin/${BASE_REF}" HEAD > /dev/null
+            base_args=(--base "origin/${BASE_REF}")
+          fi
+          for pkg in @theokit/agents theokit; do
+            node scripts/check-public-surface.mjs "$pkg" "${base_args[@]}"
+          done
       # `typecheck:only`, not `typecheck`: the latter is `pnpm build:packages && tsc --noEmit`,
       # and the step above already built. Measured on run 33179795266 — build:packages 51s, then
       # typecheck 67s, of which ~50s was that build running a second time.
