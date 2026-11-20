@@ -387,6 +387,21 @@ answers `continue` until the agent calls the tool with `complete` (`done`) or `b
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
 
+## Isolated workspaces for coding sub-agents
+
+`worktreeProvider(repo, root)` (from `@theokit/agents/bridge`) gives each task its own
+`git worktree add -b task/<id> <root>/<id>`. Pass it as `isolation` to `delegate` (or on the
+`SubAgentSpec`; the option wins): `delegate` acquires a workspace, runs with `cwd` set to it and
+releases it afterwards, on failure too. If the release fails, the task's error is still the one
+thrown, with the cleanup failure on its `cleanupError`; when the error cannot carry a property (a
+primitive, or a frozen or non-extensible object), an `AggregateError` holding both is thrown instead. A `streamFactory` you supply does not read `cwd`.
+Task ids must match `^[A-Za-z0-9][A-Za-z0-9._-]*$` and may not contain `..`; anything else throws
+`WorkspaceProviderError`. Used directly, `workspace.release({ keep: true })` leaves the worktree and branch.
+
+Gitignored files are not in a fresh worktree. List them in `.worktreeinclude` at the repo root (one
+literal repo-relative file or directory per line, `#` comments allowed; the `include` option renames
+the file) and they are copied in. A path that escapes the repository is refused.
+
 ## Reading a run's final answer as an object
 
 `createResultCapture(schema)` returns a `submit_result` tool whose input schema is your zod object schema. Add

@@ -257,6 +257,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `withEphemeralAgent` | value |
 | `WithheldBuiltinToolsCapability` | value |
 | `withPreCompaction` | value |
+| `WorkspaceProviderError` | value |
+| `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `A2ACapabilities` | type |
 | `A2ASkill` | type |
@@ -361,6 +363,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `InlineSkill` | type |
 | `InProcessApprovalRequest` | type |
 | `InProcessAwaitApproval` | type |
+| `IsolatedWorkspace` | type |
 | `IterationEvent` | type |
 | `JudgeResult` | type |
 | `KnownAgentRunErrorCode` | type |
@@ -453,6 +456,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `StreamFromEmitterOptions` | type |
 | `StructuredOutputErrorCode` | type |
 | `SubagentDefinition` | type |
+| `SubAgentSpec` | type |
 | `Summarize` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
@@ -486,6 +490,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `WireChunk` | type |
 | `WireDataPart` | type |
 | `WiredEntity` | type |
+| `WorkspaceProvider` | type |
 
 ## `@theokit/agents/bridge`
 
@@ -578,6 +583,8 @@ Measured against `@theokit/sdk@5.17.0`.
 | `validateAgainstInputSchema` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
+| `WorkspaceProviderError` | value |
+| `worktreeProvider` | value |
 | `WRITE_SCOPED_TOOLS` | value |
 | `AfterToolCallContext` | type |
 | `AgentDefinition` | type |
@@ -631,6 +638,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `HookApprovalRequest` | type |
 | `InferAgentInput` | type |
 | `InferAgentToolNames` | type |
+| `IsolatedWorkspace` | type |
 | `IterationEvent` | type |
 | `LLMCallContext` | type |
 | `McpApprovalSpec` | type |
@@ -667,6 +675,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `StateUpdateEvent` | type |
 | `StreamEvent` | type |
 | `StreamFromEmitterOptions` | type |
+| `SubAgentSpec` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
 | `ToolArgsValidator` | type |
@@ -679,6 +688,21 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ToolInvokeRouteOptions` | type |
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
+| `WorkspaceProvider` | type |
+
+## `@theokit/agents/control`
+
+| Symbol | Kind |
+|---|---|
+| `attachControlSocket` | value |
+| `createSessionStore` | value |
+| `AgentTurnUsage` | type |
+| `ControlClientFrame` | type |
+| `ControlServerFrame` | type |
+| `ControlSocketOptions` | type |
+| `SessionOutcome` | type |
+| `SessionStore` | type |
+| `SessionStoreOptions` | type |
 
 ## `@theokit/agents/control`
 
