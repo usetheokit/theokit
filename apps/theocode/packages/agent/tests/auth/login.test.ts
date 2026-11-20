@@ -19,8 +19,14 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { CredentialError, authFilePath } from '../../src/auth/credentials.js'
-import { knownProviders, login, logout, methodsFor, oauthDeviceLogin } from '../../src/auth/login.js'
+import { CredentialError, authFilePath, resolveCredential } from '../../src/auth/credentials.js'
+import {
+  knownProviders,
+  login,
+  logout,
+  methodsFor,
+  oauthDeviceLogin,
+} from '../../src/auth/login.js'
 
 let home: string
 
@@ -33,6 +39,14 @@ afterEach(() => {
 })
 
 describe('signing in with an API key', () => {
+  it('writes a credential that resolution reads back', () => {
+    login('sk-ant-roundtrip', home)
+
+    const resolved = resolveCredential({ env: {}, home })
+    expect(resolved.provider).toBe('anthropic')
+    expect(resolved.apiKey).toBe('sk-ant-roundtrip')
+  })
+
   it('test_login_refuses_a_credential_that_would_overwrite_an_existing_one', () => {
     // Anti-vacuity floor, and the refusal with the highest cost if it were dropped: the store holds
     // ONE credential, so a second `login` without `overwrite` would replace a working sign-in with
@@ -41,9 +55,20 @@ describe('signing in with an API key', () => {
     const before = readFileSync(authFilePath(home), 'utf8')
 
     expect(() => login('sk-ant-second', home)).toThrow(CredentialError)
+    expect(() => login('sk-ant-second', home)).toThrow(/Run logout first/)
     expect(readFileSync(authFilePath(home), 'utf8'), 'the stored credential was replaced').toBe(
       before,
     )
+  })
+
+  it('test_login_refuses_a_key_whose_prefix_contradicts_the_chosen_provider_and_keeps_the_stored_one', () => {
+    login('sk-ant-first', home)
+    const before = readFileSync(authFilePath(home), 'utf8')
+
+    expect(() => login('invalid', home, { provider: 'anthropic', overwrite: true })).toThrow(
+      CredentialError,
+    )
+    expect(readFileSync(authFilePath(home), 'utf8')).toBe(before)
   })
 
   it('test_login_writes_the_credential_and_reports_the_provider_it_inferred', () => {

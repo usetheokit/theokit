@@ -18,4 +18,11 @@ describe('hook commands with control characters are refused at parse time (#1909
   it('accepts a plain command', () => {
     expect(parseHooks([{ event: 'PreToolUse', command: 'npm test' }])[0]?.command).toBe('npm test')
   })
+
+  it('rejects a null timeout_ms instead of defaulting it, and defaults an omitted one', () => {
+    expect(() => parseHooks([{ event: 'PreToolUse', command: 'x', timeout_ms: null }])).toThrow(
+      HookError,
+    )
+    expect(parseHooks([{ event: 'PreToolUse', command: 'x' }])[0]?.timeout_ms).toBeGreaterThan(0)
+  })
 })

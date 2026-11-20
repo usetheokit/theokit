@@ -298,6 +298,7 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // question, answered on the TS AST at scan time, never at request time.
       'packages/theo/src/server/scan/detect-agent-policy.ts',
       'packages/theo/src/server/scan/module-loader.ts',
+      'packages/theo/src/server/scan/load-typescript.ts',
       // The memo the scanners above share (usetheokit/theokit#417). Node-only by nature rather
       // than by implementation: its key IS a filesystem fact — `mtimeMs` and `size` — so there is
       // no Web-Standards version of it to migrate to. It runs where its callers run: `theokit
@@ -361,6 +362,9 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // equivalent: it is Node-only by definition, the same boundary as the
       // CLI harness above.
       'packages/theo/src/server/agent/node-acp-transport.ts',
+      // ACP command resolution (#1800): node:fs (X_OK + isFile) and node:path (absolute PATH
+      // entries) to refuse a command before the transport spawns it; Node-only like the transport.
+      'packages/theo/src/server/agent/resolve-agent-command.ts',
       // Node-adapter scope (#122): decorator-controller dispatch. Scans
       // `<serverDir>/controllers/**` from disk (node:fs/node:path) and writes
       // a Web Response into a Node ServerResponse — the same dev-server /

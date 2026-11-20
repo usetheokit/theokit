@@ -56,9 +56,9 @@ function writeUnreadable(sessionId: string, ageDays = 0): string {
 }
 
 describe('an unreadable transcript is listed but never identified (theokit#668)', () => {
-  it('test_the_listing_reports_no_id_rather_than_inventing_one', () => {
+  it('test_the_listing_reports_no_id_rather_than_inventing_one', async () => {
     writeUnreadable('exec-truncated')
-    const [entry] = listSessions(CWD, root)
+    const [entry] = await listSessions(CWD, root)
 
     // It still appears: a session the GC cannot see is a session the GC never collects.
     expect(entry).toBeDefined()
@@ -68,19 +68,19 @@ describe('an unreadable transcript is listed but never identified (theokit#668)'
     expect(entry?.idSource).toBe('unavailable')
   })
 
-  it('test_a_readable_transcript_still_reports_the_id_from_the_record', () => {
+  it('test_a_readable_transcript_still_reports_the_id_from_the_record', async () => {
     // The positive control. Without it, `id === undefined` above could mean the reader broke.
     writeReadable('exec-real-id')
-    const [entry] = listSessions(CWD, root)
+    const [entry] = await listSessions(CWD, root)
     expect(entry?.id).toBe('exec-real-id')
     expect(entry?.idSource).toBe('transcript')
   })
 
-  it('test_protection_is_keyed_by_transcript_path_not_by_session_id', () => {
+  it('test_protection_is_keyed_by_transcript_path_not_by_session_id', async () => {
     // The mechanism, asserted directly: a map keyed by id cannot answer for a file whose id is
     // unknown, and no amount of care at the call site fixes that.
     const path = writeReadable('exec-only-one')
-    expect([...protectedTranscriptPaths(CWD, root).keys()]).toEqual([path])
+    expect([...(await protectedTranscriptPaths(CWD, root)).keys()]).toEqual([path])
   })
 
   it('test_the_registry_is_never_asked_to_remove_an_id_that_was_never_read', async () => {
@@ -90,13 +90,13 @@ describe('an unreadable transcript is listed but never identified (theokit#668)'
     writeUnreadable('exec-old-and-truncated', 400)
 
     const removeFromRegistry = vi.fn(() => true)
-    const plan = planTranscriptGC({ cwd: CWD, keepLast: 1, maxAgeDays: 30, root, now: NOW })
+    const plan = await planTranscriptGC({ cwd: CWD, keepLast: 1, maxAgeDays: 30, root, now: NOW })
     await runTranscriptGC(plan, { apply: true, removeFromRegistry })
 
     expect(removeFromRegistry).not.toHaveBeenCalled()
   })
 
-  it('test_a_protected_session_whose_transcript_is_unreadable_is_kept', () => {
+  it('test_a_protected_session_whose_transcript_is_unreadable_is_kept', async () => {
     // END-TO-END. Honest note on reach: this can only FAIL on 5.x. On 4.x the stem IS the id, so
     // the old id-keyed lookup matched by accident and the session was protected anyway. It is kept
     // here because it is the user-visible statement of the defect, and because it must not regress
@@ -104,7 +104,7 @@ describe('an unreadable transcript is listed but never identified (theokit#668)'
     writeReadable('exec-keeper')
     writeUnreadable('exec-protected', 400)
 
-    const plan = planTranscriptGC({
+    const plan = await planTranscriptGC({
       cwd: CWD,
       keepLast: 1,
       maxAgeDays: 30,
