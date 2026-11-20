@@ -32,6 +32,7 @@ import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk
 import { type SdkMessage } from './event-translator.js'
 import { withGuardrails } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
+import { dropRunRefusals, retainRun, takeRefusal } from './refusal-ledger.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
 import type { SdkRunUsage } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
@@ -614,24 +615,62 @@ function resolveCreateOptions(
 }
 
 /** SDK `permission_denied` `source` → who refused. `file_hook` is a hook; the rest are plugin vetoes. */
-function refusalFromRunEvent(ev: unknown): { callId: string; refusal: ToolRefusal } | undefined {
+function refusalFromRunEvent(ev: unknown): PendingRefusal | undefined {
   if (typeof ev !== 'object' || ev === null) return undefined
-  const e = ev as { type?: unknown; toolCallId?: unknown; source?: unknown; message?: unknown }
+  const e = ev as {
+    type?: unknown
+    toolCallId?: unknown
+    toolName?: unknown
+    runId?: unknown
+    source?: unknown
+    message?: unknown
+  }
   if (e.type !== 'permission_denied' || typeof e.toolCallId !== 'string' || e.toolCallId === '') {
     return undefined
   }
   const by = e.source === 'file_hook' ? 'hook' : 'plugin'
   return {
     callId: e.toolCallId,
-    refusal: { by, ...(typeof e.message === 'string' ? { reason: e.message } : {}) },
+    toolName: typeof e.toolName === 'string' ? e.toolName : '',
+    ...(typeof e.runId === 'string' ? { runId: e.runId } : {}),
+    ...(typeof e.message === 'string' ? { message: e.message } : {}),
+    ...(typeof e.source === 'string' ? { source: e.source } : {}),
+    fallback: { by, ...(typeof e.message === 'string' ? { reason: e.message } : {}) },
   }
+}
+
+/**
+ * A `permission_denied` the run reported. `fallback` is source-derived; a framework veto recorded in
+ * the refusal ledger for the same run and tool replaces it (see `resolveRefusal`).
+ */
+interface PendingRefusal {
+  callId: string
+  toolName: string
+  runId?: string
+  fallback: ToolRefusal
+  message?: string
+  /** The SDK's denial source: only a `plugin` denial can be a framework veto. */
+  source?: string
+  resolved?: ToolRefusal
+}
+
+/** Ledger entry for this denial when the framework made the veto, else the source-derived guess. */
+function resolveRefusal(p: PendingRefusal, handleRunId: string | undefined): ToolRefusal {
+  if (p.resolved !== undefined) return p.resolved
+  const runId = p.runId ?? handleRunId
+  p.resolved =
+    (runId !== undefined && p.message !== undefined && p.source === 'plugin'
+      ? takeRefusal(runId, p.toolName, p.message)
+      : undefined) ?? p.fallback
+  return p.resolved
 }
 
 function buildSendOptions(
   overrides: RuntimeOverrides,
   factoryOpts: { disableTools?: boolean } | undefined,
   compiled: CompiledAgentOptions,
-  refusals: Map<string, ToolRefusal>,
+  refusals: Map<string, PendingRefusal>,
+  handle: { id?: string },
 ): SendOptions {
   const sendOptions: SendOptions = {}
   if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
@@ -642,7 +681,16 @@ function buildSendOptions(
   const callerSink = overrides.onRunEvent
   sendOptions.onRunEvent = (ev) => {
     const found = refusalFromRunEvent(ev)
-    if (found !== undefined) refusals.set(found.callId, found.refusal)
+    if (found !== undefined) {
+      // Take the ledger entry now, at the denial event: a framework veto records its entry before
+      // the SDK reports the denial, so a later external denial of the same tool cannot claim it.
+      // The SDK event carries no runId, so the run handle's id is used; `streamTimeline` resolves
+      // anything seen before the handle was known.
+      // No retainRun here: `streamTimeline` owns the retention for the stream's lifetime, and a
+      // denial reported after the consumer closed the stream must not re-retain a dropped run.
+      if (handle.id !== undefined) resolveRefusal(found, handle.id)
+      refusals.set(found.callId, found)
+    }
     return callerSink?.(ev)
   }
   return sendOptions
@@ -662,46 +710,64 @@ async function* streamTimeline(
   runId: string,
   state: { sawError: boolean; lastEventType: string },
   outcome: TurnOutcome | undefined,
-  refusals: ReadonlyMap<string, ToolRefusal>,
+  refusals: ReadonlyMap<string, PendingRefusal>,
 ): AsyncGenerator<StreamEvent> {
   const run = (await sendPromise) as {
     events: () => AsyncGenerator<SdkTimelineEvent>
+    id?: unknown
+    runId?: unknown
   }
-  const seen = createToolSeen()
-  const emit = function* (events: StreamEvent[]): Generator<StreamEvent> {
-    for (const event of events) {
-      if (event.type === 'error') state.sawError = true
-      // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
-      if (event.type === 'done') continue
-      state.lastEventType = event.type
-      const callId = (event as { callId?: unknown }).callId
-      const refusal =
-        event.type === 'tool_result' && typeof callId === 'string'
-          ? refusals.get(callId)
-          : undefined
-      yield refusal !== undefined ? { ...event, refusal } : event
+  const handleId = [run.id, run.runId].find((v): v is string => typeof v === 'string')
+  if (handleId !== undefined) retainRun(handleId)
+  try {
+    yield* timelineBody()
+  } finally {
+    // Entries a run left unmatched must not outlive it.
+    if (handleId !== undefined) dropRunRefusals(handleId)
+    for (const p of refusals.values()) if (p.runId !== undefined) dropRunRefusals(p.runId)
+  }
+
+  async function* timelineBody(): AsyncGenerator<StreamEvent> {
+    const seen = createToolSeen()
+    const emit = function* (events: StreamEvent[]): Generator<StreamEvent> {
+      for (const event of events) {
+        if (event.type === 'error') state.sawError = true
+        // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
+        if (event.type === 'done') continue
+        state.lastEventType = event.type
+        const callId = (event as { callId?: unknown }).callId
+        const pending =
+          event.type === 'tool_result' && typeof callId === 'string'
+            ? refusals.get(callId)
+            : undefined
+        const refusal = pending !== undefined ? resolveRefusal(pending, handleId) : undefined
+        yield refusal !== undefined ? { ...event, refusal } : event
+      }
     }
-  }
-  for await (const ev of run.events()) {
-    const translated = translateTimelineEvent(ev, runId, seen)
-    // theokit#474 — recover the run's TYPED failure, but ONLY for a turn that failed before
-    // yielding anything (`lastEventType === ''`): the one case the retry seam can act on, and one
-    // where `wait()` is already resolved. Awaiting it for a NON-terminal error could hang.
-    if (
-      outcome !== undefined &&
-      state.lastEventType === '' &&
-      translated.some((e) => e.type === 'error')
-    ) {
-      outcome.failure = (
-        await (
-          (await sendPromise) as { wait: () => Promise<{ error?: { cause?: unknown } }> }
-        ).wait()
-      ).error?.cause
+    for await (const ev of run.events()) {
+      // Denials seen so far take their ledger entries in the order they were reported, before any
+      // later tool_result could consume one out of order.
+      for (const p of refusals.values()) resolveRefusal(p, handleId)
+      const translated = translateTimelineEvent(ev, runId, seen)
+      // theokit#474 — recover the run's TYPED failure, but ONLY for a turn that failed before
+      // yielding anything (`lastEventType === ''`): the one case the retry seam can act on, and one
+      // where `wait()` is already resolved. Awaiting it for a NON-terminal error could hang.
+      if (
+        outcome !== undefined &&
+        state.lastEventType === '' &&
+        translated.some((e) => e.type === 'error')
+      ) {
+        outcome.failure = (
+          await (
+            (await sendPromise) as { wait: () => Promise<{ error?: { cause?: unknown } }> }
+          ).wait()
+        ).error?.cause
+      }
+      yield* emit(translated)
     }
-    yield* emit(translated)
+    // #388 — a tool result held for a second report the run never sent still belongs on the wire.
+    yield* emit(flushPendingToolResults(seen))
   }
-  // #388 — a tool result held for a second report the run never sent still belongs on the wire.
-  yield* emit(flushPendingToolResults(seen))
 }
 
 interface StreamSdkAgentOpts {
@@ -771,9 +837,17 @@ async function* streamSdkAgent(
     // model order, and `textAlreadyStreamed` tells us which text is a repeat instead of leaving us
     // to compare content. `state` survives only to carry the two facts the tail block below needs.
     const state = { sawError: false, lastEventType: '' }
-    const refusals = new Map<string, ToolRefusal>()
-    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled, refusals)
+    const refusals = new Map<string, PendingRefusal>()
+    const handle: { id?: string } = {}
+    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled, refusals, handle)
     const sendPromise = agent.send(buildSendInput(message, overrides), sendOptions)
+    void Promise.resolve(sendPromise).then(
+      (run) => {
+        const r = run as { id?: unknown; runId?: unknown }
+        handle.id = [r.id, r.runId].find((v): v is string => typeof v === 'string')
+      },
+      () => undefined,
+    )
     // The generator is opened lazily so consumption starts only when the caller pulls — the loop is
     // detached inside the SDK (`setTimeout(() => void driveLoop())`), so the run handle is available
     // long before the turn finishes and the timeline streams live.
