@@ -1,74 +1,8 @@
-import type { PoolLike } from '../storage/storage-types.js'
-
 import type { JobBackend, JobEnqueueInput } from './job-backend.js'
-import type { JobRegistry } from './job-types.js'
-import type { Outbox } from './outbox.js'
+import type { QueueClient } from './job-types.js'
+import { createOutbox, type Outbox } from './outbox.js'
 
-/**
- * Options forwarded to `backend.enqueue` at outbox flush time.
- */
-export interface EnqueueOptions {
-  /** Optional idempotency key for at-most-once dispatch within TTL. */
-  idempotencyKey?: string
-  /** Optional delay before the job becomes available. */
-  delaySeconds?: number
-}
-
-/**
- * Typed queue client. `enqueue` returns `void` and buffers
- * to the per-request outbox. `enqueueWithId` is the log-correlation
- * variant that resolves to `{ jobId }` AFTER the outbox flushes.
- *
- * Type inference: `JobName extends keyof JobRegistry`. Users extend the
- * `JobRegistry` interface via module augmentation (see `job-types.ts`).
- * Without augmentation, all enqueue calls compile-error with "Type X is
- * not assignable to type never" — documented in EC-110 as a known onboarding
- * friction.
- */
-export interface QueueClient {
-  /** Buffer a job to the outbox. Returns void (fire-and-forget). */
-  enqueue<JobName extends keyof JobRegistry>(
-    name: JobName,
-    input: JobRegistry[JobName],
-    opts?: EnqueueOptions,
-  ): void
-  /**
-   * Buffer a job AND return a Promise that resolves with the jobId
-   * AFTER the outbox flushes (i.e., after the response commits). NOT a
-   * handle to await the job result — there is no result API.
-   */
-  enqueueWithId<JobName extends keyof JobRegistry>(
-    name: JobName,
-    input: JobRegistry[JobName],
-    opts?: EnqueueOptions,
-  ): Promise<{ jobId: string }>
-  /**
-   * Write the job NOW through `client`, a connection inside a transaction you opened, so it commits
-   * or rolls back with your own writes (usetheokit/theokit#1077). It bypasses the per-request
-   * outbox: the response status does not decide whether the job exists, your transaction does.
-   * Needs a backend with `enqueueInTransaction` (`PostgresJobBackend`, whose table must live in the
-   * database `client` is connected to); any other backend rejects with
-   * `TransactionalEnqueueUnsupportedError`.
-   */
-  enqueueInTransaction<JobName extends keyof JobRegistry>(
-    client: PoolLike,
-    name: JobName,
-    input: JobRegistry[JobName],
-    opts?: EnqueueOptions,
-  ): Promise<{ jobId: string }>
-  /**
-   * Remove the queued job `(name, idempotencyKey)` through `client`, inside your transaction, so
-   * the removal commits or rolls back with your writes (usetheokit/theokit#2118). Resolves `true`
-   * when a job was removed, `false` when none was: a job a worker leased (even with an expired
-   * lease) or that failed is left alone. A backend without `cancelInTransaction` rejects with
-   * `TransactionalCancelUnsupportedError`.
-   */
-  cancelInTransaction(
-    client: PoolLike,
-    name: keyof JobRegistry,
-    opts: { idempotencyKey: string },
-  ): Promise<boolean>
-}
+export type { EnqueueOptions, QueueClient } from './job-types.js'
 
 /** `ctx.queue.cancelInTransaction` was called with a `jobs.backend` that has no such method. */
 export class TransactionalCancelUnsupportedError extends Error {
@@ -211,5 +145,52 @@ export function createOutboxDispatcher(
       augmented.__rejectJobId?.(err)
       throw err
     }
+  }
+}
+
+/** A queue bound to one job or cron invocation: buffered jobs go out after the handler returns. */
+export interface HandlerQueue {
+  readonly queue: QueueClient
+  /** Dispatch what the handler buffered. Call after it returned. Per-entry failures are logged. */
+  flush(): Promise<void>
+  /** Drop what the handler buffered. Call after it threw. */
+  discard(): void
+}
+
+/**
+ * Create the `ctx.queue` of one job or cron invocation, with its own outbox so concurrent
+ * invocations never see each other's jobs. With no `backend`, every call rejects (or throws) with
+ * an error naming the missing `jobs.backend`, rather than buffering jobs nothing can dispatch.
+ */
+export function createHandlerQueue(
+  backend: JobBackend | undefined,
+  opts: CreateQueueClientOptions = {},
+): HandlerQueue {
+  if (backend === undefined) {
+    const fail = (): never => {
+      throw new Error(
+        'ctx.queue is unavailable: no jobs.backend is configured for this run. Set jobs.backend in theo.config.ts.',
+      )
+    }
+    return {
+      queue: {
+        enqueue: fail,
+        enqueueWithId: () => Promise.reject(new Error('ctx.queue is unavailable: no jobs.backend')),
+        enqueueInTransaction: () =>
+          Promise.reject(new Error('ctx.queue is unavailable: no jobs.backend')),
+        cancelInTransaction: () =>
+          Promise.reject(new Error('ctx.queue is unavailable: no jobs.backend')),
+      },
+      flush: () => Promise.resolve(),
+      discard: () => undefined,
+    }
+  }
+  const outbox = createOutbox()
+  return {
+    queue: createQueueClient(backend, outbox, opts),
+    flush: () => outbox.flush(createOutboxDispatcher(backend)),
+    discard: () => {
+      outbox.discard()
+    },
   }
 }

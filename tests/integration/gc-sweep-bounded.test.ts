@@ -48,7 +48,7 @@ function agedProject(count: number): { cwd: string; root: string; dir: string } 
 describe('runTranscriptGC over a real tree', () => {
   it('test_a_registry_that_never_answers_does_not_hang_the_sweep', async () => {
     const { cwd, root, dir } = agedProject(4)
-    const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
+    const plan = await planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
     expect(
       plan.candidates.length,
       'the fixture must give the sweep something to do',
@@ -77,7 +77,7 @@ describe('runTranscriptGC over a real tree', () => {
   it('test_a_working_registry_still_collects_and_leaves_the_newest', async () => {
     // The other direction, so the bound cannot be satisfied by refusing to do anything.
     const { cwd, root, dir } = agedProject(4)
-    const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
+    const plan = await planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
     const removedFromRegistry: string[] = []
 
     const result = await runTranscriptGC(plan, {
@@ -113,7 +113,7 @@ describe('runTranscriptGC over a real tree', () => {
     expect((direct as SessionRegistryRemoverError).sessionId).toBe('sX')
 
     const { cwd, root } = agedProject(3)
-    const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
+    const plan = await planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
     const result = await runTranscriptGC(plan, {
       apply: true,
       registryTimeoutMs: 15,
@@ -126,7 +126,7 @@ describe('runTranscriptGC over a real tree', () => {
     // The compatibility half that the rewritten test above used to stand in for. A remover that
     // returns a value rather than a thenable never reaches the race at all.
     const { cwd, root } = agedProject(3)
-    const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
+    const plan = await planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
     const result = await runTranscriptGC(plan, {
       apply: true,
       removeFromRegistry: () => undefined,
@@ -138,7 +138,7 @@ describe('runTranscriptGC over a real tree', () => {
   it('test_unbounded_is_still_reachable_but_must_be_asked_for', async () => {
     // The escape hatch, asserted so it is a decision rather than folklore. `Infinity` opts out.
     const { cwd, root } = agedProject(3)
-    const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
+    const plan = await planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
     let settled = false
     const result = await runTranscriptGC(plan, {
       apply: true,

@@ -1,7 +1,7 @@
 import { Agent, buildModelSelection } from '@theokit/agents'
 import type { CustomTool, HookHandlers } from '@theokit/agents'
 
-import { hooksForMember } from '../delegation/index.js'
+import { hooksForChild } from '@theokit/agents/hooks'
 // B-084's back-compat re-export of `REVIEWER_TOOLS` is gone. Its own comment set the sunset —
 // "delete once nothing outside this file reads it" — and the one reader was `composition.test.ts`,
 // which now imports the name from `composition/agent-spec.ts`, where it is declared and where
@@ -78,7 +78,7 @@ export function createReviewAgent(deps: ReviewFactoryDeps): ReviewDeps['createAg
     model: deps.config.model,
     reasoning_effort: deps.config.reasoning_effort ?? 'medium',
   })
-  const hooksPlugin = deps.hooks !== undefined ? hooksForMember(deps.hooks) : undefined
+  const hooksPlugin = deps.hooks !== undefined ? hooksForChild(deps.hooks) : undefined
 
   return async ({ agentId, systemPrompt }): Promise<ReviewAgentLike> => {
     const cred = await deps.credential(deps.config.model)
@@ -96,7 +96,7 @@ export function createReviewAgent(deps: ReviewFactoryDeps): ReviewDeps['createAg
       systemPrompt,
       tools: [...shape.tools],
       ...(hooksPlugin !== undefined
-        ? { plugins: [hooksPlugin] as unknown as Parameters<typeof Agent.create>[0]['plugins'] }
+        ? { plugins: [hooksPlugin] }
         : {}),
     })
 

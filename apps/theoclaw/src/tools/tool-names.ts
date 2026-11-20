@@ -39,6 +39,7 @@ export const CONTROL_TOOL_NAMES: readonly string[] = [
   'schedule_job',
   'list_scheduled_jobs',
   'cancel_scheduled_job',
+  'read_schedule_inbox',
   'delegate',
   'question',
   'task_declare',
