@@ -25,11 +25,11 @@ import {
 
 describe('bridge contract vs the real SDK', () => {
   it('a real Run is assignable to SdkTurnHandle', () => {
-    expectTypeOf<Run>().toExtend<SdkTurnHandle>()
+    expectTypeOf<Run>().toExtend<SdkTurnHandle<SDKMessage>>()
   })
 
   it('a real SDKAgent send is accepted by SdkAgentHandle', () => {
-    expectTypeOf<SDKAgent['send']>().toExtend<SdkAgentHandle['send']>()
+    expectTypeOf<SDKAgent['send']>().toExtend<SdkAgentHandle<SDKMessage>['send']>()
   })
 
   it('send takes structured messages and the SDK send options', () => {
@@ -110,7 +110,7 @@ describe('SdkRunAgent vs TheoClaw TurnAgent', () => {
 
   it('a complete real SDKAgent is assignable to SdkRunAgent and SdkAgentHandle', () => {
     expectTypeOf<SDKAgent>().toExtend<SdkRunAgent>()
-    expectTypeOf<SDKAgent>().toExtend<SdkAgentHandle>()
+    expectTypeOf<SDKAgent>().toExtend<SdkAgentHandle<SDKMessage>>()
     expectTypeOf<SDKAgent['generate']>().toExtend<NonNullable<SdkRunAgent['generate']>>()
     expectTypeOf<SDKAgent['dispose']>().toExtend<SdkRunAgent['dispose']>()
     expectTypeOf<SDKAgent['agentId']>().toExtend<SdkRunAgent['agentId']>()

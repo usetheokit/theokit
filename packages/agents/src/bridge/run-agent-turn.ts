@@ -24,7 +24,7 @@ export type AgentTurnOutcome =
   | { ok: false; code: 'turn_failed' | 'turn_cancelled'; reason: string }
 
 export interface RunAgentTurnOptions {
-  agent: SdkAgentHandle
+  agent: SdkAgentHandle<SdkMessage>
   message: string
   runId: string
   emit: (event: AgentStreamEvent) => void
@@ -82,7 +82,7 @@ async function microtasks(hops: number): Promise<void> {
 
 /** Cancel the run and close the iterator, waiting on neither past a few microtask turns. */
 async function cancelRun(
-  run: SdkTurnHandle | undefined,
+  run: SdkTurnHandle<SdkMessage> | undefined,
   iterator?: AsyncIterator<unknown>,
 ): Promise<AgentTurnOutcome> {
   const reasons: string[] = []
@@ -123,7 +123,8 @@ function raceAbort<T>(
 
 /** The translator ignores raw `error` messages; a streamed error fails the turn all the same. */
 function translateMessage(message: SdkMessage, runId: string): AgentStreamEvent[] {
-  if (message.type === 'error') {
+  const kind: string = message.type
+  if (kind === 'error') {
     const { code, message: text } = message as { code?: unknown; message?: unknown }
     return [
       {
@@ -134,11 +135,11 @@ function translateMessage(message: SdkMessage, runId: string): AgentStreamEvent[
       },
     ]
   }
-  return translateSdkEvent(message, runId) as unknown as AgentStreamEvent[]
+  return translateSdkEvent(message, runId)
 }
 
 interface TurnState {
-  run?: SdkTurnHandle
+  run?: SdkTurnHandle<SdkMessage>
   iterator?: AsyncIterator<unknown>
   /** False from the moment the turn is cancelled or ends: nothing is emitted after that. */
   live: boolean
@@ -206,7 +207,7 @@ async function runTurn(
       update as Parameters<typeof translateInteractionUpdate>[0],
     )) {
       if (event.type === 'text_delta') textStreamed = true
-      send(event as unknown as AgentStreamEvent)
+      send(event)
     }
   }
   const sending = options.agent.send(options.message, {
@@ -271,7 +272,7 @@ async function runTurn(
  * which the route answers with 502.
  */
 export function completeFromTurn(
-  withAgent: <R>(work: (agent: SdkAgentHandle) => Promise<R>) => Promise<R>,
+  withAgent: <R>(work: (agent: SdkAgentHandle<SdkMessage>) => Promise<R>) => Promise<R>,
 ): OpenAICompatibleRoutesOptions['complete'] {
   return async (
     request: OpenAIChatRequest,

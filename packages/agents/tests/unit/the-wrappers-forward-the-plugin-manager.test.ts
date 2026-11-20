@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { withGuardrails, withStepCeiling } from '../../src/bridge/handle-wrappers.js'
+import type { SdkMessage } from '../../src/bridge/event-translator.js'
 import type { SdkAgentHandle } from '../../src/bridge/sdk-adapter.js'
 import type { Guardrail } from '../../src/guardrails/index.js'
 
@@ -34,15 +35,15 @@ class HandleWithPluginManager {
 }
 
 /** The wrapped handle as ACP reads it: `pluginManager` is optional. */
-type ServedHandle = SdkAgentHandle & { pluginManager?: () => unknown }
+type ServedHandle = SdkAgentHandle<SdkMessage> & { pluginManager?: () => unknown }
 
-function handleWith(manager: object): SdkAgentHandle {
-  return new HandleWithPluginManager(manager) as unknown as SdkAgentHandle
+function handleWith(manager: object): SdkAgentHandle<SdkMessage> {
+  return new HandleWithPluginManager(manager) as unknown as SdkAgentHandle<SdkMessage>
 }
 
 const allowAll: Guardrail = { name: 'allow-all', checkOutput: () => ({ action: 'allow' }) }
 
-function pluginManagerOf(handle: SdkAgentHandle, wrapper: string): unknown {
+function pluginManagerOf(handle: SdkAgentHandle<SdkMessage>, wrapper: string): unknown {
   const served = handle as ServedHandle
   expect(typeof served.pluginManager, `${wrapper} dropped pluginManager`).toBe('function')
   return served.pluginManager?.()
@@ -66,7 +67,7 @@ describe('the wrappers forward the plugin manager', () => {
   })
 
   it('test_a_handle_without_a_plugin_manager_has_none_after_wrapping', () => {
-    const bare: SdkAgentHandle = {
+    const bare: SdkAgentHandle<SdkMessage> = {
       agentId: 'bare-agent',
       send: () => Promise.resolve({ wait: () => Promise.resolve({}) }),
       dispose: () => Promise.resolve(),
@@ -96,10 +97,14 @@ describe('the wrappers forward the plugin manager', () => {
 })
 
 describe('the wrappers keep the members they rebuild', () => {
-  function recordingHandle(): { handle: SdkAgentHandle; sent: unknown[]; disposed: () => number } {
+  function recordingHandle(): {
+    handle: SdkAgentHandle<SdkMessage>
+    sent: unknown[]
+    disposed: () => number
+  } {
     const sent: unknown[] = []
     let disposed = 0
-    const handle: SdkAgentHandle = {
+    const handle: SdkAgentHandle<SdkMessage> = {
       agentId: 'recording-agent',
       send: (_msg, opts) => {
         sent.push(opts)

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { withGuardrails } from '../../src/bridge/handle-wrappers.js'
+import type { SdkMessage } from '../../src/bridge/event-translator.js'
 import type { SdkAgentHandle } from '../../src/bridge/sdk-adapter.js'
 
 describe('a structured user message under guardrails', () => {
@@ -12,7 +13,11 @@ describe('a structured user message under guardrails', () => {
         cancel: () => Promise.resolve(),
       }),
     )
-    const handle: SdkAgentHandle = { agentId: 'a', dispose: () => Promise.resolve(), send }
+    const handle: SdkAgentHandle<SdkMessage> = {
+      agentId: 'a',
+      dispose: () => Promise.resolve(),
+      send,
+    }
     const guarded = withGuardrails(handle, [
       { name: 'redact', checkInput: (t) => ({ action: 'redact', text: t.replace('SECRET', 'X') }) },
     ])

@@ -4,12 +4,16 @@ import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 
+import type { SdkMessage } from '../bridge/event-translator.js'
 import type { SdkAgentHandle } from '../bridge/sdk-adapter.js'
 import * as entry from '../control-entry.js'
 import { attachControlSocket } from './control-socket.js'
 import { createSessionStore } from './session-store.js'
 
-function fakeAgent(hold: boolean): { agent: SdkAgentHandle; cancel: ReturnType<typeof vi.fn> } {
+function fakeAgent(hold: boolean): {
+  agent: SdkAgentHandle<SdkMessage>
+  cancel: ReturnType<typeof vi.fn>
+} {
   const cancel = vi.fn(async () => {})
   const agent = {
     agentId: 'a',
@@ -21,7 +25,7 @@ function fakeAgent(hold: boolean): { agent: SdkAgentHandle; cancel: ReturnType<t
         return { status: 'finished' }
       },
     }),
-  } as unknown as SdkAgentHandle
+  } as unknown as SdkAgentHandle<SdkMessage>
   return { agent, cancel }
 }
 

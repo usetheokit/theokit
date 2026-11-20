@@ -14,9 +14,18 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { translateInteractionUpdate, translateSdkEvent } from '../../src/bridge/event-translator.js'
+import {
+  type SdkMessage,
+  translateInteractionUpdate,
+  translateSdkEvent,
+} from '../../src/bridge/event-translator.js'
 
 const RUN = 'run-1'
+
+/** A message carrying fields the published `SDKMessage` does not declare (the cross-shape fallbacks). */
+function legacyShape(msg: SdkMessage, extra: Record<string, unknown>): SdkMessage {
+  return Object.assign({}, msg, extra)
+}
 
 describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
   it('test_assistant_text_from_message_content — reads msg.message.content, not msg.content', () => {
@@ -125,15 +134,17 @@ describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
     // #42: running status now emits a tool_call so the UI shows a running card with input args.
     expect(
       translateSdkEvent(
-        {
-          type: 'tool_call',
-          agent_id: 'a',
-          run_id: RUN,
-          call_id: 'c1',
-          name: 'glob',
-          status: 'running',
-          input: { p: '*' },
-        },
+        legacyShape(
+          {
+            type: 'tool_call',
+            agent_id: 'a',
+            run_id: RUN,
+            call_id: 'c1',
+            name: 'glob',
+            status: 'running',
+          },
+          { input: { p: '*' } },
+        ),
         RUN,
       ),
     ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'glob', input: { p: '*' } }])
@@ -164,16 +175,18 @@ describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
   it('test_running_tool_call_args_takes_precedence_over_legacy_fields — args wins (theokit#58)', () => {
     expect(
       translateSdkEvent(
-        {
-          type: 'tool_call',
-          agent_id: 'a',
-          run_id: RUN,
-          call_id: 'c1',
-          name: 'shell_exec',
-          status: 'running',
-          args: { a: 1 },
-          input: { b: 2 },
-        },
+        legacyShape(
+          {
+            type: 'tool_call',
+            agent_id: 'a',
+            run_id: RUN,
+            call_id: 'c1',
+            name: 'shell_exec',
+            status: 'running',
+            args: { a: 1 },
+          },
+          { input: { b: 2 } },
+        ),
         RUN,
       ),
     ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'shell_exec', input: { a: 1 } }])
@@ -471,11 +484,22 @@ describe('unknown events warn instead of vanishing (#141)', () => {
   })
 })
 
-describe('translateSdkEvent — typed input (#1802)', () => {
-  it('accepts a message typed only by `type` and a literal carrying extra fields', () => {
-    const bare: { readonly type: string } = { type: 'unknown_kind' }
-    expect(translateSdkEvent(bare, RUN)).toEqual([])
-    const literal = translateSdkEvent({ type: 'status', status: 'FINISHED', extra: 1 }, RUN)
-    expect(literal.every((e) => typeof e.type === 'string')).toBe(true)
+describe('translateSdkEvent: assistant content is validated, not assumed', () => {
+  it('skips malformed blocks and reads the well-formed ones', () => {
+    const malformed: SdkMessage = { type: 'assistant', message: { content: [] } }
+    const content: unknown[] = [
+      null,
+      'text',
+      7,
+      { type: 'text', text: 42 },
+      { type: 'text', text: 'ok' },
+      { type: 'tool_use' },
+    ]
+    // A runtime payload the declared type forbids: assigned past the type, as a real wire would.
+    Object.assign(malformed, { message: { role: 'assistant', content } })
+    expect(translateSdkEvent(malformed, RUN)).toEqual([
+      { type: 'text_delta', content: 'ok' },
+      { type: 'tool_call', callId: '', toolName: 'unknown', input: {} },
+    ])
   })
 })

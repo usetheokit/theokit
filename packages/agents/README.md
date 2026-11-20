@@ -107,17 +107,6 @@ process.exitCode = result.exitCode
 
 `AuthProvider` options: `requestTimeoutMs` aborts each refresh request after that long (default: no timeout), and `onTransientFailure: 'use-stored'` returns the stored credential when a transient failure outlasts the retries (default `'throw'`). An `invalid_grant` always throws.
 
-### Typed bridge signatures
-
-```ts
-translateSdkEvent(msg: SdkMessageLike, runId: string): AgentStreamEvent[] // SdkMessageLike = { readonly type: string }
-translateInteractionUpdate(update: InteractionUpdate): AgentStreamEvent[]
-SdkSendOptions // SendOptions: signal, onDelta, queueMode, ...
-SdkTurnHandle  // wait(): { usage.inputTokens, cost.amountUsd, error.code, ... }; cancel?(); stream?(): AsyncIterable<SdkMessageLike>
-```
-
-An `@theokit/sdk` `SDKMessage` feeds `translateSdkEvent` without a cast, and `Agent` is assignable to `SdkAgentHandle`.
-
 ## Stability tiers: experimental exports
 
 Every export without an `@experimental` tag on its own declaration is stable. `@theokit/agents/testing` is a utility subpath for your own tests (not a test-only seam), and its tier is stable except for the legacy snake_case mock stream listed below. The list below is checked against `public-surface-baseline.json` by `tests/unit/experimental-exports.test.ts`.

@@ -12,6 +12,7 @@ import {
   DelegationError,
   type DelegationResult,
 } from './delegation-types.js'
+import type { SdkMessage } from './event-translator.js'
 import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
 
 export interface DelegationPortFromAgentFactoryOptions {
@@ -32,11 +33,11 @@ function describeStreamedError(event: object): string {
 }
 
 /** Drain the run's stream and return a description of the first error event, if any. */
-async function streamedErrorOf(run: SdkTurnHandle): Promise<string | undefined> {
+async function streamedErrorOf(run: SdkTurnHandle<SdkMessage>): Promise<string | undefined> {
   if (run.stream === undefined) return undefined
   let streamed: string | undefined
   for await (const message of run.stream()) {
-    const event = message as { type?: unknown; status?: unknown; message?: unknown }
+    const event: { type?: unknown; status?: unknown; message?: unknown } = message
     if (event.type === 'error') streamed ??= describeStreamedError(message)
     // A guarded agent's stream ends a failed run with `{ type: 'status', status: 'ERROR', message }`.
     else if (event.type === 'status' && event.status === 'ERROR') {
@@ -46,7 +47,7 @@ async function streamedErrorOf(run: SdkTurnHandle): Promise<string | undefined> 
   return streamed
 }
 
-type Settled = Awaited<ReturnType<SdkTurnHandle['wait']>> & {
+type Settled = Awaited<ReturnType<SdkTurnHandle<SdkMessage>['wait']>> & {
   readonly streamed: string | undefined
 }
 
@@ -55,7 +56,10 @@ type Settled = Awaited<ReturnType<SdkTurnHandle['wait']>> & {
  * cancellation rejects rather than being lost, and its handler is attached at once so it is never an
  * unhandled rejection.
  */
-async function untilSettled(run: SdkTurnHandle, signal: AbortSignal | undefined): Promise<Settled> {
+async function untilSettled(
+  run: SdkTurnHandle<SdkMessage>,
+  signal: AbortSignal | undefined,
+): Promise<Settled> {
   let cancelling: Promise<{ readonly failure: unknown } | undefined> | undefined
   const cancel = (): void => {
     cancelling ??= (async () => {
@@ -106,7 +110,7 @@ function passesThrough(error: unknown): boolean {
 }
 
 async function runOnce(
-  create: () => Promise<SdkAgentHandle>,
+  create: () => Promise<SdkAgentHandle<SdkMessage>>,
   task: string,
   signal: AbortSignal | undefined,
   sendOptions: SdkSendOptions | undefined,
@@ -154,7 +158,7 @@ async function runOnce(
  * aggregates carrying a guardrail error), which pass through unchanged.
  */
 export function delegationPortFromAgentFactory(
-  create: () => Promise<SdkAgentHandle>,
+  create: () => Promise<SdkAgentHandle<SdkMessage>>,
   options?: DelegationPortFromAgentFactoryOptions,
 ): DelegationPort {
   return {
