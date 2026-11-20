@@ -365,6 +365,10 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // ACP command resolution (#1800): node:fs (X_OK + isFile) and node:path (absolute PATH
       // entries) to refuse a command before the transport spawns it; Node-only like the transport.
       'packages/theo/src/server/agent/resolve-agent-command.ts',
+      // Durable HITL approvals (#1960): the file store keeps one JSON record per pending approval
+      // with node:fs/promises and node:path. A store is pluggable (`ApprovalStore`), so a runtime
+      // without a filesystem passes its own; this file is the Node implementation, a leaf.
+      'packages/theo/src/server/agent/approval-store.ts',
       // Node-adapter scope (#122): decorator-controller dispatch. Scans
       // `<serverDir>/controllers/**` from disk (node:fs/node:path) and writes
       // a Web Response into a Node ServerResponse — the same dev-server /
