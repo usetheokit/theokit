@@ -85,7 +85,15 @@ function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): 
   const own = new Map(registryIds.map((id) => [transcriptPath(planned.root, planned.cwd, id), id]))
   return {
     ...planned,
-    candidates: planned.candidates.map((c) => ({ ...c, id: own.get(c.transcript) })),
+    candidates: planned.candidates.map((c) => ({
+      ...c,
+      // A transcript sitting at its own id's path is not a fork: the id it names is its own.
+      id:
+        own.get(c.transcript) ??
+        (c.id !== undefined && transcriptPath(planned.root, planned.cwd, c.id) === c.transcript
+          ? c.id
+          : undefined),
+    })),
   }
 }
 
