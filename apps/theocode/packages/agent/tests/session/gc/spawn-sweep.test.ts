@@ -16,14 +16,26 @@
  * second implementation of the delete path. The parent still owns the DECISION (enabled, interval,
  * first-run-is-a-dry-run); the child only does the work.
  */
+import { EventEmitter } from 'node:events'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
-import { buildSweepCommand } from '../../../src/session/gc/spawn-sweep.js'
+import {
+  buildSweepCommand,
+  startSessionSweepInBackground,
+} from '../../../src/session/gc/sweep-wiring.js'
 
 describe('buildSweepCommand', () => {
   it('test_it_runs_the_command_that_already_exists', () => {
     // Not a second delete path. The flags are the ones `args.ts` already parses.
-    const cmd = buildSweepCommand({ apply: true, execPath: '/usr/bin/node', script: '/app/cli.mjs' })
+    const cmd = buildSweepCommand({
+      apply: true,
+      execPath: '/usr/bin/node',
+      script: '/app/cli.mjs',
+    })
 
     expect(cmd.command).toBe('/usr/bin/node')
     expect(cmd.args).toEqual(['/app/cli.mjs', 'sessions', 'gc', '--all-projects', '--apply'])
@@ -63,51 +75,45 @@ describe('buildSweepCommand', () => {
 })
 
 /**
- * B-144 — the child is bounded, because an unbounded subprocess is what this whole release was about.
- *
- * B-128 fixed a timeout the operator could not reach. B-137 fixed a `git` call that had no timeout at
- * all, on the CLI's first line. Then B-142 moved the sweep into a child process and gave it **no
- * bound whatsoever** — the same defect, introduced by the fix for a different one.
- *
- * The failure mode is specific and it accumulates. A sweep that hangs — a network-backed tree, a
- * `stat` that blocks on a dead mount — leaves a child running for as long as the TUI does. The next
- * day the stamp is due again and another is spawned. Nothing ever reaps them.
- *
- * The bound is deliberately generous: 37.1 s was MEASURED on a 13 269-project tree, so a limit near
- * that would kill legitimate sweeps on a large disk. Ten minutes is an order of magnitude past the
- * worst measurement and still finite, which is the only property that matters here.
+ * The child's bound, asserted through the spawn seam the framework's `scheduleSessionSweep` takes.
+ * (The framework also tests it in `packages/agents/tests/unit/sweep-schedule.test.ts`; these keep
+ * the TheoCode-level guarantee that the wiring does not weaken it.)
  */
 describe('the child process is bounded', () => {
-  it('test_it_carries_a_timeout', () => {
-    const cmd = buildSweepCommand({ apply: true, execPath: 'node', script: 'cli.mjs' })
+  const spawned = (): { options: Record<string, unknown> } => {
+    let options: Record<string, unknown> = {}
+    const spawn = ((_cmd: string, _args: readonly string[], opts: Record<string, unknown>) => {
+      options = opts
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; unref: () => void }
+      child.stdout = Object.assign(new EventEmitter(), { unref: () => {} })
+      child.unref = () => {}
+      return child
+    }) as unknown as NonNullable<Parameters<typeof startSessionSweepInBackground>[0]['spawn']>
+    const base = mkdtempSync(join(tmpdir(), 'theocode-spawnopts-'))
+    startSessionSweepInBackground({
+      enabled: true,
+      onReport: () => {},
+      projectsRootOverride: join(base, 'projects'),
+      spawn,
+    })
+    return { options }
+  }
 
-    expect(cmd.options.timeout, 'the spawned sweep has no bound at all').toBeGreaterThan(0)
+  it('test_it_carries_a_timeout', () => {
+    expect(spawned().options.timeout, 'the spawned sweep has no bound at all').toBeGreaterThan(0)
   })
 
   it('test_the_bound_is_far_past_the_worst_measured_sweep', () => {
-    // 37.1 s cold on the tree this repository cites. A bound near that kills real sweeps on a large
-    // disk, which is worse than the hang it prevents — the collector would simply stop working.
-    const cmd = buildSweepCommand({ apply: true, execPath: 'node', script: 'cli.mjs' })
-
-    expect(cmd.options.timeout).toBeGreaterThan(60_000)
+    expect(spawned().options.timeout).toBeGreaterThan(60_000)
   })
 
   it('test_it_names_the_signal_rather_than_leaving_it_to_the_default', () => {
-    // A sweep killed mid-`unlink` must be able to finish the syscall it is in. SIGTERM is the one a
-    // process can handle; SIGKILL cannot be caught and is not what a delete path should meet first.
-    const cmd = buildSweepCommand({ apply: true, execPath: 'node', script: 'cli.mjs' })
-
-    expect(cmd.options.killSignal).toBe('SIGTERM')
+    expect(spawned().options.killSignal).toBe('SIGTERM')
   })
 
   it('test_the_child_inherits_no_stream_it_could_write_over_the_frame_with', () => {
-    // The TUI owns the screen, so nothing is INHERITED. stdout is piped — captured, not displayed —
-    // because ignoring it threw away the counts two DoDs require (B-150); stderr stays ignored.
-    const cmd = buildSweepCommand({ apply: true, execPath: 'node', script: 'cli.mjs' })
-
-    expect(cmd.options.stdio).toEqual(['ignore', 'pipe', 'ignore'])
-    expect(cmd.options.stdio, 'a stream is inherited and would land on the frame').not.toContain(
-      'inherit',
-    )
+    const { stdio } = spawned().options
+    expect(stdio).toEqual(['ignore', 'pipe', 'ignore'])
+    expect(stdio, 'a stream is inherited and would land on the frame').not.toContain('inherit')
   })
 })
