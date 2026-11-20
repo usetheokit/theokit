@@ -109,6 +109,7 @@ const TYPE_VERDICTS: Record<string, Verdict> = {
   JudgeResult: { verdict: 'in', via: STAR },
   MemoryAdapterErrorCode: { verdict: 'in', via: STAR },
   Verdict: { verdict: 'in', via: STAR },
+  ModelFallbackAttempt: { verdict: 'in', via: STAR },
 }
 
 interface Surface {
