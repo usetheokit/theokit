@@ -2,10 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFile, execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
+import * as nodeModule from 'node:module'
 import { promisify } from 'node:util'
 import { join, resolve } from 'node:path'
 
 const execFileAsync = promisify(execFile)
+/**
+ * The runner stands in for Deno's import map with synchronous module hooks (`registerHooks`, Node 22.15+).
+ * On the 22.12 floor the harness cannot run, so these cases run on the newer legs only.
+ */
+const describeWithHooks = describe.skipIf(!('registerHooks' in nodeModule))
 const RUNNER = `
 import { registerHooks } from 'node:module'
 import { pathToFileURL } from 'node:url'
@@ -178,7 +184,7 @@ async function loadBuiltEntry(handlerBody: string): Promise<() => Promise<void>>
   }
 }
 
-describe('generated entry loaded through the build wiring', () => {
+describeWithHooks('generated entry loaded through the build wiring', () => {
   const stubPackage = (name: string): void => {
     write(
       `node_modules/${name}/package.json`,
@@ -282,7 +288,7 @@ describe('renderDenoConfig', () => {
   })
 })
 
-describe('generated Deno cron entry', () => {
+describeWithHooks('generated Deno cron entry', () => {
   it('enqueues buffered jobs on the configured backend after the handler succeeds', async () => {
     const run = await loadBuiltEntry(`ctx.queue.enqueue('a', { n: 1 }); ctx.queue.enqueue('b', {})`)
     await run()
