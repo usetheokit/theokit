@@ -28,8 +28,7 @@ async function answer(message: string, context: LocalCommandContext): Promise<st
     case 'think': {
       const level = arg.toLowerCase()
       if (context.think === undefined) return undefined
-      if (!(THINKING_LEVELS as readonly string[]).includes(level))
-        return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
+      if (!(THINKING_LEVELS as readonly string[]).includes(level)) return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
       context.think(level as ThinkingLevel)
       return `Thinking level set to ${level}.`
     }
@@ -40,15 +39,10 @@ async function answer(message: string, context: LocalCommandContext): Promise<st
       return arg === '' ? STEER_USAGE_REPLY : context.steer(arg)
     case 'stop': {
       const stopped = context.stop()
-      return stopped === 0
-        ? 'Nothing is running to stop.'
-        : `Stopped ${String(stopped)} running turn${stopped === 1 ? '' : 's'}.`
+      return stopped === 0 ? 'Nothing is running to stop.' : `Stopped ${String(stopped)} running turn${stopped === 1 ? '' : 's'}.`
     }
     default:
-      return infoReply(message, context.model, 'webchat', [
-        `Thinking: ${context.thinking?.() ?? 'default'}`,
-        `Running turns: ${String(context.running())}`,
-      ])
+      return infoReply(message, context.model, 'webchat', [`Thinking: ${context.thinking?.() ?? 'default'}`, `Running turns: ${String(context.running())}`])
   }
 }
 

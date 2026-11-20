@@ -10,12 +10,7 @@ import { formatUsageLine, type TurnUsage } from '../usage/turn-usage.js'
  * client and writes it, unmasked, to the server's stderr.
  */
 function turnFailed(reason: string): AgentStreamEvent {
-  return {
-    type: 'error',
-    code: 'turn_failed',
-    message: `the turn failed: ${reason}`,
-    retryable: false,
-  }
+  return { type: 'error', code: 'turn_failed', message: `the turn failed: ${reason}`, retryable: false }
 }
 
 const DONE: IteratorReturnResult<undefined> = { done: true, value: undefined }
@@ -93,19 +88,12 @@ function startTurn(
 
   void Promise.resolve()
     .then(() => runTurn(message, push, controller.signal))
-    .catch(
-      (error: unknown): TurnOutcome => ({
-        ok: false,
-        code: 'turn_failed',
-        reason: describeError(error),
-      }),
-    )
+    .catch((error: unknown): TurnOutcome => ({ ok: false, code: 'turn_failed', reason: describeError(error) }))
     .then((outcome) => {
       const usage = outcome.ok ? outcome.usage : undefined
       if (usage !== undefined) write(formatUsageLine('webchat', usage))
       release(usage)
-      if (!outcome.ok && outcome.code === 'turn_failed' && !sawError)
-        push(turnFailed(outcome.reason))
+      if (!outcome.ok && outcome.code === 'turn_failed' && !sawError) push(turnFailed(outcome.reason))
       close()
     })
 
@@ -138,7 +126,5 @@ export function createWebchatRun(
   signal: AbortSignal,
   write: (line: string) => void = () => undefined,
 ): (message: string, sessionId: string) => AsyncIterable<StreamEvent> {
-  return (message, chatId) => ({
-    [Symbol.asyncIterator]: () => startTurn(turnFor(chatId), message, signal, write),
-  })
+  return (message, chatId) => ({ [Symbol.asyncIterator]: () => startTurn(turnFor(chatId), message, signal, write) })
 }

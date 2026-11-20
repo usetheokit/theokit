@@ -135,13 +135,8 @@ function guardTurn(
       let streamedError = false
       if (turn.stream !== undefined) {
         for await (const event of turn.stream()) {
-          if (
-            typeof event === 'object' &&
-            event !== null &&
-            (event as { type?: unknown }).type === 'error'
-          ) {
-            streamedError = true
-          }
+          const kind: string = event.type
+          if (kind === 'error') streamedError = true
         }
       }
       if (streamedError) yield errorStatus('run error')
@@ -215,7 +210,8 @@ export function withTypedStream(handle: SdkAgentHandle<SdkMessage>): SdkAgentHan
                       message: out.error?.message ?? 'run error',
                       retryable: false,
                     }
-                  } else {
+                  } else if (out.status !== 'cancelled') {
+                    // A cancelled run ends without a terminal event; its outcome is the caller's.
                     yield doneFromOutcome(
                       {
                         type: 'done',

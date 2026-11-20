@@ -77,4 +77,19 @@ describe('withTypedStream', () => {
     }
     expect((await withTypedStream(bare).send('go')).stream).toBeUndefined()
   })
+
+  it('a cancelled run with no terminal message ends its stream without a done event', async () => {
+    const cancelled: SdkAgentHandle<SdkMessage> = {
+      ...served(),
+      send: () =>
+        Promise.resolve({
+          wait: () => Promise.resolve({ status: 'cancelled' }),
+          stream: async function* () {
+            yield MESSAGES[0]!
+          },
+        }),
+    }
+    const events = await collect(streamOf(await withTypedStream(cancelled).send('go')))
+    expect(events).toEqual([{ type: 'text_delta', content: 'hi' }])
+  })
 })
