@@ -45,7 +45,8 @@ const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [
 async function readMessages(session: ChatSession): Promise<Message[]> {
   const stored = await readFullHistory({
     cwd: session.workspace,
-    transcript: session.transcript,
+    sessionId: session.id,
+    sessionDir: join(session.workspace, '.theoclaw'),
   })
   // The reader's `text` also renders tool calls and results; the CLI shows only what was said.
   return stored
