@@ -58,17 +58,17 @@ describe('INVARIANT 1 — a floor violation is REFUSED, never silently normalise
     ['keepLast negative', -1, 30],
     ['maxAgeDays', 2, 0],
     ['maxAgeDays negative', 2, -5],
-  ])('test_%s_below_the_floor_throws_instead_of_clamping', (_label, keepLast, maxAgeDays) => {
+  ])('test_%s_below_the_floor_throws_instead_of_clamping', async (_label, keepLast, maxAgeDays) => {
     // Clamping is the tempting behaviour and the dangerous one: an operator who typed `--keep-last 0`
     // meaning "keep none" gets silently given a different policy than the one they asked for, and
     // never learns which. Refusing tells them.
-    expect(() => plan(keepLast, maxAgeDays)).toThrow(GCFloorError)
+    await expect(plan(keepLast, maxAgeDays)).rejects.toThrow(GCFloorError)
   })
 
   it('test_the_refusal_names_the_field_and_the_floor', async () => {
     // A refusal that does not say which knob is wrong sends the operator guessing between two.
     try {
-      plan(0, 30)
+      await plan(0, 30)
       expect.unreachable('a keepLast of 0 was accepted')
     } catch (error) {
       expect(error).toBeInstanceOf(GCFloorError)
@@ -80,7 +80,7 @@ describe('INVARIANT 1 — a floor violation is REFUSED, never silently normalise
   it('test_a_value_AT_the_floor_is_accepted', async () => {
     // Counter-proof. A guard that refuses the boundary as well would be off by one, and every test
     // above would still pass.
-    expect(() => plan(1, 1)).not.toThrow()
+    await expect(plan(1, 1)).resolves.toBeDefined()
   })
 })
 
@@ -100,7 +100,7 @@ describe('INVARIANT 2 — no mtime means NEVER collect', () => {
     // every age comparison against it is `false`, and the file would be collected by accident.
     writeTranscriptFile('a', 90)
     writeTranscriptFile('b', 0)
-    for (const candidate of plan(1, 30).candidates) {
+    for (const candidate of (await plan(1, 30)).candidates) {
       expect(Number.isNaN(candidate.modifiedAt.getTime())).toBe(false)
     }
   })
@@ -112,7 +112,7 @@ describe('INVARIANT 3 — an active writer lease protects its transcript', () =>
     writeTranscriptFile('recent', 0)
     const lease = await acquireSessionWriter(path)
     try {
-      const result = plan(1, 30)
+      const result = await plan(1, 30)
       expect(result.candidates.map((c) => c.id)).not.toContain('live')
       expect(result.kept.find((k) => k.id === 'live')?.reason).toMatch(/lease|writer/i)
     } finally {
@@ -127,7 +127,7 @@ describe('INVARIANT 4 — the apply phase re-checks between plan and apply', () 
     // A collector that trusted its own plan would delete the session the user just returned to.
     writeTranscriptFile('doomed', 400)
     writeTranscriptFile('recent', 0)
-    const computed = plan(1, 30)
+    const computed = await plan(1, 30)
     expect(computed.candidates.map((c) => c.id)).toContain('doomed')
 
     await persistSessionId(CWD, 'doomed', root) // the window: it became live after planning
@@ -140,7 +140,7 @@ describe('INVARIANT 4 — the apply phase re-checks between plan and apply', () 
   it('test_a_session_that_acquires_a_LEASE_after_planning_is_not_deleted', async () => {
     const path = writeTranscriptFile('doomed', 400)
     writeTranscriptFile('recent', 0)
-    const computed = plan(1, 30)
+    const computed = await plan(1, 30)
     expect(computed.candidates.map((c) => c.id)).toContain('doomed')
 
     const lease = await acquireSessionWriter(path)
@@ -158,7 +158,7 @@ describe('INVARIANT 4 — the apply phase re-checks between plan and apply', () 
     // nothing, which is a broken GC that looks like a safe one.
     writeTranscriptFile('doomed', 400)
     writeTranscriptFile('recent', 0)
-    const result = await runTranscriptGC(plan(1, 30), { apply: true })
+    const result = await runTranscriptGC(await plan(1, 30), { apply: true })
     expect(result.removed).toContain('doomed')
     expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(false)
   })
@@ -168,7 +168,7 @@ describe('dry run is the default shape', () => {
   it('test_without_apply_nothing_is_removed_and_the_plan_is_reported', async () => {
     writeTranscriptFile('doomed', 400)
     writeTranscriptFile('recent', 0)
-    const computed = plan(1, 30)
+    const computed = await plan(1, 30)
     const result = await runTranscriptGC(computed, { apply: false })
     expect(result.dryRun).toBe(true)
     expect(result.removed).toEqual(['doomed'])
@@ -181,7 +181,7 @@ describe('retention policy — keepLast and maxAgeDays together', () => {
     writeTranscriptFile('old-1', 400)
     writeTranscriptFile('old-2', 300)
     writeTranscriptFile('old-3', 200)
-    const result = plan(2, 30)
+    const result = await plan(2, 30)
     const kept = result.kept.map((k) => k.id)
     expect(kept).toContain('old-3')
     expect(kept).toContain('old-2')
@@ -194,7 +194,7 @@ describe('retention policy — keepLast and maxAgeDays together', () => {
     writeTranscriptFile('a', 1)
     writeTranscriptFile('b', 2)
     writeTranscriptFile('c', 3)
-    expect(plan(1, 30).candidates).toEqual([])
+    expect((await plan(1, 30)).candidates).toEqual([])
   })
 })
 
@@ -204,7 +204,7 @@ describe('errors accumulate per candidate, and ENOENT is success', () => {
     // interrupted GC look broken.
     writeTranscriptFile('doomed', 400)
     writeTranscriptFile('recent', 0)
-    const computed = plan(1, 30)
+    const computed = await plan(1, 30)
     rmSync(transcriptPath(root, CWD, 'doomed')) // vanished between plan and apply
     const result = await runTranscriptGC(computed, { apply: true })
     expect(result.errors).toEqual([])
@@ -217,7 +217,7 @@ describe('errors accumulate per candidate, and ENOENT is success', () => {
     writeTranscriptFile('doomed-a', 400)
     writeTranscriptFile('doomed-b', 400)
     writeTranscriptFile('recent', 0)
-    const computed = plan(1, 30)
+    const computed = await plan(1, 30)
     // Replace one candidate's path with a directory — `rmSync` on it without `recursive` fails.
     const blocked = transcriptPath(root, CWD, 'doomed-a')
     rmSync(blocked)
@@ -240,7 +240,7 @@ describe('the concurrency proof the milestone named as its own mitigation', () =
     // the apply runs. Everything the collector knew is now stale.
     const path = writeTranscriptFile('doomed', 400)
     writeTranscriptFile('recent', 0)
-    const computed = plan(1, 30)
+    const computed = await plan(1, 30)
     expect(computed.candidates.map((c) => c.id)).toContain('doomed')
 
     const lease = await acquireSessionWriter(path)
@@ -261,7 +261,7 @@ describe('the concurrency proof the milestone named as its own mitigation', () =
     const a = writeTranscriptFile('old-a', 400)
     const b = writeTranscriptFile('old-b', 400)
     writeTranscriptFile('recent', 0)
-    await runTranscriptGC(plan(1, 30), { apply: false })
+    await runTranscriptGC(await plan(1, 30), { apply: false })
     expect(existsSync(a)).toBe(true)
     expect(existsSync(b)).toBe(true)
   })

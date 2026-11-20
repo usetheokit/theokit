@@ -1,7 +1,6 @@
 import process from 'node:process'
-import { DEFAULT_WATCHDOG_MS } from '@theokit/agents/commands'
+import { DEFAULT_WATCHDOG_MS, exitAfterDrain } from '@theokit/agents/commands'
 import { createGoalCancellation } from '../runtime/index.js'
-import { createDrainedProcessOutput } from '../runtime/index.js'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { resolveCompositionContext, routeRequestedModel } from '../run-composition.js'
@@ -155,11 +154,11 @@ export async function goalCommand(args: ExecGoal, shutdown: Shutdown): Promise<v
     } finally {
       cancellation.shutdown()
     }
-    createDrainedProcessOutput(DEFAULT_WATCHDOG_MS)(finalStatus === 'completed' ? 0 : 1)
+    exitAfterDrain(finalStatus === 'completed' ? 0 : 1)
     return
   } catch (err) {
     process.stderr.write(`ERROR: ${err instanceof Error ? err.message : String(err)}\n`)
-    createDrainedProcessOutput(DEFAULT_WATCHDOG_MS)(1)
+    exitAfterDrain(1)
     return
   }
 }

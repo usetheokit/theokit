@@ -17,6 +17,8 @@ import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync }
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { declaresActiveTest } from '../../../scripts/lib/parity-ledger.mjs'
+
 export const INVENTORY_PATH = 'docs/wiki/references/openclaw-capability-inventory.md'
 export const HERMES_PATH = 'docs/wiki/product/objectives.md'
 export const LEDGER_PATH = 'apps/theoclaw/parity/ledger.json'
@@ -128,66 +130,11 @@ function isIsoDate(value) {
 /** EC-5: a blank test name proves nothing, so the file is not read for it. */
 const hasTestName = (check) => typeof check.test === 'string' && check.test.trim() !== ''
 
-/** Index just past the comment opening at `i`: the end of the line, or past the closing star-slash. */
-function commentEnd(text, i) {
-  const end = text[i + 1] === '/' ? text.indexOf('\n', i) : text.indexOf('*/', i + 2) + 2
-  return end > i ? end : text.length
-}
-
-/** True when the `(` at `i` opens a `.skip(...)` or `.todo(...)` call. */
-const opensNotRunCall = (text, i) => /\.\s*(?:skip|todo)\s*$/.test(text.slice(Math.max(0, i - 12), i))
-
 /**
- * `text` with every comment, and every argument list of a `.skip(...)` or `.todo(...)` call, turned
- * into spaces; newlines are kept. Strings are skipped whole, so a quote, a paren or a slash inside
- * one is not code. A regex literal holding a quote can still desynchronise this scan: the module
- * stays dependency-free (NFR-004), so it reads a test file the way a tokenizer would, not a parser.
+ * True when `text` declares a test titled exactly `name`, outside a comment and outside a `.skip` or
+ * `.todo` call: the shared scanner.
  */
-function runnableCode(text) {
-  const out = [...text]
-  const blank = (from, to) => {
-    for (let j = from; j < to; j++) if (out[j] !== '\n') out[j] = ' '
-  }
-  let depth = 0
-  let notRunAt = -1
-  let notRunDepth = -1
-  let i = 0
-  while (i < text.length) {
-    const char = text[i]
-    let next = i + 1
-    if (char === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) {
-      next = commentEnd(text, i)
-      blank(i, next)
-    } else if (char === "'" || char === '"' || char === '`') {
-      next = stringEnd(text, i)
-    } else if (char === '(') {
-      if (notRunAt < 0 && opensNotRunCall(text, i)) [notRunAt, notRunDepth] = [i, depth]
-      depth++
-    } else if (char === ')' && --depth === notRunDepth) {
-      blank(notRunAt, next)
-      notRunAt = -1
-    }
-    i = next
-  }
-  return out.join('')
-}
-
-/** Index just past the string literal whose opening quote is at `i`; a backslash escapes one character. */
-function stringEnd(text, i) {
-  let j = i + 1
-  while (j < text.length && text[j] !== text[i]) j += text[j] === '\\' ? 2 : 1
-  return j + 1
-}
-
-/**
- * True when `text` declares a test titled exactly `name`: `it(` or `test(` with that literal string
- * as its first argument, outside a comment and outside a `.skip` or `.todo` call. Matching any
- * quoted occurrence accepted a skipped test, a todo, a comment and a constant (code review #65).
- */
-function holdsQuotedTitle(text, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(?<![\\w$.])(?:it|test)\\s*\\(\\s*(['"\`])${escaped}\\1`).test(runnableCode(text))
-}
+const holdsQuotedTitle = declaresActiveTest
 
 /**
  * The test files `apps/theoclaw/vitest.config.ts` collects. A shipped row's proof must be one of them:

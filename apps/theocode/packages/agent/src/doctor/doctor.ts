@@ -26,7 +26,7 @@
  */
 import type { SettingsFileReport } from '../config/settings-load.js'
 import { refusalNotice } from '../hooks/foreign-hook-gate.js'
-import type { Check } from '@theokit/agents/doctor'
+import { checks, type Check } from '@theokit/agents/doctor'
 
 /**
  * What is known about the stored credential. Presence only — never the value, not even truncated,
@@ -44,32 +44,21 @@ export type CredentialState = 'present' | 'absent' | 'unreadable' | 'expired'
 
 export { diagnose, renderDiagnosis } from '@theokit/agents/doctor'
 
-/** The credential row, one branch per state — no state collapses into another. */
+/**
+ * The credential row. The status of each state comes from the framework's `checks.credential`; the
+ * wording — which names `/login` — is this product's, one branch per state.
+ */
+const CREDENTIAL_DETAIL: Record<CredentialState, string> = {
+  present: 'present',
+  expired:
+    'EXPIRED — the stored token is past its expiry. A refresh may still renew it on the ' +
+    'next turn; if it does not, run `theocode` and use /login.',
+  absent: 'absent — run `theocode` and use /login, or set the provider key',
+  unreadable: 'unreadable — the credential file exists and could not be parsed',
+}
+
 function credentialCheck(state: CredentialState): Check {
-  switch (state) {
-    case 'present':
-      return { name: 'credential', status: 'ok', detail: 'present' }
-    case 'expired':
-      return {
-        name: 'credential',
-        status: 'warn',
-        detail:
-          'EXPIRED — the stored token is past its expiry. A refresh may still renew it on the ' +
-          'next turn; if it does not, run `theocode` and use /login.',
-      }
-    case 'absent':
-      return {
-        name: 'credential',
-        status: 'fail',
-        detail: 'absent — run `theocode` and use /login, or set the provider key',
-      }
-    case 'unreadable':
-      return {
-        name: 'credential',
-        status: 'fail',
-        detail: 'unreadable — the credential file exists and could not be parsed',
-      }
-  }
+  return { ...checks.credential(state), detail: CREDENTIAL_DETAIL[state] }
 }
 
 /**
@@ -79,31 +68,24 @@ function credentialCheck(state: CredentialState): Check {
  * function-length ceiling is a real signal here: the row now carries three states.
  */
 const entity = (
-name: string,
-e: { active: readonly string[]; suppressedByTrust: boolean },
-): Check =>
-  e.suppressedByTrust
-    ? {
-        name,
-        status: 'warn',
-        // A warning, not a failure: trust-gating is the product working as designed. It is
-        // reported because a user debugging "my hook does not run" needs to see it, not because
-        // anything is broken.
-        //
-        // #72 — suppressed AND non-empty is a real state for `mcp` alone: the operator's own
-        // servers are not gated on project trust. Reporting only the suppression would say "not
-        // wired" about a server that is running; reporting only the list would hide that the
-        // repository's share was withheld. Whoever is debugging either half needs the other.
-        detail:
-          e.active.length === 0
-            ? 'declared but NOT wired — this directory is untrusted'
-            : `${e.active.join(', ')} — yours; the project's are NOT wired, this directory is untrusted`,
-      }
-    : {
-        name,
-        status: 'ok',
-        detail: e.active.length === 0 ? 'none' : e.active.join(', '),
-      }
+  name: string,
+  e: { active: readonly string[]; suppressedByTrust: boolean },
+): Check => ({
+  // Status from the framework's rule. A warning, not a failure: trust-gating is the product
+  // working as designed. It is reported because a user debugging "my hook does not run" needs to
+  // see it, not because anything is broken.
+  ...checks.capability(name, e),
+  // #72 — suppressed AND non-empty is a real state for `mcp` alone: the operator's own servers are
+  // not gated on project trust. Reporting only the suppression would say "not wired" about a server
+  // that is running; reporting only the list would hide that the repository's share was withheld.
+  detail: e.suppressedByTrust
+    ? e.active.length === 0
+      ? 'declared but NOT wired — this directory is untrusted'
+      : `${e.active.join(', ')} — yours; the project's are NOT wired, this directory is untrusted`
+    : e.active.length === 0
+      ? 'none'
+      : e.active.join(', '),
+})
 
 /**
  * The checks for a directory: resolved config, trust, sandbox, credential presence, and what an
@@ -134,7 +116,9 @@ function skillsOnDiskParts(found: SkillsOnDiskFindings): string[] {
   if (found.declaredButAbsent.length > 0)
     parts.push(`declared with no SKILL.md: ${found.declaredButAbsent.join(', ')}`)
   if (found.presentButUndeclared.length > 0)
-    parts.push(`on disk but declared nowhere, so not loaded: ${found.presentButUndeclared.join(', ')}`)
+    parts.push(
+      `on disk but declared nowhere, so not loaded: ${found.presentButUndeclared.join(', ')}`,
+    )
   // #65 — a third state, and its remedy is neither of the two above: the file exists and the config
   // names it, and it still does not load, because the resolver builds every root from `cwd`. Saying
   // "no SKILL.md" here named a cause that is false; saying nothing left a declared skill silently

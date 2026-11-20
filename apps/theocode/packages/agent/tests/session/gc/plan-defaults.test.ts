@@ -7,12 +7,17 @@
  * purpose: they pin 10 and 30, so a silent change to either number is a red test rather than a
  * silently wider (or narrower) deletion window.
  *
- * The seams (`readdir`, `list`, `readPointer`, `now`, dirs) stay injected — the subject is the
- * numeric defaults, not the filesystem.
+ * The subject is the numeric defaults, not the filesystem: entries are written to a temp transcript
+ * root because the framework planner has no `readdir` seam.
  */
-import { describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { planSessionGC } from '../../../src/session/gc/per-session.js'
+import { transcriptPath } from '@theokit/agents/persistence'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
 
 const DAY = 86_400_000
 const NOW = 1_700_000_000_000
@@ -21,16 +26,31 @@ function entriesAgedDays(ages: number[]): { id: string; mtimeMs: number }[] {
   return ages.map((age, i) => ({ id: `t-${String(i).padStart(2, '0')}`, mtimeMs: NOW - age * DAY }))
 }
 
+// The framework planner has no `readdir`/`list`/`readPointer` seams, so the entries are written to a
+// temp transcript root and the registry listing is the only seam left.
+let root = ''
+let cwd = ''
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'theocode-gc-root-'))
+  cwd = mkdtempSync(join(tmpdir(), 'theocode-gc-cwd-'))
+})
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true })
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 function seams(onDisk: { id: string; mtimeMs: number }[]) {
-  return {
-    cwd: '/nowhere',
-    baseDir: '/nowhere',
-    now: () => NOW,
-    list: async () => [],
-    readPointer: () => undefined,
-    readdir: () => onDisk,
+  for (const e of onDisk) {
+    const path = transcriptPath(root, cwd, e.id)
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, `${JSON.stringify({ type: 'user', sessionId: e.id })}\n`)
+    utimesSync(path, new Date(e.mtimeMs), new Date(e.mtimeMs))
   }
+  return { cwd, root, now: NOW, apply: false, listRegistry: async () => [] }
 }
+
+const planSessionGC = (o: Parameters<typeof planAndRunCurrentProjectGC>[0]) =>
+  planAndRunCurrentProjectGC(o).then((r) => r.plan)
 
 describe('planSessionGC defaults', () => {
   it('keeps_the_ten_newest_transcripts_when_keepLast_is_not_given', async () => {
@@ -44,14 +64,14 @@ describe('planSessionGC defaults', () => {
   })
 
   it('collects_past_thirty_days_and_keeps_younger_when_maxAgeDays_is_not_given', async () => {
-    // keepLast pinned to 0 so the age window is the only default under test. The newest transcript
-    // is protected as most-recent regardless; the 29-day one sits inside the default window and the
+    // keepLast pinned to 1 (the framework floor) so the age window is the only default under test.
+    // The newest transcript is protected as most-recent regardless; the 29-day one sits inside the default window and the
     // 31-day one outside it.
     const onDisk = entriesAgedDays([1, 29, 31])
 
-    const plan = await planSessionGC({ ...seams(onDisk), keepLast: 0 })
+    const plan = await planSessionGC({ ...seams(onDisk), keepLast: 1 })
 
     expect(plan.candidates.map((c) => c.id)).toEqual(['t-02'])
-    expect(plan.kept).toContain('t-01')
+    expect(plan.kept.map((k) => k.id)).toContain('t-01')
   })
 })
