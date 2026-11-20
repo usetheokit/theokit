@@ -1,13 +1,21 @@
 import { homedir } from 'node:os'
 
-import { type HookHandlers, type SDKAgent, Squad, Tool } from '@theokit/agents'
+import {
+  DelegationTimeoutError,
+  type HookHandlers,
+  type SDKAgent,
+  Squad,
+  TheokitAgentError,
+  Tool,
+  withClockCap,
+  withEphemeralAgent,
+} from '@theokit/agents'
 import { z } from 'zod'
 
 import { type AgentConfig, type TrustPosture } from '../config/index.js'
 import { resolveFreshCredential } from '../auth/index.js'
 import { resolveToolScope } from '../tools/index.js'
 import { buildRoleAgent, TEAM_ROLES, type RoleAgentContext } from './roles.js'
-import { withDelegationCap } from './delegation-cap.js'
 
 async function buildTeam(ctx: RoleAgentContext): Promise<{ squad: Squad; members: SDKAgent[] }> {
   const members = await Promise.all(TEAM_ROLES.map((role) => buildRoleAgent(role, ctx)))
@@ -32,28 +40,63 @@ export interface TeamContext {
   hooks?: HookHandlers
 }
 
-/**
- * Dispose every team member, report the ones that failed, and never throw.
- *
- * B-043 — `allSettled`, not `all`. Called from a `finally`, a rejection REPLACES the value the try
- * block produced, so ONE member failing to dispose threw away the delegation result the user had
- * been waiting for. A cleanup failure is worth reporting and is not worth losing the work over.
- *
- * Extracted from the handler's `finally` so the guarantee can be tested. It was implemented, it was
- * explained in a comment, and it had no test — which is how B-043's third DoD bullet stayed both
- * vague and unprotected while the item read `shipped`. Found 2026-09-03 by the backlog structure
- * check flagging the bullet as unfalsifiable.
- */
-export async function disposeMembers(
-  members: readonly { [Symbol.asyncDispose]: () => PromiseLike<void> }[],
-  report: (line: string) => void,
-): Promise<void> {
-  const disposals = await Promise.allSettled(members.map((m) => m[Symbol.asyncDispose]()))
-  for (const d of disposals) {
-    if (d.status === 'rejected') {
-      report(`[delegation] a team member failed to dispose: ${String(d.reason)}\n`)
-    }
+export const DELEGATION_CAP_MS = 15 * 60_000
+
+/** Reported when the cap fires, with the recovery instruction TheoCode has always given. */
+class DelegationExpiredError extends TheokitAgentError {
+  override readonly name = 'DelegationExpiredError'
+
+  constructor(capMs: number) {
+    super(
+      `[delegation_timeout] the delegation to delegate_to_team exceeded ${String(Math.round(capMs / 60_000))} min and was abandoned. ` +
+        'The member agents were disposed of; work already written to disk was NOT reverted — ' +
+        'inspect the tree before retrying.',
+      { isRetryable: false, code: 'delegation_timeout' },
+    )
   }
+}
+
+/**
+ * Run a squad under the framework's clock cap, and dispose its members when it ends.
+ *
+ * A squad that hits the cap is abandoned AND its members are disposed (cancelled) at once:
+ * `withEphemeralAgent` disposes in a `finally`, so the timeout cannot leave members running. A
+ * disposal failure is reported and never replaces the delegation's own outcome (B-043).
+ */
+export async function runTeamWithCap<R>(
+  members: readonly { [Symbol.asyncDispose]: () => PromiseLike<void> }[],
+  run: () => Promise<R>,
+  report: (line: string) => void,
+  capMs: number = DELEGATION_CAP_MS,
+): Promise<R> {
+  return withEphemeralAgent(
+    () => ({
+      agent: undefined,
+      // The helper owns "a failing dispose never replaces the result"; this only gathers every
+      // member's disposal so one failure does not skip the others.
+      dispose: async () => {
+        const disposals = await Promise.allSettled(members.map((m) => m[Symbol.asyncDispose]()))
+        const reasons = disposals.flatMap((d) => (d.status === 'rejected' ? [d.reason] : []))
+        if (reasons.length > 0) throw new AggregateError(reasons, 'team members failed to dispose')
+      },
+    }),
+    async () => {
+      try {
+        return await withClockCap(run(), capMs, 'delegate_to_team')
+      } catch (error) {
+        if (error instanceof DelegationTimeoutError) throw new DelegationExpiredError(capMs)
+        throw error
+      }
+    },
+    {
+      onDisposeError: (error) => {
+        const reasons = error instanceof AggregateError ? (error.errors as unknown[]) : [error]
+        for (const reason of reasons) {
+          report(`[delegation] a team member failed to dispose: ${String(reason)}\n`)
+        }
+      },
+    },
+  )
 }
 
 export function createDelegateToTeamTool(context: TeamContext) {
@@ -82,17 +125,17 @@ export function createDelegateToTeamTool(context: TeamContext) {
         writeRoot: scope.writeRoot,
         ...(context.hooks !== undefined ? { hooks: context.hooks } : {}),
       })
-      try {
-        const run = await withDelegationCap(squad.run(task))
-        return JSON.stringify({
-          result: run.result,
-          status: run.status,
-          members: TEAM_ROLES,
-          steps: run.steps.length,
-        })
-      } finally {
-        await disposeMembers(members, (line) => process.stderr.write(line))
-      }
+      const run = await runTeamWithCap(
+        members,
+        () => squad.run(task),
+        (line) => process.stderr.write(line),
+      )
+      return JSON.stringify({
+        result: run.result,
+        status: run.status,
+        members: TEAM_ROLES,
+        steps: run.steps.length,
+      })
     },
   })
 }

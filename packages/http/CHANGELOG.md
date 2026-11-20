@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `createNodeServer({ trustedProxy: { identityHeader, addresses } })`: the identity header and `x-forwarded-proto` are believed only from an allowlisted peer. New exports `trustedIdentity`, `peerAddress`, `PEER_ADDRESS_HEADER`, `TRUSTED_IDENTITY_HEADER`, `TrustedProxyOptions`.
+
 ## 2.7.0
 
 ### Minor Changes

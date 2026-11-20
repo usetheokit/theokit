@@ -7,7 +7,7 @@ function collect() {
   const events: TurnEvent[] = []
   const emit = (event: TurnEvent): void => void events.push(event)
   const text = (): string => events.map((e) => (e.type === 'text_delta' ? String(e.content) : '')).join('')
-  return { emit, text }
+  return { emit, text, events }
 }
 
 function build(runner: TurnRunner) {
@@ -45,6 +45,18 @@ describe('WebChat slash commands', () => {
     await run('/status', d.emit)
     expect(d.text()).toContain('Thinking: high')
     expect(runner).not.toHaveBeenCalled()
+  })
+
+  it('ends a local command with a typed done event carrying its reply and zero usage', async () => {
+    const { turnFor } = build(vi.fn<TurnRunner>())
+    const c = collect()
+    await turnFor('c1')('/think high', c.emit)
+    expect(c.events.at(-1)).toEqual({
+      type: 'done',
+      result: 'Thinking level set to high.',
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      durationMs: 0,
+    })
   })
 
   it('/stop cancels the running turn and /steer reaches it; both say so when nothing runs', async () => {

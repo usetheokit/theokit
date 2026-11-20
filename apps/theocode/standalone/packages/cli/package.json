@@ -1,0 +1,14 @@
+{
+  "name": "@theocode/cli",
+  "version": "0.1.21",
+  "private": true,
+  "type": "module",
+  "description": "Surface 2 — the headless CLI.",
+  "dependencies": {
+    "@theocode/agent": "link:../agent",
+    "@theocode/shared": "link:../shared",
+    "@theocode/tui": "link:../tui",
+    "@theokit/agents": "16.13.0",
+    "@theokit/presenter": "0.15.0"
+  }
+}

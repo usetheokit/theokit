@@ -1,11 +1,11 @@
 import {
+  createWireReader,
   foldTurnLifecycle,
-  fromWireChunk,
   type AgentOutputEvent,
   type TurnLifecycle,
 } from '@theokit/presenter'
 import type { AgentTurnMetadata } from '@theokit/agents/bridge'
-import type { WireChunk } from '@theokit/presenter/wire'
+import { readTurnMetadata, type WireChunk, type WireTurnMetadata } from '@theokit/presenter/wire'
 
 type TurnFold = TurnLifecycle<unknown>
 
@@ -53,7 +53,7 @@ function jsonlOutcome(
   failed: boolean,
   error: string | undefined,
   stopReason: StopReason,
-  usage: Record<string, number> | undefined,
+  usage: Readonly<Record<string, number | undefined>> | undefined,
 ) {
   if (failed) return { status: 'error' as const, error: error ?? 'turn failed', usage }
   if (stopReason !== undefined)
@@ -61,25 +61,12 @@ function jsonlOutcome(
   return { status: 'ok' as const, usage }
 }
 
+/** The finish chunk's validated metadata; usage keys are the wire's camelCase ones. */
 function readFinish(chunk: WireChunk): {
-  usage?: Record<string, number>
+  usage?: WireTurnMetadata['usage']
   stopReason?: AgentTurnMetadata['stopReason']
 } {
-  return (chunk as { messageMetadata?: Partial<AgentTurnMetadata> }).messageMetadata ?? {}
-}
-
-/**
- * One wire chunk to canonical events, remembering each call's tool name.
- *
- * `tool-output-*` carries only `toolCallId`; the name arrives on the earlier input chunk, so the
- * map is threaded through `fromWireChunk` per processor.
- */
-function wireTranslator(): (chunk: WireChunk) => AgentOutputEvent[] {
-  const toolNames = new Map<string, string>()
-  return (chunk) => {
-    if (chunk.type === 'tool-input-available') toolNames.set(chunk.toolCallId, chunk.toolName)
-    return fromWireChunk(chunk, toolNames)
-  }
+  return readTurnMetadata(chunk) ?? {}
 }
 
 const USAGE_ALIASES: readonly (readonly [output: string, camel: string, snake: string])[] = [
@@ -90,7 +77,9 @@ const USAGE_ALIASES: readonly (readonly [output: string, camel: string, snake: s
   ['reasoning_output_tokens', 'reasoningTokens', 'reasoning_output_tokens'],
 ]
 
-function toCodexUsage(u: Record<string, number> | undefined): Record<string, number> {
+function toCodexUsage(
+  u: Readonly<Record<string, number | undefined>> | undefined,
+): Record<string, number> {
   return Object.fromEntries(
     USAGE_ALIASES.map(([output, camel, snake]) => [output, u?.[camel] ?? u?.[snake] ?? 0]),
   )
@@ -131,7 +120,7 @@ export interface ExecProcessor {
   process(chunk: WireChunk): void
   finish(
     status: 'finished' | 'error',
-    extra?: { usage?: Record<string, number>; error?: string },
+    extra?: { usage?: Readonly<Record<string, number | undefined>>; error?: string },
   ): ProcessorResult
 }
 
@@ -189,12 +178,12 @@ export function createHumanProcessor(
 ): ExecProcessor {
   const message = finalMessage()
   let errorSeen = false
-  let usage: Record<string, number> | undefined
+  let usage: WireTurnMetadata['usage']
   let stopReason: AgentTurnMetadata['stopReason']
   // #105 — collected as they go past, so the diff at the end is scoped to what THIS turn wrote
   // rather than to whatever the working tree happens to hold.
   const writes: ToolChunk[] = []
-  const translate = wireTranslator()
+  const reader = createWireReader()
   // Per-event handling as a table, mirroring the JSONL twin's `toContentChunk` extraction. An event
   // type without a row carries nothing for this surface.
   const onEvent: Record<string, (event: AgentOutputEvent) => void> = {
@@ -230,7 +219,7 @@ export function createHumanProcessor(
         stopReason = meta.stopReason
         return
       }
-      for (const event of translate(chunk)) onEvent[event.type]?.(event)
+      for (const event of reader.read(chunk)) onEvent[event.type]?.(event)
     },
     finish(status, extra) {
       if (status === 'error') {
@@ -331,7 +320,7 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
     }
   }
 
-  let usage: Record<string, number> | undefined
+  let usage: WireTurnMetadata['usage']
   let stopReason: AgentTurnMetadata['stopReason']
   // The same rule as the human processor. The JSONL events themselves already arrive separated by
   // `turn.observe`; it is `finalText` — what `-o/--output-last-message` writes — that ran them
@@ -341,7 +330,7 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
 
   // The fold has no failed-result flag yet (#1852), so failed call ids are kept here.
   const failedCalls = new Set<string>()
-  const translate = wireTranslator()
+  const reader = createWireReader()
   const turn = foldTurnLifecycle<unknown>(codexDialect(failedCalls), threadId)
   for (const event of turn.opened) emit(event)
 
@@ -360,7 +349,7 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
         stopReason = meta.stopReason
         return
       }
-      for (const event of translate(chunk)) {
+      for (const event of reader.read(chunk)) {
         if (track(event)) errorSeen = true
         const mapped = toContentChunk(event)
         if (mapped === null) continue

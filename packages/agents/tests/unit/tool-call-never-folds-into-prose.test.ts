@@ -2,7 +2,7 @@ import { readMessageStream } from '@theokit/presenter/wire'
 import type { WireChunk, WireMessage } from '@theokit/presenter/wire'
 import { describe, expect, it } from 'vitest'
 
-import { translateSdkEvent } from '../../src/bridge/event-translator.js'
+import { type SdkMessage, translateSdkEvent } from '../../src/bridge/event-translator.js'
 import { presentUIMessageStream } from '../../src/bridge/present-ui-message-stream.js'
 import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
 
@@ -30,7 +30,7 @@ import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
 const RUN = 'run-631'
 
 /** The reported shape: the model's sentence and the tool call, in one assistant message. */
-const TEXT_AND_TOOL = {
+const TEXT_AND_TOOL: SdkMessage = {
   type: 'assistant',
   agent_id: 'a',
   run_id: RUN,
@@ -53,7 +53,8 @@ describe('a text block and a tool_use block in one message (#631)', () => {
 
   it('never appends the tool name to the text', () => {
     const [text] = translateSdkEvent(TEXT_AND_TOOL, RUN)
-    const content = String(text.content)
+    if (text?.type !== 'text_delta') throw new Error('expected a text_delta first')
+    const content = text.content
 
     // The exact defect: the sentence and the marker fused with no separator.
     expect(text).toMatchObject({ type: 'text_delta' })

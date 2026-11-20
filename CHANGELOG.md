@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `@theokit/host`: `@theokit/host/backup` keeps backups in named storage locations, optionally encrypted with AES-256-GCM (`createStorageRegistry`).
+- `@theokit/host`: `defineInstanceConfig(...).onboard` asks for the model, key and settings (hidden secret prompts), checks them with the keys' own parsers and writes the config file.
+
 ## [@theokit/agents 16.13.0, create-theokit 3.1.7, @theokit/host 0.1.0, @theokit/http 2.7.0, @theokit/presenter 0.16.0, theokit 0.83.1] - 2026-11-19
 
 ### Fixed

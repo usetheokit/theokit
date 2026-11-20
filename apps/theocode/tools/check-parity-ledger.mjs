@@ -17,6 +17,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { declaresActiveTest } from '../../../scripts/lib/parity-ledger.mjs'
 import { parseLocalSurface } from './check-codex-parity.mjs'
 
 const INVENTORY_PATH = 'docs/parity/inventory.json'
@@ -24,11 +25,8 @@ const PRODUCTS = ['codex', 'claude-code']
 const STATUSES = ['shipped', 'pointer', 'gap', 'not-planned']
 const nonEmpty = (v) => typeof v === 'string' && v.trim().length > 0
 
-/** True when the source has a live `it('name'` / `test('name'` declaration (not a comment, skip or todo). */
-export function declaresTest(source, name) {
-  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`^\\s*(?:it|test)\\(\\s*(['"\`])[^\\n]*?${esc}`, 'm').test(source)
-}
+/** True when the source has a live `it('name'` / `test('name'` declaration: the shared scanner, exact title. */
+export const declaresTest = declaresActiveTest
 
 /** Problems with the rows, one string each. `read` returns a file's text or null. */
 export function ledgerProblems(rows, read, answeredCodexNames = [], surface = null) {

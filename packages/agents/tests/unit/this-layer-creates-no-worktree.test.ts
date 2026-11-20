@@ -60,7 +60,11 @@ function codeOf(path: string): string {
     .replaceAll(/^\s*\/\/.*$/gm, '')
 }
 
-describe('this layer creates no git worktree', () => {
+// Superseded absence (#1820): the one place allowed to create a worktree, because it also ships the
+// `.worktreeinclude` copier (see worktree-include.test.ts).
+const WORKTREE_OWNER = join('bridge', 'workspace-provider.ts')
+
+describe('only the workspace provider creates a git worktree', () => {
   const files = sources(SRC)
 
   it('has a working probe — the control finds a term that IS in the tree', () => {
@@ -73,15 +77,21 @@ describe('this layer creates no git worktree', () => {
     ).toBeGreaterThan(0)
   })
 
-  it('invokes no `git worktree` subprocess', () => {
+  it('invokes `git worktree` only from the workspace provider', () => {
     const hits = files.filter((f) => /\bworktree\b/.test(codeOf(f)))
     expect(
-      hits.map((f) => f.slice(SRC.length + 1)),
+      hits.map((f) => f.slice(SRC.length + 1)).filter((f) => f !== WORKTREE_OWNER),
       'something now creates or manipulates a worktree. `.worktreeinclude` (B-073) is the ' +
         'obligation that comes with it: a fresh checkout has none of the gitignored files the ' +
         'project needs, `.env` above all, and an agent spawned there fails in a way that reads as ' +
         'a broken agent rather than a missing file. Implement the copier, or restate the absence.',
     ).toEqual([])
+  })
+
+  it('the one owner of worktree creation also ships the copier', () => {
+    const code = codeOf(join(SRC, WORKTREE_OWNER))
+    expect(code).toContain("'worktree', 'add'")
+    expect(code).toContain('.worktreeinclude')
   })
 
   it('offers no `isolation` option whose value is a worktree', () => {

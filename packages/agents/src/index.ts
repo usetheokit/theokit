@@ -431,3 +431,6 @@ export type { RetryOptions } from '@theokit/sdk/retry'
 export type { DiscoverSubagentsOptions } from '@theokit/sdk/subagents-loader'
 export type { ContextWindowOptions } from './bridge/compile-context-window.js'
 export type { SkillsOptions } from './bridge/compile-skills.js'
+
+// `classifyTurnFailure` and `describeTurnFailure` ship from `@theokit/agents/errors` (`src/errors-entry.ts`).
+export type { KnownAgentRunErrorCode } from '@theokit/sdk/errors'

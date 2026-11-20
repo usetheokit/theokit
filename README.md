@@ -632,6 +632,20 @@ Beta. The framework is used to build real apps, and the surface still moves betw
 minor versions — breaking changes are recorded in [`CHANGELOG.md`](CHANGELOG.md)
 against the version that carried them.
 
+`theokit` is at `0.Y.Z`, so a `0.Y` bump is the breaking bump. Every export without an
+`@experimental` tag on its own declaration is stable: removing or changing it needs a `minor`
+changeset and a deprecation window first. The policy is recorded in
+[ADR 0035](docs/adr/0035-the-api-stability-policy-is-recorded-in-theokit-sdk.md). Experimental
+exports of `theokit`, by entry (checked against `packages/theo/public-surface-baseline.json` by
+`packages/theo/tests/experimental-exports.test.ts`). The set was chosen from what the source says about itself: `node:sqlite` is experimental in Node and absent at the engine floor; `theokit/boot` serves only reserved routes and 404s the rest; `ChannelManager` is undocumented and in-memory only. No other entry carries such a signal, so the rest stay stable:
+
+<!-- experimental-exports:start -->
+- `theokit/boot`: `ConventionFetchHandle`, `ConventionFetchHandlerOptions`, `createConventionFetchHandler`
+- `theokit/server`: `ChannelManager`
+- `theokit/server/cost/sqlite`: `SqliteUsageStorage`
+- `theokit/server/realtime`: `ChannelManager`
+<!-- experimental-exports:end -->
+
 - **7232 tests in 930 files** (7211 passing, 21 skipped, zero type errors) — unit, integration and type-level suites across `theokit`, `@theokit/http`, `@theokit/agents`, `@theokit/agents-pty`, `@theokit/presenter` and `create-theokit`. One command: `pnpm test`. Measured 2026-08-26; a number nobody re-measures is a claim, not a fact.
 - **Nine CI jobs gate every PR**: lint + format, typecheck + build, unit + type tests, a coverage floor of 80%, dead code (`knip`), package validation (`publint` + `attw` + an install smoke test), a production dependency audit, and license compliance. Alongside them run the architecture guards — `dependency-cruiser` rules, `ls-lint` filename conventions, SDK surface parity — plus CodeQL and a two-layer secret scan (pre-commit hook and workflow).
 - **Nine deploy targets**, with TheoCloud as the principal one.

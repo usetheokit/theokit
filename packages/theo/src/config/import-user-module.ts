@@ -104,7 +104,17 @@ let namespacedImport: Promise<ScopedImport> | undefined
 function tsxNamespace(): Promise<ScopedImport> {
   namespacedImport ??= (async () => {
     const namespace = `theokit-user-modules-${process.pid}`
-    const [esm, cjs] = await Promise.all([import('tsx/esm/api'), import('tsx/cjs/api')])
+    const [esm, cjs] = await Promise.all([import('tsx/esm/api'), import('tsx/cjs/api')]).catch(
+      (err: unknown) => {
+        if ((err as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND') {
+          throw new Error(
+            'theokit needs "tsx" to load your TypeScript modules, and it is not installed. ' +
+              'Install it with: npm install --save-dev tsx',
+          )
+        }
+        throw err
+      },
+    )
     cjs.register({ namespace })
     return esm.register({ namespace }).import
   })()

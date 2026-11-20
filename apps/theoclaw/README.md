@@ -395,6 +395,8 @@ the listener. `GET /health` answers `{"status":"ok"}`.
 
 ### The `/control` socket
 
+Turns read the SDK agent through the typed port in `src/agent-port.ts` (`TurnAgent`, `TurnRun`, `TurnTimelineEvent`, with `InteractionUpdate` from `@theokit/sdk`) and the bridge's `SdkMessage`, `SdkTimelineEvent` and `AgentStreamEvent`; the typed helpers `toSdkMessage`, `toSdkTimelineEvent` and `isAgentStreamEvent` replace every cast.
+
 Connect to `ws://127.0.0.1:<port>/control` with `Authorization: Bearer <THEOCLAW_CONTROL_TOKEN>`;
 any other path answers 404 and a missing or wrong token 401, before any agent is built. Send
 `{"type":"chat","message":"..."}` as a text frame. Each event of the turn arrives as
@@ -492,6 +494,12 @@ them.
 | `list_scheduled_jobs`  | lists the jobs with their id, name, cron and target                                                                                                                                                 |
 | `cancel_scheduled_job` | removes a job by id                                                                                                                                                                                 |
 
+A web-only instance with no chat platform can schedule too: give the job the platform `inbox` and any
+label as the channel id. The answer is stored in `<workspace>/.theoclaw/schedule-inbox.json` (mode 0600,
+secrets masked, the latest 100 messages kept, kept even when transcripts are off), and a `/control`
+agent reads it with `read_schedule_inbox` ("what did my morning job say?"). A failed write is reported
+as undelivered. Nothing is pushed to WebChat.
+
 Jobs are kept in `<workspace>/.theoclaw/schedules.json` (mode 0600), so they survive a restart; a
 file that does not parse refuses the start, as `sessions.json` does. At most 50 jobs are kept, and
 a platform that is not configured, a cron or a timezone the scheduler rejects is refused with
@@ -533,7 +541,13 @@ DISPLAY=:99 THEOCLAW_HOST_TOOLS=on THEOCLAW_COMPUTER=on THEOCLAW_COMPUTER_FRAMEB
 ### The `/control` agent's browser
 
 With `THEOCLAW_BROWSER=on`, `/control` agents also get a headless Chromium through the pinned
-`@playwright/mcp` server, spawned over stdio with an isolated profile per session. Its tools reach
+`@playwright/mcp` server, spawned over stdio. The instance starts one headless Chromium, with the first `/control` session and again if it dies, on
+a persistent profile in `<workspace>/.theoclaw/browser-profile`, listening for DevTools only on
+loopback, and every session's server attaches to it, so a site signed in once stays signed in on
+later turns and for every agent, and two sessions can use the browser at once (they share cookies
+and the browser; each session opens and drives its own tab). The browser stops with the instance. A profile belongs to
+one browser process, so two TheoClaw processes cannot share a workspace's browser. Cookies a site
+marks as session cookies may not survive an instance restart; persistent cookies do. Its tools reach
 the model as `mcp_browser_<tool>` (`mcp_browser_browser_navigate`, `mcp_browser_browser_snapshot`
 and the others the server lists), so the agent can read what a page renders with JavaScript, which
 `web_fetch` cannot. Chat agents never get it. The browser can open any URL the process can reach,
@@ -649,10 +663,10 @@ before any runner starts, and refuses it naming the file and the key:
   within 2 minutes or no asker refuses it. That stops only what the agent asks about: it runs as the
   TheoClaw user, outside the tool sandbox, and an agent that writes without asking (its own
   auto-accept mode or project settings) is not stopped by it.
-- An ACP agent starts through `env -i` with only `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
+- An ACP agent starts through the framework `env` option with only `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
   `TMPDIR`, `TZ`, the locale, terminal and XDG directory variables, so the model key and the channel
   and bearer tokens are not in the environment it receives or passes to its own children; an agent
-  that logs in through its home directory still finds its login. That is all `env -i` does, and it
+  that logs in through its home directory still finds its login. That is all the `env` option does, and it
   is not a secret boundary: the agent runs as the TheoClaw user, so it can still read TheoClaw's
   environment from `/proc/<TheoClaw pid>/environ` (and anything else that user can read). Only an
   agent you trust with those secrets belongs in `acpAgents`. A `command` may not contain `=`. A

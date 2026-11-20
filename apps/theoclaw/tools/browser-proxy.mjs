@@ -74,6 +74,17 @@ const server = spawn(process.execPath, [cliPath, ...serverArgs, '--output-dir', 
   stdio: ['pipe', 'pipe', 'inherit'],
 })
 
+/**
+ * A server attached to a shared browser (`--cdp-endpoint`) would adopt the browser's first page, which
+ * another session drives. Before the first tool call it opens a page of its own (same profile, so the
+ * same cookies) and the call waits for it.
+ */
+const attached = serverArgs.includes('--cdp-endpoint')
+const OPEN_PAGE_ID = 'theoclaw-open-page'
+/** `idle` until the first tool call, `opening` while the page is being made, then `ready`. */
+let pageState = attached ? 'idle' : 'ready'
+const held = []
+
 /** The ids of the `tools/list` requests whose answers are still to be filtered. */
 const listRequests = new Set()
 
@@ -150,13 +161,29 @@ createInterface({ input: process.stdin })
       send(process.stdout, { jsonrpc: '2.0', id: message.id, error: { code: NOT_OFFERED, message: `theoclaw: the browser tool ${String(name)} is not offered` } })
       return
     }
+    if (message.method === 'tools/call' && pageState !== 'ready') {
+      held.push(message)
+      if (pageState === 'idle') {
+        pageState = 'opening'
+        send(server.stdin, {
+          jsonrpc: '2.0',
+          id: OPEN_PAGE_ID,
+          method: 'tools/call',
+          params: { name: 'browser_tabs', arguments: { action: 'new' } },
+        })
+      }
+      return
+    }
     send(server.stdin, fromClient(message))
   })
   .on('close', () => server.stdin.end())
 
 createInterface({ input: server.stdout }).on('line', (line) => {
   const message = parse(line)
-  if (message === undefined) process.stdout.write(`${line}\n`)
+  if (message?.id === OPEN_PAGE_ID) {
+    pageState = 'ready'
+    for (const next of held.splice(0)) send(server.stdin, fromClient(next))
+  } else if (message === undefined) process.stdout.write(`${line}\n`)
   else send(process.stdout, fromServer(message))
 })
 

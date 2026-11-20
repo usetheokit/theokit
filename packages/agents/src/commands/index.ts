@@ -38,3 +38,14 @@ export type {
   ShutdownDeps,
   ShutdownOutcome,
 } from './shutdown.js'
+
+export { runHeadlessTurn, readHeadlessPrompt, EmptyPromptError } from './headless-turn.js'
+export type {
+  HeadlessIo,
+  HeadlessOutcome,
+  HeadlessTurnOptions,
+  HeadlessTurnResult,
+} from './headless-turn.js'
+
+// `runHeadlessTurn` reports the turn's metadata in the wire shape `@theokit/presenter` defines.
+export type { WireTurnMetadata } from '@theokit/presenter/wire'
