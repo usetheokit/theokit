@@ -16,6 +16,8 @@ let dir: string
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'theocode-facts-'))
   mkdirSync(join(dir, '.theokit', 'memory'), { recursive: true })
+  // BLOCKED on the SDK fact writer release: SDK 5.32.0 has no public fact writer, so MEMORY.md is
+  // seeded by hand. Switch this to the SDK writer once one is released (theokit-sdk#1062).
   writeFileSync(
     join(dir, '.theokit', 'memory', 'MEMORY.md'),
     '# Memory\n\n## Facts\n- prefers tabs\n- uses pnpm\n',
