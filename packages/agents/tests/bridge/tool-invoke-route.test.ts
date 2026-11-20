@@ -203,12 +203,63 @@ describe('createToolInvokeRoute', () => {
     expect(validate).not.toHaveBeenCalled()
   })
 
-  it('runs the tool on unvalidated args when no validate is given', async () => {
+  it('args that violate the tool schema answer 400 invalid_args without a validate option', async () => {
+    const handler = vi.fn<Handler>(() => 'ran')
+    const tool: CustomTool = {
+      name: 'count',
+      description: 'counts',
+      inputSchema: { type: 'object', properties: { count: { type: 'number' } } },
+      handler,
+    }
+
+    const { status, body } = await answered(
+      { tools: [tool] },
+      invoke({ tool: 'count', args: { count: 'x' } }),
+    )
+
+    expect(status).toBe(400)
+    expect(body.error).toEqual({
+      type: 'invalid_args',
+      message: 'count: Invalid input: expected number, received string',
+    })
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('validate false lets unchecked args reach the handler', async () => {
     const handler = vi.fn<Handler>(() => 'ran')
 
-    await answered({ tools: [echoTool(handler)] }, invoke({ tool: 'echo', args: { text: 123 } }))
+    await answered(
+      { tools: [echoTool(handler)], validate: false },
+      invoke({ tool: 'echo', args: { text: 123 } }),
+    )
 
     expect(handler.mock.calls[0]?.[0]).toEqual({ text: 123 })
+  })
+
+  it('a schema that does not compile answers 500 tool_error and does not call the handler', async () => {
+    const handler = vi.fn<Handler>(() => 'ran')
+    const tool: CustomTool = {
+      ...echoTool(handler),
+      inputSchema: { type: 'object', properties: { a: { $ref: '#/nope' } } },
+    }
+
+    const { status, body } = await answered({ tools: [tool] }, invoke({ tool: 'echo', args: {} }))
+
+    expect(status).toBe(500)
+    expect(body.error?.type).toBe('tool_error')
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('a caller validator replaces the default', async () => {
+    const handler = vi.fn<Handler>(() => 'ran')
+
+    const { status } = await answered(
+      { tools: [echoTool(handler)], validate: () => undefined },
+      invoke({ tool: 'echo', args: { text: 123 } }),
+    )
+
+    expect(status).toBe(200)
+    expect(handler).toHaveBeenCalled()
   })
 
   it('answers 500 tool_error when validate throws', async () => {

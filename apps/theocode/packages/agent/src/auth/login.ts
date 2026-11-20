@@ -1,13 +1,20 @@
-import { existsSync, unlinkSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 
-import { CODEX_PROVIDER, loginWithDevice } from '@theokit/agents/auth'
+import {
+  CODEX_PROVIDER,
+  CredentialExistsError,
+  loginWithApiKey,
+  loginWithDevice,
+  logout as logoutStore,
+  providerFromApiKeyPrefix,
+} from '@theokit/agents/auth'
 import type { AuthMethod, DeviceAuthProvider } from '@theokit/agents/auth'
 
 import {
   CredentialError,
+  assertPairMatches,
   authFilePath,
-  inferProvider,
-  writeCredential,
+  PROVIDER_NAMES,
   type Provider,
 } from './credentials.js'
 import { credentialStore } from './oauth-config.js'
@@ -27,17 +34,38 @@ export function login(
     throw new CredentialError('no API key was provided — the input was empty')
   }
 
-  const provider = opts.provider ?? inferProvider(key)
+  // The framework infers from every prefix it knows; this product supports three providers, so a
+  // key it files under another one is as unplaceable here as one it cannot place at all.
+  const inferred = providerFromApiKeyPrefix(key)
+  const provider = opts.provider ?? (isProvider(inferred) ? inferred : undefined)
   if (provider === undefined) {
     throw new CredentialError(
       'cannot tell which provider this key belongs to. Pass the provider explicitly.',
     )
   }
 
-  refuseIfExists(home, opts.env ?? {}, opts.overwrite)
+  // Refuse a key that contradicts the chosen provider before anything reaches the store.
+  assertPairMatches(provider, key, 'the credential being written')
 
-  const path = writeCredential({ provider, apiKey: key }, home, opts.env ?? {})
-  return { provider, path }
+  try {
+    return loginWithApiKey(key, credentialStore(home), {
+      provider,
+      overwrite: opts.overwrite,
+      env: opts.env ?? {},
+    }) as LoginResult
+  } catch (err) {
+    // The framework says "pass overwrite"; the CLI has no such option, so keep this product's words.
+    if (err instanceof CredentialExistsError) throw new CredentialError(existsMessage(err.path))
+    throw err
+  }
+}
+
+function existsMessage(target: string): string {
+  return `a credential already exists at ${target}. Run logout first, or pass overwrite to replace it.`
+}
+
+function isProvider(name: string | undefined): name is Provider {
+  return name !== undefined && (PROVIDER_NAMES as readonly string[]).includes(name)
 }
 
 function refuseIfExists(
@@ -47,9 +75,7 @@ function refuseIfExists(
 ): void {
   const target = authFilePath(home, env)
   if (existsSync(target) && overwrite !== true) {
-    throw new CredentialError(
-      `a credential already exists at ${target}. Run logout first, or pass overwrite to replace it.`,
-    )
+    throw new CredentialError(existsMessage(target))
   }
 }
 
@@ -124,8 +150,5 @@ async function loginWithMethod(
 }
 
 export function logout(home: string, env: Record<string, string | undefined> = {}): boolean {
-  const path = authFilePath(home, env)
-  if (!existsSync(path)) return false
-  unlinkSync(path)
-  return true
+  return logoutStore(credentialStore(home), env)
 }

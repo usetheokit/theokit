@@ -12,7 +12,7 @@ const RUNNER = `
 import { registerHooks } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
-const [root, mapJson, jobs, entry] = process.argv.slice(2)
+const [root, mapJson, jobs, entry, distJobs] = process.argv.slice(2)
 const map = JSON.parse(mapJson)
 const cbs = new Map()
 globalThis.Deno = { cron: (n, _s, cb) => cbs.set(n, cb) }
@@ -25,7 +25,10 @@ registerHooks({
   resolve(spec, ctx, next) {
     // Only the project's own modules are resolved by the map; the workspace source behind them is Node's.
     if (!ctx.parentURL?.startsWith(pathToFileURL(root).href)) return next(spec, ctx)
-    if (/^npm:theokit(@[^/]*)?\\/server\\/jobs$/.test(spec)) return next(pathToFileURL(jobs).href, ctx)
+    if (/^npm:theokit(@[^/]*)?\\/server\\/jobs$/.test(spec)) {
+      // The published package's own entry when it is built; its source module otherwise.
+      return next(distJobs ? pathToFileURL(distJobs).href : pathToFileURL(jobs).href, ctx)
+    }
     if (spec.startsWith('npm:')) throw new Error('unmapped ' + spec)
     if (/^(\\.|\\/|node:|file:)/.test(spec)) return next(spec, ctx)
     const target = mapped(spec)
@@ -46,6 +49,7 @@ console.log(JSON.stringify({ error, calls: globalThis.__calls ?? [], trace: glob
 const CLI = resolve(__dirname, '../../packages/theo/src/cli/index.ts')
 const TSX = resolve(__dirname, '../../node_modules/.bin/tsx')
 const JOBS = resolve(__dirname, '../../packages/theo/src/server/jobs/index.ts')
+const DIST_JOBS = resolve(__dirname, '../../packages/theo/dist/server/jobs/index.js')
 
 let root: string
 type Callback = () => Promise<void>
@@ -168,7 +172,7 @@ async function loadBuiltEntry(handlerBody: string): Promise<void> {
   const runner = join(mkdtempSync(join(tmpdir(), 'deno-cron-runner-')), 'run.mjs')
   writeFileSync(runner, RUNNER)
   callbacks.set('job', async () => {
-    const out = await execFileAsync(TSX, [runner, root, JSON.stringify(map), JOBS, entry], {
+    const out = await execFileAsync(TSX, [runner, root, JSON.stringify(map), JOBS, entry, existsSync(DIST_JOBS) ? DIST_JOBS : ''], {
       cwd: root,
       env: { ...process.env },
     })

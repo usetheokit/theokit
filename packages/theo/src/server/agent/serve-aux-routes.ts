@@ -54,7 +54,7 @@ import {
 } from './handle-thread-routes.js'
 import { isListApprovalsPath, handleListApprovals } from './list-approvals-handler.js'
 import { extractAppResources } from './mcp-app-resources.js'
-import { isMcpPath, handleMcpJsonRpc } from './mcp-handler.js'
+import { isMcpPath, handleMcpJsonRpc, parseMcpHttpBody } from './mcp-handler.js'
 import { getRunEventCache } from './run-event-cache.js'
 
 /** JSON error envelope (mirrors mount-agent.ts:37 — the parity source for the MCP CSRF gate). */
@@ -439,12 +439,9 @@ async function serveMcpRoute(
     if (!csrf.valid) return jsonError(403, 'CSRF_FAILED', `CSRF check failed: ${csrf.reason}`)
   }
 
-  let body: unknown = null
-  try {
-    body = await request.json()
-  } catch {
-    /* malformed/empty JSON → handleMcpJsonRpc returns a -32600 envelope */
-  }
+  const parsed = await parseMcpHttpBody(request)
+  if ('error' in parsed) return parsed.error
+  const body = parsed.body
   // M30 — pass the agent's declared `ui://` App resources (named `appResources` export) so the MCP
   // server advertises + serves them via resources/list + resources/read.
   return handleMcpJsonRpc(mod, agent.name, body, extractAppResources(mod))

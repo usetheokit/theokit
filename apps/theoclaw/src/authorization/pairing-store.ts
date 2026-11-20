@@ -1,7 +1,8 @@
 import { randomInt } from 'node:crypto'
 import { mkdirSync, readFileSync } from 'node:fs'
-import { open, rename } from 'node:fs/promises'
 import { join } from 'node:path'
+
+import { atomicWriteJson } from '@theokit/sdk/persistence'
 
 import { describeError, TheoClawConfigError } from '../control-plane/errors.js'
 import { senderKey } from './policy.js'
@@ -72,16 +73,7 @@ function loadPaired(path: string): Set<string> {
 
 /** Write through a temporary file opened at 0600, then rename over the real one. */
 async function persist(path: string, paired: readonly string[]): Promise<void> {
-  const temporary = `${path}.tmp`
-  const handle = await open(temporary, 'w', 0o600)
-  try {
-    // The mode of `open` applies only on create; a leftover temporary file keeps its own.
-    await handle.chmod(0o600)
-    await handle.writeFile(`${JSON.stringify({ paired }, null, 2)}\n`)
-  } finally {
-    await handle.close()
-  }
-  await rename(temporary, path)
+  await atomicWriteJson(path, { paired }, { mode: 0o600 })
 }
 
 /**
