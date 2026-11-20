@@ -203,6 +203,9 @@ describe.skipIf(!CHROMIUM)('the shared browser on the installed Chromium', () =>
       expect(a).toContain('who=one')
       expect(b).toContain('Welcome back')
       expect(b).toContain('who=two')
+      // Each session still sits on its own page: a shared tab would show the last navigation to both.
+      expect(await one.call('browser_tabs', { action: 'list' })).toContain('who=one')
+      expect(await two.call('browser_tabs', { action: 'list' })).toContain('who=two')
     },
   )
 
