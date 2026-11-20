@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@theokit/agents/bridge'
+import type { AgentStreamEvent, DoneEvent, StreamEvent } from '@theokit/agents/bridge'
 
 import { describeError } from '../control-plane/errors.js'
 import type { TurnEvent, TurnOutcome, TurnRunner } from '../control-plane/turn.js'
@@ -9,7 +9,7 @@ import { formatUsageLine, type TurnUsage } from '../usage/turn-usage.js'
  * then sees one error, never a stream that simply stops. The presenter masks the message for the
  * client and writes it, unmasked, to the server's stderr.
  */
-function turnFailed(reason: string): StreamEvent {
+function turnFailed(reason: string): AgentStreamEvent {
   return { type: 'error', code: 'turn_failed', message: `the turn failed: ${reason}`, retryable: false }
 }
 
@@ -19,10 +19,10 @@ const DONE: IteratorReturnResult<undefined> = { done: true, value: undefined }
  * The run's `done` with the turn's usage record (FR-003): the token counts and cost the run
  * reported, the cost left out when the run was unpriced, and the model.
  */
-function withUsage(done: StreamEvent, usage: TurnUsage): StreamEvent {
+function withUsage(done: DoneEvent, usage: TurnUsage): DoneEvent {
   const { inputTokens, outputTokens } = usage
-  const prior = typeof done.usage === 'object' && done.usage !== null ? done.usage : {}
-  const enriched: StreamEvent = {
+  const prior = done.usage
+  const enriched: DoneEvent = {
     ...done,
     usage: { ...prior, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
     model: usage.model,
@@ -51,7 +51,7 @@ function startTurn(
   const controller = new AbortController()
   const queue: StreamEvent[] = []
   // The run's `done` and whatever follows it wait for the turn's outcome, which carries the usage.
-  let held: { readonly done: StreamEvent; readonly after: StreamEvent[] } | undefined
+  let held: { readonly done: DoneEvent; readonly after: StreamEvent[] } | undefined
   let closed = false
   let answered = false
   let sawError = false
