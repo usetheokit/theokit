@@ -130,6 +130,21 @@ export interface ApprovalRequest {
   timeoutMs: number
 }
 
+/** Record the approval through `onDefer`, then defer; fail closed when it cannot be recorded. */
+async function deferCall(
+  onDefer: (approval: DeferredApproval) => Promise<void>,
+  a: Omit<DeferredApproval, 'toolUseId'> & { toolUseId: string | undefined },
+): Promise<PreToolCallVeto | PreToolCallDefer> {
+  try {
+    if (a.toolUseId === undefined) throw new Error('the tool call carries no toolUseId')
+    await onDefer({ ...a, toolUseId: a.toolUseId })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    return { block: true, message: `approval could not be recorded: ${reason}` }
+  }
+  return { defer: true }
+}
+
 /**
  * Build the HITL `pre_tool_call` plugin. Gated tools pause for approval; others pass through.
  * The returned object is a `@theokit/sdk` `Plugin` (structural — `definePlugin` is an identity).
@@ -180,22 +195,15 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
           }
 
           if (wiring.onDefer !== undefined) {
-            try {
-              if (c.toolUseId === undefined) throw new Error('the tool call carries no toolUseId')
-              await wiring.onDefer({
-                approvalId,
-                toolUseId: c.toolUseId,
-                toolName: c.name,
-                input: c.args,
-                ...(opts.question !== undefined ? { question: opts.question } : {}),
-                runId: c.runId,
-                agentId: c.agentId,
-              })
-            } catch (err) {
-              const reason = err instanceof Error ? err.message : String(err)
-              return { block: true, message: `approval could not be recorded: ${reason}` }
-            }
-            return { defer: true }
+            return deferCall(wiring.onDefer, {
+              approvalId,
+              toolUseId: c.toolUseId,
+              toolName: c.name,
+              input: c.args,
+              question: opts.question,
+              runId: c.runId,
+              agentId: c.agentId,
+            })
           }
 
           const raw = await wiring.awaitApproval(approvalId, opts, c.name)
