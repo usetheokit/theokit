@@ -128,6 +128,24 @@ describe('theoclaw mcp', () => {
       }
     })
 
+    it('a refused method keeps the TheoClaw body beside the framework allow header', async () => {
+      const r = await rpc(null, 'GET')
+      expect(await r.text()).toBe('method not allowed')
+      expect(r.headers.get('allow')).toBe('POST')
+    })
+
+    it('a successful tools/call carries isError: false', async () => {
+      const r = await (
+        await rpc({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: { name: 'list_dir', arguments: { path: 'files' } },
+        })
+      ).json()
+      expect(r.result.isError).toBe(false)
+    })
+
     it('unknown method, bad JSON and ids', async () => {
       const u = await (await rpc({ jsonrpc: '2.0', id: 'z', method: 'nope' })).json()
       expect(u.error.code).toBe(-32601)
