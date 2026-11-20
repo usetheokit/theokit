@@ -1,6 +1,7 @@
 import { describe, it, expectTypeOf } from 'vitest'
 
 import { defineCron } from '../../packages/theo/src/server/cron/define-cron.js'
+import type { QueueClient } from '../../packages/theo/src/server/jobs/queue-client.js'
 import type { CronContext, CronDefinition } from '../../packages/theo/src/server/cron/cron-types.js'
 
 describe('defineCron type inference (T1.2)', () => {
@@ -18,6 +19,7 @@ describe('defineCron type inference (T1.2)', () => {
       readonly traceId: string
       readonly scheduledAt: Date
       readonly signal: AbortSignal
+      readonly queue: QueueClient
     }>()
   })
 

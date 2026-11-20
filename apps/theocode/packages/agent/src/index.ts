@@ -11,5 +11,5 @@ export { skillsOnDisk } from './skills-on-disk.js'
 export { foreignSurfacesOnDisk } from './foreign-surfaces-on-disk.js'
 export { foreignHookRefusals } from './hooks/foreign-hook-gate.js'
 
-export { loadOutputStyle } from './context/output-styles.js'
+export { outputStyleResolves } from './output-style-wiring.js'
 export { FOREIGN_SURFACES } from './setting-sources.js'

@@ -35,7 +35,7 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
-| `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer |
+| `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer; `createDevicePairing` and `pairRoute`: setup-code device pairing |
 | `./testing` | Test seams: compiled-agent inspection, mock streams, the live-suite provider-key guard |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
@@ -54,9 +54,11 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
 | `./doctor` | Environment diagnostics: `credentialShape(value, { minLength? })` names a malformed credential (`edge_whitespace`, `inner_whitespace`, `quote_or_backslash`, `control_character`, `placeholder`, `too_short`) or returns `ok`, and `describeCredentialDefect` words it without echoing the value; `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
-| `./usage` | Token and cost accounting |
+| `./usage` | Token and cost accounting: `usageFromRun`, `formatUsd` and `InMemoryUsageStorage`. See the note below the table. |
 | `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 | `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
+
+`usageFromRun(result, { model })` builds a `UsageRecord` from a run result. `priced` is `false`, and `costUsd` is `0`, when the run has no finite `cost.amountUsd`, so an unpriced model is not read as a free run; `undefined` means priced. `InMemoryUsageStorage.getUsage` leaves unpriced runs out of `totalCostUsd` and counts them in `unpricedRuns`. `formatUsd` prints six significant digits with trailing zeros trimmed.
 
 A terminal command list, with aliases, hidden names and handlers, from `./commands`:
 
@@ -168,6 +170,15 @@ Booleans accept `1/true/yes/on` and `0/false/no/off` (trimmed, case-insensitive)
 Any other value is passed through unchanged, so the schema rejects `MYAPP_MEMORY=maybe` by key name instead of reading it as `false`.
 `auditEnvKnobs` reports keys with neither a knob nor an opt-out as unreachable.
 
+
+## Resolving every config layer
+
+`defineLayeredConfig({ schema, defaults, env?, accumulate?, floors?, profiles? })` from `@theokit/agents/config` returns `{ resolve }`. `resolve({ user, project, projectLocal, env, cli, managed })` folds the layers in this order, later winning: `defaults`, `user`, `project`, `project_local`, `profile`, `env`, `cli`, `managed`. It returns `{ values, profile, provenancePerKey }`.
+
+- Each file layer is checked against the schema (as a partial) and a failure names the layer.
+- `profiles: { selectKey, tableKey }`: the last name chosen by user, project, project-local or cli selects a profile; the tables merge per name across the file layers, and an unknown name throws a `ConfigurationError` naming it.
+- `floors: { key: { permissiveness, restricted, override } }`: a restricted layer (named from `project`, `project_local`, `profile`, `env`) can only tighten the key; the `override` layer (e.g. `cli`) can loosen it.
+- `managed` is applied after the floors, so a managed value for any key is final. For an `accumulate` key it replaces the accumulated list.
 
 ### `-c a.b=value` overrides
 
@@ -303,7 +314,7 @@ AgentBuilder.create()
   .onWired((w) => console.log(w.tools, w.skills.listed, w.skills.readable, w.mcpServers))
 ```
 
-- `tools`: tool names handed to `Agent.create`, with `withheldBuiltinTools` removed. SDK default builtins are not enumerated.
+- `tools`: caller-supplied tool names handed to `Agent.create`. Withheld builtins are listed in `withheldBuiltinTools`; a caller tool sharing a withheld name stays in `tools`. SDK default builtins are not enumerated.
 - `skills.listed` / `skills.readable`: the skills the created agent resolved (`agent.skills.list()`, so a withheld project source or an unknown name is absent; SDK 5.17 discovers no user skills and lists an inline skill only when it is also in `skills.enabled`), and, separately, the inline skills a `skill_read` wired by this build serves. A `skill_read` you supply yourself reports none as readable. The listener runs only when the call created the agent, not on a cache hit, a resume, or a concurrent call that shared another's creation.
 - `mcpServers`, `subagents`, `settingSources` (`project` / `user`), `withheldBuiltinTools`.
 - `hooks`: events registered through `.hooks()`. Hooks inside your own plugins are opaque and not listed.
@@ -384,6 +395,21 @@ to the agent that works on the goal and pass `{ judge: signal.judge }` as the `G
 answers `continue` until the agent calls the tool with `complete` (`done`) or `blocked` (`blocked`), with
 no extra model call per round. The status is kept until `signal.reset()`, so reset it before the next goal
 and use one signal per concurrent goal. `toolName` and `description` rename or reword the tool.
+
+## Isolated workspaces for coding sub-agents
+
+`worktreeProvider(repo, root)` (from `@theokit/agents/bridge`) gives each task its own
+`git worktree add -b task/<id> <root>/<id>`. Pass it as `isolation` to `delegate` (or on the
+`SubAgentSpec`; the option wins): `delegate` acquires a workspace, runs with `cwd` set to it and
+releases it afterwards, on failure too. If the release fails, the task's error is still the one
+thrown, with the cleanup failure on its `cleanupError`; when the error cannot carry a property (a
+primitive, or a frozen or non-extensible object), an `AggregateError` holding both is thrown instead. A `streamFactory` you supply does not read `cwd`.
+Task ids must match `^[A-Za-z0-9][A-Za-z0-9._-]*$` and may not contain `..`; anything else throws
+`WorkspaceProviderError`. Used directly, `workspace.release({ keep: true })` leaves the worktree and branch.
+
+Gitignored files are not in a fresh worktree. List them in `.worktreeinclude` at the repo root (one
+literal repo-relative file or directory per line, `#` comments allowed; the `include` option renames
+the file) and they are copied in. A path that escapes the repository is refused.
 
 ## Reading a run's final answer as an object
 
@@ -803,6 +829,21 @@ message is prefixed with `redirectNote` so the model does not resume the withdra
 failures outside a turn go to `report`; secret masking is the caller's (`sendOptions` or `emit`).
 After `close()`, `run` answers `turn_failed`.
 
+## Device pairing
+
+`createDevicePairing({ dir })` (from `@theokit/agents/control`) lets a phone or second machine reach a control surface. The owner calls `issueCode()` (valid `codeTtlMs`, default 10 minutes, and for one request). The device redeems it with a name (max 64 characters) and a credential it chose: `request(code, name, credential)` refuses `bad_credential` (shorter than `minCredentialLength`, default 32, or fewer than 10 distinct characters), `bad_name`, `unknown_or_expired` and `too_many_pending` (`maxPending`, default 20). The owner lists `pending()`, then `approve(id)` or `deny(id)`. Approved devices are stored in `<dir>/devices.json` (mode 0600) as SHA-256 digests only; `accepts(authorization)` compares a `Bearer` header in constant time.
+
+```ts
+import { createDevicePairing, pairRoute } from '@theokit/agents/control'
+
+const pairing = createDevicePairing({ dir: stateDir })
+const handlePair = pairRoute(pairing) // POST { code, name, token } -> 202 { id } | 400 | 401 | 413 | 429
+pairing.onRevoke((id) => closeSocketsOf(id)) // e.g. close with code 1008
+await pairing.revoke('my-phone') // removes every approved device with that name (names are not unique)
+```
+
+`revoke(name)` calls each `onRevoke` listener with the id of every removed device, after the store is written. Device names are not unique: two devices approved under the same name are revoked together. Approving a request whose credential matches an already approved device replaces that device silently, and its id is passed to `onRevoke` so its sockets close. The route reads `{ code, name, token }` (`credential` is accepted as an alias for `token`).
+
 ## Sessions
 
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
@@ -859,6 +900,23 @@ plan is a separate step. Each candidate is `{ project, kind, target, sessionId?,
 
 The plan also reports `touchedProjects`, `liveCwds` and `countByKind`. `listRegistry` defaults to `Agent.list`.
 
+### Applying a cross-project plan
+
+`runProjectsGC(plan, { apply, owner, removeFromRegistry?, registryTimeoutMs?, protectedIds? })` applies a plan. Without
+`apply: true` it is a dry run: nothing is removed and `removed` lists every candidate. When applying, it re-reads each
+live project's pointer, `protectedIds(cwd)` and the writer lease before EACH removal, and puts a candidate in `refused`
+(with the reason) when it changed since the plan. A registered transcript goes through `removeFromRegistry` (default
+`Agent.delete`, bounded by `registryTimeoutMs`) before its file is unlinked; a lock directory goes through `rmdir`. An
+already-missing target is not an error, other failures land in `errors` per target, and a project directory left empty
+is removed.
+
+Applying requires the root to be owned by `owner.app`. `claimCollectorRoot(projectsRoot, { app })` writes the marker
+`.theokit-collector.json` (`{ app, version }`) next to `projects/`; it never replaces another app's marker
+(`CollectorRootNotOwnedError`) and throws `CollectorRootError` when the marker cannot be written.
+`collectorRootOwner(projectsRoot)` reads it (`undefined` when absent or malformed). Whether to claim a root is the
+app's call: claim the default root, and a custom one only if it holds no projects yet. `runProjectsGC` throws
+`CollectorRootNotOwnedError` (code `collector_root_not_owned`) when the marker is missing or names another app.
+
 ## Refused tool calls
 
 When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
@@ -897,3 +955,23 @@ Server to client: `event` (`{ event, session? }`), `done` (`{ session?, usage? }
 `bad_frame` for an unparsable or unknown frame (the socket stays open), or the store's refusal
 (`busy`, `bad_session`, `turn_failed`, `turn_cancelled`). `interrupted` for a sessionless chat carries the
 private session id. When a socket closes, the turns it started are cancelled.
+
+### Client
+
+`createControlClient({ url, authorization })` (from `@theokit/agents/control`, also needs `ws`) opens a
+socket with the `authorization` header value you pass (include any `Bearer ` prefix). One chat runs at a time per client.
+
+```ts
+import { createControlClient } from '@theokit/agents/control'
+
+const client = await createControlClient({ url: 'ws://127.0.0.1:8080/control', authorization: `Bearer ${token}` })
+for await (const frame of client.chat('hello', 'main')) {
+  if (frame.type === 'event') render(frame.event) // ends after done, interrupted or error
+}
+client.interrupt('main') // or client.steer('main', 'use the other file')
+await client.close()
+```
+
+A URL that is not `ws://` or `wss://`, a refused upgrade (`HTTP <status>`) and a closed connection reject
+with `ControlConnectionError`; its message never contains the credential. A 1009 close reports the
+frame limit.

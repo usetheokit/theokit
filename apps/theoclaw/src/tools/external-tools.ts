@@ -102,7 +102,7 @@ const httpServer = z.strictObject({
 const acpAgent = z.strictObject({
   name: z.string().regex(ACP_NAME, 'must match ^[a-z][a-z0-9_]{0,63}$'),
   description: z.string().min(1),
-  // The agent starts through `env -i` (acp-transport.ts), which reads a word with `=` as a variable.
+  // A command with `=` is refused (kept from when the agent started through `env -i`, which read it as a variable).
   command: command.refine((value) => !value.includes('='), { message: 'may not contain "="' }),
   args: z.array(z.string()).optional(),
   timeoutMs: timeout.optional(),
