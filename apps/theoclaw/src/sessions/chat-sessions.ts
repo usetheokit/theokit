@@ -10,6 +10,7 @@ import type { AgentOptions, Plugin } from '@theokit/sdk'
 import { isAuthenticatedSender, senderKey } from '../authorization/policy.js'
 import { OWNER_SCOPE } from '../memory/memory-store.js'
 import { memoryBackend } from '../memory/backend.js'
+import { importLegacyFacts, legacyFactsFile } from '../memory/legacy-facts.js'
 import { createMemory, type MemoryWiring, memoryEnabled } from '../memory/wiring.js'
 import { withSdkSkills } from '../agent/create-agent.js'
 import { createContainer } from '../agent-container.js'
@@ -94,13 +95,21 @@ export function chatSessions(options: ChatSessionsOptions): {
     )
   }
   const memory = memoryEnabled(options.env, transient)
-    ? createMemory(
-        memoryDirectory(options.env),
-        options.write,
-        memoryBackend(options.env),
-      )
+    ? createMemory(memoryDirectory(options.env), options.write, memoryBackend(options.env))
     : undefined
   const owners = ownerKeys(options.env)
+  const imported = new Set<string>()
+  // Facts earlier versions kept under the workspace move into the sender's SDK partition, once per scope.
+  const importLegacy = async (scope: string): Promise<void> => {
+    if (memory === undefined || imported.has(scope)) return
+    imported.add(scope)
+    await importLegacyFacts(
+      legacyFactsFile(settings.workspace),
+      memoryDirectory(options.env),
+      scope,
+      options.write,
+    )
+  }
   const currentEvent = new AsyncLocalStorage<MessageEvent>()
   const thinking = new Map<string, ThinkingLevel>()
   // Spread after the channel's options, which carry the instance-wide THEOCLAW_THINKING, so the session's level wins.
@@ -116,6 +125,7 @@ export function chatSessions(options: ChatSessionsOptions): {
     getOrCreate: async (id, sessionOptions) => {
       const dir = sessionOptions.local?.sessionDir
       const scope = scopeOf(currentEvent.getStore(), owners)
+      await importLegacy(scope)
       const backendOptions = (await memory?.agentOptions()) ?? {}
       const build = (agentId: string, extra: AgentOptions): Promise<SessionAgent> =>
         createChannelAgentFactory<SessionAgent>(options.env, (channel) =>
@@ -126,7 +136,14 @@ export function chatSessions(options: ChatSessionsOptions): {
             ...extra,
             // The SDK's memory: this sender's own partition, outside the cwd, reviewed after each turn.
             ...(memory === undefined ? {} : { memory: memory.settings(scope) }),
-            ...(backendOptions.plugins === undefined ? {} : { plugins: [...pluginList(extra.plugins ?? channel.plugins ?? sessionOptions.plugins), ...pluginList(backendOptions.plugins)] }),
+            ...(backendOptions.plugins === undefined
+              ? {}
+              : {
+                  plugins: [
+                    ...pluginList(extra.plugins ?? channel.plugins ?? sessionOptions.plugins),
+                    ...pluginList(backendOptions.plugins),
+                  ],
+                }),
             // The session's prompt carries the persona; `...channel` would replace it with the bare notice.
             systemPrompt: extra.systemPrompt ?? sessionOptions.systemPrompt ?? channel.systemPrompt,
             local: { ...sessionOptions.local, ...channel.local },
@@ -134,7 +151,8 @@ export function chatSessions(options: ChatSessionsOptions): {
         )()
       try {
         const opened = await build(id, thinkingExtra(keyOf(id)))
-        const agent = memory === undefined ? opened : memory.record(opened, surfaceOf(id), keyOf(id))
+        const agent =
+          memory === undefined ? opened : memory.record(opened, surfaceOf(id), keyOf(id))
         return transient ? withIncognitoCleanup(agent, dir) : agent
       } catch (error) {
         if (transient) removeIncognitoDir(dir)
@@ -188,7 +206,12 @@ function pluginList(plugins: AgentOptions['plugins']): readonly Plugin[] {
 /** Where the SDK keeps facts and the turn log: the instance's state directory, never an agent's cwd. */
 function memoryDirectory(env: Readonly<Record<string, string | undefined>>): string {
   const state = env.THEOCLAW_STATE_DIR?.trim()
-  return join(state === undefined || state === '' ? join(env.THEOKIT_HOME?.trim() || join(homedir(), '.theokit'), 'theoclaw') : state, 'memory')
+  return join(
+    state === undefined || state === ''
+      ? join(env.THEOKIT_HOME?.trim() || join(homedir(), '.theokit'), 'theoclaw')
+      : state,
+    'memory',
+  )
 }
 
 /** The `platform:senderId` keys `THEOCLAW_OWNERS` names, compared the way the owner policy does. */
