@@ -25,6 +25,9 @@
  * ```
  */
 
+/**
+ * @experimental Legacy snake_case event vocabulary that no production path consumes; it may change to match the wire or presenter vocabulary.
+ */
 export interface MockResponse {
   type: 'text' | 'tool_call' | 'error'
   content?: string
@@ -34,6 +37,9 @@ export interface MockResponse {
   message?: string
 }
 
+/**
+ * @experimental Legacy snake_case event vocabulary that no production path consumes; it may change to match the wire or presenter vocabulary.
+ */
 export interface MockAgentStreamOptions {
   agentName?: string
   responses: MockResponse[]
@@ -41,11 +47,17 @@ export interface MockAgentStreamOptions {
   cost?: number
 }
 
+/**
+ * @experimental Legacy snake_case event vocabulary that no production path consumes; it may change to match the wire or presenter vocabulary.
+ */
 export interface MockStreamEvent {
   type: string
   [key: string]: unknown
 }
 
+/**
+ * @experimental Legacy snake_case event vocabulary that no production path consumes; it may change to match the wire or presenter vocabulary.
+ */
 export function createMockAgentStream(opts: MockAgentStreamOptions) {
   return (_message: string, _sessionId: string): AsyncIterable<MockStreamEvent> => ({
     async *[Symbol.asyncIterator]() {

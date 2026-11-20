@@ -655,10 +655,10 @@ before any runner starts, and refuses it naming the file and the key:
   within 2 minutes or no asker refuses it. That stops only what the agent asks about: it runs as the
   TheoClaw user, outside the tool sandbox, and an agent that writes without asking (its own
   auto-accept mode or project settings) is not stopped by it.
-- An ACP agent starts through `env -i` with only `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
+- An ACP agent starts through the framework `env` option with only `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
   `TMPDIR`, `TZ`, the locale, terminal and XDG directory variables, so the model key and the channel
   and bearer tokens are not in the environment it receives or passes to its own children; an agent
-  that logs in through its home directory still finds its login. That is all `env -i` does, and it
+  that logs in through its home directory still finds its login. That is all the `env` option does, and it
   is not a secret boundary: the agent runs as the TheoClaw user, so it can still read TheoClaw's
   environment from `/proc/<TheoClaw pid>/environ` (and anything else that user can read). Only an
   agent you trust with those secrets belongs in `acpAgents`. A `command` may not contain `=`. A

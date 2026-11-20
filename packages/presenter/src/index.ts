@@ -37,3 +37,10 @@ export {
   readPendingApproval,
   type PendingApproval,
 } from './approvals/pending-approvals.js'
+export {
+  EMPTY_TRANSCRIPT,
+  foldTranscript,
+  type TranscriptItem,
+  type TranscriptState,
+  type TranscriptTool,
+} from './transcript/fold-transcript.js'
