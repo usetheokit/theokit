@@ -27,31 +27,67 @@
  * Re-reading rather than trusting the return value is the discipline the implementation gate already
  * uses for the wiring triad: evidence derived independently, never self-reported.
  */
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { classifyRegistryOutcome } from '../../src/session/session-ops.js'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import { deleteSession } from '../../src/session/session-ops.js'
+
+let base: string
+let cwd: string
+
+beforeEach(() => {
+  base = mkdtempSync(join(tmpdir(), 'theocode-dv-'))
+  cwd = mkdtempSync(join(tmpdir(), 'theocode-dvproj-'))
+})
+
+afterEach(() => {
+  rmSync(base, { recursive: true, force: true })
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+/** A registry the test controls: `remove` decides what the removal does to the listing. */
+async function outcomeOf(
+  listed: string[],
+  remove: (listed: string[], id: string) => string[],
+  id = 'exec-1',
+): Promise<string> {
+  let current = [...listed]
+  const result = await deleteSession(id, {
+    cwd,
+    baseDir: base,
+    removeFromRegistry: async (agentId) => {
+      current = remove(current, agentId)
+    },
+    isListedInRegistry: async (agentId) => current.includes(agentId),
+  })
+  return result.registryEntry
+}
 
 describe('what happened to the registry entry', () => {
-  it('test_listed_before_and_gone_after_is_the_only_removal', () => {
-    expect(classifyRegistryOutcome({ before: ['exec-1', 'tui-2'], after: ['tui-2'], id: 'exec-1' }))
-      .toBe('removed')
+  it('test_listed_before_and_gone_after_is_the_only_removal', async () => {
+    expect(await outcomeOf(['exec-1', 'tui-2'], (l, id) => l.filter((x) => x !== id))).toBe(
+      'removed',
+    )
   })
 
-  it('test_still_listed_after_is_the_defect_and_is_named', () => {
-    expect(classifyRegistryOutcome({ before: ['exec-1'], after: ['exec-1'], id: 'exec-1' }))
-      .toBe('still-present')
+  it('test_still_listed_after_is_the_defect_and_is_named', async () => {
+    expect(await outcomeOf(['exec-1'], (l) => l)).toBe('still-present')
   })
 
-  it('test_absent_before_cannot_be_verified_by_this_method', () => {
+  it('test_absent_before_cannot_be_verified_by_this_method', async () => {
     // An archived session is excluded from the listing, so "gone after" would be true for a session
     // that was never visible — a false removal. Saying `unverified` is the honest answer, and it is
     // why this returns three states rather than a boolean.
-    expect(classifyRegistryOutcome({ before: [], after: [], id: 'exec-1' })).toBe('unverified')
+    expect(await outcomeOf([], (l) => l)).toBe('unverified')
   })
 
-  it('test_an_unrelated_session_disappearing_is_not_this_ones_removal', () => {
+  it('test_an_unrelated_session_disappearing_is_not_this_ones_removal', async () => {
     // Anti-vacuity floor: a classifier that only compared list LENGTHS would pass every arm above.
-    expect(classifyRegistryOutcome({ before: ['exec-1', 'tui-2'], after: ['exec-1'], id: 'exec-1' }))
-      .toBe('still-present')
+    expect(await outcomeOf(['exec-1', 'tui-2'], (l) => l.filter((x) => x !== 'tui-2'))).toBe(
+      'still-present',
+    )
   })
 })

@@ -11,7 +11,7 @@
  * — the wrong trade for a session store". What changes is that the choice is now declared through a
  * documented flag instead of being re-derived by an index comparison.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -19,7 +19,10 @@ import { JsonlParseError, transcriptPath } from '@theokit/agents/persistence'
 import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { readUserTurnPreviewsAsync } from '../../src/session/backtrack.js'
+import {
+  forkSessionBeforeUserTurn,
+  readUserTurnPreviewsAsync,
+} from '../../src/session/backtrack.js'
 
 let base: string
 let cwd: string
@@ -87,5 +90,43 @@ describe('goal continuation turns', () => {
     ])
     const previews = await readUserTurnPreviewsAsync('s2', { cwd, baseDir: base })
     expect(previews).toEqual(['real question'])
+  })
+})
+
+describe('fork before a user turn (framework forkBeforeUserTurn)', () => {
+  it('forks a session whose last line is torn, keeping the turns before the cut', async () => {
+    writeTranscript('src', [userTurn('first'), userTurn('second'), '{"type":"user","mess'])
+
+    const out = await forkSessionBeforeUserTurn('src', 'dst', 1, { cwd, baseDir: base })
+
+    expect(out).toEqual({ newId: 'dst', copied: true, selectedText: 'second' })
+    const copy = readFileSync(transcriptPath(base, cwd, 'dst'), 'utf8')
+    expect(copy).toContain('first')
+    expect(copy).not.toContain('second')
+  })
+
+  it('reports copied: false for a missing session', async () => {
+    expect(await forkSessionBeforeUserTurn('nope', 'dst', 0, { cwd, baseDir: base })).toEqual({
+      newId: 'dst',
+      copied: false,
+    })
+  })
+
+  it('refuses a destination the TUI pointer names, before writing anything', async () => {
+    writeTranscript('src', [userTurn('first'), userTurn('second')])
+    mkdirSync(join(cwd, '.theokit'), { recursive: true })
+    writeFileSync(join(cwd, '.theokit', 'tui-session'), 'tui-live\n')
+
+    await expect(
+      forkSessionBeforeUserTurn('src', 'tui-live', 1, { cwd, baseDir: base }),
+    ).rejects.toThrow()
+    expect(existsSync(transcriptPath(base, cwd, 'tui-live'))).toBe(false)
+  })
+
+  it('rejects a turn index out of range', async () => {
+    writeTranscript('src', [userTurn('first')])
+    await expect(
+      forkSessionBeforeUserTurn('src', 'dst', 5, { cwd, baseDir: base }),
+    ).rejects.toThrow()
   })
 })
