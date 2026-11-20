@@ -192,16 +192,6 @@ export function compatSourcesForSdk(
   return out
 }
 
-/** The installed SDK's version, or `undefined` when the subpath does not resolve. */
-function installedSdkVersion(): string | undefined {
-  try {
-    return (createRequire(import.meta.url)('@theokit/sdk/package.json') as { version?: string })
-      .version
-  } catch {
-    return undefined
-  }
-}
-
 /**
  * Refuses when the installed SDK is too old to know `compatSources`, instead of letting it vanish.
  *
