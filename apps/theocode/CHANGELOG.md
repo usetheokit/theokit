@@ -34,6 +34,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Fixed
 
+- `theocode login` refuses again a key that does not belong to the chosen provider, such as `invalid` for `--provider anthropic`, and keeps the stored credential. Since `@theokit/agents` builds its provider defaults from the SDK table, they carry no key prefix, so the check passed every key; it now asks the SDK which vendor a key belongs to (#2500).
 - The sweep's spawn-options test removes its temporary directory through `tempRoot`, so
   `no-leaked-temp-dirs.test.ts` passes on the promotion pull request (#2489).
 - The standalone consumer pins `@theokit/sdk` at 5.32.0 again, in step with the real manifests, so

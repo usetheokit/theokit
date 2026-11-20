@@ -13,6 +13,7 @@ import { isTransientError } from '@theokit/agents'
 import {
   CredentialNotFoundError,
   DEFAULT_PROVIDERS,
+  providerFromApiKeyPrefix,
   resolveAgentCredential,
 } from '@theokit/agents/auth'
 import type { SourceOrigin } from '@theokit/agents/auth'
@@ -39,9 +40,13 @@ const DESCRIPTORS: readonly ProviderDescriptor[] = DEFAULT_PROVIDERS.filter(
   (d): d is ProviderDescriptor => (PROVIDERS as readonly string[]).includes(d.name),
 )
 
-const PREFIXES: Readonly<Record<Provider, string>> = Object.fromEntries(
-  DESCRIPTORS.map((d) => [d.name, d.keyPrefix ?? '']),
-) as Record<Provider, string>
+/**
+ * A prefix a descriptor still states. The framework's defaults carry none since they come from the
+ * SDK provider table: the SDK's `providerFromApiKeyPrefix` is then the only judge of a key's vendor.
+ */
+const PREFIXES: Readonly<Partial<Record<Provider, string>>> = Object.fromEntries(
+  DESCRIPTORS.flatMap((d) => (d.keyPrefix ? [[d.name, d.keyPrefix]] : [])),
+) as Partial<Record<Provider, string>>
 
 export function credentialHome(home: string, env: Record<string, string | undefined> = {}): string {
   return storeCredentialHome(credentialStore(home), env)
@@ -157,12 +162,23 @@ export interface ResolvedCredential {
  */
 export function assertPairMatches(provider: Provider, apiKey: string, where: string): void {
   const expected = PREFIXES[provider]
-  if (expected !== undefined && expected !== '' && !apiKey.startsWith(expected)) {
+  if (expected !== undefined) {
+    if (apiKey.startsWith(expected)) return
     throw new CredentialError(
       `${where}: the key declared for provider "${provider}" does not start with "${expected}". ` +
         `Either the provider or the key is wrong; sending it would fail mid-request.`,
     )
   }
+  // Every provider this product supports is one the SDK knows, so a key it cannot attribute to the
+  // chosen provider (another vendor's, or none it recognises) is a paste into the wrong place.
+  const inferred = providerFromApiKeyPrefix(apiKey)
+  if (inferred === provider) return
+  const looksLike =
+    inferred === undefined ? 'a key of no vendor the SDK knows' : `a "${inferred}" key`
+  throw new CredentialError(
+    `${where}: the key declared for provider "${provider}" is not a "${provider}" key; it looks like ${looksLike}. ` +
+      `Either the provider or the key is wrong; sending it would fail mid-request.`,
+  )
 }
 
 function toLocalKind(kind: 'api-key' | 'oauth'): 'api' | 'oauth' {
