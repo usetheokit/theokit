@@ -111,5 +111,6 @@ export function wellKnownCardPath(agentName: string): string {
   return `/.well-known/${agentName}/agent-card.json`
 }
 
-/** Alias of `wellKnownCardPath`. */
+/** Alias of `wellKnownCardPath`.
+ * @alias */
 export const agentCardPath = wellKnownCardPath

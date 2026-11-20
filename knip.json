@@ -42,7 +42,8 @@
     "expect-type",
     "lint-staged",
     "pg",
-    "@types/pg"
+    "@types/pg",
+    "@vitejs/plugin-react"
   ],
   "rules": {
     "files": "error",
