@@ -1,3 +1,11 @@
+/**
+ * `@theokit/agents/testing` — a utility subpath for consumers' own tests, not a test-only seam.
+ *
+ * Tier decision: stable by default (`createMockWireStream`, `createMockOutputEvents`, `wireChunk`,
+ * `inspectCompiled`, the live-suite provider-key guard). The exception is the legacy snake_case
+ * `createMockAgentStream` and its types, each tagged `@experimental` on its own declaration.
+ */
+
 export {
   createMockAgentStream,
   type MockAgentStreamOptions,
@@ -25,3 +33,12 @@ export type { CompiledInspection } from './inspect-compiled.js'
  * (`tests/unit/every-public-type-crosses-the-barrel.test.ts`).
  */
 export type { AgentOutputEvent } from '@theokit/presenter'
+
+// The live-suite provider-key guard, published so apps stop copying it.
+export {
+  LIVE_KEY_NAMES,
+  MissingProviderKeyError,
+  assertProviderKeyWhenRequired,
+  requireProviderKeySetup,
+  type ProviderKeyGuardOptions,
+} from './provider-key.js'

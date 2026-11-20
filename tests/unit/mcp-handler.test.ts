@@ -12,7 +12,11 @@ import { describe, expect, it } from 'vitest'
 
 import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
 
-import { handleMcpJsonRpc, isMcpPath } from '../../packages/theo/src/server/agent/mcp-handler.js'
+import {
+  handleMcpJsonRpc,
+  handleMcpToolsJsonRpc,
+  isMcpPath,
+} from '../../packages/theo/src/server/agent/mcp-handler.js'
 
 const mod = {
   default: defineAgent({
@@ -150,5 +154,47 @@ describe('handleMcpJsonRpc', () => {
   it('returns a parse/invalid error for a non-JSON-RPC body', async () => {
     const { json } = await rpc(mod, 'ops', { not: 'jsonrpc' })
     expect(json.error).toBeDefined()
+  })
+})
+
+describe('shared dispatcher on parsed bodies', () => {
+  const entries: [string, (body: unknown) => Promise<Response>][] = [
+    ['handleMcpJsonRpc', (b) => handleMcpJsonRpc(mod, 'a', b)],
+    ['handleMcpToolsJsonRpc', (b) => handleMcpToolsJsonRpc([] as never, 'a', b)],
+  ]
+  describe.each(entries)('%s', (_n, call) => {
+    const init = async (pv: string) =>
+      (
+        (await (
+          await call({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: { protocolVersion: pv },
+          })
+        ).json()) as { result: { protocolVersion: string } }
+      ).result.protocolVersion
+    it('negotiates the protocol version', async () => {
+      expect(await init('2025-03-26')).toBe('2025-03-26')
+      expect(await init('2024-11-05')).toBe('2024-11-05')
+      expect(await init('1999-01-01')).toBe('2025-06-18')
+    })
+    it('answers ping with {}', async () => {
+      expect(await (await call({ jsonrpc: '2.0', id: 7, method: 'ping' })).json()).toEqual({
+        jsonrpc: '2.0',
+        id: 7,
+        result: {},
+      })
+    })
+    it('answers a notification and an idless client response with 202 and no body', async () => {
+      for (const m of [
+        { jsonrpc: '2.0', method: 'notifications/initialized' },
+        { jsonrpc: '2.0', result: {} },
+      ]) {
+        const res = await call(m)
+        expect(res.status).toBe(202)
+        expect(await res.text()).toBe('')
+      }
+    })
   })
 })

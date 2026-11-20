@@ -6,14 +6,13 @@ import { ConfigurationError } from '@theokit/agents'
 import type { SandboxBackend } from '@theokit/agents/sandbox'
 import { SDK_FOREIGN_SURFACES } from '../setting-sources.js'
 import { ToolRegistry, type ToolScope } from '../tools/index.js'
-import { hooksForMember } from './hooks-for-member.js'
+import { hooksForChild } from '@theokit/agents/hooks'
 import { declareAgent, toolsNamed, type SpecContext } from '../composition/agent-spec.js'
 import { EFFORT_LEVELS, parseEffort } from '../config/index.js'
 import type { ReasoningEffort, TrustPosture } from '../config/index.js'
 
 export const TEAM_ROLES = ['explorer', 'worker'] as const
 
-type AgentOptions = Parameters<typeof Agent.create>[0]
 
 interface RoleConfig {
   name: string
@@ -188,7 +187,7 @@ async function roleAgentOptions(
   if (def === undefined) throw unresolvedRole(name, ctx.posture)
   const role = roleConfigFrom(def, name)
   const { cwd, writeRoot, modelId, effort } = inheritFromParent(role, ctx)
-  const hooksPlugin = ctx.hooks !== undefined ? hooksForMember(ctx.hooks) : undefined
+  const hooksPlugin = ctx.hooks !== undefined ? hooksForChild(ctx.hooks) : undefined
   return {
     apiKey: requireResolvedCredential(ctx.apiKey),
     model: buildModelSelection(modelId, effort),
@@ -228,7 +227,7 @@ async function roleAgentOptions(
       { model: modelId, reasoning_effort: effort as ReasoningEffort },
     ),
     ...(hooksPlugin !== undefined
-      ? { plugins: [hooksPlugin] as unknown as AgentOptions['plugins'] }
+      ? { plugins: [hooksPlugin] }
       : {}),
   }
 }

@@ -1,4 +1,5 @@
-import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
+import { parseChatCommand } from '@theokit/gateway'
+import type { ChatCommand, GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
 import { shouldRespondInChat } from '@theokit/gateway-telegram'
 import type { Context } from 'grammy'
 
@@ -14,11 +15,16 @@ export interface GroupActivationOptions {
 }
 
 const HOOK_NAME = 'theoclaw-group-activation'
+/** What `/help` says about the command this hook answers. */
+export const ACTIVATION_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
+  name: 'activation',
+  usage: '/activation mention|always',
+  description: 'how a group activates the bot (groups only)',
+}
 /**
  * The command, behind an optional leading mention (Slack keeps `<@U…>` in the text, Mattermost and
  * WhatsApp `@name`) and with Telegram's optional `@botname` suffix; the argument is checked apart.
  */
-const ACTIVATION = /^(?:(?:<@[^>]+>|@\S+)\s+)?\/activation(?:@\S+)?(?:\s+(.*))?$/
 const USAGE = 'Use /activation mention or /activation always.'
 
 /** The grammy context the Telegram adapter carries, with the bot identity grammy sets from `getMe`. */
@@ -70,10 +76,10 @@ export function createGroupActivationHook(options: GroupActivationOptions): Gate
     name: HOOK_NAME,
     pre_inbound({ event }) {
       if (event.channel.type === 'dm') return undefined
-      const command = ACTIVATION.exec(event.text.trim())
-      if (command !== null) {
+      const command = parseChatCommand(event.text)
+      if (command?.name === 'activation') {
         // Only an owner changes a mode; anyone else's command never becomes a prompt either.
-        return options.isOwner(event.platform, event.sender.id) ? activation(event, command[1]) : { block: true }
+        return options.isOwner(event.platform, event.sender.id) ? activation(event, command.arg) : { block: true }
       }
       if (event.platform !== 'telegram') return undefined
       const mode = modes.get(event.channel.id) ?? options.mode

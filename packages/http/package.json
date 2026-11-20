@@ -1,6 +1,6 @@
 {
   "name": "@theokit/http",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "NestJS-style decorators (@Controller, @Get, @Post, @Body, @UseGuards) over Web Standards, compiling to TheoKit route registrations.",
   "repository": {
     "type": "git",
@@ -43,6 +43,10 @@
     "./css-resource": {
       "types": "./dist/css-resource.d.ts",
       "import": "./dist/css-resource.js"
+    },
+    "./guards": {
+      "types": "./dist/guards-entry.d.ts",
+      "import": "./dist/guards-entry.js"
     },
     "./package.json": "./package.json"
   },

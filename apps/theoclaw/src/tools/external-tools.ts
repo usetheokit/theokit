@@ -10,9 +10,6 @@ import type { ProtectedPath } from './tool-settings.js'
 
 const VARIABLE = 'THEOCLAW_EXTERNAL_TOOLS'
 
-/** The item that makes the SDK honour an HTTP server's `auth` (OAuth included). */
-const MCP_AUTH_GAP_ITEM = 'B-680'
-
 /** One ACP coding agent the `/control` agent may delegate a message to, as one tool. */
 export interface AcpAgentConfig {
   /** The tool name the model calls. */
@@ -78,17 +75,34 @@ const stdioServer = z.strictObject({
   envPolicy: z.enum(['inherit-scrubbed', 'core']).optional(),
 })
 
+// The SDK sends a bearer only for `auth.oauth` (a stored token, refreshed, or the PKCE flow) and
+// refuses an `auth` without it at `Agent.create`, so the file must carry it. `CLIENT_SECRET` is not
+// accepted: SDK 5.17.0 sends only `client_id` to the token endpoint (code exchange and refresh), so a
+// confidential client would pass validation and then fail to get a token.
+const mcpAuth = z.strictObject({
+  CLIENT_ID: z.string().min(1),
+  scopes: z.array(z.string()).optional(),
+  oauth: z.strictObject({
+    authorizationEndpoint: z.url({ protocol: /^https?$/ }),
+    tokenEndpoint: z.url({ protocol: /^https?$/ }),
+    redirectMode: z.enum(['manual', 'localhost']),
+    localhostPort: z.number().int().min(0).max(65_535).optional(),
+    timeoutMs: timeout.optional(),
+  }),
+})
+
 const httpServer = z.strictObject({
   type: z.enum(['http', 'sse']).optional(),
   url: z.url({ protocol: /^https?$/ }),
   headers: stringMap.optional(),
+  auth: mcpAuth.optional(),
   requestTimeoutMs: timeout.optional(),
 })
 
 const acpAgent = z.strictObject({
   name: z.string().regex(ACP_NAME, 'must match ^[a-z][a-z0-9_]{0,63}$'),
   description: z.string().min(1),
-  // The agent starts through `env -i` (acp-transport.ts), which reads a word with `=` as a variable.
+  // A command with `=` is refused (kept from when the agent started through `env -i`, which read it as a variable).
   command: command.refine((value) => !value.includes('='), { message: 'may not contain "="' }),
   args: z.array(z.string()).optional(),
   timeoutMs: timeout.optional(),
@@ -128,7 +142,7 @@ function readJson(path: string, readFile: ReadFile): unknown {
   }
 }
 
-/** One server: HTTP when it names a `url`, stdio otherwise; an HTTP `auth` is refused by name. */
+/** One server: HTTP when it names a `url`, stdio otherwise. */
 function parseServer(name: string, raw: Readonly<Record<string, unknown>>, path: string): McpServerConfig {
   if (!SERVER_NAME.test(name)) {
     refuse(path, `mcpServers.${name}: a server name must match ${SERVER_NAME.source}, so the SDK names its tools mcp_${name}_<tool> unchanged`)
@@ -137,12 +151,6 @@ function parseServer(name: string, raw: Readonly<Record<string, unknown>>, path:
     refuse(path, `mcpServers.${name}: ${name} is the name of a TheoClaw server (THEOCLAW_BROWSER), which this one would replace`)
   }
   if ('url' in raw) {
-    if ('auth' in raw) {
-      refuse(
-        path,
-        `mcpServers.${name}.auth is not honoured by @theokit/sdk 5.11.0 (${MCP_AUTH_GAP_ITEM}): the request would go out without credentials; pass the token in headers`,
-      )
-    }
     return parseWith(httpServer, raw, path, ['mcpServers', name]) as McpHttpServerConfig
   }
   return parseWith(stdioServer, raw, path, ['mcpServers', name]) as McpStdioServerConfig
@@ -182,7 +190,7 @@ function startLineOf(servers: readonly string[], agents: readonly AcpAgentConfig
 /**
  * Read and validate the file `THEOCLAW_EXTERNAL_TOOLS` names, at start (plan D1). Unset or blank:
  * no server and no agent. Throws `TheoClawConfigError` naming the file and the key for an unreadable
- * or malformed file, an HTTP `auth` the SDK would ignore, `envPolicy: "all"`, a relative command, a
+ * or malformed file, an HTTP `auth` without `oauth` (the SDK refuses it), `envPolicy: "all"`, a relative command, a
  * server name the SDK would rewrite, and an ACP name that collides with another tool.
  */
 export function resolveExternalTools(env: Env, readFile: ReadFile = readFileSync): ExternalTools {

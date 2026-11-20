@@ -51,4 +51,19 @@ describe('the A2A tool subpath', () => {
     >
     expect(typeof mod.createA2AJsonRpcHandler).toBe('function')
   })
+
+  it('exposes buildAgentCard and agentCardPath from both the root and dist/a2a.js', async (ctx) => {
+    if (!existsSync(resolve(distDir, 'index.js'))) {
+      ctx.skip()
+      return
+    }
+    for (const file of ['index.js', 'a2a.js']) {
+      const mod = (await import(pathToFileURL(resolve(distDir, file)).href)) as Record<
+        string,
+        unknown
+      >
+      expect(typeof mod.buildAgentCard, file).toBe('function')
+      expect(typeof mod.agentCardPath, file).toBe('function')
+    }
+  })
 })

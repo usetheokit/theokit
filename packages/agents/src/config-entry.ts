@@ -49,6 +49,8 @@ export {
   type BootstrapStep,
 } from './config/app-bootstrap.js'
 
+export { defineLayeredConfig, type SecurityFloorSpec } from './config/define-layered-config.js'
+
 export { parseDottedOverrides, DottedOverrideError } from './config/dotted-overrides.js'
 
 export { TrustStore, TrustStorePermissionsError, type TrustRecord } from './config/trust-store.js'
@@ -80,6 +82,8 @@ export {
   composeInstructions,
   type ComposeInstructionsOptions,
   type ComposedInstructions,
+  type InstructionCut,
+  type InstructionTrim,
   type InstructionSource,
 } from './config/compose-instructions.js'
 
@@ -100,6 +104,12 @@ export {
   type ShellResult,
   type TemplateDeps,
 } from './config/command-template.js'
+export {
+  findFileMentions,
+  resolveFileMentions,
+  type FileMentionOptions,
+  type ResolvedFileMentions,
+} from './config/file-mentions.js'
 
 /**
  * B-067 — the settings precedence stack, named.
@@ -280,3 +290,18 @@ export {
  *
  * It stays reachable from `theokit/server` for the consumers that actually have it.
  */
+
+/**
+ * Env knobs: declare which config keys the environment may set, coerce their values, build the env
+ * layer, and audit that every key has a knob or a documented opt-out. The SDK types cross the
+ * signature of `auditEnvKnobs`, so they are re-exported to be nameable.
+ */
+export {
+  auditEnvKnobs,
+  coerceEnvValue,
+  envKnob,
+  envLayerFrom,
+  type EnvKnob,
+  type EnvKnobKind,
+} from './config/env-knobs.js'
+export type { EnvOptOut, EnvReachabilityAudit } from '@theokit/sdk'

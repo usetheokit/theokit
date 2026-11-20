@@ -1,7 +1,7 @@
 import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { parseSkillMarkdown } from './registry.js'
+import { skillHeader } from './legacy-compat.js'
 
 /** OC-72: `theoclaw skills publish <dir>` uploads a skill folder to the skills registry. */
 export const MAX_PACKAGE_BYTES = 1024 * 1024
@@ -19,7 +19,7 @@ export interface SkillPackage {
 /** A refusal with a message that is safe to print (it never holds the token). */
 export class PublishError extends Error {}
 
-/** `version` from the frontmatter; `parseSkillMarkdown` ignores it. */
+/** `version` from the frontmatter; `skillHeader` ignores it. */
 export function readSkillVersion(text: string): string | undefined {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
   if (match === null) return undefined
@@ -53,7 +53,7 @@ function collect(root: string, rel: string, out: { path: string; data: Buffer }[
 
 /** Reads and validates a skill folder; throws `PublishError` before anything is sent. */
 export function buildSkillPackage(dir: string): SkillPackage {
-  let files: { path: string; data: Buffer }[] = []
+  const files: { path: string; data: Buffer }[] = []
   try {
     if (!lstatSync(dir).isDirectory()) throw new PublishError(`${dir} is not a directory`)
     collect(dir, '', files, { n: 0 })
@@ -61,11 +61,11 @@ export function buildSkillPackage(dir: string): SkillPackage {
     if (error instanceof PublishError) throw error
     throw new PublishError(`cannot read ${dir}`)
   }
-  files = files.sort((a, b) => (a.path < b.path ? -1 : 1))
+  files.sort((a, b) => (a.path < b.path ? -1 : 1))
   const skill = files.find((file) => file.path === 'SKILL.md')
   if (skill === undefined) throw new PublishError(`${dir} has no SKILL.md`)
   const text = skill.data.toString('utf8')
-  const parsed = parseSkillMarkdown(text, 'workspace')
+  const parsed = skillHeader(text)
   if (parsed === undefined) throw new PublishError('SKILL.md needs frontmatter with a name and a description')
   if (!SKILL_NAME.test(parsed.name)) throw new PublishError(`invalid skill name "${parsed.name}"`)
   const version = readSkillVersion(text)

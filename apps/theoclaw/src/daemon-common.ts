@@ -1,6 +1,8 @@
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
+
+import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { configurationPath, loadConfiguration } from './config-file.js'
 import { resolveInstance } from './instance.js'
@@ -72,10 +74,13 @@ export function checkInstallable(io: DaemonIo): InstallTarget | undefined {
   return { ...target, workingDirectory: settings.THEOCLAW_WORKSPACE ?? target.workspace ?? io.homeDir }
 }
 
+/** The mode a plain `writeFile` gives: 0666 less the umask. The SDK sets its `mode` exactly, so it is passed on. */
+export function umaskFileMode(): number {
+  return 0o666 & ~process.umask()
+}
+
 /** Writes beside the destination and renames, so a reader never sees half a definition. */
-export function writeAtomically(path: string, content: string | Buffer): void {
+export async function writeAtomically(path: string, content: string): Promise<void> {
   mkdirSync(dirname(path), { recursive: true })
-  const temporary = `${path}.${process.pid}.tmp`
-  writeFileSync(temporary, content)
-  renameSync(temporary, path)
+  await replaceFileAtomic(path, content, { mode: umaskFileMode() })
 }
