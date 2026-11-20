@@ -3,11 +3,11 @@
  * protect were deleted instead.
  *
  * The quota protects the N most recent transcripts of a DEAD project. The sort that feeds it reads
- * an unknown mtime as `Infinity` (`all-sessions.ts:166`, `(b.mtimeMs ?? Infinity) - ...`), so an
+ * an unknown mtime as `Infinity` (the old planner's sort, `(b.mtimeMs ?? Infinity) - ...`), so an
  * entry the collector could not `stat` sorts as the NEWEST thing in the project and takes a slot.
  *
  * Those entries are already safe: `collectableAge` returns `undefined` without an mtime
- * (`all-sessions.ts:222`) and the planner skips them. So the quota is spent on files that were never
+ * (the old planner's `collectableAge`) and the planner skips them. So the quota is spent on files that were never
  * at risk, and the stale transcripts it was meant to keep fall through to deletion.
  *
  * The history is what makes this worth a test rather than a one-line change. `mtimeMs` used to be
@@ -16,7 +16,7 @@
  * also sorts LAST, so `keepLast` ... could not protect it either". The fix moved the entry to the
  * front to protect it, and protected it twice while unprotecting its neighbours.
  *
- * The errnos are named in `filesystem.ts:74-82` and include EMFILE, "plausible precisely here, since
+ * The errnos are named in the old `listRealProject` and include EMFILE, "plausible precisely here, since
  * the collector stats every entry of every project in one pass".
  *
  * Reachability changed in this release: until `session_gc` defaulted to true, this needed someone to
@@ -24,37 +24,23 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { planSessionGCAllProjects, type ProjectEntry } from '../../../src/session/gc/all-sessions.js'
+import { planVirtual, targets, type VEntry } from './plan-harness.js'
 
-const DAY = 86_400_000
-const NOW = Date.UTC(2026, 8, 3)
+const transcript = (name: string, ageDays: number | undefined): VEntry => ({
+  name,
+  ...(ageDays === undefined ? {} : { ageDays }),
+})
 
-const transcript = (name: string, ageDays: number | undefined): ProjectEntry =>
-  ({
-    name,
-    isDirectory: false,
-    ...(ageDays === undefined ? {} : { mtimeMs: NOW - ageDays * DAY }),
-  }) as ProjectEntry
-
-async function planFor(entries: ProjectEntry[]) {
-  return planSessionGCAllProjects({
-    projectsRoot: '/scratch',
-    now: () => NOW,
-    listProjects: () => ['p'],
-    listProject: () => entries,
-    // DEAD is the only kind the collector deletes from, and the only kind `keepLast` guards.
-    classify: () => ({ state: 'DEAD' }) as never,
-    listRegistry: async () => [],
-    hasLiveWriter: () => false,
-    readPointer: () => undefined,
-    keepLast: 10,
-  } as never)
-}
+// DEAD is the only kind the collector deletes from, and the only kind `keepLast` guards.
+const planFor = (entries: VEntry[]) =>
+  planVirtual({ keepLast: 10, projects: { '/scratch/p': entries } })
 
 describe('the keepLast quota', () => {
   it('test_stale_transcripts_inside_the_quota_are_protected', async () => {
     // The baseline the quota promises: 5 stale transcripts, quota 10, nothing collected.
-    const plan = await planFor([1, 2, 3, 4, 5].map((i) => transcript(`stale-${String(i)}.jsonl`, 30 + i)))
+    const plan = await planFor(
+      [1, 2, 3, 4, 5].map((i) => transcript(`stale-${String(i)}.jsonl`, 30 + i)),
+    )
 
     expect(plan.candidates).toHaveLength(0)
   })
@@ -70,7 +56,7 @@ describe('the keepLast quota', () => {
     const plan = await planFor([...unstattable, ...stale])
 
     expect(
-      plan.candidates.map((c) => c.target),
+      targets(plan),
       'entries the collector could not stat spent the quota, and the transcripts it protects were planned for deletion',
     ).toEqual([])
   })

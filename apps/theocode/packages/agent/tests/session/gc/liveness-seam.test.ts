@@ -25,7 +25,7 @@ import { encodeProjectDir } from '@theokit/agents/persistence'
 import { claimRoot } from '../../../src/session/gc/root-ownership.js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { planAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
+import { planAllProjectsOnDisk } from '../../../src/session/gc/projects-gc.js'
 
 const POSIX = process.platform !== 'win32'
 
@@ -54,7 +54,7 @@ afterEach(() => {
 })
 
 /** A project directory holding one transcript whose first record names `cwd`. */
-function projectFor(cwd: string, transcript = 'sess-a.jsonl'): string {
+function projectFor(cwd: string, transcript = 'sess-a.jsonl', withSibling = true): string {
   const name = encodeProjectDir(cwd)
   const dir = join(root, name)
   mkdirSync(dir, { recursive: true })
@@ -65,6 +65,13 @@ function projectFor(cwd: string, transcript = 'sess-a.jsonl'): string {
   // to be normalised (the GC's own invariant), so age has to come from the fixture.
   const old = new Date(Date.now() - 90 * 86_400_000)
   utimesSync(file, old, old)
+  if (!withSibling) return name
+  // A newer sibling: the quota (`keepLast` has a floor of 1) protects the newest transcript, so the
+  // one under test has to be the older of two.
+  const newer = join(dir, 'sess-newer.jsonl')
+  writeFileSync(newer, `${JSON.stringify({ cwd })}\n`, 'utf8')
+  const recent = new Date(Date.now() - 40 * 86_400_000)
+  utimesSync(newer, recent, recent)
   return name
 }
 
@@ -72,10 +79,18 @@ describe('the liveness seam — what the framework cannot test for us', () => {
   it('test_a_project_whose_cwd_exists_is_not_planned_for_deletion', async () => {
     // Anti-vacuity floor. Without it, an adapter that reported everything UNDETERMINED would satisfy
     // every case below while doing nothing.
-    projectFor(live)
+    projectFor(live, 'sess-a.jsonl', false)
 
-    const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 0, maxAgeDays: 1 })
+    const plan = await planAllProjectsOnDisk({
+      projectsRoot: root,
+      keepLast: 1,
+      maxAgeDays: 1,
+      listRegistry: async () => [],
+    })
 
+    // The framework no longer needs a second guard to keep a live project's newest transcript: the
+    // quota does, and `liveCwds` shows the verdict that was reached was ALIVE.
+    expect(plan.liveCwds).toContain(live)
     expect(plan.candidates.map((c) => c.target).join(' ')).not.toContain(encodeProjectDir(live))
   })
 
@@ -85,7 +100,12 @@ describe('the liveness seam — what the framework cannot test for us', () => {
     const gone = join(live, 'a-directory-that-was-removed')
     projectFor(gone)
 
-    const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 0, maxAgeDays: 1 })
+    const plan = await planAllProjectsOnDisk({
+      projectsRoot: root,
+      keepLast: 1,
+      maxAgeDays: 1,
+      listRegistry: async () => [],
+    })
 
     expect(plan.candidates.map((c) => c.target).join(' ')).toContain(encodeProjectDir(gone))
   })
@@ -101,7 +121,12 @@ describe('the liveness seam — what the framework cannot test for us', () => {
     chmodSync(parent, 0o000)
 
     try {
-      const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 0, maxAgeDays: 1 })
+      const plan = await planAllProjectsOnDisk({
+        projectsRoot: root,
+        keepLast: 1,
+        maxAgeDays: 1,
+        listRegistry: async () => [],
+      })
 
       expect(
         plan.candidates.map((c) => c.target).join(' '),
@@ -121,7 +146,12 @@ describe('the liveness seam — what the framework cannot test for us', () => {
     const name = encodeProjectDir(join(live, 'no-transcript-here'))
     mkdirSync(join(root, name), { recursive: true })
 
-    const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 0, maxAgeDays: 1 })
+    const plan = await planAllProjectsOnDisk({
+      projectsRoot: root,
+      keepLast: 1,
+      maxAgeDays: 1,
+      listRegistry: async () => [],
+    })
 
     expect(plan.candidates.map((c) => c.target).join(' ')).not.toContain(name)
   })

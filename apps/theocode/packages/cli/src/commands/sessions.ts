@@ -13,8 +13,13 @@ import {
 import type { ExecSessions } from '../runtime/index.js'
 
 async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
-  const { planAllProjectsOnDisk, runAllProjectsOnDisk, formatReport } =
-    await import('@theocode/agent/session')
+  const {
+    planAllProjectsOnDisk,
+    runAllProjectsOnDisk,
+    formatReport,
+    keptWholeCount,
+    reportErrors,
+  } = await import('@theocode/agent/session')
   let plan
   try {
     plan = await planAllProjectsOnDisk({
@@ -28,12 +33,12 @@ async function gcAcrossAllProjects(args: ExecSessions): Promise<void> {
   const result = await runAllProjectsOnDisk(plan, { apply: args.apply })
   if (args.json) {
     process.stdout.write(
-      `${JSON.stringify({ type: 'sessions.gc.all', dryRun: result.dryRun, byKind: plan.totalByKind, removed: result.removed.length, kept: plan.kept.length, errors: [...plan.errors, ...result.errors] })}\n`,
+      `${JSON.stringify({ type: 'sessions.gc.all', dryRun: result.dryRun, byKind: plan.countByKind, removed: result.removed.length, kept: keptWholeCount(plan), errors: reportErrors(plan, result) })}\n`,
     )
   } else {
     for (const l of formatReport(plan, result)) process.stderr.write(`${l}\n`)
   }
-  process.exit(plan.errors.length + result.errors.length > 0 ? 1 : 0)
+  process.exit(reportErrors(plan, result).length > 0 ? 1 : 0)
 }
 
 export function humanReport(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string[] {

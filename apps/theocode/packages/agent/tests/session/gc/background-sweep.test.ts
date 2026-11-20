@@ -22,7 +22,7 @@ afterAll(() => {
   for (const r of roots) rmSync(r, { recursive: true, force: true })
 })
 
-import { startSessionSweepInBackground } from '../../../src/session/gc/auto-runtime.js'
+import { startSessionSweepInBackground } from '../../../src/session/gc/sweep-wiring.js'
 
 function scratchRoot(): string {
   const base = mkdtempSync(join(tmpdir(), 'theocode-bgsweep-'))
@@ -41,17 +41,31 @@ const stampOf = (root: string): string => join(root, '..', '.last-session-gc')
  * entire first-run sentence, the one that tells the operator how to turn deletion off, left the
  * suite green.
  */
-const fakeChild = (): { on: (e: 'close', cb: (c: number | null) => void) => void } => ({
+type FakeChild = {
+  stdout: { on: (e: 'data', cb: (chunk: unknown) => void) => void; unref: () => void }
+  on: (e: string, cb: (c: number | null) => void) => void
+  unref: () => void
+}
+
+const fakeChild = (): FakeChild => ({
+  stdout: { on: () => {}, unref: () => {} },
   on: () => {},
+  unref: () => {},
 })
 
-const closingWith = (
-  code: number | null,
-): { on: (e: 'close', cb: (c: number | null) => void) => void } => ({
-  on: (_event, cb) => {
-    cb(code)
+const closingWith = (code: number | null): FakeChild => ({
+  ...fakeChild(),
+  on: (event, cb) => {
+    if (event === 'close') cb(code)
   },
 })
+
+/** The `spawn` seam, recording the argv it was handed. */
+const spawning = (make: () => FakeChild, seen: (args: readonly string[]) => void = () => {}) =>
+  ((_command: string, args: readonly string[]): never => {
+    seen(args)
+    return make() as never
+  }) as unknown as typeof import('node:child_process').spawn
 
 describe('startSessionSweepInBackground', () => {
   it('test_it_hands_the_sweep_to_a_child_and_returns_before_that_child_finishes', () => {
@@ -63,7 +77,7 @@ describe('startSessionSweepInBackground', () => {
     // that reported a finished sweep would have had to invent it.
     //
     // The clock stays only as a coarse regression net, and its ceiling is chosen against the
-    // measurement `spawn-sweep.ts` records: 4.9 s was the FASTEST in-process sweep ever measured
+    // measurement the sweep wiring records: 4.9 s was the FASTEST in-process sweep ever measured
     // (warm, 13 269 projects). Anything under that is evidence the parent did not do the work, and
     // 4 s is far enough above a delegating call — which spawns nothing here — that a loaded runner
     // cannot approach it. The old ceiling was 500 ms, close enough to the contention this repository
@@ -82,17 +96,22 @@ describe('startSessionSweepInBackground', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: (cmd) => {
-        handed.push(cmd.args)
-        return fakeChild()
-      },
+      spawn: spawning(fakeChild, (args) => handed.push(args)),
     })
 
     expect(outcome.started).toBe(true)
-    expect(handed, 'the sweep was never handed to a child — this call did the work itself').toHaveLength(1)
+    expect(
+      handed,
+      'the sweep was never handed to a child — this call did the work itself',
+    ).toHaveLength(1)
     expect(handed[0], 'the child was spawned without the collector subcommand').toContain('gc')
-    expect(reports, 'the call reported a finished sweep before the child had finished one').toEqual([])
-    expect(Date.now() - started, 'the call took longer than the fastest sweep ever measured').toBeLessThan(4_000)
+    expect(reports, 'the call reported a finished sweep before the child had finished one').toEqual(
+      [],
+    )
+    expect(
+      Date.now() - started,
+      'the call took longer than the fastest sweep ever measured',
+    ).toBeLessThan(4_000)
   })
 
   it('test_a_disabled_collector_spawns_nothing_and_stamps_nothing', () => {
@@ -103,10 +122,9 @@ describe('startSessionSweepInBackground', () => {
       enabled: false,
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: () => {
+      spawn: spawning(fakeChild, () => {
         spawned = true
-        return fakeChild()
-      },
+      }),
     })
 
     expect(outcome).toMatchObject({ started: false, reason: 'disabled' })
@@ -123,10 +141,9 @@ describe('startSessionSweepInBackground', () => {
       enabled: true,
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: (cmd) => {
-        args = cmd.args
-        return fakeChild()
-      },
+      spawn: spawning(fakeChild, (a) => {
+        args = a
+      }),
     })
 
     expect(args).toContain('gc')
@@ -144,10 +161,9 @@ describe('startSessionSweepInBackground', () => {
       now: new Date('2026-09-05T00:00:00Z'),
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: (cmd) => {
-        args = cmd.args
-        return fakeChild()
-      },
+      spawn: spawning(fakeChild, (a) => {
+        args = a
+      }),
     })
 
     expect(args).toContain('--apply')
@@ -162,10 +178,9 @@ describe('startSessionSweepInBackground', () => {
         now,
         onReport: () => {},
         projectsRootOverride: root,
-        spawnSweep: () => {
+        spawn: spawning(fakeChild, () => {
           spawns += 1
-          return fakeChild()
-        },
+        }),
       })
     }
 
@@ -185,7 +200,7 @@ describe('startSessionSweepInBackground', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => {
+      spawn: () => {
         throw new Error('EAGAIN')
       },
     })
@@ -205,7 +220,7 @@ describe('what the operator is told when the child finishes', () => {
       now: new Date('2026-09-05T00:00:00Z'),
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => closingWith(0),
+      spawn: spawning(() => closingWith(0)),
     })
     return reports
   }
@@ -237,7 +252,7 @@ describe('what the operator is told when the child finishes', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => closingWith(1),
+      spawn: spawning(() => closingWith(1)),
     })
 
     expect(reports.join(' ')).toContain('exit 1')
@@ -260,14 +275,13 @@ describe('what the operator is told when the child finishes', () => {
  * displaying anything, which is what was wanted all along.
  */
 describe('what the child did reaches the operator', () => {
-  const childSaying = (line: string) => ({
+  const childSaying = (line: string): FakeChild => ({
+    ...closingWith(0),
     stdout: {
-      on: (_e: 'data', cb: (chunk: unknown) => void) => {
+      on: (_e, cb) => {
         cb(line)
       },
-    },
-    on: (_event: 'close', cb: (code: number | null) => void) => {
-      cb(0)
+      unref: () => {},
     },
   })
 
@@ -281,7 +295,7 @@ describe('what the child did reaches the operator', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => childSaying('DRY-RUN — nothing was removed; use --apply to execute\n'),
+      spawn: spawning(() => childSaying('DRY-RUN — nothing was removed; use --apply to execute\n')),
     })
 
     expect(reports.join(' ')).toContain('DRY-RUN')
@@ -299,7 +313,7 @@ describe('what the child did reaches the operator', () => {
       now: new Date('2026-09-05T00:00:00Z'),
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => childSaying('APPLIED — 12 artifact(s) removed\n'),
+      spawn: spawning(() => childSaying('APPLIED — 12 artifact(s) removed\n')),
     })
 
     expect(reports.join(' ')).toContain('12')
@@ -316,7 +330,7 @@ describe('what the child did reaches the operator', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => ({ on: (_e, cb) => cb(0) }),
+      spawn: spawning(() => closingWith(0)),
     })
 
     expect(reports.join(' ')).toContain('sweep')
@@ -347,11 +361,11 @@ describe('the sweep reports what it could not do instead of failing', () => {
         enabled: true,
         onReport: (l) => said.push(l),
         projectsRootOverride: root,
-        spawnSweep: fakeChild,
+        spawn: spawning(fakeChild),
       })
 
       expect(outcome.started).toBe(false)
-      expect(outcome.reason).toBe('unspawnable')
+      expect(outcome.reason).toBe('spawn-failed')
       expect(said.join(' '), 'the sweep refused to start and said nothing').toContain('no script')
     } finally {
       process.argv = argv
@@ -372,11 +386,11 @@ describe('the sweep reports what it could not do instead of failing', () => {
       enabled: true,
       onReport: (l) => said.push(l),
       projectsRootOverride: join(blocker, 'nested', 'projects'),
-      spawnSweep: fakeChild,
+      spawn: spawning(fakeChild),
     })
 
     expect(outcome.started, 'a stamp that could not be written stopped the collection').toBe(true)
-    expect(said.join(' ')).toContain('could not record the run time')
+    expect(said.join(' ')).toContain('could not write the stamp file')
   })
 
   it('test_a_healthy_run_reports_neither_of_those', () => {
@@ -387,7 +401,7 @@ describe('the sweep reports what it could not do instead of failing', () => {
       enabled: true,
       onReport: (l) => said.push(l),
       projectsRootOverride: scratchRoot(),
-      spawnSweep: fakeChild,
+      spawn: spawning(fakeChild),
     })
 
     expect(said.join(' ')).not.toContain('could not')
@@ -403,7 +417,7 @@ describe('a stamp that cannot be understood is not a stamp', () => {
     // garbage date honoured as real could park the interval in the future and disable the collector
     // permanently. It does NOT pin `readLastRun`'s NaN branch, and a mutation check is what showed
     // the difference: replacing that branch with `return at` leaves this test green, because
-    // `sweepDecision` guards NaN a second time (`auto.ts:51`).
+    // `sweepDecision` guards NaN a second time (`sweepDecision`).
     //
     // The redundancy is deliberate and worth keeping — the two functions are separately reachable —
     // but it means the first guard is not observable through this seam. Claiming otherwise would
@@ -416,7 +430,7 @@ describe('a stamp that cannot be understood is not a stamp', () => {
       enabled: true,
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: fakeChild,
+      spawn: spawning(fakeChild),
     })
 
     expect(outcome.started, 'a corrupt stamp stopped the collector').toBe(true)
@@ -433,7 +447,7 @@ describe('a stamp that cannot be understood is not a stamp', () => {
       enabled: true,
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: fakeChild,
+      spawn: spawning(fakeChild),
     })
 
     expect(outcome.started).toBe(false)

@@ -14,9 +14,15 @@ export { gcProtectedIds } from './gc/pointer.js'
 
 export { listAgents, CursorNotDrainedError } from './agent-list.js'
 
-export { planAllProjectsOnDisk, runAllProjectsOnDisk, formatReport } from './gc/filesystem.js'
+export {
+  planAllProjectsOnDisk,
+  runAllProjectsOnDisk,
+  formatReport,
+  keptWholeCount,
+  reportErrors,
+} from './gc/projects-gc.js'
 
-export { guardedSweepStart } from './gc/guarded-start.js'
+export { guardedSweepStart } from './gc/sweep-wiring.js'
 
 export { readUserTurnPreviewsAsync } from './backtrack.js'
 

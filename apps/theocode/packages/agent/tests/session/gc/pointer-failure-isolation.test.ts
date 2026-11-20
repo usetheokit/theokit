@@ -6,7 +6,7 @@
  * protected set. "Refusing to GC is the safe direction" — correct, and it is an argument about THAT
  * PROJECT.
  *
- * The call sat outside every `try` in `resolveGuards` (`all-sessions.ts:143`, between the catch that
+ * The call sat outside every `try` in `resolveGuards` (the old `resolveGuards`, between the catch that
  * wraps `listProject` and the one that wraps `listRegistry`), so the throw unwound past both, out of
  * `planOneProject`, and out of `planSessionGCAllProjects` itself. Measured: the whole plan rejects.
  * One project with a permissions problem meant no project anywhere was collected — and with the
@@ -17,15 +17,13 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { planVirtual, targetOf, targets } from './plan-harness.js'
 
-const NOW = Date.UTC(2026, 8, 3)
-const DAY = 86_400_000
-// TWO transcripts per project: for an ALIVE project the newest is protected as most-recent, so a
-// single-transcript project can never produce a candidate and would make these assertions vacuous.
+// TWO transcripts per project: the newest is the quota's, so a single-transcript project can never
+// produce a candidate and would make these assertions vacuous.
 const stale = [
-  { name: 'newest.jsonl', isDirectory: false, mtimeMs: NOW - 1 * DAY },
-  { name: 'old.jsonl', isDirectory: false, mtimeMs: NOW - 90 * DAY },
+  { name: 'newest.jsonl', ageDays: 1 },
+  { name: 'old.jsonl', ageDays: 90 },
 ]
 
 const eacces = (): never => {
@@ -34,83 +32,66 @@ const eacces = (): never => {
   throw err
 }
 
-async function planWith(readPointer: (cwd: string) => string | undefined) {
-  return planSessionGCAllProjects({
-    projectsRoot: '/s',
-    now: () => NOW,
-    listProjects: () => ['broken', 'healthy'],
-    listProject: () => stale,
+const BROKEN = '/cwd/broken'
+const HEALTHY = '/cwd/healthy'
+
+async function planWith(pointer: (cwd: string) => string | undefined) {
+  return planVirtual({
     // Both ALIVE, each with its own cwd, so only one pointer read fails.
-    classify: (p: string) => ({ state: 'ALIVE', cwd: `/cwd/${p}` }),
-    listRegistry: async () => [],
-    hasLiveWriter: () => false,
-    readPointer,
-    keepLast: 0,
-  } as never)
+    liveness: () => 'alive',
+    projects: { [BROKEN]: stale, [HEALTHY]: stale },
+    pointer,
+  })
 }
 
 describe('a failing pointer read is isolated to its project', () => {
   it('test_the_sweep_completes_instead_of_rejecting', async () => {
     // The finding. Before this, the returned promise rejected and nothing anywhere was collected.
-    await expect(
-      planWith((cwd) => (cwd === '/cwd/broken' ? eacces() : undefined)),
-    ).resolves.toBeDefined()
+    await expect(planWith((cwd) => (cwd === BROKEN ? eacces() : undefined))).resolves.toBeDefined()
   })
 
   it('test_the_healthy_project_is_still_collected', async () => {
-    const plan = await planWith((cwd) => (cwd === '/cwd/broken' ? eacces() : undefined))
+    const plan = await planWith((cwd) => (cwd === BROKEN ? eacces() : undefined))
 
     expect(
-      plan.candidates.map((c) => c.target),
+      targets(plan),
       'a permissions problem in one project stopped collection in another',
-    ).toEqual(['/s/healthy/old.jsonl'])
+    ).toEqual([targetOf(HEALTHY, 'old.jsonl')])
   })
 
   it('test_the_broken_project_is_skipped_rather_than_collected', async () => {
-    // The safe direction the pointer docblock argues for, kept — for that project only. Collecting
-    // it would be the outcome `readPointerId` refuses to allow.
-    const plan = await planWith((cwd) => (cwd === '/cwd/broken' ? eacces() : undefined))
+    // The safe direction the pointer docblock argues for, kept — for that project only.
+    const plan = await planWith((cwd) => (cwd === BROKEN ? eacces() : undefined))
 
-    expect(plan.candidates.map((c) => c.target)).not.toContain('/s/broken/old.jsonl')
+    expect(targets(plan)).not.toContain(targetOf(BROKEN, 'old.jsonl'))
   })
 
   it('test_the_reason_is_reported_rather_than_silently_skipped', async () => {
-    // "I found nothing" and "I could not look" are different facts — the rule B-020 states one
-    // function above, applied to this one.
-    const plan = await planWith((cwd) => (cwd === '/cwd/broken' ? eacces() : undefined))
+    // "I found nothing" and "I could not look" are different facts.
+    const plan = await planWith((cwd) => (cwd === BROKEN ? eacces() : undefined))
 
-    expect(plan.errors.join(' ')).toContain('broken')
+    expect(plan.errors.map((e) => `${e.project} ${e.message}`).join(' ')).toContain('broken')
   })
 
-  // The message names the READ that failed, not just the project.
-  //
-  // B-143 widened what this catch covers — the pointer read moved inside the guard that already
-  // wrapped the registry read — and the message it reports was left saying `registry unavailable`.
-  // An operator whose pointer file is unreadable is then sent to look at the registry. Widening a
-  // catch without widening its message is how a diagnostic starts pointing at the wrong file.
+  // The message names the READ that failed, not just the project: an operator whose pointer file is
+  // unreadable must not be sent to look at the registry.
   it('test_a_failing_pointer_read_is_not_reported_as_a_registry_problem', async () => {
-    const plan = await planWith((cwd) => (cwd === '/cwd/broken' ? eacces() : undefined))
+    const plan = await planWith((cwd) => (cwd === BROKEN ? eacces() : undefined))
 
-    expect(plan.errors.join(' '), 'the pointer failed and the message blamed the registry').toContain(
-      'pointer',
-    )
+    const said = plan.errors.map((e) => e.message).join(' ')
+    expect(said, 'the pointer failed and the message blamed the registry').toContain('pointer')
+    expect(said).not.toContain('registry')
   })
 
   it('test_a_failing_registry_read_still_names_the_registry', async () => {
     // The other half, so the fix cannot be "rename it to pointer and move on".
-    const plan = await planSessionGCAllProjects({
-      projectsRoot: '/s',
-      now: () => NOW,
-      listProjects: () => ['broken'],
-      listProject: () => stale,
-      classify: (p: string) => ({ state: 'ALIVE', cwd: `/cwd/${p}` }),
-      listRegistry: async () => eacces(),
-      hasLiveWriter: () => false,
-      readPointer: () => undefined,
-      keepLast: 0,
-    } as never)
+    const plan = await planVirtual({
+      liveness: () => 'alive',
+      projects: { [BROKEN]: stale },
+      registry: async () => eacces(),
+    })
 
-    expect(plan.errors.join(' ')).toContain('registry')
+    expect(plan.errors.map((e) => e.message).join(' ')).toContain('registry')
   })
 
   it('test_a_healthy_tree_still_collects_everything', async () => {

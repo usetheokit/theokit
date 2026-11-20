@@ -18,104 +18,90 @@
  * used it on exactly one branch. `planOneProject` already keeps a project it cannot classify. The
  * machinery to be safe existed; the failure sites simply did not reach for it.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
 import { CursorNotDrainedError, listAgents } from '../../../src/session/agent-list.js'
+import { planVirtual, projectOf, targets } from './plan-harness.js'
 
-const DAY = 86_400_000
-const NOW = 1_000 * DAY
-
-function options(overrides: Partial<Parameters<typeof planSessionGCAllProjects>[0]> = {}) {
-  return {
-    now: () => NOW,
-    keepLast: 0,
-    maxAgeDays: 30,
-    listProjects: () => ['proj'],
-    listProject: () => [{ name: 'sess-old.jsonl', isDirectory: false, mtimeMs: NOW - 60 * DAY }],
-    classify: () => ({ state: 'DEAD' as const, cwd: '/proj' }),
-    listRegistry: async () => [],
-    hasLiveWriter: () => false,
-    readPointer: () => undefined,
-    ...overrides,
-  } as Parameters<typeof planSessionGCAllProjects>[0]
-}
+const CWD = '/proj'
 
 describe('B-020 — retention and age apply to the projects the collector deletes from', () => {
   it('test_a_transcript_with_an_unknown_mtime_is_not_collectable', async () => {
     // mtime 0 made a real transcript ~20 000 days old, clearing every window, AND sorted it last so
     // the keepLast slice could not reach it. An entry whose age cannot be computed has no age to
     // compare against the window.
-    const plan = await planSessionGCAllProjects(
-      options({
-        listProject: () => [{ name: 'sess-unknown.jsonl', isDirectory: false, mtimeMs: undefined }],
-      } as never),
-    )
+    const plan = await planVirtual({ projects: { [CWD]: [{ name: 'sess-unknown.jsonl' }] } })
 
     expect(
-      plan.candidates.map((c) => c.target),
+      targets(plan),
       'a transcript whose mtime could not be read was planned for deletion as infinitely old',
     ).toEqual([])
   })
 
   it('test_keepLast_protects_the_newest_transcripts_of_a_DEAD_project', async () => {
-    // The main deletion path. `resolveGuards` returned an empty protection set for DEAD, so
-    // KEEP_PER_PROJECT and the --keep-last flag applied only to projects the collector spares.
-    const plan = await planSessionGCAllProjects(
-      options({
-        keepLast: 2,
-        listProject: () => [
-          { name: 'sess-c.jsonl', isDirectory: false, mtimeMs: NOW - 40 * DAY },
-          { name: 'sess-b.jsonl', isDirectory: false, mtimeMs: NOW - 50 * DAY },
-          { name: 'sess-a.jsonl', isDirectory: false, mtimeMs: NOW - 60 * DAY },
+    // The main deletion path: the quota must apply to the projects the collector deletes from.
+    const plan = await planVirtual({
+      keepLast: 2,
+      projects: {
+        [CWD]: [
+          { name: 'sess-c.jsonl', ageDays: 40 },
+          { name: 'sess-b.jsonl', ageDays: 50 },
+          { name: 'sess-a.jsonl', ageDays: 60 },
         ],
-      }),
-    )
+      },
+    })
 
     expect(
-      plan.candidates.map((c) => c.target.split('/').pop()),
+      targets(plan).map((t) => t.split('/').pop()),
       'keepLast had no effect on a DEAD project — the only kind the collector deletes from',
     ).toEqual(['sess-a.jsonl'])
   })
 
   it('test_a_DEAD_project_still_collects_beyond_the_keepLast_slice', async () => {
-    // Anti-vacuity floor: protecting EVERYTHING would satisfy the assertion above.
-    const plan = await planSessionGCAllProjects(options({ keepLast: 0 }))
+    // Anti-vacuity floor: protecting EVERYTHING would satisfy the assertion above. `keepLast` has a
+    // floor of 1, so a second transcript sits outside the slice.
+    const plan = await planVirtual({
+      projects: {
+        [CWD]: [
+          { name: 'sess-new.jsonl', ageDays: 40 },
+          { name: 'sess-old.jsonl', ageDays: 60 },
+        ],
+      },
+    })
 
     expect(plan.candidates.length).toBeGreaterThan(0)
   })
 
   it('test_a_project_that_cannot_be_classified_is_kept', async () => {
-    // The behaviour the four fixes above route into. It already existed and was simply unreachable
-    // from the failure sites.
-    const classify = vi.fn(() => ({ state: 'UNDETERMINED' as const, reason: 'EACCES' }))
-
-    const plan = await planSessionGCAllProjects(options({ classify } as never))
+    // The behaviour the fixes above route into.
+    const plan = await planVirtual({
+      liveness: () => 'undetermined',
+      projects: { [CWD]: [{ name: 'sess-old.jsonl', ageDays: 60 }] },
+    })
 
     expect(plan.candidates).toEqual([])
-    expect(plan.kept).toContain('proj')
+    expect(plan.kept.map((k) => k.project)).toContain(projectOf(CWD))
   })
 })
 
 describe('B-020 — a run that could not look does not report an empty result', () => {
   it('test_a_failed_projects_listing_is_reported_as_an_error', async () => {
-    // `listProjects()` throwing returned an EMPTY plan with an EMPTY error list, and the renderer
-    // prints "nothing to collect" for exactly that shape. "I found nothing" and "I could not look"
-    // are different facts, and the report showed the reassuring one.
-    const plan = await planSessionGCAllProjects(
-      options({
-        listProjects: () => {
-          throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
-        },
-      }),
-    )
+    // A throwing listing returned an EMPTY plan with an EMPTY error list, and the renderer prints
+    // "nothing to collect" for exactly that shape. "I found nothing" and "I could not look" are
+    // different facts.
+    const plan = await planVirtual({
+      projects: { [CWD]: [{ name: 'sess-old.jsonl', ageDays: 60 }] },
+      readdirRoot: () => {
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+      },
+    })
 
     expect(plan.candidates).toEqual([])
     expect(
       plan.errors,
       'a collector that could not list any project reported a clean, empty run',
     ).toHaveLength(1)
-    expect(plan.errors[0]).toMatch(/EACCES/)
+    expect(plan.errors[0]?.message).toMatch(/EACCES/)
   })
 })
 

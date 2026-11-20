@@ -16,34 +16,30 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { planVirtual, targetOf, targets } from './plan-harness.js'
 
-const DAY = 86_400_000
-const NOW = 1_000 * DAY
+const CWD = '/proj'
+// A newer decoy: `keepLast` has a floor of 1 and protects the newest transcript, so the transcript
+// under test is the older one.
+const decoy = { name: 'sess-new.jsonl', ageDays: 40 }
 
-/** One project holding one transcript old enough to be collectable. */
-function options(overrides: Partial<Parameters<typeof planSessionGCAllProjects>[0]> = {}) {
-  return {
-    now: () => NOW,
-    keepLast: 0,
-    maxAgeDays: 30,
-    listProjects: () => ['proj'],
-    listProject: () => [{ name: 'sess-old.jsonl', isDirectory: false, mtimeMs: NOW - 60 * DAY }],
-    classify: () => ({ state: 'DEAD' as const, cwd: '/proj' }),
-    listRegistry: async () => [],
-    hasLiveWriter: () => false,
-    readPointer: () => undefined,
-    ...overrides,
-  } as Parameters<typeof planSessionGCAllProjects>[0]
+function plan(
+  entries: { name: string; isDirectory?: boolean; ageDays?: number }[],
+  hasLiveWriter?: (t: string) => boolean,
+) {
+  return planVirtual({
+    projects: { [CWD]: entries },
+    ...(hasLiveWriter === undefined ? {} : { hasLiveWriter }),
+  })
 }
 
 describe('B-003 — the plan phase consults the writer lease', () => {
   it('test_a_stale_transcript_with_no_live_writer_is_collectable', async () => {
     // Anti-vacuity floor: if nothing were ever planned, the test below would pass for free.
-    const plan = await planSessionGCAllProjects(options())
+    const p = await plan([decoy, { name: 'sess-old.jsonl', ageDays: 60 }])
 
     expect(
-      plan.candidates.some((c) => c.target.endsWith('sess-old.jsonl')),
+      targets(p).some((t) => t.endsWith('sess-old.jsonl')),
       'the fixture stopped producing a collectable transcript, so the guard test below proves nothing',
     ).toBe(true)
   })
@@ -51,15 +47,15 @@ describe('B-003 — the plan phase consults the writer lease', () => {
   it('test_a_transcript_with_a_live_writer_is_NOT_planned_for_deletion', async () => {
     const hasLiveWriter = vi.fn(() => true)
 
-    const plan = await planSessionGCAllProjects(options({ hasLiveWriter }))
+    const p = await plan([decoy, { name: 'sess-old.jsonl', ageDays: 60 }], hasLiveWriter)
 
     expect(
       hasLiveWriter,
-      '`hasLiveWriter` is a required option wired to the SDK lease and was never called in the plan ' +
-        'phase — transcript deletion consulted the lease in neither phase',
+      '`hasLiveWriter` was never consulted in the plan phase — transcript deletion consulted the ' +
+        'lease in neither phase',
     ).toHaveBeenCalled()
     expect(
-      plan.candidates.filter((c) => c.kind === 'transcript'),
+      p.candidates.filter((c) => c.kind === 'transcript'),
       'a transcript being written to right now was planned for deletion. Only its mtime freshness ' +
         'stood between a live session and unlink.',
     ).toEqual([])
@@ -68,18 +64,13 @@ describe('B-003 — the plan phase consults the writer lease', () => {
 
 describe('#1911 — only the SDK’s own temp files are collectable', () => {
   it('test_a_foreign_old_tmp_file_is_not_a_candidate_but_an_sdk_temp_file_is', async () => {
-    const old = NOW - 60 * DAY
     const sdkTmp = 'abc.jsonl.1234.0123456789abcdef.tmp'
-    const plan = await planSessionGCAllProjects(
-      options({
-        listProject: () => [
-          { name: 'notes.tmp', isDirectory: false, mtimeMs: old },
-          { name: sdkTmp, isDirectory: false, mtimeMs: old },
-        ],
-      }),
-    )
+    const p = await plan([
+      { name: 'notes.tmp', ageDays: 60 },
+      { name: sdkTmp, ageDays: 60 },
+    ])
 
-    expect(plan.candidates.some((c) => c.target.endsWith(sdkTmp))).toBe(true)
-    expect(plan.candidates.some((c) => c.target.endsWith('notes.tmp'))).toBe(false)
+    expect(targets(p)).toContain(targetOf(CWD, sdkTmp))
+    expect(targets(p)).not.toContain(targetOf(CWD, 'notes.tmp'))
   })
 })

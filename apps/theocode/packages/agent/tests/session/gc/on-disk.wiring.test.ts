@@ -21,7 +21,9 @@ import { join } from 'node:path'
 
 import { afterAll, describe, expect, it } from 'vitest'
 
-import { runAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
+import { claimRoot } from '../../../src/session/gc/root-ownership.js'
+
+import { runAllProjectsOnDisk, type AllPlan } from '../../../src/session/gc/projects-gc.js'
 
 /**
  * Scratch roots, removed when the file finishes.
@@ -37,8 +39,11 @@ afterAll(() => {
 })
 
 function scratch(): { root: string; project: string; transcript: string } {
-  const root = mkdtempSync(join(tmpdir(), 'theocode-gc-wiring-'))
-  roots.push(root)
+  const home = mkdtempSync(join(tmpdir(), 'theocode-gc-wiring-'))
+  roots.push(home)
+  const root = join(home, 'projects')
+  // Applying needs a root this product owns; the marker sits beside `projects/`, inside `home`.
+  claimRoot(root)
   const project = join(root, 'a-project')
   mkdirSync(project, { recursive: true })
   const transcript = join(project, 'sess-old.jsonl')
@@ -46,12 +51,15 @@ function scratch(): { root: string; project: string; transcript: string } {
   return { root, project, transcript }
 }
 
-const planFor = (transcript: string) => ({
-  candidates: [{ project: 'a-project', kind: 'transcript' as const, target: transcript, ageDays: 90 }],
+const planFor = (root: string, transcript: string): AllPlan => ({
+  projectsRoot: root,
+  candidates: [
+    { project: 'a-project', kind: 'transcript' as const, target: transcript, ageDays: 90 },
+  ],
   kept: [],
-  touchedProjects: [],
+  touchedProjects: ['a-project'],
   liveCwds: [],
-  totalByKind: {} as never,
+  countByKind: { transcript: 1, 'writer-lock': 0, 'lock-directory': 0, temp: 0, registry: 0 },
   errors: [],
 })
 
@@ -59,9 +67,11 @@ describe('the on-disk wiring of the delete path', () => {
   it('test_apply_actually_removes_the_file_from_the_filesystem', async () => {
     const { root, transcript } = scratch()
 
-    const result = await runAllProjectsOnDisk(planFor(transcript), { apply: true, projectsRoot: root })
+    const result = await runAllProjectsOnDisk(planFor(root, transcript), { apply: true })
 
-    expect(existsSync(transcript), 'the collector reported a removal it did not perform').toBe(false)
+    expect(existsSync(transcript), 'the collector reported a removal it did not perform').toBe(
+      false,
+    )
     expect(result.removed).toContain(transcript)
     expect(result.errors).toEqual([])
   })
@@ -71,7 +81,7 @@ describe('the on-disk wiring of the delete path', () => {
     // satisfy the case above, and this is the one that would catch it.
     const { root, transcript } = scratch()
 
-    const result = await runAllProjectsOnDisk(planFor(transcript), { projectsRoot: root })
+    const result = await runAllProjectsOnDisk(planFor(root, transcript), {})
 
     expect(existsSync(transcript), 'a DRY RUN deleted a file').toBe(true)
     expect(result.dryRun).toBe(true)
@@ -83,8 +93,8 @@ describe('the on-disk wiring of the delete path', () => {
     const { root, transcript } = scratch()
 
     const result = await runAllProjectsOnDisk(
-      planFor(join(root, 'a-project', 'never-existed.jsonl')),
-      { apply: true, projectsRoot: root },
+      planFor(root, join(root, 'a-project', 'never-existed.jsonl')),
+      { apply: true },
     )
 
     expect(result.errors).toEqual([])

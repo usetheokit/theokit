@@ -7,60 +7,58 @@
  *
  * Per rules/testing.md § 3, business rules on a deletion path get tests. These are those rules.
  */
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { GCFloorError } from '@theokit/agents/session'
+import { afterAll, describe, expect, it } from 'vitest'
 
-const DAY = 86_400_000
-const NOW = 1_000 * DAY
+import { planAllProjectsOnDisk } from '../../../src/session/gc/projects-gc.js'
+import { claimRoot } from '../../../src/session/gc/root-ownership.js'
+import { fileOf, planVirtual, targets } from './plan-harness.js'
 
-function options(
-  entries: { name: string; isDirectory?: boolean; ageDays: number }[],
-  overrides: Record<string, unknown> = {},
-) {
-  return {
-    now: () => NOW,
-    keepLast: 0,
-    maxAgeDays: 30,
-    projectsRoot: '/root',
-    listProjects: () => ['proj'],
-    listProject: () =>
-      entries.map((e) => ({
-        name: e.name,
-        isDirectory: e.isDirectory ?? false,
-        mtimeMs: NOW - e.ageDays * DAY,
-      })),
-    classify: () => ({ state: 'DEAD' as const, cwd: '/proj' }),
-    listRegistry: async () => [],
-    hasLiveWriter: () => false,
-    readPointer: () => undefined,
-    ...overrides,
-  } as Parameters<typeof planSessionGCAllProjects>[0]
-}
+const CWD = '/proj'
+const NEWER = { name: 'newer.jsonl', ageDays: 31 }
 
 describe('B-003 — the age window is a floor, not a suggestion', () => {
   it('test_a_transcript_inside_the_window_is_never_planned', async () => {
-    const plan = await planSessionGCAllProjects(options([{ name: 'fresh.jsonl', ageDays: 1 }]))
+    const plan = await planVirtual({
+      projects: { [CWD]: [NEWER, { name: 'fresh.jsonl', ageDays: 1 }] },
+    })
 
-    expect(plan.candidates).toEqual([])
+    expect(targets(plan).some((t) => t.endsWith('fresh.jsonl'))).toBe(false)
   })
 
   it('test_a_transcript_past_the_window_is_planned', async () => {
-    // Anti-vacuity floor for the assertion above.
-    const plan = await planSessionGCAllProjects(options([{ name: 'stale.jsonl', ageDays: 60 }]))
+    // Anti-vacuity floor for the assertion above (the newest is the quota's, so the stale one is the
+    // second).
+    const plan = await planVirtual({
+      projects: {
+        [CWD]: [
+          { name: 'new.jsonl', ageDays: 40 },
+          { name: 'stale.jsonl', ageDays: 60 },
+        ],
+      },
+    })
 
-    expect(plan.candidates).toHaveLength(1)
+    expect(targets(plan)).toHaveLength(1)
   })
 })
 
 describe('B-003 — the live pointer is never collected', () => {
   it('test_the_pointed_session_is_kept_however_stale', async () => {
-    const plan = await planSessionGCAllProjects(
-      options([{ name: 'pointed.jsonl', ageDays: 900 }], {
-        readPointer: () => 'pointed',
-        classify: () => ({ state: 'ALIVE' as const, cwd: '/proj' }),
-      }),
-    )
+    const pointed = fileOf(CWD, 'pointed')
+    const plan = await planVirtual({
+      liveness: () => 'alive',
+      pointer: () => 'pointed',
+      projects: {
+        [CWD]: [
+          { name: 'decoy.jsonl', ageDays: 40 },
+          { name: pointed, ageDays: 900 },
+        ],
+      },
+    })
 
     expect(
       plan.candidates,
@@ -72,30 +70,34 @@ describe('B-003 — the live pointer is never collected', () => {
 
 describe('B-003 — keepLast retains the newest transcripts', () => {
   it('test_the_newest_transcripts_survive_regardless_of_age', async () => {
-    const plan = await planSessionGCAllProjects(
-      options(
-        [
+    const plan = await planVirtual({
+      keepLast: 2,
+      liveness: () => 'alive',
+      projects: {
+        [CWD]: [
           { name: 'a.jsonl', ageDays: 100 },
           { name: 'b.jsonl', ageDays: 200 },
           { name: 'c.jsonl', ageDays: 300 },
         ],
-        { keepLast: 2, classify: () => ({ state: 'ALIVE' as const, cwd: '/proj' }) },
-      ),
-    )
+      },
+    })
 
     // The two most recent are kept; only the oldest is collectable.
-    expect(plan.candidates.map((c) => c.target)).toEqual([expect.stringContaining('c.jsonl')])
+    expect(targets(plan)).toEqual([expect.stringContaining('c.jsonl')])
   })
 })
 
 describe('B-003 — a lock whose transcript still exists is not an orphan', () => {
   it('test_a_lock_with_a_live_sibling_transcript_is_kept', async () => {
-    const plan = await planSessionGCAllProjects(
-      options([
-        { name: 'sess.jsonl', ageDays: 1 },
-        { name: 'sess.jsonl.lock', ageDays: 90 },
-      ]),
-    )
+    const plan = await planVirtual({
+      projects: {
+        [CWD]: [
+          { name: 'sess.jsonl', ageDays: 1 },
+          { name: 'sess.jsonl.writer.lock', ageDays: 90 },
+          { name: 'sess.jsonl.lock', ageDays: 90, isDirectory: true },
+        ],
+      },
+    })
 
     expect(
       plan.candidates,
@@ -103,47 +105,52 @@ describe('B-003 — a lock whose transcript still exists is not an orphan', () =
         'once the session it guards is gone',
     ).toEqual([])
   })
+
+  it('test_a_lock_whose_transcript_is_gone_is_collected', async () => {
+    // Anti-vacuity: a planner that never collected a lock would satisfy the case above.
+    const plan = await planVirtual({
+      projects: { [CWD]: [{ name: 'gone.jsonl.writer.lock', ageDays: 90 }] },
+    })
+
+    expect(plan.candidates.map((c) => c.kind)).toEqual(['writer-lock'])
+  })
 })
 
 /**
  * The floor REFUSES; it does not normalise.
  *
- * `planSessionGCAllProjects` throws when `maxAgeDays` is below `FLOOR_DAYS`, and the message says
- * why: "silently normalising would delete yesterday's session". That guard sits on the only path in
- * this product that removes a user's data and had no test — a comment in `liveness-seam.test.ts`
- * mentioned it, which is documentation, not a gate.
- *
- * Found 2026-09-03 while writing down the reliability target in the README: the target claims the
- * delete path fails towards keeping, and a claim in a versioned file needs something that fails when
- * it stops being true.
+ * The planner throws `GCFloorError` when `maxAgeDays` is below the floor of one day: silently
+ * normalising would delete yesterday's session. That guard sits on the only path in this product
+ * that removes a user's data, and the claim that the delete path fails towards keeping needs
+ * something that fails when it stops being true.
  */
 describe('the retention floor is a refusal, not a normalisation', () => {
-  const base = { projectsRoot: '/nonexistent-for-this-test', projects: [] as string[] }
+  const home = mkdtempSync(join(tmpdir(), 'theocode-floor-'))
+  const projectsRoot = join(home, 'projects')
+  claimRoot(projectsRoot)
+  afterAll(() => rmSync(home, { recursive: true, force: true }))
 
   it('test_a_window_below_the_floor_is_refused', async () => {
-    await expect(planSessionGCAllProjects({ ...base, maxAgeDays: 0 } as never)).rejects.toThrow(
-      RangeError,
+    await expect(planAllProjectsOnDisk({ projectsRoot, maxAgeDays: 0 })).rejects.toThrow(
+      GCFloorError,
     )
   })
 
   it('test_a_negative_window_is_refused', async () => {
-    await expect(planSessionGCAllProjects({ ...base, maxAgeDays: -30 } as never)).rejects.toThrow(
-      RangeError,
+    await expect(planAllProjectsOnDisk({ projectsRoot, maxAgeDays: -30 })).rejects.toThrow(
+      GCFloorError,
     )
   })
 
   it('test_the_refusal_says_what_the_floor_is_and_why_it_exists', async () => {
     // A guard that refuses without saying why gets removed by the next person who hits it.
-    await expect(
-      planSessionGCAllProjects({ ...base, maxAgeDays: 0 } as never),
-    ).rejects.toThrow(/floor of 1 day/)
+    await expect(planAllProjectsOnDisk({ projectsRoot, maxAgeDays: 0 })).rejects.toThrow(
+      /at least 1.*refused rather than clamped/s,
+    )
   })
 
   it('test_the_floor_itself_is_accepted', async () => {
-    // Anti-vacuity: refusing everything would satisfy the assertions above. One day is a legitimate
-    // choice for someone who wants an aggressive sweep; the floor bounds it, it does not forbid it.
-    await expect(
-      planSessionGCAllProjects({ ...base, maxAgeDays: 1 } as never),
-    ).resolves.toBeDefined()
+    // Anti-vacuity: refusing everything would satisfy the assertions above.
+    await expect(planAllProjectsOnDisk({ projectsRoot, maxAgeDays: 1 })).resolves.toBeDefined()
   })
 })

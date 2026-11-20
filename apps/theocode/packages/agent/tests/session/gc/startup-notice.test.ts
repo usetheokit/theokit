@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { startupNoticeFor } from '../../../src/session/gc/auto-runtime.js'
+import { startupNoticeFor } from '../../../src/session/gc/sweep-wiring.js'
 
 describe('startupNoticeFor', () => {
   it('test_a_started_sweep_says_nothing', () => {

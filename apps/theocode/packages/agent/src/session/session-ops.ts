@@ -36,7 +36,7 @@ export interface SessionInfo {
  * mints a fourth prefix and disappears, silently, exactly as `exec-` did from the first commit.
  *
  * What settles it is that this codebase already answers "what is a session", and the answer is not
- * the name: `gc/filesystem.ts:98` builds the DELETION PROTECTION SET from
+ * the name: `gc/projects-gc.ts` builds the DELETION PROTECTION SET from
  * this same listing with no filter at all. Two answers to one question is how they come to disagree,
  * and here the stricter one guarded a display while the looser one guarded deletion.
  *
