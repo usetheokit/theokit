@@ -71,7 +71,12 @@ export default tseslint.config(
   // header of this file states the bar every cap here was set to meet: measured zero on this tree,
   // so it freezes a good state instead of announcing debt. Widening those caps to `tools/` would
   // announce debt, which is a refactor decision and not a lint decision.
-  { files: ['**/*.cjs'], languageOptions: { globals: { module: 'readonly' } } },
+  // `require` too, since #2446 made the dependency-cruiser config load a shared rule with it.
+  {
+    files: ['**/*.cjs'],
+    languageOptions: { globals: { module: 'readonly', require: 'readonly' } },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
   {
     languageOptions: {
       globals: {
