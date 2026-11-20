@@ -666,7 +666,7 @@ describe('the typed conversions of the port (#2317)', () => {
   })
 
   const DONE = { type: 'done', result: 'r', usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 }, durationMs: 4 }
-  const MALFORMED: readonly (readonly [string, { readonly type: string }])[] = [
+  const MALFORMED: readonly (readonly [string, { readonly type: string; readonly [key: string]: unknown }])[] = [
     ['iteration without totalSteps', { type: 'iteration', step: 1 }],
     ['iteration with a string totalSteps', { type: 'iteration', step: 1, totalSteps: '3' }],
     ['done usage without totalTokens', { ...DONE, usage: { inputTokens: 1, outputTokens: 2 } }],
