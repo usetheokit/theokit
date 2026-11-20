@@ -105,10 +105,10 @@ function oldestUnmanagedRun(): string | undefined {
 }
 
 function evictOldest(tools: Map<string, Entry[]>, runId: string): void {
-  for (const [name, queue] of tools) {
-    queue.shift()
-    if (queue.length === 0) tools.delete(name)
-    entryCount.set(runId, (entryCount.get(runId) ?? 1) - 1)
-    return
-  }
+  const first = tools.entries().next()
+  if (first.done) return
+  const [name, queue] = first.value
+  queue.shift()
+  if (queue.length === 0) tools.delete(name)
+  entryCount.set(runId, (entryCount.get(runId) ?? 1) - 1)
 }
