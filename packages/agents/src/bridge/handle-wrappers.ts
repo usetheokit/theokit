@@ -11,6 +11,8 @@
  *
  * @internal
  */
+import type { SDKUserMessage } from '@theokit/sdk'
+
 import type { Guardrail } from '../guardrails/index.js'
 import { GuardrailViolationError, runInputGuards, runOutputGuards } from '../guardrails/index.js'
 
@@ -39,7 +41,7 @@ export function withStepCeiling(
     },
     dispose: () => handle.dispose(),
     ...forwardedMembers(handle),
-    send: (msg: string, sendOpts?: SdkSendOptions) =>
+    send: (msg: string | SDKUserMessage, sendOpts?: SdkSendOptions) =>
       handle.send(msg, { maxIterations, ...sendOpts }),
   }
 }
@@ -57,10 +59,16 @@ export function withGuardrails(
     },
     dispose: () => handle.dispose(),
     ...forwardedMembers(handle),
-    send: async (msg: string, sendOpts?: SdkSendOptions): Promise<SdkTurnHandle> => {
+    send: async (
+      msg: string | SDKUserMessage,
+      sendOpts?: SdkSendOptions,
+    ): Promise<SdkTurnHandle> => {
       // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
       // not merely annotate it afterwards.
-      const guarded = await runInputGuards(msg, guardrails)
+      const guarded =
+        typeof msg === 'string'
+          ? await runInputGuards(msg, guardrails)
+          : { ...msg, text: await runInputGuards(msg.text, guardrails) }
       return guardTurn(await handle.send(guarded, sendOpts), guardrails)
     },
   }

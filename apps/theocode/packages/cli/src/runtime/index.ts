@@ -18,8 +18,5 @@ export {
 } from './events.js'
 export { createGoalCancellation } from './goal-cancellation.js'
 export { resolveSession } from './preflight.js'
-export { consumeWithForkIfBusy, availableIdOrFork } from './session-busy.js'
 
 export { gitGate } from './preflight.js'
-
-export { loadProjectEnv } from '@theocode/agent/config'
