@@ -9,12 +9,23 @@
 // Both reference CLIs start fresh and resume on request. The pointer is still WRITTEN on every
 // launch, because that is what makes `--continue` able to find the session next time.
 
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { afterAll, describe, expect, it } from 'vitest'
 
 import { createTuiSession } from '../../src/agent-session/tui-session.js'
+import { drainAll } from '../../src/terminal-io/index.js'
 import { resumeRequested } from '../../src/agent-session/resume-request.js'
 
-const POINTER = '/nonexistent/.theokit/tui-session'
+const DIR = mkdtempSync(join(tmpdir(), 'fresh-by-default-'))
+const POINTER = join(DIR, '.theokit', 'tui-session')
+
+afterAll(async () => {
+  await drainAll()
+  rmSync(DIR, { recursive: true, force: true })
+})
 
 describe('resumeRequested', () => {
   it('is false for a launch with no arguments — the default is a fresh session', () => {

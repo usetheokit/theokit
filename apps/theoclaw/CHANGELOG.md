@@ -13,6 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A scheduled run's agent send now carries the untrusted content options itself, next to the scheduler's cancellation signal.
 - The CI live and container checks route `THEOCLAW_MODEL` through OpenRouter (`openrouter/` prefix) instead of sending the OpenRouter key to Google's own endpoint (#2482).
 
 ### Changed

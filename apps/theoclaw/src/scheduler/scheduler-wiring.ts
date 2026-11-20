@@ -63,7 +63,7 @@ function handleOf(agent: TurnAgent): Parameters<Parameters<typeof agentRunPort>[
     agentId: 'theoclaw-scheduled-run',
     send: async (message, options) => {
       if (typeof message !== 'string') throw new Error('a scheduled run sends its prompt as text')
-      const run = await agent.send(message, options)
+      const run = await agent.send(message, { ...options, ...untrustedContentSendOptions() })
       return {
         wait: async () => {
           const outcome = await run.wait()
