@@ -18,14 +18,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const THEOCODE = join(HERE, '..')
-const WORKSPACE_VERSION = JSON.parse(
-  readFileSync(join(THEOCODE, '../../packages/agents/package.json'), 'utf8'),
-).version
+/** The release the standalone consumer pins; the workspace manifests declare `workspace:*` instead. */
+const PINNED_VERSION = JSON.parse(readFileSync(join(THEOCODE, 'standalone/package.json'), 'utf8'))
+  .devDependencies['@theokit/agents']
 
 /** The install needs the registry; without it (offline, sandbox) the suite is skipped, not failed. */
 const registryReachable = (() => {
   try {
-    execFileSync('npm', ['view', `@theokit/agents@${WORKSPACE_VERSION}`, 'version'], {
+    execFileSync('npm', ['view', `@theokit/agents@${PINNED_VERSION}`, 'version'], {
       stdio: 'pipe',
       timeout: 20_000,
     })
@@ -44,8 +44,15 @@ const MANIFESTS = [
 const declared = MANIFESTS.map((m) => {
   const json = JSON.parse(readFileSync(join(THEOCODE, m), 'utf8'))
   const spec = { ...json.dependencies, ...json.devDependencies }['@theokit/agents']
-  // `workspace:<exact>` links to this checkout in development and publishes as `<exact>`.
-  return { manifest: m, spec, version: String(spec).replace(/^workspace:/, '') }
+  return { manifest: m, spec }
+})
+
+// `workspace:*` follows `packages/agents` through every release; the exact released version the
+// standalone build installs lives in its own manifests, so nothing goes stale at Version Packages.
+describe('TheoCode manifests follow the workspace @theokit/agents', () => {
+  it.each(declared)('$manifest declares workspace:*', ({ spec }) => {
+    expect(spec).toBe('workspace:*')
+  })
 })
 
 let root
@@ -68,7 +75,7 @@ describe.skipIf(!registryReachable)(
           '--no-audit',
           '--no-fund',
           '--ignore-scripts',
-          `@theokit/agents@${declared[0].version}`,
+          `@theokit/agents@${PINNED_VERSION}`,
         ],
         { cwd: root, stdio: 'pipe' },
       )
@@ -85,17 +92,10 @@ describe.skipIf(!registryReachable)(
       if (root) rmSync(root, { recursive: true, force: true })
     })
 
-    it('every TheoCode manifest pins one exact released version, not workspace:*', () => {
-      for (const { manifest, spec } of declared) {
-        expect(spec, manifest).toBe(`workspace:${WORKSPACE_VERSION}`)
-      }
-      expect(declared[0].version).toBe(WORKSPACE_VERSION)
-    })
-
     it('resolves the pinned version as a registry copy, not a link into the repository', () => {
       const dir = realpathSync(join(root, 'node_modules/@theokit/agents'))
       const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-      expect(pkg.version).toBe(declared[0].version)
+      expect(pkg.version).toBe(PINNED_VERSION)
       expect(relative(realpathSync(tmpdir()), dir).startsWith('..')).toBe(false)
       expect(dir.split(sep)).toContain('node_modules')
     })

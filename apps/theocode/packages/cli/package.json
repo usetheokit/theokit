@@ -8,7 +8,7 @@
     "@theocode/agent": "workspace:*",
     "@theocode/shared": "workspace:*",
     "@theocode/tui": "workspace:*",
-    "@theokit/agents": "workspace:16.13.0",
+    "@theokit/agents": "workspace:*",
     "@theokit/presenter": "workspace:*"
   }
 }
