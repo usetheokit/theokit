@@ -46,7 +46,7 @@ it('offers a skill added after turn 1 on turn 2 of the same agent, keeping histo
   await turn(agent, 'first turn marker')
   expect(requestText(stub, 0)).not.toContain('About summarize.')
   skill(skills, 'summarize', 'BODY-SUMMARIZE-1')
-  skill(skills, 'needs-missing', 'x', 'requires: no-such-binary-xyz\n')
+  skill(skills, 'needs-missing', 'x', 'requires-bins: no-such-binary-xyz\n')
   await turn(agent, 'second turn')
   const second = requestText(stub, 1)
   expect(second).toContain('About summarize.')

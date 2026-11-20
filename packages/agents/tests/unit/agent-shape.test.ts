@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
+import * as zm from 'zod/mini'
 
 import { AgentBuilder, ContextualTool } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
 import { ModelCapability, ToolsCapability } from '../../src/capability/capabilities.js'
-import { declareAgentShape } from '../../src/capability/agent-shape.js'
+import { declareAgentShape, shapeToolsAsCustomTools } from '../../src/capability/agent-shape.js'
 
 /**
  * M69 — `declareAgentShape(name, members)`: what an agent is MADE OF, as a published value.
@@ -102,5 +104,48 @@ describe('declareAgentShape — the composed shape as a value', () => {
     expect(() =>
       declareAgentShape('assistant', [new ModelCapability('a'), new ModelCapability('b')]),
     ).toThrow()
+  })
+})
+
+describe('shapeToolsAsCustomTools', () => {
+  const base = { name: 'j', description: 'd', handler: () => 'x' }
+  const shapeOf = (inputSchema: unknown) =>
+    declareAgentShape('a', [new ToolsCapability([{ ...base, inputSchema } as never])])
+
+  it('returns JSON-Schema tools and non-plain object schemas unchanged', () => {
+    for (const schema of [
+      { type: 'object' },
+      Object.create({ type: 'object' }),
+      { type: 'object', parse: () => 1 },
+      { type: 'object', parse: () => 1, _def: {}, _zod: {} },
+      { type: 'object', _zod: { traits: {} } },
+      { type: 'object', _zod: { traits: new Set(['other']) } },
+      { type: 'object', _zod: { traits: new Set(['$ZodType']) } },
+      {
+        type: 'object',
+        properties: { q: { type: 'string' } },
+        _zod: { traits: new Set(['$ZodType']), def: {}, run() {} },
+      },
+    ]) {
+      const out = shapeToolsAsCustomTools(shapeOf(schema))
+      expect(out.map((t) => t.name)).toEqual(['j'])
+      expect(out[0]?.inputSchema).toBe(schema)
+    }
+  })
+
+  it('lowers a live Zod schema to JSON Schema instead of throwing', () => {
+    const [tool] = shapeToolsAsCustomTools(shapeOf(z.object({ q: z.string() })))
+    expect(tool?.inputSchema).toMatchObject({ type: 'object' })
+  })
+
+  it('lowers a live Zod Mini schema like a classic one', () => {
+    const [tool] = shapeToolsAsCustomTools(shapeOf(zm.object({ q: zm.string() })))
+    expect(tool?.inputSchema).toMatchObject({ type: 'object' })
+  })
+
+  it('rejects a non-object schema', () => {
+    for (const odd of [[], 'x', undefined, null]) {
+      expect(() => shapeToolsAsCustomTools(shapeOf(odd))).toThrow(/"j"/)
+    }
   })
 })

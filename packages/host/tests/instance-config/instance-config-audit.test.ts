@@ -2,6 +2,7 @@ import { mkdtempSync, writeFileSync, statSync, mkdirSync, chmodSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { InstanceConfigError } from '../../src/instance-config/errors.js'
 import { defineInstanceConfig } from '../../src/instance-config/index.js'
 const mk = () => mkdtempSync(join(tmpdir(), 'ic-'))
 const cfg = defineInstanceConfig({
@@ -40,5 +41,20 @@ describe.runIf(process.platform !== 'win32')('audit', () => {
     chmodSync(f, 0o600)
     chmodSync(d, 0o755)
     expect(cfg.audit(f)).toEqual([])
+  })
+  it('reports a missing file as clean but surfaces other stat errors', () => {
+    const d = mk()
+    expect(cfg.audit(join(d, 'none.env'))).toEqual([])
+    const f = join(d, 'sub', 'c.env')
+    mkdirSync(join(d, 'sub'))
+    writeFileSync(f, '')
+    chmodSync(join(d, 'sub'), 0o000)
+    try {
+      if (process.getuid?.() !== 0) {
+        expect(() => cfg.audit(f)).toThrow(InstanceConfigError)
+      }
+    } finally {
+      chmodSync(join(d, 'sub'), 0o700)
+    }
   })
 })

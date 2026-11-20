@@ -53,6 +53,34 @@ export {
   type TranscriptGCPlan,
 } from './gc/transcript-gc.js'
 
+export {
+  planProjectsGC,
+  runProjectsGC,
+  type RunProjectsGCOptions,
+  type RunProjectsGCResult,
+  type PlanProjectsGCOptions,
+  type ProjectsGCCandidate,
+  type ProjectsGCFs,
+  type ProjectsGCKind,
+  type ProjectsGCPlan,
+  type ProjectsGCRegistryEntry,
+} from './gc/projects-gc.js'
+
+export {
+  scheduleSessionSweep,
+  sweepDecision,
+  type ScheduleSessionSweepOptions,
+  type SweepDecision,
+  type SweepScheduleResult,
+} from './gc/sweep-schedule.js'
+
+export {
+  claimCollectorRoot,
+  CollectorRootError,
+  collectorRootOwner,
+  CollectorRootNotOwnedError,
+} from './gc/collector-root.js'
+
 /**
  * T2.6 — why an empty session list can be empty. Framework-owned because it reads THEOKIT_HOME and
  * this package's  layout: a product should not explain a directory it does not control.
@@ -88,3 +116,10 @@ export {
   type Liveness,
   type LivenessVerdict,
 } from './liveness-oracle.js'
+
+// #1850 — re-run a one-shot turn on a fork id when the session is busy.
+export {
+  ForkedSessionBusyError,
+  streamTurnForkingIfBusy,
+  type ForkIfBusyOptions,
+} from './fork-if-busy.js'

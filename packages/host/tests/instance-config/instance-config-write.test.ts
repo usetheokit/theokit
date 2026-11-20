@@ -43,9 +43,12 @@ describe('write', () => {
   it('refuses quote values without echoing them', async () => {
     const d = mk()
     const f = join(d, 'c.env')
-    const err = await cfg
-      .write(f, { DEMO_A: 'sec"ret' }, { force: false })
-      .catch((e: unknown) => e as Error)
+    const err = await cfg.write(f, { DEMO_A: 'sec"ret' }, { force: false }).then(
+      () => {
+        throw new Error('expected a rejection')
+      },
+      (e: unknown) => e as InstanceConfigError,
+    )
     expect(err).toBeInstanceOf(InstanceConfigError)
     expect(err.message).toContain('DEMO_A')
     expect(err.message).not.toContain('sec"ret')
@@ -74,12 +77,25 @@ describe('write', () => {
         },
       },
     })
-    const err = await leaky
-      .write(join(mk(), 'c.env'), { DEMO_B: secret }, { force: false })
-      .catch((e: unknown) => e as InstanceConfigError)
+    const err = await leaky.write(join(mk(), 'c.env'), { DEMO_B: secret }, { force: false }).then(
+      () => {
+        throw new Error('expected a rejection')
+      },
+      (e: unknown) => e as InstanceConfigError,
+    )
     expect(err).toBeInstanceOf(InstanceConfigError)
     expect(err.message).not.toContain(secret)
     expect(err.cause).toBeUndefined()
+  })
+  it('refuses a __proto__ key that parseEnv cannot preserve', async () => {
+    const d = mk()
+    const proto = defineInstanceConfig({ app: 'demo', keys: { ['__proto__']: {} } as never })
+    const f = join(d, 'c.env')
+    const entries = JSON.parse('{"__proto__":"x"}')
+    await expect(proto.write(f, entries, { force: false })).rejects.toBeInstanceOf(
+      InstanceConfigError,
+    )
+    expect(readdirSync(d)).toEqual([])
   })
   it('concurrent writers do not collide', async () => {
     const d = mk()

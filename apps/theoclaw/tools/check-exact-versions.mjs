@@ -11,9 +11,9 @@
 import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
+import { exactVersionViolations as sharedExactVersionViolations } from '../../../scripts/lib/app-dependencies.mjs'
+
 const SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies']
-const EXACT = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
-const WORKSPACE_EXACT = 'workspace:*'
 
 /** Thrown when a manifest cannot be judged at all, as opposed to holding a range. */
 class ManifestShapeError extends Error {
@@ -25,23 +25,19 @@ class ManifestShapeError extends Error {
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
 
-const isExact = (specifier) => typeof specifier === 'string' && (EXACT.test(specifier) || specifier === WORKSPACE_EXACT)
-
 /**
  * `{ section, name, specifier }` for every non-exact entry, in section order. An absent section is
- * empty; a section present but not a plain object throws `ManifestShapeError`.
+ * empty; a section present but not a plain object throws `ManifestShapeError`. The rule is the shared
+ * one; TheoClaw's check has never judged `peerDependencies`, so those are left out.
  */
 export function exactVersionViolations(manifest) {
-  const violations = []
+  const judged = {}
   for (const section of SECTIONS) {
     if (!(section in manifest)) continue
-    const entries = manifest[section]
-    if (!isPlainObject(entries)) throw new ManifestShapeError(`${section} is not an object`)
-    for (const [name, specifier] of Object.entries(entries)) {
-      if (!isExact(specifier)) violations.push({ section, name, specifier: String(specifier) })
-    }
+    if (!isPlainObject(manifest[section])) throw new ManifestShapeError(`${section} is not an object`)
+    judged[section] = manifest[section]
   }
-  return violations
+  return sharedExactVersionViolations(judged)
 }
 
 /** The parsed manifest at `path`; throws `ManifestShapeError` naming why it cannot be read. */

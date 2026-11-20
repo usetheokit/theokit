@@ -1,13 +1,20 @@
 import { chmodSync, statSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
 
+import { InstanceConfigError } from './errors.js'
+
 import type { AuditFinding } from './index.js'
 
 function modeOf(path: string): number | undefined {
   try {
     return statSync(path).mode & 0o777
-  } catch {
-    return undefined
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw new InstanceConfigError(
+      'instance_config_audit_failed',
+      `cannot inspect ${path}: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`,
+      { cause: error },
+    )
   }
 }
 
