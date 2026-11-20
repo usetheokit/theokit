@@ -11,3 +11,8 @@ export {
   type ControlClientFrame,
   type ControlServerFrame,
 } from './control/frames.js'
+export {
+  ControlConnectionError,
+  createControlClient,
+  type ControlClient,
+} from './control/control-client.js'
