@@ -60,15 +60,15 @@ function writeRealisticTranscript(sessionId: string): void {
 }
 
 describe('listSessions reports the id the caller knows (#654)', () => {
-  it('test_the_id_comes_from_the_record_not_the_filename', () => {
+  it('test_the_id_comes_from_the_record_not_the_filename', async () => {
     writeRealisticTranscript('older')
 
-    const ids = listSessions(CWD, root).map((s) => s.id)
+    const ids = (await listSessions(CWD, root)).map((s) => s.id)
 
     expect(ids, 'on SDK 5.x the filename is a one-way hash of this id').toContain('older')
   })
 
-  it('test_a_transcript_with_no_readable_record_is_listed_without_an_id', () => {
+  it('test_a_transcript_with_no_readable_record_is_listed_without_an_id', async () => {
     // CHANGED by usetheokit/theokit#668, and worth saying why rather than quietly editing it.
     //
     // This test asserted the OLD contract — that an unreadable transcript reports the filename as
@@ -89,7 +89,7 @@ describe('listSessions reports the id the caller knows (#654)', () => {
     mkdirSync((projectDirFor as (c: string, r: string) => string)(CWD, root), { recursive: true })
     writeFileSync(path, '', 'utf8')
 
-    const sessions = listSessions(CWD, root)
+    const sessions = await listSessions(CWD, root)
 
     expect(sessions, 'an unreadable transcript must still be listed').toHaveLength(1)
     expect(sessions[0]?.id, 'no id may be invented from the filename').toBeUndefined()

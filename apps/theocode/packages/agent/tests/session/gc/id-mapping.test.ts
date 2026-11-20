@@ -18,15 +18,53 @@
  * candidate now carries the id it was matched from so the deletion can speak the registry's
  * vocabulary.
  */
-import { basename } from 'node:path'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
-import { describe, expect, it } from 'vitest'
+import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { planSessionGC, runSessionGC } from '../../../src/session/gc/per-session.js'
+import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
 
 const DAY = 86_400_000
 const now = (): number => 1_000 * DAY
+
+// The framework planner has no `readdir`/`list`/`readPointer` seams, so each entry is a real file
+// under a temp transcript root; the registry listing and its remover stay injected.
+let root = ''
+let cwd = ''
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'theocode-gc-root-'))
+  cwd = mkdtempSync(join(tmpdir(), 'theocode-gc-cwd-'))
+})
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true })
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+function seed(id: string, mtimeMs: number, legacy = false): string {
+  const path = (legacy ? legacyTranscriptPath : transcriptPath)(root, cwd, id)
+  mkdirSync(join(path, '..'), { recursive: true })
+  writeFileSync(path, `${JSON.stringify({ type: 'user', sessionId: id })}\n`)
+  utimesSync(path, new Date(mtimeMs), new Date(mtimeMs))
+  return path
+}
+
+const planSessionGC = (o: {
+  list: () => Promise<{ agentId: string; archived?: boolean }[]>
+  removed?: string[]
+}) =>
+  planAndRunCurrentProjectGC({
+    cwd,
+    root,
+    now: now(),
+    keepLast: 1,
+    maxAgeDays: 1,
+    apply: o.removed !== undefined,
+    listRegistry: o.list,
+    removeFromRegistry: (id) => void o.removed?.push(id),
+  })
 
 describe('#102 — deletion speaks the registry vocabulary', () => {
   it('test_a_registered_session_is_deleted_by_its_session_id_not_its_filename', async () => {
@@ -35,35 +73,16 @@ describe('#102 — deletion speaks the registry vocabulary', () => {
     const deleted: string[] = []
     const agentId = 'exec-522dc0ef-0bf9-419d-b40c-cf0c81d611e4'
 
-    const plan = await planSessionGC({
-      cwd: '/p',
-      now,
-      keepLast: 0,
-      maxAgeDays: 1,
-      list: () => Promise.resolve([{ agentId, archived: true }]),
-      // A NEWER decoy, so the target is not the most-recent transcript — that guard protects it
-      // unconditionally and would make this arm assert nothing.
-      readdir: () => [
-        { id: 'decoy-newer', mtimeMs: 999 * DAY },
-        { id: idOf(agentId), mtimeMs: 0 },
-      ],
-      readPointer: () => undefined,
-    } as never)
+    // A NEWER decoy, so the target is not the most-recent transcript — that guard protects it
+    // unconditionally and would make this arm assert nothing.
+    seed('decoy-newer', 999 * DAY)
+    seed(agentId, 0)
 
-    await runSessionGC(plan, {
-      apply: true,
-      // B-161: `readdir` and `cwd` are injected here as well as into planSessionGC. Without them
-      // `resolveApply` falls through to `process.cwd()` and reads the REAL transcript store —
-      // per-session.ts:226, `(opts.readdir ?? readTranscriptDir)(transcriptDir(cwd, baseDir))` — so
-      // this test covered three production lines on a machine that had sessions and none on a clean
-      // checkout, making total coverage a property of the machine.
-      cwd: '/p',
-      readdir: () => [],
-      delete: (id: string) => {
-        deleted.push(id)
-        return Promise.resolve()
-      },
-    } as never)
+    // Plan and apply are one call here; the registry remover is what `Agent.delete` is.
+    await planSessionGC({
+      list: () => Promise.resolve([{ agentId, archived: true }]),
+      removed: deleted,
+    })
 
     expect(deleted, 'Agent.delete was handed a transcript filename').toEqual([agentId])
   })
@@ -77,29 +96,20 @@ describe('#102 — deletion speaks the registry vocabulary', () => {
     // registry currently lists. Both arms below are therefore the same claim from two directions,
     // and neither alone would have caught the trade.
     const agentId = 'exec-522dc0ef-0bf9-419d-b40c-cf0c81d611e4'
+    seed('decoy-newer', 999 * DAY)
+    const current = seed(agentId, 0)
+    const legacy = seed(agentId, 0, true)
     const plan = await planSessionGC({
-      cwd: '/p',
-      now,
-      keepLast: 0,
-      maxAgeDays: 1,
       list: () => Promise.resolve([{ agentId }]),
-      readdir: () => [
-        { id: 'decoy-newer', mtimeMs: 999 * DAY },
-        { id: idOf(agentId), mtimeMs: 0 },
-        { id: agentId, mtimeMs: 0 },
-      ],
-      readPointer: () => undefined,
-    } as never)
+      removed: [], // apply, so the file checks below are not vacuous
+    })
 
-    const doomed = plan.candidates.map((c) => c.id)
-    expect(doomed, 'the 5.x-named transcript of a live session was planned for deletion').not.toContain(idOf(agentId))
-    expect(doomed, 'the 4.x-named transcript of a live session was planned for deletion').not.toContain(agentId)
+    // Candidates are reported by session id, which both names share, so the files are checked too.
+    expect(
+      plan.plan.candidates,
+      'a transcript of a live session was planned for deletion',
+    ).toEqual([])
+    expect(existsSync(current), 'the 5.x-named transcript of a live session was deleted').toBe(true)
+    expect(existsSync(legacy), 'the 4.x-named transcript of a live session was deleted').toBe(true)
   })
 })
-
-// The forward mapping, from the SAME module the production code uses. Re-deriving it here would
-// give the test a second copy that keeps passing while production drifts — the family of bug this
-// file exists to close.
-function idOf(session: string): string {
-  return basename(transcriptPath(transcriptRoot(), '/p', session)).replace(/\.jsonl$/, '')
-}

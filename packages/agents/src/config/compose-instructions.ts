@@ -25,6 +25,27 @@ export interface InstructionSource {
   /** The product's own label, used only in warnings. Never interpreted here. */
   readonly name: string
   readonly content: string
+  /** How this source is cut when the budget is tight. Omitted behaves as `{ kind: 'drop' }`. */
+  readonly trim?: InstructionTrim
+}
+
+/**
+ * Per-source trim policy. `drop` (the default) is the original behaviour: the last source may keep
+ * its head once, otherwise it is dropped whole.
+ */
+export type InstructionTrim =
+  | { readonly kind: 'drop' }
+  | { readonly kind: 'keep-head' }
+  | { readonly kind: 'keep-tail' }
+  | { readonly kind: 'blocks-from-start'; readonly separator: string }
+
+/** Characters one source lost: `to` is 0 when it was dropped. Never zero-width. */
+export interface InstructionCut {
+  readonly name: string
+  /** Characters before the cut. */
+  readonly from: number
+  /** Characters after the cut. */
+  readonly to: number
 }
 
 export interface ComposeInstructionsOptions {
@@ -42,6 +63,8 @@ export interface ComposedInstructions {
   readonly dropped: readonly string[]
   /** Name of the source that was cut in half to fit, when one was. */
   readonly trimmed?: string
+  /** One entry per source that lost characters, in the order they were cut. Empty when all fit. */
+  readonly cuts: readonly InstructionCut[]
 }
 
 const DEFAULT_SEPARATOR = '\n\n'
@@ -74,6 +97,9 @@ export function composeInstructions(
       text: base.slice(0, options.maxChars),
       dropped: sources.map((source) => source.name),
       trimmed: 'base',
+      cuts: sources
+        .filter((source) => source.content.length > 0)
+        .map((source) => ({ name: source.name, from: source.content.length, to: 0 })),
     }
   }
 
@@ -82,6 +108,10 @@ export function composeInstructions(
   const kept: InstructionSource[] = [...sources]
   const dropped: string[] = []
   let trimmed: string | undefined
+  const cuts: InstructionCut[] = []
+  const record = (name: string, from: number, to: number): void => {
+    if (from !== to) cuts.push({ name, from, to })
+  }
 
   const lengthOf = (list: readonly InstructionSource[]): number =>
     [base, ...list.map((source) => source.content)].join(separator).length
@@ -95,9 +125,23 @@ export function composeInstructions(
     // would leave a composed prompt where nothing is complete.
     const withoutLast = kept.slice(0, -1)
     const room = options.maxChars - lengthOf(withoutLast) - separator.length
-    if (room > 0 && trimmed === undefined) {
+    const policy = last.trim
+    if (policy !== undefined && policy.kind !== 'drop') {
+      const next = applyPolicy(last.content, policy, room)
+      if (next !== undefined) {
+        kept[kept.length - 1] = { ...last, content: next }
+        record(last.name, last.content.length, next.length)
+        trimmed ??= last.name
+        warn(
+          `instruction budget: "${last.name}" was trimmed to ${String(next.length)} characters to ` +
+            `fit the ${String(options.maxChars)}-character ceiling.`,
+        )
+        break
+      }
+    } else if (room > 0 && trimmed === undefined) {
       kept[kept.length - 1] = { ...last, content: last.content.slice(0, room) }
       trimmed = last.name
+      record(last.name, last.content.length, room)
       warn(
         `instruction budget: "${last.name}" was trimmed to ${String(room)} characters to fit the ` +
           `${String(options.maxChars)}-character ceiling.`,
@@ -107,6 +151,7 @@ export function composeInstructions(
 
     kept.pop()
     dropped.push(last.name)
+    record(last.name, last.content.length, 0)
     warn(`instruction budget: "${last.name}" was dropped to fit the ceiling.`)
   }
 
@@ -114,5 +159,22 @@ export function composeInstructions(
     text: [base, ...kept.map((source) => source.content)].join(separator),
     dropped,
     ...(trimmed !== undefined && { trimmed }),
+    cuts,
   }
+}
+
+/** The trimmed content, or undefined when the policy cannot make it fit (the source is dropped). */
+function applyPolicy(
+  content: string,
+  policy: Exclude<InstructionTrim, { kind: 'drop' }>,
+  room: number,
+): string | undefined {
+  if (room <= 0) return undefined
+  if (content.length <= room) return content
+  if (policy.kind === 'keep-head') return content.slice(0, room)
+  if (policy.kind === 'keep-tail') return content.slice(content.length - room)
+  if (policy.separator === '') return undefined
+  const blocks = content.split(policy.separator)
+  while (blocks.length > 0 && blocks.join(policy.separator).length > room) blocks.shift()
+  return blocks.length === 0 ? undefined : blocks.join(policy.separator)
 }
