@@ -35,7 +35,6 @@
     "release": "pnpm build && node scripts/check-pack-no-workspace.mjs && node scripts/publish-and-record.mjs && node scripts/verify-release-published.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "check:public-surface": "node scripts/check-public-surface.mjs @theokit/agents && node scripts/check-public-surface.mjs theokit",
-    "check:public-surface:pr": "node scripts/check-public-surface.mjs @theokit/agents --base \"$PUBLIC_SURFACE_BASE\" && node scripts/check-public-surface.mjs theokit --base \"$PUBLIC_SURFACE_BASE\"",
     "check:app-deps": "node scripts/check-app-dependencies.mjs",
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
     "check:pack-exports": "node scripts/check-pack-exports-resolve.mjs",
