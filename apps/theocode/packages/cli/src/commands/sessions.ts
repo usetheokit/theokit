@@ -148,11 +148,14 @@ export async function planAndRunCurrentProjectGC(
     planned,
     everyone.map((a) => a.agentId),
   )
+  const registered = new Set(everyone.map((a) => a.agentId))
   const removeById = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
+  // A transcript's own id that no registry entry carries has nothing to remove there.
+  const remove = (id: string) => (registered.has(id) ? removeById(id) : undefined)
   const result = await runTranscriptGC(plan, {
     apply: opts.apply,
     protectedIds,
-    removeFromRegistry: removeById,
+    removeFromRegistry: remove,
   })
   return {
     plan,
