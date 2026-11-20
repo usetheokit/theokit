@@ -82,11 +82,37 @@ export interface CurrentProjectGCOptions {
  * instead: the registered session (archived or not) whose transcript file this is. A transcript no
  * registry entry owns has no identity and is collected by path, never as its source.
  */
+function ownIdentity(
+  planned: TranscriptGCPlan,
+  own: Map<string, string>,
+  c: TranscriptGCPlan['candidates'][number],
+): string | undefined {
+  const registered = own.get(c.transcript)
+  if (registered !== undefined) return registered
+  // Unregistered: the framework's id is the transcript's own only when the file is named for it. A
+  // fork's first row names its SOURCE, whose file is a different one, so it keeps no identity.
+  return c.id !== undefined && transcriptPath(planned.root, planned.cwd, c.id) === c.transcript
+    ? c.id
+    : undefined
+}
+
 function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): TranscriptGCPlan {
   const own = new Map(registryIds.map((id) => [transcriptPath(planned.root, planned.cwd, id), id]))
+  const named = planned.candidates.map((c) => ({ ...c, id: ownIdentity(planned, own, c) }))
+  // A transcript no registry entry owns and whose id the framework could not read is UNREADABLE,
+  // not an orphan: "I could not read this" does not justify an unlink, so it is kept.
+  const unreadable = named.filter(
+    (c, i) =>
+      c.id === undefined && !own.has(c.transcript) && planned.candidates[i]?.id === undefined,
+  )
+  if (unreadable.length === 0) return { ...planned, candidates: named }
   return {
     ...planned,
-    candidates: planned.candidates.map((c) => ({ ...c, id: own.get(c.transcript) })),
+    candidates: named.filter((c) => !unreadable.includes(c)),
+    kept: [
+      ...planned.kept,
+      ...unreadable.map(() => ({ id: undefined, reason: 'transcript id unreadable' })),
+    ],
   }
 }
 
@@ -147,7 +173,7 @@ export async function planAndRunCurrentProjectGC(
     cwd,
     everyone.filter((a) => a.archived !== true).map((a) => a.agentId),
   )
-  const planned = planTranscriptGC({
+  const planned = await planTranscriptGC({
     cwd,
     keepLast: opts.keepLast ?? 10,
     maxAgeDays: opts.maxAgeDays ?? 30,
@@ -159,7 +185,10 @@ export async function planAndRunCurrentProjectGC(
     withholdLegacyNamed(planned, [...protectedIds().keys()]),
     everyone.map((a) => a.agentId),
   )
-  const remove = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
+  const registered = new Set(everyone.map((a) => a.agentId))
+  const removeById = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
+  // A transcript's own id that no registry entry carries has nothing to remove there.
+  const remove = (id: string) => (registered.has(id) ? removeById(id) : undefined)
   const result = await runTranscriptGC(plan, {
     apply: opts.apply,
     protectedIds,
