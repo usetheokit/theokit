@@ -29,8 +29,13 @@ interface Baseline {
 interface Gate {
   DEPRECATION_WINDOW_DAYS: number
   extractSurface: (dir: string) => Baseline
-  comparePolicy: (prev: Baseline, next: Baseline, o: { major: boolean; now: number }) => string[]
-  declaresMajor: (texts: string[], pkg: string) => boolean
+  comparePolicy: (
+    prev: Baseline,
+    next: Baseline,
+    o: { major: boolean; now: number; level?: string },
+  ) => string[]
+  declaresMajor: (texts: string[], pkg: string, level?: 'major' | 'minor') => boolean
+  breakingLevel: (version: string) => 'major' | 'minor'
 }
 
 const path: string = resolve(import.meta.dirname, '..', '..', 'scripts', 'check-public-surface.mjs')
@@ -286,6 +291,20 @@ describe('public surface gate', () => {
     expect(run(prev, surface(src('x: number', 'x: string')))).toEqual([
       expect.stringContaining('referenced type dist/index.d.ts#g changed'),
     ])
+  })
+
+  it('treats minor as the breaking bump for a 0.x package only', () => {
+    expect(gate.breakingLevel('0.83.0')).toBe('minor')
+    expect(gate.breakingLevel('1.2.0')).toBe('major')
+    const minor = ["---\n'theokit': minor\n---\n"]
+    expect(gate.declaresMajor(minor, 'theokit', 'minor')).toBe(true)
+    expect(gate.declaresMajor(minor, 'theokit', 'major')).toBe(false)
+    expect(gate.declaresMajor(["---\n'theokit': patch\n---\n"], 'theokit', 'minor')).toBe(false)
+    const prev = surface(BASE)
+    const next = surface('export interface Opts { a: string }\n')
+    expect(gate.comparePolicy(prev, next, { major: false, now: NOW, level: 'minor' })[0]).toContain(
+      '"@x/pkg": minor',
+    )
   })
 
   it('reads a major declaration from changeset frontmatter', () => {
