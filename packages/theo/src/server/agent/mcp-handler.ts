@@ -7,8 +7,6 @@
  * (method not found). Web Standards Response (G8). The stdio transport + full method set stay
  * SDK-side (sdk-runtime.md); this exposes the agent over the app's own HTTP route.
  */
-import { randomUUID } from 'node:crypto'
-
 import { type CompiledTool, compileLoadedAgentModule } from '@theokit/agents'
 import { runPreToolCall } from '@theokit/sdk'
 import type { CustomTool, Plugin, PreToolCallContext } from '@theokit/sdk'
@@ -270,7 +268,7 @@ async function dispatchMcp(
                 name: toolName,
                 args: (args && typeof args === 'object' ? args : {}) as Record<string, unknown>,
                 agentId,
-                runId: randomUUID(),
+                runId: globalThis.crypto.randomUUID(),
               })
           : undefined
       return rpcResult(
