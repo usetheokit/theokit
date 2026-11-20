@@ -37,7 +37,7 @@ async function streamedErrorOf(run: SdkTurnHandle<SdkMessage>): Promise<string |
   if (run.stream === undefined) return undefined
   let streamed: string | undefined
   for await (const message of run.stream()) {
-    const event = message as { type?: unknown; status?: unknown; message?: unknown }
+    const event: { type?: unknown; status?: unknown; message?: unknown } = message
     if (event.type === 'error') streamed ??= describeStreamedError(message)
     // A guarded agent's stream ends a failed run with `{ type: 'status', status: 'ERROR', message }`.
     else if (event.type === 'status' && event.status === 'ERROR') {
