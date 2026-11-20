@@ -16,6 +16,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Changed
+- **`-c key=value` parsing and environment-variable coercion now come from the framework (`@theokit/agents/config`: `parseDottedOverrides`, `envLayerFrom`, `coerceEnvValue`).** `config/cli-overrides.ts` shrinks to the coercion table and this product's error wording, which is unchanged; `config/config.ts` declares each knob as `envKnob(variable, kind)` instead of its own coercers. Not migrated, because the framework has no equivalent yet: the `.theocode`/`.claude` settings readers and key translation (`settings-load.ts`, `settings-json.ts`) and the managed-file reader (`managed-settings.ts`) — the framework's `loadSettings` reads only `.claude/` with a fixed schema and its operator-policy reader is internal and memoised. The layer chain and security floor already use the framework's fold and floor; what remains in them is this product's vocabulary.
+
 ### Removed
 - **The unused `writeCredential` wrapper and `StoredOAuthCredential` type in `auth/credentials.ts`.** Sign-in already writes through the framework's `loginWithApiKey`; nothing called the wrapper, and `knip` flagged both.
 
