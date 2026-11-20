@@ -92,8 +92,8 @@ const WAIST_FIELDS = [
   'subagents',
   // #1912 — `WithheldBuiltinToolsCapability`, from `AgentBuilder.withholdBuiltinTools()`.
   'withheldBuiltinTools',
-  // #1866 — `onWired`, a listener the builder carries; no capability expresses it.
-  'onWired',
+  // #1855 — `skillsRead`, from `AgentBuilder.skills(selection, { read })`; no capability yet.
+  'skillsRead',
 ] as const satisfies readonly WaistField[]
 
 /**
@@ -116,7 +116,7 @@ const WAIST_FIELDS_ARE_EXHAUSTIVE: _Exhaustive = true
  * ever stops producing its field the gap reappears and the test fails; `satisfies` makes a
  * fabricated name a compile error.
  */
-const NOT_EXPRESSIBLE_YET = ['onWired'] as const satisfies readonly WaistField[]
+const NOT_EXPRESSIBLE_YET = ['skillsRead'] as const satisfies readonly WaistField[]
 
 /** A posture that grants — built here rather than mocked, so the gate runs its real refusal path. */
 const TRUSTING_POSTURE = {

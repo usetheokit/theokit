@@ -9,7 +9,7 @@
  * The agent card and the MCP server manifest stay in the root barrel: they describe THIS agent to
  * others, and they are not what this subpath is for.
  */
-export { createA2ATool } from './a2a/a2a-client.js'
+export { A2ATimeoutError, createA2ATool } from './a2a/a2a-client.js'
 export type { A2AAuth, A2AToolConfig } from './a2a/a2a-client.js'
 export { createA2AJsonRpcHandler } from './a2a/a2a-json-rpc-handler.js'
 export type { A2AJsonRpcHandlerOptions } from './a2a/a2a-json-rpc-handler.js'

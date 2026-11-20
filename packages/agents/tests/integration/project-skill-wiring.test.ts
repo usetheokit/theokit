@@ -13,7 +13,7 @@ import { z } from 'zod'
 
 import { AgentBuilder } from '../../src/bridge/agent-builder.js'
 import type { CompiledWiring } from '../../src/bridge/index.js'
-import { getOrCreateReporting } from '../../src/bridge/compiled-wiring.js'
+import { getOrCreateReporting, WIRED_LISTENER } from '../../src/bridge/compiled-wiring.js'
 import { toAgentFactory } from '../../src/bridge/sdk-adapter.js'
 
 const POSTURE = {
@@ -133,10 +133,7 @@ describe('onWired with the real SDK', () => {
       const session = id('race-a')
       await check(
         session,
-        [
-          getOrCreateReporting(Agent, session, opts(), (w) => seen.push(w)),
-          Agent.getOrCreate(session, opts() as never),
-        ],
+        [rep(session, opts(), seen), Agent.getOrCreate(session, opts() as never)],
         seen,
         1,
       )
@@ -147,10 +144,7 @@ describe('onWired with the real SDK', () => {
       const session = id('race-b')
       await check(
         session,
-        [
-          Agent.getOrCreate(session, opts() as never),
-          getOrCreateReporting(Agent, session, opts(), (w) => seen.push(w)),
-        ],
+        [Agent.getOrCreate(session, opts() as never), rep(session, opts(), seen)],
         seen,
         0,
       )
@@ -161,18 +155,12 @@ describe('onWired with the real SDK', () => {
       const session = id('race-c')
       const direct = { ...opts(), withheldBuiltinTools: ['bash'] }
       // Direct SDK call starts creating first; the listener call joins it with different options.
-      await Promise.all([
-        Agent.getOrCreate(session, direct as never),
-        getOrCreateReporting(Agent, session, opts(), (w) => mine.push(w)),
-      ])
+      await Promise.all([Agent.getOrCreate(session, direct as never), rep(session, opts(), mine)])
       expect(mine).toHaveLength(0)
       // Listener call first, direct call joins: the listener's own options are what is reported.
       const session2 = id('race-d')
       const own = { ...opts(), withheldBuiltinTools: ['write'] }
-      await Promise.all([
-        getOrCreateReporting(Agent, session2, own, (w) => mine.push(w)),
-        Agent.getOrCreate(session2, direct as never),
-      ])
+      await Promise.all([rep(session2, own, mine), Agent.getOrCreate(session2, direct as never)])
       expect(mine.map((w) => w.withheldBuiltinTools)).toEqual([['write']])
     })
 
@@ -192,12 +180,12 @@ describe('onWired with the real SDK', () => {
         })
         return ag
       }
-      const first = getOrCreateReporting(Agent, session, opts(), (w) => seen.push(w))
+      const first = rep(session, opts(), seen)
       while (Agent.registry.get(session) === undefined) await new Promise((r) => setTimeout(r, 0))
       const doomed = Agent.registry.get(session) as unknown as { dispose(): Promise<void> }
       await doomed.dispose()
       statics.create = realCreate
-      const next = (await getOrCreateReporting(Agent, session, opts(), (w) => seen.push(w))) as {
+      const next = (await rep(session, opts(), seen)) as {
         dispose(): Promise<void>
       }
       expect(next).not.toBe(doomed)
@@ -211,3 +199,10 @@ describe('onWired with the real SDK', () => {
     })
   })
 })
+
+/** The listener rides on a plugin of the options, as the builder wires it. */
+function rep(session: string, options: Record<string, unknown>, into: CompiledWiring[]) {
+  const plugin = { [WIRED_LISTENER]: (w: CompiledWiring) => into.push(w) }
+  const plugins = [...((options.plugins as unknown[] | undefined) ?? []), plugin]
+  return getOrCreateReporting(Agent, session, { ...options, plugins })
+}

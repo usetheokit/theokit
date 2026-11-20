@@ -30,12 +30,17 @@ describe('the committed capability map is what the package implies', () => {
     rendered = currentCapabilityMap()
   }, 120_000)
 
+  it('test_the_map_names_the_pnpm_exec_regenerate_command', () => {
+    expect(rendered).toContain('`pnpm exec tsx scripts/capability-map.mts`')
+    expect(rendered).not.toContain('npx tsx')
+  })
+
   it('test_the_map_EXISTS_and_is_published', () => {
     // It is in `files`; a map that ships nowhere is the state this replaced, where the README pointed
     // at a path that was empty after install.
     expect(
       existsSync(OUT),
-      `${OUT} does not exist — run 'npx tsx scripts/capability-map.mts'`,
+      `${OUT} does not exist — run 'pnpm exec tsx scripts/capability-map.mts'`,
     ).toBe(true)
     const pkg = JSON.parse(
       readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
@@ -83,7 +88,7 @@ describe('the committed capability map is what the package implies', () => {
     expect(
       committed === rendered,
       'docs/capability-map.md has drifted from the package. Re-run ' +
-        "'npx tsx scripts/capability-map.mts' and commit the result. It is generated, never edited: a " +
+        "'pnpm exec tsx scripts/capability-map.mts' and commit the result. It is generated, never edited: a " +
         'hand-kept copy of an export list is the copy that goes stale.',
     ).toBe(true)
   })

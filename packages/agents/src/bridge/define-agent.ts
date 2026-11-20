@@ -27,9 +27,9 @@ import type { HumanInTheLoopOptions } from '../types.js'
 import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
-import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
+import type { CompiledAgentOptions } from './agent-compiler.js'
 import type { CodePlugin } from './code-plugins.js'
-import { type CompiledWiring, WIRED_HOOKS } from './compiled-wiring.js'
+import { type CompiledWiring, WIRED_HOOKS, WIRED_LISTENER } from './compiled-wiring.js'
 import type { HookHandlers } from './hook-handlers.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
 import {
@@ -37,6 +37,7 @@ import {
   resolveSettingSources,
   type SettingSourcesSelection,
 } from './setting-sources-gate.js'
+import { toCompiledTool } from './tool-conversion.js'
 
 /**
  * One subagent, as `AgentOptions.agents` in the SDK takes it.
@@ -122,6 +123,12 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * request path against the run-context). Absent ⇒ the SDK enables every discovered skill.
    */
   skills?: SkillsSelection
+  /**
+   * Which skills `skill_read` serves. `'inline'` (default): inline skills only. `'advertised'`: also
+   * skills enabled by name and discovered through `settingSources` / `compatSources`, after the trust
+   * gate — exactly what the `<skills>` block lists.
+   */
+  skillsRead?: 'inline' | 'advertised'
   /**
    * Subagents this agent carries, registered by name — `AgentOptions.agents` in the SDK.
    *
@@ -288,42 +295,6 @@ export function isAgentDefinition(value: unknown): value is AgentDefinition {
 }
 
 /**
- * Normalize a pre-built `@theokit/sdk` {@link CustomTool} to the internal
- * {@link CompiledTool} shape (issue #81). `CustomTool.handler` takes a narrower
- * `Record<string, unknown>` input than `CompiledTool.handler`'s `unknown`, so it cannot be
- * assigned directly (contravariance); this thin wrapper bridges the parameter. Runtime-safe:
- * the SDK always calls a tool handler with the parsed input object.
- */
-function toCompiledTool(tool: CustomTool): CompiledTool {
-  // M7 — forward the run-context `ctx` (2nd arg) to the underlying tool so `defineAgent({ context })`
-  // reaches `ctx.context` in the handler (dropping it silently severs the context seam).
-  // `CustomTool.handler` takes `Record<string, unknown>` as input; `CompiledTool.handler` takes the
-  // wider `unknown`. Contravariance on the input parameter prevents direct assignment — `as unknown as`
-  // is the SDK-boundary seam for this widening. Runtime-safe: SDK always passes a plain object for input.
-  const handler = tool.handler as unknown as (
-    input: unknown,
-    ctx?: { signal?: AbortSignal; context?: unknown },
-  ) => string | Promise<string>
-  const compiled: CompiledTool = {
-    name: tool.name,
-    description: tool.description,
-    inputSchema: tool.inputSchema,
-    handler: (input, ctx) => handler(input, ctx),
-  }
-  // Preserve SYMBOL-keyed metadata the SDK installs on a tool — notably the `@theokit/sdk/a2a` subagent
-  // credential-inheritance sink (`Symbol.for("theokit.subagent.inheritCredentials")`). Copying only the
-  // four known fields drops it, so the SDK runtime can't hand the parent's `apiKey` down to a delegated
-  // child → the child fails with `provider_unresolved` ("(no response)"). The wrapped handler still calls
-  // the original tool's handler, so the sink (which mutates that handler's closure) stays effective.
-  for (const sym of Object.getOwnPropertySymbols(tool)) {
-    ;(compiled as unknown as Record<symbol, unknown>)[sym] = (
-      tool as unknown as Record<symbol, unknown>
-    )[sym]
-  }
-  return compiled
-}
-
-/**
  * Lower a definition to the SDK-ready {@link CompiledAgentOptions} — the same shape
  * `compileAgent` (decorator path) produces, so both surfaces converge on one runtime.
  */
@@ -347,6 +318,7 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
     // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
     ...compileSkillsSelection(def.skills),
+    ...(def.skillsRead !== undefined ? { skillsRead: def.skillsRead } : {}),
     // #825 — the author's own subagents, carried verbatim. Absent ⇒ no key, so an agent that
     // declares none is indistinguishable from one written before the field existed, and the SDK
     // goes on discovering from `settingSources` exactly as it did.
@@ -411,18 +383,12 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
  * needs a transport. Doing the conversion HERE (not on the builder) means every entry point that
  * reaches `defineAgent` gets it, so `hooks` can never be declared-but-dropped.
  */
-function compileHooksAndPlugins(
-  def: AgentDefinition,
-): Pick<CompiledAgentOptions, 'plugins' | 'onWired'> {
-  return { ...compilePlugins(def), ...(def.onWired !== undefined ? { onWired: def.onWired } : {}) }
-}
-
-function compilePlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[] } {
+function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[] } {
   const map = (def as { hooks?: Readonly<Record<string, unknown>> }).hooks
   const entries = Object.entries(map ?? {}).filter(([, h]) => typeof h === 'function')
   const explicit = def.plugins ?? []
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && def.onWired === undefined) {
     return def.plugins !== undefined ? { plugins: def.plugins } : {}
   }
 
@@ -433,6 +399,8 @@ function compilePlugins(def: AgentDefinition): { plugins?: readonly CodePlugin[]
     version: '1.0.0',
     kind: 'general' as const,
     [WIRED_HOOKS]: entries.map(([event]) => ({ event })),
+    // The listener rides on the plugin so it survives every clone of the compiled options.
+    [WIRED_LISTENER]: def.onWired,
     register(ctx: { on: (hook: string, handler: (c: never) => unknown) => void }): void {
       for (const [hookName, handler] of entries) {
         ctx.on(hookName, handler as (c: never) => unknown)

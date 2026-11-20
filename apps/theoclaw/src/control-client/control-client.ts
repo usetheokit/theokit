@@ -3,13 +3,21 @@ import WebSocket from 'ws'
 import { describeError } from '../control-plane/errors.js'
 import type { TurnEvent } from '../control-plane/turn.js'
 
-/** A frame the instance sends on `/control` for a session turn. */
-export type ControlFrame =
+let arrivalClock = 0
+
+/** The next stamp of the arrival clock, shared by frames and the TUI's notices so their order is true arrival order. */
+export function nextArrival(): number {
+  return ++arrivalClock
+}
+
+/** A frame the instance sends on `/control` for a session turn, stamped by the client when it came off the socket. */
+export type ControlFrame = (
   | { readonly type: 'event'; readonly event: TurnEvent; readonly session: string }
   | { readonly type: 'done'; readonly session: string }
   | { readonly type: 'interrupted'; readonly session: string }
   | { readonly type: 'error'; readonly code: string; readonly session?: string }
   | { readonly type: 'interrupt_ok' | 'steer_ok' | 'no_turn'; readonly session: string }
+) & { readonly arrivedAt?: number }
 
 /** The connection to the instance failed or ended in a way a surface reports. Never carries the token. */
 export class TheoClawControlError extends Error {
@@ -72,7 +80,7 @@ function frameQueue(socket: WebSocket): { next(): Promise<ControlFrame> } {
   const waiters: { resolve(frame: ControlFrame): void; reject(error: Error): void }[] = []
   let closed: TheoClawControlError | undefined
   socket.on('message', (raw) => {
-    const frame = JSON.parse(String(raw)) as ControlFrame
+    const frame = { ...(JSON.parse(String(raw)) as ControlFrame), arrivedAt: nextArrival() } as ControlFrame
     const waiter = waiters.shift()
     if (waiter === undefined) frames.push(frame)
     else waiter.resolve(frame)

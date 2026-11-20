@@ -55,7 +55,7 @@ describe('transcript GC — injected protection', () => {
     writeOldSession('old-1', 90)
     writeOldSession('old-2', 90)
 
-    const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 30, now: NOW })
+    const plan = await planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 30, now: NOW })
 
     // Regression guard: no injection ⇒ byte-identical to before the seam existed.
     expect(plan.candidates.length).toBeGreaterThan(0)
@@ -65,7 +65,7 @@ describe('transcript GC — injected protection', () => {
     writeOldSession('old-1', 90)
     writeOldSession('old-2', 90)
 
-    const plan = planTranscriptGC({
+    const plan = await planTranscriptGC({
       cwd,
       root,
       keepLast: 1,
@@ -83,14 +83,14 @@ describe('transcript GC — injected protection', () => {
     // union, never difference, or the seam becomes a way to delete a live session.
     writeOldSession('old-1', 90)
 
-    const withoutInjection = planTranscriptGC({
+    const withoutInjection = await planTranscriptGC({
       cwd,
       root,
       keepLast: 1,
       maxAgeDays: 30,
       now: NOW,
     })
-    const withEmptyInjection = planTranscriptGC({
+    const withEmptyInjection = await planTranscriptGC({
       cwd,
       root,
       keepLast: 1,
@@ -105,9 +105,9 @@ describe('transcript GC — injected protection', () => {
   it('throwing_provider_fails_closed_on_plan', async () => {
     writeOldSession('old-1', 90)
 
-    // `planTranscriptGC` stayed SYNCHRONOUS — only the apply half needed the async seam, because
-    // only the apply half touches a registry. Planning reads the filesystem and decides.
-    expect(() =>
+    // Planning is async because the SDK listing it reads is; the injected provider still throws
+    // synchronously inside it, so the plan rejects.
+    await expect(
       planTranscriptGC({
         cwd,
         root,
@@ -118,7 +118,7 @@ describe('transcript GC — injected protection', () => {
           throw new Error('registry unavailable')
         },
       }),
-    ).toThrow(/registry unavailable|refus/i)
+    ).rejects.toThrow(/registry unavailable|refus/i)
   })
 
   it('plan_then_delete_concurrent_test_rechecks_injected_ids', async () => {
@@ -128,7 +128,7 @@ describe('transcript GC — injected protection', () => {
     writeOldSession('old-1', 90)
     writeOldSession('old-2', 90)
 
-    const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 30, now: NOW })
+    const plan = await planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 30, now: NOW })
     const target = plan.candidates[0]
     expect(target, 'fixture produced no candidate').toBeDefined()
     // These fixtures are readable, so the id is present; asserting it keeps the `!` below honest
@@ -146,7 +146,7 @@ describe('transcript GC — injected protection', () => {
 
   it('throwing_provider_fails_closed_on_apply', async () => {
     writeOldSession('old-1', 90)
-    const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 30, now: NOW })
+    const plan = await planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 30, now: NOW })
 
     await expect(
       runTranscriptGC(plan, {

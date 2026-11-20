@@ -8,73 +8,79 @@ import type { CompiledWiring } from '../../src/bridge/index.js'
 
 const h = vi.hoisted(() => ({
   created: [] as Record<string, unknown>[],
-  // session id -> the cwd it is persisted under; a resume only finds it from that cwd.
-  known: new Map<string, string | undefined>(),
-  resumeCwds: [] as (string | undefined)[],
-  // The SDK's live-agent cache (`Agent.registry`): a faithful stand-in, so a cached agent is reused.
+  // session id -> persisted (resumable) but not live
+  known: new Set<string>(),
   live: new Map<string, unknown>(),
-  resumes: 0,
-  sdk: (): Record<string, (...a: any[]) => Promise<unknown>> => ({}),
+  inFlight: new Map<string, Promise<unknown>>(),
+  resumed: [] as string[],
+  // project skills on disk the fake SDK can resolve
+  projectSkills: ['project-skill'] as string[],
 }))
 
-const fakeAgent = () => ({
-  agentId: 'a1',
-  send: () => Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) }),
-  dispose: () => Promise.resolve(),
-})
-const cwdOf = (o: Record<string, unknown>) => (o.local as { cwd?: string } | undefined)?.cwd
+type Opts = Record<string, unknown> & {
+  skills?: { enabled?: string[]; inline?: { name: string }[] }
+  local?: { settingSources?: string[] }
+}
+
+/** Mirrors what the SDK resolves: a disk skill only when its source is granted AND it exists. */
+function fakeAgent(opts: Opts) {
+  const sources = opts.local?.settingSources ?? []
+  const enabled = opts.skills?.enabled ?? []
+  const list = [
+    ...(sources.includes('project') ? h.projectSkills.filter((n) => enabled.includes(n)) : []),
+    // The SDK discovers no user skills on the user-only path, and filters inline ones through `enabled`.
+    ...(opts.skills?.inline ?? []).map((i) => i.name).filter((n) => enabled.includes(n)),
+  ]
+  return {
+    agentId: 'a1',
+    skills: { list: () => Promise.resolve(list.map((name) => ({ name, description: name }))) },
+    send: () => Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) }),
+    dispose: () => Promise.resolve(),
+  }
+}
+
+async function sdkCreate(opts: Opts & { agentId: string; onBeforeCreate?: () => unknown }) {
+  await Promise.resolve()
+  await opts.onBeforeCreate?.()
+  h.created.push(opts)
+  h.known.add(opts.agentId)
+  return fakeAgent(opts)
+}
 
 vi.mock('@theokit/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   Agent: {
-    registry: {
-      get: (id: string) => h.live.get(id),
-      set: (id: string, agent: unknown) => {
+    // The SDK's documented shape: live cache, then in-flight, then resume-or-create.
+    getOrCreate: async (id: string, opts: Opts) => {
+      const live = h.live.get(id)
+      if (live !== undefined) return live
+      const running = h.inFlight.get(id)
+      if (running !== undefined) return running
+      const build = (async () => {
+        let agent: unknown
+        if (h.known.has(id)) {
+          h.resumed.push(id)
+          agent = fakeAgent(opts)
+        } else {
+          agent = await sdkCreate({ ...opts, agentId: id } as never)
+        }
         h.live.set(id, agent)
-      },
-    },
-    get: (id: string, opts?: { cwd?: string }) =>
-      h.known.has(id) && h.known.get(id) === opts?.cwd
-        ? Promise.resolve({})
-        : Promise.reject(Object.assign(new Error('unknown'), { name: 'UnknownAgentError' })),
-    // Mirrors the SDK: live cache, then resume, then create; the result is cached.
-    getOrCreate: async (id: string, opts: Record<string, unknown>) => {
-      const hit = h.live.get(id)
-      if (hit !== undefined) return hit
-      let agent: unknown
+        return agent
+      })()
+      h.inFlight.set(id, build)
       try {
-        agent = await h.sdk().resume(id, opts)
-      } catch {
-        agent = await h.sdk().create({ ...opts, agentId: id })
+        return await build
+      } finally {
+        h.inFlight.delete(id)
       }
-      h.live.set(id, agent)
-      return agent
-    },
-    resume: (id: string, opts: Record<string, unknown>) => {
-      h.resumes++
-      h.resumeCwds.push(cwdOf(opts))
-      if (h.known.has(id) && h.known.get(id) === cwdOf(opts)) return Promise.resolve(fakeAgent())
-      return Promise.reject(Object.assign(new Error('unknown'), { name: 'UnknownAgentError' }))
-    },
-    create: async (opts: Record<string, unknown>) => {
-      await Promise.resolve()
-      const id = opts.agentId as string
-      if (h.known.has(id)) {
-        throw Object.assign(new Error('exists'), { code: 'agent_id_already_exists' })
-      }
-      h.known.set(id, cwdOf(opts))
-      h.created.push(opts)
-      return fakeAgent()
     },
   },
   Tool: { create: (spec: unknown) => spec },
   SkillReadTool: { create: () => ({ name: 'skill_read' }) },
 }))
 
-const sdkMod = await import('@theokit/sdk')
-h.sdk = () => sdkMod.Agent as never
+const { getOrCreateReporting, WIRED_LISTENER } = await import('../../src/bridge/compiled-wiring.js')
 const { AgentBuilder } = await import('../../src/bridge/agent-builder.js')
-const { getOrCreateReporting } = await import('../../src/bridge/compiled-wiring.js')
 const { toAgentFactory } = await import('../../src/bridge/sdk-adapter.js')
 const { streamAgentTurnInProcess } = await import('../../src/in-process-turn.js')
 
@@ -115,13 +121,15 @@ afterEach(() => {
   h.created.length = 0
   h.known.clear()
   h.live.clear()
-  h.resumes = 0
-  h.resumeCwds.length = 0
+  h.inFlight.clear()
+  h.resumed.length = 0
+  h.projectSkills = ['project-skill']
   vi.restoreAllMocks()
 })
 
 describe('onWired', () => {
   it('reports the tools, skills, MCP servers, hooks and subagents handed to Agent.create', async () => {
+    h.projectSkills = ['disk-skill']
     const seen: Wiring[] = []
     const def = base()
       .tool(tool('lookup') as never)
@@ -139,8 +147,7 @@ describe('onWired', () => {
     const created = h.created[0]!
     expect(w.tools).toEqual((created.tools as { name: string }[]).map((t) => t.name))
     expect(w.tools).toEqual(expect.arrayContaining(['lookup', 'skill_read']))
-    // The fake SDK agent lists no skills of its own, so only the inline one is known from options.
-    expect(w.skills.listed).toEqual(['inline-one'])
+    expect(w.skills.listed).toEqual(['disk-skill'])
     expect(w.skills.readable).toEqual(['inline-one'])
     expect(w.mcpServers).toEqual(['docs'])
     expect(w.hooks).toEqual([{ event: 'pre_tool_call' }])
@@ -163,62 +170,47 @@ describe('onWired', () => {
     expect(seen[0]?.tools).toContain('lookup')
   })
 
-  it('reports nothing for a resumed session, found from a non-default cwd', async () => {
-    const cwd = '/somewhere/else'
-    h.known.set('known', cwd)
+  it('reports nothing for a resumed session', async () => {
+    h.known.add('known')
     const seen: Wiring[] = []
     const def = base()
       .onWired((w) => seen.push(w))
       .build()
-    const make = toAgentFactory(def as never, {
-      apiKey: 'k',
-      approvals: POSTURE,
-      overrides: { cwd },
-    })
+    const make = toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })
     await make('known')
-    expect(h.resumeCwds).toEqual([cwd])
+    expect(h.resumed).toEqual(['known'])
     expect(seen).toHaveLength(0)
     await make('fresh')
     expect(seen).toHaveLength(1)
   })
 
-  it('a reused session keeps its first wiring and ignores changed options', async () => {
-    const first: Wiring[] = []
-    const second: Wiring[] = []
-    const make = (tools: string[], seen: Wiring[]) =>
-      toAgentFactory(
-        tools
-          .reduce((b, t) => b.tool(tool(t) as never), base())
-          .onWired((w) => seen.push(w))
-          .build() as never,
-        { apiKey: 'k', approvals: POSTURE },
-      )
-    await make(['lookup'], first)('reuse')
-    expect(first).toHaveLength(1)
-    expect(first[0]?.tools).toEqual(['lookup'])
-    // Same persisted session, different options: the live agent is reused untouched (no resume
-    // that would merge the new options into a second handle), so nothing is reported.
-    const resumesBefore = h.resumes
-    await make(['lookup', 'other'], second)('reuse')
-    expect(h.resumes).toBe(resumesBefore)
-    expect(second).toHaveLength(0)
-    expect(first).toHaveLength(1)
-    expect(first[0]?.tools).toEqual(['lookup'])
-    // A new session with the changed options is a creation and reports its own options.
-    await make(['lookup', 'other'], second)('reuse-2')
-    expect(second.map((w) => w.tools)).toEqual([['lookup', 'other']])
+  it('reports nothing for a live-cache hit', async () => {
+    const seen: Wiring[] = []
+    const def = base()
+      .onWired((w) => seen.push(w))
+      .build()
+    const make = toAgentFactory(def as never, { apiKey: 'k', approvals: POSTURE })
+    await make('twice')
+    await make('twice')
+    expect(h.created).toHaveLength(1)
+    expect(seen).toHaveLength(1)
   })
 
-  it('reports once when two calls race to create the same fresh session', async () => {
+  it('two concurrent creations for one session make one Agent.create and one onWired call', async () => {
     const { Agent } = await import('@theokit/sdk')
     const seen: Wiring[] = []
-    const options = { tools: [{ name: 'lookup' }] }
-    await Promise.all([
-      getOrCreateReporting(Agent, 'same', options, (w) => seen.push(w)),
-      getOrCreateReporting(Agent, 'same', options, (w) => seen.push(w)),
+    const options = {
+      tools: [{ name: 'lookup' }],
+      plugins: [{ [WIRED_LISTENER]: (w: Wiring) => seen.push(w) }],
+    }
+    const [a, b] = await Promise.all([
+      getOrCreateReporting(Agent, 'same', options),
+      getOrCreateReporting(Agent, 'same', options),
     ])
-    expect(seen).toHaveLength(1)
+    expect(a).toBe(b)
     expect(h.created).toHaveLength(1)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.tools).toEqual(['lookup'])
   })
 
   it('a builtin in withheldBuiltinTools is absent from tools', async () => {
