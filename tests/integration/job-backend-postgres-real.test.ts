@@ -642,7 +642,12 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       const b = await backend.enqueue({ name: 'run-task', input: { taskId: 2 }, delaySeconds: 50 })
       const c = await backend.enqueue({ name: 'run-task', input: { taskId: 3 }, delaySeconds: 80 })
       const tx = await pool.connect()
+      // The competing reschedule runs on its own connection so its backend pid is known and the
+      // probe below can only be satisfied by that session, not by any other lock wait on the table.
+      const other = await pool.connect()
       try {
+        const pid = (await other.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]
+          .pid
         await tx.query('BEGIN')
         expect(
           await backend.reschedule(tx, a.jobId, {
@@ -651,7 +656,7 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         ).toBe(true)
         let done = false
         const competing = backend
-          .reschedule(pool, c.jobId, { ahead: { name: 'run-task', where: { taskId: [1] } } })
+          .reschedule(other, c.jobId, { ahead: { name: 'run-task', where: { taskId: [1] } } })
           .then((ok) => {
             done = true
             return ok
@@ -661,7 +666,8 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         for (let waited = 0; ; waited += 25) {
           const blocked = await pool.query<{ n: string }>(
             `SELECT count(*)::text AS n FROM pg_stat_activity
-             WHERE wait_event_type = 'Lock' AND query LIKE '%theokit_jobs_ci%'`,
+             WHERE pid = $1 AND wait_event_type = 'Lock'`,
+            [pid],
           )
           if (Number(blocked.rows[0].n) > 0) break
           if (waited > 5000) throw new Error('competing reschedule never blocked on the lock')
@@ -673,9 +679,29 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         expect(await competing).toBe(true)
       } finally {
         tx.release()
+        other.release()
       }
       // Make every job due without changing their relative order, then lease one at a time.
       await pool.query(`UPDATE theokit_jobs_ci SET available_at = available_at - INTERVAL '1 day'`)
+      // Every job must be present, due and unleased before leasing. A row that is not is printed
+      // with its raw times, so a far-future or locked row shows its value instead of a boolean.
+      const rows = await pool.query<{
+        id: string
+        available_at: string
+        locked_until: string | null
+        failed_at: string | null
+        now: string
+        due: boolean
+        free: boolean
+      }>(
+        `SELECT id, available_at::text, locked_until::text, failed_at::text, NOW()::text AS now,
+                available_at <= NOW() AS due, (locked_until IS NULL OR locked_until < NOW()) AS free
+         FROM theokit_jobs_ci ORDER BY id`,
+      )
+      expect(rows.rows.map((r) => r.id).sort((x, y) => x.localeCompare(y))).toEqual(
+        [a.jobId, b.jobId, c.jobId].sort((x, y) => x.localeCompare(y)),
+      )
+      expect(rows.rows.filter((r) => !r.due || !r.free || r.failed_at !== null)).toEqual([])
       expect(await leaseOneByOne()).toEqual([b.jobId, c.jobId, a.jobId])
     })
 
