@@ -411,6 +411,25 @@ Gitignored files are not in a fresh worktree. List them in `.worktreeinclude` at
 literal repo-relative file or directory per line, `#` comments allowed; the `include` option renames
 the file) and they are copied in. A path that escapes the repository is refused.
 
+### Preparing a fresh checkout
+
+A fresh worktree usually cannot build until its dependencies are installed.
+`prepareWorkspace(path, { exec?, setupScripts?, timeoutMs? })` (from `@theokit/agents/bridge`) picks
+exactly one recipe and runs it; `detectWorkspaceRecipe(root, { setupScripts? })` only reports it. The
+order is:
+
+1. `.devcontainer/devcontainer.json`, then `.devcontainer.json` (JSONC). The host-side lifecycle runs
+   `onCreateCommand`, `updateContentCommand`, `postCreateCommand`, `postStartCommand` in that order; an
+   object value runs its commands in parallel and the next stage waits.
+2. The first existing path in `setupScripts` (relative to the checkout, run with `sh`). The default is
+   an empty list: the framework names no product's script.
+3. A lockfile (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lockb`, `bun.lock`), only when
+   `node_modules` is absent.
+
+Each command is bounded by `timeoutMs` (default 10 minutes). A failure throws `WorkspaceRecipeError`
+with `source` and `stage`, and the original error as `cause`. `worktreeProvider(repo, root, { prepare:
+true })` calls `prepareWorkspace` after acquiring; if it fails, the worktree and branch are removed.
+
 ## Reading a run's final answer as an object
 
 `createResultCapture(schema)` returns a `submit_result` tool whose input schema is your zod object schema. Add

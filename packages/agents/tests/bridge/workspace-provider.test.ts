@@ -70,6 +70,29 @@ describe('worktreeProvider', () => {
     },
   )
 
+  it('prepare runs the recipe after acquire, and a failed one removes the worktree and branch', async () => {
+    const { repo, root, git } = setup()
+    writeFileSync(
+      join(repo, '.devcontainer.json'),
+      '{"postCreateCommand":"echo ok > prepared.txt"}',
+    )
+    git('add', '.')
+    git('commit', '-qm', 'dc')
+    const ws = await worktreeProvider(repo, root, { prepare: true }).acquire('p')
+    expect(readFileSync(join(ws.path, 'prepared.txt'), 'utf8').trim()).toBe('ok')
+    const plain = await worktreeProvider(repo, root).acquire('q')
+    expect(existsSync(join(plain.path, 'prepared.txt'))).toBe(false)
+    await Promise.all([ws.release(), plain.release()])
+
+    writeFileSync(join(repo, '.devcontainer.json'), '{"postCreateCommand":"exit 3"}')
+    git('commit', '-qam', 'bad')
+    await expect(worktreeProvider(repo, root, { prepare: true }).acquire('f')).rejects.toThrow(
+      /postCreateCommand failed/,
+    )
+    expect(existsSync(join(root, 'f'))).toBe(false)
+    expect(git('branch', '--list', 'task/f').trim()).toBe('')
+  })
+
   it('release keep true leaves the worktree and branch', async () => {
     const { repo, root, git } = setup()
     const ws = await worktreeProvider(repo, root).acquire('k')
