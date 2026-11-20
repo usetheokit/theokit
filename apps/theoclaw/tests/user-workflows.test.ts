@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -77,5 +77,28 @@ describe('workspace workflows', () => {
     const event = { text: '/approve wfr-nope', platform: 'telegram', sender: { id: '1' } } as never
     const decision = (await hook.pre_inbound!({ event } as never)) as { block: boolean; message: string }
     expect(decision.message).toBe('No suspended workflow run has that token.')
+  })
+
+  it('resumes a token on the workflow that owns it, among several', async () => {
+    const { load, workspace } = setup(DEF)
+    writeFileSync(join(workspace, 'workflows', 'audit.json'), JSON.stringify({ ...DEF, name: 'audit' }))
+    const loaded = load()
+    expect(loaded.names).toEqual(['audit', 'release'])
+    const release = loaded.tools.find((t) => t.name === 'release')!
+    const suspended = JSON.parse(String(await release.handler({ text: 'notes' })))
+    const answer = await load().resume(suspended.runId, true)
+    expect(answer).toMatch(new RegExp(`^release ${suspended.runId}: completed`))
+  })
+
+  it('lets a resume failure that is not "unknown token" propagate, logged with the token', async () => {
+    const { load, lines, workspace } = setup(DEF)
+    const loaded = load()
+    const suspended = JSON.parse(String(await loaded.tools[0]!.handler({ text: 'notes' })))
+    const dir = join(workspace, '.s', 'workflows')
+    for (const file of readdirSync(dir, { recursive: true }).map(String)) {
+      if (file.includes(suspended.runId)) writeFileSync(join(dir, file), '{ not json')
+    }
+    await expect(load().resume(suspended.runId, true)).rejects.toThrow(suspended.runId)
+    expect(lines.some((l) => l.includes(`${suspended.runId} resume failed`))).toBe(true)
   })
 })

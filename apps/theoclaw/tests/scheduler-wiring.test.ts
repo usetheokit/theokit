@@ -7,7 +7,7 @@ import type { PlatformName, SendResult } from '@theokit/gateway'
 import { createJobStore, type JobStore, ScheduleStoreError } from '@theokit/agents/tools'
 import type { AgentOptions } from '@theokit/sdk'
 import { Cron } from '@theokit/sdk'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { TurnAgent, TurnRun } from '../src/agent-port.js'
 import type { StartedPlatform } from '../src/channels/channel-loop.js'
@@ -238,6 +238,24 @@ describe('wireScheduler inbox', () => {
     const { messages } = await readInbox(scheduleTools)
     expect(messages).toHaveLength(1)
     expect(messages[0]?.text).toContain('failed: boom')
+  })
+
+  it.each([
+    ['an error with a code', { status: 'error', error: { code: 'rate_limited' } }, 'failed: run ended with error: rate_limited'],
+    ['a cancelled run', { status: 'cancelled' }, 'failed: run ended with status cancelled'],
+    ['a finished run with no answer', { status: 'finished' }, 'failed: run finished without a result'],
+  ])('names why %s failed, and never reads its stream', async (_name, outcome, text) => {
+    const stream = vi.fn(async function* () {
+      yield { type: 'assistant' }
+    })
+    const agent: TurnAgent = {
+      send: () => Promise.resolve({ stream, cancel: () => Promise.resolve(), wait: () => Promise.resolve(outcome) }),
+    }
+    const { scheduler, scheduleTools } = await start(agent, [], [], dir, [])
+    await scheduler.add(inboxJob)
+    expect(await scheduler.fire('job-1')).toBe('failed')
+    expect((await readInbox(scheduleTools)).messages?.[0]?.text).toContain(text)
+    expect(stream).not.toHaveBeenCalled()
   })
 
   it('refuses the inbox target without a workspace', async () => {

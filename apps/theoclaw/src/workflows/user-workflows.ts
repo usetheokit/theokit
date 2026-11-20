@@ -7,9 +7,11 @@ import {
   Workflow,
   workflowAsTool,
   workflowResumeTool,
-  WorkflowResumeWorkflowMismatchError,
+  WorkflowSet,
   WorkflowSnapshotNotFoundError,
+  type WorkflowBuilder,
   type WorkflowRun,
+  type StepContext,
 } from '@theokit/sdk/workflow'
 import { z } from 'zod'
 
@@ -38,6 +40,7 @@ const Approval = z.object({ approved: z.boolean() })
 const StepResult = z.object({ result: z.string() })
 const State = z.object({ text: z.string(), result: z.string().optional(), approved: z.boolean().optional() })
 type StateValue = z.infer<typeof State>
+type StartInput = z.infer<typeof Input> | z.infer<typeof Approval>
 
 export interface LoadedWorkflows {
   readonly tools: CustomTool[]
@@ -65,12 +68,12 @@ export function readDefinitions(workspace: string, write: (line: string) => void
 }
 
 function buildWorkflow(def: WorkflowDefinitionValue, generate: GenerateObject, stateDir: string) {
-  let builder = Workflow.create<unknown>({
+  let builder: WorkflowBuilder<StartInput, unknown> = Workflow.create<StartInput>({
     name: def.name,
     inputSchema: z.union([Input, Approval]),
     persistence: { backend: 'json', dir: stateDir },
-  }) as unknown as { then: (s: unknown) => typeof builder; suspend: (o: unknown) => typeof builder; commit: () => unknown }
-  const stateOf = (ctx: { state: unknown }): StateValue | undefined => {
+  })
+  const stateOf = (ctx: StepContext): StateValue | undefined => {
     const parsed = State.safeParse(ctx.state)
     return parsed.success ? parsed.data : undefined
   }
@@ -78,7 +81,7 @@ function buildWorkflow(def: WorkflowDefinitionValue, generate: GenerateObject, s
     if ('approve' in step) {
       builder = builder.suspend({ id: step.id, payloadSchema: Approval })
       builder = builder.then(
-        fn(`${step.id}--decision`, (input: unknown, ctx: { state: unknown; setState: (s: unknown) => void }) => {
+        fn(`${step.id}--decision`, (input: unknown, ctx: StepContext) => {
           const state = stateOf(ctx)
           ctx.setState({ ...state, approved: Approval.parse(input).approved })
           return { result: state?.result ?? '' }
@@ -87,7 +90,7 @@ function buildWorkflow(def: WorkflowDefinitionValue, generate: GenerateObject, s
       return
     }
     builder = builder.then(
-      fn(step.id, async (input: unknown, ctx: { state: unknown; setState: (s: unknown) => void }) => {
+      fn(step.id, async (input: unknown, ctx: StepContext) => {
         const state = stateOf(ctx) ?? { text: index === 0 ? Input.parse(input).text : '' }
         if (state.approved === false) return { result: state.result ?? '' }
         const data = state.result ?? state.text
@@ -101,14 +104,12 @@ function buildWorkflow(def: WorkflowDefinitionValue, generate: GenerateObject, s
     )
   })
   builder = builder.then(
-    fn('finish', (_input: unknown, ctx: { state: unknown }) => {
+    fn('finish', (_input: unknown, ctx: StepContext) => {
       const state = stateOf(ctx)
       return { result: state?.result ?? '', approved: state?.approved ?? true }
     }),
   )
-  return builder.commit() as {
-    run: (input: z.infer<typeof Input>) => Promise<WorkflowRun>
-  }
+  return builder.commit()
 }
 
 /**
@@ -123,7 +124,7 @@ export function loadUserWorkflows(options: {
   readonly write: (line: string) => void
 }): LoadedWorkflows {
   const tools: CustomTool[] = []
-  const committed: Array<{ name: string; workflow: Parameters<typeof workflowResumeTool>[0] }> = []
+  const committed: Array<ReturnType<typeof buildWorkflow>> = []
   for (const def of readDefinitions(options.workspace, options.write)) {
     const workflow = buildWorkflow(def, options.generate, join(options.stateDir, 'workflows'))
     const logged = {
@@ -140,31 +141,32 @@ export function loadUserWorkflows(options: {
         inputSchema: Input,
         reportSuspended: true,
       }),
-      workflowResumeTool(workflow as unknown as Parameters<typeof workflowResumeTool>[0], {
+      workflowResumeTool(workflow, {
         name: `${def.name}_resume`,
         description: `Resume a suspended ${def.name} run by its runId, with { approved: true | false } as the payload. A run id resumes once.`,
         reportSuspended: true,
       }),
     )
-    committed.push({ name: def.name, workflow: workflow as unknown as Parameters<typeof workflowResumeTool>[0] })
+    committed.push(workflow)
   }
+  // SDK 5.32.0 declares `__options` (which `WorkflowSet.of` reads for the name) on its parameter type
+  // but not on `Workflow`, although every committed workflow has it at runtime.
+  const set = WorkflowSet.of(committed as unknown as Parameters<typeof WorkflowSet.of>[0])
   const resume = async (token: string, approved: boolean): Promise<string | undefined> => {
-    for (const { name, workflow } of committed) {
-      let run: WorkflowRun
-      try {
-        run = await Workflow.resume({ workflow, runId: token, payload: { approved } } as never)
-      } catch (error) {
-        // Only "this workflow does not own the token" moves on to the next workflow.
-        if (error instanceof WorkflowSnapshotNotFoundError || error instanceof WorkflowResumeWorkflowMismatchError) continue
-        const reason = error instanceof Error ? error.message : String(error)
-        options.write(`theoclaw-workflow: ${name} ${token} resume failed: ${reason}`)
-        throw new Error(`${name} ${token}: resume failed: ${reason}`, { cause: error })
-      }
-      options.write(`theoclaw-workflow: ${name} ${token} ${run.status}`)
-      const detail = run.status === 'failed' ? ` ${run.error?.message ?? ''}`.trimEnd() : ''
-      return `${name} ${token}: ${run.status}${run.status === 'completed' ? ` ${JSON.stringify(run.output)}` : detail}`
+    let name: string
+    let run: WorkflowRun
+    try {
+      ;({ name, run } = await set.resume(token, { approved }))
+    } catch (error) {
+      // The set throws this only when no workflow owns the token: the contract's undefined.
+      if (error instanceof WorkflowSnapshotNotFoundError) return undefined
+      const reason = error instanceof Error ? error.message : String(error)
+      options.write(`theoclaw-workflow: ${token} resume failed: ${reason}`)
+      throw new Error(`${token}: resume failed: ${reason}`, { cause: error })
     }
-    return undefined
+    options.write(`theoclaw-workflow: ${name} ${token} ${run.status}`)
+    const detail = run.status === 'failed' ? ` ${run.error?.message ?? ''}`.trimEnd() : ''
+    return `${name} ${token}: ${run.status}${run.status === 'completed' ? ` ${JSON.stringify(run.output)}` : detail}`
   }
-  return { tools, resume, names: committed.map((c) => c.name) }
+  return { tools, resume, names: set.names }
 }

@@ -33,7 +33,7 @@ export async function portState(
   const instance = resolveInstance(env, { homeDir })
   const workspace = (instance.workspace ?? env.THEOCLAW_WORKSPACE ?? '').trim()
   if (workspace === '') throw new StatePortRefusal('THEOCLAW_WORKSPACE is unset: there is no state to port')
-  const jobs = loadScheduleStore(workspace).list()
-  const rows = await portJobs(target.dsn, jobs, { force }, deps)
+  const from = loadScheduleStore(workspace)
+  const rows = await portJobs(target.dsn, from, { force }, deps)
   return [{ store: 'schedules', rows }]
 }

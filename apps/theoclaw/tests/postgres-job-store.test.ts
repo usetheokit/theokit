@@ -25,7 +25,7 @@ const fakePool = (config: Record<string, unknown>): PoolLike => {
     query: (sql: string, params: unknown[] = []) => {
       if (sql.startsWith('SELECT'))
         return Promise.resolve({
-          rows: [...table.values()].map((j) => ({ job: JSON.parse(j) })) as never[],
+          rows: [...table.values()].map((j) => ({ id: (JSON.parse(j) as ScheduledJob).id, job: JSON.parse(j) })) as never[],
         })
       if (sql.startsWith('INSERT')) table.set(params[0] as string, params[1] as string)
       if (sql.startsWith('DELETE')) table.delete(params[0] as string)
