@@ -1,4 +1,15 @@
-import { closeSync, constants, existsSync, fchmodSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fchmodSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
@@ -8,6 +19,7 @@ import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { resolveInstance } from '../instance.js'
+import { readFullHistory } from './transcript-history.js'
 
 /**
  * `theoclaw sessions list|show|export` (OC-51): a read-only view over the chat transcripts the SDK
@@ -29,36 +41,25 @@ interface Message {
 
 const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [--json]'
 
-function textOf(content: unknown): string {
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return ''
-  return content
-    .map((block: unknown) => {
-      const entry = block as { type?: unknown; text?: unknown }
-      return entry?.type === 'text' && typeof entry.text === 'string' ? entry.text : ''
-    })
-    .join('')
+/** The user and assistant turns of a session, read by the SDK; entries with no text are dropped. */
+async function readMessages(session: ChatSession): Promise<Message[]> {
+  const stored = await readFullHistory({
+    cwd: session.workspace,
+    transcript: session.transcript,
+  })
+  // The reader's `text` also renders tool calls and results; the CLI shows only what was said.
+  return stored
+    .map((entry) => ({
+      role: entry.role,
+      text: (entry.parts ?? []).map((part) => (part.type === 'text' ? part.text : '')).join(''),
+    }))
+    .filter((entry) => entry.text !== '')
 }
 
-/** The user and assistant turns of a transcript; tool results and system records carry no text. */
-export function readMessages(file: string): Message[] {
-  const messages: Message[] = []
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    if (line.trim() === '') continue
-    let record: { type?: unknown; message?: { content?: unknown } }
-    try {
-      record = JSON.parse(line) as typeof record
-    } catch {
-      continue
-    }
-    if (record.type !== 'user' && record.type !== 'assistant') continue
-    const text = textOf(record.message?.content)
-    if (text !== '') messages.push({ role: record.type, text })
-  }
-  return messages
+type ChatSession = Awaited<ReturnType<typeof listSessions>>[number] & {
+  id: string
+  workspace: string
 }
-
-type ChatSession = Awaited<ReturnType<typeof listSessions>>[number] & { id: string }
 
 async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {
   const env: NodeJS.ProcessEnv = { ...io.env }
@@ -71,8 +72,9 @@ async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {
       { variable: 'THEOCLAW_WORKSPACE' },
     )
   }
-  return (await listSessions(workspace, join(workspace, '.theoclaw'))).filter(
-    (entry): entry is ChatSession => entry.id !== undefined,
+  const listed = await listSessions(workspace, join(workspace, '.theoclaw'))
+  return listed.flatMap((entry) =>
+    entry.id === undefined ? [] : [{ ...entry, id: entry.id, workspace }],
   )
 }
 
@@ -163,9 +165,16 @@ async function shareCommand(
   // No check-then-use: drop any earlier copy (a read-only file, or a link planted in its place),
   // then create the file exclusively without following a link, and set its mode on the open handle.
   rmSync(file, { force: true })
-  const fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+  const fd = openSync(
+    file,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+    0o600,
+  )
   try {
-    writeFileSync(fd, `${JSON.stringify({ id: session.id, messages: readMessages(session.transcript) })}\n`)
+    writeFileSync(
+      fd,
+      `${JSON.stringify({ id: session.id, messages: await readMessages(session) })}\n`,
+    )
     fchmodSync(fd, 0o444)
   } finally {
     closeSync(fd)
@@ -185,7 +194,7 @@ export async function resumeCommand(args: readonly string[], io: SessionsIo): Pr
     return 1
   }
   io.stdout.write(`resuming session ${last.id}\n`)
-  for (const message of readMessages(last.transcript))
+  for (const message of await readMessages(last))
     io.stdout.write(`${message.role}: ${message.text}\n`)
   return 0
 }
@@ -211,7 +220,7 @@ export async function sessionsCommand(args: readonly string[], io: SessionsIo): 
   if (verb === 'list') {
     for (const entry of sessions) {
       io.stdout.write(
-        `${entry.id}\t${readMessages(entry.transcript).length} messages\t${entry.modifiedAt.toISOString()}\n`,
+        `${entry.id}\t${(await readMessages(entry)).length} messages\t${entry.modifiedAt.toISOString()}\n`,
       )
     }
     return 0
@@ -219,7 +228,7 @@ export async function sessionsCommand(args: readonly string[], io: SessionsIo): 
   const wanted = operands[0]!
   const session = pickSession(sessions, wanted, io)
   if (session === undefined) return 1
-  const messages = readMessages(session.transcript)
+  const messages = await readMessages(session)
   if (verb === 'show') {
     io.stdout.write(
       `id: ${session.id}\nmessages: ${messages.length}\nupdated: ${session.modifiedAt.toISOString()}\n`,

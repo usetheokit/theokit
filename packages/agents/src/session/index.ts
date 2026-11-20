@@ -67,6 +67,14 @@ export {
 } from './gc/projects-gc.js'
 
 export {
+  scheduleSessionSweep,
+  sweepDecision,
+  type ScheduleSessionSweepOptions,
+  type SweepDecision,
+  type SweepScheduleResult,
+} from './gc/sweep-schedule.js'
+
+export {
   claimCollectorRoot,
   CollectorRootError,
   collectorRootOwner,

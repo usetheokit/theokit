@@ -17245,6 +17245,44 @@
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
+        "DevicePairing": {
+          "tier": "stable",
+          "declaration": "interface DevicePairing {\n    issueCode(): string;\n    request(code: string, name: string, credential: string): PairingRequestResult;\n    pending(): readonly {\n        id: string;\n        name: string;\n        since: number;\n    }[];\n    approve(id: string): Promise<PairingApproval>;\n    deny(id: string): boolean;\n    revoke(name: string): Promise<boolean>;\n    accepts(authorization: string | undefined): boolean;\n    onRevoke(listener: (id: string) => void): () => void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/control.d.ts#PairingApproval",
+            "dist/control.d.ts#PairingRequestResult"
+          ],
+          "internals": {
+            "dist/control.d.ts#PairingApproval": "type PairingApproval = {\n    readonly ok: true;\n    readonly name: string;\n} | {\n    readonly ok: false;\n    readonly reason: 'unknown_request' | 'write_failed';\n};",
+            "dist/control.d.ts#PairingRequestResult": "type PairingRequestResult = {\n    readonly ok: true;\n    readonly id: string;\n} | {\n    readonly ok: false;\n    readonly reason: 'unknown_or_expired' | 'bad_credential' | 'bad_name' | 'too_many_pending';\n};"
+          }
+        },
+        "DevicePairingOptions": {
+          "tier": "stable",
+          "declaration": "interface DevicePairingOptions {\n    dir: string;\n    codeTtlMs?: number;\n    maxPending?: number;\n    minCredentialLength?: number;\n    now?: () => number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "PairingApproval": {
+          "tier": "stable",
+          "declaration": "type PairingApproval = {\n    readonly ok: true;\n    readonly name: string;\n} | {\n    readonly ok: false;\n    readonly reason: 'unknown_request' | 'write_failed';\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "PairingRequestResult": {
+          "tier": "stable",
+          "declaration": "type PairingRequestResult = {\n    readonly ok: true;\n    readonly id: string;\n} | {\n    readonly ok: false;\n    readonly reason: 'unknown_or_expired' | 'bad_credential' | 'bad_name' | 'too_many_pending';\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "SessionOutcome": {
           "tier": "stable",
           "declaration": "type SessionOutcome = AgentTurnOutcome | {\n    ok: false;\n    code: 'busy' | 'bad_session' | 'interrupted';\n};",
@@ -17441,6 +17479,24 @@
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
+        "createDevicePairing": {
+          "tier": "stable",
+          "declaration": "declare function createDevicePairing(options: DevicePairingOptions): DevicePairing;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/control.d.ts#DevicePairing",
+            "dist/control.d.ts#DevicePairingOptions",
+            "dist/control.d.ts#PairingApproval",
+            "dist/control.d.ts#PairingRequestResult"
+          ],
+          "internals": {
+            "dist/control.d.ts#DevicePairing": "interface DevicePairing {\n    issueCode(): string;\n    request(code: string, name: string, credential: string): PairingRequestResult;\n    pending(): readonly {\n        id: string;\n        name: string;\n        since: number;\n    }[];\n    approve(id: string): Promise<PairingApproval>;\n    deny(id: string): boolean;\n    revoke(name: string): Promise<boolean>;\n    accepts(authorization: string | undefined): boolean;\n    onRevoke(listener: (id: string) => void): () => void;\n}",
+            "dist/control.d.ts#DevicePairingOptions": "interface DevicePairingOptions {\n    dir: string;\n    codeTtlMs?: number;\n    maxPending?: number;\n    minCredentialLength?: number;\n    now?: () => number;\n}",
+            "dist/control.d.ts#PairingApproval": "type PairingApproval = {\n    readonly ok: true;\n    readonly name: string;\n} | {\n    readonly ok: false;\n    readonly reason: 'unknown_request' | 'write_failed';\n};",
+            "dist/control.d.ts#PairingRequestResult": "type PairingRequestResult = {\n    readonly ok: true;\n    readonly id: string;\n} | {\n    readonly ok: false;\n    readonly reason: 'unknown_or_expired' | 'bad_credential' | 'bad_name' | 'too_many_pending';\n};"
+          }
+        },
         "createSessionStore": {
           "tier": "stable",
           "declaration": "declare function createSessionStore(options: SessionStoreOptions): SessionStore;",
@@ -17503,6 +17559,22 @@
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle {\n    readonly agentId: string;\n    readonly generate?: (message: string, options: {\n        output: unknown;\n        [key: string]: unknown;\n    }) => Promise<unknown>;\n    readonly pluginManager?: () => unknown;\n    send: (msg: string, opts?: SdkSendOptions) => Promise<SdkTurnHandle>;\n    dispose: () => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = Record<string, unknown>;",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle {\n    wait: () => Promise<{\n        result?: string;\n        usage?: {\n            totalTokens?: number;\n            inputTokens?: number;\n            outputTokens?: number;\n        };\n        cost?: {\n            amountUsd?: number;\n        };\n        status?: string;\n        error?: {\n            message: string;\n        };\n    }>;\n    stream?: () => AsyncIterable<unknown>;\n    cancel?: () => unknown;\n}"
+          }
+        },
+        "pairRoute": {
+          "tier": "stable",
+          "declaration": "declare function pairRoute(pairing: DevicePairing): (request: Request) => Promise<Response>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/control.d.ts#DevicePairing",
+            "dist/control.d.ts#PairingApproval",
+            "dist/control.d.ts#PairingRequestResult"
+          ],
+          "internals": {
+            "dist/control.d.ts#DevicePairing": "interface DevicePairing {\n    issueCode(): string;\n    request(code: string, name: string, credential: string): PairingRequestResult;\n    pending(): readonly {\n        id: string;\n        name: string;\n        since: number;\n    }[];\n    approve(id: string): Promise<PairingApproval>;\n    deny(id: string): boolean;\n    revoke(name: string): Promise<boolean>;\n    accepts(authorization: string | undefined): boolean;\n    onRevoke(listener: (id: string) => void): () => void;\n}",
+            "dist/control.d.ts#PairingApproval": "type PairingApproval = {\n    readonly ok: true;\n    readonly name: string;\n} | {\n    readonly ok: false;\n    readonly reason: 'unknown_request' | 'write_failed';\n};",
+            "dist/control.d.ts#PairingRequestResult": "type PairingRequestResult = {\n    readonly ok: true;\n    readonly id: string;\n} | {\n    readonly ok: false;\n    readonly reason: 'unknown_or_expired' | 'bad_credential' | 'bad_name' | 'too_many_pending';\n};"
           }
         }
       }
@@ -19834,6 +19906,14 @@
             "dist/session.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}"
           }
         },
+        "ScheduleSessionSweepOptions": {
+          "tier": "stable",
+          "declaration": "interface ScheduleSessionSweepOptions {\n    readonly enabled: boolean;\n    readonly stampFile: string;\n    readonly intervalHours?: number;\n    readonly command: (input: {\n        apply: boolean;\n    }) => {\n        command: string;\n        args: readonly string[];\n    };\n    readonly timeoutMs?: number;\n    readonly onReport: (line: string) => void;\n    readonly now?: Date;\n    readonly spawn?: typeof spawn;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "SessionInUseError": {
           "tier": "stable",
           "declaration": "declare class SessionInUseError extends TheokitAgentError {\n    readonly sessionId: string;\n    readonly reason: string;\n    readonly registryOutcome?: RegistryOutcome | undefined;\n    readonly name = \"SessionInUseError\";\n    constructor(sessionId: string, reason: string, registryOutcome?: RegistryOutcome | undefined);\n}",
@@ -19855,6 +19935,22 @@
         "SessionSummary": {
           "tier": "stable",
           "declaration": "type SessionSummary = SessionListing;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "SweepDecision": {
+          "tier": "stable",
+          "declaration": "type SweepDecision = {\n    readonly run: false;\n    readonly reason: 'disabled' | 'too-soon';\n    readonly lastRun?: Date;\n} | {\n    readonly run: true;\n    readonly firstRun: boolean;\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "SweepScheduleResult": {
+          "tier": "stable",
+          "declaration": "interface SweepScheduleResult {\n    readonly started: boolean;\n    readonly reason: 'disabled' | 'too-soon' | 'first-run-dry' | 'applying' | 'spawn-failed';\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -20149,6 +20245,20 @@
             "dist/session.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
           }
         },
+        "scheduleSessionSweep": {
+          "tier": "stable",
+          "declaration": "declare function scheduleSessionSweep(options: ScheduleSessionSweepOptions): SweepScheduleResult;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/session.d.ts#ScheduleSessionSweepOptions",
+            "dist/session.d.ts#SweepScheduleResult"
+          ],
+          "internals": {
+            "dist/session.d.ts#ScheduleSessionSweepOptions": "interface ScheduleSessionSweepOptions {\n    readonly enabled: boolean;\n    readonly stampFile: string;\n    readonly intervalHours?: number;\n    readonly command: (input: {\n        apply: boolean;\n    }) => {\n        command: string;\n        args: readonly string[];\n    };\n    readonly timeoutMs?: number;\n    readonly onReport: (line: string) => void;\n    readonly now?: Date;\n    readonly spawn?: typeof spawn;\n}",
+            "dist/session.d.ts#SweepScheduleResult": "interface SweepScheduleResult {\n    readonly started: boolean;\n    readonly reason: 'disabled' | 'too-soon' | 'first-run-dry' | 'applying' | 'spawn-failed';\n}"
+          }
+        },
         "sessionPointerPath": {
           "tier": "stable",
           "declaration": "declare function sessionPointerPath(cwd: string, root?: string): string;",
@@ -20165,6 +20275,16 @@
           "references": ["dist/session.d.ts#ForkIfBusyOptions"],
           "internals": {
             "dist/session.d.ts#ForkIfBusyOptions": "interface ForkIfBusyOptions {\n    readonly onFork?: (from: string, to: string) => void;\n    readonly forkId?: (id: string) => string;\n    readonly isBusy?: (id: string) => boolean;\n}"
+          }
+        },
+        "sweepDecision": {
+          "tier": "stable",
+          "declaration": "declare function sweepDecision(input: {\n    enabled: boolean;\n    now: Date;\n    intervalHours: number;\n    lastRun: Date | undefined;\n}): SweepDecision;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/session.d.ts#SweepDecision"],
+          "internals": {
+            "dist/session.d.ts#SweepDecision": "type SweepDecision = {\n    readonly run: false;\n    readonly reason: 'disabled' | 'too-soon';\n    readonly lastRun?: Date;\n} | {\n    readonly run: true;\n    readonly firstRun: boolean;\n};"
           }
         },
         "transcriptOf": {

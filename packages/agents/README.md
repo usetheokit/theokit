@@ -35,7 +35,7 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
-| `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer |
+| `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer; `createDevicePairing` and `pairRoute`: setup-code device pairing |
 | `./testing` | Test seams: compiled-agent inspection, mock streams, the live-suite provider-key guard |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
@@ -314,7 +314,7 @@ AgentBuilder.create()
   .onWired((w) => console.log(w.tools, w.skills.listed, w.skills.readable, w.mcpServers))
 ```
 
-- `tools`: tool names handed to `Agent.create`, with `withheldBuiltinTools` removed. SDK default builtins are not enumerated.
+- `tools`: caller-supplied tool names handed to `Agent.create`. Withheld builtins are listed in `withheldBuiltinTools`; a caller tool sharing a withheld name stays in `tools`. SDK default builtins are not enumerated.
 - `skills.listed` / `skills.readable`: the skills the created agent resolved (`agent.skills.list()`, so a withheld project source or an unknown name is absent; SDK 5.17 discovers no user skills and lists an inline skill only when it is also in `skills.enabled`), and, separately, the inline skills a `skill_read` wired by this build serves. A `skill_read` you supply yourself reports none as readable. The listener runs only when the call created the agent, not on a cache hit, a resume, or a concurrent call that shared another's creation.
 - `mcpServers`, `subagents`, `settingSources` (`project` / `user`), `withheldBuiltinTools`.
 - `hooks`: events registered through `.hooks()`. Hooks inside your own plugins are opaque and not listed.
@@ -848,6 +848,21 @@ message is prefixed with `redirectNote` so the model does not resume the withdra
 failures outside a turn go to `report`; secret masking is the caller's (`sendOptions` or `emit`).
 After `close()`, `run` answers `turn_failed`.
 
+## Device pairing
+
+`createDevicePairing({ dir })` (from `@theokit/agents/control`) lets a phone or second machine reach a control surface. The owner calls `issueCode()` (valid `codeTtlMs`, default 10 minutes, and for one request). The device redeems it with a name (max 64 characters) and a credential it chose: `request(code, name, credential)` refuses `bad_credential` (shorter than `minCredentialLength`, default 32, or fewer than 10 distinct characters), `bad_name`, `unknown_or_expired` and `too_many_pending` (`maxPending`, default 20). The owner lists `pending()`, then `approve(id)` or `deny(id)`. Approved devices are stored in `<dir>/devices.json` (mode 0600) as SHA-256 digests only; `accepts(authorization)` compares a `Bearer` header in constant time.
+
+```ts
+import { createDevicePairing, pairRoute } from '@theokit/agents/control'
+
+const pairing = createDevicePairing({ dir: stateDir })
+const handlePair = pairRoute(pairing) // POST { code, name, token } -> 202 { id } | 400 | 401 | 413 | 429
+pairing.onRevoke((id) => closeSocketsOf(id)) // e.g. close with code 1008
+await pairing.revoke('my-phone') // removes every approved device with that name (names are not unique)
+```
+
+`revoke(name)` calls each `onRevoke` listener with the id of every removed device, after the store is written. Device names are not unique: two devices approved under the same name are revoked together. Approving a request whose credential matches an already approved device replaces that device silently, and its id is passed to `onRevoke` so its sockets close. The route reads `{ code, name, token }` (`credential` is accepted as an alias for `token`).
+
 ## Sessions
 
 `@theokit/agents/session` forks a session before a user turn with `forkBeforeUserTurn(srcId, newId, nth, { cwd })`.
@@ -920,6 +935,48 @@ Applying requires the root to be owned by `owner.app`. `claimCollectorRoot(proje
 `collectorRootOwner(projectsRoot)` reads it (`undefined` when absent or malformed). Whether to claim a root is the
 app's call: claim the default root, and a custom one only if it holds no projects yet. `runProjectsGC` throws
 `CollectorRootNotOwnedError` (code `collector_root_not_owned`) when the marker is missing or names another app.
+
+### Scheduling the sweep
+
+`scheduleSessionSweep({ enabled, stampFile, command, onReport, intervalHours?, timeoutMs? })` runs the cross-project GC
+in a detached child, at most once per `intervalHours` (default 24). It reads `stampFile` (an unparseable or missing
+stamp counts as a first run), writes it BEFORE spawning, and never blocks or throws: a failure goes to `onReport`.
+The first run is dry (`command({ apply: false })`), later ones apply. The child gets `timeoutMs` (default 600000) and
+`SIGTERM`; when it closes, its last stdout line is reported. The command is the app's: `sweepDecision` is the pure
+interval check.
+
+```ts
+import { dirname, join } from 'node:path'
+import { projectsRoot, scheduleSessionSweep } from '@theokit/agents/session'
+
+scheduleSessionSweep({
+  enabled: true,
+  stampFile: join(dirname(projectsRoot()), '.last-session-gc'),
+  command: ({ apply }) => ({
+    command: process.execPath,
+    args: [myScript, 'sessions-gc', ...(apply ? ['--apply'] : [])],
+  }),
+  onReport: (line) => console.error(line),
+})
+```
+
+```ts
+// the child (myScript sessions-gc): plan, then run
+import { claimCollectorRoot, planProjectsGC, projectsRoot, runProjectsGC } from '@theokit/agents/session'
+
+const root = projectsRoot()
+const apply = process.argv.includes('--apply')
+if (apply) claimCollectorRoot(root, { app: 'my-app' }) // only if the app owns this root
+const plan = await planProjectsGC({
+  projectsRoot: root,
+  keepLast: 20,
+  maxAgeDays: 30,
+  candidateCwds: () => knownWorkspaces(),
+  candidateCwdsComplete: true, // only if the list is truly complete
+})
+const result = await runProjectsGC(plan, { apply, owner: { app: 'my-app' } })
+console.log(`${result.dryRun ? 'would remove' : 'removed'} ${result.removed.length} of ${plan.candidates.length}`)
+```
 
 ## Refused tool calls
 
