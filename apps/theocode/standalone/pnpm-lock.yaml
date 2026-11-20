@@ -12,8 +12,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.15.0(jiti@2.7.0))
       '@theokit/agents':
-        specifier: 16.11.0
-        version: 16.11.0(@theokit/http@2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(react@19.3.1)(vitest@4.1.12)(ws@8.23.0)(zod@4.6.7)
+        specifier: 16.12.0
+        version: 16.12.0(@theokit/http@2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(react@19.3.1)(vitest@4.1.12)(ws@8.23.0)(zod@4.6.7)
       '@theokit/agents-pty':
         specifier: 0.2.1
         version: 0.2.1(@theokit/sdk@5.17.0(ws@8.23.0))
@@ -841,6 +841,23 @@ packages:
 
   '@theokit/agents@16.11.0':
     resolution: {integrity: sha512-z1oBBlZP91yJsq++S5RcbYBE6FTNEvFgiTytOweT6lDgSjHz5VcbEyyiQPBTIh/mRU/i/eRv1U6aVvTnr0WFaw==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@jitl/quickjs-wasmfile-release-sync': 0.32.0
+      '@theokit/http': '>=2.1.0-next.0'
+      quickjs-emscripten-core: 0.32.0
+      react: '>=18'
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      '@jitl/quickjs-wasmfile-release-sync':
+        optional: true
+      quickjs-emscripten-core:
+        optional: true
+      react:
+        optional: true
+
+  '@theokit/agents@16.12.0':
+    resolution: {integrity: sha512-gDYEx+9HVlunZ6MpBGg+na/NnSnt03AlJSYJYJpIzVOFO44f88WKb0AqIPoMwIscnW2o+8EJ+b6kpvmOrQihPw==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@jitl/quickjs-wasmfile-release-sync': 0.32.0
@@ -2707,6 +2724,29 @@ snapshots:
       - '@theokit/sdk'
 
   '@theokit/agents@16.11.0(@theokit/http@2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(react@19.3.1)(vitest@4.1.12)(ws@8.23.0)(zod@4.6.7)':
+    dependencies:
+      '@theokit/http': 2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7)
+      '@theokit/presenter': 0.15.0(@theokit/sdk@5.17.0(ws@8.23.0))(zod@4.6.7)
+      '@theokit/sdk': 5.17.0(ws@8.23.0)
+      '@theokit/sdk-tools': 0.29.0(@theokit/sdk@5.17.0(ws@8.23.0))(vitest@4.1.12)(zod@4.6.7)
+      zod: 4.6.7
+    optionalDependencies:
+      react: 19.3.1
+    transitivePeerDependencies:
+      - '@lancedb/lancedb'
+      - '@opentelemetry/api'
+      - '@types/ws'
+      - better-sqlite3
+      - mammoth
+      - onnxruntime-node
+      - proper-lockfile
+      - simple-git
+      - sqlite-vec
+      - unpdf
+      - vitest
+      - ws
+
+  '@theokit/agents@16.12.0(@theokit/http@2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(react@19.3.1)(vitest@4.1.12)(ws@8.23.0)(zod@4.6.7)':
     dependencies:
       '@theokit/http': 2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7)
       '@theokit/presenter': 0.15.0(@theokit/sdk@5.17.0(ws@8.23.0))(zod@4.6.7)

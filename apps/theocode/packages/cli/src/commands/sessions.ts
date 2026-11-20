@@ -83,17 +83,23 @@ export interface CurrentProjectGCOptions {
  */
 function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): TranscriptGCPlan {
   const own = new Map(registryIds.map((id) => [transcriptPath(planned.root, planned.cwd, id), id]))
+  // A transcript whose id could not be read, and that no registry entry owns, is kept: unreadable is
+  // not orphaned. A readable one at its own id's path keeps that id; any other (a fork) has none.
+  const idOf = (c: TranscriptGCPlan['candidates'][number]): string | undefined =>
+    own.get(c.transcript) ??
+    (c.id !== undefined && transcriptPath(planned.root, planned.cwd, c.id) === c.transcript
+      ? c.id
+      : undefined)
+  const unreadable = planned.candidates.filter((c) => c.id === undefined && !own.has(c.transcript))
   return {
     ...planned,
-    candidates: planned.candidates.map((c) => ({
-      ...c,
-      // A transcript sitting at its own id's path is not a fork: the id it names is its own.
-      id:
-        own.get(c.transcript) ??
-        (c.id !== undefined && transcriptPath(planned.root, planned.cwd, c.id) === c.transcript
-          ? c.id
-          : undefined),
-    })),
+    candidates: planned.candidates
+      .filter((c) => !unreadable.includes(c))
+      .map((c) => ({ ...c, id: idOf(c) })),
+    kept: [
+      ...planned.kept,
+      ...unreadable.map((c) => ({ id: c.id, reason: 'session id unreadable — not collected' })),
+    ],
   }
 }
 
@@ -166,7 +172,10 @@ export async function planAndRunCurrentProjectGC(
     withholdLegacyNamed(planned, [...protectedIds().keys()]),
     everyone.map((a) => a.agentId),
   )
-  const remove = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
+  const registered = new Set(everyone.map((a) => a.agentId))
+  const removeEntry = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
+  // A transcript no registry entry names is collected by path; the registry is not asked about it.
+  const remove = (id: string): unknown => (registered.has(id) ? removeEntry(id) : undefined)
   const result = await runTranscriptGC(plan, {
     apply: opts.apply,
     protectedIds,
