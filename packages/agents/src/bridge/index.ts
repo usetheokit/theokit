@@ -193,7 +193,15 @@ export {
   DelegationError,
   type DelegateOptions,
   type DelegationResult,
+  type SubAgentSpec,
 } from './agent-orchestrator.js'
+
+export {
+  worktreeProvider,
+  WorkspaceProviderError,
+  type IsolatedWorkspace,
+  type WorkspaceProvider,
+} from './workspace-provider.js'
 
 export {
   createToolHooksPlugin,
@@ -282,3 +290,8 @@ export {
   type RunAgentTurnOptions,
 } from './run-agent-turn.js'
 export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'
+export {
+  createResultCapture,
+  NoResultSubmittedError,
+  type ResultCapture,
+} from './result-capture.js'

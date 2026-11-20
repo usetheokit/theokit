@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it, onTestFinished } from 'vitest'
 
-import { readableSkills } from '../../src/context/readable-skills.js'
+import { buildThroughRuntime, readSkill, TRUSTED } from '../helpers/advertised-skill-read.js'
 
 /**
  * #826 — a skill shipped inside a plugin bundle must be readable, like one in `skills/`.
@@ -29,10 +29,10 @@ describe('a skill inside a plugin bundle', () => {
     write(join(cwd, '.claude', 'skills', 'greet'), 'greet', 'PLAIN-OK')
     write(join(cwd, '.claude', 'plugins', 'sample', 'skills', 'bundled'), 'bundled', 'BUNDLED-OK')
 
-    const names = (await readableSkills(cwd, join(cwd, 'nowhere'), true)).map((s) => s.name)
+    const chat = await buildThroughRuntime(cwd, join(cwd, 'nowhere'), TRUSTED, ['greet', 'bundled'])
 
-    expect(names, 'the control: an ordinary skill must keep loading').toContain('greet')
-    expect(names, 'the bundled skill is on disk and must be readable').toContain('bundled')
+    expect(await readSkill(chat, 'greet'), 'the control: an ordinary skill must keep loading').toContain('PLAIN-OK')
+    expect(await readSkill(chat, 'bundled'), 'the bundled skill is on disk and must be readable').toContain('BUNDLED-OK')
   })
 })
 

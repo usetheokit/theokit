@@ -79,9 +79,13 @@ describe('#1898 — workspace links are not compared with the registry', () => {
   })
 
   function run(dependencies, installed, published) {
-    const root = mkdtempSync(join(tmpdir(), 'theokit-updates-'))
-    dirs.push(root)
-    mkdirSync(join(root, 'tools'))
+    // The script imports the shared library from `../../../scripts/lib`, so the tree mirrors apps/<app>.
+    const base = mkdtempSync(join(tmpdir(), 'theokit-updates-'))
+    dirs.push(base)
+    const root = join(base, 'apps', 'app')
+    mkdirSync(join(base, 'scripts', 'lib'), { recursive: true })
+    copyFileSync(join(here, '..', '..', '..', 'scripts', 'lib', 'app-dependencies.mjs'), join(base, 'scripts', 'lib', 'app-dependencies.mjs'))
+    mkdirSync(join(root, 'tools'), { recursive: true })
     mkdirSync(join(root, 'packages'))
     mkdirSync(join(root, 'bin'))
     copyFileSync(join(here, 'check-theokit-updates.mjs'), join(root, 'tools', 'check-theokit-updates.mjs'))

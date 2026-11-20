@@ -12,6 +12,8 @@ export { InMemoryUsageStorage } from './in-memory-usage.js'
 // It lands on this subpath and not the main barrel because it belongs to the same subject — real
 // provider-reported usage — and because the barrel is a measured 36.5 KB against a 37.5 KB ceiling.
 export { readRunUsage } from './run-usage.js'
+export { formatUsd, usageFromRun } from './usage-from-run.js'
+export type { RunUsageSource, UsageFromRunContext } from './usage-from-run.js'
 export type { RunUsageSnapshot } from './run-usage.js'
 export type {
   ToolUsageRecord,
