@@ -310,3 +310,29 @@ describe('Release Workflow', () => {
     expect(buildIdx).toBeLessThan(changesetsIdx)
   })
 })
+
+describe('CI public-surface gate', () => {
+  const job = loadWorkflow('ci.yml').jobs['typecheck-build']
+  interface Step {
+    name?: string
+    run?: string
+    env?: Record<string, string>
+    with?: Record<string, unknown>
+  }
+  const steps: Step[] = job.steps
+
+  it('checks out the full history so the PR base comparison has it', () => {
+    expect(steps[0].with?.['fetch-depth']).toBe(0)
+  })
+
+  it('runs the gate after the build, passes the base through env, and does not swallow failure', () => {
+    const build = steps.findIndex((s) => s.run === 'pnpm build:packages')
+    const gate = steps.findIndex((s) => s.run?.includes('check-public-surface.mjs @theokit/agents'))
+    expect(build).toBeGreaterThanOrEqual(0)
+    expect(gate).toBeGreaterThan(build)
+    expect(steps[gate].env?.BASE_REF).toBe('${{ github.base_ref }}')
+    expect(steps[gate].run).toContain('--base "origin/${BASE_REF}"')
+    expect(steps[gate].run).not.toContain('${{')
+    expect(steps[gate].run).not.toMatch(/\|\|\s*true/)
+  })
+})
