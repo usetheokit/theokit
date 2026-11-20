@@ -1,5 +1,94 @@
 # theo
 
+## 1.0.0
+
+### Major Changes
+
+- ba10ee8: `vite`, `@vitejs/plugin-react`, `typescript` and `tsx` are now optional peer dependencies of `theokit`, so apps that only use `theokit/server/*` no longer install them. Apps that run the CLI must list them in `devDependencies`; `theokit dev`, `build` and `preview` exit with a message naming the missing package and the install command. `create-theokit` templates now list them. `theokit start` needs `tsx` too and names it if missing; the CLI no longer loads `tsx` at startup, only after this check.
+
+### Minor Changes
+
+- a005b6c: `createACPTool` resolves the agent command on absolute `PATH` entries only, and `theokit/server/agent` exports `resolveAgentCommand`. A relative command or one that is not found closes the transport with `AcpTransportClosedError` before anything is spawned, and the agent's `PATH` keeps only its absolute entries. Windows keeps its previous behaviour.
+- 61578b9: Add i18n to `theokit/client`: `defineI18n` (a missing key in any locale is a type error), `I18nProvider`, `useI18n().t`, `negotiateLocale` (stored preference, then browser), and locale-aware `formatDate`, `formatNumber` and `formatRelativeTime`.
+- 8500380: `PostgresJobBackend` has `defer`, `restore` and `reschedule` to hold, release and bring forward pending jobs in the caller's transaction, skipping leased jobs.
+
+  `defer` and `reschedule` clear an expired lease on the jobs they move, so a late `ack` or `nack` cannot overwrite the new time. `reschedule` takes `ahead: { name, where }` to place a job one second before the earliest of the other pending jobs. It locks those jobs (skipping leased ones) in the caller's transaction, then updates the job, so a dequeue in between cannot lease them.
+
+- 8c90284: `theokit/server/agent` exports `handleMcpToolsHttp`, which handles a whole MCP HTTP request (405, `-32700`, batch `-32600`, 202 for notifications). The shared MCP dispatcher now negotiates `protocolVersion` on `initialize`, answers `ping`, sends no reply to a message without `id` (202 over HTTP, no line over stdio) and sets `isError: false` on a successful `tools/call`.
+- 7eb19f7: Add `objectToFormData` and `FormDataEncodingError` to `theokit/client`: the encoder that round-trips through the server's `formDataToObject`, so a client can post files to a server action. An array of objects throws `FormDataEncodingError` instead of encoding something the decoder reads back as `[]`.
+
+### Patch Changes
+
+- 62177a8: The generated Deno cron entry imports the jobs runtime through an `npm:` specifier and gives each handler `ctx.queue`, wired to the `jobs.backend` of the effective config (base `theo.config.ts`, with the `theo.config.<NODE_ENV>.ts` override winning). Jobs a handler enqueues flush after it succeeds, are discarded when it throws, and carry the run's trace. Packages a config reaches through a literal `import("pkg")` are mapped too, and an environment override is ignored when `theo.config.ts` is absent, as `loadConfig` does.
+- a39007d: `JobContext` and `CronContext` now have `queue`, so a job or cron handler can enqueue jobs. Jobs buffered with `ctx.queue.enqueue` go out after the handler returns and are dropped if it throws; `enqueueInTransaction` writes through your own transaction. A cron without `jobs.backend` gets a `queue` whose calls reject.
+
+  The generated Deno cron entry loads the `jobs.backend` of `theo.config.ts` (and the `theo.config.<NODE_ENV>.ts` override selected at run time), so `ctx.queue` works in Deno crons.
+
+- 134aaff: `theo sessions gc` awaits the now-async `planTranscriptGC`.
+- e500a45: Put `theokit` under the public-surface gate with a committed `public-surface-baseline.json`: a `0.Y` package needs a `minor` changeset to remove or change a stable export. `SqliteUsageStorage`, `ChannelManager` and the `theokit/boot` handler types are tagged `@experimental`, and the README Status section lists experimental exports by entry.
+- 2238e9d: `startTestServer` now accepts a server as ready only when this attempt's child answers (a per-attempt token), binds the requested dev port strictly, reports bind conflicts as port substitution so they retry, and on Windows terminates and confirms the whole process tree in `close()`.
+- Updated dependencies [ce037a8]
+- Updated dependencies [3cd7f4c]
+- Updated dependencies [d9ed271]
+- Updated dependencies [74fe8d3]
+- Updated dependencies [1015eae]
+- Updated dependencies [07135e7]
+- Updated dependencies [62177a8]
+- Updated dependencies [8f2a882]
+- Updated dependencies [70bf073]
+- Updated dependencies [f478270]
+- Updated dependencies [2b8c4f0]
+- Updated dependencies [adbc836]
+- Updated dependencies [0aa7583]
+- Updated dependencies [8193477]
+- Updated dependencies [260bd0d]
+- Updated dependencies [539d27a]
+- Updated dependencies [789a453]
+- Updated dependencies [c2d84b5]
+- Updated dependencies [e1daf45]
+- Updated dependencies [31f7697]
+- Updated dependencies [df1beb2]
+- Updated dependencies [869d1ab]
+- Updated dependencies [459cfc7]
+- Updated dependencies [3ae5df4]
+- Updated dependencies [134aaff]
+- Updated dependencies [bfefc06]
+- Updated dependencies [8af3269]
+- Updated dependencies [690ec8d]
+- Updated dependencies [6d79a82]
+- Updated dependencies [6853572]
+- Updated dependencies [8e257c4]
+- Updated dependencies [4ecaab5]
+- Updated dependencies [d040fd1]
+- Updated dependencies [dd923ed]
+- Updated dependencies [efead22]
+- Updated dependencies [08a149c]
+- Updated dependencies [e142476]
+- Updated dependencies [4022962]
+- Updated dependencies [57a44ea]
+- Updated dependencies [b6443f4]
+- Updated dependencies [5eecde7]
+- Updated dependencies [75105ca]
+- Updated dependencies [6228390]
+- Updated dependencies [0ce1fcf]
+- Updated dependencies [f0654a1]
+- Updated dependencies [2fd4868]
+- Updated dependencies [af91f47]
+- Updated dependencies [4a234f3]
+- Updated dependencies [c5e3952]
+- Updated dependencies [e28f5b8]
+- Updated dependencies [ef547c3]
+- Updated dependencies [7df99e5]
+- Updated dependencies [45600f9]
+- Updated dependencies [caf098d]
+- Updated dependencies [892eba7]
+- Updated dependencies [45f7995]
+- Updated dependencies [5a98849]
+- Updated dependencies [b8935bf]
+  - @theokit/agents@17.0.0
+  - @theokit/http@2.8.0
+  - @theokit/presenter@0.17.0
+
 ## 0.83.1
 
 ### Patch Changes
@@ -551,8 +640,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                          [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                          were found and every /api/agents/* route will 404.
+                                                            [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                            were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
