@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 
-import { parseSkillMarkdown } from './registry.js'
+import { skillHeader } from './legacy-compat.js'
 
 /**
  * OC-72: a reference skill registry. Packages live as `<dir>/<name>/<version>.json`, the exact bytes
@@ -73,7 +73,7 @@ function validatePackage(text: string, name: string, version: string): string | 
     if (path === 'SKILL.md') skillMd = Buffer.from(f.contentBase64, 'base64').toString('utf8')
   }
   if (skillMd === undefined) return 'SKILL.md is missing'
-  const entry = parseSkillMarkdown(skillMd, 'bundled')
+  const entry = skillHeader(skillMd)
   if (entry === undefined) return 'SKILL.md does not parse'
   if (entry.name !== name) return 'SKILL.md name differs from the package name'
   return undefined

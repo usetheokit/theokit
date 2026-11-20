@@ -125,9 +125,21 @@ Lookup is exact by design. A name that is not in the table gives `undefined`, ne
 
 When both exit-code spellings are present and differ, `exitCode` wins. A missing exit code stays `undefined`, never 0. `{ok: false, error}` reads as `error` (`tool_failed` when absent, `stderr` as `detail`); `{ok: true, diff}` and a raw unified diff string read as `diff`; anything else is `text`.
 
+## Rendering a transcript
+
+`foldTranscript(state, event)` folds `AgentOutputEvent`s into a `TranscriptState { items, status, error? }`, starting from `EMPTY_TRANSCRIPT`. Items are messages, reasoning, tool cards (`pending`, `running`, `success` or `failed`, with a `ToolResultView` from `readToolResult`) and an error. Text before and after a tool call are two message items; tool cards are keyed by `callId`. It is pure, never mutates its input, and returns the same state object when an event changes nothing (`status` events).
+
+It is terminal-final: `finish` sets `done` and `error` sets `error` (keeping `code`); both fail every tool still `pending` or `running`, and every later event returns the same state.
+
+Use `foldTranscript` to draw a chat screen. Use `foldTurnLifecycle` when you need the turn's lifecycle (items started and completed, the outcome) rather than a render state.
+
 ## Pending approvals
 
 `pendingApprovals(messages)` returns every outstanding approval across wire messages, in order, as `PendingApproval { approvalId, toolCallId, toolName, input, question?, timeoutMs? }`. With nothing outstanding it returns one shared empty array. `readPendingApproval(part)` reads a single part. A part in `approval-requested` without a string `approval.id` is skipped, never settled by its `toolCallId`, because `approve()` could not settle it.
+
+## Turn metadata
+
+`readTurnMetadata(chunk)` (from `@theokit/presenter/wire`) reads a `finish` chunk's `messageMetadata` as a `WireTurnMetadata { usage?, cost?, durationMs?, stopReason?, model? }`. Fields of the wrong type are dropped rather than thrown on, and an unknown `stopReason` is dropped. It returns `undefined` for any other chunk or a finish without object metadata. A `stopReason` of `'step_limit'` or `'no_progress'` means the turn was cut, not finished.
 
 ## Refused tool calls
 

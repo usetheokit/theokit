@@ -127,6 +127,7 @@ export {
 } from './openai-compatible-routes.js'
 export {
   createToolInvokeRoute,
+  validateAgainstInputSchema,
   type ToolArgsValidator,
   type ToolCallVetoPort,
   type ToolInvokeRouteOptions,
@@ -192,7 +193,15 @@ export {
   DelegationError,
   type DelegateOptions,
   type DelegationResult,
+  type SubAgentSpec,
 } from './agent-orchestrator.js'
+
+export {
+  worktreeProvider,
+  WorkspaceProviderError,
+  type IsolatedWorkspace,
+  type WorkspaceProvider,
+} from './workspace-provider.js'
 
 export {
   createToolHooksPlugin,
@@ -253,11 +262,36 @@ export {
 // M107 — the neighbour that TOUCHES disk. `mcp-resolver` decides which servers a request receives;
 // this one reads `<cwd>/.mcp.json`. The layer exposed the rare cases and not the common one, so every
 // consumer wrote the loader by hand.
-export { loadMcpJson, loadPersonalMcpServers, McpFileError } from './mcp-file.js'
+export {
+  loadMcpJson,
+  loadMcpServersFile,
+  loadPersonalMcpServers,
+  mcpSecretValues,
+  McpFileError,
+} from './mcp-file.js'
+export type { McpServersPolicy } from './mcp-file.js'
 export { loadMcpScopes } from './mcp-scopes.js'
 export type { McpScopesResult } from './mcp-scopes.js'
 
 // M68 — the `settingSources` trust gate (ADR 0063/0064/0065).
 export * from './setting-sources-gate.js'
+export {
+  foreignSurfaceInventory,
+  type ForeignSurfaceEntry,
+  type ForeignSurfaceInventoryInput,
+} from './foreign-surfaces.js'
 
+// #1866 — the compiled wiring reported through `onWired`.
+export type { CompiledWiring } from './compiled-wiring.js'
+export {
+  runAgentTurn,
+  completeFromTurn,
+  type AgentTurnOutcome,
+  type RunAgentTurnOptions,
+} from './run-agent-turn.js'
 export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'
+export {
+  createResultCapture,
+  NoResultSubmittedError,
+  type ResultCapture,
+} from './result-capture.js'

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
 import { checkRegistryBase, RegistryError } from './registry-client.js'
-import { parseSkillMarkdown } from './registry.js'
+import { skillHeader } from './legacy-compat.js'
 
 export const MAX_PACKAGE_BYTES = 1024 * 1024
 const TIMEOUT_MS = 10_000
@@ -171,7 +171,7 @@ export async function downloadSkill(
   }
   const skill = files.find((f) => f.path === 'SKILL.md')
   const parsed =
-    skill === undefined ? undefined : parseSkillMarkdown(skill.bytes.toString('utf8'), 'workspace')
+    skill === undefined ? undefined : skillHeader(skill.bytes.toString('utf8'))
   if (parsed === undefined) throw new RegistryError('the package has no valid SKILL.md')
   if (parsed.name !== name)
     throw new RegistryError(`SKILL.md is named ${parsed.name}, not ${name}; not installed`)

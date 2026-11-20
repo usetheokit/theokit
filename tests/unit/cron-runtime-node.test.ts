@@ -152,3 +152,99 @@ describe('createCronScheduler (T1.4)', () => {
     scheduler.stop()
   })
 })
+
+describe('ctx.queue in a cron handler', () => {
+  const makeBackend = () => {
+    const enqueue = vi.fn(async () => ({ jobId: 'c' }))
+    const enqueueInTransaction = vi.fn(async () => ({ jobId: 'tx' }))
+    return {
+      enqueue,
+      enqueueInTransaction,
+      backend: { name: 'fake', enqueue, enqueueInTransaction } as never,
+    }
+  }
+
+  it('dispatches buffered jobs after the handler returns, with the cron trace', async () => {
+    const { enqueue, backend } = makeBackend()
+    let traceId = ''
+    const def = defineCron('q', {
+      schedule: '* * * * *',
+      handler: (ctx: CronContext) => {
+        traceId = ctx.traceId
+        ctx.queue.enqueue('child' as never, { a: 1 } as never)
+        expect(enqueue).not.toHaveBeenCalled()
+      },
+    })
+    const scheduler = createCronScheduler([def], { backend })
+    scheduler.start()
+    await vi.advanceTimersByTimeAsync(65_000)
+    expect(enqueue).toHaveBeenCalledTimes(1)
+    const entry = (enqueue.mock.calls[0] as unknown as [{ traceparent: string }])[0]
+    expect(entry.traceparent).toContain(`00-${traceId}-`)
+    scheduler.stop()
+  })
+
+  it('drops buffered jobs when the handler throws', async () => {
+    const { enqueue, backend } = makeBackend()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const def = defineCron('q2', {
+      schedule: '* * * * *',
+      concurrency: 'allow',
+      handler: (ctx: CronContext) => {
+        ctx.queue.enqueue('child' as never, {} as never)
+        throw new Error('boom')
+      },
+    })
+    const scheduler = createCronScheduler([def], { backend })
+    scheduler.start()
+    await vi.advanceTimersByTimeAsync(125_000)
+    expect(enqueue).not.toHaveBeenCalled()
+    scheduler.stop()
+  })
+
+  it('keeps overlapping invocations apart: one throws, the other still dispatches its jobs', async () => {
+    const { enqueue, enqueueInTransaction, backend } = makeBackend()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const releases: Array<() => void> = []
+    let calls = 0
+    const def = defineCron('q3', {
+      schedule: '* * * * *',
+      concurrency: 'allow',
+      handler: async (ctx: CronContext) => {
+        const me = ++calls
+        ctx.queue.enqueue('child' as never, { run: me } as never)
+        await new Promise<void>((resolve) => releases.push(resolve))
+        if (me === 1) throw new Error('boom')
+        await ctx.queue.enqueueInTransaction({} as never, 'tx' as never, {} as never)
+      },
+    })
+    const scheduler = createCronScheduler([def], { backend })
+    scheduler.start()
+    await vi.advanceTimersByTimeAsync(65_000)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(releases).toHaveLength(2)
+    releases[1]?.()
+    await vi.advanceTimersByTimeAsync(0)
+    releases[0]?.()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(enqueue).toHaveBeenCalledTimes(1)
+    expect((enqueue.mock.calls[0] as unknown as [{ input: unknown }])[0].input).toEqual({ run: 2 })
+    expect(enqueueInTransaction).toHaveBeenCalledTimes(1)
+    scheduler.stop()
+  })
+
+  it('rejects queue calls when no backend is configured', async () => {
+    let result: unknown
+    const def = defineCron('q5', {
+      schedule: '* * * * *',
+      handler: async (ctx: CronContext) => {
+        result = await ctx.queue.enqueueWithId('x' as never, {} as never).catch((e: unknown) => e)
+      },
+    })
+    const scheduler = createCronScheduler([def])
+    scheduler.start()
+    await vi.advanceTimersByTimeAsync(65_000)
+    expect((result as Error).message).toContain('no jobs.backend')
+    scheduler.stop()
+  })
+})

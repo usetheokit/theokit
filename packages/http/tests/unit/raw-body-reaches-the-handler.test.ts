@@ -95,4 +95,37 @@ describe('a controller reading the raw body', () => {
 
     expect(received).toEqual({ hello: 'world' })
   })
+
+  it('still parses and validates @Body when the content type is multipart', async () => {
+    const { Body } = await import('../../src/decorators/params.js')
+    const { z } = await import('zod')
+    let received: unknown
+
+    @Public()
+    @Controller('api/validated')
+    class ValidatedController {
+      @Post()
+      async create(@Body(z.object({ n: z.coerce.number() })) body: unknown) {
+        received = body
+        return { ok: true }
+      }
+    }
+
+    const handler = createDecoratorHandler([ValidatedController])
+    const send = (payload: string) =>
+      handler(
+        new Request('http://x/api/validated', {
+          method: 'POST',
+          headers: { 'content-type': `multipart/form-data; boundary=${MULTIPART_BOUNDARY}` },
+          body: payload,
+        }),
+      )
+
+    const ok = await send('{"n":"7"}')
+    expect(ok?.status).toBe(201)
+    expect(received).toEqual({ n: 7 })
+
+    const bad = await send('{"n":"x"}')
+    expect(bad?.status).toBe(422)
+  })
 })
