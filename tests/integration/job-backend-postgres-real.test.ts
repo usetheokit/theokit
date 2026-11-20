@@ -656,7 +656,17 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
             done = true
             return ok
           })
-        await new Promise((r) => setTimeout(r, 200))
+        // Wait until Postgres reports a backend blocked on a row lock, so the contention is proven
+        // rather than assumed from elapsed time.
+        for (let waited = 0; ; waited += 25) {
+          const blocked = await pool.query<{ n: string }>(
+            `SELECT count(*)::text AS n FROM pg_stat_activity
+             WHERE wait_event_type = 'Lock' AND query LIKE '%theokit_jobs_ci%'`,
+          )
+          if (Number(blocked.rows[0].n) > 0) break
+          if (waited > 5000) throw new Error('competing reschedule never blocked on the lock')
+          await new Promise((r) => setTimeout(r, 25))
+        }
         expect(done).toBe(false)
         await backend.reschedule(tx, b.jobId, { availableAt: new Date(Date.now() + 10_000) })
         await tx.query('COMMIT')
