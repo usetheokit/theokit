@@ -42,9 +42,7 @@ describe('the bridge types', () => {
       { inputTokens?: number; outputTokens?: number; totalTokens?: number } | undefined
     >()
     expectTypeOf<Resolved['cost']>().toEqualTypeOf<{ amountUsd?: number } | undefined>()
-    expectTypeOf<Resolved['error']>().toEqualTypeOf<
-      { code?: string; message: string } | undefined
-    >()
+    expectTypeOf<Resolved['error']>().toEqualTypeOf<{ message: string } | undefined>()
   })
 
   it('still accepts a Record<string, unknown> as send options', () => {

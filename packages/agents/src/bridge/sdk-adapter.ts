@@ -29,7 +29,7 @@ import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { getOrCreateReporting } from './compiled-wiring.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
-import { type SdkMessage, type SdkMessageLike } from './event-translator.js'
+import { type SdkMessage } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone, withShell } from './sdk-adapter-create-options.js'
@@ -839,15 +839,18 @@ export interface SdkTurnHandle {
   wait(): Promise<{
     result?: string
     status?: string
-    error?: { code?: string; message: string }
+    error?: { message: string }
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
     cost?: { amountUsd?: number }
   }>
   /**
-   * Yields SDK messages that feed `translateSdkEvent` directly, no cast. {@link SdkMessageLike} has
-   * no index signature, so an `@theokit/sdk` `SDKMessage` stream is assignable.
+   * Yields SDK messages that feed `translateSdkEvent` directly, no cast: the element is `any` so an
+   * `@theokit/sdk` `SDKMessage` stream is assignable and each message is accepted as a
+   * `SdkMessageLike`, while a handle that only drains the stream (yielding anything) still
+   * compiles, as the `agentRunPort` tests do.
    */
-  stream?(): AsyncIterable<SdkMessageLike>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- loose on purpose, see above
+  stream?(): AsyncIterable<any>
   /** Optional: stops the run. `runAgentTurn` calls it when its signal aborts. */
   cancel?(): unknown
 }
