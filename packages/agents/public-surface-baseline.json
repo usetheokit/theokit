@@ -21299,6 +21299,30 @@
           "references": [],
           "internals": {}
         },
+        "InMemorySessionStore": {
+          "tier": "stable",
+          "declaration": "declare class InMemorySessionStore implements SessionStore {\n    #private;\n    readRecords(agentId: string): Promise<SessionRecord[]>;\n    appendRecords(agentId: string, records: readonly SessionRecord[]): Promise<void>;\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "InstanceLock": {
+          "tier": "stable",
+          "declaration": "interface InstanceLock {\n    readonly path: string;\n    release(): Promise<void>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "InstanceLockedError": {
+          "tier": "stable",
+          "declaration": "declare class InstanceLockedError extends TheokitAgentError {\n    readonly name = \"InstanceLockedError\";\n    readonly lockPath: string;\n    readonly holderPid?: number;\n    constructor(lockPath: string, holderPid?: number, message?: string);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "JsonlParseError": {
           "tier": "stable",
           "declaration": "declare class JsonlParseError extends TheokitAgentError {\n    readonly line: number;\n    readonly name = \"JsonlParseError\";\n    constructor(message: string, line: number);\n}",
@@ -21347,6 +21371,14 @@
           "references": [],
           "internals": {}
         },
+        "ProfileConflictError": {
+          "tier": "stable",
+          "declaration": "declare class ProfileConflictError extends ConfigurationError {\n    readonly name: string;\n    readonly variables: readonly string[];\n    constructor(variables: readonly string[]);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "ReadJsonlTailOptions": {
           "tier": "stable",
           "declaration": "interface ReadJsonlTailOptions {\n    readonly maxRecords?: number;\n    readonly sinceMarker?: string;\n    readonly _stats?: boolean;\n}",
@@ -21358,6 +21390,22 @@
         "ResilientSqliteDb": {
           "tier": "stable",
           "declaration": "interface ResilientSqliteDb {\n    pragma(statement: string, options?: {\n        simple?: boolean;\n    }): unknown;\n    exec(sql: string): void;\n    close(): void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ResolveProfileOptions": {
+          "tier": "stable",
+          "declaration": "interface ResolveProfileOptions {\n    profilesRoot?: string;\n    appDirectories?: Readonly<Record<string, string>>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ResolvedProfile": {
+          "tier": "stable",
+          "declaration": "interface ResolvedProfile {\n    readonly name: string;\n    readonly directory: string;\n    readonly directories: readonly string[];\n    readonly env: Readonly<Record<string, string>>;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -21443,6 +21491,14 @@
           "references": [],
           "internals": {}
         },
+        "acquireInstanceLock": {
+          "tier": "stable",
+          "declaration": "declare function acquireInstanceLock(dir: string, options?: {\n    path?: string;\n}): Promise<InstanceLock>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "acquireSessionWriter": {
           "tier": "stable",
           "declaration": "declare function acquireSessionWriter(sessionPath: string): Promise<SessionWriterLease>;",
@@ -21454,6 +21510,14 @@
         "appendJsonl": {
           "tier": "stable",
           "declaration": "declare function appendJsonl(path: string, record: unknown): void;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "applyProfile": {
+          "tier": "stable",
+          "declaration": "declare function applyProfile(profile: ResolvedProfile, env: NodeJS.ProcessEnv): Promise<void>;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -21510,6 +21574,14 @@
         "forkTranscript": {
           "tier": "stable",
           "declaration": "declare function forkTranscript(src: string, dst: string, options?: ForkTranscriptOptions): void;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "getProfilesRoot": {
+          "tier": "stable",
+          "declaration": "declare function getProfilesRoot(): string;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -21574,6 +21646,14 @@
         "replaceFileAtomic": {
           "tier": "stable",
           "declaration": "declare function replaceFileAtomic(filePath: string, content: string, options?: AtomicWriteFileOptions): Promise<void>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "resolveProfile": {
+          "tier": "stable",
+          "declaration": "declare function resolveProfile(name: string, options?: ResolveProfileOptions): ResolvedProfile;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -21851,6 +21931,22 @@
           "references": [],
           "internals": {}
         },
+        "SandboxContainer": {
+          "tier": "stable",
+          "declaration": "export interface SandboxContainer {\n    id: string;\n    name: string;\n    state: string;\n    image: string;\n    labels: Record<string, string>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "SandboxDockerError": {
+          "tier": "stable",
+          "declaration": "export declare class SandboxDockerError extends TheokitAgentError {\n    readonly name = \"SandboxDockerError\";\n    readonly code: \"sandbox_docker_error\";\n    readonly subcommand: string;\n    readonly exitCode: number | null;\n    readonly stderr: string;\n    constructor(subcommand: string, exitCode: number | null, stderr: string, timedOut?: boolean);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "SandboxMode": {
           "tier": "stable",
           "declaration": "export type SandboxMode = \"read-only\" | \"workspace-write\" | \"danger-full-access\";",
@@ -21939,6 +22035,14 @@
           "references": [],
           "internals": {}
         },
+        "defaultDockerRunner": {
+          "tier": "stable",
+          "declaration": "export declare function defaultDockerRunner(dockerBin?: string): DockerRunner;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "detectBwrap": {
           "tier": "stable",
           "declaration": "export declare function detectBwrap(probes?: BwrapProbes): BwrapDetection;",
@@ -21963,6 +22067,14 @@
           "references": [],
           "internals": {}
         },
+        "listSandboxContainers": {
+          "tier": "stable",
+          "declaration": "export declare function listSandboxContainers(labels: Record<string, string>, options?: {\n    runner?: DockerRunner;\n}): Promise<SandboxContainer[]>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "provisionRepo": {
           "tier": "stable",
           "declaration": "export declare function provisionRepo(opts: ProvisionRepoOptions): Promise<{\n    repoDir: string;\n}>;\nexport declare function provisionRepo(sandbox: SandboxBackend, opts: ProvisionRepoOptions): Promise<{\n    repoDir: string;\n}>;",
@@ -21982,6 +22094,14 @@
         "realProbes": {
           "tier": "stable",
           "declaration": "realProbes: BwrapProbes",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "removeSandboxContainers": {
+          "tier": "stable",
+          "declaration": "export declare function removeSandboxContainers(labels: Record<string, string>, options?: {\n    runner?: DockerRunner;\n    includeRunning?: boolean;\n}): Promise<{\n    removed: SandboxContainer[];\n    skippedRunning: SandboxContainer[];\n}>;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],

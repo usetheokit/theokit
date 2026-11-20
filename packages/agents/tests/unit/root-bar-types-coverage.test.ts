@@ -68,6 +68,11 @@ const NAMED = 'named in src/index.ts' as const
 const STAR = 'star re-export, named nowhere in src/index.ts' as const
 
 const TYPE_VERDICTS: Record<string, Verdict> = {
+  ModelFallbackAttempt: {
+    verdict: 'out',
+    reason:
+      'Type of the SDK model-fallback chain; this layer does not re-export the fallback surface.',
+  },
   AgentDefinition: { verdict: 'in', via: NAMED },
   AgentOptions: { verdict: 'in', via: NAMED },
   BudgetOptions: { verdict: 'in', via: NAMED },

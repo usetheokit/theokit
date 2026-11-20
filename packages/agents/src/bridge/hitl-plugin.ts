@@ -33,6 +33,7 @@ interface PreToolCallVeto {
 interface PreToolCallDefer {
   defer: true
 }
+type PreToolCallResult = PreToolCallVeto | PreToolCallDefer | undefined
 interface PluginContext {
   on(hook: string, handler: (ctx: PreToolCallContext) => unknown): void
 }
@@ -157,89 +158,86 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
     // the HITL veto never fires (the run would proceed WITHOUT waiting for human approval).
     kind: 'general',
     register(ctx) {
-      ctx.on(
-        'pre_tool_call',
-        async (c): Promise<PreToolCallVeto | PreToolCallDefer | undefined> => {
-          const opts = wiring.gated.get(c.name)
-          if (!opts) return undefined // not gated — allow
-          const approvalId = crypto.randomUUID()
-          wiring.emit({
-            type: 'approval_required',
-            callId: approvalId,
+      ctx.on('pre_tool_call', async (c): Promise<PreToolCallResult> => {
+        const opts = wiring.gated.get(c.name)
+        if (!opts) return undefined // not gated — allow
+        const approvalId = crypto.randomUUID()
+        wiring.emit({
+          type: 'approval_required',
+          callId: approvalId,
+          toolName: c.name,
+          question: opts.question,
+          input: c.args,
+          callbackUrl: `approve/${approvalId}`,
+          timeoutMs: opts.timeout ?? 300_000,
+          // M20 — carry the declared custom-payload schema so the UI knows what to collect.
+          ...(opts.payloadSchema !== undefined ? { payloadSchema: opts.payloadSchema } : {}),
+        })
+        // Announced AFTER the stream and BEFORE the await, without blocking either. A rejected
+        // promise here is swallowed on purpose: see `onApprovalRequired` for why a dispatch failure
+        // must not become the agent's decision.
+        if (wiring.onApprovalRequired !== undefined) {
+          void (async () => {
+            try {
+              await wiring.onApprovalRequired?.({
+                approvalId,
+                toolName: c.name,
+                question: opts.question,
+                input: c.args,
+                callbackUrl: `approve/${approvalId}`,
+                timeoutMs: opts.timeout ?? 300_000,
+              })
+            } catch {
+              // Intentionally ignored — the run's outcome belongs to the human, not to the channel.
+            }
+          })()
+        }
+
+        if (wiring.onDefer !== undefined) {
+          return deferCall(wiring.onDefer, {
+            approvalId,
+            toolUseId: c.toolUseId,
             toolName: c.name,
-            question: opts.question,
             input: c.args,
-            callbackUrl: `approve/${approvalId}`,
-            timeoutMs: opts.timeout ?? 300_000,
-            // M20 — carry the declared custom-payload schema so the UI knows what to collect.
-            ...(opts.payloadSchema !== undefined ? { payloadSchema: opts.payloadSchema } : {}),
+            question: opts.question,
+            runId: c.runId,
+            agentId: c.agentId,
           })
-          // Announced AFTER the stream and BEFORE the await, without blocking either. A rejected
-          // promise here is swallowed on purpose: see `onApprovalRequired` for why a dispatch failure
-          // must not become the agent's decision.
-          if (wiring.onApprovalRequired !== undefined) {
-            void (async () => {
-              try {
-                await wiring.onApprovalRequired?.({
-                  approvalId,
-                  toolName: c.name,
-                  question: opts.question,
-                  input: c.args,
-                  callbackUrl: `approve/${approvalId}`,
-                  timeoutMs: opts.timeout ?? 300_000,
-                })
-              } catch {
-                // Intentionally ignored — the run's outcome belongs to the human, not to the channel.
-              }
-            })()
-          }
+        }
 
-          if (wiring.onDefer !== undefined) {
-            return deferCall(wiring.onDefer, {
-              approvalId,
-              toolUseId: c.toolUseId,
-              toolName: c.name,
-              input: c.args,
-              question: opts.question,
-              runId: c.runId,
-              agentId: c.agentId,
-            })
-          }
-
-          const raw = await wiring.awaitApproval(approvalId, opts, c.name)
-          // M20 — normalize the legacy boolean and the decision object to one shape.
-          const decision: HitlDecision = typeof raw === 'boolean' ? { approved: raw } : raw
-          if (decision.approved) return undefined
-          // On denial, surface the approver's reason + payload to the model so it can self-correct.
-          //
-          // An expiry is NOT a denial by a person, and saying so was #393: both produced
-          // `Tool 'x' denied by human approver`, so an operator auditing a gated action could not
-          // tell "a reviewer refused this" from "nobody was watching and the window closed" — the
-          // one distinction a HITL gate exists to record. The registry's `reason` already names the
-          // budget and which `onTimeout` applied; this only has to stop inventing the actor and
-          // point at the knob.
-          let message =
-            decision.settledBy === 'timeout'
-              ? `Tool '${c.name}' was not approved: ${decision.reason ?? 'the approval window expired with no decision'}. ` +
-                `Decide within the window, or raise 'timeout' on the tool's approval options.`
-              : `Tool '${c.name}' denied by human approver`
-          if (decision.settledBy !== 'timeout' && decision.reason) message += `: ${decision.reason}`
-          if (decision.payload !== undefined) {
-            message += ` (payload: ${JSON.stringify(decision.payload)})`
-          }
-          const bare = decision.reason
-          message = recordRefusal(
-            c.runId,
-            c.name,
-            {
-              by: decision.settledBy === 'timeout' ? 'timeout' : 'human',
-              ...(bare ? { reason: bare } : {}),
-            },
-            message,
-          )
-          return { block: true, message }
-        },
-      )
+        const raw = await wiring.awaitApproval(approvalId, opts, c.name)
+        // M20 — normalize the legacy boolean and the decision object to one shape.
+        const decision: HitlDecision = typeof raw === 'boolean' ? { approved: raw } : raw
+        if (decision.approved) return undefined
+        // On denial, surface the approver's reason + payload to the model so it can self-correct.
+        //
+        // An expiry is NOT a denial by a person, and saying so was #393: both produced
+        // `Tool 'x' denied by human approver`, so an operator auditing a gated action could not
+        // tell "a reviewer refused this" from "nobody was watching and the window closed" — the
+        // one distinction a HITL gate exists to record. The registry's `reason` already names the
+        // budget and which `onTimeout` applied; this only has to stop inventing the actor and
+        // point at the knob.
+        let message =
+          decision.settledBy === 'timeout'
+            ? `Tool '${c.name}' was not approved: ${decision.reason ?? 'the approval window expired with no decision'}. ` +
+              `Decide within the window, or raise 'timeout' on the tool's approval options.`
+            : `Tool '${c.name}' denied by human approver`
+        if (decision.settledBy !== 'timeout' && decision.reason) message += `: ${decision.reason}`
+        if (decision.payload !== undefined) {
+          message += ` (payload: ${JSON.stringify(decision.payload)})`
+        }
+        const bare = decision.reason
+        message = recordRefusal(
+          c.runId,
+          c.name,
+          {
+            by: decision.settledBy === 'timeout' ? 'timeout' : 'human',
+            ...(bare ? { reason: bare } : {}),
+          },
+          message,
+        )
+        return { block: true, message }
+      })
     },
   }
 }

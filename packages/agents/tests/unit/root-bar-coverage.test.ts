@@ -114,6 +114,80 @@ function atLeast(a: string, b: string): boolean {
 }
 
 const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
+  // ── Arrived with the 5.17.0 → 5.32.0 bump (the HITL defer veto, #1959). Each is `out`: this layer
+  // does not wrap them, and a consumer that wants one imports it from `@theokit/sdk` directly.
+  BUILTIN_TOOL_NAMES: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  fingerprintHookGate: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  guardTools: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  hookFingerprint: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  InMemorySessionStore: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  isBuiltinToolName: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  listMemoryFacts: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  listProjectHooks: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  listWorkspacePlugins: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  readManagedSettingsDocument: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  removeMemoryFact: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
+  runPreToolCall: {
+    since: '5.32.0',
+    verdict: 'out',
+    reason:
+      'SDK-direct surface (hooks, memory-fact, managed-settings or fallback helper); this layer has no wrapper for it and no src reference.',
+  },
   // ── Arrived with `@theokit/sdk@5.x`; `since` keeps them out of the orphan guard on earlier ones.
   //
   // The seven below arrived with the 5.5.0 → 5.9.0 bump that merging `apps/theocode` forced: that
@@ -159,6 +233,26 @@ const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
   // ── IN — errors + core primitives (M58/M63/M78 blocks) ──────────────────────────────────────
   Agent: { verdict: 'in', via: 'M103 narrowed re-export' },
   AgentDisposedError: { verdict: 'in', via: "export * from '@theokit/sdk/errors'" },
+  ToolCallBlockedError: {
+    since: '5.32.0',
+    verdict: 'in',
+    via: "export * from '@theokit/sdk/errors'",
+  },
+  ModelFallbackExhaustedError: {
+    since: '5.32.0',
+    verdict: 'in',
+    via: "export * from '@theokit/sdk/errors'",
+  },
+  MemoryFactNotRemovableError: {
+    since: '5.32.0',
+    verdict: 'in',
+    via: "export * from '@theokit/sdk/errors'",
+  },
+  MemoryFactAmbiguousError: {
+    since: '5.32.0',
+    verdict: 'in',
+    via: "export * from '@theokit/sdk/errors'",
+  },
   AgentRunError: { verdict: 'in', via: "export * from '@theokit/sdk/errors'" },
   AuthenticationError: { verdict: 'in', via: "export * from '@theokit/sdk/errors'" },
   ConfigurationError: { verdict: 'in', via: './errors.js (layer home module)' },
