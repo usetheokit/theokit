@@ -171,6 +171,15 @@ Any other value is passed through unchanged, so the schema rejects `MYAPP_MEMORY
 `auditEnvKnobs` reports keys with neither a knob nor an opt-out as unreachable.
 
 
+## Resolving every config layer
+
+`defineLayeredConfig({ schema, defaults, env?, accumulate?, floors?, profiles? })` from `@theokit/agents/config` returns `{ resolve }`. `resolve({ user, project, projectLocal, env, cli, managed })` folds the layers in this order, later winning: `defaults`, `user`, `project`, `project_local`, `profile`, `env`, `cli`, `managed`. It returns `{ values, profile, provenancePerKey }`.
+
+- Each file layer is checked against the schema (as a partial) and a failure names the layer.
+- `profiles: { selectKey, tableKey }`: the last name chosen by user, project, project-local or cli selects a profile; the tables merge per name across the file layers, and an unknown name throws a `ConfigurationError` naming it.
+- `floors: { key: { permissiveness, restricted, override } }`: a restricted layer (named from `project`, `project_local`, `profile`, `env`) can only tighten the key; the `override` layer (e.g. `cli`) can loosen it.
+- `managed` is applied after the floors, so a managed value for any key is final. For an `accumulate` key it replaces the accumulated list.
+
 ### `-c a.b=value` overrides
 
 `parseDottedOverrides(pairs, { coerce? })` from `@theokit/agents/config` turns argv pairs into the

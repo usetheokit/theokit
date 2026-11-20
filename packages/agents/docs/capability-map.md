@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1371 export(s) across 26 entry point(s).
+1373 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -962,6 +962,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `currentOperatorPolicy` | value |
 | `DEFAULT_CONTEXT_PRESSURE_THRESHOLDS` | value |
 | `defineAppBootstrap` | value |
+| `defineLayeredConfig` | value |
 | `DottedOverrideError` | value |
 | `effectiveContextWindow` | value |
 | `envKnob` | value |
@@ -1050,6 +1051,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
 | `ResolvedFileMentions` | type |
+| `SecurityFloorSpec` | type |
 | `Settings` | type |
 | `SettingsCandidate` | type |
 | `SettingsCandidates` | type |

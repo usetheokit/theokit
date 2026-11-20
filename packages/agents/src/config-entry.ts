@@ -49,6 +49,8 @@ export {
   type BootstrapStep,
 } from './config/app-bootstrap.js'
 
+export { defineLayeredConfig, type SecurityFloorSpec } from './config/define-layered-config.js'
+
 export { parseDottedOverrides, DottedOverrideError } from './config/dotted-overrides.js'
 
 export { TrustStore, TrustStorePermissionsError, type TrustRecord } from './config/trust-store.js'
