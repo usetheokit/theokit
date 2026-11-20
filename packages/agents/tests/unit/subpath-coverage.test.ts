@@ -107,6 +107,18 @@ const DECISIONS: Record<string, Decision> = {
       'catalogue reaches the SDK directly. Crossing it here would put a second, staler copy of the ' +
       'provider list in front of consumers for no capability they do not already have.',
   },
+  './hooks-approval': {
+    sinceMajor: 5,
+    verdict: 'out',
+    reason:
+      'Added by the 5.32.0 bump (#1959); an SDK-direct surface this layer does not wrap, so a consumer imports it from `@theokit/sdk`.',
+  },
+  './process': {
+    sinceMajor: 5,
+    verdict: 'out',
+    reason:
+      'Added by the 5.32.0 bump (#1959); an SDK-direct surface this layer does not wrap, so a consumer imports it from `@theokit/sdk`.',
+  },
   './mcp-events': {
     sinceMajor: 5,
     verdict: 'out',
