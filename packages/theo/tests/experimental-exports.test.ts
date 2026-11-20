@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
@@ -53,8 +55,22 @@ describe('theokit experimental exports', () => {
     expect(parseReadme(drifted)).not.toEqual(fromBaseline())
   })
 
-  it('the tag reaches the built declarations', () => {
-    const dts = read('../dist/server/cost/sqlite/index.d.ts')
-    expect(dts).toMatch(/@experimental[\s\S]*class SqliteUsageStorage/)
+  it('the tag reaches the built declarations of every experimental name', () => {
+    const dist = fileURLToPath(new URL('../dist/', import.meta.url))
+    const files = (readdirSync(dist, { recursive: true }) as string[])
+      .filter((f) => f.endsWith('.d.ts'))
+      .map((f) => readFileSync(join(dist, f), 'utf8'))
+    const exp = Object.values(fromBaseline()).flat()
+    expect(exp.length).toBeGreaterThan(0)
+    for (const name of new Set(exp)) {
+      // A docblock holding the tag, directly above the declaration (it may sit in a shared chunk).
+      const tagged = new RegExp(
+        String.raw`@experimental(?:(?!\*/)[\s\S])*\*/\s*(?:export\s+)?(?:declare\s+)?(?:class|interface|function|const|type)\s+${name}\b`,
+      )
+      expect(
+        files.some((f) => tagged.test(f)),
+        `${name} lost @experimental in dist`,
+      ).toBe(true)
+    }
   })
 })

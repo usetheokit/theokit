@@ -697,7 +697,7 @@
     "./boot": {
       "names": {
         "ConventionFetchHandle": {
-          "tier": "stable",
+          "tier": "experimental",
           "declaration": "interface ConventionFetchHandle {\n    fetch(request: Request): Promise<Response>;\n    close(): Promise<void>;\n}",
           "runtime": false,
           "deprecatedSince": null,
@@ -705,7 +705,7 @@
           "internals": {}
         },
         "ConventionFetchHandlerOptions": {
-          "tier": "stable",
+          "tier": "experimental",
           "declaration": "interface ConventionFetchHandlerOptions {\n    readonly reservedRoutes?: ReservedRoutes;\n}",
           "runtime": false,
           "deprecatedSince": null,
@@ -721,7 +721,7 @@
           }
         },
         "createConventionFetchHandler": {
-          "tier": "stable",
+          "tier": "experimental",
           "declaration": "declare function createConventionFetchHandler(options?: ConventionFetchHandlerOptions): ConventionFetchHandle;",
           "runtime": true,
           "deprecatedSince": null,
@@ -2863,7 +2863,7 @@
           }
         },
         "ChannelManager": {
-          "tier": "stable",
+          "tier": "experimental",
           "declaration": "declare class ChannelManager {\n    private rooms;\n    private wsRooms;\n    subscribe(ws: WebSocketLike, room: string): void;\n    unsubscribe(ws: WebSocketLike, room: string): void;\n    broadcast(room: string, data: unknown, exclude?: WebSocketLike): void;\n    broadcastAll(data: unknown): void;\n    getRoomSize(room: string): number;\n    cleanup(ws: WebSocketLike): void;\n}",
           "runtime": true,
           "deprecatedSince": null,
@@ -14869,7 +14869,7 @@
     "./server/realtime": {
       "names": {
         "ChannelManager": {
-          "tier": "stable",
+          "tier": "experimental",
           "declaration": "declare class ChannelManager {\n    private rooms;\n    private wsRooms;\n    subscribe(ws: WebSocketLike, room: string): void;\n    unsubscribe(ws: WebSocketLike, room: string): void;\n    broadcast(room: string, data: unknown, exclude?: WebSocketLike): void;\n    broadcastAll(data: unknown): void;\n    getRoomSize(room: string): number;\n    cleanup(ws: WebSocketLike): void;\n}",
           "runtime": true,
           "deprecatedSince": null,

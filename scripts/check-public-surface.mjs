@@ -342,7 +342,7 @@ export function comparePolicy(prev, next, { major, now, level = 'major' }) {
 
 /** The bump that is breaking for a package at `version`: `minor` while it is 0.x, else `major`. */
 export function breakingLevel(version) {
-  return /^0\./.test(version) ? 'minor' : 'major'
+  return /^0\./.test(String(version ?? '')) ? 'minor' : 'major'
 }
 
 /** True when any changeset text declares `pkg` as `major` (or `minor` for a 0.x package) in its frontmatter. */
