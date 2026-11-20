@@ -24,12 +24,12 @@ import { applyCapabilities } from '../../src/capability/capability.js'
 import { ModelCapability } from '../../src/capability/capabilities.js'
 import { createHandoffConversation } from '../../src/handoff/handoff-conversation.js'
 
-import { resolveLiveModel } from '../../../../scripts/live-model.mjs'
+import { resolveSdkLiveModel } from '../../../../scripts/live-model.mjs'
 
 import { redactThenCut } from './provider-text.js'
 import { LIVE_KEY_NAMES } from './require-provider-key.js'
 
-const MODEL = resolveLiveModel(process.env)
+const MODEL = resolveSdkLiveModel(process.env)
 const PRESENT_KEYS = LIVE_KEY_NAMES.filter((n) => (process.env[n]?.trim() ?? '') !== '')
 const HAS_KEY = PRESENT_KEYS.length > 0
 

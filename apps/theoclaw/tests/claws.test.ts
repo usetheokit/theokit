@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 
-import { readPersonaPrompt } from '../src/agent/persona-files.js'
+import { readPersonaPrompt } from '../src/control-plane/agent-factory.js'
 import { clawsCommand } from '../src/routing/claws.js'
 import { readAgentRouter } from '../src/routing/routing-env.js'
 

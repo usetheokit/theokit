@@ -100,6 +100,18 @@ describe('the external tools file at start', () => {
     expect(read.secrets).toEqual(['header-secret-0123'])
   })
 
+  it('masks each header and env value of 8+ characters once and skips shorter ones', () => {
+    const read = resolveExternalTools({
+      [VARIABLE]: toolsFile({
+        mcpServers: {
+          a: { url: 'https://x.example/mcp', headers: { Authorization: 'same-secret-0123', X: 'short' } },
+          b: { command: '/bin/true', env: { TOKEN: 'same-secret-0123', OTHER: 'other-secret-0123' } },
+        },
+      }),
+    })
+    expect([...read.secrets].sort()).toEqual(['other-secret-0123', 'same-secret-0123'])
+  })
+
   it('accepts an HTTP server with auth.oauth', () => {
     const auth = {
       CLIENT_ID: 'client',

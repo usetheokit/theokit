@@ -16,8 +16,27 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Changed
+
+- Session tests write their pointer under a temporary directory and drain pending writes before cleanup, so no `could not persist the session pointer` diagnostics appear.
+- `/memory` and `/memory forget <n>` use the SDK's `listMemoryFacts` / `removeMemoryFact` (SDK 5.32.0); the local `memory-facts.ts` parser is removed.
+- **Backtrack, session delete and the background sweep now use the framework (#1924).** Backtrack
+  previews and forks go through `listUserTurns` / `forkBeforeUserTurn`, session delete through
+  `deleteSession` (its registry outcome is still measured from the listing, and the TUI-pointer
+  refusal stays here, checked first), and the daily background sweep through `scheduleSessionSweep`;
+  `gc/auto.ts`, `auto-runtime.ts`, `spawn-sweep.ts` and `guarded-start.ts` are gone (their wiring is
+  `gc/sweep-wiring.ts`). A backtrack index past the last turn is now the framework's error, not a
+  `RangeError`. The sweep's child is now detached (own process group, so it survives the terminal
+  closing) and a stamp that cannot be written is reported with the framework's wording. The
+  cross-project collector (`gc/all-sessions*`, `filesystem`, `root-claim`, `root-ownership`) stays:
+  `planProjectsGC` keeps a live project whole unless the caller declares its cwd list complete, which
+  TheoCode cannot enumerate, and the framework's ownership marker is not TheoCode's.
+
 ### Fixed
 
+- `theocode login` refuses again a key that does not belong to the chosen provider, such as `invalid` for `--provider anthropic`, and keeps the stored credential. Since `@theokit/agents` builds its provider defaults from the SDK table, they carry no key prefix, so the check passed every key; it now asks the SDK which vendor a key belongs to (#2500).
+- The sweep's spawn-options test removes its temporary directory through `tempRoot`, so
+  `no-leaked-temp-dirs.test.ts` passes on the promotion pull request (#2489).
 - The standalone consumer pins `@theokit/sdk` at 5.32.0 again, in step with the real manifests, so
   `tools/standalone-consumer.test.mjs` passes on the promotion pull request (#2467).
 - The workspace manifests declare `@theokit/agents` as `workspace:*` rather than an exact

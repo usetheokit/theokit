@@ -133,6 +133,13 @@ describe('the heartbeat', () => {
     expect(refusal).toThrow('THEOCLAW_HEARTBEAT')
   })
 
+  it('refuses a bad cron synchronously, before any await', () => {
+    // A synchronous throw (not a rejected promise) is what lets the start refuse before its first await.
+    const refusal = () => readHeartbeatSettings({ THEOCLAW_HEARTBEAT: '61 * * * * telegram:1' }, TEN)
+    expect(refusal).toThrow(TheoClawConfigError)
+    expect(refusal).toThrow(/THEOCLAW_HEARTBEAT.*cron/)
+  })
+
   it('refuses a heartbeat platform outside the ten', () => {
     const refusal = () => readHeartbeatSettings({ THEOCLAW_HEARTBEAT: '@daily myspace:42' }, TEN)
     expect(refusal).toThrow(TheoClawConfigError)

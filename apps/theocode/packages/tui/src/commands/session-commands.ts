@@ -1,12 +1,7 @@
 import { compactReport } from './compact-report.js'
-import {
-  memoryFacts,
-  withFactRemoved,
-  memoryEnabledForSession,
-  setMemoryEnabledForSession,
-} from '@theocode/agent'
+import { listMemoryFacts, removeMemoryFact } from '@theokit/sdk'
+import { memoryEnabledForSession, setMemoryEnabledForSession } from '@theocode/agent'
 import { planResume } from './resume-command.js'
-import { readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -273,15 +268,6 @@ function memoryStorePath(): string {
   return join(workingDirectory(), '.theokit', 'memory', 'MEMORY.md')
 }
 
-function readMemoryStore(): string {
-  try {
-    return readFileSync(memoryStorePath(), 'utf8')
-  } catch {
-    // No store yet is the normal first-run state, not an error to raise at someone asking.
-    return ''
-  }
-}
-
 /** B-077 — `/memory off|on`. Restricts only; trust still decides whether memory is possible. */
 function toggleMemory(on: boolean, setToast: SetToast): void {
   setMemoryEnabledForSession(on)
@@ -293,25 +279,35 @@ function toggleMemory(on: boolean, setToast: SetToast): void {
   })
 }
 
-/** B-077 — `/memory forget <n>`, by the number the listing shows. */
+/** B-077 — `/memory forget <n>`, by the number the listing shows. The SDK owns the store. */
 function forgetFact(rawIndex: string, setToast: SetToast): void {
-  const store = readMemoryStore()
-  const n = Number(rawIndex)
-  const updated = Number.isInteger(n) ? withFactRemoved(store, n) : undefined
-  if (updated === undefined) {
-    // Reported, never a silent no-op: writing the file back unchanged and claiming success is the
-    // failure `rules/error-handling.md` § 2 forbids.
-    setToast({
-      message: `no fact ${rawIndex || '(none given)'} — /memory lists them by number`,
-      variant: 'error',
-    })
-    return
-  }
-  writeFileSync(memoryStorePath(), updated, 'utf8')
-  setToast({
-    message: `forgot fact ${String(n)} — ${String(memoryFacts(updated).length)} left`,
-    variant: 'success',
-  })
+  void (async () => {
+    try {
+      const n = Number(rawIndex)
+      const facts = await listMemoryFacts(workingDirectory())
+      const target = Number.isInteger(n) ? facts[n - 1] : undefined
+      if (target === undefined) {
+        setToast({
+          message: `no fact ${rawIndex || '(none given)'} — /memory lists them by number`,
+          variant: 'error',
+        })
+        return
+      }
+      if (!(await removeMemoryFact(workingDirectory(), target.id))) {
+        setToast({ message: `fact ${String(n)} was already gone`, variant: 'error' })
+        return
+      }
+      setToast({
+        message: `forgot fact ${String(n)} — ${String(facts.length - 1)} left`,
+        variant: 'success',
+      })
+    } catch (err) {
+      setToast({
+        message: `/memory forget failed: ${err instanceof Error ? err.message : String(err)}`,
+        variant: 'error',
+      })
+    }
+  })()
 }
 
 /**
@@ -364,19 +360,28 @@ export function handleMemoryInfo(
   if (verb === 'off' || verb === 'on') return toggleMemory(verb === 'on', setToast)
   if (verb.startsWith('forget')) return forgetFact(verb.slice('forget'.length).trim(), setToast)
 
-  const facts = memoryFacts(readMemoryStore())
-  const header = memoryHeader({
-    trusted: resolveTrustPosture(workingDirectory()).allows.memory,
-    configured,
-    sessionOn: memoryEnabledForSession(),
-  })
-  setPanel({
-    title: 'memory',
-    body:
-      facts.length === 0
-        ? `${header}\n\nno facts stored yet — say "Remember: <fact>" to store one`
-        : `${header}\n\n${facts.map((f, i) => `  ${String(i + 1)}. ${f}`).join('\n')}\n\n/memory forget <n> removes one`,
-  })
+  void (async () => {
+    try {
+      const facts = (await listMemoryFacts(workingDirectory())).map((f) => f.text)
+      const header = memoryHeader({
+        trusted: resolveTrustPosture(workingDirectory()).allows.memory,
+        configured,
+        sessionOn: memoryEnabledForSession(),
+      })
+      setPanel({
+        title: 'memory',
+        body:
+          facts.length === 0
+            ? `${header}\n\nno facts stored yet — say "Remember: <fact>" to store one`
+            : `${header}\n\n${facts.map((f, i) => `  ${String(i + 1)}. ${f}`).join('\n')}\n\n/memory forget <n> removes one`,
+      })
+    } catch (err) {
+      setToast({
+        message: `/memory failed: ${err instanceof Error ? err.message : String(err)}`,
+        variant: 'error',
+      })
+    }
+  })()
 }
 
 export function handleCompact(sessionId: string, setToast: SetToast): void {

@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { sweepDecision } from '../../../src/session/gc/auto.js'
+import { sweepDecision } from '@theokit/agents/session'
 
 const NOW = new Date('2026-09-03T12:00:00Z')
 const decide = (over: Partial<Parameters<typeof sweepDecision>[0]> = {}) =>
