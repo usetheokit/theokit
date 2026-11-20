@@ -110,6 +110,34 @@ describe('prepareWorkspace', () => {
     ).rejects.toThrow(/timed out/)
   })
 
+  it('a timed-out command is aborted through the signal given to exec', async () => {
+    const root = dir({ '.devcontainer.json': '{"postCreateCommand":"x"}' })
+    let aborted = false
+    await expect(
+      prepareWorkspace(root, {
+        exec: (_c, _cwd, signal) =>
+          new Promise(() => {
+            signal?.addEventListener('abort', () => {
+              aborted = true
+            })
+          }),
+        timeoutMs: 20,
+      }),
+    ).rejects.toBeInstanceOf(WorkspaceRecipeError)
+    expect(aborted).toBe(true)
+  })
+
+  it.each(['[]', '[1]', '5', '{"a":[]}'])(
+    'a malformed lifecycle value %s is a parse error, not dropped',
+    async (value) => {
+      const root = dir({ '.devcontainer.json': `{"postCreateCommand":${value}}` })
+      await expect(detectWorkspaceRecipe(root)).rejects.toMatchObject({
+        stage: 'parse',
+        source: '.devcontainer.json',
+      })
+    },
+  )
+
   it('the default executor runs a setup script', async () => {
     const root = dir({ 'setup.sh': 'echo ok > done.txt' })
     await prepareWorkspace(root, { setupScripts: ['setup.sh'] })

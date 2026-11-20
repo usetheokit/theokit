@@ -16,7 +16,12 @@ export interface WorkspaceRecipe {
 }
 
 /** Runs one command in `cwd`. A string goes through a shell, an array is an argv. */
-export type RecipeExec = (command: string | string[], cwd: string) => Promise<void>
+/** `signal` aborts when the command exceeds `timeoutMs`; an `exec` that spawns work should stop it. */
+export type RecipeExec = (
+  command: string | string[],
+  cwd: string,
+  signal?: AbortSignal,
+) => Promise<void>
 
 /** A recipe command failed (or its devcontainer file was unreadable). The original is the `cause`. */
 export class WorkspaceRecipeError extends TheokitAgentError {
@@ -100,13 +105,17 @@ function stripJsonc(text: string): string {
   return result
 }
 
-function commandsOf(value: unknown): (string | string[])[] {
+function commandsOf(value: unknown, stage: string): (string | string[])[] {
+  if (value === undefined || value === null) return []
   if (typeof value === 'string') return value.trim() === '' ? [] : [value]
   if (Array.isArray(value)) {
-    return value.length > 0 && value.every((v) => typeof v === 'string') ? [value] : []
+    if (value.length > 0 && value.every((v) => typeof v === 'string')) return [value]
+  } else if (typeof value === 'object') {
+    return Object.values(value).flatMap((v) => commandsOf(v, stage))
   }
-  if (value && typeof value === 'object') return Object.values(value).flatMap(commandsOf)
-  return []
+  throw new Error(
+    `${stage} must be a command string, a non-empty string array or an object of them`,
+  )
 }
 
 async function devcontainerRecipe(root: string, source: string): Promise<WorkspaceRecipe> {
@@ -124,9 +133,15 @@ async function devcontainerRecipe(root: string, source: string): Promise<Workspa
       { cause: error },
     )
   }
-  const steps = LIFECYCLE.map((stage) => ({ stage, commands: commandsOf(config[stage]) })).filter(
-    (step) => step.commands.length > 0,
-  )
+  let steps: { stage: string; commands: (string | string[])[] }[]
+  try {
+    steps = LIFECYCLE.map((stage) => ({
+      stage,
+      commands: commandsOf(config[stage], stage),
+    })).filter((step) => step.commands.length > 0)
+  } catch (error) {
+    throw new WorkspaceRecipeError(source, 'parse', (error as Error).message, { cause: error })
+  }
   return { kind: 'devcontainer', source, steps }
 }
 
@@ -161,7 +176,7 @@ export async function detectWorkspaceRecipe(
 }
 
 function execCommand(timeoutMs: number): RecipeExec {
-  return (command, cwd) =>
+  return (command, cwd, signal) =>
     new Promise((resolve, reject) => {
       const [file, args] =
         typeof command === 'string' ? ['sh', ['-c', command]] : [command[0], command.slice(1)]
@@ -169,7 +184,13 @@ function execCommand(timeoutMs: number): RecipeExec {
       execFile(
         file,
         args,
-        { cwd, timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024 },
+        {
+          cwd,
+          timeout: timeoutMs,
+          killSignal: 'SIGKILL',
+          maxBuffer: 16 * 1024 * 1024,
+          ...(signal ? { signal } : {}),
+        },
         (error, _out, stderr) => {
           if (!error) {
             resolve()
@@ -183,13 +204,15 @@ function execCommand(timeoutMs: number): RecipeExec {
 }
 
 function withTimeout(
-  run: Promise<void>,
+  run: (signal: AbortSignal) => Promise<void>,
   timeoutMs: number,
   command: string | string[],
 ): Promise<void> {
   let timer: NodeJS.Timeout | undefined
+  const controller = new AbortController()
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
+      controller.abort()
       reject(
         new Error(
           `${typeof command === 'string' ? command : command.join(' ')} timed out after ${timeoutMs} ms`,
@@ -197,7 +220,7 @@ function withTimeout(
       )
     }, timeoutMs)
   })
-  return Promise.race([run, timeout]).finally(() => {
+  return Promise.race([run(controller.signal), timeout]).finally(() => {
     clearTimeout(timer)
   })
 }
@@ -223,7 +246,7 @@ export async function prepareWorkspace(
       await Promise.all(
         step.commands.map((command) =>
           withTimeout(
-            Promise.resolve().then(() => exec(command, path)),
+            (signal) => Promise.resolve().then(() => exec(command, path, signal)),
             timeoutMs,
             command,
           ),

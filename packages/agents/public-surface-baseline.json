@@ -4183,7 +4183,7 @@
         },
         "RecipeExec": {
           "tier": "stable",
-          "declaration": "type RecipeExec = (command: string | string[], cwd: string) => Promise<void>;",
+          "declaration": "type RecipeExec = (command: string | string[], cwd: string, signal?: AbortSignal) => Promise<void>;",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -8466,7 +8466,7 @@
             "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe"
           ],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#RecipeExec": "type RecipeExec = (command: string | string[], cwd: string) => Promise<void>;",
+            "dist/bridge-entry-<hash>.d.ts#RecipeExec": "type RecipeExec = (command: string | string[], cwd: string, signal?: AbortSignal) => Promise<void>;",
             "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe": "interface WorkspaceRecipe {\n    readonly kind: 'devcontainer' | 'setup-script' | 'lockfile';\n    readonly source: string;\n    readonly steps: readonly {\n        readonly stage: string;\n        readonly commands: readonly (string | string[])[];\n    }[];\n}"
           }
         },
@@ -12081,7 +12081,7 @@
         },
         "RecipeExec": {
           "tier": "stable",
-          "declaration": "type RecipeExec = (command: string | string[], cwd: string) => Promise<void>;",
+          "declaration": "type RecipeExec = (command: string | string[], cwd: string, signal?: AbortSignal) => Promise<void>;",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -14213,7 +14213,7 @@
             "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe"
           ],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#RecipeExec": "type RecipeExec = (command: string | string[], cwd: string) => Promise<void>;",
+            "dist/bridge-entry-<hash>.d.ts#RecipeExec": "type RecipeExec = (command: string | string[], cwd: string, signal?: AbortSignal) => Promise<void>;",
             "dist/bridge-entry-<hash>.d.ts#WorkspaceRecipe": "interface WorkspaceRecipe {\n    readonly kind: 'devcontainer' | 'setup-script' | 'lockfile';\n    readonly source: string;\n    readonly steps: readonly {\n        readonly stage: string;\n        readonly commands: readonly (string | string[])[];\n    }[];\n}"
           }
         },
@@ -17063,10 +17063,74 @@
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
+        "ControlClient": {
+          "tier": "stable",
+          "declaration": "interface ControlClient {\n    chat(message: string, session: string): AsyncIterable<ControlServerFrame>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n    close(): Promise<void>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-sse-handler-<hash>.d.ts#AgentStopReason",
+            "dist/agent-sse-handler-<hash>.d.ts#AgentStreamEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ApprovalRequiredEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ArtifactChunkEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ArtifactStartEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#CheckpointSavedEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#DoneEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ErrorEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#FileEditEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#InputRequestedEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#IterationEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#PartialToolCallEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#RunStartedEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ShellOutputEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#StateUpdateEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#TaskProgressEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#TextDeltaEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ThinkingEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ToolCallEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ToolResultEvent",
+            "dist/control.d.ts#AgentTurnUsage",
+            "dist/control.d.ts#ControlServerFrame",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome"
+          ],
+          "internals": {
+            "dist/agent-sse-handler-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
+            "dist/agent-sse-handler-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
+            "dist/agent-sse-handler-<hash>.d.ts#ApprovalRequiredEvent": "interface ApprovalRequiredEvent {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ArtifactChunkEvent": "interface ArtifactChunkEvent {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ArtifactStartEvent": "interface ArtifactStartEvent {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#CheckpointSavedEvent": "interface CheckpointSavedEvent {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#DoneEvent": "interface DoneEvent {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    model?: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ErrorEvent": "interface ErrorEvent {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#FileEditEvent": "interface FileEditEvent {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#InputRequestedEvent": "interface InputRequestedEvent {\n    type: 'input_requested';\n    requestId: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#IterationEvent": "interface IterationEvent {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#PartialToolCallEvent": "interface PartialToolCallEvent {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#RunStartedEvent": "interface RunStartedEvent {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ShellOutputEvent": "interface ShellOutputEvent {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#StateUpdateEvent": "interface StateUpdateEvent {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#TaskProgressEvent": "interface TaskProgressEvent {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#TextDeltaEvent": "interface TextDeltaEvent {\n    type: 'text_delta';\n    content: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ThinkingEvent": "interface ThinkingEvent {\n    type: 'thinking';\n    content: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ToolCallEvent": "interface ToolCallEvent {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ToolResultEvent": "interface ToolResultEvent {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n}",
+            "dist/control.d.ts#AgentTurnUsage": "type AgentTurnUsage = NonNullable<Extract<AgentTurnOutcome, {\n    ok: true;\n}>['usage']>;",
+            "dist/control.d.ts#ControlServerFrame": "type ControlServerFrame = {\n    type: 'event';\n    event: AgentStreamEvent;\n    session?: string;\n} | {\n    type: 'done';\n    session?: string;\n    usage?: AgentTurnUsage;\n} | {\n    type: 'interrupted' | 'interrupt_ok' | 'steer_ok' | 'no_turn';\n    session: string;\n} | {\n    type: 'error';\n    code: string;\n    session?: string;\n};",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+          }
+        },
         "ControlClientFrame": {
           "tier": "stable",
           "declaration": "type ControlClientFrame = {\n    type: 'chat';\n    message: string;\n    session?: string;\n} | {\n    type: 'interrupt';\n    session: string;\n} | {\n    type: 'steer';\n    session: string;\n    message: string;\n};",
           "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ControlConnectionError": {
+          "tier": "stable",
+          "declaration": "declare class ControlConnectionError extends TheokitAgentError {\n    readonly name = \"ControlConnectionError\";\n    constructor(message: string);\n}",
+          "runtime": true,
           "deprecatedSince": null,
           "references": [],
           "internals": {}
@@ -17316,6 +17380,64 @@
             "dist/control.d.ts#ControlSocketOptions": "interface ControlSocketOptions {\n    path?: string;\n    authorize: (authorization: string | undefined) => boolean | {\n        revoked: (cb: () => void) => void;\n    };\n    sessions: SessionStore;\n    maxPayloadBytes?: number;\n    log?: (line: string) => void;\n}",
             "dist/control.d.ts#SessionOutcome": "type SessionOutcome = AgentTurnOutcome | {\n    ok: false;\n    code: 'busy' | 'bad_session' | 'interrupted';\n};",
             "dist/control.d.ts#SessionStore": "interface SessionStore {\n    run(session: string, message: string, emit: (e: AgentStreamEvent) => void, owner: object): Promise<SessionOutcome>;\n    interrupt(session: string): 'cancelled' | 'no_turn';\n    steer(session: string, message: string): Promise<'steered' | 'no_turn'>;\n    cancelOwnedBy(owner: object): void;\n    close(): Promise<void>;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+          }
+        },
+        "createControlClient": {
+          "tier": "stable",
+          "declaration": "declare function createControlClient(options: {\n    url: string;\n    authorization: string;\n}): Promise<ControlClient>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-sse-handler-<hash>.d.ts#AgentStopReason",
+            "dist/agent-sse-handler-<hash>.d.ts#AgentStreamEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ApprovalRequiredEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ArtifactChunkEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ArtifactStartEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#CheckpointSavedEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#DoneEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ErrorEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#FileEditEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#InputRequestedEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#IterationEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#PartialToolCallEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#RunStartedEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ShellOutputEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#StateUpdateEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#TaskProgressEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#TextDeltaEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ThinkingEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ToolCallEvent",
+            "dist/agent-sse-handler-<hash>.d.ts#ToolResultEvent",
+            "dist/control.d.ts#AgentTurnUsage",
+            "dist/control.d.ts#ControlClient",
+            "dist/control.d.ts#ControlServerFrame",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome"
+          ],
+          "internals": {
+            "dist/agent-sse-handler-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
+            "dist/agent-sse-handler-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
+            "dist/agent-sse-handler-<hash>.d.ts#ApprovalRequiredEvent": "interface ApprovalRequiredEvent {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ArtifactChunkEvent": "interface ArtifactChunkEvent {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ArtifactStartEvent": "interface ArtifactStartEvent {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#CheckpointSavedEvent": "interface CheckpointSavedEvent {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#DoneEvent": "interface DoneEvent {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    model?: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ErrorEvent": "interface ErrorEvent {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#FileEditEvent": "interface FileEditEvent {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#InputRequestedEvent": "interface InputRequestedEvent {\n    type: 'input_requested';\n    requestId: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#IterationEvent": "interface IterationEvent {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#PartialToolCallEvent": "interface PartialToolCallEvent {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#RunStartedEvent": "interface RunStartedEvent {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ShellOutputEvent": "interface ShellOutputEvent {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#StateUpdateEvent": "interface StateUpdateEvent {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#TaskProgressEvent": "interface TaskProgressEvent {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#TextDeltaEvent": "interface TextDeltaEvent {\n    type: 'text_delta';\n    content: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ThinkingEvent": "interface ThinkingEvent {\n    type: 'thinking';\n    content: string;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ToolCallEvent": "interface ToolCallEvent {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n}",
+            "dist/agent-sse-handler-<hash>.d.ts#ToolResultEvent": "interface ToolResultEvent {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n}",
+            "dist/control.d.ts#AgentTurnUsage": "type AgentTurnUsage = NonNullable<Extract<AgentTurnOutcome, {\n    ok: true;\n}>['usage']>;",
+            "dist/control.d.ts#ControlClient": "interface ControlClient {\n    chat(message: string, session: string): AsyncIterable<ControlServerFrame>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n    close(): Promise<void>;\n}",
+            "dist/control.d.ts#ControlServerFrame": "type ControlServerFrame = {\n    type: 'event';\n    event: AgentStreamEvent;\n    session?: string;\n} | {\n    type: 'done';\n    session?: string;\n    usage?: AgentTurnUsage;\n} | {\n    type: 'interrupted' | 'interrupt_ok' | 'steer_ok' | 'no_turn';\n    session: string;\n} | {\n    type: 'error';\n    code: string;\n    session?: string;\n};",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
@@ -19478,6 +19600,22 @@
             "dist/session.d.ts#FsSeam": "interface FsSeam {\n    exists: (path: string) => boolean | undefined;\n    listEntries: (dir: string) => readonly string[];\n    firstLine: (file: string) => string;\n}"
           }
         },
+        "CollectorRootError": {
+          "tier": "stable",
+          "declaration": "declare class CollectorRootError extends TheokitAgentError {\n    readonly markerPath: string;\n    readonly name = \"CollectorRootError\";\n    constructor(markerPath: string, action: 'read' | 'write', cause: unknown);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "CollectorRootNotOwnedError": {
+          "tier": "stable",
+          "declaration": "declare class CollectorRootNotOwnedError extends TheokitAgentError {\n    readonly projectsRoot: string;\n    readonly expected: string;\n    readonly actual: string | undefined;\n    readonly name = \"CollectorRootNotOwnedError\";\n    constructor(projectsRoot: string, expected: string, actual: string | undefined);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "DeleteSessionOptions": {
           "tier": "stable",
           "declaration": "interface DeleteSessionOptions {\n    readonly cwd: string;\n    readonly root?: string;\n    readonly force?: boolean;\n    readonly removeFromRegistry?: (sessionId: string) => unknown;\n    readonly registryTimeoutMs?: number;\n    readonly isListedInRegistry?: (sessionId: string) => Promise<boolean>;\n}",
@@ -19668,6 +19806,24 @@
           "references": [],
           "internals": {}
         },
+        "RunProjectsGCOptions": {
+          "tier": "stable",
+          "declaration": "interface RunProjectsGCOptions {\n    readonly apply: boolean;\n    readonly owner?: {\n        readonly app: string;\n    };\n    readonly removeFromRegistry?: (sessionId: string) => unknown;\n    readonly registryTimeoutMs?: number;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/session.d.ts#ProjectsGCFs"],
+          "internals": {
+            "dist/session.d.ts#ProjectsGCFs": "interface ProjectsGCFs {\n    readdir: (dir: string) => readonly string[];\n    stat: (path: string) => {\n        readonly isDirectory: boolean;\n        readonly mtimeMs?: number;\n    };\n    readFile: (path: string) => string;\n    hasLiveWriter: (transcript: string) => boolean;\n}"
+          }
+        },
+        "RunProjectsGCResult": {
+          "tier": "stable",
+          "declaration": "interface RunProjectsGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly refused: readonly {\n        target: string;\n        reason: string;\n    }[];\n    readonly errors: readonly {\n        target: string;\n        message: string;\n    }[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "RunTranscriptGCResult": {
           "tier": "stable",
           "declaration": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
@@ -19749,6 +19905,14 @@
           "references": [],
           "internals": {}
         },
+        "claimCollectorRoot": {
+          "tier": "stable",
+          "declaration": "declare function claimCollectorRoot(projectsRoot: string, owner: {\n    app: string;\n}): void;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "classifyProjects": {
           "tier": "stable",
           "declaration": "declare function classifyProjects(encoded: readonly string[], opts: ClassifyProjectsOptions): Map<string, LivenessVerdict>;",
@@ -19766,6 +19930,14 @@
             "dist/session.d.ts#Liveness": "type Liveness = 'alive' | 'dead' | 'undetermined';",
             "dist/session.d.ts#LivenessVerdict": "interface LivenessVerdict {\n    readonly liveness: Liveness;\n    readonly reason: string;\n    readonly cwd?: string;\n}"
           }
+        },
+        "collectorRootOwner": {
+          "tier": "stable",
+          "declaration": "declare function collectorRootOwner(projectsRoot: string): {\n    app: string;\n} | undefined;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
         },
         "deleteSession": {
           "tier": "stable",
@@ -19934,6 +20106,28 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "runProjectsGC": {
+          "tier": "stable",
+          "declaration": "declare function runProjectsGC(plan: ProjectsGCPlan, options: RunProjectsGCOptions): Promise<RunProjectsGCResult>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/session.d.ts#ProjectsGCCandidate",
+            "dist/session.d.ts#ProjectsGCFs",
+            "dist/session.d.ts#ProjectsGCKind",
+            "dist/session.d.ts#ProjectsGCPlan",
+            "dist/session.d.ts#RunProjectsGCOptions",
+            "dist/session.d.ts#RunProjectsGCResult"
+          ],
+          "internals": {
+            "dist/session.d.ts#ProjectsGCCandidate": "interface ProjectsGCCandidate {\n    readonly project: string;\n    readonly kind: ProjectsGCKind;\n    readonly target: string;\n    readonly sessionId?: string;\n    readonly ageDays: number;\n}",
+            "dist/session.d.ts#ProjectsGCFs": "interface ProjectsGCFs {\n    readdir: (dir: string) => readonly string[];\n    stat: (path: string) => {\n        readonly isDirectory: boolean;\n        readonly mtimeMs?: number;\n    };\n    readFile: (path: string) => string;\n    hasLiveWriter: (transcript: string) => boolean;\n}",
+            "dist/session.d.ts#ProjectsGCKind": "type ProjectsGCKind = 'transcript' | 'writer-lock' | 'lock-directory' | 'temp' | 'registry';",
+            "dist/session.d.ts#ProjectsGCPlan": "interface ProjectsGCPlan {\n    readonly projectsRoot: string;\n    readonly candidates: readonly ProjectsGCCandidate[];\n    readonly kept: readonly {\n        project: string;\n        reason: string;\n    }[];\n    readonly touchedProjects: readonly string[];\n    readonly liveCwds: readonly string[];\n    readonly countByKind: Readonly<Record<ProjectsGCKind, number>>;\n    readonly errors: readonly {\n        project: string;\n        message: string;\n    }[];\n}",
+            "dist/session.d.ts#RunProjectsGCOptions": "interface RunProjectsGCOptions {\n    readonly apply: boolean;\n    readonly owner?: {\n        readonly app: string;\n    };\n    readonly removeFromRegistry?: (sessionId: string) => unknown;\n    readonly registryTimeoutMs?: number;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>;\n}",
+            "dist/session.d.ts#RunProjectsGCResult": "interface RunProjectsGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly refused: readonly {\n        target: string;\n        reason: string;\n    }[];\n    readonly errors: readonly {\n        target: string;\n        message: string;\n    }[];\n}"
+          }
         },
         "runTranscriptGC": {
           "tier": "stable",
