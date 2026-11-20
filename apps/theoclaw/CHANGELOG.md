@@ -19,6 +19,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `sessions` (list, show, export, share) and `resume` read transcripts with the SDK's `readSessionMessages` instead of parsing the JSONL by hand, so a change in the transcript format no longer breaks them silently (#1780).
 - `/sessions` now lists through the SDK listing (async, newest first), so a transcript whose first line is malformed is identified by a later record. (#1943)
 - Trigger delivery ids use the framework `SeenIds`, WebChat reads its body with `readCappedBody`, and the Google Chat route no longer caps the body a second time after the webhook router (#1781).
 - The configuration file, the daemon unit and plist files, the pairing, device, exec-approval, MCP relay grant, visitor grant and relay state and mailbox files are written through `@theokit/sdk/persistence`, so two writers in one process no longer share a `<pid>.tmp` temporary name.
