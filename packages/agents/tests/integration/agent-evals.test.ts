@@ -49,12 +49,13 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@theokit/sdk/eval', async (importOriginal) => {
   const actual = await importOriginal<typeof EvalModule>()
-  class SpyEval extends actual.Eval {
-    static override create(options: Parameters<typeof actual.Eval.create>[0]) {
+  const realCreate = actual.Eval.create.bind(actual.Eval)
+  const SpyEval = Object.assign(Object.create(actual.Eval) as typeof actual.Eval, {
+    create: (options: Parameters<typeof actual.Eval.create>[0]) => {
       h.evalAgents.push(options.agent)
-      return super.create(options)
-    }
-  }
+      return realCreate(options)
+    },
+  })
   return { ...actual, Eval: SpyEval }
 })
 
