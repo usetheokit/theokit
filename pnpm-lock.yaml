@@ -493,7 +493,7 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.10.0(jiti@2.7.0))
       '@theokit/agents':
-        specifier: workspace:16.12.0
+        specifier: workspace:16.13.0
         version: link:../../packages/agents
       '@theokit/agents-pty':
         specifier: workspace:*
@@ -550,7 +550,7 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@theokit/agents':
-        specifier: workspace:16.12.0
+        specifier: workspace:16.13.0
         version: link:../../../../packages/agents
       '@theokit/agents-pty':
         specifier: workspace:*
@@ -577,7 +577,7 @@ importers:
         specifier: workspace:*
         version: link:../tui
       '@theokit/agents':
-        specifier: workspace:16.12.0
+        specifier: workspace:16.13.0
         version: link:../../../../packages/agents
       '@theokit/presenter':
         specifier: workspace:*
@@ -586,7 +586,7 @@ importers:
   apps/theocode/packages/shared:
     dependencies:
       '@theokit/agents':
-        specifier: workspace:16.12.0
+        specifier: workspace:16.13.0
         version: link:../../../../packages/agents
 
   apps/theocode/packages/tui:
@@ -598,7 +598,7 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@theokit/agents':
-        specifier: workspace:16.12.0
+        specifier: workspace:16.13.0
         version: link:../../../../packages/agents
       '@theokit/sdk':
         specifier: 5.17.0
