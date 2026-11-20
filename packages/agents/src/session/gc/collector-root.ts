@@ -10,7 +10,7 @@ import { TheokitAgentError } from '@theokit/sdk/errors'
  */
 
 /** The marker file name, in the parent of the projects root. */
-export const COLLECTOR_ROOT_MARKER = '.theokit-collector.json'
+const COLLECTOR_ROOT_MARKER = '.theokit-collector.json'
 
 const MARKER_VERSION = 1
 
