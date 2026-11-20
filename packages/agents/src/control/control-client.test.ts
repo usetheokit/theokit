@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { SdkAgentHandle } from '../bridge/sdk-adapter.js'
+import type { SdkMessage } from '../bridge/event-translator.js'
 import * as entry from '../control-entry.js'
 import { ControlConnectionError, createControlClient } from './control-client.js'
 import { attachControlSocket } from './control-socket.js'
@@ -19,7 +20,7 @@ async function start(authorize: (header: string | undefined) => boolean): Promis
     agentId: 'a',
     dispose: async () => {},
     send: async () => ({ cancel: async () => {}, wait: async () => ({ status: 'finished' }) }),
-  } as unknown as SdkAgentHandle
+  } as unknown as SdkAgentHandle<SdkMessage>
   const server = createServer()
   servers.push(server)
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
