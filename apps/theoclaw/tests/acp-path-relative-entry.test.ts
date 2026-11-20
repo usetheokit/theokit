@@ -155,6 +155,16 @@ describe('an ACP agent named by a bare command (B-706)', () => {
     expect(existsSync(equalsMarker)).toBe(false)
   })
 
+  it('edge: a bare command that exits after spawning is reported against the command as configured', async () => {
+    const space = workspace(AGENT)
+    const legit = tempCwd(cleanups)
+    writeFileSync(join(legit, AGENT), '#!/bin/sh\nexit 3\n')
+    chmodSync(join(legit, AGENT), 0o755)
+    const error = await callAgent(space, legit)
+    expect(error).toBeInstanceOf(AcpTransportClosedError)
+    expect((error as AcpTransportClosedError).command).toBe(AGENT)
+  })
+
   it('edge: refuses a bare command when PATH is unset', async () => {
     const space = workspace(AGENT)
     const plantedMarker = join(space.cwd, 'planted-ran')
@@ -186,7 +196,7 @@ describe('an ACP agent named by a bare command (B-706)', () => {
   })
 
   it('negative: refuses a relative command with a slash even when it exists relative to the process cwd', async () => {
-    const { scrubbedAgentTransport } = await import('../src/tools/acp-transport.js')
+    const { agentTransport } = await import('../src/tools/acp-transport.js')
     const space = workspace(AGENT)
     // Present relative to the process cwd, which the old check used, but not relative to the agent's cwd.
     const dir = mkdtempSync(join(process.cwd(), 'b706-'))
@@ -195,8 +205,8 @@ describe('an ACP agent named by a bare command (B-706)', () => {
     plant(join(dir, AGENT), marker)
     const command = join(relative(process.cwd(), dir), AGENT)
     const closed: unknown[] = []
-    scrubbedAgentTransport({ name: 'asker', description: 'asks', command, args: [], cwd: space.toolRoot, timeoutMs: 5_000, onPermissionRequest: () => ({ granted: false }) }).onClose?.((error) => closed.push(error))
-    // A refused command is reported closed at once; the old code spawned `env` instead.
+    agentTransport({ name: 'asker', description: 'asks', command, args: [], cwd: space.toolRoot, timeoutMs: 5_000, onPermissionRequest: () => ({ granted: false }) }).onClose?.((error) => closed.push(error))
+    // A refused command is reported closed at once; nothing was spawned.
     expect(closed[0]).toBeInstanceOf(AcpTransportClosedError)
     expect(existsSync(marker)).toBe(false)
   })
