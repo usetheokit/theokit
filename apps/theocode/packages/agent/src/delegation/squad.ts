@@ -43,7 +43,7 @@ export interface TeamContext {
 export const DELEGATION_CAP_MS = 15 * 60_000
 
 /** Reported when the cap fires, with the recovery instruction TheoCode has always given. */
-export class DelegationExpiredError extends TheokitAgentError {
+class DelegationExpiredError extends TheokitAgentError {
   override readonly name = 'DelegationExpiredError'
 
   constructor(capMs: number) {

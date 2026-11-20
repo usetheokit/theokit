@@ -32,15 +32,12 @@ import { tempRoot } from './helpers/temp-root.js'
  * wrong is the instrument — an exact-list assertion cannot tell the two origins apart, so it reads
  * an operator's ordinary setup as a gate failure.
  */
-const realHome = process.env.HOME
-
 beforeEach(() => {
-  process.env.HOME = tempRoot('composition-home-')
+  vi.stubEnv('HOME', tempRoot('composition-home-'))
 })
 
 afterEach(() => {
-  if (realHome === undefined) delete process.env.HOME
-  else process.env.HOME = realHome
+  vi.unstubAllEnvs()
 })
 
 // Every import of a module under test is DYNAMIC and inside the test body. `vi.mock` is hoisted
