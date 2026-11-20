@@ -16,9 +16,17 @@
  * second implementation of the delete path. The parent still owns the DECISION (enabled, interval,
  * first-run-is-a-dry-run); the child only does the work.
  */
+import { EventEmitter } from 'node:events'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
-import { buildSweepCommand } from '../../../src/session/gc/sweep-wiring.js'
+import {
+  buildSweepCommand,
+  startSessionSweepInBackground,
+} from '../../../src/session/gc/sweep-wiring.js'
 
 describe('buildSweepCommand', () => {
   it('test_it_runs_the_command_that_already_exists', () => {
@@ -63,5 +71,49 @@ describe('buildSweepCommand', () => {
     expect(() => buildSweepCommand({ apply: true, execPath: '', script: 'cli.mjs' })).toThrow(
       /executable/i,
     )
+  })
+})
+
+/**
+ * The child's bound, asserted through the spawn seam the framework's `scheduleSessionSweep` takes.
+ * (The framework also tests it in `packages/agents/tests/unit/sweep-schedule.test.ts`; these keep
+ * the TheoCode-level guarantee that the wiring does not weaken it.)
+ */
+describe('the child process is bounded', () => {
+  const spawned = (): { options: Record<string, unknown> } => {
+    let options: Record<string, unknown> = {}
+    const spawn = ((_cmd: string, _args: readonly string[], opts: Record<string, unknown>) => {
+      options = opts
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; unref: () => void }
+      child.stdout = Object.assign(new EventEmitter(), { unref: () => {} })
+      child.unref = () => {}
+      return child
+    }) as unknown as NonNullable<Parameters<typeof startSessionSweepInBackground>[0]['spawn']>
+    const base = mkdtempSync(join(tmpdir(), 'theocode-spawnopts-'))
+    startSessionSweepInBackground({
+      enabled: true,
+      onReport: () => {},
+      projectsRootOverride: join(base, 'projects'),
+      spawn,
+    })
+    return { options }
+  }
+
+  it('test_it_carries_a_timeout', () => {
+    expect(spawned().options.timeout, 'the spawned sweep has no bound at all').toBeGreaterThan(0)
+  })
+
+  it('test_the_bound_is_far_past_the_worst_measured_sweep', () => {
+    expect(spawned().options.timeout).toBeGreaterThan(60_000)
+  })
+
+  it('test_it_names_the_signal_rather_than_leaving_it_to_the_default', () => {
+    expect(spawned().options.killSignal).toBe('SIGTERM')
+  })
+
+  it('test_the_child_inherits_no_stream_it_could_write_over_the_frame_with', () => {
+    const { stdio } = spawned().options
+    expect(stdio).toEqual(['ignore', 'pipe', 'ignore'])
+    expect(stdio, 'a stream is inherited and would land on the frame').not.toContain('inherit')
   })
 })

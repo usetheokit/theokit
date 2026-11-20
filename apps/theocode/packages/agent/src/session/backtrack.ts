@@ -31,6 +31,14 @@ export async function forkSessionBeforeUserTurn(
   if (!Number.isInteger(nth) || nth < 0) {
     throw new RangeError(`backtrack: nth=${String(nth)} out of range`)
   }
+  // The framework's out-of-range error is a TheokitAgentError; callers of this adapter have always
+  // been told with a RangeError, so the bound is checked here against the same listing.
+  const turns = await listUserTurns(srcId, { cwd, root })
+  if (nth >= turns.length) {
+    throw new RangeError(
+      `backtrack: nth=${String(nth)} out of range — ${String(turns.length)} user turn(s) in the window`,
+    )
+  }
   const destination = transcriptPath(root, cwd, newId)
   if ((await protectedSessions(cwd, root)).includes(destination)) {
     throw new LiveTranscriptError(destination)

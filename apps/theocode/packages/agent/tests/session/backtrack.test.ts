@@ -127,6 +127,7 @@ describe('fork before a user turn (framework forkBeforeUserTurn)', () => {
     writeTranscript('src', [userTurn('first')])
     await expect(
       forkSessionBeforeUserTurn('src', 'dst', 5, { cwd, baseDir: base }),
-    ).rejects.toThrow()
+    ).rejects.toBeInstanceOf(RangeError)
+    expect(existsSync(transcriptPath(base, cwd, 'dst'))).toBe(false)
   })
 })
