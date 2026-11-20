@@ -1,5 +1,18 @@
 # @theokit/agents
 
+## 17.1.0
+
+### Minor Changes
+
+- 58b577e: `createCodeMode` takes `plugins` and `hookContext`: the `pre_tool_call` hooks of those plugins run before each tool call a script makes, after `onPermissionRequest`. A block refuses the call with its message, and a hook that throws refuses it too.
+- 5e2d8c1: Pending `@HumanInTheLoop` approvals can now survive a restart and be answered from another instance. `createFileApprovalStore(dir)`, `createDurableApprovalRegistry(store)` and `configureApprovalRegistry(registry)` are exported from `theokit/server/agent`; with a durable registry a gated call is recorded and the run ends deferred, and `POST /api/agents/<name>/approve/<id>` resumes the session with the decision (an expired record is settled by its `onTimeout`, an unknown `schemaVersion` answers 409). The in-process registry stays the default. `@theokit/agents`: `streamAgentUIMessages` accepts `hitl.onDefer` and `toolDecisions`, and the HITL plugin does not gate a call a person already approved on resume.
+- 1e069ee: The HITL plugin can defer a gated tool call: set `onDefer` on `HitlWiring` and the call ends the run as deferred with a `DeferredApproval` (including `toolUseId`) for the host to persist. Requires `@theokit/sdk` 5.32.0.
+
+### Patch Changes
+
+- e562c5f: Generated Deno cron entries encode names, schedules and paths as string literals, and the foreign-surface reader checks and reads one open descriptor.
+- 8c164e6: `pnpm version-packages` now refreshes `pnpm-lock.yaml` after `changeset version`, so the release pull request no longer fails `pnpm install --frozen-lockfile` on the bumped `workspace:` pins.
+
 ## 17.0.0
 
 ### Major Changes
