@@ -1,4 +1,5 @@
-import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
+import { parseChatCommand } from '@theokit/gateway'
+import type { ChatCommand, GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
 
 import { sessionKeyFor } from '../sessions/session-key.js'
 import type { UsageFooterMode } from '../usage/turn-usage.js'
@@ -18,8 +19,12 @@ export interface UsageHook {
 }
 
 const HOOK_NAME = 'theoclaw-usage'
-/** Behind an optional leading mention and with Telegram's optional `@botname`, as `/activation`. */
-const USAGE_COMMAND = /^(?:(?:<@[^>]+>|@\S+)\s+)?\/usage(?:@\S+)?(?:\s+(.*))?$/
+/** What `/help` says about the command this hook answers. */
+export const USAGE_DESCRIPTION: Pick<ChatCommand, 'name' | 'usage' | 'description'> = {
+  name: 'usage',
+  usage: '/usage off|tokens|cost|full',
+  description: 'the usage footer of replies',
+}
 const USAGE_TEXT = 'Use /usage off, /usage tokens, /usage cost or /usage full.'
 const MODES: ReadonlySet<string> = new Set<UsageMode>(['off', 'tokens', 'cost', 'full'])
 
@@ -49,8 +54,11 @@ export function createUsageHook(options: UsageHookOptions = {}): UsageHook {
     hook: {
       name: HOOK_NAME,
       pre_inbound({ event }) {
-        const command = USAGE_COMMAND.exec(event.text.trim())
-        return command === null ? undefined : answer(event, command[1])
+        const command = parseChatCommand(event.text)
+        // A multi-line message was never this command: it stays an ordinary message.
+        return command?.name === 'usage' && !/[\r\n]/.test(command.arg)
+          ? answer(event, command.arg)
+          : undefined
       },
     },
     modeFor: (event) => modes.get(keyOf(event)) ?? 'off',

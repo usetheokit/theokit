@@ -50,7 +50,7 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 | `./hooks` | The lifecycle-hook engine and its fingerprint gate; `parseClaudeHooks` reads the Claude Code hook dialect (see below) |
 | `./ask` | The human-in-the-loop rendezvous — ask a question, settle it, abandon it safely |
 | `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable. `protectedPaths` (absolute, or relative to `projectRoot`) lists state directories tools must not touch; `createPathVetoPlugin(scope)` is a `pre_tool_call` plugin that refuses any `path`, `file_path`, `filename`, `paths[]` or `apply_patch` destination that resolves, through symlinks and case variants, into one, and an unscoped `git_diff`. `vetoPathCall(scope, name, args)` gives the same verdict for calls that skip the plugin chain; `resolveRealPath`, `isWithin` and `SymlinkLoopError` are exported too |
-| `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool; `timeoutMs` bounds the call and rejects with `A2ATimeoutError` (`A2A call to "<name>" failed: no answer within <ms> ms`), composed with the caller's signal. `createA2AJsonRpcHandler` serves `message/send`; `maxInFlight` caps concurrent turns and answers 503 with `retry-after` (`retryAfterSeconds`, default 5) before the body is read. A slot is held until `respond` settles, even after the handler's own deadline answered. Both options are off by default |
+| `./a2a` | `buildAgentCard` (plain `{name, route, baseUrl}` form), `createA2ATool` — call a remote agent over HTTP as a tool; `timeoutMs` bounds the call and rejects with `A2ATimeoutError` (`A2A call to "<name>" failed: no answer within <ms> ms`), composed with the caller's signal. `createA2AJsonRpcHandler` serves `message/send`; `maxInFlight` caps concurrent turns and answers 503 with `retry-after` (`retryAfterSeconds`, default 5) before the body is read. A slot is held until `respond` settles, even after the handler's own deadline answered. Both options are off by default |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract. `Shutdown.register` returns a disposer (a no-op once `run()` started); `exitAfterDrain(code)` sets the exit code and forces the exit only if the loop has not drained within `capMs` |
 | `./doctor` | Environment diagnostics: `credentialShape(value, { minLength? })` names a malformed credential (`edge_whitespace`, `inner_whitespace`, `quote_or_backslash`, `control_character`, `placeholder`, `too_short`) or returns `ok`, and `describeCredentialDefect` words it without echoing the value; `diagnose`, `renderDiagnosis`, and row builders `checks.credential` (`present` ok, `expired` warn, `absent`/`unreadable` fail; `remedy` option), `checks.capability` (warn when trust withheld the project's entries), `checks.settingsReport` and `checks.leftovers` (each `[]` when there is nothing to say, else one warn row). Compose: `diagnose([checks.credential(state, { remedy }), checks.capability('mcp', wired), ...checks.settingsReport(reports)])`. `writeDiagnosticBundle({ out, files, secrets, mask? })` writes a 0600 `.tar.gz` of masked files and refuses (`DiagnosticBundleError`, reason `secret_survived` or `name_too_long`, nothing written) when a configured secret survives the mask or a name exceeds 100 bytes. `installDiagnosticSink` routes SDK diagnostics from `THEOKIT_DIAGNOSTICS` (`1`/`true`/`stderr`/`yes` for stderr, any other value is a file path); pass `envVar` to read an app-named variable instead, e.g. `{ envVar: 'MYAPP_DIAGNOSTICS' }`. An empty `envVar` throws a `ConfigurationError` |
@@ -249,6 +249,8 @@ A surface reads the open question with `bridge.pending(threadId)` (a read, not a
 and learns of changes with `bridge.onChange(fn)`, which fires after a question is asked, answered,
 abandoned or failed and returns its own disposer.
 
+A refused tool result carries `refusal.by`, saying who refused: `human` (a person denied it; `reason` is the approver's text), `timeout` (the approval window expired with no decision), `policy` (the approval posture or the permission gate), `hook` (a hook spec or delegation hook, or an SDK file hook), or `plugin` (a veto from a plugin this framework did not build). `reason` is the bare reason, not the sentence around it. Each framework veto message ends with an unguessable ` [veto:<random hex>]` marker: tool calls dispatch concurrently and the SDK's denial event carries no call id, so the marker is what binds a denial to its own veto (an external denial has no marker and stays `plugin`).
+
 **Sessions are deleted carefully or not at all.** `./session` refuses to collect a transcript that a
 live writer holds, floors both `keepLast` and `maxAgeDays`, and plans before it applies. When your
 app knows about live sessions this package cannot see, inject them — protection is additive and
@@ -259,6 +261,17 @@ never subtractive.
 **Credentials answer two questions.** Which credential to use, and where it came from. The second
 matters more than it looks: without provenance, "why is it calling Anthropic?" has no answer in the
 data, and a user cannot tell an explicit choice from a precedence fallback.
+
+## Publishing an A2A agent card
+
+`buildAgentCard` takes a manifest entry, or just a name and route when the agent was not built through the decorators:
+
+```ts
+import { buildAgentCard, agentCardPath } from '@theokit/agents/a2a'
+
+const card = buildAgentCard({ name: 'my-agent', route: '/a2a', baseUrl: 'https://app.example.com' })
+const path = agentCardPath('my-agent') // /.well-known/my-agent/agent-card.json
+```
 
 ## Handing a conversation to another agent
 
@@ -980,7 +993,7 @@ console.log(`${result.dryRun ? 'would remove' : 'removed'} ${result.removed.leng
 
 ## Refused tool calls
 
-When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. The message the model reads is unchanged.
+When the SDK reports `permission_denied` for a tool call, the bridge sets `ToolResultEvent.refusal` (`ToolRefusal` from `@theokit/presenter`: `by`, `reason?`) on that call's result. `source: 'file_hook'` gives `by: 'hook'`; `'plugin'` and `'fork_whitelist'` give `by: 'plugin'`; `reason` is the SDK message. An exit code of 126 alone is not a refusal. A veto the framework made ends its model-facing message with a ` [veto:<random hex>]` marker (see the refusal paragraph above); a veto from an external plugin is passed through as written.
 
 ## Serving sessions over a WebSocket
 

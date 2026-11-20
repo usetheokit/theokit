@@ -174,10 +174,13 @@
           "declaration": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/index.d.ts#A2ACapabilities", "dist/index.d.ts#A2ASkill"],
+          "references": [
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities",
+            "dist/agent-card-<hash>.d.ts#A2ASkill"
+          ],
           "internals": {
-            "dist/index.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
-            "dist/index.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}"
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
+            "dist/agent-card-<hash>.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}"
           }
         },
         "AgentConfig": {
@@ -400,12 +403,12 @@
           "runtime": false,
           "deprecatedSince": null,
           "references": [
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool"
           ],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
           }
         },
         "AgentManifestEntry": {
@@ -413,9 +416,9 @@
           "declaration": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/bridge-entry-<hash>.d.ts#AgentManifestTool"],
+          "references": ["dist/agent-manifest-<hash>.d.ts#AgentManifestTool"],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
           }
         },
         "AgentManifestSource": {
@@ -1196,14 +1199,14 @@
           "runtime": false,
           "deprecatedSince": null,
           "references": [
-            "dist/index.d.ts#A2ACapabilities",
-            "dist/index.d.ts#A2ASkill",
-            "dist/index.d.ts#AgentCard"
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities",
+            "dist/agent-card-<hash>.d.ts#A2ASkill",
+            "dist/agent-card-<hash>.d.ts#AgentCard"
           ],
           "internals": {
-            "dist/index.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
-            "dist/index.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}",
-            "dist/index.d.ts#AgentCard": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}"
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
+            "dist/agent-card-<hash>.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}",
+            "dist/agent-card-<hash>.d.ts#AgentCard": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}"
           }
         },
         "CONTEXT_WINDOW_FLOOR": {
@@ -3925,6 +3928,24 @@
           "references": [],
           "internals": {}
         },
+        "PlainAgentCardInput": {
+          "tier": "stable",
+          "declaration": "interface PlainAgentCardInput extends BuildAgentCardOptions {\n    name: string;\n    route: string;\n    stream?: boolean;\n    skills?: A2ASkill[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities",
+            "dist/agent-card-<hash>.d.ts#A2ASkill",
+            "dist/agent-card-<hash>.d.ts#AgentCard",
+            "dist/agent-card-<hash>.d.ts#BuildAgentCardOptions"
+          ],
+          "internals": {
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
+            "dist/agent-card-<hash>.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}",
+            "dist/agent-card-<hash>.d.ts#AgentCard": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}",
+            "dist/agent-card-<hash>.d.ts#BuildAgentCardOptions": "interface BuildAgentCardOptions {\n    baseUrl: string;\n    description?: string;\n    securitySchemes?: AgentCard['securitySchemes'];\n    security?: AgentCard['security'];\n}"
+          }
+        },
         "Plugin": {
           "tier": "stable",
           "declaration": "type Plugin = Plugin$1;\nPlugin: {\n    create: typeof definePlugin;\n}",
@@ -6245,6 +6266,16 @@
           "references": [],
           "internals": {}
         },
+        "agentCardPath": {
+          "tier": "stable",
+          "declaration": "agentCardPath: typeof wellKnownCardPath",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/agent-card-<hash>.d.ts#wellKnownCardPath"],
+          "internals": {
+            "dist/agent-card-<hash>.d.ts#wellKnownCardPath": "declare function wellKnownCardPath(agentName: string): string;"
+          }
+        },
         "agentsPlugin": {
           "tier": "stable",
           "declaration": "declare function agentsPlugin(opts: AgentsPluginOptions): {\n    name: string;\n    register(app: PluginApp): void;\n};",
@@ -6441,24 +6472,26 @@
         },
         "buildAgentCard": {
           "tier": "stable",
-          "declaration": "declare function buildAgentCard(entry: AgentManifestEntry, options: BuildAgentCardOptions): AgentCard;",
+          "declaration": "declare function buildAgentCard(entry: AgentManifestEntry, options: BuildAgentCardOptions): AgentCard;\ndeclare function buildAgentCard(card: PlainAgentCardInput): AgentCard;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool",
-            "dist/index.d.ts#A2ACapabilities",
-            "dist/index.d.ts#A2ASkill",
-            "dist/index.d.ts#AgentCard",
-            "dist/index.d.ts#BuildAgentCardOptions"
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities",
+            "dist/agent-card-<hash>.d.ts#A2ASkill",
+            "dist/agent-card-<hash>.d.ts#AgentCard",
+            "dist/agent-card-<hash>.d.ts#BuildAgentCardOptions",
+            "dist/agent-card-<hash>.d.ts#PlainAgentCardInput",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool"
           ],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}",
-            "dist/index.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
-            "dist/index.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}",
-            "dist/index.d.ts#AgentCard": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}",
-            "dist/index.d.ts#BuildAgentCardOptions": "interface BuildAgentCardOptions {\n    baseUrl: string;\n    description?: string;\n    securitySchemes?: AgentCard['securitySchemes'];\n    security?: AgentCard['security'];\n}"
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
+            "dist/agent-card-<hash>.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}",
+            "dist/agent-card-<hash>.d.ts#AgentCard": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}",
+            "dist/agent-card-<hash>.d.ts#BuildAgentCardOptions": "interface BuildAgentCardOptions {\n    baseUrl: string;\n    description?: string;\n    securitySchemes?: AgentCard['securitySchemes'];\n    security?: AgentCard['security'];\n}",
+            "dist/agent-card-<hash>.d.ts#PlainAgentCardInput": "interface PlainAgentCardInput extends BuildAgentCardOptions {\n    name: string;\n    route: string;\n    stream?: boolean;\n    skills?: A2ASkill[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
           }
         },
         "buildMcpToolDescriptors": {
@@ -6467,14 +6500,14 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool",
             "dist/index.d.ts#McpJsonSchema",
             "dist/index.d.ts#McpToolDescriptor"
           ],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}",
             "dist/index.d.ts#McpJsonSchema": "interface McpJsonSchema {\n    type: 'object';\n    properties: Record<string, unknown>;\n    required?: string[];\n}",
             "dist/index.d.ts#McpToolDescriptor": "interface McpToolDescriptor {\n    name: string;\n    description: string;\n    inputSchema: McpJsonSchema;\n}"
           }
@@ -7670,16 +7703,16 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/bridge-entry-<hash>.d.ts#AgentManifest",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestSource",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifest",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestSource",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool"
           ],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#AgentManifest": "interface AgentManifest {\n    version: '1.0';\n    generatedAt: string;\n    agents: AgentManifestEntry[];\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestSource": "interface AgentManifestSource {\n    readonly agentConfig: {\n        name: string;\n        model?: string;\n        stream?: boolean;\n    };\n    readonly route: string;\n    readonly mainLoop: {\n        propertyKey: string | symbol;\n        strategy: string;\n    };\n    readonly guards: readonly {\n        name: string;\n    }[];\n    readonly interceptors: readonly {\n        name: string;\n    }[];\n    readonly toolboxes: readonly {\n        namespace?: string;\n        tools: readonly {\n            config: {\n                name: string;\n                description: string;\n                risk?: string;\n            };\n            approval?: unknown;\n            capabilities?: string[];\n            trace: boolean;\n            audit: boolean;\n        }[];\n    }[];\n    readonly gateway?: {\n        platforms: string[];\n        sessionStrategy?: string;\n    };\n    readonly subAgentClasses: readonly {\n        name: string;\n    }[];\n    readonly memory?: {\n        provider?: string;\n        embeddings?: boolean;\n        fts?: boolean;\n        scope?: string;\n    };\n    readonly skills?: {\n        include?: string[];\n    };\n    readonly mcpServers?: Record<string, unknown>;\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifest": "interface AgentManifest {\n    version: '1.0';\n    generatedAt: string;\n    agents: AgentManifestEntry[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestSource": "interface AgentManifestSource {\n    readonly agentConfig: {\n        name: string;\n        model?: string;\n        stream?: boolean;\n    };\n    readonly route: string;\n    readonly mainLoop: {\n        propertyKey: string | symbol;\n        strategy: string;\n    };\n    readonly guards: readonly {\n        name: string;\n    }[];\n    readonly interceptors: readonly {\n        name: string;\n    }[];\n    readonly toolboxes: readonly {\n        namespace?: string;\n        tools: readonly {\n            config: {\n                name: string;\n                description: string;\n                risk?: string;\n            };\n            approval?: unknown;\n            capabilities?: string[];\n            trace: boolean;\n            audit: boolean;\n        }[];\n    }[];\n    readonly gateway?: {\n        platforms: string[];\n        sessionStrategy?: string;\n    };\n    readonly subAgentClasses: readonly {\n        name: string;\n    }[];\n    readonly memory?: {\n        provider?: string;\n        embeddings?: boolean;\n        fts?: boolean;\n        scope?: string;\n    };\n    readonly skills?: {\n        include?: string[];\n    };\n    readonly mcpServers?: Record<string, unknown>;\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
           }
         },
         "generateAgentRoutes": {
@@ -8342,13 +8375,13 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool",
             "dist/index.d.ts#McpServerInfo"
           ],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}",
             "dist/index.d.ts#McpServerInfo": "interface McpServerInfo {\n    name: string;\n    version: string;\n    protocolVersion: string;\n}"
           }
         },
@@ -9494,9 +9527,25 @@
           "references": [],
           "internals": {}
         },
+        "A2ACapabilities": {
+          "tier": "stable",
+          "declaration": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "A2AJsonRpcHandlerOptions": {
           "tier": "stable",
           "declaration": "interface A2AJsonRpcHandlerOptions {\n    authorize(authorization: string | undefined): boolean;\n    respond(text: string, signal: AbortSignal): Promise<string>;\n    maxBodyBytes: number;\n    timeoutMs: number;\n    maxInFlight?: number;\n    retryAfterSeconds?: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "A2ASkill": {
+          "tier": "stable",
+          "declaration": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -9520,6 +9569,88 @@
             "dist/a2a.d.ts#A2AAuth": "interface A2AAuth {\n    bearer?: string;\n    apiKey?: {\n        header: string;\n        value: string;\n    };\n}"
           }
         },
+        "AgentCard": {
+          "tier": "stable",
+          "declaration": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities",
+            "dist/agent-card-<hash>.d.ts#A2ASkill"
+          ],
+          "internals": {
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
+            "dist/agent-card-<hash>.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}"
+          }
+        },
+        "BuildAgentCardOptions": {
+          "tier": "stable",
+          "declaration": "interface BuildAgentCardOptions {\n    baseUrl: string;\n    description?: string;\n    securitySchemes?: AgentCard['securitySchemes'];\n    security?: AgentCard['security'];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities",
+            "dist/agent-card-<hash>.d.ts#A2ASkill",
+            "dist/agent-card-<hash>.d.ts#AgentCard"
+          ],
+          "internals": {
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
+            "dist/agent-card-<hash>.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}",
+            "dist/agent-card-<hash>.d.ts#AgentCard": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}"
+          }
+        },
+        "PlainAgentCardInput": {
+          "tier": "stable",
+          "declaration": "interface PlainAgentCardInput extends BuildAgentCardOptions {\n    name: string;\n    route: string;\n    stream?: boolean;\n    skills?: A2ASkill[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities",
+            "dist/agent-card-<hash>.d.ts#A2ASkill",
+            "dist/agent-card-<hash>.d.ts#AgentCard",
+            "dist/agent-card-<hash>.d.ts#BuildAgentCardOptions"
+          ],
+          "internals": {
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
+            "dist/agent-card-<hash>.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}",
+            "dist/agent-card-<hash>.d.ts#AgentCard": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}",
+            "dist/agent-card-<hash>.d.ts#BuildAgentCardOptions": "interface BuildAgentCardOptions {\n    baseUrl: string;\n    description?: string;\n    securitySchemes?: AgentCard['securitySchemes'];\n    security?: AgentCard['security'];\n}"
+          }
+        },
+        "agentCardPath": {
+          "tier": "stable",
+          "declaration": "agentCardPath: typeof wellKnownCardPath",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/agent-card-<hash>.d.ts#wellKnownCardPath"],
+          "internals": {
+            "dist/agent-card-<hash>.d.ts#wellKnownCardPath": "declare function wellKnownCardPath(agentName: string): string;"
+          }
+        },
+        "buildAgentCard": {
+          "tier": "stable",
+          "declaration": "declare function buildAgentCard(entry: AgentManifestEntry, options: BuildAgentCardOptions): AgentCard;\ndeclare function buildAgentCard(card: PlainAgentCardInput): AgentCard;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities",
+            "dist/agent-card-<hash>.d.ts#A2ASkill",
+            "dist/agent-card-<hash>.d.ts#AgentCard",
+            "dist/agent-card-<hash>.d.ts#BuildAgentCardOptions",
+            "dist/agent-card-<hash>.d.ts#PlainAgentCardInput",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool"
+          ],
+          "internals": {
+            "dist/agent-card-<hash>.d.ts#A2ACapabilities": "interface A2ACapabilities {\n    streaming: boolean;\n    pushNotifications: boolean;\n    stateTransitionHistory: boolean;\n}",
+            "dist/agent-card-<hash>.d.ts#A2ASkill": "interface A2ASkill {\n    id: string;\n    name: string;\n    description: string;\n}",
+            "dist/agent-card-<hash>.d.ts#AgentCard": "interface AgentCard {\n    name: string;\n    description: string;\n    url: string;\n    version: string;\n    capabilities: A2ACapabilities;\n    defaultInputModes: string[];\n    defaultOutputModes: string[];\n    skills: A2ASkill[];\n    securitySchemes?: Record<string, {\n        type: 'http';\n        scheme: 'bearer';\n    } | {\n        type: 'apiKey';\n        in: 'header';\n        name: string;\n    }>;\n    security?: Record<string, string[]>[];\n}",
+            "dist/agent-card-<hash>.d.ts#BuildAgentCardOptions": "interface BuildAgentCardOptions {\n    baseUrl: string;\n    description?: string;\n    securitySchemes?: AgentCard['securitySchemes'];\n    security?: AgentCard['security'];\n}",
+            "dist/agent-card-<hash>.d.ts#PlainAgentCardInput": "interface PlainAgentCardInput extends BuildAgentCardOptions {\n    name: string;\n    route: string;\n    stream?: boolean;\n    skills?: A2ASkill[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
+          }
+        },
         "createA2AJsonRpcHandler": {
           "tier": "stable",
           "declaration": "declare function createA2AJsonRpcHandler(options: A2AJsonRpcHandlerOptions): (request: Request) => Promise<Response>;",
@@ -9540,6 +9671,14 @@
             "dist/a2a.d.ts#A2AAuth": "interface A2AAuth {\n    bearer?: string;\n    apiKey?: {\n        header: string;\n        value: string;\n    };\n}",
             "dist/a2a.d.ts#A2AToolConfig": "interface A2AToolConfig {\n    url: string;\n    name: string;\n    description: string;\n    headers?: Record<string, string>;\n    auth?: A2AAuth;\n    fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;\n    protocol?: 'jsonrpc';\n    timeoutMs?: number;\n}"
           }
+        },
+        "wellKnownCardPath": {
+          "tier": "stable",
+          "declaration": "declare function wellKnownCardPath(agentName: string): string;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
         }
       }
     },
@@ -10717,12 +10856,12 @@
           "runtime": false,
           "deprecatedSince": null,
           "references": [
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool"
           ],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
           }
         },
         "AgentManifestEntry": {
@@ -10730,9 +10869,9 @@
           "declaration": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/bridge-entry-<hash>.d.ts#AgentManifestTool"],
+          "references": ["dist/agent-manifest-<hash>.d.ts#AgentManifestTool"],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
           }
         },
         "AgentManifestSource": {
@@ -13605,16 +13744,16 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/bridge-entry-<hash>.d.ts#AgentManifest",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestSource",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifest",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestSource",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool"
           ],
           "internals": {
-            "dist/bridge-entry-<hash>.d.ts#AgentManifest": "interface AgentManifest {\n    version: '1.0';\n    generatedAt: string;\n    agents: AgentManifestEntry[];\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestSource": "interface AgentManifestSource {\n    readonly agentConfig: {\n        name: string;\n        model?: string;\n        stream?: boolean;\n    };\n    readonly route: string;\n    readonly mainLoop: {\n        propertyKey: string | symbol;\n        strategy: string;\n    };\n    readonly guards: readonly {\n        name: string;\n    }[];\n    readonly interceptors: readonly {\n        name: string;\n    }[];\n    readonly toolboxes: readonly {\n        namespace?: string;\n        tools: readonly {\n            config: {\n                name: string;\n                description: string;\n                risk?: string;\n            };\n            approval?: unknown;\n            capabilities?: string[];\n            trace: boolean;\n            audit: boolean;\n        }[];\n    }[];\n    readonly gateway?: {\n        platforms: string[];\n        sessionStrategy?: string;\n    };\n    readonly subAgentClasses: readonly {\n        name: string;\n    }[];\n    readonly memory?: {\n        provider?: string;\n        embeddings?: boolean;\n        fts?: boolean;\n        scope?: string;\n    };\n    readonly skills?: {\n        include?: string[];\n    };\n    readonly mcpServers?: Record<string, unknown>;\n}",
-            "dist/bridge-entry-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
+            "dist/agent-manifest-<hash>.d.ts#AgentManifest": "interface AgentManifest {\n    version: '1.0';\n    generatedAt: string;\n    agents: AgentManifestEntry[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestEntry": "interface AgentManifestEntry {\n    name: string;\n    route: string;\n    model?: string;\n    stream: boolean;\n    mainLoop: {\n        method: string;\n        strategy: string;\n    };\n    guards: string[];\n    interceptors: string[];\n    tools: AgentManifestTool[];\n    gateway?: {\n        platforms: string[];\n        sessionStrategy: string;\n    };\n    subAgents: string[];\n    memory?: {\n        provider: string;\n        embeddings: boolean;\n        fts: boolean;\n        scope: string;\n    };\n    skills?: string[];\n    mcpServers?: string[];\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestSource": "interface AgentManifestSource {\n    readonly agentConfig: {\n        name: string;\n        model?: string;\n        stream?: boolean;\n    };\n    readonly route: string;\n    readonly mainLoop: {\n        propertyKey: string | symbol;\n        strategy: string;\n    };\n    readonly guards: readonly {\n        name: string;\n    }[];\n    readonly interceptors: readonly {\n        name: string;\n    }[];\n    readonly toolboxes: readonly {\n        namespace?: string;\n        tools: readonly {\n            config: {\n                name: string;\n                description: string;\n                risk?: string;\n            };\n            approval?: unknown;\n            capabilities?: string[];\n            trace: boolean;\n            audit: boolean;\n        }[];\n    }[];\n    readonly gateway?: {\n        platforms: string[];\n        sessionStrategy?: string;\n    };\n    readonly subAgentClasses: readonly {\n        name: string;\n    }[];\n    readonly memory?: {\n        provider?: string;\n        embeddings?: boolean;\n        fts?: boolean;\n        scope?: string;\n    };\n    readonly skills?: {\n        include?: string[];\n    };\n    readonly mcpServers?: Record<string, unknown>;\n}",
+            "dist/agent-manifest-<hash>.d.ts#AgentManifestTool": "interface AgentManifestTool {\n    name: string;\n    description: string;\n    risk?: string;\n    approval: boolean;\n    capabilities?: string[];\n    trace: boolean;\n    audit: boolean;\n}"
           }
         },
         "generateAgentRoutes": {

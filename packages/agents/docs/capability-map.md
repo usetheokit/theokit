@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1418 export(s) across 26 entry point(s).
+1448 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -26,6 +26,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `Agent` | value |
 | `AGENT_BRAND` | value |
 | `AgentBuilder` | value |
+| `agentCardPath` | value |
 | `AgentConfigCapability` | value |
 | `AgentDefinitionError` | value |
 | `AgentDisposedError` | value |
@@ -131,12 +132,17 @@ Measured against `@theokit/sdk@5.17.0`.
 | `InvalidTaskIdError` | value |
 | `isAgentContext` | value |
 | `isAgentDefinition` | value |
+| `isAgentStreamEvent` | value |
 | `isApprovalRequired` | value |
+| `isDeltaTimelineEvent` | value |
 | `isDone` | value |
 | `isError` | value |
 | `isForbiddenPath` | value |
+| `isInputRequested` | value |
+| `isMessageTimelineEvent` | value |
 | `isPartialToolCall` | value |
 | `isTextDelta` | value |
+| `isThinking` | value |
 | `isToolCall` | value |
 | `isToolResult` | value |
 | `isTransientError` | value |
@@ -232,6 +238,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `textPayloadExtractor` | value |
 | `TheokitAgentError` | value |
 | `toAgentFactory` | value |
+| `toAgentStreamEvent` | value |
 | `tokenBudgetCompactionStrategy` | value |
 | `toModelOption` | value |
 | `Tool` | value |
@@ -411,6 +418,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `PartialToolCallEvent` | type |
 | `PermissionsPluginOptions` | type |
 | `PiiOptions` | type |
+| `PlainAgentCardInput` | type |
 | `PluginsSettings` | type |
 | `PolicyHandler` | type |
 | `PreCompactionHandler` | type |
@@ -442,9 +450,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SDKAgent` | type |
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
+| `SdkRun` | type |
+| `SdkRunAgent` | type |
 | `SdkSendOptions` | type |
+| `SdkStreamMessage` | type |
 | `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
+| `SdkTurnOutcome` | type |
 | `Segment` | type |
 | `SessionRecord` | type |
 | `SessionStore` | type |
@@ -549,11 +561,16 @@ Measured against `@theokit/sdk@5.17.0`.
 | `generateAgentRoutes` | value |
 | `isAgentContext` | value |
 | `isAgentDefinition` | value |
+| `isAgentStreamEvent` | value |
 | `isApprovalRequired` | value |
+| `isDeltaTimelineEvent` | value |
 | `isDone` | value |
 | `isError` | value |
+| `isInputRequested` | value |
+| `isMessageTimelineEvent` | value |
 | `isPartialToolCall` | value |
 | `isTextDelta` | value |
+| `isThinking` | value |
 | `isToolCall` | value |
 | `isToolResult` | value |
 | `loadMcpJson` | value |
@@ -584,6 +601,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SURFACE_FOLDERS` | value |
 | `surfaceOfFolder` | value |
 | `toAgentFactory` | value |
+| `toAgentStreamEvent` | value |
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
@@ -675,9 +693,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `ScoreVerdict` | type |
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
+| `SdkRun` | type |
+| `SdkRunAgent` | type |
 | `SdkSendOptions` | type |
+| `SdkStreamMessage` | type |
 | `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
+| `SdkTurnOutcome` | type |
 | `Segment` | type |
 | `SettingSourceCapability` | type |
 | `SettingSourcesSelection` | type |
@@ -1433,11 +1455,19 @@ Measured against `@theokit/sdk@5.17.0`.
 | Symbol | Kind |
 |---|---|
 | `A2ATimeoutError` | value |
+| `agentCardPath` | value |
+| `buildAgentCard` | value |
 | `createA2AJsonRpcHandler` | value |
 | `createA2ATool` | value |
+| `wellKnownCardPath` | value |
 | `A2AAuth` | type |
+| `A2ACapabilities` | type |
 | `A2AJsonRpcHandlerOptions` | type |
+| `A2ASkill` | type |
 | `A2AToolConfig` | type |
+| `AgentCard` | type |
+| `BuildAgentCardOptions` | type |
+| `PlainAgentCardInput` | type |
 
 ## `@theokit/agents/evals`
 

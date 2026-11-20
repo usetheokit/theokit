@@ -149,3 +149,66 @@ describe('AgentStreamEvent type guards', () => {
     expect(types.size).toBe(9)
   })
 })
+
+describe('toAgentStreamEvent (untrusted input)', () => {
+  it('accepts a well-formed event and narrows it', async () => {
+    const { toAgentStreamEvent, isAgentStreamEvent } =
+      await import('../../src/bridge/agent-stream-events.js')
+    const e = toAgentStreamEvent({ type: 'text_delta', content: 'hi' })
+    expect(e).toEqual({ type: 'text_delta', content: 'hi' })
+    expect(isAgentStreamEvent({ type: 'iteration', step: 1, totalSteps: null })).toBe(true)
+  })
+
+  it('validates tool_result refusal fields', async () => {
+    const { toAgentStreamEvent } = await import('../../src/bridge/agent-stream-events.js')
+    const base = {
+      type: 'tool_result',
+      callId: 'c',
+      toolName: 't',
+      output: '',
+      durationMs: 1,
+      isError: true,
+    }
+    expect(toAgentStreamEvent({ ...base, refusal: {} })).toBeUndefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 42, reason: 7 } })).toBeUndefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 'nobody' } })).toBeUndefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 'human', reason: 7 } })).toBeUndefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 'policy', reason: 'no' } })).toBeDefined()
+    expect(toAgentStreamEvent({ ...base, refusal: { by: 'hook' } })).toBeDefined()
+  })
+
+  it('rejects non-objects, unknown types and malformed fields', async () => {
+    const { toAgentStreamEvent } = await import('../../src/bridge/agent-stream-events.js')
+    expect(toAgentStreamEvent(null)).toBeUndefined()
+    expect(toAgentStreamEvent('text_delta')).toBeUndefined()
+    expect(toAgentStreamEvent({ type: 'nope' })).toBeUndefined()
+    expect(toAgentStreamEvent({ type: 'toString' })).toBeUndefined()
+    expect(toAgentStreamEvent({ type: 'text_delta', content: 1 })).toBeUndefined()
+    expect(
+      toAgentStreamEvent({ type: 'done', result: '', usage: {}, durationMs: 1 }),
+    ).toBeUndefined()
+    expect(toAgentStreamEvent({ type: 'file_edit', file: 'a', format: 'bogus' })).toBeUndefined()
+    expect(
+      toAgentStreamEvent({ type: 'run_started', runId: 'r', agentName: 'a', model: 3 }),
+    ).toBeUndefined()
+  })
+})
+
+describe('toAgentStreamEvent rejects variants missing required properties', () => {
+  it.each([
+    ['tool_call without input', { type: 'tool_call', callId: 'c', toolName: 't' }],
+    ['partial_tool_call without input', { type: 'partial_tool_call', callId: 'c', toolName: 't' }],
+    ['state_update without data', { type: 'state_update', channel: 'ch' }],
+  ])('%s', async (_name, value) => {
+    const { toAgentStreamEvent } = await import('../../src/bridge/agent-stream-events.js')
+    expect(toAgentStreamEvent(value)).toBeUndefined()
+  })
+
+  it('still accepts them when the property is present, even if undefined-valued', async () => {
+    const { toAgentStreamEvent } = await import('../../src/bridge/agent-stream-events.js')
+    expect(
+      toAgentStreamEvent({ type: 'tool_call', callId: 'c', toolName: 't', input: null }),
+    ).toBeDefined()
+    expect(toAgentStreamEvent({ type: 'state_update', channel: 'ch', data: 1 })).toBeDefined()
+  })
+})

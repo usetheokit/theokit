@@ -29,6 +29,7 @@ import type { HumanInTheLoopOptions } from '../types.js'
 import type { ApprovalRequiredEvent } from './agent-stream-events.js'
 import { shouldAutoApprove } from './approval-decision.js'
 import { createHitlPlugin, type HitlDecision } from './hitl-plugin.js'
+import { recordRefusal } from './refusal-ledger.js'
 import { createToolHooksPlugin } from './tool-hooks-plugin.js'
 
 /** The map of gated tools that `compileAgentDefinition` produces (`compiled.hitl`). */
@@ -208,15 +209,21 @@ function posturePlugins(
         createToolHooksPlugin({
           // Only GATED tools are refused: the posture describes the gate, not a universal block.
           // Refusing everything would break every agent with a free tool next to a gated one.
-          beforeToolCall: (ctx) =>
-            gated.has(ctx.name)
-              ? {
-                  block: true,
-                  message:
-                    `Tool '${ctx.name}' requires human approval, and this surface has no approver ` +
-                    `(approval posture: auto-reject — ${posturePolicy.reason}). Refused (fail-closed).`,
-                }
-              : undefined,
+          beforeToolCallInRun: (ctx, runId) => {
+            if (!gated.has(ctx.name)) return undefined
+            const message =
+              `Tool '${ctx.name}' requires human approval, and this surface has no approver ` +
+              `(approval posture: auto-reject — ${posturePolicy.reason}). Refused (fail-closed).`
+            return {
+              block: true,
+              message: recordRefusal(
+                runId,
+                ctx.name,
+                { by: 'policy', reason: posturePolicy.reason },
+                message,
+              ),
+            }
+          },
         }),
       ]
     case 'owned-by-surface':

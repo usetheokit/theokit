@@ -15,6 +15,7 @@
 import type { HumanInTheLoopOptions } from '../types.js'
 
 import type { ApprovalRequiredEvent } from './agent-stream-events.js'
+import { recordRefusal } from './refusal-ledger.js'
 
 /** Minimal shapes mirrored from `@theokit/sdk` (type-only — no runtime import, keeps the SDK peer optional). */
 interface PreToolCallContext {
@@ -173,6 +174,16 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
         if (decision.payload !== undefined) {
           message += ` (payload: ${JSON.stringify(decision.payload)})`
         }
+        const bare = decision.reason
+        message = recordRefusal(
+          c.runId,
+          c.name,
+          {
+            by: decision.settledBy === 'timeout' ? 'timeout' : 'human',
+            ...(bare ? { reason: bare } : {}),
+          },
+          message,
+        )
         return { block: true, message }
       })
     },

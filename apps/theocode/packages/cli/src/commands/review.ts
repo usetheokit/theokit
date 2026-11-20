@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { exitAfterDrain } from '@theokit/agents/commands'
 import { createGitRunner } from '@theocode/shared/git-runner'
 import type { ExecReview } from '../runtime/index.js'
 import type { Shutdown } from '@theokit/agents/commands'
@@ -10,7 +11,8 @@ export async function reviewCommand(args: ExecReview, shutdown: Shutdown): Promi
       'ERROR: `-a/--approval` does not apply to `review` mode: the reviewer receives no write tool ' +
         '(`ApplyPatch`/`Edit`), so there is no action to approve. Remove the flag.\n',
     )
-    process.exit(2)
+    exitAfterDrain(2)
+    return
   }
 
   const { runReview } = await import('@theocode/agent/review')
@@ -55,9 +57,9 @@ export async function reviewCommand(args: ExecReview, shutdown: Shutdown): Promi
     process.stderr.write(
       `[exec] review findings=${result.output.findings.length} verdict=${result.output.overall_correctness}\n`,
     )
-    process.exit(0)
+    exitAfterDrain(0)
   } catch (err) {
     process.stderr.write(`ERROR: ${err instanceof Error ? err.message : String(err)}\n`)
-    process.exit(1)
+    exitAfterDrain(1)
   }
 }

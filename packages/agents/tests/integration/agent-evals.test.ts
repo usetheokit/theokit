@@ -16,6 +16,8 @@ import 'reflect-metadata'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type * as EvalModule from '@theokit/sdk/eval'
+
 import type { ApprovalPosture } from '../../src/bridge/approval-posture.js'
 
 interface ScriptedWait {
@@ -41,7 +43,21 @@ const h = vi.hoisted(() => ({
   answer: undefined as ((prompt: string) => ScriptedWait) | undefined,
   /** Callers waiting for `ids` to reach a length; see {@link oneAtATime}. */
   waiters: [] as { length: number; resolve: () => void }[],
+  /** The `agent` option every `Eval.create` call received. */
+  evalAgents: [] as unknown[],
 }))
+
+vi.mock('@theokit/sdk/eval', async (importOriginal) => {
+  const actual = await importOriginal<typeof EvalModule>()
+  const realCreate = actual.Eval.create.bind(actual.Eval)
+  const SpyEval = Object.assign(Object.create(actual.Eval) as typeof actual.Eval, {
+    create: (options: Parameters<typeof actual.Eval.create>[0]) => {
+      h.evalAgents.push(options.agent)
+      return realCreate(options)
+    },
+  })
+  return { ...actual, Eval: SpyEval }
+})
 
 vi.mock('@theokit/sdk', () => ({
   Tool: { create: (spec: unknown) => spec },
@@ -127,6 +143,7 @@ beforeEach(() => {
   h.hold = undefined
   h.answer = undefined
   h.waiters = []
+  h.evalAgents = []
   // A case that missed the mock would reach a real provider and read as a plausible `error`
   // verdict. Any network call fails the test instead (see `oneAtATime` for how a miss happens).
   vi.stubGlobal('fetch', network)
@@ -406,6 +423,24 @@ describe('runAgentEvals sessions and disposal', () => {
 
     expect(new Set(h.ids).size).toBe(2)
     expect(h.disposed).toBe(2)
+  })
+
+  it('hands the SDK runner agents that expose only send, and still disposes the real handles', async () => {
+    const result = await runAgentEvals(base())
+
+    const factory = h.evalAgents[0] as (entry: {
+      input: string
+    }) => Promise<Record<string, unknown>>
+    expect(typeof factory).toBe('function')
+    const given = await factory({ input: 'x' })
+    expect(Object.keys(given)).toEqual(['send'])
+    const turn = await (
+      given.send as (m: string) => Promise<{ wait: () => Promise<{ result?: string }> }>
+    )('ping')
+    expect((await turn.wait()).result).toBe('KIWI')
+    expect(h.sends).toContain('ping')
+    expect(result.counts).toEqual({ pass: 1, fail: 0, error: 0 })
+    expect(h.disposed).toBe(1)
   })
 
   it('rejects with the error of a dispose that rejects', async () => {
