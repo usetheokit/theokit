@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1407 export(s) across 26 entry point(s).
+1417 export(s) across 26 entry point(s).
 
 Measured against `@theokit/sdk@5.17.0`.
 
@@ -129,12 +129,17 @@ Measured against `@theokit/sdk@5.17.0`.
 | `InvalidTaskIdError` | value |
 | `isAgentContext` | value |
 | `isAgentDefinition` | value |
+| `isAgentStreamEvent` | value |
 | `isApprovalRequired` | value |
+| `isDeltaTimelineEvent` | value |
 | `isDone` | value |
 | `isError` | value |
 | `isForbiddenPath` | value |
+| `isInputRequested` | value |
+| `isMessageTimelineEvent` | value |
 | `isPartialToolCall` | value |
 | `isTextDelta` | value |
+| `isThinking` | value |
 | `isToolCall` | value |
 | `isToolResult` | value |
 | `isTransientError` | value |
@@ -229,6 +234,7 @@ Measured against `@theokit/sdk@5.17.0`.
 | `textPayloadExtractor` | value |
 | `TheokitAgentError` | value |
 | `toAgentFactory` | value |
+| `toAgentStreamEvent` | value |
 | `tokenBudgetCompactionStrategy` | value |
 | `toModelOption` | value |
 | `Tool` | value |
@@ -437,9 +443,13 @@ Measured against `@theokit/sdk@5.17.0`.
 | `SDKAgent` | type |
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
+| `SdkRun` | type |
+| `SdkRunAgent` | type |
 | `SdkSendOptions` | type |
+| `SdkStreamMessage` | type |
 | `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
+| `SdkTurnOutcome` | type |
 | `Segment` | type |
 | `SessionRecord` | type |
 | `SessionStore` | type |
