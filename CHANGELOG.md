@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 17.3.0, create-theokit 3.2.3] - 2026-11-21
+
 ### Fixed
 
 - `@theokit/agents`: `readCappedBody` cancels an oversized body without waiting on it, so a cancel that rejects or stalls no longer replaces or delays `BodyTooLargeError` (#2318).
