@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks'
 import { rmSync, statSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
@@ -13,7 +12,8 @@ import { memoryBackend } from '../memory/backend.js'
 import { importLegacyFacts, legacyFactsFile } from '../memory/legacy-facts.js'
 import { createMemory, type MemoryWiring, memoryEnabled } from '../memory/wiring.js'
 import { withSdkSkills } from '../agent/create-agent.js'
-import { createContainer } from '../agent-container.js'
+import { Container } from '@theokit/di'
+import { createAgentBoundary } from '@theokit/di-agent'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import {
   createChannelAgentFactory,
@@ -55,10 +55,9 @@ export type ChatBoundary = <R>(
 ) => Promise<R>
 
 /**
- * The chat path's sessions and the request boundary over them. `@theokit/di-agent`'s factory takes
- * no argument and `runInRequest` takes no seed, so the event reaches the factory through an
- * `AsyncLocalStorage` set around the request: per request, which a shared variable would not be
- * once two sessions are dispatched at once. The lease the boundary resolves carries no dispose, so
+ * The chat path's sessions and the request boundary over them. The event is the request's seed
+ * (`createAgentBoundary`), per request, which a shared variable would not be once two sessions are
+ * dispatched at once. The lease the boundary resolves carries no dispose, so
  * the end of the request leaves the agent open (D2).
  */
 export function chatSessions(options: ChatSessionsOptions): {
@@ -115,7 +114,15 @@ export function chatSessions(options: ChatSessionsOptions): {
     }
     return done
   }
-  const currentEvent = new AsyncLocalStorage<MessageEvent>()
+  const container = new Container()
+  // The request's event: the seed of the request scope `withAgent` opens, undefined outside one.
+  const currentEvent = (): MessageEvent | undefined => {
+    try {
+      return container.requestSeed<MessageEvent>()
+    } catch {
+      return undefined
+    }
+  }
   const thinking = new Map<string, ThinkingLevel>()
   // Spread after the channel's options, which carry the instance-wide THEOCLAW_THINKING, so the session's level wins.
   const thinkingExtra = (key: string): AgentOptions & { thinking?: ThinkingLevel } => {
@@ -129,7 +136,7 @@ export function chatSessions(options: ChatSessionsOptions): {
     // those keys are re-pinned, `local` merged so the session's cwd and the hook gate both hold (B-397).
     getOrCreate: async (id, sessionOptions) => {
       const dir = sessionOptions.local?.sessionDir
-      const scope = scopeOf(currentEvent.getStore(), owners)
+      const scope = scopeOf(currentEvent(), owners)
       await importLegacy(scope)
       const backendOptions = (await memory?.agentOptions()) ?? {}
       const build = (agentId: string, extra: AgentOptions): Promise<SessionAgent> =>
@@ -180,12 +187,9 @@ export function chatSessions(options: ChatSessionsOptions): {
     settings,
     write: options.write,
   })
-  const boundary = createContainer<SessionLease>({
-    factory: () => {
-      const event = currentEvent.getStore()
-      if (event === undefined) throw new Error('a chat agent was resolved outside a message')
-      return sessions.lease(event)
-    },
+  const boundary = createAgentBoundary<MessageEvent, SessionLease>({
+    container,
+    factory: (event) => sessions.lease(event),
   })
   return {
     sessions,
@@ -195,7 +199,7 @@ export function chatSessions(options: ChatSessionsOptions): {
       thinking.set(router.resolveAgentId(event), level)
       sessions.rebuild(event)
     },
-    withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)),
+    withAgent: (event, work) => boundary.withAgent(event, work),
   }
 }
 
