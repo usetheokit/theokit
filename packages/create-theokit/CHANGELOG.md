@@ -1,5 +1,14 @@
 # create-theo
 
+## 3.2.2
+
+### Patch Changes
+
+- The scaffold's pins now match what this release publishes, so a project created from it
+  installs the version just cut rather than the previous one:
+
+  - @theokit/agents: ^17.1.0 -> ^17.2.0
+
 ## 3.2.1
 
 ### Patch Changes

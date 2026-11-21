@@ -1,6 +1,6 @@
 // B-396 — where the framework's scheduler meets the product: the store under the workspace, a run
 // port over a read-only worker agent, and a delivery port over the adapters the channel loop has
-// connected. The only module of the app that builds a `DeliveryRouter`.
+// connected. The scheduler's deliver port is the framework's `gatewayDeliverPort`.
 import { join } from 'node:path'
 
 import {
@@ -13,8 +13,7 @@ import {
   type RunPort,
   type Scheduler,
 } from '@theokit/agents/tools'
-import { DeliveryRouter } from '@theokit/gateway'
-import type { PlatformName } from '@theokit/gateway'
+import { gatewayDeliverPort } from '@theokit/gateway-agent'
 import type { CustomTool } from '@theokit/sdk'
 
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
@@ -92,34 +91,23 @@ function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPo
 }
 
 /**
- * Deliver through a `DeliveryRouter` built at each send from the adapters connected by then, so a
- * platform that connects after the start is reached. The text is masked first, as a chat reply and a
- * broadcast answer are (OC-90), so a configured value never reaches a channel. An adapter that throws
- * is reported as `adapter_threw`: `DeliveryRouter.send` does not catch it.
+ * Deliver through the framework's `gatewayDeliverPort`, which reads the adapters connected by the
+ * time of each send, so a platform that connects after the start is reached. The text is masked
+ * first, as a chat reply and a broadcast answer are (OC-90). The local inbox is TheoClaw's own.
  */
 function createDeliverPort(
   loop: Pick<ChannelLoop, 'started'>,
   secrets: readonly string[] = [],
   inbox?: ScheduleInbox,
 ): DeliverPort {
+  const gateway = gatewayDeliverPort(() => [...loop.started.values()].map(({ adapter }) => adapter), { secrets })
   return async (target, text) => {
     if (target.platform === INBOX_PLATFORM && inbox !== undefined) {
       return (await inbox.add(target.channelId, text))
         ? { ok: true }
         : { ok: false, error: { code: 'inbox_write_failed' } }
     }
-    const router = new DeliveryRouter()
-    for (const { adapter } of loop.started.values()) router.register(adapter)
-    try {
-      return await router.send({
-        platform: target.platform as PlatformName,
-        // As the broadcast send does: a scheduled answer goes to a channel, not a reply thread.
-        channel: { id: target.channelId, type: 'group' },
-        text: maskSecrets(text, secrets),
-      })
-    } catch {
-      return { ok: false, error: { code: 'adapter_threw' } }
-    }
+    return gateway(target, text)
   }
 }
 

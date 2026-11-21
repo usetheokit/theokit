@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import type { Writable } from 'node:stream'
 
+import { credentialShape, describeCredentialDefect, diagnose, renderDiagnosis, type Check } from '@theokit/agents/doctor'
+
 import { auditConfiguration, fixFindings } from '../security-audit.js'
 import { configurationPath, loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -19,19 +21,10 @@ export interface DoctorIo {
   readonly stdout: Writable
 }
 
-const PLACEHOLDER = /^(changeme|change-me|your[-_ ].*|xxx+|<.*>|\.\.\.|todo|none|null|undefined)$/i
-const MIN_KEY_LENGTH = 8
-
 /** What is wrong with a credential's shape, or undefined. The text never holds the credential. */
 export function credentialDefect(value: string): string | undefined {
-  if (value !== value.trim()) return 'has leading or trailing whitespace'
-  if (/\s/.test(value)) return 'contains whitespace'
-  if (/["'`\\]/.test(value)) return 'contains a quote or backslash'
-  // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f]/.test(value)) return 'contains a control character'
-  if (PLACEHOLDER.test(value)) return 'is a placeholder'
-  if (value.length < MIN_KEY_LENGTH) return `is shorter than ${MIN_KEY_LENGTH} characters`
-  return undefined
+  const defect = credentialShape(value)
+  return defect === 'ok' ? undefined : describeCredentialDefect(defect)
 }
 
 const KEYS = ['THEOKIT_API_KEY', 'OPENROUTER_API_KEY']
@@ -63,39 +56,47 @@ function repair(io: DoctorIo): string[] {
   return lines
 }
 
-export function doctor(io: DoctorIo, options: { readonly fix?: boolean } = {}): number {
+/** TheoClaw's checks, in report order; aggregation and rendering belong to `@theokit/agents/doctor`. */
+export function doctorChecks(io: DoctorIo): Check[] {
   const env: NodeJS.ProcessEnv = { ...io.env }
-  if (options.fix === true) for (const line of repair(io)) io.stdout.write(`${line}\n`)
-  const failures: string[] = []
+  const checks: Check[] = []
+  const fail = (name: string, detail: string): void => {
+    checks.push({ name, status: 'fail', detail })
+  }
   let path = configurationPath(env, io.homeDir)
   try {
     path = loadConfiguration(env, io.homeDir) ?? path
+    checks.push({ name: 'config', status: 'ok', detail: path })
   } catch (error) {
-    failures.push((error as TheoClawConfigError).message)
+    checks.push({ name: 'config', status: 'fail', detail: `${path}: ${(error as TheoClawConfigError).message}` })
   }
-  io.stdout.write(`config: ${path}\n`)
   try {
     requireModel(env)
+    checks.push({ name: 'model', status: 'ok', detail: 'the model settings are readable' })
   } catch (error) {
-    failures.push(error instanceof TheoClawConfigError ? error.message : 'the model settings cannot be read')
+    fail('model', error instanceof TheoClawConfigError ? error.message : 'the model settings cannot be read')
   }
   const stateDir = (env.THEOCLAW_STATE_DIR ?? '').trim()
-  if (stateDir !== '' && !existsSync(stateDir)) failures.push('THEOCLAW_STATE_DIR names a directory that does not exist (fixable with --fix)')
+  if (stateDir !== '' && !existsSync(stateDir)) fail('state', 'THEOCLAW_STATE_DIR names a directory that does not exist (fixable with --fix)')
   for (const key of KEYS) {
     const value = env[key]
     const defect = value === undefined || value.trim() === '' ? undefined : credentialDefect(value)
-    if (defect !== undefined) failures.push(`${key} ${defect}`)
+    if (defect !== undefined) fail('credential', `${key} ${defect}`)
   }
-  failures.push(...checkPolicy(env, path))
-  const warnings = (() => {
-    try {
-      return auditConfiguration(io.env, io.homeDir).map((finding) => `${finding.id}: ${finding.message}`)
-    } catch {
-      return []
+  for (const line of checkPolicy(env, path)) fail('policy', line)
+  try {
+    for (const finding of auditConfiguration(io.env, io.homeDir)) {
+      checks.push({ name: 'security', status: 'warn', detail: `${finding.id}: ${finding.message}` })
     }
-  })()
-  for (const line of warnings) io.stdout.write(`warn  ${line}\n`)
-  for (const line of failures) io.stdout.write(`fail  ${line}\n`)
-  if (failures.length === 0) io.stdout.write('ok    the configuration can start a turn\n')
-  return failures.length === 0 ? 0 : 3
+  } catch {
+    // an unreadable configuration is reported by the config check
+  }
+  return checks
+}
+
+export function doctor(io: DoctorIo, options: { readonly fix?: boolean } = {}): number {
+  if (options.fix === true) for (const line of repair(io)) io.stdout.write(`${line}\n`)
+  const diagnosis = diagnose(doctorChecks(io))
+  io.stdout.write(`${renderDiagnosis(diagnosis)}\n`)
+  return diagnosis.exitCode === 0 ? 0 : 3
 }

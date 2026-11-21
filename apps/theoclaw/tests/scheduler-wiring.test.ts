@@ -305,7 +305,7 @@ describe('wireScheduler', () => {
     const { scheduler } = await start(new AnsweringAgent('hello there'))
     await scheduler.add(job())
     expect(await scheduler.fire('job-1')).toBe('delivered')
-    expect(telegram.sent).toEqual([{ channel: { id: '42', type: 'group' }, text: 'hello there' }])
+    expect(telegram.sent).toEqual([{ channel: { id: '42', type: 'group' }, text: 'hello there', format: 'plain' }])
     expect(lines[0]).toBe('scheduler: 0 jobs, heartbeat off')
   })
 
@@ -358,7 +358,22 @@ describe('wireScheduler', () => {
     const { scheduler } = await start(new AnsweringAgent('hello'))
     await scheduler.add(job('slack'))
     expect(await scheduler.fire('job-1')).toBe('undelivered')
-    expect(lines).toContain('scheduler: job news: slack: no_adapter')
+    expect(lines).toContain('scheduler: job news: slack: not_started')
+    expect(store.get('job-1')?.previousOutput).toBe('hello')
+  })
+
+  it('reports adapter_threw and keeps the output when the adapter throws on send', async () => {
+    connect(
+      new FakeAdapter('telegram', {
+        send: () => {
+          throw new Error('socket closed')
+        },
+      }),
+    )
+    const { scheduler } = await start(new AnsweringAgent('hello'))
+    await scheduler.add(job())
+    expect(await scheduler.fire('job-1')).toBe('undelivered')
+    expect(lines).toContain('scheduler: job news: telegram: adapter_threw')
     expect(store.get('job-1')?.previousOutput).toBe('hello')
   })
 

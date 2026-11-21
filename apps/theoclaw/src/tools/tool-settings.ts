@@ -16,7 +16,7 @@ import { computerLine, readComputer } from './computer-settings.js'
 import type { ComputerDeps, ComputerSettings } from './computer-settings.js'
 import { externalToolPaths, resolveExternalTools } from './external-tools.js'
 import type { ExternalTools } from './external-tools.js'
-import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
+import { isWithin, resolveRealPath, SymlinkLoopError } from '@theokit/agents/tool-scope'
 
 /** Where web search goes, chosen from the keys present at start. */
 export interface SearchSettings {
@@ -393,7 +393,7 @@ function refuseWorkspaceUnderWritableRoot(settings: ToolSettings, roots: readonl
 function refuseWritableProtectedPath({ path, variable }: ProtectedPath, roots: readonly string[]): void {
   let real: string
   try {
-    real = realPathOf(path)
+    real = resolveRealPath(path)
   } catch (error) {
     if (!(error instanceof SymlinkLoopError)) throw error
     throw new TheoClawConfigError(`THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: ${error.message}`, { variable })
