@@ -5,20 +5,31 @@ import type { Plugin, PreToolCallContext } from '@theokit/sdk'
 import { isWithin, resolveRealPath } from './real-path.js'
 import type { ToolScope } from './tool-scope.js'
 
+type GeneralPlugin = Extract<Plugin, { kind: 'general' }>
+
 /** The `apply_patch` headers that name a file the patch writes, moves or deletes. */
 // `[^\n]*`, not `.*`: the patch parser splits lines on `\n` only, and `.` stops at U+2028.
 const PATCH_DESTINATION = /^\*\*\* (?:Add File|Update File|Delete File|Move to): ([^\n]*)/gm
 
 const DEFAULT_PATH_KEYS: readonly string[] = ['path', 'file_path', 'filename', 'paths']
 
-interface VetoOptions {
+export interface PathVetoOptions {
   readonly pathKeys?: readonly string[]
   readonly caseFold?: boolean
+  /** The start of every refusal. Default `path veto: `. */
+  readonly prefix?: string
+  /** The words for a path that enters a protected path. Default names the protected path. */
+  readonly enters?: (value: string, protectedPath: string) => string
 }
 
 class MalformedArgument extends Error {}
 
-function checkPath(value: unknown, scope: ToolScope, caseFold: boolean): string | undefined {
+function checkPath(
+  value: unknown,
+  scope: ToolScope,
+  caseFold: boolean,
+  enters: PathVetoOptions['enters'],
+): string | undefined {
   if (typeof value !== 'string' || value === '' || value.includes('\u0000')) {
     throw new MalformedArgument('a path argument must be a non-empty string without a NUL byte')
   }
@@ -26,7 +37,7 @@ function checkPath(value: unknown, scope: ToolScope, caseFold: boolean): string 
   for (const protectedPath of scope.protectedPaths) {
     // The protected directory is resolved too, so a symlinked protected directory is covered.
     if (isWithin(real, resolveRealPath(protectedPath), { caseFold })) {
-      return `${value} enters the protected path ${protectedPath}`
+      return enters?.(value, protectedPath) ?? `${value} enters the protected path ${protectedPath}`
     }
   }
   return undefined
@@ -39,7 +50,12 @@ const PATHSPEC_GLOB = /[*?[\\]/
  * `git_diff` takes a pathspec, not a path: `.` or an ancestor directory selects a protected
  * directory beneath it, and a wildcard can select one by name. Refuse both.
  */
-function checkGitPathspec(value: string, scope: ToolScope, caseFold: boolean): string | undefined {
+function checkGitPathspec(
+  value: string,
+  scope: ToolScope,
+  caseFold: boolean,
+  enters: PathVetoOptions['enters'],
+): string | undefined {
   if (PATHSPEC_GLOB.test(value)) return `git_diff path ${value} may not contain wildcards`
   const real = resolveRealPath(resolve(scope.projectRoot, value))
   for (const protectedPath of scope.protectedPaths) {
@@ -47,7 +63,7 @@ function checkGitPathspec(value: string, scope: ToolScope, caseFold: boolean): s
       return `git_diff path ${value} covers the protected path ${protectedPath}`
     }
   }
-  return checkPath(value, scope, caseFold)
+  return checkPath(value, scope, caseFold, enters)
 }
 
 function pathArguments(args: Record<string, unknown>, keys: readonly string[]): unknown[] {
@@ -73,7 +89,7 @@ function judge(
   scope: ToolScope,
   name: string,
   rawArgs: unknown,
-  options: VetoOptions,
+  options: PathVetoOptions,
 ): string | undefined {
   if (typeof rawArgs !== 'object' || rawArgs === null) {
     throw new MalformedArgument('the arguments are not an object')
@@ -89,25 +105,31 @@ function judge(
       return 'git_diff needs a path inside the tool root, with no pathspec magic'
     }
     // Always checked, whatever `pathKeys` says.
-    const verdict = checkGitPathspec(path, scope, caseFold)
+    const verdict = checkGitPathspec(path, scope, caseFold, options.enters)
     if (verdict !== undefined) return verdict
   }
   const candidates =
     name === 'apply_patch' ? patchDestinations(args.patch) : pathArguments(args, keys)
   for (const candidate of candidates) {
-    const verdict = checkPath(candidate, scope, caseFold)
+    const verdict = checkPath(candidate, scope, caseFold, options.enters)
     if (verdict !== undefined) return verdict
   }
   return undefined
 }
 
-function verdictOf(scope: ToolScope, name: string, args: unknown, options: VetoOptions): string {
+function verdictOf(
+  scope: ToolScope,
+  name: string,
+  args: unknown,
+  options: PathVetoOptions,
+): string {
+  const prefix = options.prefix ?? 'path veto: '
   try {
     const message = judge(scope, name, args, options)
-    return message === undefined ? '' : `path veto: ${message}`
+    return message === undefined ? '' : `${prefix}${message}`
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
-    return `path veto: refused a malformed tool call: ${reason}`
+    return `${prefix}refused a malformed tool call: ${reason}`
   }
 }
 
@@ -116,8 +138,13 @@ function verdictOf(scope: ToolScope, name: string, args: unknown, options: VetoO
  * Never throws; a malformed argument or an unresolvable path is a refusal. Use it for calls that
  * skip the plugin chain.
  */
-export function vetoPathCall(scope: ToolScope, name: string, args: unknown): string | undefined {
-  return verdictOf(scope, name, args, {}) || undefined
+export function vetoPathCall(
+  scope: ToolScope,
+  name: string,
+  args: unknown,
+  options: PathVetoOptions = {},
+): string | undefined {
+  return verdictOf(scope, name, args, options) || undefined
 }
 
 /**
@@ -125,7 +152,10 @@ export function vetoPathCall(scope: ToolScope, name: string, args: unknown): str
  * destination resolving (symlinks followed) into one of the scope's `protectedPaths`, and an
  * unscoped `git_diff`. Every failure becomes a block, never a throw.
  */
-export function createPathVetoPlugin(scope: ToolScope, options: VetoOptions = {}): Plugin {
+export function createPathVetoPlugin(
+  scope: ToolScope,
+  options: PathVetoOptions = {},
+): GeneralPlugin {
   return {
     kind: 'general',
     name: 'theokit-path-veto',
