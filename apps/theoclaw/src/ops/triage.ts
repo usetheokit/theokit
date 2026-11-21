@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
 
@@ -95,11 +95,16 @@ export async function triageCommand(args: readonly string[], io: TriageIo): Prom
     return 1
   }
   if (secrets.some((secret) => promptText.includes(secret))) return refused()
+  const created = !existsSync(outDir)
   mkdirSync(outDir, { recursive: true })
   try {
     await writeDiagnosticBundle({ out: join(outDir, archiveName), files, secrets })
   } catch (error) {
-    if (error instanceof DiagnosticBundleError && error.reason === 'secret_survived') return refused()
+    if (error instanceof DiagnosticBundleError && error.reason === 'secret_survived') {
+      // Leave no empty directory behind a refusal that this run created.
+      if (created) rmSync(outDir, { recursive: true, force: true })
+      return refused()
+    }
     throw error
   }
   writeFileSync(join(outDir, promptName), promptText, { mode: 0o600 })
