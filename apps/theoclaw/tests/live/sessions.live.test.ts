@@ -88,6 +88,10 @@ function watched(agent: SessionAgent, runs: RunRecord[]): SessionAgent {
 async function startLive(workspace: string) {
   const { startTheoClaw } = await import('../../src/composition.js')
   const runs: RunRecord[] = []
+  // Memory lives in the state directory and is shared by every owner; without one of its own it is
+  // ~/.theokit/theoclaw/memory, where the code words of other cases and earlier runs are recalled as facts.
+  const stateDir = `${workspace}-state`
+  workspaces.push(stateDir)
   const signals = new EventEmitter()
   const exit = vi.fn()
   const output = capturingStream()
@@ -100,6 +104,7 @@ async function startLive(workspace: string) {
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
       THEOCLAW_PORT: '0',
       THEOCLAW_WORKSPACE: workspace,
+      THEOCLAW_STATE_DIR: stateDir,
       THEOCLAW_TRANSCRIPTS: 'on',
       THEOCLAW_TELEGRAM_TOKEN: 'live-stand-in-telegram-token',
       // Every start names its owners (B-371); each live sender is one, so a group answers it too, and
