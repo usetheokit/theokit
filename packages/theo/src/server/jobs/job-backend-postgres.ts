@@ -445,6 +445,10 @@ export class PostgresJobBackend implements JobBackend {
     // id before the UPDATE landed: 20 workers over 200 jobs leased 162 to 178 of them more than once
     // (usetheokit/theokit#1011). Inside one UPDATE the subquery's lock is held until the lease is
     // written, so a concurrent worker skips the row instead of claiming it again.
+    // The pick is an uncorrelated ARRAY(subquery), which Postgres runs once as an InitPlan. As
+    // `WHERE id IN (subquery)` it may plan a nested loop semi join that runs the subquery again for
+    // every outer row, and SKIP LOCKED then picks the next job each time: a dequeue of one leased
+    // every due job (usetheokit/theokit#2457).
     const r = await this.#pool.query<{
       id: string
       name: string
@@ -461,7 +465,7 @@ export class PostgresJobBackend implements JobBackend {
            leased_at = COALESCE(leased_at, NOW()),
            lease_token = $3,
            held_from = NULL
-       WHERE id IN (
+       WHERE id = ANY(ARRAY(
          SELECT id FROM ${t}
          WHERE (locked_until IS NULL OR locked_until < NOW())
            AND available_at <= NOW()
@@ -469,7 +473,7 @@ export class PostgresJobBackend implements JobBackend {
          ORDER BY available_at ASC
          LIMIT $1
          FOR UPDATE SKIP LOCKED
-       )
+       ))
        RETURNING id, name, input, attempts, max_attempts, traceparent, locked_until, lease_token`,
       [batchSize, lockSeconds.toString(), randomId()],
     )
