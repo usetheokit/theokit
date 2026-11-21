@@ -730,8 +730,8 @@ importers:
         specifier: ^1.15.41
         version: 1.15.41(@swc/helpers@0.5.23)
       '@theokit/di':
-        specifier: 0.2.1
-        version: 0.2.1(reflect-metadata@0.2.2)
+        specifier: 0.3.1
+        version: 0.3.1(reflect-metadata@0.2.2)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -3372,12 +3372,6 @@ packages:
     peerDependencies:
       '@theokit/di': '>=0.3.0 <0.4'
       '@theokit/sdk': 5.32.0
-      reflect-metadata: ^0.2.0
-
-  '@theokit/di@0.2.1':
-    resolution: {integrity: sha512-QD2bKytgwMI019uRm9CkM97u9Nml9X7QZ7imwVX4FpIp/iZZN6sqETz31IOheTJAkI6qrwXBBsQnn7SWqK4DTA==}
-    engines: {node: '>=22.12.0'}
-    peerDependencies:
       reflect-metadata: ^0.2.0
 
   '@theokit/di@0.3.1':
@@ -11156,10 +11150,6 @@ snapshots:
     dependencies:
       '@theokit/di': 0.3.1(reflect-metadata@0.2.2)
       '@theokit/sdk': 5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
-      reflect-metadata: 0.2.2
-
-  '@theokit/di@0.2.1(reflect-metadata@0.2.2)':
-    dependencies:
       reflect-metadata: 0.2.2
 
   '@theokit/di@0.3.1(reflect-metadata@0.2.2)':
