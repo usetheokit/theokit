@@ -99,6 +99,8 @@ process.exitCode = result.exitCode
 
 `parseClaudeHooks(raw, { aliases? })` (from `./hooks`) turns the `hooks` object of a Claude Code `.claude/settings.json` (`{ "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "...", "timeout": 5 }] }] }`) into `{ specs, dropped }`. Each group is flattened to one spec per command, `timeout` seconds become `timeout_ms`, and a `"*"` matcher becomes no matcher. Every spec is validated with `hookSpecSchema`, so a command with control characters is refused. Anything skipped (unknown event, non-command hook, non-object group or entry, invalid spec) gets one line in `dropped`. Events map through `CLAUDE_HOOK_EVENT_ALIASES` (`PreToolUse` to `pre_tool_call`, `PostToolUse` to `transform_tool_result`, `Stop` to `post_assistant_reply`, `SessionStart` to `on_session_start`); pass `aliases` to override, and map a name to `null` for an event this engine does not deliver. Fingerprints are computed on the translated spec, so `HookApprovalStore` works unchanged. `buildHookHandlers({ projectDirEnv: 'CLAUDE_PROJECT_DIR' })` sets that variable to `cwd` in each hook process.
 
+`DEFAULT_PROVIDERS` (used by `resolveAgentCredential`) comes from the SDK provider table, `DEFAULT_PROVIDER_CANDIDATES` in `@theokit/sdk/auth`: env var names and the default order are the SDK's, not a second table in this package. Pass `providers` to narrow or extend it.
+
 `AuthProvider.ensureFresh` throws `RefreshFailure` (exported from `./auth`) when a token refresh fails. It is a `TheokitAgentError` with `code: 'oauth_refresh_failed'`, `isRetryable` equal to `.transient`, and the original error as `cause`, so the SDK's `isTransientError(err)` is `true` for a network reset and `false` for `invalid_grant`.
 
 `loginWithApiKey(key, store, { provider?, overwrite?, env? })` (from `./auth`) trims the key, infers the provider from its prefix when none is given, and writes the credential file, returning `{ provider, path }`. It throws `CredentialError` for an empty key or an unknown prefix without a provider, `ProviderPrefixMismatchError` when the declared provider contradicts the prefix, and `CredentialExistsError` (`code: 'credential_exists'`, names the path) when a file exists and `overwrite` is not set. `logout(store, env?)` removes the file and returns whether there was one; a concurrent removal returns `false`.
@@ -402,6 +404,26 @@ is never inherited. Leave the event unwired in the loop handlers so it is not de
 ## Code mode and plugin hooks
 
 `createCodeMode` (from `@theokit/agents/code-mode`) runs each `api.<name>(input)` call of a script through `onPermissionRequest`. Pass `plugins` to also run their `pre_tool_call` hooks on every script call, after `onPermissionRequest`, so a path veto or approval gate that guards normal calls guards code mode too. A hook that returns `{ block: true, message }` refuses the call with that message; a hook that throws refuses it as well, and the handler never runs. `hookContext: { agentId, runId? }` becomes the `agentId` and `runId` of the hook context. Without `plugins` nothing changes.
+
+## Blocking values copied from untrusted tool output
+
+`createProvenanceGuard(options?)` from `@theokit/agents/bridge` returns an SDK plugin that refuses a
+tool call whose argument was copied from untrusted output unless the person also said it. It
+remembers the output of untrusted tools (default `web_fetch`, `web_search`, `mcp_*`) on
+`post_tool_call`, the output of every other tool and the person's messages as trusted, and on
+`pre_tool_call` scans every string in the arguments (nested objects and arrays too) for runs of
+`minRun` (default 8) or more characters from `[A-Za-z0-9_\-.:/@#+=%]` that contain a digit or
+punctuation. A run found in an untrusted output and in no trusted text blocks the call. Untrusted
+tools are never blocked, so a search followed by a fetch still runs. Options: `untrustedSources`
+(names or a predicate), `minRun`, `keep` (texts kept per list, default 50) and
+`message(toolName, run)`.
+
+State is per instance: the remembered texts live in the plugin, so one instance shared by several
+agents or sessions mixes their conversations. Create one per agent or session.
+
+Blind spots: a value shorter than `minRun`, a plain lowercase word, and a value the model reformatted
+are not checked; only the last `keep` texts of each kind are remembered, so an older output is
+forgotten; the system prompt is not visible to a plugin, and only a tool result's `stdout` is read.
 
 ## Hooks for a child agent
 

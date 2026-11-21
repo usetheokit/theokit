@@ -7,6 +7,8 @@ import { mkdtempSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
+import { EventEmitter } from 'node:events'
+
 import { afterAll, describe, expect, it } from 'vitest'
 
 /**
@@ -22,7 +24,7 @@ afterAll(() => {
   for (const r of roots) rmSync(r, { recursive: true, force: true })
 })
 
-import { startSessionSweepInBackground } from '../../../src/session/gc/auto-runtime.js'
+import { startSessionSweepInBackground } from '../../../src/session/gc/sweep-wiring.js'
 
 function scratchRoot(): string {
   const base = mkdtempSync(join(tmpdir(), 'theocode-bgsweep-'))
@@ -41,23 +43,41 @@ const stampOf = (root: string): string => join(root, '..', '.last-session-gc')
  * entire first-run sentence, the one that tells the operator how to turn deletion off, left the
  * suite green.
  */
-const fakeChild = (): { on: (e: 'close', cb: (c: number | null) => void) => void } => ({
-  on: () => {},
-})
+type SpawnSeam = NonNullable<Parameters<typeof startSessionSweepInBackground>[0]['spawn']>
+interface FakeChild extends EventEmitter {
+  stdout: EventEmitter & { unref: () => void }
+  unref: () => void
+}
 
-const closingWith = (
-  code: number | null,
-): { on: (e: 'close', cb: (c: number | null) => void) => void } => ({
-  on: (_event, cb) => {
-    cb(code)
-  },
-})
+/** A child the framework's scheduler can drive: `close` fires with `code` after `said` on stdout. */
+const makeChild = (code: number | null | undefined, said?: string): FakeChild => {
+  const child = new EventEmitter() as FakeChild
+  child.stdout = Object.assign(new EventEmitter(), { unref: () => {} })
+  child.unref = () => {}
+  if (code !== undefined) {
+    queueMicrotask(() => {
+      if (said !== undefined) child.stdout.emit('data', Buffer.from(said))
+      child.emit('close', code)
+    })
+  }
+  return child
+}
+
+const fakeSpawn = (make: (args: readonly string[]) => FakeChild): SpawnSeam =>
+  ((_command: string, args: readonly string[]) => make(args)) as unknown as SpawnSeam
+
+const fakeChild = (): FakeChild => makeChild(undefined)
+const closingWith = (code: number | null): FakeChild => makeChild(code)
+const childSaying = (line: string): FakeChild => makeChild(0, line)
+
+/** Let the queued `close` events run. */
+const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
 describe('startSessionSweepInBackground', () => {
   it('test_it_hands_the_sweep_to_a_child_and_returns_before_that_child_finishes', () => {
     // The finding, as an assertion: 37 s of synchronous sweeping used to happen inside this call.
     //
-    // What proves the delegation is the SEAM, not the clock. `spawnSweep` is injected, so "the work
+    // What proves the delegation is the SEAM, not the clock. `spawn` is injected, so "the work
     // was handed to a child" is a fact this test can read directly; `fakeChild` never fires `close`,
     // so a parent that waited for the sweep to finish could not have returned here at all, and one
     // that reported a finished sweep would have had to invent it.
@@ -82,17 +102,25 @@ describe('startSessionSweepInBackground', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: (cmd) => {
-        handed.push(cmd.args)
+      spawn: fakeSpawn((args) => {
+        handed.push(args)
         return fakeChild()
-      },
+      }),
     })
 
     expect(outcome.started).toBe(true)
-    expect(handed, 'the sweep was never handed to a child — this call did the work itself').toHaveLength(1)
+    expect(
+      handed,
+      'the sweep was never handed to a child — this call did the work itself',
+    ).toHaveLength(1)
     expect(handed[0], 'the child was spawned without the collector subcommand').toContain('gc')
-    expect(reports, 'the call reported a finished sweep before the child had finished one').toEqual([])
-    expect(Date.now() - started, 'the call took longer than the fastest sweep ever measured').toBeLessThan(4_000)
+    expect(reports, 'the call reported a finished sweep before the child had finished one').toEqual(
+      [],
+    )
+    expect(
+      Date.now() - started,
+      'the call took longer than the fastest sweep ever measured',
+    ).toBeLessThan(4_000)
   })
 
   it('test_a_disabled_collector_spawns_nothing_and_stamps_nothing', () => {
@@ -103,10 +131,10 @@ describe('startSessionSweepInBackground', () => {
       enabled: false,
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: () => {
+      spawn: fakeSpawn(() => {
         spawned = true
         return fakeChild()
-      },
+      }),
     })
 
     expect(outcome).toMatchObject({ started: false, reason: 'disabled' })
@@ -123,10 +151,10 @@ describe('startSessionSweepInBackground', () => {
       enabled: true,
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: (cmd) => {
-        args = cmd.args
+      spawn: fakeSpawn((a) => {
+        args = a
         return fakeChild()
-      },
+      }),
     })
 
     expect(args).toContain('gc')
@@ -144,10 +172,10 @@ describe('startSessionSweepInBackground', () => {
       now: new Date('2026-09-05T00:00:00Z'),
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: (cmd) => {
-        args = cmd.args
+      spawn: fakeSpawn((a) => {
+        args = a
         return fakeChild()
-      },
+      }),
     })
 
     expect(args).toContain('--apply')
@@ -162,10 +190,10 @@ describe('startSessionSweepInBackground', () => {
         now,
         onReport: () => {},
         projectsRootOverride: root,
-        spawnSweep: () => {
+        spawn: fakeSpawn(() => {
           spawns += 1
           return fakeChild()
-        },
+        }),
       })
     }
 
@@ -185,9 +213,9 @@ describe('startSessionSweepInBackground', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => {
+      spawn: fakeSpawn(() => {
         throw new Error('EAGAIN')
-      },
+      }),
     })
 
     expect(outcome).toMatchObject({ started: false, reason: 'spawn-failed' })
@@ -196,7 +224,7 @@ describe('startSessionSweepInBackground', () => {
 })
 
 describe('what the operator is told when the child finishes', () => {
-  const reportFor = (opts: { stamped?: string }): string[] => {
+  const reportFor = async (opts: { stamped?: string }): Promise<string[]> => {
     const root = scratchRoot()
     if (opts.stamped !== undefined) writeFileSync(stampOf(root), opts.stamped)
     const reports: string[] = []
@@ -205,30 +233,33 @@ describe('what the operator is told when the child finishes', () => {
       now: new Date('2026-09-05T00:00:00Z'),
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => closingWith(0),
+      spawn: fakeSpawn(() => closingWith(0)),
     })
+    await settle()
     return reports
   }
 
-  it('test_the_first_sweep_says_it_removed_nothing_and_how_to_keep_collection_manual', () => {
+  it('test_the_first_sweep_says_it_removed_nothing_and_how_to_keep_collection_manual', async () => {
     // This sentence is the entire consent story for a default that deletes an operator's
     // transcripts. Losing it is not a cosmetic regression.
-    const text = reportFor({}).join(' ')
+    const text = (await reportFor({})).join(' ')
 
     expect(text).toContain('DRY RUN')
     expect(text, 'the operator was not told how to turn it off').toContain('session_gc = false')
   })
 
-  it('test_a_later_sweep_does_not_repeat_the_first_run_sentence', () => {
+  it('test_a_later_sweep_does_not_repeat_the_first_run_sentence', async () => {
     // Anti-vacuity: printing it every time would satisfy the test above and turn the one message
     // that matters into noise the operator learns to skip.
-    const text = reportFor({ stamped: new Date('2026-09-01T00:00:00Z').toISOString() }).join(' ')
+    const text = (
+      await reportFor({ stamped: new Date('2026-09-01T00:00:00Z').toISOString() })
+    ).join(' ')
 
     expect(text).toContain('background sweep finished')
     expect(text).not.toContain('DRY RUN')
   })
 
-  it('test_a_non_zero_exit_is_reported_rather_than_read_as_success', () => {
+  it('test_a_non_zero_exit_is_reported_rather_than_read_as_success', async () => {
     // A child that died is not a sweep that ran. Reporting "finished" for both is the shape that
     // makes a broken collector look healthy for as long as nobody checks.
     const root = scratchRoot()
@@ -237,9 +268,10 @@ describe('what the operator is told when the child finishes', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => closingWith(1),
+      spawn: fakeSpawn(() => closingWith(1)),
     })
 
+    await settle()
     expect(reports.join(' ')).toContain('exit 1')
   })
 })
@@ -260,18 +292,7 @@ describe('what the operator is told when the child finishes', () => {
  * displaying anything, which is what was wanted all along.
  */
 describe('what the child did reaches the operator', () => {
-  const childSaying = (line: string) => ({
-    stdout: {
-      on: (_e: 'data', cb: (chunk: unknown) => void) => {
-        cb(line)
-      },
-    },
-    on: (_event: 'close', cb: (code: number | null) => void) => {
-      cb(0)
-    },
-  })
-
-  it('test_the_first_sweep_reports_what_it_WOULD_have_removed', () => {
+  it('test_the_first_sweep_reports_what_it_WOULD_have_removed', async () => {
     // B-139's bullet. "Nothing was removed" without "and here is what would have been" tells the
     // operator the collector is harmless, not what it is about to do to them tomorrow.
     const root = scratchRoot()
@@ -281,13 +302,16 @@ describe('what the child did reaches the operator', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => childSaying('DRY-RUN — nothing was removed; use --apply to execute\n'),
+      spawn: fakeSpawn(() =>
+        childSaying('DRY-RUN — nothing was removed; use --apply to execute\n'),
+      ),
     })
 
+    await settle()
     expect(reports.join(' ')).toContain('DRY-RUN')
   })
 
-  it('test_an_applying_sweep_reports_its_counts', () => {
+  it('test_an_applying_sweep_reports_its_counts', async () => {
     // B-132's bullet. "Finished" is not "removed 12", and the difference is the whole point of the
     // requirement.
     const root = scratchRoot()
@@ -299,13 +323,14 @@ describe('what the child did reaches the operator', () => {
       now: new Date('2026-09-05T00:00:00Z'),
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => childSaying('APPLIED — 12 artifact(s) removed\n'),
+      spawn: fakeSpawn(() => childSaying('APPLIED — 12 artifact(s) removed\n')),
     })
 
+    await settle()
     expect(reports.join(' ')).toContain('12')
   })
 
-  it('test_a_silent_child_still_produces_a_report', () => {
+  it('test_a_silent_child_still_produces_a_report', async () => {
     // Anti-vacuity in the direction that matters: if the child says nothing, the parent must still
     // say the sweep happened. Reporting only when there is output would make a broken child
     // indistinguishable from a collector that never ran.
@@ -316,9 +341,10 @@ describe('what the child did reaches the operator', () => {
       enabled: true,
       onReport: (l) => reports.push(l),
       projectsRootOverride: root,
-      spawnSweep: () => ({ on: (_e, cb) => cb(0) }),
+      spawn: fakeSpawn(() => makeChild(0)),
     })
 
+    await settle()
     expect(reports.join(' ')).toContain('sweep')
   })
 })
@@ -347,7 +373,7 @@ describe('the sweep reports what it could not do instead of failing', () => {
         enabled: true,
         onReport: (l) => said.push(l),
         projectsRootOverride: root,
-        spawnSweep: fakeChild,
+        spawn: fakeSpawn(fakeChild),
       })
 
       expect(outcome.started).toBe(false)
@@ -372,11 +398,11 @@ describe('the sweep reports what it could not do instead of failing', () => {
       enabled: true,
       onReport: (l) => said.push(l),
       projectsRootOverride: join(blocker, 'nested', 'projects'),
-      spawnSweep: fakeChild,
+      spawn: fakeSpawn(fakeChild),
     })
 
     expect(outcome.started, 'a stamp that could not be written stopped the collection').toBe(true)
-    expect(said.join(' ')).toContain('could not record the run time')
+    expect(said.join(' ')).toContain('could not write the stamp file')
   })
 
   it('test_a_healthy_run_reports_neither_of_those', () => {
@@ -387,7 +413,7 @@ describe('the sweep reports what it could not do instead of failing', () => {
       enabled: true,
       onReport: (l) => said.push(l),
       projectsRootOverride: scratchRoot(),
-      spawnSweep: fakeChild,
+      spawn: fakeSpawn(fakeChild),
     })
 
     expect(said.join(' ')).not.toContain('could not')
@@ -416,7 +442,7 @@ describe('a stamp that cannot be understood is not a stamp', () => {
       enabled: true,
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: fakeChild,
+      spawn: fakeSpawn(fakeChild),
     })
 
     expect(outcome.started, 'a corrupt stamp stopped the collector').toBe(true)
@@ -433,7 +459,7 @@ describe('a stamp that cannot be understood is not a stamp', () => {
       enabled: true,
       onReport: () => {},
       projectsRootOverride: root,
-      spawnSweep: fakeChild,
+      spawn: fakeSpawn(fakeChild),
     })
 
     expect(outcome.started).toBe(false)

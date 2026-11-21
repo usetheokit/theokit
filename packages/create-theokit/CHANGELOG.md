@@ -1,5 +1,21 @@
 # create-theo
 
+## 3.2.2
+
+### Patch Changes
+
+- The scaffold's pins now match what this release publishes, so a project created from it
+  installs the version just cut rather than the previous one:
+
+  - @theokit/agents: ^17.1.0 -> ^17.2.0
+
+## 3.2.1
+
+### Patch Changes
+
+- 447e2a1: The scaffold integration test accepts a stable caret range of any major version for the `theokit` dependency, so the 1.0.0 promotion no longer fails it.
+- d2885f8: The default template pins `@theokit/sdk` at `^5.32.0`, the floor `theokit` declares for its peer, so a fresh project's lockfile satisfies the peer range.
+
 ## 3.2.0
 
 ### Minor Changes

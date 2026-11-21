@@ -1,4 +1,4 @@
-import type { CustomTool, McpServerConfig, Plugin } from '@theokit/sdk'
+import type { CustomTool, McpServerConfig, MemorySettings, Plugin } from '@theokit/sdk'
 import { createACPTool } from 'theokit/server/agent'
 import { bindToolScope } from '@theokit/agents/tool-scope'
 import { createExtractDocumentTool } from '@theokit/sdk-tools/extract-document'
@@ -48,8 +48,10 @@ export interface AgentToolOptions {
   readonly plugins: readonly Plugin[]
   /** The browser server with `THEOCLAW_BROWSER=on` (B-383) and the MCP servers of `THEOCLAW_EXTERNAL_TOOLS`; absent when neither names one. */
   readonly mcpServers?: Readonly<Record<string, McpServerConfig>>
-  /** Appended to the agent's system prompt: the facts earlier sessions kept (OC-56); absent adds nothing. */
+  /** Appended to the agent's system prompt; absent adds nothing. */
   readonly systemPromptSuffix?: string
+  /** SDK memory for this agent; absent leaves it off (`theoClawAgentOptions` owns that default). */
+  readonly memory?: MemorySettings
 }
 
 /** One `createACPTool` per agent of the external tools file, each run in the tool root without the host secrets. */

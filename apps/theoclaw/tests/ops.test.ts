@@ -185,6 +185,14 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     expect(await runCli(['doctor'], ok.h.io)).toBe(0)
   })
 
+  it('doctor reports warnings without failing and prints no credential', async () => {
+    const { h, path } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    chmodSync(path, 0o644)
+    expect(await runCli(['doctor'], h.io)).toBe(0)
+    expect(h.stdout()).toContain('SA-001')
+    expect(h.stdout()).not.toContain(KEY)
+  })
+
   it('doctor refuses an unknown flag', async () => {
     const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
     expect(await runCli(['doctor', '--force'], h.io)).toBe(2)

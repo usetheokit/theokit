@@ -16,8 +16,28 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Changed
+
+- The standalone consumer has `standalone/released.json` and `tools/sync-standalone.mjs` (`--check` / `--write`); `pnpm check:standalone` (drift check, frozen install, `standalone/auth.test.mjs`) now runs before `pnpm release` and `pnpm version-packages` (#2334).
+- Session tests write their pointer under a temporary directory and drain pending writes before cleanup, so no `could not persist the session pointer` diagnostics appear.
+- `/memory` and `/memory forget <n>` use the SDK's `listMemoryFacts` / `removeMemoryFact` (SDK 5.32.0); the local `memory-facts.ts` parser is removed.
+- **Backtrack, session delete and the background sweep now use the framework (#1924).** Backtrack
+  previews and forks go through `listUserTurns` / `forkBeforeUserTurn`, session delete through
+  `deleteSession` (its registry outcome is still measured from the listing, and the TUI-pointer
+  refusal stays here, checked first), and the daily background sweep through `scheduleSessionSweep`;
+  `gc/auto.ts`, `auto-runtime.ts`, `spawn-sweep.ts` and `guarded-start.ts` are gone (their wiring is
+  `gc/sweep-wiring.ts`). A backtrack index past the last turn is now the framework's error, not a
+  `RangeError`. The sweep's child is now detached (own process group, so it survives the terminal
+  closing) and a stamp that cannot be written is reported with the framework's wording. The
+  cross-project collector (`gc/all-sessions*`, `filesystem`, `root-claim`, `root-ownership`) stays:
+  `planProjectsGC` keeps a live project whole unless the caller declares its cwd list complete, which
+  TheoCode cannot enumerate, and the framework's ownership marker is not TheoCode's.
+
 ### Fixed
 
+- `theocode login` refuses again a key that does not belong to the chosen provider, such as `invalid` for `--provider anthropic`, and keeps the stored credential. Since `@theokit/agents` builds its provider defaults from the SDK table, they carry no key prefix, so the check passed every key; it now asks the SDK which vendor a key belongs to (#2500).
+- The sweep's spawn-options test removes its temporary directory through `tempRoot`, so
+  `no-leaked-temp-dirs.test.ts` passes on the promotion pull request (#2489).
 - The standalone consumer pins `@theokit/sdk` at 5.32.0 again, in step with the real manifests, so
   `tools/standalone-consumer.test.mjs` passes on the promotion pull request (#2467).
 - The workspace manifests declare `@theokit/agents` as `workspace:*` rather than an exact
@@ -25,14 +45,10 @@ for `release.yml` in this repository will not find it, and should not have been 
   The released version the standalone build installs stays pinned in `standalone/`.
 
 - `sessions gc` (current project) awaits the framework's async `planTranscriptGC`; it was reading a
-  promise as the plan. A transcript that a registry entry owns is removed under that entry's id; a
-  framework id that names a registered session owning a different file (a fork's source) is dropped,
-  so the source is never removed. Every other framework id is passed through unchanged. The local
-  legacy-name filter and the local re-planning of unreadable transcripts are gone: `sessions gc`
-  relies on the framework's `planTranscriptGC`/`runTranscriptGC` alone. **Consequence: GC can now
-  delete the 4.x-named (`<id>.jsonl`) transcript of a live session**, because the framework protects
-  only the hashed name; the three legacy-protection tests are `it.fails` until the framework covers
-  it. The owner can accept this or require a framework fix (#2410, #2444).
+  promise as the plan. A transcript that a registry entry owns is removed under that entry's id, a
+  fork's first row never names its source for removal, and a transcript whose id cannot be read is
+  **kept** and reported, not unlinked as an orphan. The legacy-named (`<id>.jsonl`) transcript of a
+  live session stays protected. (#2410)
 - The cross-project collector (`gc/all-sessions*`, `filesystem`, `auto*`, `spawn-sweep`,
   `guarded-start`) is not yet moved onto the framework's `planProjectsGC`, `scheduleSessionSweep` and
   `claimCollectorRoot`: they are in the workspace `@theokit/agents` 16.12.0 source but not in the
@@ -55,7 +71,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ### Changed
 - **Delegation uses the framework's cap, disposal and hook helpers (#1926).** `delegate_to_team` runs under `withClockCap` and `withEphemeralAgent`, so a squad that hits the 15-minute cap has its members disposed at once; the error text is unchanged. A role's `model` from its file now survives registration through `.subagents()`. Hooks reach squad members and the reviewer through `hooksForChild`, so a `pre_tool_call` hook now sees the member's real `agentId` and `runId` instead of `squad-member`. `delegation-cap.ts`, `hooks-for-member.ts` and `disposeMembers` are gone. The review parser, the goal tool and the goal store stay local for now.
 - **`skill_read` now serves exactly the skills the `<skills>` block lists, and output styles load through the framework (#1925).** The chat agent declares `.skills(…, { read: 'advertised' })`, so the framework reads the SDK's own skills manager and the trust gate decides what is readable; the product's `readable-skills.ts` and `bundle-skill-roots.ts` are gone. A skill on disk that no configuration enables (and that is not one of the operator's `~/.theokit/skills`) is no longer readable by name — it was never listed. The operator's `~/.theokit/skills` are now enabled by name alongside the inline copy, so they appear in the block. Output styles use `loadOutputStyle` and `applyOutputStyle` from `@theokit/agents/config`; a configured style with no file still falls back to the built-in instructions, and `doctor` reports it.
-- **`sessions gc` now plans with `planTranscriptGC` / `runTranscriptGC` from `@theokit/agents/session`.** The local planner (`gc/per-session.ts`) is gone. `--keep-last` or `--max-age-days` below 1 is refused with the framework's `GCFloorError` message instead of a `RangeError` (or, for `--keep-last 0`, accepted). The newest session, a session with a writer lease, the session `<cwd>/.theokit/tui-session` names and registered sessions are never collected. The report no longer prints `pointer=`/`most-recent=`/`registry|orphan`, and `--json` drops `pointer` and `mostRecent` and adds `keptReasons`. The legacy-named (`<id>.jsonl`) transcript of a live session is NOT protected by the framework (see Unreleased/Fixed). A fork is collected under its own session id, never its source's: a fork with no registry entry is reported by transcript path, and `--json` `removed` lists removed ids and orphaned paths together. (#1918)
+- **`sessions gc` now plans with `planTranscriptGC` / `runTranscriptGC` from `@theokit/agents/session`.** The local planner (`gc/per-session.ts`) is gone. `--keep-last` or `--max-age-days` below 1 is refused with the framework's `GCFloorError` message instead of a `RangeError` (or, for `--keep-last 0`, accepted). The newest session, a session with a writer lease, the session `<cwd>/.theokit/tui-session` names and registered sessions are never collected. The report no longer prints `pointer=`/`most-recent=`/`registry|orphan`, and `--json` drops `pointer` and `mostRecent` and adds `keptReasons`. The legacy-named (`<id>.jsonl`) transcript of a registered session or of the TUI pointer's session is also kept. A fork is collected under its own session id, never its source's: a fork with no registry entry is reported by transcript path, and `--json` `removed` lists removed ids and orphaned paths together. (#1918)
 - **`AgentDefinitionLike` no longer declares `model?: string`.** The framework's `SubagentAgentDefinition` now takes `model` as `ModelSelection | 'inherit'`, so the string field no longer type-checked against `.subagents()`. `definitionFrom` never set it. (#1858)
 - **The SDK builtin `shell` is withheld from the chat agent instead of refused at call time.** Its schema is no longer declared on every round of the TUI and headless agents, and the model can no longer spend a round choosing it. `withBuiltinShellVeto` stays as a backstop. (#1913)
 - **`SessionStart` hooks run through the framework's `runHostHooks`.** The surface still fires them once per session with `THEOCODE_SESSION_ID`, behind the same approval check, and reports the same warnings; only the command runner is the framework's now, and the hook event names come from the framework's Claude Code dialect table. (#1922)

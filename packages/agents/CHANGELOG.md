@@ -1,5 +1,28 @@
 # @theokit/agents
 
+## 17.2.0
+
+### Minor Changes
+
+- dffe42a: `DEFAULT_PROVIDERS` is now derived from the SDK provider table (`DEFAULT_PROVIDER_CANDIDATES` in `@theokit/sdk/auth`), so the env var names and the default order (openrouter, anthropic, openai with SDK 5.32.0) are the SDK's, and the default descriptors no longer carry a `keyPrefix`. The key check asks the SDK's `providerFromApiKeyPrefix`; a key it cannot attribute to a default provider is still refused, and the `ProviderKeyMismatchError` message now says what the key looks like. This is partial: `resolveAgentCredential` does not yet call `resolveProviderCredential` (async in SDK 5.32.0) and the openai-before-anthropic order needs an SDK release. Minor, not breaking: the default order is unchanged.
+
+### Patch Changes
+
+- 2df1cf7: The real-provider live tests send their model with the `openrouter/` prefix, so the SDK routes the job's OpenRouter model id to OpenRouter and not to the Google provider.
+
+## 17.1.0
+
+### Minor Changes
+
+- 58b577e: `createCodeMode` takes `plugins` and `hookContext`: the `pre_tool_call` hooks of those plugins run before each tool call a script makes, after `onPermissionRequest`. A block refuses the call with its message, and a hook that throws refuses it too.
+- 5e2d8c1: Pending `@HumanInTheLoop` approvals can now survive a restart and be answered from another instance. `createFileApprovalStore(dir)`, `createDurableApprovalRegistry(store)` and `configureApprovalRegistry(registry)` are exported from `theokit/server/agent`; with a durable registry a gated call is recorded and the run ends deferred, and `POST /api/agents/<name>/approve/<id>` resumes the session with the decision (an expired record is settled by its `onTimeout`, an unknown `schemaVersion` answers 409). The in-process registry stays the default. `@theokit/agents`: `streamAgentUIMessages` accepts `hitl.onDefer` and `toolDecisions`, and the HITL plugin does not gate a call a person already approved on resume.
+- 1e069ee: The HITL plugin can defer a gated tool call: set `onDefer` on `HitlWiring` and the call ends the run as deferred with a `DeferredApproval` (including `toolUseId`) for the host to persist. Requires `@theokit/sdk` 5.32.0.
+
+### Patch Changes
+
+- e562c5f: Generated Deno cron entries encode names, schedules and paths as string literals, and the foreign-surface reader checks and reads one open descriptor.
+- 8c164e6: `pnpm version-packages` now refreshes `pnpm-lock.yaml` after `changeset version`, so the release pull request no longer fails `pnpm install --frozen-lockfile` on the bumped `workspace:` pins.
+
 ## 17.0.0
 
 ### Major Changes

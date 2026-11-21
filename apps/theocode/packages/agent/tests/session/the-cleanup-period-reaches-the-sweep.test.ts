@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildSweepCommand } from '../../src/session/gc/spawn-sweep.js'
+import { buildSweepCommand } from '../../src/session/gc/sweep-wiring.js'
 
 /**
  * #736 — `cleanupPeriodDays` is declared HONOURED, so it has to arrive somewhere.

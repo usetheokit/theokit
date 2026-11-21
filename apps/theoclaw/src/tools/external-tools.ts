@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 
 import type { McpHttpServerConfig, McpServerConfig, McpStdioServerConfig } from '@theokit/sdk'
+import { mcpSecretValues } from '@theokit/agents/bridge'
 import { z } from 'zod'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -169,10 +170,7 @@ function checkAcpNames(agents: readonly AcpAgentConfig[], path: string): void {
 
 /** The values the output mask hides for `servers`: every header and env value of at least 8 characters. */
 export function secretsOf(servers: Readonly<Record<string, McpServerConfig>>): string[] {
-  return Object.values(servers).flatMap((server) => {
-    const values = 'url' in server ? server.headers : server.env
-    return Object.values(values ?? {}).filter((value) => value.length >= MIN_MASKED_LENGTH)
-  })
+  return mcpSecretValues(servers, MIN_MASKED_LENGTH)
 }
 
 function counted(count: number, noun: string, names: readonly string[]): string {

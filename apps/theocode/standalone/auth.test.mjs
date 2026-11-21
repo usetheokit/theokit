@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-const here = dirname(dirname(fileURLToPath(import.meta.url)))
+const here = dirname(fileURLToPath(import.meta.url))
 const installed = createRequire(join(here, 'package.json'))
 
 const auth = await import('@theokit/agents/auth')

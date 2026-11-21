@@ -1,5 +1,24 @@
 # theo
 
+## 0.85.0
+
+### Minor Changes
+
+- 5e2d8c1: Pending `@HumanInTheLoop` approvals can now survive a restart and be answered from another instance. `createFileApprovalStore(dir)`, `createDurableApprovalRegistry(store)` and `configureApprovalRegistry(registry)` are exported from `theokit/server/agent`; with a durable registry a gated call is recorded and the run ends deferred, and `POST /api/agents/<name>/approve/<id>` resumes the session with the decision (an expired record is settled by its `onTimeout`, an unknown `schemaVersion` answers 409). The in-process registry stays the default. `@theokit/agents`: `streamAgentUIMessages` accepts `hitl.onDefer` and `toolDecisions`, and the HITL plugin does not gate a call a person already approved on resume.
+- 1ce4f22: `handleMcpToolsJsonRpc`, `handleMcpJsonRpc` and `handleMcpStdioLine` take an optional `McpToolsOptions` (`plugins`, `hookContext`). The `pre_tool_call` hooks of those plugins run before each MCP `tools/call`; a block or a throwing hook answers with `isError: true` and the tool does not run. `tools/list` is unchanged.
+
+### Patch Changes
+
+- 58b577e: Require `@theokit/sdk` ^5.32.0, which exports `runPreToolCall`.
+- e562c5f: Generated Deno cron entries encode names, schedules and paths as string literals, and the foreign-surface reader checks and reads one open descriptor.
+- 1e069ee: Raise the `@theokit/sdk` floor to 5.32.0, the release the HITL defer veto ships in (#1959).
+- Updated dependencies [58b577e]
+- Updated dependencies [e562c5f]
+- Updated dependencies [5e2d8c1]
+- Updated dependencies [1e069ee]
+- Updated dependencies [8c164e6]
+  - @theokit/agents@17.1.0
+
 ## 0.84.0
 
 ### Breaking Changes
@@ -640,8 +659,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                            [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                            were found and every /api/agents/* route will 404.
+                                                              [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                              were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
