@@ -13,7 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- The path veto on the workspace's `.theokit` and `.theoclaw` directories now runs on `@theokit/agents/tool-scope` (`createPathVetoPlugin`, `vetoPathCall`, `resolveRealPath`), and TheoClaw's own `real-path.ts` is gone. A `git_diff` path with a wildcard is now refused too. The refusal wording and plugin name are unchanged (#1837).
+- The path veto on the workspace's `.theokit` and `.theoclaw` directories and the provenance guard now run on the framework (`createPathVetoPlugin`, `vetoPathCall`, `resolveRealPath` from `@theokit/agents/tool-scope`; `createProvenanceGuard` from `@theokit/agents/bridge`), and TheoClaw's own `real-path.ts` is gone. A `git_diff` path with a wildcard is now refused too. Plugin names and refusal wording are unchanged; `run_code`, `/mcp` and the relay are tested to give the same verdict as a model call (#1837).
 
 ### Fixed
 
