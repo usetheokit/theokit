@@ -3,7 +3,16 @@
  * with its own lockfile and no link to the repository workspace. These checks keep its manifests
  * in step with the real ones.
  */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,7 +23,10 @@ import { syncStandalone } from './sync-standalone.mjs'
 
 const app = join(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (p) => JSON.parse(readFileSync(join(app, p), 'utf8'))
-const manifests = ['package.json', ...['agent', 'cli', 'shared', 'tui'].map((n) => `packages/${n}/package.json`)]
+const manifests = [
+  'package.json',
+  ...['agent', 'cli', 'shared', 'tui'].map((n) => `packages/${n}/package.json`),
+]
 const depsOf = (m) => ({ ...m.dependencies, ...m.devDependencies })
 
 describe('standalone consumer manifests', () => {
@@ -25,15 +37,19 @@ describe('standalone consumer manifests', () => {
     expect(standalone.name).toBe(real.name)
   })
 
-  it.each(manifests)('%s has no workspace protocol and takes @theokit packages from the registry', (p) => {
-    const real = depsOf(read(p))
-    for (const [name, range] of Object.entries(depsOf(read(`standalone/${p}`)))) {
-      expect(range, name).not.toMatch(/^workspace:/)
-      if (name.startsWith('@theokit/')) expect(range, name).toMatch(/^[~^]?\d/)
-      // `workspace:*` links this checkout; the standalone manifest names the release a registry consumer gets (#2243).
-      if (real[name] !== 'workspace:*') expect(range, name).toBe(real[name].replace(/^workspace:/, ''))
-    }
-  })
+  it.each(manifests)(
+    '%s has no workspace protocol and takes @theokit packages from the registry',
+    (p) => {
+      const real = depsOf(read(p))
+      for (const [name, range] of Object.entries(depsOf(read(`standalone/${p}`)))) {
+        expect(range, name).not.toMatch(/^workspace:/)
+        if (name.startsWith('@theokit/')) expect(range, name).toMatch(/^[~^]?\d/)
+        // `workspace:*` links this checkout; the standalone manifest names the release a registry consumer gets (#2243).
+        if (real[name] !== 'workspace:*')
+          expect(range, name).toBe(real[name].replace(/^workspace:/, ''))
+      }
+    },
+  )
 
   it('pins one exact released @theokit/agents in every standalone manifest', () => {
     const pins = manifests.map((p) => depsOf(read(`standalone/${p}`))['@theokit/agents'])
@@ -81,13 +97,44 @@ describe('standalone released.json synchronization', () => {
     }
   })
 
+  it('exits non-zero from --write while the lockfile or a pin is still wrong', () => {
+    const dir = copy()
+    try {
+      writeFileSync(
+        join(dir, 'released.json'),
+        JSON.stringify({ ...released, '@theokit/sdk': '9.9.9' }),
+      )
+      const run = () =>
+        execFileSync(
+          process.execPath,
+          [join(app, 'tools/sync-standalone.mjs'), '--write', '--root', dir],
+          {
+            stdio: 'pipe',
+          },
+        )
+      expect(run).toThrow(/no importer specifier @theokit\/sdk@9.9.9/)
+      // the manifests were still rewritten to the new pin
+      expect(
+        JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).devDependencies['@theokit/sdk'],
+      ).toBe('9.9.9')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('detects a lockfile that lacks the released pin, and a non-exact release', () => {
     const dir = copy()
     try {
-      writeFileSync(join(dir, 'released.json'), JSON.stringify({ ...released, '@theokit/sdk': '9.9.9' }))
+      writeFileSync(
+        join(dir, 'released.json'),
+        JSON.stringify({ ...released, '@theokit/sdk': '9.9.9' }),
+      )
       const out = syncStandalone(dir).join('\n')
       expect(out).toContain('pnpm-lock.yaml: no importer specifier @theokit/sdk@9.9.9')
-      writeFileSync(join(dir, 'released.json'), JSON.stringify({ ...released, '@theokit/sdk': '^5.32.0' }))
+      writeFileSync(
+        join(dir, 'released.json'),
+        JSON.stringify({ ...released, '@theokit/sdk': '^5.32.0' }),
+      )
       expect(syncStandalone(dir).join('\n')).toContain('not an exact version')
     } finally {
       rmSync(dir, { recursive: true, force: true })
