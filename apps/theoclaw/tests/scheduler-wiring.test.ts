@@ -362,6 +362,21 @@ describe('wireScheduler', () => {
     expect(store.get('job-1')?.previousOutput).toBe('hello')
   })
 
+  it('reports adapter_threw and keeps the output when the adapter throws on send', async () => {
+    connect(
+      new FakeAdapter('telegram', {
+        send: () => {
+          throw new Error('socket closed')
+        },
+      }),
+    )
+    const { scheduler } = await start(new AnsweringAgent('hello'))
+    await scheduler.add(job())
+    expect(await scheduler.fire('job-1')).toBe('undelivered')
+    expect(lines).toContain('scheduler: job news: telegram: adapter_threw')
+    expect(store.get('job-1')?.previousOutput).toBe('hello')
+  })
+
   it('builds the run agent with the read-only worker options and no schedule tool', async () => {
     const built: AgentToolOptions[] = []
     const { scheduler } = await start(new AnsweringAgent('ok'), built)
