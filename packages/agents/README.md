@@ -405,26 +405,6 @@ is never inherited. Leave the event unwired in the loop handlers so it is not de
 
 `createCodeMode` (from `@theokit/agents/code-mode`) runs each `api.<name>(input)` call of a script through `onPermissionRequest`. Pass `plugins` to also run their `pre_tool_call` hooks on every script call, after `onPermissionRequest`, so a path veto or approval gate that guards normal calls guards code mode too. A hook that returns `{ block: true, message }` refuses the call with that message; a hook that throws refuses it as well, and the handler never runs. `hookContext: { agentId, runId? }` becomes the `agentId` and `runId` of the hook context. Without `plugins` nothing changes.
 
-## Blocking values copied from untrusted tool output
-
-`createProvenanceGuard(options?)` from `@theokit/agents/bridge` returns an SDK plugin that refuses a
-tool call whose argument was copied from untrusted output unless the person also said it. It
-remembers the output of untrusted tools (default `web_fetch`, `web_search`, `mcp_*`) on
-`post_tool_call`, the output of every other tool and the person's messages as trusted, and on
-`pre_tool_call` scans every string in the arguments (nested objects and arrays too) for runs of
-`minRun` (default 8) or more characters from `[A-Za-z0-9_\-.:/@#+=%]` that contain a digit or
-punctuation. A run found in an untrusted output and in no trusted text blocks the call. Untrusted
-tools are never blocked, so a search followed by a fetch still runs. Options: `untrustedSources`
-(names or a predicate), `minRun`, `keep` (texts kept per list, default 50) and
-`message(toolName, run)`.
-
-State is per instance: the remembered texts live in the plugin, so one instance shared by several
-agents or sessions mixes their conversations. Create one per agent or session.
-
-Blind spots: a value shorter than `minRun`, a plain lowercase word, and a value the model reformatted
-are not checked; only the last `keep` texts of each kind are remembered, so an older output is
-forgotten; the system prompt is not visible to a plugin, and only a tool result's `stdout` is read.
-
 ## Hooks for a child agent
 
 `hooksForChild(handlers, { forward?, childLabel? })` from `@theokit/agents/hooks` turns the parent's

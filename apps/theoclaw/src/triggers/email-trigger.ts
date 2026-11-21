@@ -2,9 +2,9 @@ import type { BasePlatformAdapter, GatewayHook, PlatformName } from '@theokit/ga
 
 import type { TurnAgent } from '../agent-port.js'
 import { maskSecrets } from '../channels/channel-loop.js'
-import { deliverText, runAgentText } from '@theokit/gateway-agent'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import { deliverText } from '../channels/deliver.js'
 import { describeError } from '../control-plane/errors.js'
+import { runText } from './trigger-route.js'
 import type { EmailTriggerSettings } from './trigger-settings.js'
 
 const HOOK_NAME = 'theoclaw-email-trigger'
@@ -49,14 +49,14 @@ export function createEmailTrigger(options: EmailTriggerOptions): EmailTrigger {
   const pending = new Set<Promise<void>>()
 
   const run = async (sender: string, body: string): Promise<void> => {
-    const outcome = await withAgent((agent) => runAgentText(agent, promptOf(settings, sender, body), { sendOptions: { ...untrustedContentSendOptions() } }))
-    if (!outcome.ok) {
+    const outcome = await withAgent((agent) => runText(agent, promptOf(settings, sender, body)))
+    if (outcome.failure !== undefined) {
       write(`email trigger: run failed (${outcome.failure})`)
       return
     }
     const adapter = adapterFor(platform)
     const text = maskSecrets(`E-mail from ${sender}:\n${outcome.text}`, options.secrets ?? [])
-    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, channelId, text)
+    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, platform, channelId, text)
     if (failure !== undefined) write(`email trigger: the summary was not delivered (${failure})`)
   }
 

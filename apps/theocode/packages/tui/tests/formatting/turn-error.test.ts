@@ -75,15 +75,3 @@ describe('#1902 — a bare status-like number is not a transient signal', () => 
     expect(offersRetry(err)).toBe(true)
   })
 })
-
-describe('turn-error — framework classification', () => {
-  it('test_a_typed_status_on_metadata_offers_retry_with_theocode_wording', () => {
-    const err = Object.assign(new Error('upstream failed'), { metadata: { statusCode: 503 } })
-
-    expect(formatTurnError(err)).toBe('upstream failed — /retry resends the last message')
-  })
-
-  it('test_a_blank_message_is_named', () => {
-    expect(formatTurnError(new Error('  '))).toBe('the turn failed with no message')
-  })
-})

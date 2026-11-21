@@ -233,7 +233,6 @@ export {
   type ProcessInputContext,
   type ToolCallVeto,
 } from './tool-hooks-plugin.js'
-export { createProvenanceGuard, type ProvenanceGuardOptions } from './provenance-guard.js'
 export { createPermissionsPlugin } from './permissions-plugin.js'
 export type { PermissionsPluginOptions } from './permissions-plugin.js'
 

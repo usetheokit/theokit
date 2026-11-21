@@ -1,5 +1,5 @@
 import { channelRendering } from '@theokit/gateway'
-import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@theokit/gateway'
+import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent, PlatformName, SendResult } from '@theokit/gateway'
 import { ChatPresenter, fromSdkMessage } from '@theokit/presenter'
 import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
@@ -12,7 +12,7 @@ import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import { type DisplayConfig, resolveDisplay } from './display-config.js'
 import { createProgressGate, type ProgressGate } from './progress.js'
 import { compactIfNeeded } from './compact-command.js'
-import { deliverText } from '@theokit/gateway-agent'
+import { deliverText } from './deliver.js'
 import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-command.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
@@ -393,10 +393,10 @@ function withFooter(
 }
 
 /** Why one member could not be reached; a code or an error name, never the message or an id. */
-async function sendToMember(adapter: BasePlatformAdapter | undefined, channelId: string, answer: string): Promise<string | undefined> {
+async function sendToMember(adapter: BasePlatformAdapter | undefined, channelId: string, platform: string, answer: string): Promise<string | undefined> {
   if (adapter === undefined) return 'not started'
   // Rendered for the member's own platform, not the origin's dialect.
-  return deliverText(adapter, channelId, answer, 'group')
+  return deliverText(adapter, platform as PlatformName, channelId, answer)
 }
 
 /** Send the answer to every other member, each on its own: one that fails costs only itself. */
@@ -404,7 +404,7 @@ async function fanOut(broadcast: BroadcastOptions, group: BroadcastGroup, event:
   const others = group.members.filter((member) => member.platform !== event.platform || member.channelId !== event.channel.id)
   await Promise.all(
     others.map(async ({ platform, channelId }) => {
-      const failure = await sendToMember(broadcast.adapterFor(platform), channelId, answer)
+      const failure = await sendToMember(broadcast.adapterFor(platform), channelId, platform, answer)
       if (failure !== undefined) broadcast.write(`broadcast group ${group.name}: ${platform}: the answer was not delivered (${failure})`)
     }),
   )

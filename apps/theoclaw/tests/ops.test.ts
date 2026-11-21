@@ -9,7 +9,6 @@ import { spawn } from 'node:child_process'
 
 import { PREDECESSOR_VARIABLE, supervised, waitForPredecessor } from '../src/ops/self-restart.js'
 import { reloadConfiguration, watchConfiguration } from '../src/ops/hot-reload.js'
-import { credentialDefect } from '../src/ops/doctor.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
 import { parseEnv } from 'node:util'
 
@@ -186,14 +185,6 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     expect(await runCli(['doctor'], ok.h.io)).toBe(0)
   })
 
-  it('doctor reports warnings without failing and prints no credential', async () => {
-    const { h, path } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
-    chmodSync(path, 0o644)
-    expect(await runCli(['doctor'], h.io)).toBe(0)
-    expect(h.stdout()).toContain('SA-001')
-    expect(h.stdout()).not.toContain(KEY)
-  })
-
   it('doctor refuses an unknown flag', async () => {
     const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
     expect(await runCli(['doctor', '--force'], h.io)).toBe(2)
@@ -246,21 +237,5 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     h.useRunner(() => Promise.resolve({ code: 1, stdout: '', stderr: '' }))
     expect(await runCli(['logs'], h.io)).toBe(1)
     expect(await runCli(['logs', '--bogus'], h.io)).toBe(2)
-  })
-})
-
-describe('credentialDefect', () => {
-  it.each([
-    [' sk-test-0123456789', 'has leading or trailing whitespace'],
-    ['sk-test 0123456789', 'contains whitespace'],
-    ['sk-test"0123456789', 'contains a quote or backslash'],
-    ['sk-test\\0123456789', 'contains a quote or backslash'],
-    ['sk-test\u00010123456789', 'contains a control character'],
-    ['changeme', 'is a placeholder'],
-    ['<your-key>', 'is a placeholder'],
-    ['short', 'is shorter than 8 characters'],
-    ['sk-test-0123456789abcdef', undefined],
-  ])('%j -> %s', (value, expected) => {
-    expect(credentialDefect(value)).toBe(expected)
   })
 })

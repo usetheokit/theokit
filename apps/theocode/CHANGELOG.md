@@ -18,8 +18,6 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Changed
 
-- Turn-failure classification uses `classifyTurnFailure` from `@theokit/agents/errors` (#1845, part of #1930); the retry wording and the message-text fallback stay here. A typed `metadata.statusCode` is now also recognised as transient.
-- The standalone consumer has `standalone/released.json` and `tools/sync-standalone.mjs` (`--check` / `--write`); `pnpm check:standalone` (drift check, frozen install, `standalone/auth.test.mjs`) now runs before `pnpm release` and `pnpm version-packages` (#2334).
 - Session tests write their pointer under a temporary directory and drain pending writes before cleanup, so no `could not persist the session pointer` diagnostics appear.
 - `/memory` and `/memory forget <n>` use the SDK's `listMemoryFacts` / `removeMemoryFact` (SDK 5.32.0); the local `memory-facts.ts` parser is removed.
 - **Backtrack, session delete and the background sweep now use the framework (#1924).** Backtrack

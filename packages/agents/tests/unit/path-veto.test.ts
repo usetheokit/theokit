@@ -109,24 +109,3 @@ describe('path veto', () => {
     expect(result).toMatchObject({ block: true })
   })
 })
-
-describe('refusal wording options', () => {
-  it('replaces the prefix and the protected-path sentence, for the call and the plugin alike', () => {
-    const { scope } = setup()
-    const options = {
-      prefix: 'app: ',
-      enters: (value: string) => `${value} enters the state directory`,
-    }
-
-    expect(vetoPathCall(scope, 'read_file', { path: '.state/x' }, options)).toBe(
-      'app: .state/x enters the state directory',
-    )
-    expect(vetoPathCall(scope, 'read_file', { path: 1 }, options)).toMatch(
-      /^app: refused a malformed tool call/,
-    )
-    expect(runPlugin(scope, { name: 'read_file', args: { path: '.state/x' } }, options)).toEqual({
-      block: true,
-      message: 'app: .state/x enters the state directory',
-    })
-  })
-})

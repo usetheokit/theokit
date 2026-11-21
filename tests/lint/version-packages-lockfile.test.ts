@@ -16,9 +16,7 @@ describe('version-packages refreshes the lockfile', () => {
       scripts: Record<string, string>
     }
     const steps = pkg.scripts['version-packages']!.split('&&').map((s) => s.trim())
-    const idx = steps.indexOf('changeset version')
-    expect(idx).toBeGreaterThanOrEqual(0)
-    expect(steps.filter((s) => s === 'changeset version')).toHaveLength(1)
-    expect(steps[idx + 1]).toMatch(/^pnpm install --lockfile-only\b/)
+    expect(steps[0]).toBe('changeset version')
+    expect(steps[1]).toMatch(/^pnpm install --lockfile-only\b/)
   })
 })

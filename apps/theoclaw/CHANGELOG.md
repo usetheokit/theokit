@@ -11,22 +11,13 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-
-- `theoclaw triage` writes its archive with `writeDiagnosticBundle`, and `theoclaw doctor` words credential defects through `credentialShape`, both from `@theokit/agents/doctor`; TheoClaw's own tar writer and shape checks are gone. Output and wording are unchanged (#1841, diagnostics part).
-- Triggers, the voice call turn, MCP events, broadcast fan-out and the scheduler's delivery now run on `@theokit/gateway-agent` (`runAgentText`, `deliverText`, `gatewayDeliverPort`); TheoClaw's own `channels/deliver.ts` and `runText` are gone. A scheduled answer is now rendered for its platform (a plain-text send carries `format: plain`), and an undelivered scheduled job reports `not_started` instead of `no_adapter` (#1832, first part).
-- The path veto on the workspace's `.theokit` and `.theoclaw` directories and the provenance guard now run on the framework (`createPathVetoPlugin`, `vetoPathCall`, `resolveRealPath` from `@theokit/agents/tool-scope`; `createProvenanceGuard` from `@theokit/agents/bridge`), and TheoClaw's own `real-path.ts` is gone. A `git_diff` path with a wildcard is now refused too. Plugin names and refusal wording are unchanged; `run_code`, `/mcp` and the relay are tested to give the same verdict as a model call (#1837).
-
 ### Fixed
 
-- WebChat reads its post body with the shared `readCappedBody`, which no longer waits on cancelling an oversized body, so a cancel that rejects or stalls still gets HTTP 413 (#2318).
 - The live session tests keep their memory in a state directory of their own, so a code word saved by another case or an earlier run is no longer recalled in place of the one the test sent (#2504).
 - A scheduled run's agent send now carries the untrusted content options itself, next to the scheduler's cancellation signal.
 - The CI live and container checks route `THEOCLAW_MODEL` through OpenRouter (`openrouter/` prefix) instead of sending the OpenRouter key to Google's own endpoint (#2482).
 
 ### Changed
-
-- `theoclaw doctor` is a list of checks run by `@theokit/agents/doctor`'s `diagnose` and `renderDiagnosis`, so its report uses the framework's layout; the exit codes stay 0 and 3 (#1779).
 
 - Persona files (SOUL.md, IDENTITY.md, USER.md, AGENTS.md, STANDING-ORDERS.md) load through the framework instruction loader, same order and 20,000-character cap per file. Their YAML frontmatter is now stripped, `@path` imports expand, and a symlink pointing outside the workspace is skipped (#1836).
 - Memory now uses the SDK's own memory: each DM sender has a separate partition (the owner identities in `THEOCLAW_OWNERS` share one), a finished turn is reviewed by the SDK, and a hosted `THEOCLAW_MEMORY_BACKEND` is mirrored and recalled through the SDK. Facts and the `session_search` turn log now live under `<THEOCLAW_STATE_DIR>/memory`, not `<workspace>/.theoclaw/memory`; facts kept by earlier versions in `<workspace>/.theoclaw/memory/facts.jsonl` are copied into the owning scope's partition the first time that scope opens a session (the old file stays where it was and is not read again once copied). With `@theokit/sdk` 5.32.0 a hosted backend receives the facts of a `Remember: …` message and recalls from it first; a fact the post-turn reviewer saves is mirrored by TheoClaw once the review settles, because the SDK mirrors only `Remember: …` facts.

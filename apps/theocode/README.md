@@ -254,19 +254,6 @@ is not a resume. It is fired by the surface that mints the session id rather tha
 framework's `on_session_start`, which fires once per *loop context*: this product builds an agent per
 turn, so that mapping would run the hook on every message.
 
-## Updating the standalone consumer
-
-`standalone/` installs TheoCode's manifests from the registry with its own lockfile. The versions
-that replace the framework's `workspace:*` links live in `standalone/released.json`.
-
-1. Edit `standalone/released.json` (exact versions only).
-2. `node tools/sync-standalone.mjs --write` rewrites the pins in the five standalone manifests.
-3. `cd standalone && pnpm install --lockfile-only` regenerates `pnpm-lock.yaml`.
-4. From the repository root, `pnpm check:standalone` runs the drift check
-   (`node tools/sync-standalone.mjs --check`), `pnpm install --frozen-lockfile` in `standalone/`, and
-   `standalone/auth.test.mjs` against the released auth APIs. `pnpm release` and
-   `pnpm version-packages` run it first, so a stale manifest or lockfile stops a release.
-
 ## Testing an unreleased theokit fix
 
 The theokit repositories publish a per-commit preview to pkg.pr.new on every push to `workspace`, so

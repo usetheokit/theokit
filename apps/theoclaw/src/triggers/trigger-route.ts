@@ -1,11 +1,12 @@
 import { SeenIds, type BasePlatformAdapter, type PlatformName } from '@theokit/gateway'
-import { deliverText, runAgentText } from '@theokit/gateway-agent'
+import { fromSdkMessage } from '@theokit/presenter'
 import { github } from 'theokit/server/webhook'
 import type { VerifyFn } from 'theokit/server/webhook'
 
 import type { TurnAgent } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
+import { deliverText } from '../channels/deliver.js'
 import { describeError } from '../control-plane/errors.js'
 import type { WebhookRoute } from '../webhooks/router.js'
 import type { TriggerSettings } from './trigger-settings.js'
@@ -43,6 +44,22 @@ function promptOf(trigger: TriggerSettings, body: string): string {
   return parts.filter((part): part is string => part !== undefined).join('\n\n')
 }
 
+/** The run's text and the error code a stream frame reported, if any. */
+export async function runText(agent: TurnAgent, prompt: string): Promise<{ readonly text: string; readonly failure?: string }> {
+  const run = await agent.send(prompt, untrustedContentSendOptions())
+  let text = ''
+  let streamError: string | undefined
+  for await (const frame of run.stream()) {
+    for (const output of fromSdkMessage({ ...frame })) {
+      if (output.type === 'text') text += output.text
+      if (output.type === 'error') streamError = output.code
+    }
+  }
+  const result = await run.wait()
+  if (result.status === 'error' || streamError !== undefined) return { text, failure: result.error?.code ?? streamError ?? 'no error code' }
+  return { text }
+}
+
 /**
  * The route of one trigger (D1, D2). A delivery whose signature fails answers 401 and nothing about
  * its body is written. A reply platform that has not started answers 503, and the id is not kept,
@@ -57,13 +74,13 @@ export function createTriggerRoute(options: TriggerRouteOptions): WebhookRoute {
   const { platform, channelId } = trigger.replyTo
 
   const run = async (body: string): Promise<void> => {
-    const outcome = await withAgent((agent) => runAgentText(agent, promptOf(trigger, body), { sendOptions: { ...untrustedContentSendOptions() } }))
-    if (!outcome.ok) {
+    const outcome = await withAgent((agent) => runText(agent, promptOf(trigger, body)))
+    if (outcome.failure !== undefined) {
       write(`trigger ${trigger.name}: run failed (${outcome.failure})`)
       return
     }
     const adapter = adapterFor(platform)
-    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, channelId, maskSecrets(outcome.text, options.secrets ?? []))
+    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, platform, channelId, maskSecrets(outcome.text, options.secrets ?? []))
     if (failure !== undefined) write(`trigger ${trigger.name}: the reply was not delivered (${failure})`)
   }
 

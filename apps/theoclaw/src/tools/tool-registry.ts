@@ -1,6 +1,6 @@
 import type { CustomTool, McpServerConfig, MemorySettings, Plugin } from '@theokit/sdk'
 import { createACPTool } from 'theokit/server/agent'
-import type { ToolScope } from '@theokit/agents/tool-scope'
+import { bindToolScope } from '@theokit/agents/tool-scope'
 import { createExtractDocumentTool } from '@theokit/sdk-tools/extract-document'
 import { createGithubLinkPreviewTool } from '@theokit/sdk-tools/github-link-preview'
 import { createSearxngWebSearchAdapter, createTavilyWebSearchAdapter } from '@theokit/sdk-tools/web-search-adapters'
@@ -35,7 +35,7 @@ import { computerTool } from './computer-tool.js'
 import { execApprovalPlugin, type ExecApprovalOptions } from './exec-approval.js'
 import { questionTool, taskTools } from './control-tools.js'
 import { loopDetectionPlugin } from './loop-detection.js'
-import { pathVetoPlugin, toolScopeOf } from './path-veto.js'
+import { pathVetoPlugin } from './path-veto.js'
 import { provenanceGuardPlugin } from './provenance-guard.js'
 import type { ToolSettings } from './tool-settings.js'
 
@@ -88,14 +88,23 @@ function webFetchTool(settings: ToolSettings): CustomTool {
   return createWebFetchTool({ fetchImpl: settings.fetchImpl, ...(settings.lookup === undefined ? {} : { lookup: settings.lookup }) })
 }
 
+function scopeOf(settings: ToolSettings): ReturnType<typeof bindToolScope> {
+  return bindToolScope({
+    projectRoot: settings.toolRoot,
+    writeRoot: settings.toolRoot,
+    sandbox: settings.sandbox,
+    mode: settings.mode,
+  })
+}
+
 /** The sandboxed shell over the settings' backend; `shell_exec`. */
 export function shellToolFor(settings: ToolSettings): CustomTool {
-  return toolScopeOf(settings).bind(createShellTool)()
+  return scopeOf(settings).bind(createShellTool)()
 }
 
 /** The two read-only file tools: the `minimal` tool profile. */
 export function fileReadTools(settings: ToolSettings): CustomTool[] {
-  const scope = toolScopeOf(settings)
+  const scope = scopeOf(settings)
   return [scope.bind(createReadFileTool)(), scope.bind(createListDirTool)()]
 }
 
@@ -104,7 +113,7 @@ export function fileReadTools(settings: ToolSettings): CustomTool[] {
  * the web and change nothing on the host (plan D3). Host-changing tools wait for exec approval.
  */
 export function readOnlyTools(settings: ToolSettings): CustomTool[] {
-  const scope = toolScopeOf(settings)
+  const scope = scopeOf(settings)
   const tools: CustomTool[] = [scope.bind(createReadFileTool)(), scope.bind(createListDirTool)(), webFetchTool(settings)]
   const search = webSearchTool(settings)
   if (search !== undefined) tools.push(search)
@@ -126,7 +135,8 @@ export function readOnlyTools(settings: ToolSettings): CustomTool[] {
  * when `settings.interactive` is set, which `withInteractiveShell` does once a real session is
  * proven to write in the tool root and nowhere else on this host.
  */
-export function buildTools(settings: ToolSettings, permission: AcpPermissionOptions = {}, scope: ToolScope = toolScopeOf(settings)): CustomTool[] {
+export function buildTools(settings: ToolSettings, permission: AcpPermissionOptions = {}): CustomTool[] {
+  const scope = scopeOf(settings)
   const tools: CustomTool[] = [
     scope.bind(createReadFileTool)(),
     scope.bind(createListDirTool)(),
@@ -178,8 +188,7 @@ export function agentToolOptions(
   execApproval?: ExecApprovalOptions,
   createCoder?: (tools: CustomTool[]) => Promise<TurnAgent>,
 ): AgentToolOptions {
-  const scope = toolScopeOf(settings)
-  const tools = [...buildTools(settings, execApproval === undefined ? {} : { ask: execApproval.ask }, scope), ...extra]
+  const tools = [...buildTools(settings, execApproval === undefined ? {} : { ask: execApproval.ask }), ...extra]
   if (createWorker !== undefined && buildDescriber !== undefined && settings.computer !== undefined) {
     // Only where a worker factory exists, which is the `/control` agent: the screenshot's describer is built by it (B-676 Q1).
     tools.push(computerTool(settings.computer, buildDescriber))
@@ -204,7 +213,7 @@ export function agentToolOptions(
   }
   // The exec gate is installed only with host tools on and exec options given (the composition gives them with a state
   // directory). Without an asker it refuses what no saved approval or reviewer allowed.
-  const plugins = [pathVetoPlugin(settings, scope), provenanceGuardPlugin(), loopDetectionPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
+  const plugins = [pathVetoPlugin(settings), provenanceGuardPlugin(), loopDetectionPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
   const base = { tools, plugins }
   const servers = mcpServersOf(settings)
   return Object.keys(servers).length === 0 ? base : { ...base, mcpServers: servers }

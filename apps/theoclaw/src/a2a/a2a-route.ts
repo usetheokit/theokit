@@ -45,17 +45,31 @@ export interface A2ARouteOptions {
 
 /** The card: public, no token, the endpoint at this request's origin. */
 function agentCardResponse(request: Request): Response {
-  if (request.method !== 'GET')
-    return new Response(null, { status: 405, headers: { allow: 'GET' } })
-  const card = buildAgentCard({
-    name: 'theoclaw',
-    route: A2A_PATH,
-    baseUrl: new URL(request.url).origin,
-    description: 'A TheoClaw instance reachable over A2A',
-    securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
-    security: [{ bearer: [] }],
-  })
+  if (request.method !== 'GET') return new Response(null, { status: 405, headers: { allow: 'GET' } })
+  const card = buildAgentCard(
+    {
+      name: 'theoclaw',
+      route: A2A_PATH,
+      stream: false,
+      mainLoop: { method: 'message/send', strategy: 'worker' },
+      guards: [],
+      interceptors: [],
+      tools: [],
+      subAgents: [],
+    },
+    {
+      baseUrl: new URL(request.url).origin,
+      description: 'A TheoClaw instance reachable over A2A',
+      securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
+      security: [{ bearer: [] }],
+    },
+  )
   return Response.json(card)
+}
+
+function refused(status: 401 | 503): Response {
+  const headers: Record<string, string> = status === 401 ? { 'www-authenticate': 'Bearer' } : { 'retry-after': '5' }
+  return new Response(null, { status, headers })
 }
 
 /**
@@ -71,30 +85,34 @@ export function a2aRoute(options: A2ARouteOptions): (request: Request) => Promis
   const write = (line: string): void => {
     options.write(maskSecrets(line, options.secrets))
   }
-  const respond = async (text: string, signal: AbortSignal): Promise<string> => {
-    try {
-      const outcome = await runWorker(
-        async () => options.buildWorker(workerToolOptions(options.tools)),
-        text,
-        signal,
-      )
-      if (!signal.aborted) write('a2a: message/send answered')
-      return maskSecrets(outcome.response, options.secrets)
-    } catch (error) {
-      write(`a2a: message/send failed: ${describeError(error)}`)
-      throw error
-    }
-  }
-  const handler = createA2AJsonRpcHandler({
-    authorize,
-    respond,
-    maxBodyBytes: MAX_MESSAGE_BYTES,
-    timeoutMs,
-    maxInFlight,
-  })
+  let inFlight = 0
 
   return async (request) => {
     if (new URL(request.url).pathname === AGENT_CARD_PATH) return agentCardResponse(request)
-    return handler(request)
+    if (!authorize(request.headers.get('authorization') ?? undefined)) return refused(401)
+    if (inFlight >= maxInFlight) return refused(503)
+    let worker: Promise<unknown> = Promise.resolve()
+    const respond = async (text: string, signal: AbortSignal): Promise<string> => {
+      const run = runWorker(async () => options.buildWorker(workerToolOptions(options.tools)), text, signal)
+      worker = run
+      try {
+        const outcome = await run
+        if (!signal.aborted) write('a2a: message/send answered')
+        return maskSecrets(outcome.response, options.secrets)
+      } catch (error) {
+        write(`a2a: message/send failed: ${describeError(error)}`)
+        throw error
+      }
+    }
+    const handler = createA2AJsonRpcHandler({ authorize, respond, maxBodyBytes: MAX_MESSAGE_BYTES, timeoutMs })
+    // Counted only once nothing synchronous is left that could throw past the release below.
+    inFlight += 1
+    const answer = handler(request)
+    void Promise.allSettled([answer])
+      .then(() => Promise.allSettled([worker]))
+      .finally(() => {
+        inFlight -= 1
+      })
+    return answer
   }
 }

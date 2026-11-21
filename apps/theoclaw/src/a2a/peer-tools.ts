@@ -21,17 +21,25 @@ export interface PeerToolSeams {
   readonly fetchImpl?: A2AToolConfig['fetchImpl']
 }
 
+type ToolHandler = CustomTool['handler']
+
 /**
- * The framework names the peer on a timeout and on a bad answer, but a refused connection reaches
- * the model as the bare `fetch failed`: name the peer there, keeping the original as `cause`. A
- * cancelled caller keeps its own abort reason.
+ * Bound the call and make every failure name the peer. A cancelled caller keeps its own abort
+ * reason (cancellation is not a peer failure); a refused connection (`TypeError: fetch failed`)
+ * gets the peer's name with the original as `cause`.
  */
-function namingPeer(name: string, handler: CustomTool['handler']): CustomTool['handler'] {
+function boundedHandler(name: string, handler: ToolHandler, timeoutMs: number): ToolHandler {
   return async (input, context) => {
+    const caller = context?.signal
+    const bound = AbortSignal.timeout(timeoutMs)
+    const signal = caller === undefined ? bound : AbortSignal.any([caller, bound])
     try {
-      return await handler(input, context)
+      return await handler(input, { ...context, signal })
     } catch (error) {
-      if (context?.signal?.aborted === true) throw error
+      if (caller?.aborted === true) throw error
+      if (bound.aborted) {
+        throw new Error(`A2A call to "${name}" failed: no answer within ${timeoutMs} ms`, { cause: error })
+      }
       const message = describeError(error)
       if (message.startsWith('A2A call to')) throw error
       throw new Error(`A2A call to "${name}" failed: ${message}`, { cause: error })
@@ -47,10 +55,9 @@ function peerTool(peer: A2APeer, seams: PeerToolSeams): CustomTool {
     url: `${peer.baseUrl}/a2a`,
     auth: { bearer: peer.token },
     protocol: 'jsonrpc',
-    timeoutMs: seams.timeoutMs ?? PEER_TIMEOUT_MS,
     ...(seams.fetchImpl === undefined ? {} : { fetchImpl: seams.fetchImpl }),
   })
-  return { ...tool, handler: namingPeer(name, tool.handler) }
+  return { ...tool, handler: boundedHandler(name, tool.handler, seams.timeoutMs ?? PEER_TIMEOUT_MS) }
 }
 
 /** One tool per peer, in the order `THEOCLAW_A2A_PEERS` names them. */

@@ -80,7 +80,7 @@ describe('the heartbeat', () => {
     const { scheduler } = await startWithHeartbeat(agent, telegram)
     expect(await scheduler.fire('heartbeat')).toBe('delivered')
     expect(agent.prompts[0]).toContain('Task:\nCheck the build and report.')
-    expect(telegram.sent).toEqual([{ channel: { id: '-100200', type: 'group' }, text: 'beat', format: 'plain' }])
+    expect(telegram.sent).toEqual([{ channel: { id: '-100200', type: 'group' }, text: 'beat' }])
   })
 
   it('reads HEARTBEAT.md again on each fire', async () => {
