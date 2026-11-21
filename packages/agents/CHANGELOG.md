@@ -1,5 +1,17 @@
 # @theokit/agents
 
+## 17.3.0
+
+### Minor Changes
+
+- a46cc53: Add `prefix` and `enters` options to `createPathVetoPlugin` and `vetoPathCall` (`@theokit/agents/tool-scope`), so a product can word the path veto's refusals itself; `vetoPathCall` now takes the options as a fourth argument.
+- 6d228e5: Add `createProvenanceGuard` to `@theokit/agents/bridge`: a plugin that blocks a tool call whose argument was copied from untrusted tool output (`web_fetch`, `web_search`, `mcp_*`) and that the person never said. State is per instance; create one per agent or session.
+
+### Patch Changes
+
+- e81f8f0: Regenerate the capability map so it lists the `PathVetoOptions` type exported from `@theokit/agents/bridge`.
+- 9866d67: `readCappedBody` cancels an oversized body without waiting on it, so a cancel that rejects or stalls still ends in `BodyTooLargeError` (HTTP 413 in WebChat).
+
 ## 17.2.0
 
 ### Minor Changes
