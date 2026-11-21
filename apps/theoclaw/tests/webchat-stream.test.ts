@@ -226,6 +226,34 @@ describe("POST /webchat/chat", () => {
     await waitFor(() => cancelled, "the oversized body's cancel");
   });
 
+  for (const [name, cancel] of [
+    ["rejects", () => Promise.reject(new Error("cancel failed"))],
+    ["never settles", () => new Promise<void>(() => {})],
+  ] as const) {
+    it(`answers 413 to an oversized body whose cancel ${name}`, async () => {
+      const stub = stubRunner({ messages: () => [text("never")] });
+      const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
+      const chunk = new Uint8Array(16_384).fill(0x78);
+      const body = new ReadableStream<Uint8Array>({
+        cancel,
+        pull(controller) {
+          controller.enqueue(chunk);
+        },
+      });
+      const request = new Request("http://127.0.0.1/webchat/chat", {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+        body,
+        duplex: "half",
+      } as RequestInit);
+
+      const response = await handle(request);
+
+      expect(response.status).toBe(413);
+      expect(stub.calls.built).toBe(0);
+    }, 3000);
+  }
+
   // F-dom-4: /control caps a frame at 64 KiB; the chat post is bounded the same way.
   it("answers 413 to a body over the chat bound and builds 0 agents", async () => {
     const stub = stubRunner({ messages: () => [text("never")] });
