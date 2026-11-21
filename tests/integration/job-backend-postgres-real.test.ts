@@ -146,6 +146,33 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       }
     })
 
+    // usetheokit/theokit#2457 — dequeue claimed through `WHERE id IN (SELECT ... LIMIT n FOR UPDATE
+    // SKIP LOCKED)`. When the statistics say the table holds one row, Postgres plans that as a nested
+    // loop semi join that runs the subquery again for every outer row, and SKIP LOCKED makes each run
+    // pick the next job: a dequeue of one leased all three, and returned jobs no worker had asked for.
+    it('test_a_dequeue_of_one_leases_one_job_when_the_statistics_say_the_table_holds_one_row', async () => {
+      const table = `theokit_jobs_stale_stats_${String(Date.now())}`
+      const stale = new PostgresJobBackend({ pool, tableName: table })
+      try {
+        await stale.migrate()
+        await pool.query(`ALTER TABLE ${table} SET (autovacuum_enabled = false)`)
+        await stale.enqueue({ name: 'seed', input: {} })
+        await pool.query(`ANALYZE ${table}`)
+        await pool.query(`DELETE FROM ${table}`)
+        for (let i = 0; i < 3; i++) await stale.enqueue({ name: 'run-task', input: { i } })
+
+        const leases = await stale.dequeue({ batchSize: 1, lockSeconds: 60 })
+
+        const locked = await pool.query<{ id: string }>(
+          `SELECT id FROM ${table} WHERE locked_until > NOW()`,
+        )
+        expect(leases).toHaveLength(1)
+        expect(locked.rows.map((r) => r.id)).toEqual([leases[0].jobId])
+      } finally {
+        await pool.query(`DROP TABLE IF EXISTS ${table}`)
+      }
+    })
+
     // usetheokit/theokit#1012 — ack and nack filtered on `id` alone, so a worker whose lease had
     // expired deleted the job while the worker that re-leased it was still running it.
     const reLeasedAfterExpiry = async (): Promise<{ jobId: string; a: string; b: string }> => {
