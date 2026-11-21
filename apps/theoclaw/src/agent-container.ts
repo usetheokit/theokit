@@ -1,7 +1,6 @@
 import 'reflect-metadata'
 
-import { Container } from '@theokit/di'
-import { createAgentProvider } from '@theokit/di-agent'
+import { createAgentBoundary } from '@theokit/di-agent'
 
 /**
  * The agent container the composition root wires its concretes into (`rules/architecture.md` § 1:
@@ -39,13 +38,7 @@ export interface AgentComposition<TAgent> {
 export function createContainer<TAgent>(
   options: AgentCompositionOptions<TAgent>,
 ): AgentComposition<TAgent> {
-  const container = new Container()
-  const provider = createAgentProvider<TAgent>({ factory: options.factory })
+  const boundary = createAgentBoundary<undefined, TAgent>({ factory: () => options.factory() })
 
-  container.register(provider)
-
-  return {
-    withAgent: (work) =>
-      container.runInRequest(async () => work(await container.resolveAsync<TAgent>(provider.provide))),
-  }
+  return { withAgent: (work) => boundary.withAgent(undefined, work) }
 }
