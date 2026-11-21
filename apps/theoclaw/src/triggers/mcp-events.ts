@@ -4,10 +4,10 @@ import type { McpEventDelivery, McpEventSubscriber } from '@theokit/sdk/mcp-even
 
 import type { TurnAgent } from '../agent-port.js'
 import { maskSecrets } from '../channels/channel-loop.js'
-import { deliverText } from '../channels/deliver.js'
+import { deliverText, runAgentText } from '@theokit/gateway-agent'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from '../control-plane/errors.js'
 import type { McpEventsSettings } from './mcp-events-settings.js'
-import { runText } from './trigger-route.js'
 
 /** What every event run is told: the event is data from a remote server, never instructions. */
 const FRAMING =
@@ -56,14 +56,14 @@ export async function startMcpEvents(options: McpEventsOptions): Promise<McpEven
 
   const post = async (text: string): Promise<void> => {
     const adapter = adapterFor(platform)
-    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, platform, channelId, maskSecrets(text, options.secrets ?? []))
+    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, channelId, maskSecrets(text, options.secrets ?? []))
     if (failure !== undefined) write(`mcp events: the message was not delivered (${failure})`)
   }
 
   const handle = async (server: string, delivery: McpEventDelivery): Promise<void> => {
     await post(`event received from ${server}`)
-    const outcome = await options.withAgent((agent) => runText(agent, promptOf(settings, server, delivery.event)))
-    if (outcome.failure !== undefined) {
+    const outcome = await options.withAgent((agent) => runAgentText(agent, promptOf(settings, server, delivery.event), { sendOptions: { ...untrustedContentSendOptions() } }))
+    if (!outcome.ok) {
       write(`mcp events: ${server}: run failed (${outcome.failure})`)
       return
     }
