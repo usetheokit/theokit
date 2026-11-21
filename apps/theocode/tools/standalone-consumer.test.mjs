@@ -3,11 +3,14 @@
  * with its own lockfile and no link to the repository workspace. These checks keep its manifests
  * in step with the real ones.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
+
+import { syncStandalone } from './sync-standalone.mjs'
 
 const app = join(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (p) => JSON.parse(readFileSync(join(app, p), 'utf8'))
@@ -43,5 +46,51 @@ describe('standalone consumer manifests', () => {
     const lock = readFileSync(join(app, 'standalone/pnpm-lock.yaml'), 'utf8')
     expect(lock).not.toContain('workspace:')
     expect(lock).toContain("'@theokit/agents':")
+  })
+})
+
+describe('standalone released.json synchronization', () => {
+  const released = read('standalone/released.json')
+
+  it('is exact, and matches every pin in the real standalone manifests and lockfile', () => {
+    for (const v of Object.values(released)) expect(v).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(syncStandalone(join(app, 'standalone'))).toEqual([])
+  })
+
+  const copy = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sync-standalone-'))
+    for (const f of [...manifests, 'released.json', 'pnpm-lock.yaml'].map((p) => `${p}`)) {
+      mkdirSync(dirname(join(dir, f)), { recursive: true })
+      cpSync(join(app, 'standalone', f), join(dir, f))
+    }
+    return dir
+  }
+
+  it('detects a drifted manifest pin and repairs it with write', () => {
+    const dir = copy()
+    try {
+      const path = join(dir, 'packages/cli/package.json')
+      const m = JSON.parse(readFileSync(path, 'utf8'))
+      m.dependencies['@theokit/agents'] = '1.0.0'
+      writeFileSync(path, JSON.stringify(m))
+      expect(syncStandalone(dir).join('\n')).toContain('packages/cli/package.json: @theokit/agents')
+      expect(syncStandalone(dir, { write: true }).join('\n')).not.toContain('package.json')
+      expect(syncStandalone(dir)).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('detects a lockfile that lacks the released pin, and a non-exact release', () => {
+    const dir = copy()
+    try {
+      writeFileSync(join(dir, 'released.json'), JSON.stringify({ ...released, '@theokit/sdk': '9.9.9' }))
+      const out = syncStandalone(dir).join('\n')
+      expect(out).toContain('pnpm-lock.yaml: no importer specifier @theokit/sdk@9.9.9')
+      writeFileSync(join(dir, 'released.json'), JSON.stringify({ ...released, '@theokit/sdk': '^5.32.0' }))
+      expect(syncStandalone(dir).join('\n')).toContain('not an exact version')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

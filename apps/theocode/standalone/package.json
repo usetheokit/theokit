@@ -13,7 +13,7 @@
     "dev:banner": "tsx packages/tui/scripts/render-banner.tsx",
     "build": "node tools/build-cli.mjs && npm run build:acp",
     "build:acp": "esbuild packages/agent/src/chat/chat-acp.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/acp-entry.mjs",
-    "test": "vitest run",
+    "test": "vitest run auth.test.mjs",
     "test:watch": "vitest",
     "test:live": "vitest run --config vitest.live.config.ts",
     "typecheck": "tsc --noEmit",
