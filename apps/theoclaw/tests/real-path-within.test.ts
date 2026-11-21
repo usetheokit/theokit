@@ -2,7 +2,7 @@ import { join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { isWithin } from '../src/tools/real-path.js'
+import { isWithin } from '@theokit/agents/tool-scope'
 
 /**
  * `isWithin` decides whether a tool's path stays inside a workspace root, so each case below is a

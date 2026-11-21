@@ -11,6 +11,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The path veto on the workspace's `.theokit` and `.theoclaw` directories now runs on `@theokit/agents/tool-scope` (`createPathVetoPlugin`, `vetoPathCall`, `resolveRealPath`), and TheoClaw's own `real-path.ts` is gone. A `git_diff` path with a wildcard is now refused too. The refusal wording and plugin name are unchanged (#1837).
+
 ### Fixed
 
 - The live session tests keep their memory in a state directory of their own, so a code word saved by another case or an earlier run is no longer recalled in place of the one the test sent (#2504).
