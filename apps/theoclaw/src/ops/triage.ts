@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
-import { gzipSync } from 'node:zlib'
+
+import { DiagnosticBundleError, writeDiagnosticBundle } from '@theokit/agents/doctor'
 
 import { loadConfiguration } from '../config-file.js'
 import { UsageError } from '../cli-args.js'
@@ -26,29 +27,6 @@ export interface TriageIo {
 
 const LOG_LINES = 200
 
-/** A minimal ustar archive of regular files (names under 100 bytes). */
-function tar(files: ReadonlyArray<{ name: string; content: string }>): Buffer {
-  const blocks: Buffer[] = []
-  for (const file of files) {
-    const body = Buffer.from(file.content, 'utf8')
-    const header = Buffer.alloc(512)
-    header.write(file.name, 0, 100, 'utf8')
-    header.write('0000644\0', 100)
-    header.write('0000000\0', 108)
-    header.write('0000000\0', 116)
-    header.write(`${body.length.toString(8).padStart(11, '0')}\0`, 124)
-    header.write(`${Math.floor(Date.now() / 1000).toString(8).padStart(11, '0')}\0`, 136)
-    header.write('        ', 148)
-    header.write('0', 156)
-    header.write('ustar\0' + '00', 257)
-    const sum = header.reduce((total, byte) => total + byte, 0)
-    header.write(`${sum.toString(8).padStart(6, '0')}\0 `, 148)
-    blocks.push(header, body, Buffer.alloc((512 - (body.length % 512)) % 512))
-  }
-  blocks.push(Buffer.alloc(1024))
-  return Buffer.concat(blocks)
-}
-
 function parseTriage(args: readonly string[]): string | undefined {
   if (args.length === 0) return undefined
   const out = args[1]
@@ -56,7 +34,7 @@ function parseTriage(args: readonly string[]): string | undefined {
   throw new UsageError('theoclaw triage: expected [--out <dir>]')
 }
 
-export function triageCommand(args: readonly string[], io: TriageIo): Promise<number> {
+export async function triageCommand(args: readonly string[], io: TriageIo): Promise<number> {
   const outDir = resolve(io.cwd, parseTriage(args) ?? '.')
   const env: NodeJS.ProcessEnv = { ...io.env }
   let loadError: string | undefined
@@ -112,16 +90,19 @@ export function triageCommand(args: readonly string[], io: TriageIo): Promise<nu
     { name: 'log-tail.txt', content: clean(logTail) },
   ]
   const promptText = clean(prompt)
-  const archive = gzipSync(tar(files))
-  // The names stay in the clear; no configured value may appear in what is written.
-  const written = [...files.map((file) => file.content), promptText, archive.toString('latin1'), tar(files).toString('utf8')]
-  if (secrets.some((secret) => written.some((text) => text.includes(secret)))) {
+  const refused = (): number => {
     io.stderr.write('theoclaw triage: a secret value survived masking; nothing was written\n')
-    return Promise.resolve(1)
+    return 1
   }
+  if (secrets.some((secret) => promptText.includes(secret))) return refused()
   mkdirSync(outDir, { recursive: true })
-  writeFileSync(join(outDir, archiveName), archive, { mode: 0o600 })
+  try {
+    await writeDiagnosticBundle({ out: join(outDir, archiveName), files, secrets })
+  } catch (error) {
+    if (error instanceof DiagnosticBundleError && error.reason === 'secret_survived') return refused()
+    throw error
+  }
   writeFileSync(join(outDir, promptName), promptText, { mode: 0o600 })
   io.stdout.write(`${JSON.stringify({ promptPath: join(outDir, promptName), bundlePath: join(outDir, archiveName), findings: findings.length })}\n`)
-  return Promise.resolve(0)
+  return 0
 }

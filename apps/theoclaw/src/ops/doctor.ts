@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import type { Writable } from 'node:stream'
 
-import { diagnose, renderDiagnosis, type Check } from '@theokit/agents/doctor'
+import { credentialShape, describeCredentialDefect, diagnose, renderDiagnosis, type Check } from '@theokit/agents/doctor'
 
 import { auditConfiguration, fixFindings } from '../security-audit.js'
 import { configurationPath, loadConfiguration } from '../config-file.js'
@@ -21,19 +21,10 @@ export interface DoctorIo {
   readonly stdout: Writable
 }
 
-const PLACEHOLDER = /^(changeme|change-me|your[-_ ].*|xxx+|<.*>|\.\.\.|todo|none|null|undefined)$/i
-const MIN_KEY_LENGTH = 8
-
 /** What is wrong with a credential's shape, or undefined. The text never holds the credential. */
 export function credentialDefect(value: string): string | undefined {
-  if (value !== value.trim()) return 'has leading or trailing whitespace'
-  if (/\s/.test(value)) return 'contains whitespace'
-  if (/["'`\\]/.test(value)) return 'contains a quote or backslash'
-  // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f]/.test(value)) return 'contains a control character'
-  if (PLACEHOLDER.test(value)) return 'is a placeholder'
-  if (value.length < MIN_KEY_LENGTH) return `is shorter than ${MIN_KEY_LENGTH} characters`
-  return undefined
+  const defect = credentialShape(value)
+  return defect === 'ok' ? undefined : describeCredentialDefect(defect)
 }
 
 const KEYS = ['THEOKIT_API_KEY', 'OPENROUTER_API_KEY']
