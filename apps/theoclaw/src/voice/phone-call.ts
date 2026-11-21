@@ -1,12 +1,13 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 import type { MessageEvent } from '@theokit/gateway'
+import { runAgentText } from '@theokit/gateway-agent'
 
 import { maskSecrets } from '../channels/channel-loop.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { describeError } from '../control-plane/errors.js'
 import type { SessionLease } from '../sessions/session-agents.js'
-import { runText } from '../triggers/trigger-route.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 
 /** The variables that switch on answering inbound Twilio phone calls (OC-15). */
 export const VOICE_CALL_TOKEN_VARIABLE = 'THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN'
@@ -229,13 +230,13 @@ export function createVoiceCallRoute(
     try {
       const outcome = await withChatAgent(event, async (lease) => {
         try {
-          return await runText(lease.agent, heard)
+          return await runAgentText(lease.agent, heard, { sendOptions: { ...untrustedContentSendOptions() } })
         } finally {
           lease.release()
         }
       })
-      if (outcome.failure !== undefined) write(`voice call: the turn failed (${outcome.failure})`)
-      reply = outcome.failure === undefined ? spoken(outcome.text, secrets) : ''
+      if (!outcome.ok) write(`voice call: the turn failed (${outcome.failure})`)
+      reply = outcome.ok ? spoken(outcome.text, secrets) : ''
     } catch (error) {
       write(`voice call: the turn failed (${describeError(error)})`)
       reply = ''

@@ -15,6 +15,10 @@ export class BodyTooLargeError extends TheokitAgentError {
   }
 }
 
+function ignoreCancelFailure(): undefined {
+  return undefined
+}
+
 function concatenate(chunks: readonly Uint8Array[], total: number): Uint8Array<ArrayBuffer> {
   const body = new Uint8Array(total)
   let offset = 0
@@ -28,7 +32,7 @@ function concatenate(chunks: readonly Uint8Array[], total: number): Uint8Array<A
 /**
  * Read the whole body, stopping as soon as it passes `maxBytes`, whether or not the request
  * declared a `content-length` (a chunked body declares none, and a declared one can understate).
- * Past the cap the reader is cancelled and `BodyTooLargeError` is thrown. The bytes are kept as
+ * Past the cap the reader is cancelled (not awaited) and `BodyTooLargeError` is thrown. The bytes are kept as
  * they came, so a signature over the raw body is computed over exactly what the client sent.
  */
 export async function readCappedBody(
@@ -44,7 +48,8 @@ export async function readCappedBody(
     if (done) break
     total += value.byteLength
     if (total > maxBytes) {
-      await reader.cancel()
+      // Best-effort: a cancel that rejects or never settles must not hold back or replace the size error.
+      reader.cancel().catch(ignoreCancelFailure)
       throw new BodyTooLargeError(maxBytes)
     }
     chunks.push(value)

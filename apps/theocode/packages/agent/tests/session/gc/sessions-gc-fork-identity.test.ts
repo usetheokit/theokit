@@ -108,3 +108,33 @@ describe('a fork of a registered session', () => {
     expect(removed, 'the protected source lost its registry entry').toEqual(['the-fork'])
   })
 })
+
+describe('registry identity of a candidate', () => {
+  it('test_an_unregistered_fork_naming_a_registered_source_gets_no_registry_identity', async () => {
+    writeTranscript(fx, 'newest', 1)
+    const source = writeTranscript(fx, 'source-live', 2)
+    const fork = writeTranscript(fx, 'the-fork', 90, {
+      content: `${JSON.stringify({ type: 'user', sessionId: 'source-live' })}\n`,
+    })
+    const removed: string[] = []
+
+    const { plan } = await run(true, {
+      listRegistry: async () => [{ agentId: 'source-live' }],
+      removeFromRegistry: (id: string) => void removed.push(id),
+    })
+
+    expect(plan.candidates.find((c) => c.transcript === fork)?.id).toBeUndefined()
+    expect(existsSync(fork)).toBe(false)
+    expect(existsSync(source)).toBe(true)
+    expect(removed).toEqual([])
+  })
+
+  it('test_an_unrelated_framework_id_is_kept_on_its_candidate', async () => {
+    writeTranscript(fx, 'newest', 1)
+    const old = writeTranscript(fx, 'stray', 90)
+
+    const { plan } = await run(false, { listRegistry: async () => [{ agentId: 'other' }] })
+
+    expect(plan.candidates.find((c) => c.transcript === old)?.id).toBe('stray')
+  })
+})
