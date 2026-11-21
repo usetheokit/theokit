@@ -66,9 +66,7 @@ const planSessionGC = () =>
   })
 
 describe('#106 — unreadable is not orphaned', () => {
-  // it.fails: the framework's planTranscriptGC does not yet protect this (local filter removed,
-  // #2410); drop .fails once it does (#2444).
-  it.fails('test_a_transcript_whose_id_cannot_be_read_is_kept', async () => {
+  it('test_a_transcript_whose_id_cannot_be_read_is_kept', async () => {
     seed('decoy-newer', 999 * DAY)
     const bad = seed('unreadable-one', 0, 'not json {')
 

@@ -47,13 +47,8 @@ for `release.yml` in this repository will not find it, and should not have been 
 - `sessions gc` (current project) awaits the framework's async `planTranscriptGC`; it was reading a
   promise as the plan. A transcript that a registry entry owns is removed under that entry's id, and
   a framework id naming a registered session that owns a different file (a fork's source) is dropped,
-  so the source is never removed; every other framework id is passed through. The local legacy-name
-  filter and the local re-planning of unreadable transcripts are gone: `sessions gc` relies on the
-  framework's `planTranscriptGC`/`runTranscriptGC` alone. **Consequence: GC can now delete the
-  4.x-named (`<id>.jsonl`) transcript of a live session, and a transcript whose id cannot be read**,
-  because the framework protects only the hashed name and collects unreadable files. Their four
-  protection tests are `it.fails` until the framework covers it. The owner can accept this or
-  require a framework fix (#2410, #2444).
+  so the source is never removed; every other framework id is passed through. TheoCode's local
+  protection of 4.x-named live-session transcripts and of unreadable transcripts stays (#2410, #2444).
 - The cross-project collector (`gc/all-sessions*`, `filesystem`, `auto*`, `spawn-sweep`,
   `guarded-start`) is not yet moved onto the framework's `planProjectsGC`, `scheduleSessionSweep` and
   `claimCollectorRoot`: they are in the workspace `@theokit/agents` 16.12.0 source but not in the

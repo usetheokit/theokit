@@ -87,9 +87,7 @@ describe('#102 — deletion speaks the registry vocabulary', () => {
     expect(deleted, 'Agent.delete was handed a transcript filename').toEqual([agentId])
   })
 
-  // it.fails: the framework's planTranscriptGC does not yet protect this (local filter removed,
-  // #2410); drop .fails once it does (#2444).
-  it.fails('test_both_naming_conventions_of_a_live_session_are_protected', async () => {
+  it('test_both_naming_conventions_of_a_live_session_are_protected', async () => {
     // #102, the half `ca3db5c` broke while fixing the other half. 5.x hashes the session id into
     // the filename; 4.x used the id itself, and the SDK still exports `legacyTranscriptPath`
     // because an upgraded machine has both on disk.

@@ -157,9 +157,7 @@ describe('sessions gc floors and legacy names', () => {
     expect(existsSync(old)).toBe(true)
   })
 
-  // it.fails: the framework's planTranscriptGC does not yet protect this (local filter removed,
-  // #2410); drop .fails once it does (#2444).
-  it.fails('test_both_naming_conventions_of_the_tui_pointer_session_are_protected', async () => {
+  it('test_both_naming_conventions_of_the_tui_pointer_session_are_protected', async () => {
     writeTranscript(fx, 'decoy-newer', 1)
     const current = writeTranscript(fx, 'tui-live', 90)
     const legacy = writeTranscript(fx, 'tui-live', 90, { legacy: true })
@@ -173,9 +171,7 @@ describe('sessions gc floors and legacy names', () => {
     )
   })
 
-  // it.fails: the framework's planTranscriptGC does not yet protect this (local filter removed,
-  // #2410); drop .fails once it does (#2444).
-  it.fails('test_a_legacy_name_the_sdk_sanitises_is_still_protected', async () => {
+  it('test_a_legacy_name_the_sdk_sanitises_is_still_protected', async () => {
     // `a.b` is filed as `a-b.jsonl` on 4.x: a stem comparison with the raw id would miss it.
     const id = 'tui.live.1'
     writeTranscript(fx, 'decoy-newer', 1)
