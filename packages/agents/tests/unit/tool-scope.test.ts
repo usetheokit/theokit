@@ -28,6 +28,12 @@ import { bindToolScope, sandboxWritePolicy } from '../../src/tools/tool-scope.js
 const fakeSandbox = { mode: 'workspace-write' } as unknown as SandboxProvider
 const otherSandbox = { mode: 'read-only' } as unknown as SandboxProvider
 
+/** What the SDK's `resolveSandbox` makes of the sandbox a factory received: it must be a function. */
+function resolved(sandbox: unknown): unknown {
+  expect(typeof sandbox).toBe('function')
+  return (sandbox as (ctx: unknown) => unknown)({})
+}
+
 /** A stand-in for a `sdk-tools` factory: records what the binder actually passed it. */
 function spyFactory() {
   const calls: Record<string, unknown>[] = []
@@ -45,7 +51,8 @@ describe('bindToolScope — the scope is applied once, and cannot be assembled w
 
     scope.bind(factory)()
 
-    expect(calls[0]).toMatchObject({ projectRoot: '/proj', sandbox: fakeSandbox })
+    expect(calls[0]).toMatchObject({ projectRoot: '/proj' })
+    expect(resolved(calls[0].sandbox)).toBe(fakeSandbox)
   })
 
   it('test_writeRoot_defaults_to_projectRoot', () => {
@@ -74,10 +81,10 @@ describe('bindToolScope — the scope is applied once, and cannot be assembled w
 
     expect(calls[0]).toMatchObject({
       projectRoot: '/proj',
-      sandbox: fakeSandbox,
       name: 'run_shell',
       timeoutMs: 5000,
     })
+    expect(resolved(calls[0].sandbox)).toBe(fakeSandbox)
   })
 })
 
@@ -89,7 +96,7 @@ describe('the sandbox cannot be removed — only replaced', () => {
 
     scope.bind(factory)({ sandbox: otherSandbox })
 
-    expect(calls[0].sandbox).toBe(otherSandbox)
+    expect(resolved(calls[0].sandbox)).toBe(otherSandbox)
   })
 
   it('test_passing_sandbox_undefined_falls_back_to_the_scope_instead_of_unbinding_it', () => {
@@ -102,7 +109,7 @@ describe('the sandbox cannot be removed — only replaced', () => {
 
     scope.bind(factory)({ sandbox: undefined })
 
-    expect(calls[0].sandbox).toBe(fakeSandbox)
+    expect(resolved(calls[0].sandbox)).toBe(fakeSandbox)
   })
 
   it('test_the_same_holds_for_projectRoot_and_writeRoot', () => {
@@ -188,5 +195,21 @@ describe('protectedPaths', () => {
     })
     input.push('/later')
     expect(scope.protectedPaths).toEqual(['/proj/.state', '/abs/dir'])
+  })
+})
+
+describe('the sandbox reaches the factory as a provider function', () => {
+  it('test_a_backend_is_wrapped_so_a_second_SDK_copy_cannot_misread_it', () => {
+    const { factory, calls } = spyFactory()
+    bindToolScope({ projectRoot: '/proj', sandbox: fakeSandbox }).bind(factory)()
+    expect(calls[0].sandbox).not.toBe(fakeSandbox)
+    expect(resolved(calls[0].sandbox)).toBe(fakeSandbox)
+  })
+
+  it('test_a_provider_function_is_passed_through_unchanged', () => {
+    const { factory, calls } = spyFactory()
+    const provider = (() => fakeSandbox) as unknown as SandboxProvider
+    bindToolScope({ projectRoot: '/proj', sandbox: provider }).bind(factory)()
+    expect(calls[0].sandbox).toBe(provider)
   })
 })

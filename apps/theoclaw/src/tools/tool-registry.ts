@@ -163,7 +163,11 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
     }
     tools.push(bindDuplicated(scope, createShellTool)())
     if (settings.interactive !== undefined) {
-      tools.push(createInteractiveShellTool({ interactive: settings.interactive }), createWriteStdinTool({ interactive: settings.interactive }))
+      // A provider function, not the backend: the SDK tells the two apart by `instanceof`, which
+      // fails across the duplicated SDK installs and then calls the backend as a function.
+      const backend = settings.interactive
+      const interactive = () => backend
+      tools.push(createInteractiveShellTool({ interactive }), createWriteStdinTool({ interactive }))
     }
   }
   tools.push(...acpTools(settings, permission))
