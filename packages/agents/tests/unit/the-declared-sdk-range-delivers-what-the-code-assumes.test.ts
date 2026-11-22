@@ -196,6 +196,15 @@ function overriddenSdkVersion(): string {
 function admits(range: string, version: string): boolean {
   const wanted = asNumber(version)
   return range.split('||').some((part) => {
+    const [lower = '', upper = '', ...rest] = part.trim().split(/\s+/)
+    if (
+      lower.startsWith('>=') &&
+      upper.startsWith('<') &&
+      !upper.startsWith('<=') &&
+      rest.length === 0
+    ) {
+      return wanted >= asNumber(lower.slice(2)) && wanted < asNumber(upper.slice(1))
+    }
     const m = /^(\^?)(\d+\.\d+\.\d+)$/.exec(part.trim())
     if (m === null) throw new Error(`cannot read the range "${part.trim()}"`)
     const floor = asNumber(m[2] ?? '')
@@ -227,6 +236,13 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     const pkgs = everySdkDeclaration().map((d) => d.pkg)
     expect(pkgs).toContain(join('apps', 'theocode', 'package.json'))
     expect(pkgs).toContain(join('apps', 'theocode', 'packages', 'agent', 'package.json'))
+  })
+
+  it('reads a bounded range with its floor and its ceiling, both ways', () => {
+    expect(admits('>=5.3.0 <10', '5.32.0')).toBe(true)
+    expect(admits('>=5.3.0 <10', '9.1.0')).toBe(true)
+    expect(admits('>=5.3.0 <10', '5.2.9')).toBe(false)
+    expect(admits('>=5.3.0 <10', '10.0.0')).toBe(false)
   })
 
   it('declares, in every manifest, a range that admits the version the root override installs', () => {
