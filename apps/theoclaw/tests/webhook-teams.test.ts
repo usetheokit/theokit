@@ -72,6 +72,17 @@ describe('createTeamsRoute', () => {
     expect(response.status).toBe(503)
   })
 
+  it('answers 500 when the handler throws', async () => {
+    const adapter = new FakeAdapter('teams')
+    adapter.onInbound(async () => {
+      throw new Error('handler exploded')
+    })
+
+    const response = await createTeamsRoute({ verify: accept(MESSAGE_ACTIVITY), adapter, write: () => undefined })(post())
+
+    expect(response.status).toBe(500)
+  })
+
   it('delivers an accepted message activity', async () => {
     const { adapter, delivered } = subscribedTeams()
 
