@@ -2,11 +2,9 @@ import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 import { describe, expect, it } from 'vitest'
 
 import { adapterBuilders } from '../src/channels/adapter-factory.js'
-import { resolvePlatforms } from '../src/channels/platforms.js'
+import { descriptorFor, resolvePlatforms } from '../src/channels/platforms.js'
 import { renderQr } from '../src/channels/whatsapp-qr.js'
-import { webhookPlatform } from '../src/webhooks/platform-routes.js'
-
-const deps = { write: () => undefined, verifierFactory: () => async () => undefined } as never
+import { gatewayRouter } from './webhook-fixtures.js'
 
 describe('THEOCLAW_WHATSAPP_BACKEND=baileys', () => {
   it('configures WhatsApp from a session directory under the state directory, with no secret', () => {
@@ -32,14 +30,17 @@ describe('THEOCLAW_WHATSAPP_BACKEND=baileys', () => {
     expect(resolvePlatforms({ THEOCLAW_WHATSAPP_BACKEND: 'cloud' }).configured).toEqual([])
   })
 
-  it('builds the Baileys adapter and has no webhook route', () => {
+  it('builds the Baileys adapter and has no webhook route', async () => {
     const entry = resolvePlatforms({ THEOCLAW_WHATSAPP_BACKEND: 'baileys', THEOCLAW_STATE_DIR: '/state' }).configured[0]
     if (entry === undefined) throw new Error('not configured')
     const adapter = adapterBuilders([entry])[0]?.build()
 
     expect(adapter).toBeInstanceOf(WhatsAppAdapter)
     expect((adapter as WhatsAppAdapter).getBackend().kind).toBe('baileys')
-    expect(webhookPlatform(entry as Parameters<typeof webhookPlatform>[0], deps)).toBeUndefined()
+    expect(descriptorFor(entry.platform, entry.settings).transport).toBe('socket')
+    // Started or not, nothing for Meta to call: the gateway's handler routes webhook channels only.
+    const router = gatewayRouter({ channels: [{ descriptor: descriptorFor(entry.platform, entry.settings), adapter: adapter! }], isStarted: () => true })
+    expect((await router(new Request('http://localhost/webhooks/whatsapp', { method: 'POST', body: '{}' }))).status).toBe(404)
   })
 
   it('draws a QR as text', async () => {
