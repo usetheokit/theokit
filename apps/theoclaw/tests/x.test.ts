@@ -99,9 +99,9 @@ describe('x', () => {
         clientId: 'cid',
         clientSecret: 'client-secret-value',
         refreshToken: 'refresh-token-value',
-        allowFrom: ['alice', '42'],
+        allowFrom: 'alice, 42',
         bearerToken: 'bearer-value',
-        guest: { dailyLimit: 3 },
+        guestDailyLimit: '3',
       },
     })
     expect(resolved.secrets).toEqual(expect.arrayContaining(['client-secret-value', 'refresh-token-value', 'bearer-value']))

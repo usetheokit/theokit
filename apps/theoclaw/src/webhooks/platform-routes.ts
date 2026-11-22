@@ -54,12 +54,12 @@ function convertsEnvelopes(
  * answers 503, and the line says why.
  */
 function teamsVerifier(
-  settings: { readonly clientId: string },
+  settings: PlatformSettings,
   factory: (options: TeamsActivityVerifierOptions) => TeamsVerifier,
   write: (line: string) => void,
 ): TeamsVerifier | undefined {
   try {
-    return factory({ clientId: settings.clientId })
+    return factory({ clientId: settings.clientId ?? '' })
   } catch (error) {
     write(`teams: the activity verifier could not be built: ${describeError(error)}`)
     return undefined
@@ -93,16 +93,13 @@ export interface WebhookDeps {
   readonly verifierFactory: (options: TeamsActivityVerifierOptions) => TeamsVerifier
 }
 
-type WebhookPlatformFor<P extends SupportedPlatform> = (
-  settings: PlatformSettings<P>,
-  deps: WebhookDeps,
-) => WebhookPlatform | undefined
+type WebhookPlatformFor = (settings: PlatformSettings, deps: WebhookDeps) => WebhookPlatform | undefined
 
 /**
  * Each platform's webhook, or `null` for one that has none. Keyed by every platform name, so a new
  * platform does not compile until it has a decision here (an unlisted one would answer 404).
  */
-const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor<P> | null } = {
+const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor | null } = {
   telegram: null,
   discord: null,
   slack: null,
@@ -119,14 +116,14 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
   yuanbao: () => signedPlatform(createYuanbaoRoute),
   qq: () => signedPlatform(createQqRoute),
   zalo: () => signedPlatform(createZaloRoute),
-  line: ({ channelSecret }) => ({
+  line: ({ channelSecret = '' }) => ({
     methods: ['POST'],
     buildRoute: (adapter) => createLineRoute({ channelSecret, adapter }),
   }),
   whatsapp: (settings, { write }) => {
     // The Baileys backend is a socket, not a webhook: nothing for Meta to call.
     if (isBaileys(settings)) return undefined
-    const { appSecret, verifyToken } = settings
+    const { appSecret = '', verifyToken = '' } = settings
     return {
       methods: ['GET', 'POST'],
       buildRoute: (adapter) => {
@@ -168,11 +165,11 @@ const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor
 }
 
 /** The route builder of one configured platform, or undefined for a platform with no webhook. */
-export function webhookPlatform<P extends SupportedPlatform>(
-  entry: { readonly platform: P; readonly settings: PlatformSettings<P> },
+export function webhookPlatform(
+  entry: { readonly platform: SupportedPlatform; readonly settings: PlatformSettings },
   deps: WebhookDeps,
 ): WebhookPlatform | undefined {
-  const forPlatform: WebhookPlatformFor<P> | null = WEBHOOK_PLATFORMS[entry.platform]
+  const forPlatform = WEBHOOK_PLATFORMS[entry.platform]
   return forPlatform === null ? undefined : forPlatform(entry.settings, deps)
 }
 
