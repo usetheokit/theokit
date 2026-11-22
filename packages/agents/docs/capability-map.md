@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1488 export(s) across 27 entry point(s).
+1482 export(s) across 27 entry point(s).
 
-Measured against `@theokit/sdk@8.0.1`.
+Measured against `@theokit/sdk@5.32.0`.
 
 ## `@theokit/agents`
 
@@ -52,7 +52,6 @@ Measured against `@theokit/sdk@8.0.1`.
 | `CapabilityPreset` | value |
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
-| `CircuitBreaker` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
 | `compileAgentDefinition` | value |
@@ -118,7 +117,6 @@ Measured against `@theokit/sdk@8.0.1`.
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
 | `GenerateObjectError` | value |
-| `GenerationFileError` | value |
 | `getModelInfo` | value |
 | `GoalRunner` | value |
 | `GuardrailError` | value |
@@ -182,7 +180,6 @@ Measured against `@theokit/sdk@8.0.1`.
 | `parseModelId` | value |
 | `piiDetector` | value |
 | `Plugin` | value |
-| `PluginManifestError` | value |
 | `PluginsCapability` | value |
 | `PreCompactionHandlerError` | value |
 | `prepareWorkspace` | value |
@@ -217,7 +214,6 @@ Measured against `@theokit/sdk@8.0.1`.
 | `runWithApiErrorHandling` | value |
 | `safePathJoin` | value |
 | `Semaphore` | value |
-| `SessionPoolClosedError` | value |
 | `SessionStoreCapability` | value |
 | `setDiagnosticsSink` | value |
 | `setOnce` | value |
@@ -258,7 +254,6 @@ Measured against `@theokit/sdk@8.0.1`.
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
-| `TrustRecordError` | value |
 | `UngatedCapabilityError` | value |
 | `unicodeNormalizer` | value |
 | `UnknownAgentError` | value |
@@ -327,7 +322,6 @@ Measured against `@theokit/sdk@8.0.1`.
 | `CatalogModel` | type |
 | `CatalogModelCost` | type |
 | `CheckpointSavedEvent` | type |
-| `CircuitBreakerOptions` | type |
 | `CompactionCallOptions` | type |
 | `CompactionStrategyConfig` | type |
 | `CompatSurface` | type |

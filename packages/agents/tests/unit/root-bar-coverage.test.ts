@@ -132,21 +132,6 @@ const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
   // would have given two wrong answers: it carries `createTokenLimiter` from 5.3.0 while the module
   // does not export it until 5.8.0. Nothing here is 5.9.0, which is what guessing would have
   // produced from the bump that prompted the work.
-  // ── Arrived by 8.0.1 (the SDK the workspace now installs); each decided `out`, none has a consumer here.
-  checkToolName: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  diag: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  diagFailure: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  GenerationFileError: { since: '8.0.1', verdict: 'in', via: 'export * from @theokit/sdk' },
-  installWorkspacePlugin: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  jsonGenerations: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  memoryGenerations: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  parsePluginManifest: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  PluginManifestError: { since: '8.0.1', verdict: 'in', via: 'export * from @theokit/sdk' },
-  readSessionHistory: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  SessionPoolClosedError: { since: '8.0.1', verdict: 'in', via: 'export * from @theokit/sdk' },
-  TrustRecordError: { since: '8.0.1', verdict: 'in', via: 'export * from @theokit/sdk' },
-  trustWorkspacePlugin: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  untrustWorkspacePlugin: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   createTokenLimiter: { since: '5.8.0', verdict: 'out', reason: R.GUARDRAILS },
   createUnicodeNormalizer: { since: '5.8.0', verdict: 'out', reason: R.GUARDRAILS },
   isInside: { since: '5.6.0', verdict: 'out', reason: R.INTERNAL },

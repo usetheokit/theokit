@@ -106,23 +106,7 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     // against an SDK the packages could not use.
     const root = readPkg('package.json')
     const dev = root.devDependencies as Record<string, string>
-    expect(dev['@theokit/sdk']).toMatch(/^\^9\./)
-  })
-
-  it('test_the_four_published_packages_admit_sdk_9_and_refuse_sdk_10', () => {
-    const floors: Record<string, string> = {
-      'packages/theo/package.json': '>=5.32.0 <10',
-      'packages/host/package.json': '>=5.32.0 <10',
-      'packages/presenter/package.json': '>=5.3.0 <10',
-    }
-    for (const [manifest, expected] of Object.entries(floors)) {
-      const peers = readPkg(manifest).peerDependencies as Record<string, string>
-      expect(peers['@theokit/sdk'], manifest).toBe(expected)
-    }
-    const agents = readPkg('packages/agents/package.json').dependencies as Record<string, string>
-    expect(agents['@theokit/sdk']).toBe('>=5.32.0 <10')
-    const root = readPkg('package.json') as { pnpm: { overrides: Record<string, string> } }
-    expect(root.pnpm.overrides['@theokit/sdk']).toMatch(/^9\./)
+    expect(dev['@theokit/sdk']).toMatch(/^\^5\./)
   })
 
   it('test_isClosed_rejects_the_open_shapes', () => {

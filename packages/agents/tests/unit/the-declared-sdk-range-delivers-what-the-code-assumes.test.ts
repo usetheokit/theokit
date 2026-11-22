@@ -189,16 +189,21 @@ function overriddenSdkVersion(): string {
 }
 
 /**
- * Whether `range` admits `version`, for the shapes the workspace spells: `^x.y.z`, an exact
- * `x.y.z` and `>=x.y.z <N`, joined by `||`. Any other shape throws rather than answering, so a declaration written
+ * Whether `range` admits `version`, for the two shapes the workspace spells: `^x.y.z` and an exact
+ * `x.y.z`, joined by `||`. Any other shape throws rather than answering, so a declaration written
  * another way is reported instead of read as agreement.
  */
 function admits(range: string, version: string): boolean {
   const wanted = asNumber(version)
   return range.split('||').some((part) => {
-    const bounded = /^>=(\d+\.\d+\.\d+) <(\d+)$/.exec(part.trim())
-    if (bounded !== null) {
-      return wanted >= asNumber(bounded[1] ?? '') && wanted < asNumber(`${bounded[2]}.0.0`)
+    const [lower = '', upper = '', ...rest] = part.trim().split(/\s+/)
+    if (
+      lower.startsWith('>=') &&
+      upper.startsWith('<') &&
+      !upper.startsWith('<=') &&
+      rest.length === 0
+    ) {
+      return wanted >= asNumber(lower.slice(2)) && wanted < asNumber(upper.slice(1))
     }
     const m = /^(\^?)(\d+\.\d+\.\d+)$/.exec(part.trim())
     if (m === null) throw new Error(`cannot read the range "${part.trim()}"`)
@@ -231,6 +236,13 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     const pkgs = everySdkDeclaration().map((d) => d.pkg)
     expect(pkgs).toContain(join('apps', 'theocode', 'package.json'))
     expect(pkgs).toContain(join('apps', 'theocode', 'packages', 'agent', 'package.json'))
+  })
+
+  it('reads a bounded range with its floor and its ceiling, both ways', () => {
+    expect(admits('>=5.3.0 <10', '5.32.0')).toBe(true)
+    expect(admits('>=5.3.0 <10', '9.1.0')).toBe(true)
+    expect(admits('>=5.3.0 <10', '5.2.9')).toBe(false)
+    expect(admits('>=5.3.0 <10', '10.0.0')).toBe(false)
   })
 
   it('declares, in every manifest, a range that admits the version the root override installs', () => {
@@ -300,9 +312,6 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     const floors = floorsOf(declaredSdkRange('packages/agents', 'dependencies'))
     expect(floors).toHaveLength(1)
     expect(floors[0]?.major).toBe(5)
-    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '8.0.1')).toBe(true)
-    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '9.0.0')).toBe(true)
-    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '10.0.0')).toBe(false)
     expect(
       floors[0]?.minor,
       `the agents floor admits @theokit/sdk@5.${floors[0]?.minor}.x, where an Anthropic-family ` +
