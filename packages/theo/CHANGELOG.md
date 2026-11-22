@@ -1,5 +1,13 @@
 # theo
 
+## 0.85.2
+
+### Patch Changes
+
+- Updated dependencies [88d3d87]
+  - @theokit/presenter@0.18.0
+  - @theokit/agents@17.3.1
+
 ## 0.85.1
 
 ### Patch Changes
@@ -665,8 +673,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                                [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                                were found and every /api/agents/* route will 404.
+                                                                  [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                                  were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
