@@ -101,13 +101,14 @@ export type StubAdapter = BasePlatformAdapter & { readonly sent: OutboundMessage
  * the descriptor's own use of the adapter, which a FakeAdapter does not have.
  */
 export function fakeBuilders(overrides: Partial<Record<PlatformName, StubAdapter>> = {}) {
-  const adapters = new Map<PlatformName, StubAdapter>()
+  // Typed as FakeAdapter, which every caller drives; the LINE one is a real adapter with the same members they use.
+  const adapters = new Map<PlatformName, FakeAdapter>()
   const builders = (configured: readonly ConfiguredPlatform[]): PlatformBuild[] =>
     configured.map(({ platform }) => ({
       platform,
       build: () => {
         const adapter = overrides[platform] ?? (platform === 'line' ? offlineLine(LINE_SECRET) : new FakeAdapter(platform))
-        adapters.set(platform, adapter)
+        adapters.set(platform, adapter as FakeAdapter)
         return adapter
       },
     }))

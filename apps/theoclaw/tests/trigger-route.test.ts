@@ -242,9 +242,8 @@ describe('through the webhook router', () => {
   function routed(): { readonly h: Harness; readonly router: (request: Request) => Promise<Response> } {
     const h = harness()
     const router = createWebhookRouter({
-      routes: new Map(),
+      channels: async () => new Response(null, { status: 404 }),
       triggers: new Map([['ci', createTriggerRoute({ trigger: TRIGGER, adapterFor: () => h.adapter, withAgent: async (work) => work(new FakeAgent({ frames: [assistant('ok'), finished()] }) as unknown as TurnAgent), write: () => undefined })]]),
-      isStarted: () => true,
       write: () => undefined,
     })
     return { h, router }
