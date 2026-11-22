@@ -95,6 +95,10 @@ function installedSdkMajor(): number {
   return Number(version.split('.')[0])
 }
 
+/** Why a symbol of SDK 8 stays out of the layer while the floor is below it. */
+const SINCE_8 =
+  'Added by `@theokit/sdk` 8, absent at the 5.32 floor: re-exporting it fails the DTS build there. Revisit when the floor moves to 8.'
+
 const DECISIONS: Record<string, Decision> = {
   // ── Arrived with `@theokit/sdk@5.x`. Each needed a verdict, and the reason each is `out` is
   // different — which is the point of recording decisions rather than an allowlist.
@@ -216,6 +220,7 @@ const DECISIONS: Record<string, Decision> = {
   },
   './auth': { verdict: 'in', via: '../../src/auth-entry.js', coverage: 'sample', symbols: [] },
   './sandbox': {
+    gaps: { startEgressProxy: SINCE_8 },
     verdict: 'in',
     via: '../../src/sandbox-entry.js',
     // M90 — this was `'sample'` with an EMPTY list, which is no sample at all. This file's own
@@ -227,6 +232,10 @@ const DECISIONS: Record<string, Decision> = {
   },
   './persistence': {
     gaps: {
+      atomicWriteJsonSync: SINCE_8,
+      ensureSecureDir: SINCE_8,
+      InsecureDirectoryError: SINCE_8,
+      listProjects: SINCE_8,
       LiveTranscriptError:
         'the 5.x name for `LiveSessionError`, and absent from the 4.x half of the range this ' +
         'package supports — re-exporting it unconditionally fails the DTS build against 4.52.1 ' +
@@ -332,13 +341,22 @@ const DECISIONS: Record<string, Decision> = {
       'Secret redaction is applied by the SDK runtime on its own sinks. Exposing it invites the ' +
       'consumer to redact by hand, which is where a path gets forgotten.',
   },
-  './internal/persistence': {
+  './internal/security': {
     verdict: 'out',
     reason: "Marked `internal/` by the SDK itself — re-exporting contradicts the source's intent.",
   },
-  './internal/security': {
+  './testing': {
     verdict: 'out',
-    reason: 'Idem `internal/persistence`.',
+    reason: 'Added by SDK 8. Test doubles for SDK consumers; no consumer here asked for them.',
+  },
+  './telemetry-node': {
+    verdict: 'out',
+    reason: 'Added by SDK 8. Node telemetry wiring the SDK owns; no consumer here asked for it.',
+  },
+  './mcp': {
+    verdict: 'out',
+    reason:
+      "Added by SDK 8. MCP is wired through the layer's own tools surface; no consumer asked.",
   },
   './client': {
     verdict: 'out',

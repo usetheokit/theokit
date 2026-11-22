@@ -2,7 +2,6 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { getTheokitHome } from '@theokit/sdk/internal/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
@@ -85,8 +84,7 @@ describe('applyInstance', () => {
     const profiled = resolveInstance({ ...process.env, THEOCLAW_PROFILE: 'a' }, { homeDir: home })
     applyInstance(profiled, process.env)
     const dir = profiled.directory!
-    expect(getTheokitHome(home)).toBe(dir)
-    expect(getTheokitHome(tmpdir())).toBe(dir)
+    expect(process.env.THEOKIT_HOME).toBe(dir)
     expect(process.env.THEOKIT_AUTH_HOME).toBe(dir)
     expect(process.env.THEOCLAW_STATE_DIR).toBe(join(dir, 'state'))
   })

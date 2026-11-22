@@ -189,13 +189,17 @@ function overriddenSdkVersion(): string {
 }
 
 /**
- * Whether `range` admits `version`, for the two shapes the workspace spells: `^x.y.z` and an exact
- * `x.y.z`, joined by `||`. Any other shape throws rather than answering, so a declaration written
+ * Whether `range` admits `version`, for the shapes the workspace spells: `^x.y.z`, an exact
+ * `x.y.z` and `>=x.y.z <N`, joined by `||`. Any other shape throws rather than answering, so a declaration written
  * another way is reported instead of read as agreement.
  */
 function admits(range: string, version: string): boolean {
   const wanted = asNumber(version)
   return range.split('||').some((part) => {
+    const bounded = /^>=(\d+\.\d+\.\d+) <(\d+)$/.exec(part.trim())
+    if (bounded !== null) {
+      return wanted >= asNumber(bounded[1] ?? '') && wanted < asNumber(`${bounded[2]}.0.0`)
+    }
     const m = /^(\^?)(\d+\.\d+\.\d+)$/.exec(part.trim())
     if (m === null) throw new Error(`cannot read the range "${part.trim()}"`)
     const floor = asNumber(m[2] ?? '')
@@ -296,6 +300,8 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     const floors = floorsOf(declaredSdkRange('packages/agents', 'dependencies'))
     expect(floors).toHaveLength(1)
     expect(floors[0]?.major).toBe(5)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '8.0.1')).toBe(true)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '9.0.0')).toBe(false)
     expect(
       floors[0]?.minor,
       `the agents floor admits @theokit/sdk@5.${floors[0]?.minor}.x, where an Anthropic-family ` +
