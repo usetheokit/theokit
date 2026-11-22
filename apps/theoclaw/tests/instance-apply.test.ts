@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { transcriptRoot } from '@theokit/sdk/persistence'
+import { getTheokitHome } from '@theokit/sdk/internal/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
@@ -85,11 +85,8 @@ describe('applyInstance', () => {
     const profiled = resolveInstance({ ...process.env, THEOCLAW_PROFILE: 'a' }, { homeDir: home })
     applyInstance(profiled, process.env)
     const dir = profiled.directory!
-    // `getTheokitHome` left the public surface with `internal/persistence` (SDK 6): the home-anchored
-    // `transcriptRoot` is the public resolver, and it must follow the profile whatever HOME is.
-    expect(transcriptRoot()).toBe(dir)
-    process.env.HOME = tmpdir()
-    expect(transcriptRoot()).toBe(dir)
+    expect(getTheokitHome(home)).toBe(dir)
+    expect(getTheokitHome(tmpdir())).toBe(dir)
     expect(process.env.THEOKIT_AUTH_HOME).toBe(dir)
     expect(process.env.THEOCLAW_STATE_DIR).toBe(join(dir, 'state'))
   })
