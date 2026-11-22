@@ -1,7 +1,7 @@
 import { GatewayRunner } from '@theokit/gateway'
 import type { GatewayHook, MessageEvent, PlatformName } from '@theokit/gateway'
-import { MattermostAdapter } from '@theokit/gateway-mattermost'
-import { SlackAdapter, normalizeSlackEvent } from '@theokit/gateway-slack'
+import { mattermostChannel } from '@theokit/gateway-mattermost'
+import { normalizeSlackEvent, slackChannel } from '@theokit/gateway-slack'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,23 +9,6 @@ import { adapterBuilders } from '../src/channels/adapter-factory.js'
 import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
 import type { ConfiguredPlatform } from '../src/channels/platforms.js'
 import { FakeAdapter, messageEvent, waitFor } from './fakes.js'
-
-// The constructors are wrapped, not replaced: each still builds the real adapter, and the test
-// reads the options it was given.
-vi.mock('@theokit/gateway-slack', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@theokit/gateway-slack')>()
-  const SlackAdapter = vi.fn(function (options: ConstructorParameters<typeof actual.SlackAdapter>[0]) {
-    return new actual.SlackAdapter(options)
-  })
-  return { ...actual, SlackAdapter }
-})
-vi.mock('@theokit/gateway-mattermost', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@theokit/gateway-mattermost')>()
-  const MattermostAdapter = vi.fn(function (options: ConstructorParameters<typeof actual.MattermostAdapter>[0]) {
-    return new actual.MattermostAdapter(options)
-  })
-  return { ...actual, MattermostAdapter }
-})
 
 const MENTION_GATED: readonly ConfiguredPlatform[] = [
   { platform: 'slack', settings: { botToken: 'xoxb-placeholder', appToken: 'xapp-placeholder' } },
@@ -42,15 +25,17 @@ afterEach(async () => {
   await Promise.all(runners.splice(0).map((runner) => runner.stop()))
 })
 
-/** The `requireMention` each of the three gated adapters was built with. */
+/** The `requireMention` each of the three gated descriptors was given; each still builds the real adapter. */
 function builtRequireMention(requireMention: boolean): unknown[] {
+  const slack = vi.spyOn(slackChannel, 'create')
+  const mattermost = vi.spyOn(mattermostChannel, 'create')
   const from = vi.spyOn(WhatsAppAdapter, 'from')
   for (const { build } of adapterBuilders(MENTION_GATED, { requireMention })) build()
-  const slack = vi.mocked(SlackAdapter).mock.calls[0]?.[0]
-  const mattermost = vi.mocked(MattermostAdapter).mock.calls[0]?.[0]
-  const whatsapp = from.mock.calls[0]?.[1]
+  const given = [slack.mock.calls[0]?.[0]?.requireMention, mattermost.mock.calls[0]?.[0]?.requireMention, from.mock.calls[0]?.[1]?.requireMention]
+  slack.mockRestore()
+  mattermost.mockRestore()
   from.mockRestore()
-  return [slack?.requireMention, mattermost?.requireMention, whatsapp?.requireMention]
+  return given
 }
 
 /** A group message as the Telegram adapter delivers it: the grammy context rides in `telegram.raw`. */

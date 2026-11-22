@@ -96,7 +96,9 @@ describe('WeChat', () => {
     const r = rig('wechat')
     expect((await r.call(new Request(url('wechat', '?signature=x')))).status).toBe(503)
     await r.start()
-    const q = new URLSearchParams({ timestamp: '1', nonce: 'n', signature: computeWeChatSignature('tk', '1', 'n') }).toString()
+    // @theokit/gateway-wechat 0.3.0 refuses a timestamp more than 300 s from the clock.
+    const now = String(Math.floor(Date.now() / 1000))
+    const q = new URLSearchParams({ timestamp: now, nonce: 'n', signature: computeWeChatSignature('tk', now, 'n') }).toString()
     const check = await r.call(new Request(url('wechat', `?${q}&echostr=hello`)))
     expect(await check.text()).toBe('hello')
 
