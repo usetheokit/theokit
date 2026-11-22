@@ -210,19 +210,30 @@ describe.skipIf(!LIVE)('the computer tool against a real model', () => {
       const actions: string[] = []
       let answer = ''
       try {
-        const run = await agent.send(
-          `Use the computer tool. Take a screenshot, move the pointer onto the text box, type the word ${word}, then take another screenshot. Tell me the code shown after the word CODE.`,
-        )
-        for await (const event of run.stream()) {
-          if (event.type !== 'tool_call' || !('name' in event) || event.name !== 'computer')
-            continue
-          if ('status' in event && event.status === 'running' && 'args' in event)
-            actions.push(String((event.args as { action?: unknown })?.action))
+        // One turn per step: a single long instruction let the model stop after the first screenshot,
+        // and the screenshot describer only reports the code when asked for it.
+        const turn = async (prompt: string): Promise<string> => {
+          const run = await agent.send(prompt)
+          for await (const event of run.stream()) {
+            if (event.type !== 'tool_call' || !('name' in event) || event.name !== 'computer')
+              continue
+            if ('status' in event && event.status === 'running' && 'args' in event)
+              actions.push(String((event.args as { action?: unknown })?.action))
+          }
+          const outcome = await run.wait()
+          if (outcome.status !== 'finished')
+            throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
+          return String(outcome.result ?? '')
         }
-        const outcome = await run.wait()
-        if (outcome.status !== 'finished')
-          throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
-        answer = String(outcome.result ?? '')
+        await turn(
+          'Use the computer tool with action screenshot, and ask it to describe the screen, including the exact code shown after the word CODE and where the text box is.',
+        )
+        await turn(
+          `Now use the computer tool with action mouse_move to put the pointer onto the text box, then action type to type the word ${word}. Do both calls before you answer.`,
+        )
+        answer = await turn(
+          'Use the computer tool with action screenshot once more, asking it for the exact code shown after the word CODE. Then tell me that code, letter for letter.',
+        )
       } finally {
         await agent[Symbol.asyncDispose]()
       }
