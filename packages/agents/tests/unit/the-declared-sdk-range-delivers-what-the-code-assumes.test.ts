@@ -301,7 +301,8 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     expect(floors).toHaveLength(1)
     expect(floors[0]?.major).toBe(5)
     expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '8.0.1')).toBe(true)
-    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '9.0.0')).toBe(false)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '9.0.0')).toBe(true)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '10.0.0')).toBe(false)
     expect(
       floors[0]?.minor,
       `the agents floor admits @theokit/sdk@5.${floors[0]?.minor}.x, where an Anthropic-family ` +
