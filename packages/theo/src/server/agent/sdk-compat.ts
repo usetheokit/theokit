@@ -48,11 +48,8 @@ export function satisfiesSdkRange(version: string, range: string): boolean {
 function satisfiesBounded(version: string, range: string): boolean {
   const parts = range.split(/\s+/)
   const floor = parts[0]?.startsWith('>=') ? parseSemver(parts[0].slice(2)) : null
-  const ceilingText = parts[1]?.startsWith('<') ? parts[1].slice(1) : undefined
-  const ceiling =
-    ceilingText === undefined
-      ? null
-      : parseSemver(/^\d+$/.test(ceilingText) ? `${ceilingText}.0.0` : ceilingText)
+  const ceilingText = parts[1]?.startsWith('<') ? parts[1].slice(1) : ''
+  const ceiling = parseSemver(/^\d+$/.test(ceilingText) ? `${ceilingText}.0.0` : ceilingText)
   const ver = parseSemver(version)
   if (parts.length !== 2 || !floor || !ceiling || !ver || ver.tag !== undefined) return false
   const n = (s: Semver): number[] => [Number(s.major), Number(s.minor), Number(s.patch)]

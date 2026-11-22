@@ -90,7 +90,7 @@ function webFetchTool(settings: ToolSettings): CustomTool {
 
 /** The sandboxed shell over the settings' backend; `shell_exec`. */
 export function shellToolFor(settings: ToolSettings): CustomTool {
-  return toolScopeOf(settings).bind(createShellTool)()
+  return bindDuplicated(toolScopeOf(settings), createShellTool)()
 }
 
 /** The two read-only file tools: the `minimal` tool profile. */
@@ -126,6 +126,16 @@ export function readOnlyTools(settings: ToolSettings): CustomTool[] {
  * when `settings.interactive` is set, which `withInteractiveShell` does once a real session is
  * proven to write in the tool root and nowhere else on this host.
  */
+/**
+ * `scope.bind` for a factory whose sandbox option is typed by another copy of `@theokit/sdk`.
+ * SDK 8 declares optional OpenTelemetry peers, which this app resolves differently from the
+ * framework packages, so pnpm installs the SDK twice and the two `SandboxBackend` classes no longer
+ * unify. The scope supplies the real values at run time; only the type identity differs.
+ */
+function bindDuplicated<O>(scope: ToolScope, factory: (options: O) => CustomTool): (overrides?: Partial<O>) => CustomTool {
+  return scope.bind(factory as never) as unknown as (overrides?: Partial<O>) => CustomTool
+}
+
 export function buildTools(settings: ToolSettings, permission: AcpPermissionOptions = {}, scope: ToolScope = toolScopeOf(settings)): CustomTool[] {
   const tools: CustomTool[] = [
     scope.bind(createReadFileTool)(),
@@ -144,14 +154,14 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
   if (settings.imageResults !== false) tools.splice(2, 0, scope.bind(createViewImageTool)())
   const search = webSearchTool(settings)
   if (search !== undefined) tools.push(search)
-  if (settings.gitRepository && settings.sandboxEnforced) tools.push(scope.bind(createGitDiffTool)())
+  if (settings.gitRepository && settings.sandboxEnforced) tools.push(bindDuplicated(scope, createGitDiffTool)())
   if (settings.hostTools) {
     // The file writers take a project root and no sandbox, so `read-only` can only leave them out
     // (plan D3); the shell stays, confined by the read-only backend.
     if (settings.sandboxMode !== 'read-only') {
       tools.push(scope.bind(createWriteFileTool)(), scope.bind(createEditFileTool)(), scope.bind(createApplyPatchTool)(), createScreenshotLogbookTool({ projectRoot: settings.toolRoot }))
     }
-    tools.push(scope.bind(createShellTool)())
+    tools.push(bindDuplicated(scope, createShellTool)())
     if (settings.interactive !== undefined) {
       tools.push(createInteractiveShellTool({ interactive: settings.interactive }), createWriteStdinTool({ interactive: settings.interactive }))
     }
