@@ -192,7 +192,7 @@ describe('composeTheoClaw', () => {
     await loop.stopAll()
   })
 
-  it('answers a route as soon as the runner has settled, while a slow platform is still held', async () => {
+  it('serves a route once the runner has settled, before a slow platform has connected', async () => {
     const held = deferred<boolean>()
     const { builders } = fakeBuilders({ telegram: new FakeAdapter('telegram', { connect: () => held.promise }) })
     const { loop, router } = composeTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, write: () => undefined, startTimeoutMs: 100 })

@@ -1,8 +1,7 @@
-import type { GatewayHandler, InboundAudio, MessageEvent } from '@theokit/gateway'
+import type { GatewayHandler, MessageEvent } from '@theokit/gateway'
 
 export interface VoiceReplies {
-  /** The audio the Telegram adapter read: bounded to 20 MB and 30 s by the adapter, before any authorization hook runs. */
-  transcribe(audio: InboundAudio): Promise<string>
+  transcribe(fileId: string): Promise<string>
   speak(event: MessageEvent, text: string): Promise<void>
 }
 
@@ -13,26 +12,23 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-/**
- * Whether a Telegram message is a voice note. Both grammy polling contexts and parsed webhook
- * updates carry `message.voice`; the adapter adds `event.audio` when it could read the audio, so a
- * voice note without it is one it could not read.
- */
-function isVoiceNote(event: MessageEvent): boolean {
-  if (event.platform !== 'telegram') return false
+/** Both grammy polling contexts and parsed webhook updates carry `message.voice`. */
+function voiceId(event: MessageEvent): string | undefined {
+  if (event.platform !== 'telegram') return undefined
   const raw = event.telegram.raw
-  return record(raw) && record(raw.message) && record(raw.message.voice)
+  if (!record(raw) || !record(raw.message) || !record(raw.message.voice)) return undefined
+  return typeof raw.message.voice.file_id === 'string' ? raw.message.voice.file_id : undefined
 }
 
 /** Runs inside the gateway handler, after owner and group authorization. */
 export function withVoiceReplies(handler: GatewayHandler, voice: VoiceReplies | undefined): GatewayHandler {
   return async (event, ctx) => {
-    if (!isVoiceNote(event)) return handler(event, ctx)
+    const fileId = voiceId(event)
+    if (fileId === undefined) return handler(event, ctx)
     let text: string
     try {
       if (voice === undefined) throw new Error('voice disabled')
-      if (event.audio === undefined) throw new Error('voice not read')
-      text = (await voice.transcribe(event.audio)).trim()
+      text = (await voice.transcribe(fileId)).trim()
       if (text === '') throw new Error('empty transcription')
     } catch {
       await ctx.reply(VOICE_FAILED)
@@ -100,9 +96,17 @@ export function configuredVoiceReplies(
     return value
   }
   return {
-    async transcribe(audio) {
+    async transcribe(fileId) {
+      const metadata = await json(await call(`${telegram}/getFile`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file_id: fileId }),
+      }))
+      const file = metadata.result
+      if (metadata.ok !== true || !record(file) || typeof file.file_path !== 'string' ||
+          !/^[\w/-]+\.\w+$/.test(file.file_path) || file.file_path.includes('..') ||
+          (typeof file.file_size === 'number' && file.file_size > MAX_AUDIO_BYTES)) throw new Error('invalid voice file')
+      const audio = await bytes(await call(`https://api.telegram.org/file/bot${token}/${file.file_path}`))
       const body = new FormData()
-      body.set('file', new Blob([audio.data as Uint8Array<ArrayBuffer>], { type: audio.mediaType }), 'voice.ogg')
+      body.set('file', new Blob([audio], { type: 'audio/ogg' }), 'voice.ogg')
       body.set('model', 'gpt-4o-mini-transcribe')
       const result = await json(await call('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST', headers: { authorization: `Bearer ${key}` }, body,

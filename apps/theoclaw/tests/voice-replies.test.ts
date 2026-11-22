@@ -12,14 +12,13 @@ import { configuredVoiceReplies, VOICE_FAILED, withVoiceReplies } from '../src/v
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent, waitFor } from './fakes.js'
 
 const env = { THEOCLAW_VOICE_OPENAI_API_KEY: 'audio-secret', THEOCLAW_TELEGRAM_TOKEN: 'telegram-secret' }
-/** A parsed note as the Telegram adapter hands it on: with the audio it read (`null` for a note it could not read). */
-function note(sender = 1, audio: MessageEvent['audio'] | null = { data: new TextEncoder().encode('OggS'), mediaType: 'audio/ogg', durationSeconds: 1 }): MessageEvent {
+function note(sender = 1): MessageEvent {
   const event = parseInbound({ message: {
     message_id: sender + 2, date: 10, from: { id: sender }, chat: { id: 42, type: 'private' },
     voice: { file_id: 'voice-id', mime_type: 'audio/ogg' },
   } })
   if (!event) throw new Error('fixture did not parse')
-  return audio === null ? event : { ...event, audio }
+  return event
 }
 function context(event: MessageEvent): GatewayContext {
   return { event, reply: vi.fn(async () => ({ ok: true })) }
@@ -27,6 +26,8 @@ function context(event: MessageEvent): GatewayContext {
 function network() {
   return vi.fn<typeof fetch>(async (url) => {
     const path = String(url)
+    if (path.endsWith('/getFile')) return Response.json({ ok: true, result: { file_path: 'voice/file.oga', file_size: 4 } })
+    if (path.includes('/file/bot')) return new Response('OggS')
     if (path.endsWith('/transcriptions')) return Response.json({ text: 'hello from voice' })
     if (path.endsWith('/speech')) return new Response('OggS-reply')
     if (path.endsWith('/sendVoice')) return Response.json({ ok: true, result: { message_id: 4 } })
@@ -59,14 +60,14 @@ describe('voice note replies', () => {
       expect(agent.sent).toEqual(['hello from voice'])
       expect(release).toHaveBeenCalledOnce()
       expect(adapter.sent).toEqual([])
-      expect(request).toHaveBeenCalledTimes(3)
-      const speech = request.mock.calls[1]?.[1]
+      expect(request).toHaveBeenCalledTimes(5)
+      const speech = request.mock.calls[3]?.[1]
       expect(JSON.parse(String(speech?.body))).toEqual({ model: 'gpt-4o-mini-tts', voice: 'alloy', input: 'Hello [redacted]', response_format: 'opus' })
-      const upload = request.mock.calls[2]?.[1]?.body as FormData
+      const upload = request.mock.calls[4]?.[1]?.body as FormData
       expect(upload.get('chat_id')).toBe('42')
       expect(upload.get('reply_parameters')).toBe('{"message_id":3}')
       expect(await (upload.get('voice') as Blob).text()).toBe('OggS-reply')
-      const transcription = request.mock.calls[0]?.[1]?.body as FormData
+      const transcription = request.mock.calls[2]?.[1]?.body as FormData
       expect(transcription.get('model')).toBe('gpt-4o-mini-transcribe')
       expect(await (transcription.get('file') as Blob).text()).toBe('OggS')
     } finally { await runner.stop() }
@@ -87,7 +88,7 @@ describe('voice note replies', () => {
       await adapters.get('telegram')!.deliver(note())
       await waitFor(() => request.mock.calls.some(([url]) => String(url).endsWith('/sendVoice')), 2000, 'composed audio reply')
       expect(agent.sent).toEqual(['hello from voice'])
-      expect(JSON.parse(String(request.mock.calls[1]?.[1]?.body)).input).toBe('[redacted]')
+      expect(JSON.parse(String(request.mock.calls[3]?.[1]?.body)).input).toBe('[redacted]')
     } finally {
       await app.loop.stopAll()
       await app.sessions.disposeAll()
@@ -143,7 +144,7 @@ describe('voice note replies', () => {
       telegram: { ...base.telegram, raw: { get message() { return { voice: { file_id: 'voice-id' } } } } } }
     const handler = vi.fn(async (_event, ctx: GatewayContext) => { await ctx.reply('answer') })
     await withVoiceReplies(handler, configuredVoiceReplies(env, request))(event, context(event))
-    expect((request.mock.calls[2]?.[1]?.body as FormData).get('message_thread_id')).toBe('7')
+    expect((request.mock.calls[4]?.[1]?.body as FormData).get('message_thread_id')).toBe('7')
   })
 
   it('requires explicit audio and Telegram credentials', () => {
@@ -151,18 +152,23 @@ describe('voice note replies', () => {
     expect(configuredVoiceReplies({ THEOCLAW_VOICE_OPENAI_API_KEY: 'key' })).toBeUndefined()
   })
 
-  it.each(['not read', 'transcription'])('rejects a %s voice note before a model turn', async (failure) => {
-    // Reading the audio (size, timeout, a failed download) is the Telegram adapter's: it leaves
-    // `audio` off a note it could not read, which has to end in the failure answer, not a model turn.
+  it.each(['http', 'api', 'path', 'oversize', 'stream', 'empty', 'transcription'])('rejects invalid %s input before a model turn', async (failure) => {
     const request = network()
-    if (failure === 'transcription') request.mockResolvedValueOnce(Response.json({ text: null }))
+    if (failure === 'http') request.mockResolvedValueOnce(new Response('', { status: 401 }))
+    if (failure === 'api') request.mockResolvedValueOnce(Response.json({ ok: false }))
+    if (failure === 'path') request.mockResolvedValueOnce(Response.json({ ok: true, result: { file_path: '../secret.ogg' } }))
+    if (failure === 'oversize') request.mockResolvedValueOnce(Response.json({ ok: true, result: { file_path: 'voice/a.ogg', file_size: 21 * 1024 * 1024 } }))
+    if (['stream', 'empty', 'transcription'].includes(failure)) {
+      request.mockResolvedValueOnce(Response.json({ ok: true, result: { file_path: 'voice/a.ogg' } }))
+      request.mockResolvedValueOnce(new Response(failure === 'stream' ? new Uint8Array(21 * 1024 * 1024) : failure === 'empty' ? '' : 'audio'))
+      if (failure === 'transcription') request.mockResolvedValueOnce(Response.json({ text: null }))
+    }
     const handler = vi.fn(async () => undefined)
-    const event = failure === 'not read' ? note(1, null) : note()
+    const event = note()
     const ctx = context(event)
     await withVoiceReplies(handler, configuredVoiceReplies(env, request))(event, ctx)
     expect(handler).not.toHaveBeenCalled()
     expect(ctx.reply).toHaveBeenCalledWith(VOICE_FAILED)
-    if (failure === 'not read') expect(request).not.toHaveBeenCalled()
   })
 
   it.each(['speech-http', 'speech-empty', 'upload-refused', 'upload-timeout'])('falls back without retrying on %s', async (failure) => {

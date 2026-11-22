@@ -7,7 +7,7 @@ import type { GatewayContext, MessageEvent, PlatformName, SendResult } from '@th
 import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
 import { createUsageHook } from '../src/channels/usage-hook.js'
 import { createAcpCommandHook, createAcpSessions } from '../src/channels/acp-command.js'
-import { CHAT_COMMANDS, createInfoHook } from '../src/channels/info-commands.js'
+import { CHAT_COMMANDS } from '../src/channels/info-commands.js'
 import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { readAckReaction, showTyping } from '../src/channels/typing.js'
@@ -111,7 +111,11 @@ describe('every registered command has a help line', () => {
 describe('the commands /help lists', () => {
   it('each is answered by its own handler without a model turn', async () => {
     const usage = createUsageHook().hook
-    const activation = createGroupActivationHook({ isOwner: () => true })
+    const activation = createGroupActivationHook({
+      isOwner: () => true,
+      mode: 'mention',
+      write: () => undefined,
+    })
     const acp = createAcpCommandHook({
       sessions: createAcpSessions({ agents: [], cwd: '/tmp' }),
       isOwner: () => true,
@@ -125,18 +129,14 @@ describe('the commands /help lists', () => {
       withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => undefined }),
       reset: async () => undefined,
       goal: { tokenBudget: 1, judge: () => never() },
-      think: () => undefined,
       compact: { run: async () => ({ preTokens: 2, postTokens: 1 }), write: () => undefined },
     })
-    // Answered by hooks built elsewhere (exec approval, the control plane), not by the ones this test builds.
-    const elsewhere = ['/approve', '/deny', '/elevated', '/stop', '/steer']
     for (const command of HELP_COMMANDS) {
       expect(HELP_TEXT).toContain(command)
-      if (elsewhere.includes(command)) continue
       // /activation is a group command: in a DM it is an ordinary message.
       const base = messageEvent('telegram', command)
-      const event = { ...base, channel: { ...base.channel, type: command.startsWith('/activation') ? 'group' : 'dm' } } as MessageEvent
-      const hooked = [usage, activation, acp, createHelpHook(), createInfoHook('offline-model')].map((hook) => hook.pre_inbound?.({ event } as never))
+      const event = { ...base, channel: { ...base.channel, type: 'group' } } as MessageEvent
+      const hooked = [usage, activation, acp].map((hook) => hook.pre_inbound?.({ event } as never))
       const log: string[] = []
       if ((await Promise.all(hooked)).some((d) => d?.block === true)) continue
       await handler(event, ctxFor(event, log)).catch(() => undefined)

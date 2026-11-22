@@ -26,7 +26,7 @@ export function smsOptions(settings: PlatformSettings): TwilioOptions {
 /** Options that apply to every build, from the authorization policy. */
 export interface AdapterBuildOptions {
   /**
-   * Whether Telegram, Slack, Mattermost and WhatsApp answer a group message only when mentioned
+   * Whether Slack, Mattermost and WhatsApp answer a group message only when mentioned
    * (`THEOCLAW_GROUP_ACTIVATION`). Unset leaves each adapter's own default.
    */
   readonly requireMention?: boolean
@@ -37,7 +37,7 @@ export interface AdapterBuildOptions {
 }
 
 /** The platforms whose descriptor takes a `requireMention` setting TheoClaw drives from `THEOCLAW_GROUP_ACTIVATION`. */
-const MENTION_GATED: ReadonlySet<string> = new Set(['telegram', 'slack', 'mattermost', 'whatsapp'])
+const MENTION_GATED: ReadonlySet<string> = new Set(['slack', 'mattermost', 'whatsapp'])
 
 function mention(options: AdapterBuildOptions): { readonly requireMention?: boolean } {
   return options.requireMention === undefined ? {} : { requireMention: options.requireMention }

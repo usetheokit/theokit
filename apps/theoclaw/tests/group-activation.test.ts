@@ -1,6 +1,7 @@
 import { GatewayRunner } from '@theokit/gateway'
 import type { GatewayHook, MessageEvent, PlatformName } from '@theokit/gateway'
-import { normalizeSlackEvent } from '@theokit/gateway-slack'
+import { mattermostChannel } from '@theokit/gateway-mattermost'
+import { normalizeSlackEvent, slackChannel } from '@theokit/gateway-slack'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,7 +11,6 @@ import type { ConfiguredPlatform } from '../src/channels/platforms.js'
 import { FakeAdapter, messageEvent, waitFor } from './fakes.js'
 
 const MENTION_GATED: readonly ConfiguredPlatform[] = [
-  { platform: 'telegram', settings: { token: 'placeholder-token' } },
   { platform: 'slack', settings: { botToken: 'xoxb-placeholder', appToken: 'xapp-placeholder' } },
   { platform: 'mattermost', settings: { baseUrl: 'https://mattermost.example.org', accessToken: 'x' } },
   { platform: 'whatsapp', settings: { accessToken: 'x', phoneNumberId: '1234', appSecret: 'x', verifyToken: 'x' } },
@@ -25,18 +25,17 @@ afterEach(async () => {
   await Promise.all(runners.splice(0).map((runner) => runner.stop()))
 })
 
-/** The `requireMention` each of the four gated adapters was built with, read from the adapter. */
+/** The `requireMention` each of the three gated descriptors was given; each still builds the real adapter. */
 function builtRequireMention(requireMention: boolean): unknown[] {
+  const slack = vi.spyOn(slackChannel, 'create')
+  const mattermost = vi.spyOn(mattermostChannel, 'create')
   const from = vi.spyOn(WhatsAppAdapter, 'from')
-  const [telegram, slack, mattermost] = adapterBuilders(MENTION_GATED, { requireMention }).map(({ build }) => build() as unknown as Record<string, unknown>)
-  for (const { platform, build } of adapterBuilders(MENTION_GATED.filter((entry) => entry.platform === 'whatsapp'), { requireMention })) {
-    expect(platform).toBe('whatsapp')
-    build()
-  }
-  const whatsapp = from.mock.calls[0]?.[1]
+  for (const { build } of adapterBuilders(MENTION_GATED, { requireMention })) build()
+  const given = [slack.mock.calls[0]?.[0]?.requireMention, mattermost.mock.calls[0]?.[0]?.requireMention, from.mock.calls[0]?.[1]?.requireMention]
+  slack.mockRestore()
+  mattermost.mockRestore()
   from.mockRestore()
-  const opts = (adapter: Record<string, unknown> | undefined): Record<string, unknown> => (adapter?.opts ?? {}) as Record<string, unknown>
-  return [telegram?.requireMention, opts(slack).requireMention, opts(mattermost).requireMention, whatsapp?.requireMention]
+  return given
 }
 
 /** A group message as the Telegram adapter delivers it: the grammy context rides in `telegram.raw`. */
@@ -87,16 +86,35 @@ describe('group activation', () => {
     expect(normalizeSlackEvent(body('hello everyone'), 'UBOT', { requireMention: false })).toBeDefined()
   })
 
-  it('builds telegram mattermost slack and whatsapp with requireMention under mention', () => {
-    expect(builtRequireMention(true)).toEqual([true, true, true, true])
+  it('builds mattermost slack and whatsapp with requireMention under mention', () => {
+    expect(builtRequireMention(true)).toEqual([true, true, true])
   })
 
-  it('always builds telegram mattermost slack and whatsapp with requireMention false', () => {
-    expect(builtRequireMention(false)).toEqual([false, false, false, false])
+  it('always builds mattermost slack and whatsapp with requireMention false', () => {
+    expect(builtRequireMention(false)).toEqual([false, false, false])
+  })
+
+  it('a telegram group message without a mention never reaches the handler under mention', async () => {
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
+    await telegram.send(telegramGroup('hello everyone'))
+    expect(telegram.handled()).toBe(0)
+    await telegram.send(telegramGroup('hello @theo_bot'))
+    expect(telegram.handled()).toBe(1)
+  })
+
+  it("an owner /activation always lets the group's unmentioned telegram messages through", async () => {
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
+    await telegram.send(telegramGroup('/activation always'))
+    expect(telegram.adapter.sent.map((message) => message.text)).toEqual(['Group activation is now always.'])
+    await telegram.send(telegramGroup('hello everyone'))
+    expect(telegram.handled()).toBe(1)
+    // Another group keeps the start-time mode.
+    await telegram.send(telegramGroup('hello everyone', OWNER, -200))
+    expect(telegram.handled()).toBe(1)
   })
 
   it('an owner /activation in a slack group replies that the mode is set at start and changes nothing', async () => {
-    const slack = await app('slack', createGroupActivationHook({ isOwner: ownerOn('slack') }))
+    const slack = await app('slack', createGroupActivationHook({ isOwner: ownerOn('slack'), mode: 'mention' }))
     await slack.send(group('slack', '/activation always'))
     expect(slack.adapter.sent.map((message) => message.text)).toEqual([
       'Group activation on slack is set at start by THEOCLAW_GROUP_ACTIVATION.',
@@ -107,38 +125,58 @@ describe('group activation', () => {
   })
 
   it('reads an owner /activation that the platform delivers behind a mention of the bot', async () => {
-    const slack = await app('slack', createGroupActivationHook({ isOwner: ownerOn('slack') }))
+    const slack = await app('slack', createGroupActivationHook({ isOwner: ownerOn('slack'), mode: 'mention' }))
     await slack.send(group('slack', '<@U123BOT> /activation always'))
-    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram') }))
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
     await telegram.send(telegramGroup('/activation@theo_bot always'))
     expect(slack.adapter.sent.map((message) => message.text)).toEqual([
       'Group activation on slack is set at start by THEOCLAW_GROUP_ACTIVATION.',
     ])
-    expect(telegram.adapter.sent.map((message) => message.text)).toEqual([
-      'Group activation on telegram is set at start by THEOCLAW_GROUP_ACTIVATION.',
-    ])
+    expect(telegram.adapter.sent.map((message) => message.text)).toEqual(['Group activation is now always.'])
     expect(slack.handled() + telegram.handled()).toBe(0)
   })
 
-  it("blocks a paired sender's /activation in silence and lets their other messages through", async () => {
-    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram') }))
-    await telegram.send(telegramGroup('/activation always', 'paired-friend'))
-    expect(telegram.adapter.sent).toEqual([])
+  it('answers a malformed owner /activation with its usage and never reaches the handler', async () => {
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
+    await telegram.send(telegramGroup('/activation always now'))
+    await telegram.send(telegramGroup('/activation'))
+    expect(telegram.adapter.sent.map((message) => message.text)).toEqual([
+      'Use /activation mention or /activation always.',
+      'Use /activation mention or /activation always.',
+    ])
     expect(telegram.handled()).toBe(0)
-    // The mention gate is the Telegram adapter's (`requireMention`), not this hook's.
-    await telegram.send(telegramGroup('hello everyone', 'paired-friend'))
-    expect(telegram.handled()).toBe(1)
   })
 
-  it('asks the owner check it is given, so a sender that check refuses cannot use the command', async () => {
+  it("blocks a paired sender's /activation in silence", async () => {
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
+    await telegram.send(telegramGroup('/activation always', 'paired-friend'))
+    await telegram.send(telegramGroup('hello everyone', 'paired-friend'))
+    expect(telegram.adapter.sent).toEqual([])
+    expect(telegram.handled()).toBe(0)
+  })
+
+  it('a telegram group message whose context carries no bot identity is treated as unmentioned and logged once', async () => {
+    const lines: string[] = []
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention', write: (line) => void lines.push(line) }))
+    const unreadable = (text: string): MessageEvent =>
+      ({ ...telegramGroup(text), telegram: { chatId: -100, messageId: 1, raw: { chat: { id: -100, type: 'group' }, message: { text } } } }) as unknown as MessageEvent
+    await telegram.send(unreadable('hello @theo_bot'))
+    await telegram.send(unreadable('hello again @theo_bot'))
+    expect(telegram.handled()).toBe(0)
+    expect(lines).toEqual(['theoclaw-group-activation: a telegram group message carried no bot identity; treated as unmentioned'])
+  })
+
+  it('asks the owner check it is given, so a sender that check refuses cannot change a mode', async () => {
     const asked: string[] = []
     const isOwner = (platform: string, senderId: string): boolean => {
       asked.push(`${platform}:${senderId}`)
       return false
     }
-    const telegram = await app('telegram', createGroupActivationHook({ isOwner }))
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner, mode: 'mention' }))
     await telegram.send(telegramGroup('/activation always'))
     expect(asked).toEqual([`telegram:${OWNER}`])
     expect(telegram.adapter.sent).toEqual([])
+    await telegram.send(telegramGroup('hello everyone'))
+    expect(telegram.handled()).toBe(0)
   })
 })

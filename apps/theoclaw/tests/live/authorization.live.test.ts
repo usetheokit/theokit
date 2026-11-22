@@ -205,7 +205,7 @@ describe.skipIf(!LIVE)('the owner policy against a real model', () => {
     const app = await liveApp({
       env: { THEOCLAW_OWNERS: `telegram:${OWNER}`, THEOCLAW_DM_POLICY: 'allowlist' },
       platforms: ['telegram'],
-      hooks: [createGroupActivationHook({ isOwner: (platform, senderId) => platform === 'telegram' && senderId === OWNER })],
+      hooks: [createGroupActivationHook({ isOwner: (platform, senderId) => platform === 'telegram' && senderId === OWNER, mode: 'mention' })],
     })
     // Events dispatch in order, so the unmentioned one is settled before the mentioned reply lands.
     await app.deliver(group('hello everyone'), 0)

@@ -123,14 +123,17 @@ describe('the Slack credential guard', () => {
 })
 
 describe('signal sender id', () => {
-  it('names a sender by phone number, not UUID, so signal:+number owners match', async () => {
-    // NumberKeyedSignalAdapter moved to @theokit/gateway-signal 0.3.0 as its `senderKey` option, which
-    // the descriptor takes and TheoClaw sets to "number".
-    const { signalEnvelopeToMessageEvent } = await import('@theokit/gateway-signal')
+  it('hands the handler the phone number, not the UUID, so signal:+number owners match', async () => {
+    // NumberKeyedSignalAdapter moved to @theokit/gateway-signal 0.3.0 as its `senderKey` option: the
+    // descriptor is given "number", and the package converts the envelope with it.
+    const { signalChannel, signalEnvelopeToMessageEvent } = await import('@theokit/gateway-signal')
+    const create = vi.spyOn(signalChannel, 'create')
     const [signal] = adapterBuilders([{ platform: 'signal', settings: { account: '+5511999990000' } }])
-    const { senderKey } = ((signal?.build() as unknown as { opts: { senderKey?: 'uuid' | 'number' } }).opts)
+    signal?.build()
+    const senderKey = create.mock.calls[0]?.[0]?.senderKey
+    create.mockRestore()
     expect(senderKey).toBe('number')
     const envelope = { source: '+5511888880000', sourceNumber: '+5511888880000', sourceUuid: 'uuid-1', timestamp: 1, dataMessage: { message: 'pong', timestamp: 1 } }
-    expect(signalEnvelopeToMessageEvent(envelope as never, 1, senderKey)?.sender.id).toBe('+5511888880000')
+    expect(signalEnvelopeToMessageEvent(envelope as never, 1, senderKey as 'number')?.sender.id).toBe('+5511888880000')
   })
 })

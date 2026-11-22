@@ -36,7 +36,11 @@ export interface ChannelHookOptions {
 export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[] {
   const { policy, pairing, write } = options
   const ownerPolicy = createOwnerPolicyHook({ policy, ...(options.execApproval === undefined ? {} : { execPending: options.execApproval.hasPending }), ...(pairing === undefined ? {} : { pairing }), write })
-  const groupActivation = createGroupActivationHook({ isOwner: (platform, senderId) => isPolicyOwner(policy, platform, senderId) })
+  const groupActivation = createGroupActivationHook({
+    isOwner: (platform, senderId) => isPolicyOwner(policy, platform, senderId),
+    mode: policy.groupActivation,
+    write,
+  })
   const help = createHelpHook()
   const exec = options.execApproval === undefined ? [] : [options.execApproval.hook]
   const workflows = options.workflowResume === undefined ? [] : [createWorkflowApproveHook({ resume: options.workflowResume, isOwner: (platform, id) => isPolicyOwner(policy, platform, id) })]
