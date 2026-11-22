@@ -53,28 +53,35 @@ describe('the SMS webhook', () => {
     expect(delivered).toEqual([])
   })
 
-  it('delivers a Twilio post signed over THEOCLAW_SMS_PUBLIC_URL', async () => {
+  it('reads the body after verifying it: a post signed over THEOCLAW_SMS_PUBLIC_URL is delivered', async () => {
     const { delivered, router } = rig()
     expect((await router(post(INBOUND))).status).toBe(200)
     expect(delivered.map((event) => event.text)).toEqual(['hello theo'])
   })
 
-  it('answers 503 before the platform starts, and when nobody is subscribed (no_handler), so Twilio retries', async () => {
+  it('answers 503 before the platform starts', async () => {
     expect((await rig(false).router(post(INBOUND))).status).toBe(503)
+  })
+
+  it('answers 503 when deliver returns no_handler', async () => {
     const { adapter, router } = rig()
     adapter.onInbound(undefined as never)
     expect((await router(post(INBOUND))).status).toBe(503)
   })
 
-  it('answers 400 on a body that inbound parsing rejects', async () => {
+  it('answers 400 on a body parse inbound rejects', async () => {
     const { delivered, router } = rig()
     expect((await router(post({ Nothing: 'here' }))).status).toBe(400)
     expect(delivered).toEqual([])
   })
 
-  it('answers 405 for a method the route does not take and 413 past 1 MiB', async () => {
+  it('answers 405 for a method the route does not take', async () => {
     const { router } = rig()
     expect((await router(new Request('http://localhost/webhooks/sms', { method: 'GET' }))).status).toBe(405)
+  })
+
+  it('refuses a body over 1 MiB with 413', async () => {
+    const { router } = rig()
     expect((await router(post({ Body: 'x'.repeat(1024 * 1024 + 1) }))).status).toBe(413)
   })
 })

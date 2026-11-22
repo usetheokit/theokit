@@ -70,6 +70,12 @@ describe('the composed voice call route', () => {
     expect(body).toContain('input="speech"')
   })
 
+  it('listens until the end of speech and posts back, as the calls always have', async () => {
+    const body = await (await app().router(post({ ...CALL, SpeechResult: 'hello' }))).text()
+    expect(body).toContain('<Gather method="POST" speechTimeout="auto" action="https://theoclaw.example.org/webhooks/voice" input="speech"/>')
+    expect(body).toContain('<Redirect method="POST">https://theoclaw.example.org/webhooks/voice</Redirect>')
+  })
+
   it('runs one turn and speaks the reply, then listens again', async () => {
     const { router, sent } = app('It is <noon> & sunny.')
     const body = await (await router(post({ ...CALL, SpeechResult: 'what time is it' }))).text()

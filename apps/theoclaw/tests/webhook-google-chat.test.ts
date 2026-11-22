@@ -54,17 +54,24 @@ describe('the Google Chat webhook', () => {
     expect(await response.json()).toEqual({ error: 'keys' })
   })
 
-  it('answers 503 before the platform starts, 405 for a method it does not take, 500 when the adapter throws', async () => {
+  it('answers 503 before the platform starts', async () => {
     const ok = async () => ({ status: 200, body: {} })
     expect((await rig(ok, false)(request({ authorization: 'Bearer abc' }))).status).toBe(503)
+  })
+
+  it('answers 405 for a method the route does not take', async () => {
+    const ok = async () => ({ status: 200, body: {} })
     expect((await rig(ok)(new Request('http://localhost/webhooks/google_chat', { method: 'GET' }))).status).toBe(405)
+  })
+
+  it('answers 500 when the adapter throws', async () => {
     const throwing = rig(async () => {
       throw new Error('keys broke')
     })
     expect((await throwing(request({ authorization: 'Bearer abc' }))).status).toBe(500)
   })
 
-  it('refuses a body over 1 MiB with 413 without calling the adapter', async () => {
+  it('refuses a body over 1 MiB with 413', async () => {
     let called = false
     const router = rig(async () => {
       called = true

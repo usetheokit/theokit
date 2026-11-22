@@ -30,7 +30,7 @@ function post(body: string, signature = computeLineSignature(SECRET, body)): Req
 }
 
 describe('the LINE webhook', () => {
-  it('answers 401 on a bad signature and delivers nothing', async () => {
+  it('answers 401 on a bad signature', async () => {
     const { delivered, router } = rig()
     expect((await router(post(JSON.stringify({ events: [text('hi')] }), 'bad'))).status).toBe(401)
     expect(delivered).toEqual([])
@@ -41,7 +41,7 @@ describe('the LINE webhook', () => {
     expect((await router(post(JSON.stringify({ events: [text('hi')] })))).status).toBe(503)
   })
 
-  it('answers 503 when nobody is subscribed (no_handler), so LINE retries', async () => {
+  it('answers 503 when deliver returns no_handler', async () => {
     const { adapter, router } = rig()
     adapter.onInbound(undefined as never)
     expect((await router(post(JSON.stringify({ events: [text('hi')] })))).status).toBe(503)
@@ -54,13 +54,32 @@ describe('the LINE webhook', () => {
     expect(delivered).toEqual(['one', 'two'])
   })
 
-  it('answers 400 on a body that is not an envelope', async () => {
+  it('answers 400 on a body that is not json', async () => {
     const { router } = rig()
     expect((await router(post('not json'))).status).toBe(400)
+  })
+
+  it('answers 400 when events is not a list', async () => {
+    const { router } = rig()
     expect((await router(post(JSON.stringify({ events: 'x' })))).status).toBe(400)
   })
 
-  it('answers 200 on an empty events list (the verification ping)', async () => {
+  it('answers 400 when an event is not an object', async () => {
+    const { delivered, router } = rig()
+    expect((await router(post(JSON.stringify({ events: ['x', null] })))).status).toBe(400)
+    expect(delivered).toEqual([])
+  })
+
+  // The package's conversion reads such an event without throwing, so it is acknowledged (TheoClaw's own route answered 400).
+  it('acknowledges an event that carries a null message or source without delivering it', async () => {
+    const { delivered, router } = rig()
+    for (const event of [{ type: 'message', source: null }, { type: 'message', source: { type: 'user', userId: 'U-1' }, message: null }]) {
+      expect((await router(post(JSON.stringify({ events: [event] })))).status).toBe(200)
+    }
+    expect(delivered).toEqual([])
+  })
+
+  it('answers 200 on an empty events list', async () => {
     const { router } = rig()
     expect((await router(post(JSON.stringify({ events: [] })))).status).toBe(200)
   })
@@ -72,9 +91,19 @@ describe('the LINE webhook', () => {
     expect(delivered).toEqual(['spaced'])
   })
 
-  it('answers 405 for a method the route does not take and 413 past 1 MiB', async () => {
+  it('answers 405 for a method the route does not take', async () => {
     const { router } = rig()
     expect((await router(new Request('http://localhost/webhooks/line', { method: 'GET' }))).status).toBe(405)
+  })
+
+  it('refuses a body over 1 MiB with 413', async () => {
+    const { router } = rig()
     expect((await router(post('x'.repeat(1024 * 1024 + 1)))).status).toBe(413)
+  })
+
+  it('answers 500 when the handler path throws', async () => {
+    const { adapter, router } = rig()
+    Object.assign(adapter, { dispatchWebhookBody: async () => { throw new Error('boom') } })
+    expect((await router(post(JSON.stringify({ events: [text('hi')] })))).status).toBe(500)
   })
 })

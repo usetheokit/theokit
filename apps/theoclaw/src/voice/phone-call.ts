@@ -83,19 +83,34 @@ export function voiceCallSecrets(env: Env): string[] {
   return token === '' ? [] : [token]
 }
 
+/**
+ * The builders' output with the two attributes TheoClaw's calls rely on, which the builders do not
+ * emit: `speechTimeout="auto"` (end of speech, not a fixed wait) on `<Gather>`, and `method="POST"`
+ * on `<Gather>` and `<Redirect>`. The text and attribute values are still escaped by the builders.
+ */
+function withCallAttributes(verb: string): string {
+  return verb
+    .replace(/^<Gather /, '<Gather method="POST" speechTimeout="auto" ')
+    .replace(/^<Redirect>/, '<Redirect method="POST">')
+}
+
 /** The `<Gather>` that listens for speech and posts it back to `action`; `prompt` is spoken first. */
 function gather(action: string, prompt: string): string {
-  return twiml.gather({ action, input: 'speech', ...(prompt === '' ? {} : { prompt }) })
+  return withCallAttributes(twiml.gather({ action, input: 'speech', ...(prompt === '' ? {} : { prompt }) }))
+}
+
+function redirect(action: string): string {
+  return withCallAttributes(twiml.redirect(action))
 }
 
 /** TwiML that speaks `speech`, then listens. A silence falls through to the redirect, which posts again with no speech. */
 export function listenTwiml(action: string, speech: string, prompt = ''): string {
-  return twiml.response(twiml.say(speech), gather(action, prompt), twiml.redirect(action))
+  return twiml.response(twiml.say(speech), gather(action, prompt), redirect(action))
 }
 
 /** TwiML that listens with `prompt`, then re-posts on silence. */
 export function promptTwiml(action: string, prompt: string): string {
-  return twiml.response(gather(action, prompt), twiml.redirect(action))
+  return twiml.response(gather(action, prompt), redirect(action))
 }
 
 /** TwiML that speaks `speech` and ends the call. */

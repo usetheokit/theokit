@@ -70,14 +70,21 @@ describe('the WhatsApp webhook', () => {
     expect(lines).toEqual([])
   })
 
-  it('answers the subscription challenge as text, and 403 or 401 on a wrong verify token', async () => {
+  it('answers the subscription challenge as text', async () => {
     const { router } = rig()
     const url = (token: string): string => `http://localhost/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=${token}&hub.challenge=abc123`
 
     const good = await router(new Request(url(VERIFY_TOKEN)))
     expect(good.status).toBe(200)
     expect(await good.text()).toBe('abc123')
-    expect([401, 403]).toContain((await router(new Request(url('wrong')))).status)
+  })
+
+  // The descriptor answers 403, Meta's documented refusal, where TheoClaw's own route answered 401.
+  it('answers 403 on a wrong verify token', async () => {
+    const { router } = rig()
+    const wrong = await router(new Request('http://localhost/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=abc123'))
+    expect(wrong.status).toBe(403)
+    expect(await wrong.text()).toBe('')
   })
 
   it('answers 503 before the platform starts', async () => {
@@ -85,7 +92,7 @@ describe('the WhatsApp webhook', () => {
     expect((await router(signedPost(envelope({ messages: [message('hi')] })))).status).toBe(503)
   })
 
-  it('answers 503 when nobody is subscribed (no_handler), so Meta retries', async () => {
+  it('answers 503 when deliver returns no_handler', async () => {
     const { adapter, router } = rig()
     adapter.onInbound(undefined as never)
     expect((await router(signedPost(envelope({ messages: [message('hi')] })))).status).toBe(503)
@@ -97,7 +104,7 @@ describe('the WhatsApp webhook', () => {
     expect(delivered).toEqual([])
   })
 
-  it('delivers each message of an envelope', async () => {
+  it('delivers each event the adapter returns', async () => {
     const { delivered, router } = rig()
     expect((await router(signedPost(envelope({ contacts: [{ wa_id: '5511999990000', profile: { name: 'Ana' } }], messages: [message('one', 'wamid.1'), message('two', 'wamid.2')] })))).status).toBe(200)
     expect(delivered.map((event) => event.text)).toEqual(['one', 'two'])
@@ -110,12 +117,32 @@ describe('the WhatsApp webhook', () => {
     expect(delivered).toEqual([])
   })
 
-  it('answers 400 on a payload that is not an envelope', async () => {
-    const { router } = rig()
-    expect((await router(signedPost('not json'))).status).toBe(400)
-    // A signed object with no entries: the package's descriptor refuses it with 500 where TheoClaw's own route answered 400.
-    // Only a request signed with the app secret gets this far, and nothing is delivered either way.
-    expect((await router(signedPost('{"not":"an envelope"}'))).status).toBe(500)
+  it('answers 400 on a payload parse webhook payload rejects', async () => {
+    const { delivered, router } = rig()
+    for (const body of ['{"not":"an envelope"}', 'not json']) {
+      expect((await router(signedPost(body))).status).toBe(400)
+    }
+    expect(delivered).toEqual([])
+  })
+
+  it('answers 500 when a handler throws, so Meta retries', async () => {
+    const { adapter, router } = rig()
+    adapter.onInbound(async () => {
+      throw new Error('handler broke')
+    })
+    expect((await router(signedPost(envelope({ messages: [message('hi')] })))).status).toBe(500)
+  })
+
+  it('answers 503 when any event finds no handler (the worst outcome wins)', async () => {
+    const { adapter, router } = rig()
+    let first = true
+    adapter.onInbound(async () => {
+      if (first) {
+        first = false
+        adapter.onInbound(undefined as never)
+      }
+    })
+    expect((await router(signedPost(envelope({ messages: [message('one', 'wamid.1'), message('two', 'wamid.2')] })))).status).toBe(503)
   })
 
   it('answers 500 and writes it when the conversion throws', async () => {
@@ -129,9 +156,13 @@ describe('the WhatsApp webhook', () => {
     expect(lines).toEqual(['whatsapp: webhook failed: conversion broke'])
   })
 
-  it('answers 405 for a method the route does not take and 413 past 1 MiB', async () => {
+  it('answers 405 for a method the route does not take', async () => {
     const { router } = rig()
     expect((await router(new Request('http://localhost/webhooks/whatsapp', { method: 'PUT' }))).status).toBe(405)
+  })
+
+  it('refuses a body over 1 MiB with 413', async () => {
+    const { router } = rig()
     expect((await router(signedPost('x'.repeat(1024 * 1024 + 1)))).status).toBe(413)
   })
 })

@@ -27,7 +27,7 @@ describe('placeCall', () => {
     const form = init.body as URLSearchParams
     expect(form.get('To')).toBe('+15550100')
     expect(form.get('From')).toBe('+15550199')
-    expect(form.get('Twiml')).toBe('<?xml version="1.0" encoding="UTF-8"?><Response><Say>a &lt; b &amp; c</Say></Response>')
+    expect(form.get('Twiml')).toBe('<Response><Say>a &lt; b &amp; c</Say></Response>')
   })
 
   it('refuses bad, unlisted numbers and an unset list without a request', async () => {

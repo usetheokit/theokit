@@ -5,7 +5,7 @@ import { createHmac } from 'node:crypto'
 
 import { composeTheoClaw } from '../src/composition.js'
 import { fakeBuilders, noAgent, offlineAdapter, WORKSPACE } from './composition-fixtures.js'
-import { waitFor } from './fakes.js'
+import { FakeAdapter, waitFor } from './fakes.js'
 
 /**
  * The webhook routes as `composeTheoClaw` serves them through the gateway's webhook handler over the
@@ -138,7 +138,29 @@ describe('the composed SMS route', () => {
   })
 })
 
+describe('the composed SMS route over an adapter the descriptor did not build', () => {
+  it('refuses every post, since no Twilio options are held for the adapter to verify with', async () => {
+    const { builders } = fakeBuilders({ sms: new FakeAdapter('sms') })
+    const { loop, router } = composeTheoClaw({ env: SMS_ENV, agentFactory: noAgent, builders, write: () => undefined })
+    await loop.ready
+
+    expect((await router(twilioPost())).status).toBe(401)
+    await loop.stopAll()
+  })
+})
+
 describe('the composed WhatsApp route', () => {
+  it('refuses a post over an adapter the descriptor did not build, without failing the platform', async () => {
+    const { builders } = fakeBuilders({ whatsapp: new FakeAdapter('whatsapp') })
+    const { loop, router } = composeTheoClaw({ env: WHATSAPP_ENV, agentFactory: noAgent, builders, write: () => undefined })
+    await loop.ready
+
+    // The descriptor holds the app secret per adapter it built, so it refuses this one's signature.
+    expect((await router(signedWhatsAppPost(WHATSAPP_TEXT))).status).toBe(401)
+    expect(loop.failed).toEqual([])
+    await loop.stopAll()
+  })
+
   it('writes a route failure without the configured value it quotes', async () => {
     const whatsapp = offlineAdapter(WHATSAPP_ENV, 'whatsapp')
     // The conversion of the envelope throws, as a defect in it would.

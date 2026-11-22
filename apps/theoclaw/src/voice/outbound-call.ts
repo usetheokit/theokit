@@ -6,6 +6,8 @@ import { TheoClawConfigError } from '../control-plane/errors.js'
 
 const E164 = /^\+[1-9]\d{1,14}$/
 const TIMEOUT_MS = 15_000
+/** The builders open a document with this; the outbound call's inline TwiML has never carried it. */
+const XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>'
 
 export interface PlaceCallInput {
   readonly env: NodeJS.ProcessEnv
@@ -48,7 +50,7 @@ export async function placeCall(input: PlaceCallInput): Promise<string> {
   const body = new URLSearchParams({
     To: to,
     From: from,
-    Twiml: twiml.response(twiml.say(message)),
+    Twiml: twiml.response(twiml.say(message)).replace(XML_DECLARATION, ''),
   })
   let response: Response
   try {

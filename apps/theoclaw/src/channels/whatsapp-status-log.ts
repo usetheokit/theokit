@@ -1,4 +1,5 @@
 import type { ChannelDescriptor } from '@theokit/gateway'
+import { parseWebhookPayload } from '@theokit/gateway-whatsapp'
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
@@ -41,7 +42,8 @@ function logFailedStatuses(envelope: unknown, write: (line: string) => void): vo
 /**
  * The gateway's WhatsApp descriptor, with TheoClaw's one addition to its webhook: a failed delivery
  * status in a request whose signature checks is written, since Meta reports a refused send only
- * there. The answer is the descriptor's own; a request that does not verify writes nothing.
+ * there, and a signed body that is not an envelope answers 400. Otherwise the answer is the
+ * descriptor's own; a request that does not verify writes nothing.
  */
 export function withFailedStatusLog(descriptor: ChannelDescriptor, write: (line: string) => void): ChannelDescriptor {
   if (descriptor.transport !== 'webhook' || descriptor.webhook.handle === undefined) return descriptor
@@ -54,11 +56,15 @@ export function withFailedStatusLog(descriptor: ChannelDescriptor, write: (line:
       ...webhook,
       async handle(adapter, request) {
         if (request.method?.toUpperCase() === 'POST' && (await webhook.verify(adapter, request))) {
+          let body: unknown
           try {
-            logFailedStatuses(JSON.parse(request.rawBody), write)
+            body = JSON.parse(request.rawBody)
           } catch {
             // Not JSON: the descriptor answers 400, which is the whole handling a malformed body gets.
           }
+          // Signed JSON that is no Meta envelope is the sender's: 400, which Meta does not retry (the descriptor answers 500).
+          if (body !== undefined && parseWebhookPayload(body) === null) return { status: 400 }
+          logFailedStatuses(body, write)
         }
         return handle(adapter, request)
       },
