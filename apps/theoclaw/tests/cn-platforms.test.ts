@@ -10,11 +10,8 @@ import { computeZaloSignature } from '@theokit/gateway-zalo'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { adapterBuilders } from '../src/channels/adapter-factory.js'
-import { resolvePlatforms } from '../src/channels/platforms.js'
-import { webhookPlatform, withRoute } from '../src/webhooks/platform-routes.js'
-import type { Handle } from '../src/webhooks/platform-routes.js'
-import { createWebhookRouter } from '../src/webhooks/router.js'
-import type { WebhookRoute } from '../src/webhooks/router.js'
+import { descriptorFor, resolvePlatforms } from '../src/channels/platforms.js'
+import { gatewayRouter } from './webhook-fixtures.js'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -58,22 +55,11 @@ function rig(platform: keyof typeof ENVS): Rig {
   const resolved = resolvePlatforms(ENVS[platform])
   const entry = resolved.configured[0]
   if (entry === undefined) throw new Error('not configured')
-  const webhook = webhookPlatform(entry, { write: () => undefined, verifierFactory: () => async () => ({ ok: false, reason: 'missing_authorization', message: '' }) })
-  const handles = new WeakMap<BasePlatformAdapter, Handle>()
-  const build = withRoute(adapterBuilders(resolved.configured)[0]!, webhook, handles)
   const started = new Map<PlatformName, BasePlatformAdapter>()
-  const adapter = build.build()
-  const route: WebhookRoute = {
-    methods: webhook?.methods ?? [],
-    handle: async (request) => {
-      const handle = handles.get(adapter)
-      return handle === undefined ? new Response(null, { status: 503 }) : handle(request)
-    },
-  }
-  const call = createWebhookRouter({
-    routes: new Map([[platform, route]]),
+  const adapter = adapterBuilders(resolved.configured)[0]!.build()
+  const call = gatewayRouter({
+    channels: [{ descriptor: descriptorFor(entry.platform, entry.settings), adapter }],
     isStarted: (name) => started.has(name),
-    write: () => undefined,
   })
   return {
     call,

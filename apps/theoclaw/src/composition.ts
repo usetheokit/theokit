@@ -4,9 +4,8 @@ import { mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { redactSecrets } from '@theokit/gateway'
-import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
-import { teamsActivityVerifier } from '@theokit/gateway-teams'
-import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
+import { createWebhookHandler } from '@theokit/gateway'
+import type { BuiltChannel, ChannelDescriptor, PlatformName } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, CustomTool, Plugin, SDKAgent } from '@theokit/sdk'
 
@@ -33,7 +32,7 @@ import { createAcpSessions, type AcpSessions } from './channels/acp-command.js'
 import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
-import { type ConfiguredPlatform, isBaileys, resolvePlatforms } from './channels/platforms.js'
+import { type ConfiguredPlatform, descriptorFor, isBaileys, resolvePlatforms } from './channels/platforms.js'
 import { qrWriter } from './channels/whatsapp-qr.js'
 
 import { readDisplayConfig } from './channels/display-config.js'
@@ -76,17 +75,10 @@ import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-s
 import { Generations } from './sessions/generations.js'
 import type { SessionAgent, SessionAgents } from './sessions/session-agents.js'
 import { readSessionSettings, type SessionSettings } from './sessions/session-settings.js'
-import {
-  type Handle,
-  startedRoute,
-  type WebhookDeps,
-  type WebhookPlatform,
-  webhookPlatform,
-  withRoute,
-} from './webhooks/platform-routes.js'
-import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
+import { withFailedStatusLog } from './channels/whatsapp-status-log.js'
+import { describeError } from './control-plane/errors.js'
+import { createWebhookRouter, type WebhookRoute, webhookPlatformOf } from './webhooks/router.js'
 import { theoClawApiFor } from './http-api/api-routes.js'
-import type { TeamsVerifier } from './webhooks/teams.js'
 import { createActivityLedger, createExecApprovalStore, execApprovalPlugin, type ExecApprovalOptions } from './tools/exec-approval.js'
 import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { createEmailTrigger } from './triggers/email-trigger.js'
@@ -159,8 +151,6 @@ export interface TheoClawOptions {
    * anything is written or installed, since loading it can throw.
    */
   readonly pairing?: PairingStore
-  /** Builds the Teams activity verifier, once (D4). Defaults to the package's `teamsActivityVerifier`. */
-  readonly teamsVerifierFactory?: (options: TeamsActivityVerifierOptions) => TeamsVerifier
   /** Every value a reply must not carry (`processSecrets`); the channel credentials when absent. */
   readonly secrets?: readonly string[]
   /** Stand-ins for the stores a secret reference names (tests); the process uses the real ones. */
@@ -288,15 +278,6 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       await adapter.sendMessage({ channel: event.channel, text })
     },
   })
-  const deps: WebhookDeps = {
-    write: maskedWrite,
-    verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier,
-  }
-  const webhooks = new Map<PlatformName, WebhookPlatform>()
-  for (const entry of configured) {
-    const webhook = webhookPlatform(entry, deps)
-    if (webhook !== undefined) webhooks.set(entry.platform, webhook)
-  }
   const events = options.events ?? readEventSettings(options.env, configured.map((entry) => entry.platform))
   reportUnservedPlatforms(skipped, configured.filter((entry) => entry.platform !== 'email' || events.emailTrigger === undefined), policy, options.write)
   const emailTrigger = events.emailTrigger === undefined ? undefined : createEmailTrigger({
@@ -306,11 +287,21 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     write: maskedWrite,
     secrets,
   })
-  const handles = new WeakMap<BasePlatformAdapter, Handle>()
+  // Each adapter the loop builds, paired with its gateway descriptor: the webhook handler routes by it.
+  const built: BuiltChannel[] = []
+  const descriptors = new Map<PlatformName, ChannelDescriptor>(
+    configured.map((entry) => [entry.platform, entry.platform === 'whatsapp' ? withFailedStatusLog(descriptorFor(entry.platform, entry.settings), maskedWrite) : descriptorFor(entry.platform, entry.settings)]),
+  )
   const loop = startChannelLoop({
-    platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention', onQr: qrWriter(options.write), connectTimeoutMs: PAIRING_WAIT_MS }).map((build) =>
-      withRoute(build, webhooks.get(build.platform), handles),
-    ),
+    platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention', onQr: qrWriter(options.write), connectTimeoutMs: PAIRING_WAIT_MS }).map(({ platform, build }) => ({
+      platform,
+      build: () => {
+        const adapter = build()
+        const descriptor = descriptors.get(platform)
+        if (descriptor !== undefined) built.push({ descriptor, adapter })
+        return adapter
+      },
+    })),
     handler: withVoiceReplies(createReplyHandler({
       withAgent: chat.withAgent,
       reset: (event) => chat.sessions.reset(event),
@@ -345,14 +336,17 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
         ? { startTimeoutMs: PAIRING_WAIT_MS }
         : {}),
   })
-  const routes = new Map<PlatformName, WebhookRoute>(
-    [...webhooks].map(([platform, { methods }]) => [platform, { methods, handle: startedRoute(loop, platform, handles) }]),
-  )
   const voiceCall = readVoiceCallSettings(options.env)
-  const router = createWebhookRouter({
-    routes,
-    ...(voiceCall === undefined ? {} : { named: new Map([['voice', { methods: ['POST'], handle: createVoiceCallRoute({ settings: voiceCall, withChatAgent: chat.withAgent, write: maskedWrite, secrets }) }]]) }),
+  // A platform stopped since answers 503 (D7); a route that throws is written, masked, and answers 500.
+  const channels = createWebhookHandler({
+    channels: built,
     isStarted: (platform) => loop.started.has(platform),
+    platformFor: webhookPlatformOf,
+    onError: (platform, error) => maskedWrite(`${platform}: webhook failed: ${describeError(error)}`),
+  })
+  const router = createWebhookRouter({
+    channels,
+    ...(voiceCall === undefined ? {} : { named: new Map([['voice', { methods: ['POST'], handle: createVoiceCallRoute({ settings: voiceCall, withChatAgent: chat.withAgent, write: maskedWrite, secrets }) }]]) }),
     write: maskedWrite,
     triggers: composedTriggers(options, events, loop, maskedWrite, secrets),
   })
