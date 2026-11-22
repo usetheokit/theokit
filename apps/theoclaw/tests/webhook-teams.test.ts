@@ -19,8 +19,19 @@ import { gatewayRouter } from './webhook-fixtures.js'
  * injected verifier, which the descriptor no longer takes).
  */
 
-const ENV = { THEOCLAW_TEAMS_CLIENT_ID: 'teams-client-id', THEOCLAW_TEAMS_CLIENT_SECRET: 'teams-secret', THEOCLAW_TEAMS_TENANT_ID: '00000000-0000-4000-8000-000000000000' }
-const ACTIVITY = JSON.stringify({ type: 'message', id: 'a-1', text: 'hello theo', from: { id: 'user-1' }, conversation: { id: 'c-1', conversationType: 'personal' }, serviceUrl: 'https://smba.trafficmanager.net/teams/' })
+const ENV = {
+  THEOCLAW_TEAMS_CLIENT_ID: 'teams-client-id',
+  THEOCLAW_TEAMS_CLIENT_SECRET: 'teams-secret',
+  THEOCLAW_TEAMS_TENANT_ID: '00000000-0000-4000-8000-000000000000',
+}
+const ACTIVITY = JSON.stringify({
+  type: 'message',
+  id: 'a-1',
+  text: 'hello theo',
+  from: { id: 'user-1' },
+  conversation: { id: 'c-1', conversationType: 'personal' },
+  serviceUrl: 'https://smba.trafficmanager.net/teams/',
+})
 
 function rig(started = true) {
   const entry = resolvePlatforms(ENV).configured[0]!
@@ -30,11 +41,16 @@ function rig(started = true) {
     delivered.push(event.text)
   })
   const lines: string[] = []
-  const router = gatewayRouter({ channels: [{ descriptor: descriptorFor(entry.platform, entry.settings), adapter }], isStarted: () => started, write: (line) => lines.push(line) })
+  const router = gatewayRouter({
+    channels: [{ descriptor: descriptorFor(entry.platform, entry.settings), adapter }],
+    isStarted: () => started,
+    write: (line) => lines.push(line),
+  })
   return { delivered, lines, router }
 }
 
-const post = (headers: Record<string, string> = {}, body = ACTIVITY): Request => new Request('http://localhost/webhooks/teams', { method: 'POST', headers, body })
+const post = (headers: Record<string, string> = {}, body = ACTIVITY): Request =>
+  new Request('http://localhost/webhooks/teams', { method: 'POST', headers, body })
 
 describe('the Teams webhook', () => {
   it('never delivers an activity the package verification rejected', async () => {
@@ -50,7 +66,9 @@ describe('the Teams webhook', () => {
 
   it('answers 405 for a method the route does not take', async () => {
     const { router } = rig()
-    expect((await router(new Request('http://localhost/webhooks/teams', { method: 'GET' }))).status).toBe(405)
+    expect(
+      (await router(new Request('http://localhost/webhooks/teams', { method: 'GET' }))).status,
+    ).toBe(405)
   })
 
   it('refuses a body over 1 MiB with 413 and delivers nothing', async () => {
@@ -60,7 +78,13 @@ describe('the Teams webhook', () => {
   })
 
   it('answers 404 for a platform that is not configured', async () => {
-    expect((await rig().router(new Request('http://localhost/webhooks/line', { method: 'POST', body: '{}' }))).status).toBe(404)
+    expect(
+      (
+        await rig().router(
+          new Request('http://localhost/webhooks/line', { method: 'POST', body: '{}' }),
+        )
+      ).status,
+    ).toBe(404)
   })
 })
 
@@ -77,15 +101,25 @@ function verifiedRig(subscribe: ((event: MessageEvent) => Promise<void>) | undef
   const adapter = offlineAdapter(ENV, 'teams')
   if (subscribe !== undefined) adapter.onInbound(subscribe)
   const real = descriptorFor(entry.platform, entry.settings)
+  const methods = real.transport === 'webhook' ? real.webhook.methods : undefined
   const descriptor: ChannelDescriptor = {
-    ...real,
+    platform: real.platform,
+    config: real.config,
+    create: real.create,
+    transport: 'webhook',
     webhook: {
-      ...real.webhook!,
+      ...(methods === undefined ? {} : { methods }),
+      verify: () => true,
+      ingest: async () => 'malformed',
       handle: async (target, request) => {
-        const activity = JSON.parse(request.rawBody) as Parameters<typeof normalizeTeamsActivity>[0]
+        const activity = JSON.parse(request.rawBody) as { type: string }
         if (activity.type !== 'message') return { status: 200 }
-        const event = normalizeTeamsActivity(activity) as unknown as MessageEvent
-        const outcome = await (target as unknown as { deliver(e: MessageEvent): Promise<'ok' | 'no_handler' | 'handler_threw'> }).deliver(event)
+        const event = normalizeTeamsActivity(activity as never) as unknown as MessageEvent
+        const outcome = await (
+          target as unknown as {
+            deliver(e: MessageEvent): Promise<'ok' | 'no_handler' | 'handler_threw'>
+          }
+        ).deliver(event)
         return { status: statusForDeliver([outcome]) }
       },
     },
@@ -108,7 +142,9 @@ describe('the Teams delivery outcomes', () => {
     const router = verifiedRig(async (event) => {
       delivered.push(event.text)
     })
-    expect((await router(post({}, JSON.stringify({ type: 'conversationUpdate' })))).status).toBe(200)
+    expect((await router(post({}, JSON.stringify({ type: 'conversationUpdate' })))).status).toBe(
+      200,
+    )
     expect(delivered).toEqual([])
   })
 
