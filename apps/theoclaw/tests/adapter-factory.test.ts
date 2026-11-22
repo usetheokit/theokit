@@ -112,13 +112,30 @@ describe('adapterBuilders', () => {
 })
 
 describe('the Slack credential guard', () => {
-  it('is the adapter\'s own: building Slack registers no process-wide rejection listener', () => {
-    // GuardedSlackAdapter moved to @theokit/gateway-slack 0.5.0+, whose connect() answers false for a
-    // refused credential instead of leaving a rejection for Node to turn into an exit.
-    const before = process.listenerCount('unhandledRejection')
-    const [slack] = adapterBuilders(PLACEHOLDERS.filter((entry) => entry.platform === 'slack'))
-    expect(slack?.build().platform).toBe('slack')
-    expect(process.listenerCount('unhandledRejection')).toBe(before)
+  it('reports a Slack credential rejection instead of letting it crash the process', async () => {
+    // GuardedSlackAdapter moved into @theokit/gateway-slack 0.5.0+: connect() stops Bolt's own
+    // background token check and answers false for a refused credential. Run that path for real,
+    // with Bolt's socket start refusing the way Slack does.
+    const { App } = await import('@slack/bolt')
+    const refusal = Object.assign(new Error('An API error occurred: invalid_auth'), { code: 'slack_webapi_platform_error' })
+    const start = vi.spyOn(App.prototype, 'start').mockRejectedValue(refusal)
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown): void => void unhandled.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    const listeners = process.listenerCount('unhandledRejection')
+    try {
+      const [slack] = adapterBuilders([{ platform: 'slack', settings: { botToken: 'xoxb-fake', appToken: 'xapp-fake' } }])
+      expect(await slack?.build().connect()).toBe(false)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(unhandled).toEqual([])
+      expect(process.listenerCount('unhandledRejection')).toBe(listeners)
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('invalid_auth'))
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+      start.mockRestore()
+      stderr.mockRestore()
+    }
   })
 })
 
