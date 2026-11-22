@@ -116,6 +116,23 @@ describe('the composed SMS route', () => {
     await loop.stopAll()
   })
 
+  it('answers 503 once the platform is stopped, so the provider retries', async () => {
+    const sms = offlineAdapter(SMS_ENV, 'sms')
+    const delivered: MessageEvent[] = []
+    const { builders } = fakeBuilders({ sms })
+    const { loop, router } = composeTheoClaw({ env: SMS_ENV, agentFactory: noAgent, builders, write: () => undefined })
+    await loop.ready
+    sms.onInbound(async (event) => {
+      delivered.push(event)
+    })
+    expect((await router(twilioPost())).status).toBe(200)
+
+    await loop.stopAll()
+
+    expect((await router(twilioPost())).status).toBe(503)
+    expect(delivered).toHaveLength(1)
+  })
+
   it('answers 503 on a platform whose adapter failed to start, and 200 once it connects', async () => {
     const sms = offlineAdapter(SMS_ENV, 'sms')
     const connect = sms.connect.bind(sms)
