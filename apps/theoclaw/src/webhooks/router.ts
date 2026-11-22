@@ -1,6 +1,5 @@
 import { BodyTooLargeError, readCappedBody } from '@theokit/agents/bridge'
 import type { PlatformName } from '@theokit/gateway'
-
 /** One webhook route: what it answers, and the methods it takes. */
 export interface WebhookRoute {
   readonly methods: readonly string[]
@@ -8,10 +7,11 @@ export interface WebhookRoute {
 }
 
 export interface RouterOptions {
-  /** A route per configured webhook platform; an absent platform answers 404. */
-  readonly routes: ReadonlyMap<PlatformName, WebhookRoute>
-  /** Whether the platform's runner has started; a configured platform that has not answers 503 (D7). */
-  readonly isStarted: (platform: PlatformName) => boolean
+  /**
+   * Every `/webhooks/<platform>` that is not one of `named`: the gateway's webhook handler, which
+   * answers 404 for an unknown platform, 503 before it starts, 405, 413 and 500 itself.
+   */
+  readonly channels: (request: Request) => Promise<Response>
   /** Where a route that throws is written; the process output mask keeps credentials out. */
   readonly write: (line: string) => void
   /**
@@ -33,8 +33,17 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-const WEBHOOK_PATH = /^\/webhooks\/([a-z]+)$/
+const WEBHOOK_PATH = /^\/webhooks\/([a-z_]+)$/
 const TRIGGER_PATH = /^\/hooks\/([a-z][a-z0-9-]{0,31})$/
+
+function pathOf(url: URL): string {
+  return url.pathname.replace(/(.)\/$/, '$1')
+}
+
+/** The platform `/webhooks/<platform>` names (a single trailing slash ignored), for the gateway's webhook handler. */
+export function webhookPlatformOf(url: URL): PlatformName | undefined {
+  return WEBHOOK_PATH.exec(pathOf(url))?.[1] as PlatformName | undefined
+}
 
 function answer(status: number): Response {
   return new Response(null, { status })
@@ -70,25 +79,19 @@ function resolveTrigger(path: string, request: Request, options: RouterOptions):
   return { label: `trigger ${name}`, route }
 }
 
-/** The route a request names, or the status that answers it before any route runs. */
+/** The route a request names, or the status that answers it before any route runs; a gateway platform is `undefined`. */
 function resolveRoute(
   request: Request,
   options: RouterOptions,
-): { readonly label: string; readonly route: WebhookRoute } | Response {
-  const path = new URL(request.url).pathname.replace(/(.)\/$/, '$1')
+): { readonly label: string; readonly route: WebhookRoute } | Response | undefined {
+  const path = pathOf(new URL(request.url))
   const trigger = resolveTrigger(path, request, options)
   if (trigger !== undefined) return trigger
   const name = WEBHOOK_PATH.exec(path)?.[1]
   const named = name === undefined ? undefined : options.named?.get(name)
-  if (name !== undefined && named !== undefined) {
-    return named.methods.includes(request.method) ? { label: name, route: named } : answer(405)
-  }
-  const platform = name as PlatformName | undefined
-  const route = platform === undefined ? undefined : options.routes.get(platform)
-  if (platform === undefined || route === undefined) return answer(404)
-  if (!options.isStarted(platform)) return answer(503)
-  if (!route.methods.includes(request.method)) return answer(405)
-  return { label: platform, route }
+  if (name === undefined) return answer(404)
+  if (named === undefined) return undefined
+  return named.methods.includes(request.method) ? { label: name, route: named } : answer(405)
 }
 
 /** The request with its body capped in memory, or the status that refuses the body. */
@@ -109,14 +112,15 @@ async function readBody(
 }
 
 /**
- * Route `/webhooks/<platform>` to its route: 404 for a platform with no route or an unknown path,
- * 503 while the platform's runner has not started (D7), 405 for a method the route does not take,
- * 413 for a body past the cap (EC-1). A single trailing slash is ignored (EC-4). `/hooks/<name>`
- * reaches a configured trigger's route the same way, with the same cap (B-397 FR-001).
+ * Route `/hooks/<name>` to a configured trigger and `/webhooks/<name>` to a named route (the voice
+ * call): 404 or 405 as each says, 413 for a body past the cap (EC-1). Every other
+ * `/webhooks/<platform>` goes to the gateway's webhook handler, which owns the platform statuses
+ * (404, 503 before start, 405, 413, 500). A single trailing slash is ignored (EC-4).
  */
 export function createWebhookRouter(options: RouterOptions): (request: Request) => Promise<Response> {
   return async (request) => {
     const resolved = resolveRoute(request, options)
+    if (resolved === undefined) return options.channels(request)
     if (resolved instanceof Response) return resolved
     const { label, route } = resolved
     const routed = await readBody(request, label, options.write)
