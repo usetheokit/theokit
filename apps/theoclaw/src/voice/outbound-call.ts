@@ -1,3 +1,5 @@
+import { twiml } from '@theokit/gateway-sms'
+
 import { UsageError } from '../cli-args.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -10,15 +12,6 @@ export interface PlaceCallInput {
   readonly to: string
   readonly message: string
   readonly fetch?: typeof fetch
-}
-
-function xmlEscape(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
 }
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
@@ -55,7 +48,7 @@ export async function placeCall(input: PlaceCallInput): Promise<string> {
   const body = new URLSearchParams({
     To: to,
     From: from,
-    Twiml: `<Response><Say>${xmlEscape(message)}</Say></Response>`,
+    Twiml: twiml.response(twiml.say(message)),
   })
   let response: Response
   try {

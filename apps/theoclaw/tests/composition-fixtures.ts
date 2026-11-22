@@ -6,15 +6,18 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { PlatformName } from '@theokit/gateway'
+import type { BasePlatformAdapter, OutboundMessage, PlatformName } from '@theokit/gateway'
 import { afterAll } from 'vitest'
 import { computeLineSignature } from '@theokit/gateway-line'
 
 import type { PlatformBuild } from '../src/channels/channel-loop.js'
 import type { MaskableStream } from '../src/channels/output-mask.js'
+import { adapterBuilders } from '../src/channels/adapter-factory.js'
+import { resolvePlatforms } from '../src/channels/platforms.js'
 import type { ConfiguredPlatform } from '../src/channels/platforms.js'
 import type { TurnAgent } from '../src/channels/reply-handler.js'
 import { FakeAdapter, FakeAgent } from './fakes.js'
+import { offline, offlineLine } from './webhook-fixtures.js'
 
 /** A stream that keeps what was written to it, for the output mask to wrap. */
 export function capturingStream(): MaskableStream & { readonly text: () => string } {
@@ -89,14 +92,21 @@ export function chunkedPost(path: string, totalBytes: number): Request {
   return new Request(`http://localhost${path}`, { method: 'POST', body, duplex: 'half' } as RequestInit)
 }
 
-/** FakeAdapter builders for whatever is configured; `adapters` exposes them to the test. */
-export function fakeBuilders(overrides: Partial<Record<PlatformName, FakeAdapter>> = {}) {
-  const adapters = new Map<PlatformName, FakeAdapter>()
+/** An adapter a test drives: what it was asked to send, and an inbound delivery. */
+export type StubAdapter = BasePlatformAdapter & { readonly sent: OutboundMessage[]; readonly connects: number; readonly disconnects: number }
+
+/**
+ * FakeAdapter builders for whatever is configured; `adapters` exposes them to the test. LINE is the
+ * real adapter without a network, since the gateway's webhook handler verifies and ingests through
+ * the descriptor's own use of the adapter, which a FakeAdapter does not have.
+ */
+export function fakeBuilders(overrides: Partial<Record<PlatformName, StubAdapter>> = {}) {
+  const adapters = new Map<PlatformName, StubAdapter>()
   const builders = (configured: readonly ConfiguredPlatform[]): PlatformBuild[] =>
     configured.map(({ platform }) => ({
       platform,
       build: () => {
-        const adapter = overrides[platform] ?? new FakeAdapter(platform)
+        const adapter = overrides[platform] ?? (platform === 'line' ? offlineLine(LINE_SECRET) : new FakeAdapter(platform))
         adapters.set(platform, adapter)
         return adapter
       },
@@ -105,3 +115,14 @@ export function fakeBuilders(overrides: Partial<Record<PlatformName, FakeAdapter
 }
 
 export const noAgent = (): TurnAgent => new FakeAgent({ frames: [] })
+
+/**
+ * The adapter TheoClaw builds for `platform` from `env`, with no network: what a webhook route
+ * verifies and ingests through is the descriptor's own use of the real adapter.
+ */
+export function offlineAdapter(env: Readonly<Record<string, string>>, platform: PlatformName): StubAdapter {
+  const entry = resolvePlatforms(env).configured.find((configured) => configured.platform === platform)
+  const build = entry === undefined ? undefined : adapterBuilders([entry])[0]
+  if (build === undefined) throw new Error(`${platform} is not configured by this environment`)
+  return offline(build.build())
+}

@@ -2,16 +2,16 @@ import { EventEmitter } from 'node:events'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { computeLineSignature } from '@theokit/gateway-line'
+import { computeLineSignature, lineChannel } from '@theokit/gateway-line'
 import { startChannelLoop } from '../src/channels/channel-loop.js'
 import { parsePort } from '../src/control-plane/bind.js'
 import { TheoClawBindError, TheoClawConfigError } from '../src/control-plane/errors.js'
 import { type ControlPlaneHandle, listenControlPlane } from '../src/control-plane/listener.js'
 import { installShutdown } from '../src/control-plane/shutdown.js'
-import { createLineRoute } from '../src/webhooks/line.js'
 import { MAX_BODY_BYTES, createWebhookRouter } from '../src/webhooks/router.js'
 import type { WebhookRoute } from '../src/webhooks/router.js'
 import { FakeAdapter, deferred, waitFor } from './fakes.js'
+import { gatewayRouter, offlineLine, routerOf } from './webhook-fixtures.js'
 
 const SECRET = 'line-channel-secret'
 const LINE_BODY = JSON.stringify({
@@ -24,6 +24,11 @@ const LINE_BODY = JSON.stringify({
     },
   ],
 })
+
+/** The router's own body handling, which a named route (the voice call) and a trigger share: no gateway platform in front of it. */
+function namedRouter(named: ReadonlyMap<string, WebhookRoute>, write: (line: string) => void = () => undefined) {
+  return createWebhookRouter({ channels: async () => new Response(null, { status: 404 }), named, write })
+}
 
 const servers: ControlPlaneHandle[] = []
 afterEach(async () => {
@@ -88,7 +93,7 @@ function shutdownHarness(
 
 describe('the process entry', () => {
   it('answers a webhook within 1000 ms while the handler never settles', async () => {
-    const line = new FakeAdapter('line')
+    const line = offlineLine(SECRET)
     const loop = startChannelLoop({
       platforms: [{ platform: 'line', build: () => line }],
       handler: () => new Promise<void>(() => {}),
@@ -96,11 +101,7 @@ describe('the process entry', () => {
       write: () => undefined,
     })
     await loop.ready
-    const router = createWebhookRouter({
-      routes: new Map([['line', { methods: ['POST'], handle: createLineRoute({ channelSecret: SECRET, adapter: line }) }]]),
-      isStarted: (platform) => loop.started.has(platform),
-      write: () => undefined,
-    })
+    const router = gatewayRouter({ channels: [{ descriptor: lineChannel, adapter: line }], isStarted: (platform) => loop.started.has(platform) })
     const base = await serve(router)
 
     const response = await fetch(`${base}/webhooks/line`, {
@@ -125,7 +126,7 @@ describe('the process entry', () => {
   })
 
   it('unconfigured platform answers 404 and unstarted answers 503', async () => {
-    const router = createWebhookRouter({
+    const router = routerOf({
       routes: new Map([['line', spyRoute()]]),
       isStarted: () => false,
       write: () => undefined,
@@ -138,7 +139,7 @@ describe('the process entry', () => {
   })
 
   it('answers 405 for a method the route does not take', async () => {
-    const router = createWebhookRouter({ routes: new Map([['line', spyRoute()]]), isStarted: () => true, write: () => undefined })
+    const router = routerOf({ routes: new Map([['line', spyRoute()]]), isStarted: () => true, write: () => undefined })
 
     const response = await router(new Request('http://localhost/webhooks/line', { method: 'GET' }))
 
@@ -186,7 +187,7 @@ describe('the process entry', () => {
 
   it('refuses an oversized body with 413', async () => {
     const line = spyRoute()
-    const router = createWebhookRouter({ routes: new Map([['line', line]]), isStarted: () => true, write: () => undefined })
+    const router = routerOf({ routes: new Map([['line', line]]), isStarted: () => true, write: () => undefined })
 
     const response = await router(post('/webhooks/line', { headers: { 'content-length': '2000000' }, body: 'x' }))
 
@@ -201,7 +202,7 @@ describe('the process entry', () => {
       ['whatsapp', spyRoute(['GET', 'POST'])],
       ['teams', spyRoute()],
     ] as const)
-    const router = createWebhookRouter({ routes, isStarted: () => true, write: () => undefined })
+    const router = routerOf({ routes, isStarted: () => true, write: () => undefined })
 
     for (const platform of routes.keys()) {
       const response = await router(post(`/webhooks/${platform}`, { body: chunkedBody(MAX_BODY_BYTES + 1) }))
@@ -212,7 +213,7 @@ describe('the process entry', () => {
 
   it('hands the route the exact bytes it read', async () => {
     const line = spyRoute()
-    const router = createWebhookRouter({ routes: new Map([['line', line]]), isStarted: () => true, write: () => undefined })
+    const router = namedRouter(new Map([['line', line]]))
 
     await router(post('/webhooks/line', { body: new Uint8Array([0xff, 0xfe, 0x00]) }))
 
@@ -222,11 +223,7 @@ describe('the process entry', () => {
   it('a body that cannot be read answers 400 and is written', async () => {
     const line = spyRoute()
     const lines: string[] = []
-    const router = createWebhookRouter({
-      routes: new Map([['line', line]]),
-      isStarted: () => true,
-      write: (entry) => lines.push(entry),
-    })
+    const router = namedRouter(new Map([['line', line]]), (entry) => lines.push(entry))
     const broken = new ReadableStream<Uint8Array>({
       pull(controller) {
         controller.error(new Error('client went away'))
@@ -242,7 +239,7 @@ describe('the process entry', () => {
 
   it('caps the body of a method other than post', async () => {
     const put = spyRoute(['PUT'])
-    const router = createWebhookRouter({ routes: new Map([['line', put]]), isStarted: () => true, write: () => undefined })
+    const router = namedRouter(new Map([['line', put]]))
 
     const response = await router(
       new Request('http://localhost/webhooks/line', {
@@ -258,7 +255,7 @@ describe('the process entry', () => {
 
   it('a trailing slash reaches the same route', async () => {
     const line = spyRoute()
-    const router = createWebhookRouter({ routes: new Map([['line', line]]), isStarted: () => true, write: () => undefined })
+    const router = routerOf({ routes: new Map([['line', line]]), isStarted: () => true, write: () => undefined })
 
     const response = await router(post('/webhooks/line/', { body: '{}' }))
 
@@ -274,7 +271,7 @@ describe('the process entry', () => {
         throw new Error('unknown backend: carrier-pigeon')
       },
     }
-    const router = createWebhookRouter({
+    const router = routerOf({
       routes: new Map([['sms', failing]]),
       isStarted: () => true,
       write: (line) => lines.push(line),
@@ -326,7 +323,7 @@ describe('the process entry', () => {
         return new Response(null, { status: 200 })
       },
     }
-    const router = createWebhookRouter({ routes: new Map([['line', line]]), isStarted: () => true, write: () => undefined })
+    const router = routerOf({ routes: new Map([['line', line]]), isStarted: () => true, write: () => undefined })
 
     const response = await router(post('/webhooks/line', { body: chunkedBody(MAX_BODY_BYTES) }))
 
@@ -336,7 +333,7 @@ describe('the process entry', () => {
 
   it('a 413 does not break the next request on the same connection', async () => {
     const line = spyRoute()
-    const base = await serve(createWebhookRouter({ routes: new Map([['line', line]]), isStarted: () => true, write: () => undefined }))
+    const base = await serve(routerOf({ routes: new Map([['line', line]]), isStarted: () => true, write: () => undefined }))
 
     const declared = await fetch(`${base}/webhooks/line`, {
       method: 'POST',
@@ -399,7 +396,7 @@ describe('the process entry', () => {
     })
 
     it('three signed posts with never-settling handlers each answer 200 within 1000 ms', async () => {
-      const line = new FakeAdapter('line')
+      const line = offlineLine(SECRET)
       const loop = startChannelLoop({
         platforms: [{ platform: 'line', build: () => line }],
         handler: () => new Promise<void>(() => {}),
@@ -407,11 +404,7 @@ describe('the process entry', () => {
         write: () => undefined,
       })
       await loop.ready
-      const router = createWebhookRouter({
-        routes: new Map([['line', { methods: ['POST'], handle: createLineRoute({ channelSecret: SECRET, adapter: line }) }]]),
-        isStarted: (platform) => loop.started.has(platform),
-      write: () => undefined,
-      })
+      const router = gatewayRouter({ channels: [{ descriptor: lineChannel, adapter: line }], isStarted: (platform) => loop.started.has(platform) })
       const base = await serve(router)
 
       const statuses = await Promise.all(

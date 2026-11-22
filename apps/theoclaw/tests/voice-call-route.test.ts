@@ -1,8 +1,10 @@
+import { createHmac } from 'node:crypto'
+
 import { describe, expect, it } from 'vitest'
 
 import { composeTheoClaw } from '../src/composition.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
-import { readVoiceCallSettings, twilioSignature } from '../src/voice/phone-call.js'
+import { readVoiceCallSettings } from '../src/voice/phone-call.js'
 import { fakeBuilders, noAgent, WORKSPACE } from './composition-fixtures.js'
 import { assistant, FakeAgent, finished } from './fakes.js'
 
@@ -17,6 +19,12 @@ const ENV = {
   THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN: TOKEN,
   THEOCLAW_VOICE_CALL_PUBLIC_URL: URL_,
   THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS: '+14155550100',
+}
+
+/** Twilio's signature, computed here from its documented rule so the test does not lean on the code it checks. */
+function twilioSignature(authToken: string, url: string, params: URLSearchParams): string {
+  const entries = [...params.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return createHmac('sha1', authToken).update(entries.reduce((text, [key, value]) => text + key + value, url)).digest('base64')
 }
 
 function post(fields: Record<string, string>, sign = true): Request {

@@ -1,7 +1,6 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
-
 import type { MessageEvent } from '@theokit/gateway'
 import { runAgentText } from '@theokit/gateway-agent'
+import { twilioRequestVerifier, twiml } from '@theokit/gateway-sms'
 
 import { maskSecrets } from '../channels/channel-loop.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -84,61 +83,28 @@ export function voiceCallSecrets(env: Env): string[] {
   return token === '' ? [] : [token]
 }
 
-function escapeXml(text: string): string {
-  return text.replace(
-    /[<>&"']/g,
-    (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c] as string,
-  )
-}
-
-function response(body: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`
-}
-
-function say(text: string): string {
-  return `<Say>${escapeXml(text)}</Say>`
-}
-
+/** The `<Gather>` that listens for speech and posts it back to `action`; `prompt` is spoken first. */
 function gather(action: string, prompt: string): string {
-  return `<Gather input="speech" action="${escapeXml(action)}" method="POST" speechTimeout="auto">${say(prompt)}</Gather>`
+  return twiml.gather({ action, input: 'speech', ...(prompt === '' ? {} : { prompt }) })
 }
 
 /** TwiML that speaks `speech`, then listens. A silence falls through to the redirect, which posts again with no speech. */
 export function listenTwiml(action: string, speech: string, prompt = ''): string {
-  const inner = prompt === '' ? '' : say(prompt)
-  return response(
-    `${say(speech)}<Gather input="speech" action="${escapeXml(action)}" method="POST" speechTimeout="auto">${inner}</Gather><Redirect method="POST">${escapeXml(action)}</Redirect>`,
-  )
+  return twiml.response(twiml.say(speech), gather(action, prompt), twiml.redirect(action))
 }
 
 /** TwiML that listens with `prompt`, then re-posts on silence. */
 export function promptTwiml(action: string, prompt: string): string {
-  return response(
-    `${gather(action, prompt)}<Redirect method="POST">${escapeXml(action)}</Redirect>`,
-  )
+  return twiml.response(gather(action, prompt), twiml.redirect(action))
 }
 
 /** TwiML that speaks `speech` and ends the call. */
 export function hangupTwiml(speech: string): string {
-  return response(`${say(speech)}<Hangup/>`)
+  return twiml.response(twiml.say(speech), twiml.hangup())
 }
 
 function xml(body: string): Response {
   return new Response(body, { status: 200, headers: { 'content-type': 'text/xml' } })
-}
-
-/** Twilio's signature: base64 HMAC-SHA1 of the URL followed by each sorted form key and value. */
-export function twilioSignature(authToken: string, url: string, params: URLSearchParams): string {
-  const entries = [...params.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-  const data = entries.reduce((text, [key, value]) => text + key + value, url)
-  return createHmac('sha1', authToken).update(data).digest('base64')
-}
-
-function signatureMatches(expected: string, given: string | null): boolean {
-  if (given === null) return false
-  const a = Buffer.from(expected)
-  const b = Buffer.from(given)
-  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 /** The spoken form of a reply: masked, whitespace folded, cut at `MAX_SPOKEN_CHARS`. */
@@ -181,16 +147,11 @@ export function createVoiceCallRoute(
     if (calls.size > REMEMBERED_CALLS) calls.delete(calls.keys().next().value as string)
   }
 
+  const verify = twilioRequestVerifier({ authToken: settings.authToken, publicUrl: settings.publicUrl })
   return async (request) => {
+    // The verifier reads its request; the route reads the form after it.
+    if (!(await verify(request.clone())).ok) return new Response(null, { status: 401 })
     const params = new URLSearchParams(await request.text())
-    if (
-      !signatureMatches(
-        twilioSignature(settings.authToken, settings.publicUrl, params),
-        request.headers.get('x-twilio-signature'),
-      )
-    ) {
-      return new Response(null, { status: 401 })
-    }
     const callSid = params.get('CallSid') ?? ''
     const from = (params.get('From') ?? '').trim()
     if (callSid === '') return new Response(null, { status: 400 })

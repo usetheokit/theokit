@@ -1,133 +1,80 @@
 import { describe, expect, it } from 'vitest'
 
+import { computeLineSignature, lineChannel } from '@theokit/gateway-line'
 import type { MessageEvent } from '@theokit/gateway'
-import { computeLineSignature } from '@theokit/gateway-line'
 
-import { createLineRoute } from '../src/webhooks/line.js'
-import { FakeAdapter } from './fakes.js'
+import { gatewayRouter, offlineLine } from './webhook-fixtures.js'
+
+/** The LINE webhook as the gateway's webhook handler serves it over TheoClaw's adapter (FR-005, FR-009). */
 
 const SECRET = 'line-channel-secret'
+const text = (value: string, id = 'm-1') => ({
+  type: 'message',
+  timestamp: 1,
+  source: { type: 'user', userId: 'U-1' },
+  message: { id, type: 'text', text: value },
+})
 
-function textEvent(id: string, text: string) {
-  return {
-    type: 'message',
-    timestamp: 1,
-    source: { type: 'user', userId: `U-${id}` },
-    replyToken: `reply-${id}`,
-    message: { id, type: 'text', text },
-  }
+function rig(started = true) {
+  const adapter = offlineLine(SECRET)
+  const delivered: string[] = []
+  adapter.onInbound(async (event: MessageEvent) => {
+    delivered.push(event.text)
+  })
+  const router = gatewayRouter({ channels: [{ descriptor: lineChannel, adapter }], isStarted: () => started })
+  return { adapter, delivered, router }
 }
 
-function signedPost(body: string, signature = computeLineSignature(SECRET, body)): Request {
-  return new Request('http://localhost/webhooks/line', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-line-signature': signature },
-    body,
-  })
+function post(body: string, signature = computeLineSignature(SECRET, body)): Request {
+  return new Request('http://localhost/webhooks/line', { method: 'POST', headers: { 'x-line-signature': signature }, body })
 }
 
-/** A started LINE adapter: subscribed, so deliver() hands each event to the recorded handler. */
-function subscribedLine(): { adapter: FakeAdapter; delivered: MessageEvent[] } {
-  const adapter = new FakeAdapter('line')
-  const delivered: MessageEvent[] = []
-  adapter.onInbound(async (event) => {
-    delivered.push(event)
-  })
-  return { adapter, delivered }
-}
-
-describe('createLineRoute', () => {
-  it('answers 401 on a bad signature', async () => {
-    const { adapter, delivered } = subscribedLine()
-    const body = JSON.stringify({ events: [textEvent('1', 'hi')] })
-
-    const response = await createLineRoute({ channelSecret: SECRET, adapter })(signedPost(body, 'forged'))
-
-    expect(response.status).toBe(401)
-    expect(delivered).toHaveLength(0)
+describe('the LINE webhook', () => {
+  it('answers 401 on a bad signature and delivers nothing', async () => {
+    const { delivered, router } = rig()
+    expect((await router(post(JSON.stringify({ events: [text('hi')] }), 'bad'))).status).toBe(401)
+    expect(delivered).toEqual([])
   })
 
-  it('answers 503 when deliver returns no_handler', async () => {
-    const adapter = new FakeAdapter('line')
-    const body = JSON.stringify({ events: [textEvent('1', 'hi')] })
+  it('answers 503 before the platform starts, so LINE retries', async () => {
+    const { router } = rig(false)
+    expect((await router(post(JSON.stringify({ events: [text('hi')] })))).status).toBe(503)
+  })
 
-    const response = await createLineRoute({ channelSecret: SECRET, adapter })(signedPost(body))
-
-    expect(response.status).toBe(503)
+  it('answers 503 when nobody is subscribed (no_handler), so LINE retries', async () => {
+    const { adapter, router } = rig()
+    adapter.onInbound(undefined as never)
+    expect((await router(post(JSON.stringify({ events: [text('hi')] })))).status).toBe(503)
   })
 
   it('delivers once per convertible event', async () => {
-    const { adapter, delivered } = subscribedLine()
-    const follow = { type: 'follow', timestamp: 1, source: { type: 'user', userId: 'U-3' }, replyToken: 'r-3' }
-    const body = JSON.stringify({ events: [textEvent('1', 'one'), follow, textEvent('2', 'two')] })
-
-    const response = await createLineRoute({ channelSecret: SECRET, adapter })(signedPost(body))
-
-    expect(response.status).toBe(200)
-    expect(delivered.map((event) => event.text)).toEqual(['one', 'two'])
+    const { delivered, router } = rig()
+    const body = JSON.stringify({ events: [text('one', 'm-1'), { type: 'follow', timestamp: 2, source: { type: 'user', userId: 'U-1' } }, text('two', 'm-2')] })
+    expect((await router(post(body))).status).toBe(200)
+    expect(delivered).toEqual(['one', 'two'])
   })
 
-  it('answers 400 on a body that is not json', async () => {
-    const { adapter, delivered } = subscribedLine()
-
-    const response = await createLineRoute({ channelSecret: SECRET, adapter })(signedPost('not json'))
-
-    expect(response.status).toBe(400)
-    expect(delivered).toHaveLength(0)
+  it('answers 400 on a body that is not an envelope', async () => {
+    const { router } = rig()
+    expect((await router(post('not json'))).status).toBe(400)
+    expect((await router(post(JSON.stringify({ events: 'x' })))).status).toBe(400)
   })
 
-  it('answers 400 when events is not a list', async () => {
-    const { adapter } = subscribedLine()
-
-    const response = await createLineRoute({ channelSecret: SECRET, adapter })(
-      signedPost(JSON.stringify({ events: 'nope' })),
-    )
-
-    expect(response.status).toBe(400)
-  })
-
-  it('answers 400 when an event is not an object', async () => {
-    const { adapter, delivered } = subscribedLine()
-
-    const response = await createLineRoute({ channelSecret: SECRET, adapter })(
-      signedPost(JSON.stringify({ events: [null] })),
-    )
-
-    expect(response.status).toBe(400)
-    expect(delivered).toHaveLength(0)
-  })
-
-  it('answers 400 when an event carries a null message or source', async () => {
-    const { adapter, delivered } = subscribedLine()
-    const nullMessage = { type: 'message', source: { type: 'user', userId: 'U-1' }, message: null }
-    const nullSource = { type: 'message', source: null, message: { id: '1', type: 'text', text: 'x' } }
-
-    for (const event of [nullMessage, nullSource]) {
-      const response = await createLineRoute({ channelSecret: SECRET, adapter })(
-        signedPost(JSON.stringify({ events: [event] })),
-      )
-      expect(response.status).toBe(400)
-    }
-    expect(delivered).toHaveLength(0)
-  })
-
-  it('answers 200 on an empty events list', async () => {
-    const { adapter } = subscribedLine()
-
-    const response = await createLineRoute({ channelSecret: SECRET, adapter })(
-      signedPost(JSON.stringify({ events: [] })),
-    )
-
-    expect(response.status).toBe(200)
+  it('answers 200 on an empty events list (the verification ping)', async () => {
+    const { router } = rig()
+    expect((await router(post(JSON.stringify({ events: [] })))).status).toBe(200)
   })
 
   it('verifies the signature over the raw bytes, not a re-serialised body', async () => {
-    const { adapter, delivered } = subscribedLine()
-    const body = `{ "events" : [ ${JSON.stringify(textEvent('1', 'spaced'))} ] }`
+    const { delivered, router } = rig()
+    const body = `{ "events" : [ ${JSON.stringify(text('spaced'))} ] }`
+    expect((await router(post(body))).status).toBe(200)
+    expect(delivered).toEqual(['spaced'])
+  })
 
-    const response = await createLineRoute({ channelSecret: SECRET, adapter })(signedPost(body))
-
-    expect(response.status).toBe(200)
-    expect(delivered).toHaveLength(1)
+  it('answers 405 for a method the route does not take and 413 past 1 MiB', async () => {
+    const { router } = rig()
+    expect((await router(new Request('http://localhost/webhooks/line', { method: 'GET' }))).status).toBe(405)
+    expect((await router(post('x'.repeat(1024 * 1024 + 1)))).status).toBe(413)
   })
 })
