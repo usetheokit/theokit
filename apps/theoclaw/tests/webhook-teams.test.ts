@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import { statusForDeliver } from '@theokit/gateway'
+import { normalizeTeamsActivity } from '@theokit/gateway-teams'
+import type { ChannelDescriptor, MessageEvent } from '@theokit/gateway'
+
 import { descriptorFor, resolvePlatforms } from '../src/channels/platforms.js'
 import { offlineAdapter } from './composition-fixtures.js'
 import { gatewayRouter } from './webhook-fixtures.js'
@@ -53,5 +57,69 @@ describe('the Teams webhook', () => {
     const { delivered, router } = rig()
     expect((await router(post({}, 'x'.repeat(1024 * 1024 + 1)))).status).toBe(413)
     expect(delivered).toEqual([])
+  })
+
+  it('answers 404 for a platform that is not configured', async () => {
+    expect((await rig().router(new Request('http://localhost/webhooks/line', { method: 'POST', body: '{}' }))).status).toBe(404)
+  })
+})
+
+/*
+ * No verifier injection seam exists: `teamsChannel.webhook.handle` builds `teamsActivityVerifier`
+ * from the client id inside the package and the descriptor takes no verifier option, so a valid
+ * connector token cannot be forged offline. Mitigation: the delivery and acknowledgement half is
+ * driven through a stand-in `handle` that stands where verification passed and answers by the same
+ * `statusForDeliver` mapping over the real Teams adapter's `deliver`; refusals stay covered above
+ * through the real descriptor.
+ */
+function verifiedRig(subscribe: ((event: MessageEvent) => Promise<void>) | undefined) {
+  const entry = resolvePlatforms(ENV).configured[0]!
+  const adapter = offlineAdapter(ENV, 'teams')
+  if (subscribe !== undefined) adapter.onInbound(subscribe)
+  const real = descriptorFor(entry.platform, entry.settings)
+  const descriptor: ChannelDescriptor = {
+    ...real,
+    webhook: {
+      ...real.webhook!,
+      handle: async (target, request) => {
+        const activity = JSON.parse(request.rawBody) as Parameters<typeof normalizeTeamsActivity>[0]
+        if (activity.type !== 'message') return { status: 200 }
+        const event = normalizeTeamsActivity(activity) as unknown as MessageEvent
+        const outcome = await (target as unknown as { deliver(e: MessageEvent): Promise<'ok' | 'no_handler' | 'handler_threw'> }).deliver(event)
+        return { status: statusForDeliver([outcome]) }
+      },
+    },
+  }
+  return gatewayRouter({ channels: [{ descriptor, adapter }], isStarted: () => true })
+}
+
+describe('the Teams delivery outcomes', () => {
+  it('acknowledges a delivered message with 200 and hands it to the handler', async () => {
+    const delivered: string[] = []
+    const router = verifiedRig(async (event) => {
+      delivered.push(event.text)
+    })
+    expect((await router(post())).status).toBe(200)
+    expect(delivered).toEqual(['hello theo'])
+  })
+
+  it('acknowledges a non message activity without delivering it', async () => {
+    const delivered: string[] = []
+    const router = verifiedRig(async (event) => {
+      delivered.push(event.text)
+    })
+    expect((await router(post({}, JSON.stringify({ type: 'conversationUpdate' })))).status).toBe(200)
+    expect(delivered).toEqual([])
+  })
+
+  it('answers 500 on handler_threw so Teams redelivers', async () => {
+    const router = verifiedRig(async () => {
+      throw new Error('handler exploded')
+    })
+    expect((await router(post())).status).toBe(500)
+  })
+
+  it('answers 503 on no_handler so Teams retries', async () => {
+    expect((await verifiedRig(undefined)(post())).status).toBe(503)
   })
 })
