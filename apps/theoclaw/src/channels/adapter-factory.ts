@@ -1,6 +1,5 @@
 import { createChannels, createFileCredentialStore } from '@theokit/gateway'
 import type { BasePlatformAdapter, ChannelDescriptor } from '@theokit/gateway'
-import type { TwilioOptions } from '@theokit/gateway-sms'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 import { XAdapter } from '@theokit/gateway-x'
 import type { XAdapterOptions } from '@theokit/gateway-x'
@@ -8,20 +7,6 @@ import type { XAdapterOptions } from '@theokit/gateway-x'
 import type { PlatformBuild } from './channel-loop.js'
 import { descriptorFor, isBaileys } from './platforms.js'
 import type { ConfiguredPlatform, PlatformSettings } from './platforms.js'
-
-/**
- * The SMS adapter's options: Twilio only (D6). The webhook route parses with the same options, so
- * both are built here and cannot drift apart.
- */
-export function smsOptions(settings: PlatformSettings): TwilioOptions {
-  return {
-    backend: 'twilio',
-    accountSid: settings.accountSid ?? '',
-    authToken: settings.authToken ?? '',
-    fromNumber: settings.fromNumber ?? '',
-    publicUrl: settings.publicUrl ?? '',
-  }
-}
 
 /** Options that apply to every build, from the authorization policy. */
 export interface AdapterBuildOptions {
@@ -91,6 +76,9 @@ function configFor(entry: ConfiguredPlatform, options: AdapterBuildOptions): Rea
     ...(MENTION_GATED.has(entry.platform) ? mention(options) : {}),
     // The Signal adapter names a sender by `sourceUuid`; an owner written as `signal:+5511...` matches the number.
     ...(entry.platform === 'signal' ? { senderKey: 'number' } : {}),
+    // A LINE group message reaches the agent without a mention, as it did before the gateway's webhook handler served it
+    // (the descriptor's default is to require one, naming a bot user id TheoClaw does not read).
+    ...(entry.platform === 'line' ? { requireMention: false } : {}),
     // The Chat webhook is served by the instance's HTTP server at `/webhooks/google_chat`: the adapter opens no port.
     ...(entry.platform === 'google_chat' ? { webhook: 'external' } : {}),
   }
