@@ -102,10 +102,12 @@ describe('startChannelLoop', () => {
   it('a connect that never settles holds back only its platform', async () => {
     const harness = startTen(
       { matrix: new FakeAdapter('matrix', { connect: () => new Promise<boolean>(() => {}) }) },
-      { startTimeoutMs: 5000 },
+      { startTimeoutMs: 100 },
     )
 
+    // The one runner wires every platform's inbound when its start settles: at the latest at the timeout.
     await waitFor(() => harness.loop.started.size === 9, 1000, 'nine platforms to start')
+    await harness.loop.ready
 
     expect(harness.loop.started.has('matrix')).toBe(false)
     expect(await harness.adapters.get('slack')?.deliver(messageEvent('slack', 'hi'))).toBe('ok')

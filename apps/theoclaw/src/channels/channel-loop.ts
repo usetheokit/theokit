@@ -10,14 +10,14 @@ export interface PlatformBuild {
 export interface ChannelLoopOptions {
   readonly platforms: readonly PlatformBuild[]
   readonly handler: GatewayHandler
-  /** Registered on every runner, in order, before the handler sees a message (the owner policy, FR-009). */
+  /** Registered on the runner, in order, before the handler sees a message (the owner policy, FR-009). */
   readonly hooks?: readonly GatewayHook[]
   /** Every configured credential value; none of them is ever written (D9). */
   readonly secrets: readonly string[]
   readonly write: (line: string) => void
   /** How long one platform may take to connect before it is abandoned. Default 30 000 ms. */
   readonly startTimeoutMs?: number
-  /** Retry a platform whose start failed, in the background, with doubling delays. Absent: give up after one try. */
+  /** Reconnect a platform whose connect failed transiently, in the background, with doubling delays. Absent: give up after one try. */
   readonly retry?: RetryPolicy
 }
 
@@ -28,10 +28,9 @@ export interface RetryPolicy {
   readonly maxAttempts: number
 }
 
-/** A platform whose runner connected: the routes deliver to `adapter`, shutdown stops `runner`. */
+/** A platform that connected: the routes and the senders deliver through `adapter`. */
 export interface StartedPlatform {
   readonly adapter: BasePlatformAdapter
-  readonly runner: GatewayRunner
 }
 
 export interface ChannelLoop {
@@ -55,27 +54,12 @@ export function maskSecrets(text: string, secrets: readonly string[]): string {
     .reduce((masked, secret) => masked.split(secret).join(MASK), text)
 }
 
-type StartOutcome =
-  | { readonly kind: 'connected' }
-  | { readonly kind: 'rejected'; readonly error: unknown }
-  | { readonly kind: 'timed_out' }
-
-/** Race a start against the timeout; the timer is cleared as soon as the start settles. */
-function settleWithin(start: Promise<unknown>, timeoutMs: number): Promise<StartOutcome> {
-  let timer: NodeJS.Timeout | undefined
-  const timeout = new Promise<StartOutcome>((resolve) => {
-    timer = setTimeout(() => resolve({ kind: 'timed_out' }), timeoutMs)
-  })
-  const settled = start.then(
-    (): StartOutcome => ({ kind: 'connected' }),
-    (error: unknown): StartOutcome => ({ kind: 'rejected', error }),
-  )
-  return Promise.race([settled, timeout]).finally(() => clearTimeout(timer))
-}
-
 /**
- * Start one `GatewayRunner` per platform, each on its own, so one platform that cannot connect
- * silences only itself (D1). Returns at once; `ready` settles when every start has.
+ * Start one `GatewayRunner` over every adapter that builds. The runner isolates the platforms
+ * (`connectFailure: "isolate"`), bounds each connect, retries a transient failure in the background
+ * and masks the configured values, so one platform that cannot connect silences only itself (D1).
+ * An adapter that does not build is reported here and left out. Returns at once; `ready` settles
+ * when every start has.
  */
 export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
   const started = new Map<PlatformName, StartedPlatform>()
@@ -86,86 +70,88 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
   // The configured values are masked BEFORE `redactSecrets`: it shortens some shapes to a head and
   // a tail, after which the whole value is no longer there to find, and the fragments would stay.
   const describeError = (error: unknown): string =>
-    redactSecrets(
-      maskSecrets(error instanceof Error ? error.message : String(error), options.secrets),
-    )
-  const failPlatform = (platform: PlatformName, line: string): void => {
-    failed.push(platform)
+    redactSecrets(maskSecrets(error instanceof Error ? error.message : String(error), options.secrets))
+  const fail = (platform: PlatformName, line: string): void => {
+    if (!failed.includes(platform)) failed.push(platform)
     options.write(line)
   }
-  const stopQuietly = (platform: PlatformName, runner: GatewayRunner): Promise<void> =>
-    runner.stop().catch((error: unknown) => options.write(`${platform}: stop failed: ${describeError(error)}`))
 
-  const timers = new Set<NodeJS.Timeout>()
-  const sleep = (ms: number): Promise<void> =>
-    new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        timers.delete(timer)
-        resolve()
-      }, ms)
-      timers.add(timer)
-    })
-
-  /** One start attempt; true when the platform is now started. */
-  const attempt = async ({ platform, build }: PlatformBuild, retrying: boolean): Promise<boolean> => {
-    const fail = (line: string): false => {
-      if (retrying) options.write(line)
-      else failPlatform(platform, line)
-      return false
-    }
-    let adapter: BasePlatformAdapter
-    let runner: GatewayRunner
-    try {
-      adapter = build()
-      runner = new GatewayRunner({ adapters: [adapter], handler: options.handler, hooks: options.hooks ?? [] })
-    } catch (error) {
-      fail(`${platform}: start failed: ${describeError(error)}`)
-      return false
-    }
-    const start = runner.start()
-    const outcome = await settleWithin(start, timeoutMs)
-    if (outcome.kind === 'timed_out') {
-      fail(`${platform}: start timed out after ${timeoutMs} ms`)
-      // Abandoned: if it connects later, stop it, so nothing stays connected unseen.
-      void start.then(
-        () => stopQuietly(platform, runner),
-        (error: unknown) =>
-          options.write(`${platform}: abandoned start failed: ${describeError(error)}`),
-      )
-      return false
-    }
-    if (outcome.kind === 'rejected') {
-      return fail(`${platform}: start failed: ${describeError(outcome.error)}`)
-    }
-    if (stopping) {
-      await stopQuietly(platform, runner)
-      return true
-    }
-    started.set(platform, { adapter, runner })
-    const index = failed.indexOf(platform)
-    if (index >= 0) failed.splice(index, 1)
-    options.write(`${platform}: connected`)
-    return true
-  }
-
-  const startOne = async (entry: PlatformBuild): Promise<void> => {
-    if (await attempt(entry, false) || options.retry === undefined) return
-    const retry = options.retry
-    // Not awaited by `ready`: the other platforms are served while this one keeps trying.
-    void (async () => {
-      let delay = retry.initialDelayMs
-      for (let n = 1; n <= retry.maxAttempts && !stopping; n++) {
-        options.write(`${entry.platform}: retry ${n}/${retry.maxAttempts} in ${delay} ms`)
-        await sleep(delay)
-        if (stopping) return
-        if (await attempt(entry, true)) return
-        delay = Math.min(delay * 2, retry.maxDelayMs)
+  /**
+   * Two things the runner does not do that TheoClaw's channels rely on. An adapter that answers
+   * `false` (a socket that cannot open, a Slack call that failed) is retried like one that throws,
+   * since the runner treats `false` as final and a daemon that starts offline would never recover.
+   * And a connect the runner has given up on, which fails later, is written once, masked: the
+   * runner drops that rejection.
+   */
+  const watchConnect = (adapter: BasePlatformAdapter): BasePlatformAdapter => {
+    const connect = adapter.connect.bind(adapter)
+    adapter.connect = async () => {
+      let abandoned = false
+      const timer = setTimeout(() => (abandoned = true), timeoutMs)
+      timer.unref()
+      try {
+        if (await connect()) return true
+      } catch (error) {
+        if (abandoned) options.write(`${adapter.platform}: abandoned start failed: ${describeError(error)}`)
+        throw error
+      } finally {
+        clearTimeout(timer)
       }
-      if (!stopping) options.write(`${entry.platform}: giving up after ${retry.maxAttempts} retries`)
-    })()
+      throw new Error(`adapter "${adapter.platform}" connect returned false`)
+    }
+    return adapter
   }
 
-  const ready = Promise.allSettled(options.platforms.map(startOne)).then(() => undefined)
+  const adapters: BasePlatformAdapter[] = []
+  for (const { platform, build } of options.platforms) {
+    try {
+      adapters.push(watchConnect(build()))
+    } catch (error) {
+      fail(platform, `${platform}: start failed: ${describeError(error)}`)
+    }
+  }
+  const byPlatform = new Map(adapters.map((adapter) => [adapter.platform, adapter] as const))
+
+  const runner = new GatewayRunner({
+    adapters,
+    handler: options.handler,
+    hooks: options.hooks ?? [],
+    connectFailure: 'isolate',
+    connectTimeoutMs: timeoutMs,
+    secrets: options.secrets,
+    ...(options.retry === undefined
+      ? {}
+      : { reconnect: { initialDelayMs: options.retry.initialDelayMs, maxDelayMs: options.retry.maxDelayMs, maxAttempts: options.retry.maxAttempts } }),
+    onAdapterState: (platform, state, reason) => {
+      if (stopping) return
+      if (state === 'connected') {
+        const adapter = byPlatform.get(platform)
+        if (adapter === undefined) return
+        started.set(platform, { adapter })
+        const index = failed.indexOf(platform)
+        if (index >= 0) failed.splice(index, 1)
+        options.write(`${platform}: connected`)
+      } else if (state === 'failed') {
+        fail(platform, `${platform}: start failed: ${describeError(reason ?? '')}`)
+      } else if (state === 'timed_out') {
+        fail(platform, `${platform}: start timed out after ${timeoutMs} ms`)
+      } else {
+        const attempt = /attempt (\d+) in (\d+)ms/.exec(reason ?? '')
+        options.write(
+          attempt === null || options.retry === undefined
+            ? `${platform}: ${describeError(reason ?? 'retrying')}`
+            : `${platform}: retry ${attempt[1]}/${options.retry.maxAttempts} in ${attempt[2]} ms`,
+        )
+      }
+    },
+  })
+
+  const ready = runner.start().then(
+    () => undefined,
+    (error: unknown) => {
+      for (const adapter of adapters) fail(adapter.platform, `${adapter.platform}: start failed: ${describeError(error)}`)
+    },
+  )
 
   return {
     started,
@@ -173,12 +159,9 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
     ready,
     async stopAll() {
       stopping = true
-      for (const timer of timers) clearTimeout(timer)
-      timers.clear()
-      const toStop = [...started]
       // A stopped platform is no longer started: a route that looks it up answers 503 (D7).
       started.clear()
-      await Promise.all(toStop.map(([platform, { runner }]) => stopQuietly(platform, runner)))
+      await runner.stop().catch((error: unknown) => options.write(`stop failed: ${describeError(error)}`))
     },
   }
 }
