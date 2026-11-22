@@ -149,8 +149,8 @@ interface ScopedOptions {
  * CALLS anything else, so a backend built by another copy of the SDK would be called and throw
  * `provider is not a function`. A function is never mistaken for a backend.
  */
-function asProvider(sandbox: unknown): SandboxProvider {
-  return (typeof sandbox === 'function' ? sandbox : () => sandbox) as SandboxProvider
+function asProvider(sandbox: unknown): (ctx: unknown) => unknown {
+  return typeof sandbox === 'function' ? (sandbox as (ctx: unknown) => unknown) : () => sandbox
 }
 
 /**
