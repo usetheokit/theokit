@@ -54,7 +54,7 @@ const PLACEHOLDERS: readonly ConfiguredPlatform[] = [
   { platform: 'raft', settings: {} },
   {
     platform: 'x',
-    settings: { userId: '1', username: 'bot', clientId: 'x', clientSecret: 'x', refreshToken: 'x', allowFrom: ['alice'] },
+    settings: { userId: '1', username: 'bot', clientId: 'x', clientSecret: 'x', refreshToken: 'x', allowFrom: 'alice' },
   },
   { platform: 'wechat', settings: { appId: 'x', appSecret: 'x', token: 'x' } },
   {
@@ -82,7 +82,13 @@ describe('adapterBuilders', () => {
     expect(builders.map((entry) => entry.platform)).toEqual(
       PLACEHOLDERS.map((entry) => entry.platform),
     )
-    for (const { platform, build } of builders) expect(build().platform).toBe(platform)
+    // The iMessage descriptor refuses to build anywhere but macOS.
+    const os = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      for (const { platform, build } of builders) expect(build().platform).toBe(platform)
+    } finally {
+      os.mockRestore()
+    }
   })
 
   it('builds WhatsApp on the Cloud backend', () => {
@@ -105,47 +111,26 @@ describe('adapterBuilders', () => {
   })
 })
 
-describe('GuardedSlackAdapter', () => {
-  it('reports a Slack credential rejection instead of letting it crash the process', async () => {
-    const { GuardedSlackAdapter, isSlackPlatformError } =
-      await import('../src/channels/adapter-factory.js')
+describe('the Slack credential guard', () => {
+  it('is the adapter\'s own: building Slack registers no process-wide rejection listener', () => {
+    // GuardedSlackAdapter moved to @theokit/gateway-slack 0.5.0+, whose connect() answers false for a
+    // refused credential instead of leaving a rejection for Node to turn into an exit.
     const before = process.listenerCount('unhandledRejection')
-    const adapter = new GuardedSlackAdapter({ botToken: 'xoxb-fake', appToken: 'xapp-fake' })
-    vi.spyOn(Object.getPrototypeOf(GuardedSlackAdapter.prototype), 'connect').mockResolvedValue(
-      false,
-    )
-    expect(await adapter.connect()).toBe(false)
-    expect(process.listenerCount('unhandledRejection')).toBe(before + 1)
-    const err = Object.assign(new Error('An API error occurred: invalid_auth'), {
-      code: 'slack_webapi_platform_error',
-    })
-    const write = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const listener = process.listeners('unhandledRejection').at(-1) as (r: unknown) => void
-    listener(err)
-    expect(write).toHaveBeenCalledWith(expect.stringContaining('slack: connect failed'))
-    expect(() => listener(new Error('other'))).toThrow('other')
-    expect(isSlackPlatformError(err)).toBe(true)
-    vi.restoreAllMocks()
+    const [slack] = adapterBuilders(PLACEHOLDERS.filter((entry) => entry.platform === 'slack'))
+    expect(slack?.build().platform).toBe('slack')
+    expect(process.listenerCount('unhandledRejection')).toBe(before)
   })
 })
 
 describe('signal sender id', () => {
-  it('hands the handler the phone number, not the UUID, so signal:+number owners match', async () => {
-    const { NumberKeyedSignalAdapter } = await import('../src/channels/adapter-factory.js')
-    const adapter = new NumberKeyedSignalAdapter({ account: '+5511999990000' })
-    const seen: string[] = []
-    adapter.onInbound(async (event) => {
-      seen.push(event.sender.id)
-    })
-    await adapter.deliver({
-      id: 'u:1',
-      platform: 'signal',
-      sender: { id: 'uuid-1' },
-      channel: { id: '+5511888880000' },
-      text: 'Responda só: pong',
-      receivedAt: 1,
-      signal: { timestamp: 1, sourceNumber: '+5511888880000', sourceUuid: 'uuid-1', raw: {} },
-    } as never)
-    expect(seen).toEqual(['+5511888880000'])
+  it('names a sender by phone number, not UUID, so signal:+number owners match', async () => {
+    // NumberKeyedSignalAdapter moved to @theokit/gateway-signal 0.3.0 as its `senderKey` option, which
+    // the descriptor takes and TheoClaw sets to "number".
+    const { signalEnvelopeToMessageEvent } = await import('@theokit/gateway-signal')
+    const [signal] = adapterBuilders([{ platform: 'signal', settings: { account: '+5511999990000' } }])
+    const { senderKey } = ((signal?.build() as unknown as { opts: { senderKey?: 'uuid' | 'number' } }).opts)
+    expect(senderKey).toBe('number')
+    const envelope = { source: '+5511888880000', sourceNumber: '+5511888880000', sourceUuid: 'uuid-1', timestamp: 1, dataMessage: { message: 'pong', timestamp: 1 } }
+    expect(signalEnvelopeToMessageEvent(envelope as never, 1, senderKey)?.sender.id).toBe('+5511888880000')
   })
 })

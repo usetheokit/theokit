@@ -110,7 +110,7 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
     await app.loop.stopAll()
   })
 
-  it('createGroupActivationHook in the composed app answers a mentioned telegram group message and ignores an unmentioned one', async () => {
+  it('createGroupActivationHook in the composed app answers an owner /activation in a telegram group from the start-time mode, without a model turn', async () => {
     const app = composedApp({ THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_DM_POLICY: 'allowlist' }, ['telegram'])
     await app.loop.ready
     const inGroup = (text: string): MessageEvent =>
@@ -119,9 +119,10 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
         channel: { id: '-100', type: 'group' },
         telegram: { chatId: -100, messageId: 1, raw: { chat: { id: -100, type: 'group' }, message: { text }, me: { username: 'theo_bot', id: 99 } } },
       }) as unknown as MessageEvent
-    await app.deliver(inGroup('nobody asked the bot'), 0)
-    await app.deliver(inGroup('@theo_bot what time is it'), 1)
-    expect(app.asked).toEqual(['@theo_bot what time is it'])
+    // The mention gate itself is the Telegram adapter's `requireMention`; the fakes here have none.
+    await app.deliver(inGroup('/activation always'), 1)
+    expect(app.sent('telegram')).toEqual(['Group activation on telegram is set at start by THEOCLAW_GROUP_ACTIVATION.'])
+    expect(app.asked).toEqual([])
     await app.loop.stopAll()
   })
 
@@ -143,7 +144,7 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
     await app.loop.stopAll()
   })
 
-  it('createBroadcastGroups in the composed app fans out only the group messages the activation hook admits', async () => {
+  it('createBroadcastGroups in the composed app fans out a telegram group message to the other group', async () => {
     const app = composedApp({
       THEOCLAW_OWNERS: 'telegram:owner,discord:owner',
       THEOCLAW_DM_POLICY: 'allowlist',
@@ -158,7 +159,6 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
       }) as unknown as MessageEvent
     const discordGroup = (text: string): MessageEvent =>
       ({ ...messageEvent('discord', text, 'owner'), channel: { id: 'dc-1', type: 'group' } }) as MessageEvent
-    await app.deliver(telegramGroup('nobody asked the bot'), 0)
     await app.deliver(telegramGroup('@theo_bot first question'), 1)
     await waitFor(() => app.sent('discord').length === 1, 2000, 'the broadcast to reach the discord group')
     expect(app.asked).toEqual(['@theo_bot first question'])
