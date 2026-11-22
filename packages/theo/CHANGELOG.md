@@ -1,5 +1,11 @@
 # theo
 
+## 0.85.1
+
+### Patch Changes
+
+- 1af4cdc: `PostgresJobBackend.dequeue` leases at most `batchSize` jobs again. When the table statistics said it held one row, Postgres planned the claim as a nested loop that ran the `FOR UPDATE SKIP LOCKED` pick once per row, so a dequeue of one could lease every due job and keep the extra ones locked with no worker on them until their lock expired.
+
 ## 0.85.0
 
 ### Minor Changes
@@ -659,8 +665,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                              [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                              were found and every /api/agents/* route will 404.
+                                                                [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                                were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
