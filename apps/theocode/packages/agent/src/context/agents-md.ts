@@ -1,115 +1,88 @@
-import { expandInstructionImports } from '@theokit/agents/config'
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { loadInstructionWalk } from '@theokit/agents/config'
+import { basename, dirname, resolve } from 'node:path'
 
 type WarnFn = (message: string) => void
 
 const MAX_CHARS = 64_000
 const SEPARATOR = '\n\n--- project-doc ---\n\n'
 /**
- * B-042 / absorbed 2026-08-15 — the `@file.md` expansion now comes from the framework.
+ * The upward walk is the framework's: `loadInstructionWalk` in `@theokit/agents/config` climbs from
+ * the working directory to the git root, strips frontmatter, expands `@file.md` imports inside a
+ * containment root and keeps the public and `.local` chains independent. This file no longer
+ * walks a directory.
  *
- * ~75 lines lived here: the regex, the code-span masking, the `realpath` containment check and the
- * depth/cycle bounds. All four are `expandInstructionImports` in `@theokit/agents/config`, and this
- * copy is where the containment bug B-042 had to be found and fixed by hand.
+ * What stays ours, because the framework's answer differs:
+ *  - ORDER. The framework returns the whole public chain, then the whole local chain. This product
+ *    interleaves them per directory, root-most first, base before local, so a private note sits
+ *    next to the file it annotates.
+ *  - BUDGET. The framework drops whole files at its ceiling; it is asked for none here, and the
+ *    joined text is cut from the START at `MAX_CHARS` (root-most content goes first), as before.
+ *    The aggregate policy of `composeInstructions` below is likewise ours.
+ *  - NAMES. `CLAUDE.md` is not in the framework default, so both lists are passed.
  *
- * What did NOT move is the WALK. The framework's `loadInstructionTree` descends into subdirectories;
- * this product's convention is the opposite — climb from the working directory to the git root and
- * read the ancestor chain. Two different traversals, and swapping one for the other would change
- * which files load. So the walk below stays ours and the expansion becomes theirs, which is the
- * split that was always correct.
- */
-/**
- * The instruction files the walk finds, grouped by the directory they came from.
- *
- * ONE traversal, used by both callers. `/status` has to answer "is an AGENTS.md steering this
- * agent?" — Codex answers it on its own status panel (`Agents.md: <none>`) and this product
- * answered it nowhere — and the only wrong way to answer it is a second walk that can disagree
- * with the one that actually loaded.
+ * The containment root for imports is the framework's: the shallowest directory holding a file,
+ * which is at most the git root.
  */
 /**
  * The instruction file, in order of precedence, FIRST-WINS per directory level.
  *
  * `THEO.md` is this product's own name; `AGENTS.md` is the cross-tool convention; `CLAUDE.md` is
- * read so a repository written for Claude Code steers this agent with no migration — which was the
- * finding: the list was literal, so an adopter arriving from there brought nothing and started by
- * re-writing instructions they already had.
+ * read so a repository written for Claude Code steers this agent with no migration.
  *
- * FIRST-WINS is a change of kind, not of degree. The previous list read BOTH files it knew about at
- * every level; now a directory contributes exactly ONE. A repository that grows a `THEO.md`
- * therefore stops reading its `AGENTS.md` — that is the point (one file steers, and which one is
- * unambiguous) and it is also the surprise, so a test pins it rather than leaving it to be found.
+ * FIRST-WINS: a directory contributes exactly ONE base file. A repository that grows a `THEO.md`
+ * therefore stops reading its `AGENTS.md` — one file steers, and which one is unambiguous.
  */
 export const BASE_NAMES = ['THEO.md', 'AGENTS.md', 'CLAUDE.md'] as const
 
 /**
- * The private companion, running its OWN chain rather than following the winner above.
- *
- * If it followed, adding a `THEO.md` would silently orphan an existing `AGENTS.local.md` — a file
- * the operator wrote, disabled by a file they added for an unrelated reason. Two independent chains
- * cost one line and remove that trap.
+ * The private companion, running its OWN chain rather than following the winner above, so adding a
+ * `THEO.md` never orphans an existing `AGENTS.local.md`.
  */
 const LOCAL_NAMES = ['THEO.local.md', 'AGENTS.local.md', 'CLAUDE.local.md'] as const
 
-function walkInstructionChain(cwd: string): {
-  rootDir: string
-  chain: { dir: string; files: string[] }[]
-} {
-  const chain: { dir: string; files: string[] }[] = []
-  let dir = cwd
-  for (;;) {
-    const files = [BASE_NAMES, LOCAL_NAMES]
-      .map((names) => names.map((f) => join(dir, f)).find((p) => existsSync(p)))
-      .filter((p): p is string => p !== undefined)
-    if (files.length > 0) chain.push({ dir, files })
-    // The repository root bounds the import expansion below.
-    if (existsSync(join(dir, '.git'))) return { rootDir: dir, chain }
-    const parent = dirname(dir)
-    if (parent === dir) {
-      // B-042 — reaching the FILESYSTEM ROOT used to set `rootDir = '/'`, which makes
-      // `insideRoot(anything, '/')` true: outside a git repository the confinement did not merely
-      // stop working, it permitted reading any file on the machine into the system prompt. With no
-      // repository to bound it, the project IS the working directory.
-      return { rootDir: cwd, chain }
-    }
-    dir = parent
-  }
+interface LoadedFile {
+  readonly path: string
+  readonly content: string
 }
 
-/** The paths the walk would read, root-most first — the order `loadAgentsMd` composes them in. */
-export function agentsMdChain(cwd: string): readonly string[] {
-  return walkInstructionChain(cwd)
-    .chain.flatMap((l) => l.files)
-    .reverse()
+const quiet: WarnFn = () => undefined
+
+/** Files in the order the prompt carries them: root-most directory first, base before local. */
+async function loadChain(cwd: string, warn: WarnFn): Promise<LoadedFile[]> {
+  const root = resolve(cwd)
+  const tree = await loadInstructionWalk({
+    cwd: root,
+    alternatives: BASE_NAMES,
+    local: LOCAL_NAMES,
+    maxChars: Number.MAX_SAFE_INTEGER,
+    onWarn: warn,
+  })
+  const isLocal = (p: string): boolean => (LOCAL_NAMES as readonly string[]).includes(basename(p))
+  return tree.blocks
+    .map((b) => ({ path: resolve(root, b.path), content: b.content.trim() }))
+    .map((f, i) => ({ f, i }))
+    .sort(
+      (x, y) =>
+        dirname(x.f.path).length - dirname(y.f.path).length ||
+        Number(isLocal(x.f.path)) - Number(isLocal(y.f.path)) ||
+        x.i - y.i,
+    )
+    .map(({ f }) => f)
 }
 
-export function loadAgentsMd(
+/** The paths the walk reads, in the order `loadAgentsMd` composes them. */
+export async function agentsMdChain(cwd: string): Promise<readonly string[]> {
+  return (await loadChain(cwd, quiet)).map((f) => f.path)
+}
+
+export async function loadAgentsMd(
   cwd: string,
   warn: WarnFn = (m) => process.stderr.write(`${m}\n`),
-): string {
-  const { rootDir, chain } = walkInstructionChain(cwd)
-  const chainPaths = new Set(chain.flatMap((l) => l.files))
-
-  const found: string[] = []
-  for (const level of chain) {
-    const visited = new Set(chainPaths)
-    const parts = level.files.map((p) =>
-      expandInstructionImports({
-        text: readFileSync(p, 'utf8').trim(),
-        filePath: p,
-        rootDir,
-        onWarn: warn,
-        // Markers stay: they are visible in the model's prompt, and presentation is this product's.
-        wrap: (name, content) => `\n--- import: ${name} ---\n${content}\n--- end import ---\n`,
-        // Everything the chain already read — otherwise a file the walk loaded AND an import names
-        // lands in the prompt twice.
-        alreadyLoaded: [...visited],
-      }),
-    )
-    found.push(parts.filter(Boolean).join(SEPARATOR))
-  }
-
-  const joined = found.reverse().filter(Boolean).join(SEPARATOR)
+): Promise<string> {
+  const joined = (await loadChain(cwd, warn))
+    .map((f) => f.content)
+    .filter(Boolean)
+    .join(SEPARATOR)
   if (joined.length > MAX_CHARS) {
     warn(
       `[agents-md] instruction chain truncated to ${MAX_CHARS} chars (was ${joined.length}) — root-most content dropped first`,
@@ -177,7 +150,12 @@ export interface ProjectDocParts {
 export type ProjectDoc = string | ProjectDocParts
 
 type PartKey = keyof ProjectDocParts
-const PART_ORDER: readonly PartKey[] = ['userAgentsMd', 'userRules', 'projectAgentsMd', 'projectRules']
+const PART_ORDER: readonly PartKey[] = [
+  'userAgentsMd',
+  'userRules',
+  'projectAgentsMd',
+  'projectRules',
+]
 /** Rules go first, the project's before the user's; AGENTS.md follows, the user's before the project's. */
 const RULES_TRIM_ORDER: readonly PartKey[] = ['projectRules', 'userRules']
 const AGENTS_MD_TRIM_ORDER: readonly PartKey[] = ['userAgentsMd', 'projectAgentsMd']
@@ -189,7 +167,9 @@ function toParts(doc: ProjectDoc): ProjectDocParts {
 }
 
 function renderParts(parts: ProjectDocParts): string {
-  return PART_ORDER.map((k) => parts[k]).filter((s) => s.length > 0).join('\n\n')
+  return PART_ORDER.map((k) => parts[k])
+    .filter((s) => s.length > 0)
+    .join('\n\n')
 }
 
 export function composeInstructions(
@@ -247,7 +227,9 @@ function withinBudget(
 
   if (total() > opts.maxChars) trimSource('rules', RULES_TRIM_ORDER, trimBlocksFromStart)
   if (total() > opts.maxChars) {
-    trimSource('agentsMd', AGENTS_MD_TRIM_ORDER, (t, budget) => (budget === 0 ? '' : t.slice(-budget)))
+    trimSource('agentsMd', AGENTS_MD_TRIM_ORDER, (t, budget) =>
+      budget === 0 ? '' : t.slice(-budget),
+    )
   }
   if (total() > opts.maxChars && surface.length > 0) {
     const before = surface.length
