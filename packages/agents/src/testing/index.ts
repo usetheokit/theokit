@@ -45,3 +45,6 @@ export {
 
 // A scripted agent with no model, for tests of code that sends a turn and reads its run.
 export { FakeAgent, type FakeTimelineEvent, type FakeTurn, type SdkFrame } from './fake-agent.js'
+
+// Named by `FakeTimelineEvent`, so a consumer can write it.
+export type { InteractionUpdate } from '@theokit/sdk'

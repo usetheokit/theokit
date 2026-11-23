@@ -13,7 +13,7 @@ export interface FakeTurn {
     readonly status: string
     readonly error?: { readonly code?: string }
     readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number }
-    readonly cost?: { readonly amountUsd?: number | undefined }
+    readonly cost?: { readonly amountUsd?: number }
   }
   /** The stream waits on this before its first frame; an aborted signal releases it. */
   readonly before?: Promise<void>
@@ -119,8 +119,9 @@ export class FakeAgent {
         }
         if (turn.streamError) throw turn.streamError
       },
-      cancel: async () => {
+      cancel: () => {
         this.cancels += 1
+        return Promise.resolve()
       },
       wait: async () => {
         if (!aborted()) {

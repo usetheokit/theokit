@@ -57,7 +57,9 @@ export class FakeAdapter extends BasePlatformAdapter {
 
   async sendMessage(message: OutboundMessage): Promise<SendResult> {
     this.sent.push(message)
-    return this.options.send ? this.options.send(message) : { ok: true, messageId: `sent-${this.sent.length}` }
+    return this.options.send
+      ? this.options.send(message)
+      : { ok: true, messageId: `sent-${this.sent.length}` }
   }
 
   onInbound(handler: (event: MessageEvent) => Promise<void>): () => void {
@@ -76,7 +78,11 @@ export class FakeAdapter extends BasePlatformAdapter {
  * An inbound message as `platform` would produce it. The platform-specific block is a stub: the
  * code under test reads only the base fields.
  */
-export function messageEvent(platform: PlatformName, text: string, senderId = 'user-1'): MessageEvent {
+export function messageEvent(
+  platform: PlatformName,
+  text: string,
+  senderId = 'user-1',
+): MessageEvent {
   return {
     id: `${platform}-message-${senderId}`,
     platform,
@@ -108,11 +114,17 @@ export const TEN_PLATFORMS: readonly PlatformName[] = [
  * the deadline, so a description that shows a screen shows the screen that failed, not the one the
  * wait began on.
  */
-export async function waitFor(condition: () => boolean, timeoutMs: number, what: string | (() => string)): Promise<void> {
+export async function waitFor(
+  condition: () => boolean,
+  timeoutMs: number,
+  what: string | (() => string),
+): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!condition()) {
     if (Date.now() > deadline) {
-      throw new Error(`timed out after ${timeoutMs} ms waiting for ${typeof what === 'function' ? what() : what}`)
+      throw new Error(
+        `timed out after ${timeoutMs} ms waiting for ${typeof what === 'function' ? what() : what}`,
+      )
     }
     await new Promise((resolve) => setImmediate(resolve))
   }

@@ -23973,7 +23973,7 @@
         },
         "FakeAgent": {
           "tier": "stable",
-          "declaration": "declare class FakeAgent {\n    private readonly turn;\n    readonly sent: string[];\n    readonly signals: (AbortSignal | undefined)[];\n    readonly queueModes: (string | undefined)[];\n    cancels: number;\n    constructor(turn: FakeTurn);\n    send(text: string, options?: {\n        readonly signal?: AbortSignal;\n        readonly queueMode?: string;\n    }): Promise<{\n        stream(): AsyncGenerator<SdkFrame>;\n        events(): AsyncGenerator<FakeTimelineEvent>;\n        cancel: () => Promise<void>;\n        wait: () => Promise<{\n            readonly status: string;\n            readonly error?: {\n                readonly code?: string;\n            };\n            readonly usage?: {\n                readonly inputTokens?: number;\n                readonly outputTokens?: number;\n            };\n            readonly cost?: {\n                readonly amountUsd?: number | undefined;\n            };\n        }>;\n    }>;\n}",
+          "declaration": "declare class FakeAgent {\n    private readonly turn;\n    readonly sent: string[];\n    readonly signals: (AbortSignal | undefined)[];\n    readonly queueModes: (string | undefined)[];\n    cancels: number;\n    constructor(turn: FakeTurn);\n    send(text: string, options?: {\n        readonly signal?: AbortSignal;\n        readonly queueMode?: string;\n    }): Promise<{\n        stream(): AsyncGenerator<SdkFrame>;\n        events(): AsyncGenerator<FakeTimelineEvent>;\n        cancel: () => Promise<void>;\n        wait: () => Promise<{\n            readonly status: string;\n            readonly error?: {\n                readonly code?: string;\n            };\n            readonly usage?: {\n                readonly inputTokens?: number;\n                readonly outputTokens?: number;\n            };\n            readonly cost?: {\n                readonly amountUsd?: number;\n            };\n        }>;\n    }>;\n}",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
@@ -23983,7 +23983,7 @@
           ],
           "internals": {
             "dist/testing.d.ts#FakeTimelineEvent": "type FakeTimelineEvent = {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n} | {\n    readonly kind: 'message';\n    readonly message: SdkFrame;\n    readonly textAlreadyStreamed: boolean;\n};",
-            "dist/testing.d.ts#FakeTurn": "interface FakeTurn {\n    readonly frames: readonly SdkFrame[] | ((text: string) => readonly SdkFrame[]);\n    readonly streamError?: Error;\n    readonly result?: {\n        readonly status: string;\n        readonly error?: {\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    };\n    readonly before?: Promise<void>;\n    readonly sendGate?: Promise<void>;\n    readonly deltas?: readonly string[];\n    readonly afterDeltas?: Promise<void>;\n    readonly toolHeld?: boolean;\n    readonly toolName?: string;\n    readonly waitGate?: Promise<void>;\n    readonly teardown?: Promise<void>;\n}",
+            "dist/testing.d.ts#FakeTurn": "interface FakeTurn {\n    readonly frames: readonly SdkFrame[] | ((text: string) => readonly SdkFrame[]);\n    readonly streamError?: Error;\n    readonly result?: {\n        readonly status: string;\n        readonly error?: {\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number;\n        };\n    };\n    readonly before?: Promise<void>;\n    readonly sendGate?: Promise<void>;\n    readonly deltas?: readonly string[];\n    readonly afterDeltas?: Promise<void>;\n    readonly toolHeld?: boolean;\n    readonly toolName?: string;\n    readonly waitGate?: Promise<void>;\n    readonly teardown?: Promise<void>;\n}",
             "dist/testing.d.ts#SdkFrame": "type SdkFrame = {\n    readonly type: string;\n} & Readonly<Record<string, unknown>>;"
           }
         },
@@ -23999,13 +23999,21 @@
         },
         "FakeTurn": {
           "tier": "stable",
-          "declaration": "interface FakeTurn {\n    readonly frames: readonly SdkFrame[] | ((text: string) => readonly SdkFrame[]);\n    readonly streamError?: Error;\n    readonly result?: {\n        readonly status: string;\n        readonly error?: {\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    };\n    readonly before?: Promise<void>;\n    readonly sendGate?: Promise<void>;\n    readonly deltas?: readonly string[];\n    readonly afterDeltas?: Promise<void>;\n    readonly toolHeld?: boolean;\n    readonly toolName?: string;\n    readonly waitGate?: Promise<void>;\n    readonly teardown?: Promise<void>;\n}",
+          "declaration": "interface FakeTurn {\n    readonly frames: readonly SdkFrame[] | ((text: string) => readonly SdkFrame[]);\n    readonly streamError?: Error;\n    readonly result?: {\n        readonly status: string;\n        readonly error?: {\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number;\n        };\n    };\n    readonly before?: Promise<void>;\n    readonly sendGate?: Promise<void>;\n    readonly deltas?: readonly string[];\n    readonly afterDeltas?: Promise<void>;\n    readonly toolHeld?: boolean;\n    readonly toolName?: string;\n    readonly waitGate?: Promise<void>;\n    readonly teardown?: Promise<void>;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": ["dist/testing.d.ts#SdkFrame"],
           "internals": {
             "dist/testing.d.ts#SdkFrame": "type SdkFrame = {\n    readonly type: string;\n} & Readonly<Record<string, unknown>>;"
           }
+        },
+        "InteractionUpdate": {
+          "tier": "stable",
+          "declaration": "type InteractionUpdate = TextDeltaUpdate | ThinkingDeltaUpdate | ThinkingCompletedUpdate | ToolCallStartedUpdate | ToolCallCompletedUpdate | PartialToolCallUpdate | TokenDeltaUpdate | StepStartedUpdate | StepCompletedUpdate | TurnEndedUpdate | UserMessageAppendedUpdate | SummaryUpdate | SummaryStartedUpdate | SummaryCompletedUpdate | ShellOutputDeltaUpdate;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
         },
         "LIVE_KEY_NAMES": {
           "tier": "stable",
