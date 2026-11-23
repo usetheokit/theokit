@@ -12,6 +12,7 @@ export interface ControlStreamEvent {
   name?: string
   status?: string
   error?: string
+  variant?: 'warning' | 'error'
 }
 
 /** A frame the converter reads: only the event frames carry anything it draws. */
@@ -19,6 +20,9 @@ export interface ControlStreamFrame {
   readonly type: string
   readonly event?: { readonly type: string; readonly [key: string]: unknown }
   readonly code?: string
+  /** A `notice` frame (added by a `frames` transform) carries a line for the owner. */
+  readonly variant?: 'warning' | 'error'
+  readonly text?: string
 }
 
 /**
@@ -73,7 +77,7 @@ export interface ControlStreamClient<F extends ControlStreamFrame = ControlStrea
 export interface ControlStreamSourceOptions<F extends ControlStreamFrame = ControlStreamFrame> {
   /**
    * Wraps the turn's frames before they are read: a caller reorders them, drops some, or adds its own. A frame of
-   * type `break` closes the open assistant message, so text after it starts a new one. The transform runs lazily,
+   * type `notice` (with `variant` and `text`) becomes a notice event at that place in the stream. The transform runs lazily,
    * one frame at a time, as the stream is read, and its `return` runs when the stream is closed.
    */
   frames?: (frames: AsyncIterable<F>) => AsyncIterable<ControlStreamFrame>
@@ -81,8 +85,8 @@ export interface ControlStreamSourceOptions<F extends ControlStreamFrame = Contr
 
 /**
  * Sends `message` on `session` and returns the turn as a stream source. The stream ends at `done`; an
- * `interrupted` or `error` frame, or an error event inside the turn, ends it with a terminal `error` event, and a
- * failed connection rejects. Closing the iterator early stops reading the turn but does not interrupt it.
+ * `interrupted` frame ends it with an `interrupted` event, an `error` frame with an error notice, an error event
+ * inside the turn raises an error notice and the turn goes on, and a failed connection rejects. Closing the iterator early stops reading the turn but does not interrupt it.
  */
 export function createControlStreamSource<F extends ControlStreamFrame = ControlStreamFrame>(
   client: ControlStreamClient<F>,
@@ -99,22 +103,26 @@ export function createControlStreamSource<F extends ControlStreamFrame = Control
         yield event
         continue
       }
-      if (frame.type === 'break') {
-        yield { type: 'assistant', message: '' }
+      if (frame.type === 'notice') {
+        yield { type: 'notice', variant: frame.variant ?? 'warning', text: frame.text ?? '' }
         continue
       }
       if (frame.type === 'done') return
       if (frame.type === 'interrupted') {
-        yield { type: 'error', error: 'interrupted' }
+        yield { type: 'interrupted' }
         return
       }
       if (frame.type === 'error') {
-        yield { type: 'error', error: `the turn ended: ${String(frame.code)}` }
+        yield { type: 'notice', variant: 'error', text: `the turn ended: ${String(frame.code)}` }
         return
       }
       if (frame.type === 'event' && frame.event?.type === 'error') {
-        yield { type: 'error', error: `the turn failed (${String(frame.event.code)})` }
-        return
+        // An error event inside the turn does not end it, and the framework's `error` is terminal: a notice instead.
+        yield {
+          type: 'notice',
+          variant: 'error',
+          text: `the turn failed (${String(frame.event.code)})`,
+        }
       }
     }
   }

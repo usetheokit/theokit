@@ -68,7 +68,9 @@ export {
 
 export {
   scheduleSessionSweep,
+  startInProcessSweeper,
   sweepDecision,
+  type InProcessSweeper,
   type ScheduleSessionSweepOptions,
   type SweepDecision,
   type SweepScheduleResult,
@@ -79,6 +81,8 @@ export {
   CollectorRootError,
   collectorRootOwner,
   CollectorRootNotOwnedError,
+  type CollectorRootMarkerFormat,
+  type CollectorRootOptions,
 } from './gc/collector-root.js'
 
 /**

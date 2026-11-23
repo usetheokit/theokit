@@ -59,15 +59,15 @@ describe('createControlStreamSource', () => {
     ])
   })
 
-  it('ends with a terminal error on interrupted and error frames', async () => {
+  it('ends with interrupted on an interrupted frame and a notice on an error frame', async () => {
     expect(
       await collect(
         createControlStreamSource(fake([{ type: 'interrupted', session: 's' }]), 's', 'm')(),
       ),
-    ).toEqual([{ type: 'error', error: 'interrupted' }])
+    ).toEqual([{ type: 'interrupted' }])
     expect(
       await collect(createControlStreamSource(fake([{ type: 'error', code: 'BUSY' }]), 's', 'm')()),
-    ).toEqual([{ type: 'error', error: 'the turn ended: BUSY' }])
+    ).toEqual([{ type: 'notice', variant: 'error', text: 'the turn ended: BUSY' }])
   })
 
   it('binds interrupt and steer to the session', () => {
@@ -79,7 +79,7 @@ describe('createControlStreamSource', () => {
     expect(client.steer).toHaveBeenCalledWith('s1', 'go left')
   })
 
-  it('reads the frames through a transform and closes the message at a break', async () => {
+  it('reads the frames through a transform and turns a notice frame into a notice event', async () => {
     const client = fake([
       { type: 'event', event: { type: 'text_delta', content: 'a' } },
       { type: 'done' },
@@ -88,13 +88,13 @@ describe('createControlStreamSource', () => {
       frames: async function* (frames) {
         for await (const frame of frames) {
           yield frame
-          yield { type: 'break' }
+          yield { type: 'notice', variant: 'warning', text: 'n' }
         }
       },
     })
     expect(await collect(source())).toEqual([
       { type: 'text-delta', text: 'a' },
-      { type: 'assistant', message: '' },
+      { type: 'notice', variant: 'warning', text: 'n' },
     ])
   })
 })

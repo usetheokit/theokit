@@ -1,13 +1,15 @@
+import { execFileSync } from 'node:child_process'
 import {
   closeSync,
   constants,
+  existsSync,
   fstatSync,
   openSync,
   readdirSync,
   readFileSync,
   statSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import { isPair, parseDocument, parse as parseYaml, visit } from 'yaml'
 
@@ -84,6 +86,15 @@ function textFiles(files: readonly (readonly [string, string])[], out: Out): For
   return read
 }
 
+/** The `metadata.requires.bins` strings of a skill's frontmatter; none when absent or malformed. */
+function requiredBins(metadata: unknown): string[] {
+  if (!isRecord(metadata) || !isRecord(metadata.requires)) return []
+  const { bins } = metadata.requires
+  return Array.isArray(bins)
+    ? bins.filter((b): b is string => typeof b === 'string' && b !== '')
+    : []
+}
+
 function parseSkill(
   text: string,
   taken: ReadonlySet<string>,
@@ -97,11 +108,18 @@ function parseSkill(
   } catch {
     return lacks
   }
-  const { name, description } = isRecord(front) ? front : ({} as Raw)
+  const { name, description, metadata } = isRecord(front) ? front : ({} as Raw)
   if (typeof name !== 'string' || typeof description !== 'string') return lacks
   if (!SAFE_SKILL_NAME.test(name)) return { reason: 'skill name is not a safe directory name' }
   if (taken.has(name)) return { reason: 'duplicated name' }
-  return { skill: { name, description, body: text.slice(match[0].length) } }
+  return {
+    skill: {
+      name,
+      description,
+      body: text.slice(match[0].length),
+      requiresBins: requiredBins(metadata),
+    },
+  }
 }
 
 function readSkillsDir(dir: string, relBase: string, out: Out): ForeignSkill[] {
@@ -282,12 +300,77 @@ function readClaudeHooks(path: string, rel: string, out: Out): ForeignHook[] {
   }))
 }
 
+/** The `*.md` regular files directly under `dir`, `first` (when present) ahead of the rest by name. */
+function markdownFiles(dir: string, first: string): string[] {
+  let names: string[] = []
+  try {
+    names = readdirSync(dir)
+  } catch {
+    return []
+  }
+  const files = names
+    .filter((n) => n.endsWith('.md') && isFile(join(dir, n)))
+    .sort((a, b) => a.localeCompare(b))
+  return files.includes(first) ? [first, ...files.filter((n) => n !== first)] : files
+}
+
+/** Variables that make git answer for another repository than the one `cwd` is in. */
+const GIT_REDIRECTS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'] as const
+
+/** The git top-level of `project`, as Claude Code keys auto memory; `project` itself outside a repository or without git. */
+function gitRoot(project: string): string {
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([name]) => !(GIT_REDIRECTS as readonly string[]).includes(name),
+    ),
+  )
+  try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- git is looked up on PATH, as Claude Code does
+    return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: project,
+      env,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 10_000,
+    }).trim()
+  } catch {
+    // not a repository, no git, a hung or killed git: key by the project path itself
+    return project
+  }
+}
+
+/** The auto memory: `*.md` directly under `projects/<encoded git root>/memory`, `MEMORY.md` first. */
+function readClaudeMemories(dir: string, cwd: string, out: Out): ForeignTextFile[] {
+  const encoded = gitRoot(cwd).replace(/[^a-zA-Z0-9]/g, '-')
+  const rel = `projects/${encoded}/memory`
+  const memoryDir = join(dir, 'projects', encoded, 'memory')
+  return textFiles(
+    markdownFiles(memoryDir, 'MEMORY.md').map((n) => [join(memoryDir, n), `${rel}/${n}`] as const),
+    out,
+  )
+}
+
+/** `user` without the names `project` carries; each shadowed one is listed as untranslated. */
+function mergeMcp(
+  user: Record<string, ForeignMcpServer>,
+  project: Record<string, ForeignMcpServer>,
+  out: Out,
+): Record<string, ForeignMcpServer> {
+  const kept: Record<string, ForeignMcpServer> = {}
+  for (const [name, server] of Object.entries(user)) {
+    if (Object.hasOwn(project, name))
+      out.push({ path: `.claude.json#${name}`, reason: 'shadowed by the project scope' })
+    else kept[name] = server
+  }
+  return { ...kept, ...project }
+}
+
 function readClaude(
   home: string,
+  dir: string,
   cwd: string | undefined,
   out: Out,
 ): Omit<ForeignSetup, 'kind' | 'source' | 'untranslated'> {
-  const dir = join(home, '.claude')
   const instructionFiles: (readonly [string, string])[] = [[join(dir, 'CLAUDE.md'), 'CLAUDE.md']]
   if (cwd !== undefined) {
     instructionFiles.push(
@@ -308,6 +391,7 @@ function readClaude(
           'project/.mcp.json',
           out,
         )
+  const mcpServers = mergeMcp(user, project, out)
   const skills = new Map(readSkillsDir(join(dir, 'skills'), 'skills', out).map((s) => [s.name, s]))
   if (cwd !== undefined) {
     for (const s of readSkillsDir(join(cwd, '.claude', 'skills'), 'project/.claude/skills', out)) {
@@ -330,7 +414,8 @@ function readClaude(
   return {
     instructions: textFiles(instructionFiles, out),
     skills: [...skills.values()].sort((a, b) => (a.name < b.name ? -1 : 1)),
-    mcpServers: { ...user, ...project },
+    mcpServers,
+    memories: cwd === undefined ? [] : readClaudeMemories(dir, cwd, out),
     hooks,
   }
 }
@@ -358,6 +443,13 @@ function readHermes(
   root: string,
   out: Out,
 ): Omit<ForeignSetup, 'kind' | 'source' | 'untranslated'> {
+  const instructions = textFiles(
+    [
+      [join(root, 'SOUL.md'), 'SOUL.md'],
+      [join(root, 'AGENTS.md'), 'AGENTS.md'],
+    ],
+    out,
+  )
   let mcpServers: Record<string, ForeignMcpServer> = {}
   const text = readCapped(join(root, 'config.yaml'), 'config.yaml', out)
   if (text !== undefined) {
@@ -374,23 +466,29 @@ function readHermes(
       out.push({ path: 'config.yaml', reason: 'not valid YAML' })
     }
   }
+  const skills = readSkillsDir(join(root, 'skills'), 'skills', out)
+  // Hermes keeps its channels here; none of them is imported.
+  for (const entry of ['platforms', 'channel_directory.json'])
+    if (existsSync(join(root, entry)))
+      out.push({ path: entry, reason: 'channels are not imported' })
   return {
-    instructions: textFiles(
+    instructions,
+    skills,
+    mcpServers,
+    memories: textFiles(
       [
-        [join(root, 'SOUL.md'), 'SOUL.md'],
-        [join(root, 'AGENTS.md'), 'AGENTS.md'],
+        [join(root, 'memories', 'MEMORY.md'), 'memories/MEMORY.md'],
+        [join(root, 'memories', 'USER.md'), 'memories/USER.md'],
       ],
       out,
     ),
-    skills: readSkillsDir(join(root, 'skills'), 'skills', out),
-    mcpServers,
     hooks: [],
   }
 }
 
 /**
  * Reads another agent's setup (`claude-code` under `<home>/.claude` and `<home>/.claude.json`, plus the
- * project scope under `cwd`; `hermes` under `<home>/.hermes`) into a neutral shape, with every entry it
+ * project scope under `cwd`; `hermes` under `<home>/.hermes`; `configDir` replaces either directory) into a neutral shape, with every entry it
  * could not translate and why. Read-only: nothing is written and no hook or server is run.
  */
 export function readForeignSetup(
@@ -399,10 +497,11 @@ export function readForeignSetup(
 ): ForeignSetup {
   const untranslated: UntranslatedEntry[] = []
   const source =
-    kind === 'claude-code' ? join(options.home, '.claude') : join(options.home, '.hermes')
+    options.configDir ?? join(options.home, kind === 'claude-code' ? '.claude' : '.hermes')
+  const cwd = options.cwd === undefined ? undefined : resolve(options.cwd)
   const read =
     kind === 'claude-code'
-      ? readClaude(options.home, options.cwd, untranslated)
+      ? readClaude(options.home, source, cwd, untranslated)
       : readHermes(source, untranslated)
   return { kind, source, ...read, untranslated }
 }

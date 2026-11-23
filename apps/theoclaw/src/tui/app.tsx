@@ -20,11 +20,8 @@ import {
   controlTurn,
   createTurnInbox,
   nextSessionId,
-  type TranscriptEntry,
   type TurnInbox,
   type TuiNotice,
-  type TurnNotice,
-  turnEntries,
 } from './frames.js'
 
 export interface TheoClawTuiProps {
@@ -59,54 +56,19 @@ type Item =
       readonly kind: 'turn'
       readonly id: number
       readonly source: AgentStreamSource
-      readonly notices: readonly TurnNotice[]
-      /** Set when the turn was interrupted: the local reducer's transcript, drawn instead of the framework's fold. */
-      readonly frozen?: readonly TranscriptEntry[]
     }
 
-function Turn({
-  source,
-  notices,
-  frozen,
-}: {
-  readonly source: AgentStreamSource
-  readonly notices: readonly TurnNotice[]
-  readonly frozen?: readonly TranscriptEntry[]
-}): ReactElement {
+function Turn({ source }: { readonly source: AgentStreamSource }): ReactElement {
   const { events } = useAgentStream(source)
-  if (frozen !== undefined) {
-    return (
-      <>
-        {frozen.map((entry, index) => {
-          if (entry.kind === 'assistant')
-            return (
-              <ChatMessage key={index} role="assistant">
-                {entry.text}
-              </ChatMessage>
-            )
-          if (entry.kind === 'tool')
-            return <ToolCallCard key={index} name={entry.name} status={entry.status} />
-          if (entry.kind === 'notice')
-            return (
-              <Notice key={index} variant={entry.variant}>
-                {entry.text}
-              </Notice>
-            )
-          return null
-        })}
-      </>
-    )
-  }
   return (
     <>
-      {turnEntries(events, notices).map((entry, index) => {
-        if (entry.kind === 'notice')
+      {events.map((event) => {
+        if (event.kind === 'notice')
           return (
-            <Notice key={`n${index}`} variant={entry.variant}>
-              {entry.text}
+            <Notice key={event.id} variant={event.variant}>
+              {event.text}
             </Notice>
           )
-        const { event } = entry
         if (event.kind === 'message')
           return (
             <ChatMessage key={event.id} role={event.role}>
@@ -126,7 +88,7 @@ function Entry({ item }: { readonly item: Item }): ReactElement {
     case 'user':
       return <ChatMessage role="user">{item.text}</ChatMessage>
     case 'turn':
-      return <Turn source={item.source} notices={item.notices} frozen={item.frozen} />
+      return <Turn source={item.source} />
     case 'notice':
       return <Notice variant={item.variant}>{item.text}</Notice>
   }
@@ -167,14 +129,8 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
     setBusy(true)
     const mine = createTurnInbox()
     inbox.current = mine
-    const update = (change: (item: Item & { kind: 'turn' }) => Item): void =>
-      setItems((current) =>
-        current.map((item) => (item.kind === 'turn' && item.id === id ? change(item) : item)),
-      )
-    const inTurn = (n: TurnNotice): void =>
-      update((item) => ({ ...item, notices: [...item.notices, n] }))
-    const onInterrupted = (frozen: readonly TranscriptEntry[]): void =>
-      update((item) => ({ ...item, frozen }))
+    // What is left once the framework ended the fold (a notice posted after the interruption) goes below the turn.
+    const inTurn = (n: TuiNotice): void => setItems((current) => [...current, { kind: 'notice', ...n }])
     const onEnd = (): void => {
       running.current = false
       setBusy(false)
@@ -183,13 +139,13 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
       if (next !== undefined) send(next)
     }
     // A function source: the hook starts the turn when it mounts, so the stream is opened exactly once.
-    const turnSource = controlTurn(client, text, session, inTurn, onEnd, mine, onInterrupted)
+    const turnSource = controlTurn(client, text, session, inTurn, onEnd, mine)
     turn.current = turnSource
     const source: AgentStreamSource = turnSource
     setItems((current) => [
       ...current,
       { kind: 'user', text },
-      { kind: 'turn', id, source, notices: [] },
+      { kind: 'turn', id, source },
     ])
   }
 
