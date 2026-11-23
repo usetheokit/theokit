@@ -157,7 +157,7 @@ describe('the tool settings at start', () => {
   it('a profiled start with no injected cwd makes files/ in the profile workspace, where its agents work', async () => {
     const home = tempCwd(cleanups)
     const instance = resolveInstance({ THEOCLAW_PROFILE: 'tools' }, { homeDir: home })
-    applyInstance(instance, {})
+    await applyInstance(instance, {})
     const before = existsSync(join(process.cwd(), 'files'))
     const result = await start({}, undefined, { detect: notEnforced }, { instance })
     expect(result.error).toBeUndefined()
