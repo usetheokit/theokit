@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import http from 'node:http'
 
 import { bearerCheck, type Grant, type GrantStore } from '@theokit/http/guards'
@@ -97,7 +96,12 @@ export function createMcpRelayServer(options: McpRelayServerOptions): http.Serve
       send(res, 400)
       return
     }
-    const job: RelayJob = { id: randomUUID(), client: grant.name, scopes: grant.scopes, body }
+    const job: RelayJob = {
+      id: crypto.randomUUID(),
+      client: grant.name,
+      scopes: grant.scopes,
+      body,
+    }
     if (queue.length >= maxQueue) {
       send(res, 503, undefined, { 'retry-after': '5' })
       return

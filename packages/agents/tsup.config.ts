@@ -12,6 +12,8 @@ export default defineConfig({
     a2a: 'src/a2a-entry.ts',
     // The turn-failure classifier, off the root bundle (ADR 0033).
     errors: 'src/errors-entry.ts',
+    // Capability presets for a whole kind of agent, off the root bundle (ADR 0033).
+    presets: 'src/presets-entry.ts',
     // B-413 — run cases against an agent and read a verdict per case; development-time tooling.
     evals: 'src/evals-entry.ts',
     // B-410 — a conversation one agent hands to another; an app-facing orchestrator.
