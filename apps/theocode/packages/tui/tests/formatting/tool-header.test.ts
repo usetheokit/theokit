@@ -370,8 +370,14 @@ describe('Bash, Edit and ApplyPatch headers come from the toolkit presentation',
     expect(header('Edit', { path: 'a.ts' })?.name).toBe('Edited a.ts')
   })
 
-  it('keeps the patch counts on ApplyPatch', () => {
-    const patch = '*** Begin Patch\n*** Update File: a.ts\n@@\n-a\n+b\n*** End Patch'
-    expect(header('ApplyPatch', { patch })?.name).toMatch(/^Edited a\.ts/)
+  it('keeps the own wording of Edit without a path and of ApplyPatch', () => {
+    expect(header('Edit', {})?.name).toBe('Edited file')
+    expect(header('ApplyPatch', { patch: 'garbage' })?.name).toBe('Edited files')
+    const patch = [1, 2, 3, 4].map((n) => `*** Update File: f${n}.ts\n@@\n-a\n+b`).join('\n')
+    const wrapped = `*** Begin Patch\n${patch}\n*** End Patch`
+    expect(header('ApplyPatch', { patch: wrapped })?.name).toMatch(
+      /^Edited f1\.ts, f2\.ts, f3\.ts \+1 more/,
+    )
+    expect(header('ApplyPatch', { patch: wrapped }, 'running')?.name).toMatch(/^Editing /)
   })
 })

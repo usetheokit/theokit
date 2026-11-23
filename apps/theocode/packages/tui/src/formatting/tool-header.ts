@@ -153,11 +153,7 @@ export function formatToolHeader(
 }
 
 /** `Ran x` → `Rejected x` / `Blocked x`, per tool, so the noun still matches what was refused. */
-function refusedName(
-  verb: 'Rejected' | 'Blocked',
-  tool: string,
-  input: Record<string, unknown>,
-): string {
+function refusedName(verb: 'Rejected' | 'Blocked', tool: string, input: Record<string, unknown>): string {
   const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
   switch (tool) {
     case 'Bash':
@@ -177,11 +173,12 @@ function refusedName(
 
 type Header = { name?: string; summary?: string }
 
-/** Bash, Edit and ApplyPatch take their verb and target from the toolkit's presentation of the tool they alias. */
-const PRESENTATION = toolPresentation(
-  {},
-  { aliases: { Bash: 'shell_exec', Edit: 'edit_file', ApplyPatch: 'apply_patch' } },
-)
+/**
+ * Bash and Edit take their verb and target from the toolkit's presentation of the tool they alias.
+ * ApplyPatch stays ours: its file list handles renames, `+N more` and the `files` fallback, which
+ * the toolkit's `apply_patch` header words differently.
+ */
+const PRESENTATION = toolPresentation({}, { aliases: { Bash: 'shell_exec', Edit: 'edit_file' } })
 
 function presented(tool: string, input: Record<string, unknown>, active: boolean): string {
   return PRESENTATION.get(tool)?.header(input, active) ?? ''
@@ -201,12 +198,23 @@ const HEADERS_BY_TOOL: ReadonlyMap<
       ).trim(),
     }),
   ],
-  ['Edit', (input, active) => ({ name: presented('Edit', input, active).trim() })],
+  [
+    'Edit',
+    (input, active) => ({
+      name: presented(
+        'Edit',
+        { ...input, path: typeof input.path === 'string' ? input.path : 'file' },
+        active,
+      ).trim(),
+    }),
+  ],
   [
     'ApplyPatch',
     (input, active) => {
       const patch = typeof input.patch === 'string' ? input.patch : ''
-      return { name: `${presented('ApplyPatch', input, active)}${diffCounts(patch)}`.trim() }
+      return {
+        name: `${active ? 'Editing' : 'Edited'} ${filesFromV4APatch(patch)}${diffCounts(patch)}`.trim(),
+      }
     },
   ],
   [
