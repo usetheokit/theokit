@@ -161,28 +161,36 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
 function declaredNames(raw: string): Set<string> {
   const names = new Set<string>()
   const lines = raw.split(/\r?\n/)
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (line === '' || line.startsWith('#')) continue
-    const eq = line.indexOf('=')
-    if (eq <= 0) continue
-    const name = line
-      .slice(0, eq)
-      .replace(/^export\s+/, '')
-      .trim()
-    const value = line.slice(eq + 1).trimStart()
-    const q = value[0]
-    if (q === '"' || q === "'" || q === '`') {
-      if (!value.slice(1).includes(q)) {
-        let j = i + 1
-        while (j < lines.length && !lines[j].includes(q)) j++
-        if (j >= lines.length) return names
-        i = j
-      }
-    }
-    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) names.add(name)
+  let i = 0
+  while (i < lines.length) {
+    const decl = splitDeclaration(lines[i].trim())
+    i++
+    if (decl === undefined) continue
+    const end = valueEnd(decl.value, lines, i)
+    if (end === undefined) return names
+    i = end
+    if (/^[A-Za-z_]\w*$/.test(decl.name)) names.add(decl.name)
   }
   return names
+}
+
+function splitDeclaration(line: string): { name: string; value: string } | undefined {
+  if (line === '' || line.startsWith('#')) return undefined
+  const eq = line.indexOf('=')
+  if (eq <= 0) return undefined
+  const name = line
+    .slice(0, eq)
+    .replace(/^export\s+/, '')
+    .trim()
+  return { name, value: line.slice(eq + 1).trimStart() }
+}
+
+/** The index of the line after the value, or `undefined` when a quoted value never closes. */
+function valueEnd(value: string, lines: readonly string[], next: number): number | undefined {
+  const q = value[0]
+  if ((q !== '"' && q !== "'" && q !== '`') || value.slice(1).includes(q)) return next
+  const close = lines.findIndex((l, idx) => idx >= next && l.includes(q))
+  return close === -1 ? undefined : close + 1
 }
 
 /** `projectEnvStepWith()` with no extra protected keys. */
