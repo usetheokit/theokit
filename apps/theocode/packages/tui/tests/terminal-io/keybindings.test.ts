@@ -52,20 +52,6 @@ describe('reading the file', () => {
     expect(read.notApplied).toEqual([])
   })
 
-  it('test_alt_and_named_keys_the_framework_accepts_are_reported_not_bound', () => {
-    bindings({
-      bindings: [
-        { bindings: { 'alt+f': 'quit', tab: 'quit', 'ctrl+r': 'toggle-verbose', 'ctrl+y': null } },
-      ],
-    })
-    const read = loadKeybindings(home)
-
-    expect(read.bound).toEqual([{ ctrl: true, letter: 'r', action: 'toggle-verbose' }])
-    expect(read.notApplied.join('\n')).toContain('alt+f')
-    expect(read.notApplied.join('\n')).toContain('tab')
-    expect(read.notApplied.join('\n')).toContain('"ctrl+y"')
-  })
-
   it('test_no_file_is_not_an_error_and_binds_nothing', () => {
     const read = loadKeybindings(home)
     expect(read.bound).toEqual([])

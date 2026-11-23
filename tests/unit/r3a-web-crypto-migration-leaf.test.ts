@@ -322,10 +322,6 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       'packages/theo/src/server/http/error-pages.ts',
       // Node-adapter scope per ADR-0028 (static-file serving = Node only)
       'packages/theo/src/server/http/static.ts',
-      // Hosted chat page (#2733): reads its built page assets from disk (node:fs, node:path,
-      // node:url), the same static-file boundary as static.ts above. Its session hash is Web
-      // Crypto, so it is not a node:crypto consumer.
-      'packages/theo/src/server/http/hosted-chat.ts',
       // Durable usage storage on `node:sqlite` (usetheokit/theokit#459). A leaf in the strict
       // sense: NOT re-exported from `theokit/server/cost`, which stays Web-Standards, but reached
       // only through its own `theokit/server/cost/sqlite` subpath. The first attempt did export it

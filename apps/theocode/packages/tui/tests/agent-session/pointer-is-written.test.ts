@@ -12,7 +12,7 @@
 // The two questions stay separate, which is the whole point of the opt-in: READING the pointer is
 // what makes this launch inherit a conversation; WRITING it is what makes the next launch able to.
 
-import { mkdirSync, mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -48,8 +48,6 @@ async function pointerHolds(file: string, id: string): Promise<void> {
   }
 }
 
-import { sessionPointerPath } from '@theokit/agents/session'
-
 import { createTuiSession } from '../../src/agent-session/tui-session.js'
 
 const made: string[] = []
@@ -57,72 +55,36 @@ afterEach(() => {
   for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 
-const CWD = '/tmp/pointer-is-written-project'
-
-function newRoot(): string {
+function pointerPath(): string {
   const dir = mkdtempSync(join(tmpdir(), 'session-pointer-'))
   made.push(dir)
-  return dir
+  return join(dir, 'tui-session')
 }
 
 describe('the session pointer', () => {
   it('is written by a launch that does NOT resume, so --continue has something to find', async () => {
-    const root = newRoot()
-    const pointer = sessionPointerPath(CWD, root)
-    const s = createTuiSession({ cwd: CWD, pointerRoot: root, resume: false })
+    const pointer = pointerPath()
+    const s = createTuiSession({ cwd: '/tmp', sessionPointer: pointer, resume: false })
     await pointerSettles(pointer)
     expect(existsSync(pointer), 'nothing wrote the pointer').toBe(true)
-    expect(readFileSync(pointer, 'utf8')).toBe(`${s.session()}\n`)
+    expect(readFileSync(pointer, 'utf8').trim()).toBe(s.session())
   })
 
   it('is not READ by that launch — the id is fresh even when a pointer already exists', async () => {
-    const root = newRoot()
-    const pointer = sessionPointerPath(CWD, root)
-    const first = createTuiSession({ cwd: CWD, pointerRoot: root, resume: false }).session()
+    const pointer = pointerPath()
+    const first = createTuiSession({ cwd: '/tmp', sessionPointer: pointer, resume: false }).session()
     await pointerSettles(pointer)
-    const second = createTuiSession({ cwd: CWD, pointerRoot: root, resume: false }).session()
+    const second = createTuiSession({ cwd: '/tmp', sessionPointer: pointer, resume: false }).session()
     await pointerHolds(pointer, second)
     expect(second).not.toBe(first)
     expect(readFileSync(pointer, 'utf8').trim()).toBe(second)
   })
 
   it('is read when resume IS requested, and the id comes back unchanged', async () => {
-    const root = newRoot()
-    const pointer = sessionPointerPath(CWD, root)
-    const first = createTuiSession({ cwd: CWD, pointerRoot: root, resume: false }).session()
+    const pointer = pointerPath()
+    const first = createTuiSession({ cwd: '/tmp', sessionPointer: pointer, resume: false }).session()
     await pointerSettles(pointer)
-    const resumed = createTuiSession({ cwd: CWD, pointerRoot: root, resume: true }).session()
+    const resumed = createTuiSession({ cwd: '/tmp', sessionPointer: pointer, resume: true }).session()
     expect(resumed).toBe(first)
-  })
-})
-
-describe('the legacy pointer', () => {
-  it('is read once when the framework has none, and migrated', async () => {
-    const root = newRoot()
-    const cwd = newRoot()
-    mkdirSync(join(cwd, '.theokit'))
-    writeFileSync(join(cwd, '.theokit', 'tui-session'), 'tui-legacy')
-    const s = createTuiSession({ cwd, pointerRoot: root, resume: true })
-    expect(s.session()).toBe('tui-legacy')
-    expect(s.resumed).toBe(true)
-    const pointer = sessionPointerPath(cwd, root)
-    await pointerHolds(pointer, 'tui-legacy')
-    expect(readFileSync(pointer, 'utf8')).toBe('tui-legacy\n')
-  })
-
-  it('never overrides a framework pointer', async () => {
-    const root = newRoot()
-    const cwd = newRoot()
-    mkdirSync(join(cwd, '.theokit'))
-    writeFileSync(join(cwd, '.theokit', 'tui-session'), 'tui-legacy')
-    const first = createTuiSession({ cwd, pointerRoot: root, resume: false }).session()
-    await pointerHolds(sessionPointerPath(cwd, root), first)
-    const s = createTuiSession({ cwd, pointerRoot: root, resume: true })
-    expect(s.session()).toBe(first)
-  })
-
-  it('reports not resumed when nothing is stored', () => {
-    const s = createTuiSession({ cwd: newRoot(), pointerRoot: newRoot(), resume: true })
-    expect(s.resumed).toBe(false)
   })
 })

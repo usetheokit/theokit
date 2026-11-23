@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import { loadJsonl, transcriptPath, transcriptRoot } from '@theokit/sdk/persistence'
 
 /**
@@ -59,11 +57,6 @@ export interface ReadThreadHistoryOptions {
   readonly root?: string
 }
 
-export interface ReadThreadHistoryFileOptions {
-  /** Skip lines that are not a JSON object instead of making the whole read `unreadable`. */
-  readonly skipMalformed?: boolean
-}
-
 const ABSENT: ThreadHistory = { state: 'absent', messages: [] }
 
 /** Read one thread's stored history, distinguishing "none" from "could not read". */
@@ -80,40 +73,6 @@ export function readThreadHistory(
     // "no history" is the defect this function exists to remove.
     if (isNotFound(err)) return ABSENT
     return { state: 'unreadable', messages: [], reason: messageOf(err) }
-  }
-}
-
-/**
- * Read a transcript by its real path, for a caller that already holds the file (a session listing)
- * rather than a session id. Same three states as `readThreadHistory`; with `skipMalformed`, a line
- * that is not a JSON object is dropped and the rest is returned.
- */
-export function readThreadHistoryFile(
-  path: string,
-  options: ReadThreadHistoryFileOptions = {},
-): ThreadHistory {
-  try {
-    if (options.skipMalformed !== true) return { state: 'present', messages: loadJsonl(path) }
-    const messages: Record<string, unknown>[] = []
-    for (const line of readFileSync(path, 'utf8').split('\n')) {
-      const row = parseObject(line)
-      if (row !== undefined) messages.push(row)
-    }
-    return { state: 'present', messages }
-  } catch (err) {
-    if (isNotFound(err)) return ABSENT
-    return { state: 'unreadable', messages: [], reason: messageOf(err) }
-  }
-}
-
-function parseObject(line: string): Record<string, unknown> | undefined {
-  try {
-    const parsed: unknown = JSON.parse(line)
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined
-  } catch {
-    return undefined
   }
 }
 

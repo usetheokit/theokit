@@ -10,7 +10,7 @@
  */
 
 /** The single source of truth for the supported SDK range. Mirrors the `package.json` peer floor. */
-export const SUPPORTED_SDK_RANGE = '>=5.32.0 <14'
+export const SUPPORTED_SDK_RANGE = '>=5.32.0 <12'
 
 // Bounded semver: three `\d+` tuples + an optional `-tag.N` prerelease. No nested quantifiers →
 // no catastrophic backtracking; the security/detect-unsafe-regex heuristic false-positives here.

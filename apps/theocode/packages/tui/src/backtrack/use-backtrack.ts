@@ -1,7 +1,7 @@
-import { backtrackReducer, CLOSED_BACKTRACK, type BacktrackState } from '@theokit/tui'
-import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useState, type Dispatch, type SetStateAction } from 'react'
 
 import { confirmBacktrack as confirmBacktrackCmd, primeBacktrack } from './backtrack.js'
+import { armLadder, CLOSED_LADDER, selectTurn, type LadderState } from './backtrack-ladder.js'
 
 export type BacktrackDeps = Pick<
   Parameters<typeof confirmBacktrackCmd>[1],
@@ -26,54 +26,46 @@ export interface BacktrackLadder {
 function requestBacktrackWindow(
   currentSessionId: BacktrackDeps['currentSessionId'],
   setToast: BacktrackDeps['setToast'],
-  apply: (previews: readonly string[]) => void,
+  apply: (ladder: LadderState) => void,
 ): void {
   let previewWindow: readonly string[] = []
+  let turnCount = 0
   void primeBacktrack({
     currentSessionId,
     setRewindPreviews: (p) => {
       previewWindow = typeof p === 'function' ? p([...previewWindow]) : p
     },
-    setRewindCount: () => undefined,
+    setRewindCount: (n) => {
+      turnCount = typeof n === 'function' ? n(turnCount) : n
+    },
     setRewindNth: () => undefined,
     setRewindPrimed: (v) => {
-      if (v) apply(previewWindow)
+      if (v) apply(armLadder(previewWindow, turnCount))
     },
     setToast,
   })
 }
 
 export function useBacktrack(deps: BacktrackDeps): BacktrackLadder {
-  const [ladder, setLadderState] = useState<BacktrackState>(CLOSED_BACKTRACK)
-  const ladderRef = useRef<BacktrackState>(CLOSED_BACKTRACK)
-  const setLadder = useCallback((update: (current: BacktrackState) => BacktrackState): void => {
-    ladderRef.current = update(ladderRef.current)
-    setLadderState(ladderRef.current)
-  }, [])
+  const [ladder, setLadder] = useState<LadderState>(CLOSED_LADDER)
   const [rotating, setRotating] = useState(false)
   const [composerSeed, setComposerSeedState] = useState('')
 
   const { setToast, currentSessionId } = deps
 
   const reset = useCallback((): void => {
-    setLadder((current) => backtrackReducer(current, { type: 'reset' }))
-  }, [setLadder])
+    setLadder(CLOSED_LADDER)
+  }, [])
 
   const prime = useCallback((): void => {
-    requestBacktrackWindow(currentSessionId, setToast, (previews) => {
-      setLadder((current) => backtrackReducer(current, { type: 'prime', previews }))
-    })
-  }, [currentSessionId, setToast, setLadder])
+    requestBacktrackWindow(currentSessionId, setToast, setLadder)
+  }, [currentSessionId, setToast])
 
   const advance = useCallback(
-    (_next: number, turnCount: number): void => {
-      // The reducer is the one authority on the position: the toast reports where it landed, not
-      // the caller's idea of where it would.
-      const landed = backtrackReducer(ladderRef.current, { type: 'older' })
-      ladderRef.current = landed
-      setLadderState(landed)
+    (next: number, turnCount: number): void => {
+      setLadder((current) => selectTurn(current, next))
       setToast({
-        message: `Backtrack: message ${String(landed.selected + 1)}/${String(turnCount)} — Enter to edit, Esc for older`,
+        message: `Backtrack: message ${String(next + 1)}/${String(turnCount)} — Enter to edit, Esc for older`,
         variant: 'info',
       })
     },
@@ -82,7 +74,7 @@ export function useBacktrack(deps: BacktrackDeps): BacktrackLadder {
 
   const confirm = useCallback((): void => {
     void confirmBacktrackCmd(
-      { rewindNth: ladder.selected },
+      { rewindNth: ladder.nth },
       {
         ...deps,
         setComposerSeed: setComposerSeedState,
@@ -90,13 +82,13 @@ export function useBacktrack(deps: BacktrackDeps): BacktrackLadder {
         setRotating,
       },
     )
-  }, [ladder.selected, deps, reset])
+  }, [ladder.nth, deps, reset])
 
   return {
     armed: ladder.armed,
     rotating,
-    nth: ladder.selected,
-    total: ladder.previews.length,
+    nth: ladder.nth,
+    total: ladder.total,
     previews: ladder.previews,
     composerSeed,
     setSeed: setComposerSeedState,

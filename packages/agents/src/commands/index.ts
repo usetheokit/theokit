@@ -28,14 +28,6 @@ export type {
 } from './command-router.js'
 
 export {
-  formatGcJson,
-  formatGcPlan,
-  parseSessionsGcArgs,
-  sessionsGcCommand,
-} from './sessions-gc.js'
-export type { SessionsGcArgs, SessionsGcOptions, SessionsGcOutcome } from './sessions-gc.js'
-
-export {
   createShutdown,
   exitAfterDrain,
   DEFAULT_WATCHDOG_MS,

@@ -9,8 +9,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { TurnAgent } from '../../src/agent-port.js'
 import { createOwnerPolicyHook } from '../../src/authorization/owner-policy-hook.js'
-import { createFilePairingStore } from '@theokit/gateway'
+import { createPairingStore } from '../../src/authorization/pairing-store.js'
 import { parseAuthorizationPolicy } from '../../src/authorization/policy.js'
+import { createBroadcastGroups } from '../../src/channels/broadcast-groups.js'
 import { createGroupActivationHook } from '../../src/channels/group-activation-hook.js'
 import { createReplyHandler } from '../../src/channels/reply-handler.js'
 import { createContainer } from '../../src/composition.js'
@@ -55,7 +56,7 @@ interface LiveOptions {
 async function liveApp({ env, platforms, hooks = [] }: LiveOptions) {
   requireModelSettings()
   const policy = parseAuthorizationPolicy(env)
-  const pairing = policy.stateDir === undefined ? undefined : createFilePairingStore({ dir: policy.stateDir })
+  const pairing = policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir })
   const real = createChannelAgentFactory(process.env, (options) => Agent.create(options))
   const prompts: string[] = []
   let completedTurns = 0
@@ -93,7 +94,7 @@ async function liveApp({ env, platforms, hooks = [] }: LiveOptions) {
     // One agent per message, as before sessions: these checks are about who reaches the agent.
     withAgent: (_event, work) => agents.withAgent((agent) => work({ agent, release: () => undefined })),
     broadcast: {
-      groups: policy.broadcastGroups,
+      groups: createBroadcastGroups(policy.broadcastGroups),
       adapterFor: (platform) => adapters.get(platform as PlatformName),
       write: (line) => void process.stderr.write(`${line}\n`),
     },

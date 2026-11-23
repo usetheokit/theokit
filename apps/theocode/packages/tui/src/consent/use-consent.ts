@@ -1,51 +1,80 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
-import { useWorkspaceConsent, type ReviewableHook, type WorkspaceConsent } from '@theokit/tui'
-import { resolveEffectiveConfig, resolveTrustPosture, trustDir } from '@theocode/agent/config'
+import { resolveEffectiveConfig, resolveTrustPosture } from '@theocode/agent/config'
 import { approveHook, classifyHooks, parseHooks } from '@theocode/agent/hooks'
 
+import {
+  persistedApproval,
+  trust as trustInState,
+  distrust as distrustInState,
+  initialState,
+  markReviewed as markReviewedInState,
+  refuseHook as refuseHookInState,
+  type ConsentState,
+} from './consent-state.js'
 import { computePendingHooks } from './hook-consent.js'
 import { workingDirectory } from '../working-directory.js'
 
-export type Consent = WorkspaceConsent
+export interface Consent {
+  readonly trusted: boolean
+  readonly hooksReviewed: boolean
+  readonly pendingHooks: ReturnType<typeof computePendingHooks>
 
-type Classified = ReturnType<typeof computePendingHooks>
+  readonly trust: () => void
+  readonly distrust: () => void
 
-/**
- * The framework owns the consent state (optimistic trust with rollback, session refusals, pending
- * list). What stays here is product code: how trust is persisted, how hooks are classified, and
- * mapping the framework's fingerprint back to the spec `approveHook` persists.
- */
+  /**
+   * B-040 — returns a promise so the caller can sequence on it. It used to take an on-failure
+   * callback, which let the gate run `markReviewed()` synchronously while the persist was still in
+   * flight and close as if it had succeeded.
+   */
+  readonly approveHookConsent: (spec: unknown) => Promise<void>
+  readonly refuseHook: (fingerprint: string) => void
+  readonly markReviewed: () => void
+}
+
 export function useConsent(cwd: string = workingDirectory()): Consent {
-  const classified = useRef<Classified>([])
+  const [state, setState] = useState<ConsentState>(() =>
+    initialState(resolveTrustPosture(cwd).level === 'trusted'),
+  )
+  const { trusted, hooksReviewed, declined, epoch } = state
 
-  const listPendingHooks = useCallback((): readonly ReviewableHook[] => {
-    classified.current = computePendingHooks({
+  const pendingHooks = useMemo(() => {
+    void epoch
+    return computePendingHooks({
       cwd,
-      declined: new Set(),
+      declined: declined,
       resolveEffectiveConfig,
       parseHooks,
       classifyHooks,
       onError: (err) => process.stderr.write(`[hooks] consent check failed: ${String(err)}\n`),
     })
-    return classified.current.map((h) => ({
-      fingerprint: h.fingerprint,
-      event: h.spec.event,
-      command: h.spec.command,
-      status: h.status === 'modified' ? 'modified' : 'new',
-      ...(h.previousCommand === undefined ? {} : { previousCommand: h.previousCommand }),
-    }))
-  }, [cwd])
+  }, [cwd, declined, epoch])
 
-  return useWorkspaceConsent({
-    workspaceKey: cwd,
-    isTrusted: () => resolveTrustPosture(cwd).level === 'trusted',
-    persistTrust: () => trustDir(cwd),
-    listPendingHooks,
-    approveHook: async (fingerprint) => {
-      const hook = classified.current.find((h) => h.fingerprint === fingerprint)
-      if (!hook) throw new Error('the hook is no longer pending; its configuration changed')
-      await approveHook(cwd, hook.spec)
+  const approveHookConsent = useCallback(
+    async (spec: unknown): Promise<void> => {
+      await approveHook(cwd, spec as Parameters<typeof approveHook>[1])
+      setState(persistedApproval)
     },
-  })
+    [cwd],
+  )
+
+  return {
+    trusted,
+    hooksReviewed,
+    pendingHooks,
+    trust: useCallback(() => {
+      setState(trustInState)
+    }, []),
+    distrust: useCallback(() => {
+      setState(distrustInState)
+    }, []),
+    approveHookConsent,
+    refuseHook: useCallback((fingerprint: string) => {
+      setState((current) => refuseHookInState(current, fingerprint))
+    }, []),
+    markReviewed: useCallback(() => {
+      setState(markReviewedInState)
+    }, []),
+  }
 }

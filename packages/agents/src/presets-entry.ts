@@ -8,7 +8,5 @@
  */
 export {
   codingAgentPreset,
-  codingAgentTools,
   type CodingAgentPresetOptions,
-  type CodingAgentTools,
 } from './capability/coding-agent-preset.js'

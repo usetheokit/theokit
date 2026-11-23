@@ -1,14 +1,11 @@
 import './runtime.js'
 import 'reflect-metadata'
 
-import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname } from 'node:path'
 
 import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
 import { resolveSecretRefs } from '@theokit/agents/auth'
-import { teeOutput } from '@theokit/host'
 import { restartSelf, waitForPredecessor } from '@theokit/host/service'
 
 import { startTheoClaw } from './composition.js'
@@ -20,6 +17,7 @@ import {
   createChannelAgentFactory,
 } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
+import { teeToLogFile } from './ops/log-tee.js'
 import { watchConfiguration } from './ops/hot-reload.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
@@ -87,15 +85,7 @@ try {
   const configFile = loadConfiguration(process.env, homedir())
   // B-718: mirror the output to THEOCLAW_LOG_FILE, which `theoclaw logs` reads where there is no user unit.
   applyProxyEnvironment(process.env)
-  const logFile = process.env.THEOCLAW_LOG_FILE?.trim()
-  if (logFile !== undefined && logFile !== '') {
-    try {
-      mkdirSync(dirname(logFile), { recursive: true, mode: 0o700 })
-      teeOutput({ file: logFile, maxBytes: 10 * 1024 * 1024, keep: 2 })
-    } catch {
-      // A log file that cannot be written stops the mirror and never the process.
-    }
-  }
+  teeToLogFile(process.env, [process.stdout, process.stderr])
   // Hot reload (B-399): a change to the model settings applies to the next agent, without a restart.
   // A changed start-only setting (port, token, channel, policy) restarts the process (B-716).
   if (configFile !== undefined) {

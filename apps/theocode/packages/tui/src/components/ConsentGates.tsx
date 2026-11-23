@@ -1,62 +1,59 @@
 import type { ReactElement } from 'react'
-import { Box, Text } from 'ink'
 
-import { HookReviewPrompt, WorkspaceTrustPrompt } from '@theokit/tui'
-import { APPROVAL_KEY_HINT } from '../formatting/index.js'
+import { PermissionPrompt } from '@theokit/tui'
+import { APPROVAL_KEY_HINT, approvalChoices } from '../formatting/index.js'
 
+import { trustDir } from '@theocode/agent/config'
 import type { ApprovalMode } from '../consent/index.js'
 import type { ReasoningEffort } from '@theocode/agent/config'
 import type { ToastPayload } from '../screen-types.js'
 import type { Dispatch, SetStateAction } from 'react'
 import { AGENT } from '@theocode/shared/agent'
+import { applyHookDecision } from '../consent/hook-decision.js'
 import { workingDirectory } from '../working-directory.js'
 
 type Consent = ReturnType<typeof import('../consent/index.js').useConsent>
 
-const HOOK_WARNING =
-  'This command runs on every matching tool call. Approve only what you recognise — ' +
-  'declining leaves it inert, and you will be asked again next launch.'
-
 export interface HooksGateProps {
   readonly consent: Consent
   readonly pendingHooks: Consent['pendingHooks']
-  // B-040 — a persist failure the user cannot see is a persist failure that reads as success.
+  // B-040 — the sibling TrustGate already takes this. A persist failure the user cannot see is a
+  // persist failure that reads as success.
   readonly setToast: Dispatch<SetStateAction<ToastPayload | null>>
 }
 
-export function HooksGate({
-  consent,
-  pendingHooks,
-  setToast,
-}: HooksGateProps): ReactElement | null {
-  const head = pendingHooks[0]
-  if (!head) return null
+export function HooksGate({ consent, pendingHooks, setToast }: HooksGateProps): ReactElement {
   return (
-    <Box flexDirection="column">
-      <HookReviewPrompt
-        hook={head}
-        remaining={pendingHooks.length - 1}
-        refuseLabel="No, leave it inert"
-        onDecision={(decision) => {
-          if (decision === 'refuse') {
-            consent.refuseHook(head.fingerprint)
-            return
-          }
-          // The gate stays OPEN on failure (the hook stays pending): an approval that did not
-          // persist will not be in effect next launch.
-          consent.approveHook(head.fingerprint).catch((err: unknown) => {
-            setToast({
-              message:
-                `could not persist the hook approval: ${(err as Error).message} — the hook is still ` +
-                'unapproved; approve again to retry',
-              variant: 'error',
-            })
-          })
-        }}
-      />
-      <Text dimColor>{HOOK_WARNING}</Text>
-      <Text dimColor>{APPROVAL_KEY_HINT}</Text>
-    </Box>
+    <PermissionPrompt
+      toolType="Review hook"
+      command={
+        pendingHooks.length > 1
+          ? `${pendingHooks.length} hooks need review — one at a time`
+          : 'one hook needs review'
+      }
+      description={((h) =>
+        (h.status === 'modified'
+          ? `[changed] ${h.spec.event}\n  was: ${h.previousCommand}\n  now: ${h.spec.command}`
+          : `[new] ${h.spec.event}\n  ${h.spec.command}`) +
+        '\n\nThis command runs on every matching tool call. Approve only what you recognise — ' +
+        'declining leaves it inert, and you will be asked again next launch.')(pendingHooks[0]!)}
+      hint={APPROVAL_KEY_HINT}
+      hintPlacement="below"
+      choices={approvalChoices('No, leave it inert')}
+      onDecision={(decision) => {
+        void applyHookDecision(
+          decision === 'yes' ? 'yes' : 'no',
+          pendingHooks[0]!,
+          pendingHooks.length,
+          {
+            approve: (spec) => consent.approveHookConsent(spec),
+            refuse: (fp) => consent.refuseHook(fp),
+            markReviewed: () => consent.markReviewed(),
+            toast: (message) => setToast({ message, variant: 'error' }),
+          },
+        )
+      }}
+    />
   )
 }
 
@@ -82,19 +79,18 @@ export function TrustGate({
   exit,
 }: TrustGateProps): ReactElement {
   return (
-    <Box flexDirection="column">
-      <WorkspaceTrustPrompt
-        dir={workingDirectory()}
-        description={`${AGENT.name} will read files here and may run commands or apply patches. Trust only directories you control — an untrusted repo's AGENTS.md could try to hijack the agent. Approve to trust this directory (remembered); reject to quit.`}
-        // Rejecting the trust gate QUITS — saying so on the button is the difference between an
-        // informed refusal and a surprise exit.
-        quitLabel="No, quit"
-        onDecision={(decision) => {
-          if (decision !== 'trust') {
-            exit()
-            return
-          }
-          consent.trust().then(
+    <PermissionPrompt
+      toolType="Trust directory"
+      command={workingDirectory()}
+      description={`${AGENT.name} will read files here and may run commands or apply patches. Trust only directories you control — an untrusted repo's AGENTS.md could try to hijack the agent. Approve to trust this directory (remembered); reject to quit.`}
+      hint={APPROVAL_KEY_HINT}
+      hintPlacement="below"
+      // Rejecting the trust gate QUITS — the session cannot continue without an answer. Saying so
+      // on the button is the difference between an informed refusal and a surprise exit.
+      choices={approvalChoices('No, quit')}
+      onDecision={(decision) => {
+        if (decision === 'yes') {
+          void trustDir(workingDirectory()).then(
             () => {
               try {
                 SESSION.reloadConfig()
@@ -111,17 +107,19 @@ export function TrustGate({
               }
             },
             (err: unknown) => {
-              // The framework has already rolled the optimistic trust back.
               setToast({
                 message: `could not persist trust: ${(err as Error).message} — the directory is still untrusted; approve again to retry`,
                 variant: 'error',
               })
+              consent.distrust()
               process.stderr.write(`could not persist trust: ${(err as Error).message}\n`)
             },
           )
-        }}
-      />
-      <Text dimColor>{APPROVAL_KEY_HINT}</Text>
-    </Box>
+          consent.trust()
+        } else {
+          exit()
+        }
+      }}
+    />
   )
 }

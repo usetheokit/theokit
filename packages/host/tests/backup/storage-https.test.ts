@@ -136,24 +136,3 @@ it('refuses a non-https url and a wrong token', async () => {
     registry.init('r', { root: 'https://u:p@h/x', encrypted: false }),
   ).rejects.toBeInstanceOf(BackupError)
 })
-
-it('abandons a server that stops answering instead of waiting forever', async () => {
-  const base = await scratch()
-  const { url, ca } = await start(base)
-  server!.removeAllListeners('request')
-  server!.on('request', (req, res) => {
-    if (req.url?.endsWith('/backups/')) {
-      res.writeHead(200, { 'content-type': 'application/json' })
-      res.write('{"names":') // headers sent, body never finished
-    }
-  })
-  const registry = createStorageRegistry({
-    file: join(base, 's.json'),
-    defaultRoot: join(base, 's'),
-    ca,
-    timeoutMs: 200,
-  })
-  await registry.init('r', { root: url, encrypted: false, token: TOKEN })
-  expect(await registry.test('r')).toMatchObject({ ok: false })
-  await expect(registry.store('r', await makeBackup(base))).rejects.toBeInstanceOf(BackupError)
-})

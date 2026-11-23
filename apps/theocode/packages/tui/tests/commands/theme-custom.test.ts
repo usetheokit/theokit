@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { handleTheme } from '../../src/commands/theme-command.js'
 import { resetSessionThemeForTest, sessionThemeLabel } from '../../src/theme/theme-session.js'
@@ -25,10 +25,8 @@ beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'theocode-theme-cmd-'))
   mkdirSync(join(home, '.claude', 'themes'), { recursive: true })
   toasts = []
-  vi.stubEnv('NO_COLOR', '')
 })
 afterEach(() => {
-  vi.unstubAllEnvs()
   resetSessionThemeForTest()
   rmSync(home, { recursive: true, force: true })
 })
@@ -103,16 +101,5 @@ describe('selecting a custom theme', () => {
 
     expect(sessionThemeLabel()).toBe('light')
     expect(last()?.variant).toBe('success')
-  })
-})
-
-describe('selecting a custom theme with NO_COLOR set', () => {
-  it('test_it_is_refused_and_the_session_is_unchanged', () => {
-    theme('midnight', { name: 'Midnight', base: 'dark' })
-    vi.stubEnv('NO_COLOR', '1')
-    handleTheme('custom:midnight', push, NEVER_PERSISTED, STORE, home)
-    expect(last()?.variant).toBe('error')
-    expect(last()?.message).toContain('NO_COLOR')
-    expect(sessionThemeLabel()).toBeUndefined()
   })
 })

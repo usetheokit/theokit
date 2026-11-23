@@ -1,95 +1,65 @@
 /**
- * The idempotent-delete rule both GC apply phases share, pinned at the framework's apply phase.
+ * The idempotent-delete rule both GC apply phases share, pinned in one place.
  *
- * The 2026-09-10 architecture review measured this business rule implemented twice — per-session
- * and all-projects — with the same semantics and the same `target: message` error shape consumers
- * parse. The rule now has one implementation, in `runProjectsGC`; these tests lock it there, so a
- * change to it (tolerating another code, changing the shape) turns one suite red.
+ * The 2026-09-10 architecture review measured this business rule implemented twice — in
+ * `runSessionGC` (per-session) and `runSessionGCAllProjects` (all projects) — with the same
+ * semantics and the same `id: message` error shape consumers parse. These tests lock the rule at
+ * its single implementation, so a change to it (tolerating another code, changing the shape) is a
+ * change to one function with one suite going red.
  */
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { removeTolerant } from '../../../src/session/gc/remove-tolerant.js'
 
-import { runAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
-import { claimRoot } from '../../../src/session/gc/root-ownership.js'
-
-const bases: string[] = []
-afterEach(() => {
-  for (const b of bases.splice(0)) {
-    try {
-      chmodSync(join(b, 'projects', 'p'), 0o700)
-    } catch {
-      // not created by this case
-    }
-    rmSync(b, { recursive: true, force: true })
-  }
-})
-
-function scratch(): { root: string; dir: string; plan: (target: string) => never } {
-  const base = mkdtempSync(join(tmpdir(), 'theocode-gc-tolerant-'))
-  bases.push(base)
-  const root = join(base, 'projects')
-  const dir = join(root, 'p')
-  mkdirSync(dir, { recursive: true })
-  claimRoot(root)
-  const plan = (target: string) =>
-    ({
-      candidates: [],
-      kept: [],
-      touchedProjects: [],
-      liveCwds: [],
-      totalByKind: {},
-      errors: [],
-      framework: {
-        projectsRoot: root,
-        candidates: [{ project: 'p', kind: 'transcript', target, ageDays: 90 }],
-        kept: [],
-        touchedProjects: ['p'],
-        liveCwds: [],
-        countByKind: { transcript: 1, 'writer-lock': 0, 'lock-directory': 0, temp: 0, registry: 0 },
-        errors: [],
-      },
-    }) as never
-  return { root, dir, plan }
+function enoent(): NodeJS.ErrnoException {
+  const err = new Error('no such file') as NodeJS.ErrnoException
+  err.code = 'ENOENT'
+  return err
 }
 
-describe('removal tolerates a vanished file', () => {
+describe('removeTolerant', () => {
   it('a_successful_delete_is_recorded_as_removed', async () => {
-    const { root, dir, plan } = scratch()
-    const file = join(dir, 'old.jsonl')
-    writeFileSync(file, '{}\n')
+    const removed: string[] = []
+    const errors: string[] = []
 
-    const result = await runAllProjectsOnDisk(plan(file), { apply: true, projectsRoot: root })
+    await removeTolerant('t-1', async () => {}, removed, errors)
 
-    // The emptied project directory is removed with its last transcript.
-    expect(result.removed).toEqual([file, dir])
-    expect(result.errors).toEqual([])
-    expect(existsSync(file)).toBe(false)
+    expect(removed).toEqual(['t-1'])
+    expect(errors).toEqual([])
   })
 
   it('enoent_counts_as_removed_because_gone_is_what_removal_means', async () => {
-    const { root, dir, plan } = scratch()
-    const file = join(dir, 'vanished.jsonl')
+    const removed: string[] = []
+    const errors: string[] = []
 
-    const result = await runAllProjectsOnDisk(plan(file), { apply: true, projectsRoot: root })
+    await removeTolerant(
+      't-2',
+      async () => {
+        throw enoent()
+      },
+      removed,
+      errors,
+    )
 
-    expect(result.errors).toEqual([])
+    expect(removed).toEqual(['t-2'])
+    expect(errors).toEqual([])
   })
 
   it('any_other_error_is_collected_as_id_colon_message_and_does_not_throw', async () => {
-    const { root, dir, plan } = scratch()
-    const file = join(dir, 'locked.jsonl')
-    writeFileSync(file, '{}\n')
-    chmodSync(dir, 0o500)
+    const removed: string[] = []
+    const errors: string[] = []
 
-    const result = await runAllProjectsOnDisk(plan(file), { apply: true, projectsRoot: root })
+    await removeTolerant(
+      't-3',
+      async () => {
+        throw new Error('EACCES: permission denied')
+      },
+      removed,
+      errors,
+    )
 
-    expect(result.removed).toEqual([])
-    // The `target: message` shape is a contract: callers parse it.
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0]?.startsWith(`${file}: `)).toBe(true)
-    expect(existsSync(file)).toBe(true)
+    expect(removed).toEqual([])
+    // The `id: message` shape is a contract: both sweeps report through it and callers parse it.
+    expect(errors).toEqual(['t-3: EACCES: permission denied'])
   })
 })

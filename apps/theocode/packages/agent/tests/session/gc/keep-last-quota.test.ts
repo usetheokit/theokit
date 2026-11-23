@@ -24,7 +24,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { planSessionGCAllProjects, type ProjectEntry } from './legacy-plan.js'
+import { planSessionGCAllProjects, type ProjectEntry } from '../../../src/session/gc/all-sessions.js'
 
 const DAY = 86_400_000
 const NOW = Date.UTC(2026, 8, 3)
@@ -54,9 +54,7 @@ async function planFor(entries: ProjectEntry[]) {
 describe('the keepLast quota', () => {
   it('test_stale_transcripts_inside_the_quota_are_protected', async () => {
     // The baseline the quota promises: 5 stale transcripts, quota 10, nothing collected.
-    const plan = await planFor(
-      [1, 2, 3, 4, 5].map((i) => transcript(`stale-${String(i)}.jsonl`, 30 + i)),
-    )
+    const plan = await planFor([1, 2, 3, 4, 5].map((i) => transcript(`stale-${String(i)}.jsonl`, 30 + i)))
 
     expect(plan.candidates).toHaveLength(0)
   })

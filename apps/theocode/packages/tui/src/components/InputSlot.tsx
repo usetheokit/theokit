@@ -96,7 +96,7 @@ type WithApproval = InputSlotProps & { readonly pendingApproval: PendingApproval
 export const INPUT_LAYERS: readonly SurfaceLayer<InputSlotProps>[] = [
   {
     name: 'hooks-gate',
-    when: (p) => p.trusted && p.pendingHooks.length > 0,
+    when: (p) => p.trusted && !p.consent.hooksReviewed && p.pendingHooks.length > 0,
     render: (p) => (
       <HooksGate consent={p.consent} pendingHooks={p.pendingHooks} setToast={p.setToast} />
     ),

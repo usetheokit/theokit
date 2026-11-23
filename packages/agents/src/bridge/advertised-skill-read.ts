@@ -27,41 +27,30 @@ interface WireRuntime {
   defineSkillReadTool?: (source: readonly InlineSkill[] | ReadSource) => unknown
 }
 
-/**
- * The SDK's own binary gate, `binaryOnPath` from `@theokit/sdk/skills` (exported since 10.0.0). An older SDK
- * does not export it: a local PATH lookup then stands in, so a skill whose binary is present is still served.
- */
-function localBinaryOnPath(bin: string): boolean {
-  const exts = process.platform === 'win32' ? ['', '.exe', '.cmd', '.bat'] : ['']
-  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
-    if (dir === '') continue
-    for (const ext of exts) {
-      try {
-        accessSync(join(dir, bin + ext), constants.X_OK)
-        return true
-      } catch {
-        // not here; keep looking
-      }
-    }
+function isExecutable(file: string): boolean {
+  try {
+    accessSync(file, constants.X_OK)
+    return true
+  } catch {
+    return false
   }
-  return false
 }
 
-async function binaryGate(): Promise<(bin: string) => boolean> {
-  const skills = (await import('@theokit/sdk/skills')) as {
-    binaryOnPath?: (bin: string) => boolean
-  }
-  return skills.binaryOnPath ?? localBinaryOnPath
+function binaryOnPath(bin: string): boolean {
+  if (bin.length === 0 || /[\\/]/.test(bin)) return false
+  return (process.env.PATH ?? '')
+    .split(delimiter)
+    .filter((d) => d.length > 0)
+    .some((d) => isExecutable(join(d, bin)))
 }
 
 /**
  * The SDK's own disclosure rule for the `<skills>` block (hidden and unrunnable skills are not offered). The SDK
- * exposes no API for the flags, so the rule is mirrored here over the SDK's binary gate; the real-SDK cases in
- * skill-read-autowire.test.ts pin the manager it reads.
+ * exposes no API for it, so it is mirrored; the real-SDK cases in skill-read-autowire.test.ts pin the manager it reads.
  */
-function isDisclosed(skill: Skill | InlineSkill, onPath: (bin: string) => boolean): boolean {
+function isDisclosed(skill: Skill | InlineSkill): boolean {
   const s = skill as { disableModelInvocation?: boolean; requiresBins?: string[] }
-  return s.disableModelInvocation !== true && (s.requiresBins ?? []).every(onPath)
+  return s.disableModelInvocation !== true && (s.requiresBins ?? []).every(binaryOnPath)
 }
 
 interface Holder {
@@ -96,9 +85,8 @@ async function advertisedSkills(holder: Holder): Promise<(InlineSkill | Skill)[]
     // Project roots granted: the manager's current snapshot IS the listing, new skills included.
     // Withheld: a refresh would still discover them, so only the creation-time set is served.
     const granted = manager.settingSourcesIncludeProject === true
-    const onPath = await binaryGate()
     return (await manager.list()).filter(
-      (s) => (granted || roots.has(skillKey(s))) && isDisclosed(s, onPath),
+      (s) => (granted || roots.has(skillKey(s))) && isDisclosed(s),
     )
   }
   // Fail closed: the public listing carries no disclosure flags, so without the manager nothing is served.

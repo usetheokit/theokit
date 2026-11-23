@@ -9,7 +9,7 @@ import {
   compileLoadedAgentModule,
   type DeferredApproval,
   type HumanInTheLoopOptions,
-  resolveSkillsSettings,
+  resolveEnabledSkills,
   streamAgentUIMessages,
 } from '@theokit/agents'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
@@ -108,11 +108,11 @@ export function makeThreadStartRun(
     (async function* () {
       const compiled = compileLoadedAgentModule(mod, source)
       if (compiled.skillsResolver) {
-        const settings = await resolveSkillsSettings(
+        const enabled = await resolveEnabledSkills(
           compiled.skillsResolver,
           compiled.runContext ?? {},
         )
-        if (settings !== undefined) compiled.skills = settings
+        if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
       }
       // No owner on this path, and that is a stated limit rather than an oversight (B-016). A thread
       // continuation runs headless — there is no request whose identity could be resolved — so an

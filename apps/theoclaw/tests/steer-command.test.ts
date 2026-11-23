@@ -50,40 +50,4 @@ describe('/steer', () => {
     expect(t.sends).toEqual([])
     expect(t.replies).toEqual([STEER_IDLE_REPLY, STEER_USAGE_REPLY])
   })
-
-  it('still steers while the reply is being sent, and is idle again once the turn failed', async () => {
-    const fail = { status: 'error', error: { code: 'MODEL_DOWN' } }
-    for (const result of [undefined, fail]) {
-      const fake = new FakeAgent({ frames: [assistant('an answer'), finished()], ...(result === undefined ? {} : { result }) })
-      const sends: (string | undefined)[] = []
-      const agent = {
-        send: async (text: string, options?: { queueMode?: string }) => (sends.push(options?.queueMode), fake.send(text)),
-      } as never
-      const handler = createReplyHandler({
-        reset: async () => undefined,
-        withAgent: async <R>(_e: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> => work({ agent, release: () => undefined }),
-      })
-      const replies: string[] = []
-      let during: Promise<void> | undefined
-      const call = (text: string, steerDuringReply: boolean) => {
-        const event = messageEvent('telegram', text)
-        const ctx: GatewayContext = {
-          event,
-          reply: async (reply) => {
-            replies.push(reply)
-            // The stream has ended; the reply is being sent and the lease is not yet released.
-            if (steerDuringReply) during = call('/steer now', false)
-            return { ok: true, messageId: 'm' }
-          },
-        }
-        return handler(event, ctx)
-      }
-      await call('go', true).catch(() => undefined)
-      await during
-      if (result === undefined) expect(replies).toContain(STEERED_REPLY)
-      replies.length = 0
-      await call('/steer later', false)
-      expect(replies).toEqual([STEER_IDLE_REPLY])
-    }
-  })
 })

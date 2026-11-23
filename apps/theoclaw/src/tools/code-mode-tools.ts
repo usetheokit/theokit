@@ -1,12 +1,18 @@
-import { DelegationError } from '@theokit/agents'
+import {
+  DelegationBudgetExceededError,
+  DelegationError,
+  DelegationTimeoutError,
+  GuardrailError,
+} from '@theokit/agents'
 import type { DelegationPort, DelegationResult } from '@theokit/agents'
-import { delegationPortFromAgentFactory } from '@theokit/agents/bridge'
 import { createCodeMode } from '@theokit/agents/code-mode'
 import { createQuickJsSandbox } from '@theokit/agents/code-mode-quickjs'
 import { createDelegateAllTool, createDelegateTool } from '@theokit/agents/tools'
 import type { CustomTool } from '@theokit/sdk'
 
-import type { TurnAgent, TurnMessage } from '../agent-port.js'
+import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
+import { describeError } from '../control-plane/errors.js'
+import { describeStreamedError } from '../control-plane/turn.js'
 import { vetoToolCall } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
 
@@ -95,27 +101,133 @@ function cappedScriptTools(tools: readonly CustomTool[]): CustomTool[] {
   )
 }
 
-/** The one roster entry of `delegate_all`: each task gets a fresh worker, runs one turn, and is disposed (EC-3). */
+/** Drain the run's stream and return the code of the first error event, if any. */
+async function streamedErrorOf(run: TurnRun): Promise<string | undefined> {
+  let streamed: string | undefined
+  for await (const message of run.stream()) {
+    if (message.type === 'error') streamed ??= describeStreamedError(message)
+  }
+  return streamed
+}
+
+/**
+ * The run's outcome, its stream drained first. While it runs, an abort of `signal` cancels it; the
+ * cancellation's own failure, if any, rejects here rather than being lost. Its handler is attached
+ * when the cancellation starts, so a run that fails while the cancellation is still rejecting
+ * reports both instead of leaving one unhandled, which would end the process (LCR #76).
+ */
+async function untilSettled(
+  run: TurnRun,
+  signal: AbortSignal | undefined,
+): Promise<Awaited<ReturnType<TurnRun['wait']>> & { readonly streamed: string | undefined }> {
+  let cancelling: Promise<{ readonly failure: unknown } | undefined> | undefined
+  const cancel = (): void => {
+    cancelling ??= run.cancel().then(
+      () => undefined,
+      (failure: unknown) => ({ failure }),
+    )
+  }
+  if (signal?.aborted === true) cancel()
+  else signal?.addEventListener('abort', cancel, { once: true })
+  let result: Awaited<ReturnType<TurnRun['wait']>> & { readonly streamed: string | undefined }
+  try {
+    const streamed = await streamedErrorOf(run)
+    result = { ...(await run.wait()), streamed }
+  } catch (error) {
+    const cancelled = await cancelling
+    if (cancelled === undefined) throw error
+    throw new AggregateError(
+      [error, cancelled.failure],
+      `${describeError(error)}; cancelling the worker's run then failed: ${describeError(cancelled.failure)}`,
+    )
+  } finally {
+    signal?.removeEventListener('abort', cancel)
+  }
+  const cancelled = await cancelling
+  if (cancelled !== undefined) throw cancelled.failure
+  return result
+}
+
+async function disposeWorker(agent: TurnAgent): Promise<void> {
+  const dispose = (agent as Partial<AsyncDisposable>)[Symbol.asyncDispose]
+  if (typeof dispose === 'function') await dispose.call(agent)
+}
+
+/**
+ * A worker failure `delegate_all` must read as itself: a guardrail error, whose message must not
+ * reach the model, and a delegation error, which already says what failed (B-697 D1, #80). A guarded
+ * worker whose disposal or cancellation also failed passes too, so it ends the turn as a defect
+ * rather than leak the guard's trigger inside a wrapped message (EC-1).
+ */
+function passesThrough(error: unknown): boolean {
+  if (error instanceof AggregateError) return carriesGuardrailError(error)
+  return (
+    error instanceof GuardrailError ||
+    error instanceof DelegationError ||
+    error instanceof DelegationBudgetExceededError ||
+    error instanceof DelegationTimeoutError
+  )
+}
+
+/** Whether a guardrail error sits anywhere in `error`, an aggregate of aggregates included. */
+function carriesGuardrailError(error: unknown): boolean {
+  if (error instanceof GuardrailError) return true
+  return error instanceof AggregateError && error.errors.some(carriesGuardrailError)
+}
+
+/**
+ * The one roster entry of `delegate_all`: each task gets a fresh worker, runs one turn, and is
+ * disposed. Every other way a worker can fail, its build and its disposal included, is a
+ * `DelegationError`, so `delegate_all` reports it beside the other tasks instead of ending the
+ * parent's turn (EC-3). The parent turn's signal cancels each worker's run when it aborts.
+ */
 function workerPort(createWorker: CreateWorker): DelegationPort {
-  return delegationPortFromAgentFactory(createWorker)
+  return {
+    run: async (task, options): Promise<DelegationResult> => {
+      try {
+        return await runWorker(createWorker, task, options?.signal)
+      } catch (error) {
+        throw passesThrough(error) ? error : new DelegationError('worker', error)
+      }
+    },
+  }
 }
 
 /**
  * One worker turn: built, run and disposed. A build that fails, a run that does not finish and a
  * disposal that throws all reject: a worker whose disposal failed is in a state nobody knows, as a
- * `/control` turn's is (`runTheoClawTurn`). The framework port wraps an ordinary failure in a
- * `DelegationError`; the caller here reads the underlying error.
+ * `/control` turn's is (`runTheoClawTurn`).
  */
 export async function runWorker(
   createWorker: CreateWorker,
   task: TurnMessage,
   signal: AbortSignal | undefined,
 ): Promise<DelegationResult> {
+  if (signal?.aborted === true) throw new Error('the turn that delegated was cancelled before the worker started')
+  const agent = await createWorker()
+  let outcome: DelegationResult
   try {
-    return await delegationPortFromAgentFactory(createWorker).run(task, signal === undefined ? {} : { signal })
+    // The signal reaches the send too: the SDK composes it into its dispatch signal, where cancelling the run only moves its local status.
+    const run = await agent.send(task, signal === undefined ? {} : { signal })
+    const { streamed, ...result } = await untilSettled(run, signal)
+    if (streamed !== undefined) throw new Error(`the worker's run streamed an error (${streamed})`)
+    if (result.status !== 'finished') throw new Error(`the worker's run ended with status ${result.status}`)
+    // The SDK accounts the worker's cost; this port reports none it measured (plan D4).
+    outcome = { response: result.result ?? '', toolCalls: [], cost: 0, costUnknown: true, tokens: 0 }
   } catch (error) {
-    throw error instanceof DelegationError && error.agentName === 'worker' ? error.cause : error
+    // The disposal still runs; if it fails too, both failures are reported, the run's first.
+    try {
+      await disposeWorker(agent)
+    } catch (disposal) {
+      throw new AggregateError(
+        [error, disposal],
+        `${describeError(error)}; disposing the worker then failed: ${describeError(disposal)}`,
+      )
+    }
+    throw error
   }
+  await disposeWorker(agent)
+  return outcome
 }
 
 /** The `worker` entry, and a `coder` entry (a coding task in its own git worktree, OC-83) where one is available. */

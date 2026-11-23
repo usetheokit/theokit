@@ -1,4 +1,4 @@
-import { toolPresentation, type AgentToolEvent } from '@theokit/tui'
+import type { AgentToolEvent } from '@theokit/tui'
 
 function oneLine(value: string, max = 120): string {
   const flat = value.replace(/\r?\n/g, '⏎')
@@ -6,26 +6,127 @@ function oneLine(value: string, max = 120): string {
 }
 
 /**
- * A refused call arrives with a typed `refusal` (`@theokit/tui` `ToolRefusal`), so nothing here reads
- * the result text or an exit code to decide that a call was refused. `human` and `timeout` read as
- * `Rejected`, `policy` and `hook` as `Blocked` — the toolkit's own split.
+ * B-027 — the `Blocked <cmd>` rendering was DELETED, not repaired.
+ *
+ * `vetoReason` detected `{ exitCode: 126, stderr }` and could never fire, on three independent
+ * counts: it bailed on `'ok' in p` and every SDK tool result carries `ok`; it read `p.exitCode`
+ * where results use `exit_code` (the sibling below gets it right); and nothing in this repository or
+ * the SDK produces exit code 126, which is a shell convention this product never emits. Its only
+ * consumer populated the WeakMap that the header branch read, so the whole chain was unreachable —
+ * a feature that read as protection and provided none.
+ *
+ * It was not rewired because the correct shape is not known here without guessing. A hook veto is
+ * `{ block: true, message }` (`@theokit/sdk` `PreToolCallDecision`), which the SDK "surfaces to the
+ * model" — what that becomes on the wire the renderer sees was not measured, and inventing a shape
+ * is how the original was written. B-055 carries the wiring with that contract as its evidence.
  */
-function refusalVerb(refusal: NonNullable<AgentToolEvent['refusal']>): 'Rejected' | 'Blocked' {
-  return refusal.by === 'human' || refusal.by === 'timeout' ? 'Rejected' : 'Blocked'
+
+/**
+ * B-027, MEASURED — the shape that comment said could never arrive does arrive.
+ *
+ * B-027 deleted a `Blocked <cmd>` rendering because its detector keyed on
+ * `{ exitCode: 126, stderr }` and, in its words, "nothing in this repository or the SDK produces
+ * exit code 126, which is a shell convention this product never emits". It also said the shape a
+ * veto takes on the wire "was not measured, and inventing a shape is how the original was written".
+ *
+ * It has now been measured, by rejecting a real approval in the TUI and dumping the event:
+ *
+ *     {"kind":"tool","name":"Ran echo probe2","status":"failed",
+ *      "output":"{\"stdout\":\"\",\"stderr\":\"Tool 'Bash' denied by human approver\",
+ *                \"exitCode\":126}"}
+ *
+ * `@theokit/agents@11.0.0` turns a `{block: true, message}` decision into exactly that — camelCase
+ * `exitCode`, 126, and the message on `stderr`. So the deleted detector had the RIGHT shape and the
+ * wrong conclusion about whether it occurs. Keyed on the message rather than on 126 alone, because
+ * 126 is also what a real shell returns for "command not executable" and the two deserve different
+ * words.
+ */
+const DENIED_MARK = 'denied by human approver'
+
+/** The body `shellBody` renders for a rejection — and the mark the header recognises it by. */
+export const REJECTED_BODY = 'rejected — nothing ran'
+
+/**
+ * The prefix `shellBody` puts on a call something OTHER than the human refused — the permissions
+ * gate, the sandbox's tool-level gating, a hook. Measured 2026-10-02: a refusal from the permissions
+ * gate arrives in the same veto shape as a human rejection (camelCase `exitCode` 126, the reason on
+ * `stderr`) and the header printed `Edited hello.txt (+1 -0)` for a patch that wrote nothing.
+ */
+const BLOCKED_BODY_PREFIX = 'blocked — nothing ran: '
+
+/**
+ * The JSON object `output` starts with. The TUI's `onError` passes every failure through
+ * `turnErrorText`, which appends ` — <hint>` after the payload, so the event the header sees is
+ * `{...} — set THEOCODE_DIAGNOSTICS=stderr ...` and not parseable as a whole.
+ */
+function leadingJsonObject(output: string): Record<string, unknown> | undefined {
+  const whole = parseJsonObject(output)
+  if (whole !== undefined) return whole
+  for (let end = output.indexOf('} — '); end !== -1; end = output.indexOf('} — ', end + 1)) {
+    const prefix = parseJsonObject(output.slice(0, end + 1))
+    if (prefix !== undefined) return prefix
+  }
+  return undefined
+}
+
+/** The reason a policy gave for refusing, when `output` is the runtime's raw veto payload. */
+function vetoReason(output: string): string | undefined {
+  if (!output.startsWith('{')) return undefined
+  const p = leadingJsonObject(output)
+  if (p === undefined || p.exitCode !== 126 || typeof p.stderr !== 'string') return undefined
+  return p.stderr.includes(DENIED_MARK) ? undefined : p.stderr
 }
 
 /**
- * Ours only. Tools with no entry below return `undefined`, so the toolkit's own header (and, for
- * `GitDiff`, `Grep`, `Glob` and `Read`, its `explored` grouping) applies untouched.
+ * Whether this event is a call the human refused.
  *
- * `defaultToolHeader` was once composed in as a fallback and removed: it gave those four tools a verb
- * but lost the explored block. Whether a call joins that block is decided by the event's `explore`
- * flag (only `explore: false` opts a call out, see `messages-to-events`), not by the header's `name`;
- * the removal is kept because every tool the default could have helped is in the explore set and this
- * product wants the collapsed shape.
+ * TWO forms are accepted, and the reason is the order the framework applies things in: since
+ * usetheokit/theokit-tui#156 the RESULT formatter runs before the header formatter and REPLACES
+ * `output`. So by the time the header sees the event, the runtime's raw payload has already become
+ * `REJECTED_BODY` — and matching only the raw form silently stopped working the moment the upstream
+ * fix landed, which is exactly how it was caught: the body read `rejected — nothing ran` under a
+ * header that still said `Ran echo parity-final`.
  *
- * A tool that is NOT explored and has no entry below still renders its raw name. The fix for that is
- * an entry here, where the verb can carry the target and the tense.
+ * The raw form is kept because `shellBody` only handles `Bash`; a rejected `ApplyPatch` or
+ * `Edit` still arrives with the runtime's own payload.
+ */
+function wasDenied(event: AgentToolEvent): boolean {
+  if (event.status !== 'failed') return false
+  const output = (event as { output?: unknown }).output
+  if (typeof output !== 'string') return false
+  return output === REJECTED_BODY || output.includes(DENIED_MARK)
+}
+
+/** Whether this event is a call a policy refused before it ran — raw payload or `shellBody` form. */
+function wasBlocked(event: AgentToolEvent): boolean {
+  if (event.status !== 'failed') return false
+  const output = (event as { output?: unknown }).output
+  if (typeof output !== 'string') return false
+  return output.startsWith(BLOCKED_BODY_PREFIX) || vetoReason(output) !== undefined
+}
+
+/**
+ * Ours only. `defaultToolHeader` was composed in as a fallback and then REMOVED, measured.
+ *
+ * The reasoning that added it was sound and the measurement killed it. This product exposes
+ * `GitDiff`, `Grep`, `Glob` and `Read` with no entry below, so they rendered as raw
+ * snake_case names, and the toolkit's default answers all four. What that missed is the sentence in
+ * `ToolHeaderFormatter`'s own docblock: *explored grouping matches on the (possibly overridden)
+ * `name`, so returning a name for a tool listed in `exploreTools` opts that call OUT of the
+ * collapse*. All four are in `DEFAULT_EXPLORE_TOOLS`.
+ *
+ * Measured on three consecutive `Read` calls:
+ *
+ *     without a header   ->  explored                              (one block)
+ *     with the default   ->  tool/Read | tool/Read | tool/Read     (three cards)
+ *
+ * So the fallback bought a verb on a card and paid for it with the grouping — and the grouping is
+ * the Claude Code shape this product is chasing. Every tool the default could have helped is in the
+ * explore set, which makes the trade a pure loss rather than a balance.
+ *
+ * A tool that is NOT explored and has no entry below still renders its raw name. That is the honest
+ * cost of this decision, and the fix for it is an entry here — where the verb can carry the target
+ * and the tense, which the tool-agnostic default cannot.
  */
 export function formatToolHeader(
   event: AgentToolEvent,
@@ -34,27 +135,25 @@ export function formatToolHeader(
   const input = (event.input ?? {}) as Record<string, unknown>
   const header = HEADERS_BY_TOOL.get(String(event.name))?.(input, active)
   if (header === undefined) return undefined
-  const { refusal } = event
-  if (refusal === undefined) return header
+  if (wasBlocked(event)) {
+    return {
+      name: refusedName('Blocked', String(event.name), input),
+      summary: 'refused before it ran — nothing ran and nothing changed',
+    }
+  }
+  if (!wasDenied(event)) return header
 
-  // The past tense would be a lie: a refused call renders `status: "failed"`, and every header here
-  // reads that as "not active" and prints `Ran <cmd>` for a command that never ran.
-  const verb = refusalVerb(refusal)
+  // The past tense was a lie. A rejected call renders `status: "failed"`, and every header here
+  // reads that as "not active" and prints `Ran <cmd>` — for a command that never ran. Whether the
+  // shell executed is the single fact this line exists to convey.
   return {
-    name: refusedName(verb, String(event.name), input),
-    summary:
-      verb === 'Rejected'
-        ? 'you rejected this call — nothing ran and nothing changed'
-        : 'refused before it ran — nothing ran and nothing changed',
+    name: refusedName('Rejected', String(event.name), input),
+    summary: 'you rejected this call — nothing ran and nothing changed',
   }
 }
 
 /** `Ran x` → `Rejected x` / `Blocked x`, per tool, so the noun still matches what was refused. */
-function refusedName(
-  verb: 'Rejected' | 'Blocked',
-  tool: string,
-  input: Record<string, unknown>,
-): string {
+function refusedName(verb: 'Rejected' | 'Blocked', tool: string, input: Record<string, unknown>): string {
   const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
   switch (tool) {
     case 'Bash':
@@ -74,57 +173,15 @@ function refusedName(
 
 type Header = { name?: string; summary?: string }
 
-/**
- * Bash, Edit and ApplyPatch take their verb and target from the toolkit's presentation of the tool
- * they alias. What the toolkit does not do and TheoCode keeps: flatten a multi-line command to one
- * line (`⏎`), fall back to `file` / `files` when the target is missing, and append the +/- counts
- * of a patch. The adapter that turns a presentation into the `formatToolHeader` /
- * `formatToolResult` pair is still missing from `@theokit/tui` (theokit-tui#295), so this reads
- * `header` from the map directly.
- */
-const PRESENTATION = toolPresentation(
-  {},
-  { aliases: { Bash: 'shell_exec', Edit: 'edit_file', ApplyPatch: 'apply_patch' } },
-)
-
-function presented(tool: string, input: Record<string, unknown>, active: boolean): string {
-  const entry = PRESENTATION.get(tool)
-  // An installed `@theokit/tui` older than 0.83.4 ignores `aliases`; an empty header would hide that.
-  if (!entry) throw new Error(`@theokit/tui >= 0.83.4 is required: no presentation for ${tool}`)
-  return entry.header(input, active)
-}
-
 const HEADERS_BY_TOOL: ReadonlyMap<
   string,
   (input: Record<string, unknown>, active: boolean) => Header
 > = new Map([
   [
     'Bash',
-    (input, active) => ({
-      name: presented(
-        'Bash',
-        { ...input, command: typeof input.command === 'string' ? oneLine(input.command) : '' },
-        active,
-      ).trim(),
-    }),
-  ],
-  [
-    'Edit',
-    (input, active) => ({
-      name: presented(
-        'Edit',
-        { ...input, path: typeof input.path === 'string' ? input.path : 'file' },
-        active,
-      ).trim(),
-    }),
-  ],
-  [
-    'ApplyPatch',
     (input, active) => {
-      const patch = typeof input.patch === 'string' ? input.patch : ''
-      return {
-        name: `${presented('ApplyPatch', { patch, path: 'files' }, active).trim()}${diffCounts(patch)}`,
-      }
+      const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
+      return { name: `${active ? 'Running' : 'Ran'} ${cmd}`.trim() }
     },
   ],
   [
@@ -144,10 +201,26 @@ const HEADERS_BY_TOOL: ReadonlyMap<
   ],
   ['update_plan', (_input, active) => ({ name: active ? 'Updating plan' : 'Updated plan' })],
   [
+    'Edit',
+    (input, active) => {
+      const path = typeof input.path === 'string' ? input.path : 'file'
+      return { name: `${active ? 'Editing' : 'Edited'} ${path}`.trim() }
+    },
+  ],
+  [
     'ViewImage',
     (input, active) => {
       const path = typeof input.path === 'string' ? input.path : 'image'
       return { name: `${active ? 'Viewing' : 'Viewed'} ${path}`.trim() }
+    },
+  ],
+  [
+    'ApplyPatch',
+    (input, active) => {
+      const patch = typeof input.patch === 'string' ? input.patch : ''
+      return {
+        name: `${active ? 'Editing' : 'Edited'} ${filesFromV4APatch(patch)}${diffCounts(patch)}`.trim(),
+      }
     },
   ],
 ])
@@ -240,6 +313,18 @@ function planBody(p: ParsedResult): { output: string } | undefined {
 
 function shellBody(p: ParsedResult): { output: string } | undefined {
   if (p.ok === false) return { output: `Bash: ${errorText(p)}` }
+  // A rejected call, now that the formatter is reached on the failure path at all
+  // (usetheokit/theokit-tui#156 — the override used to be gated on a field an errored part never
+  // populates, so the raw payload was printed verbatim). The runtime renders the veto as a shell
+  // result with camelCase `exitCode` 126 and the message on `stderr`; `exit_code` below is the
+  // snake_case a real shell run uses, and the two are deliberately not merged — 126 from a real
+  // shell means "not executable", which deserves different words.
+  if (typeof p.stderr === 'string' && p.stderr.includes(DENIED_MARK)) {
+    return { output: REJECTED_BODY }
+  }
+  if (p.exitCode === 126 && typeof p.stderr === 'string') {
+    return { output: `${BLOCKED_BODY_PREFIX}${p.stderr}` }
+  }
   const body = [p.stdout, p.stderr]
     .map((s) =>
       typeof s === 'string' ? s.replace(/\r\n/g, '\n').replace(/\r/g, '').trimEnd() : '',

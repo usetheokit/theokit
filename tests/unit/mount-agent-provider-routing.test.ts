@@ -80,21 +80,4 @@ describe('mountAgent resolves the key from the agent it is about to run (theokit
 
     expect(response.status).not.toBe(500)
   })
-
-  it('does not send the resolver error text or stack to the client', async () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    try {
-      const response = await mountAgent(agentModule('gpt-4o-mini'), post({ message: 'hi' }), () => {
-        throw new Error('secret-detail at /srv/app/key.ts:1')
-      })
-      const body = await response.text()
-      expect(response.status).toBe(500)
-      expect(body).not.toContain('secret-detail')
-      expect(body).not.toContain('/srv/app')
-      expect(JSON.parse(body).error.code).toBe('INTERNAL')
-      expect(spy).toHaveBeenCalled()
-    } finally {
-      spy.mockRestore()
-    }
-  })
 })

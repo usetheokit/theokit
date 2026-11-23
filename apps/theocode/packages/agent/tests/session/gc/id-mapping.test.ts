@@ -105,9 +105,10 @@ describe('#102 — deletion speaks the registry vocabulary', () => {
     })
 
     // Candidates are reported by session id, which both names share, so the files are checked too.
-    expect(plan.plan.candidates, 'a transcript of a live session was planned for deletion').toEqual(
-      [],
-    )
+    expect(
+      plan.plan.candidates,
+      'a transcript of a live session was planned for deletion',
+    ).toEqual([])
     expect(existsSync(current), 'the 5.x-named transcript of a live session was deleted').toBe(true)
     expect(existsSync(legacy), 'the 4.x-named transcript of a live session was deleted').toBe(true)
   })

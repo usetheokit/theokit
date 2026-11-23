@@ -120,9 +120,7 @@ describe('claimDefaultRoot', () => {
 
     claimDefaultRoot(projects, builtInDefaultRoot('/somewhere/else'))
 
-    expect(rootIsOurs(projects), "a root with someone else's projects in it was claimed").toBe(
-      false,
-    )
+    expect(rootIsOurs(projects), 'a root with someone else\'s projects in it was claimed').toBe(false)
   })
 
   it('test_a_custom_root_that_does_not_exist_yet_is_claimed', () => {

@@ -26,16 +26,14 @@ afterAll(() => {
 })
 
 import { parseExecArgs } from '../../src/runtime/args.js'
-import { credentialState } from '@theokit/agents/doctor'
 import {
+  credentialState,
   doctorCommand,
   resolveDoctorTarget,
   runtimeCredentialState,
 } from '../../src/commands/doctor.js'
 
 const NOW = 1_700_000_000_000
-
-const stateAt = (path: string, now: number) => credentialState(path, { now })
 
 function credentialFile(contents: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'theocode-doctor-'))
@@ -47,19 +45,19 @@ function credentialFile(contents: string): string {
 
 describe('credentialState', () => {
   it('test_a_missing_file_is_absent', () => {
-    expect(stateAt(join(tmpdir(), 'theocode-does-not-exist', 'auth.json'), NOW)).toBe(
+    expect(credentialState(join(tmpdir(), 'theocode-does-not-exist', 'auth.json'), NOW)).toBe(
       'absent',
     )
   })
 
   it('test_a_file_that_does_not_parse_is_unreadable', () => {
-    expect(stateAt(credentialFile('{ not json'), NOW)).toBe('unreadable')
+    expect(credentialState(credentialFile('{ not json'), NOW)).toBe('unreadable')
   })
 
   it('test_a_credential_with_no_expiry_is_present', () => {
     // An API key has no expiry at all. Treating a missing field as expired would warn every key
     // user about a problem they cannot have.
-    expect(stateAt(credentialFile('{"type":"api","provider":"openai"}'), NOW)).toBe(
+    expect(credentialState(credentialFile('{"type":"api","provider":"openai"}'), NOW)).toBe(
       'present',
     )
   })
@@ -72,12 +70,12 @@ describe('credentialState', () => {
   it('test_a_credential_whose_expiry_has_passed_is_expired', () => {
     const path = credentialFile(`{"type":"oauth","provider":"openai","expires":${NOW - 1}}`)
 
-    expect(stateAt(path, NOW), 'an expired token still reported as present').toBe('expired')
+    expect(credentialState(path, NOW), 'an expired token still reported as present').toBe('expired')
   })
 
   it('test_a_credential_that_expires_in_the_future_is_present', () => {
     expect(
-      stateAt(
+      credentialState(
         credentialFile(`{"type":"oauth","provider":"openai","expires":${NOW + 60_000}}`),
         NOW,
       ),
@@ -92,26 +90,26 @@ describe('credentialState', () => {
     // Measured 2026-09-17 with a decoy left behind after an unrelated run. `unreadable` already
     // existed and already says "exists and could not be parsed" — nothing here is a new state, only
     // a state that was never produced.
-    expect(stateAt(credentialFile('{"not":"a-credential"}'), NOW)).toBe('unreadable')
+    expect(credentialState(credentialFile('{"not":"a-credential"}'), NOW)).toBe('unreadable')
   })
 
   it('test_an_empty_object_is_unreadable', () => {
     // The boundary: `{}` parses and carries nothing. Reporting it present is the same claim as above
     // with less to argue about.
-    expect(stateAt(credentialFile('{}'), NOW)).toBe('unreadable')
+    expect(credentialState(credentialFile('{}'), NOW)).toBe('unreadable')
   })
 
   it('test_a_json_array_is_unreadable', () => {
     // `JSON.parse` accepts arrays, and `(parsed as {expires?}).expires` on one is `undefined` —
     // which read as "no expiry, therefore present".
-    expect(stateAt(credentialFile('["not","a","credential"]'), NOW)).toBe('unreadable')
+    expect(credentialState(credentialFile('["not","a","credential"]'), NOW)).toBe('unreadable')
   })
 
   it('test_a_non_numeric_expiry_is_not_read_as_expired', () => {
     // A string date would be `<= now` under no comparison that means anything. Refusing to guess
     // is the difference between a diagnostic and a rumour.
     expect(
-      stateAt(credentialFile('{"provider":"openai","expires":"2020-01-01"}'), NOW),
+      credentialState(credentialFile('{"provider":"openai","expires":"2020-01-01"}'), NOW),
     ).toBe('present')
   })
 })

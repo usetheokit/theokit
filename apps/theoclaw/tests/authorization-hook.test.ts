@@ -7,8 +7,8 @@ import type { MessageEvent, PlatformName } from '@theokit/gateway'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createOwnerPolicyHook } from '../src/authorization/owner-policy-hook.js'
-import { createFilePairingStore } from '@theokit/gateway'
-import type { PairingStore } from '@theokit/gateway'
+import { createPairingStore } from '../src/authorization/pairing-store.js'
+import type { PairingStore } from '../src/authorization/pairing-store.js'
 import { parseAuthorizationPolicy } from '../src/authorization/policy.js'
 import { FakeAdapter, messageEvent, waitFor } from './fakes.js'
 
@@ -50,7 +50,7 @@ async function instance(options: InstanceOptions = {}) {
   const env = { THEOCLAW_OWNERS: `${platform}:${OWNER_ID}`, THEOCLAW_STATE_DIR: dir, ...options.env }
   const parsed = parseAuthorizationPolicy(env)
   const policy = options.owners === undefined ? parsed : { ...parsed, owners: new Set(options.owners) }
-  const pairing = options.pairing === null ? undefined : (options.pairing ?? createFilePairingStore({ dir }))
+  const pairing = options.pairing === null ? undefined : (options.pairing ?? createPairingStore({ dir }))
   const lines: string[] = []
   const hook = createOwnerPolicyHook({
     policy,
@@ -231,8 +231,7 @@ describe('createOwnerPolicyHook', () => {
 
   it('an owner whose /approve could not be saved pairs the sender by sending the same code again', async () => {
     const stateDir = join(dir, 'state')
-    mkdirSync(stateDir)
-    const app = await instance({ pairing: createFilePairingStore({ dir: stateDir }) })
+    const app = await instance({ pairing: createPairingStore({ dir: stateDir, write: () => undefined }) })
     await app.send(messageEvent('telegram', 'hello', 'stranger'))
     const code = /\d{6}/.exec(app.replies()[0] ?? '')?.[0] ?? ''
     // A file where the state directory was: the save fails with ENOTDIR whoever runs the test.
@@ -286,7 +285,7 @@ describe('createOwnerPolicyHook', () => {
   })
 
   it('an email sender paired in the store is still refused', async () => {
-    const pairing = createFilePairingStore({ dir })
+    const pairing = createPairingStore({ dir })
     const approved = await pairing.approve(pairing.issue('email', 'friend@example.com'))
     expect(approved.ok).toBe(true)
     const app = await instance({ platform: 'email', env: { THEOCLAW_OWNERS: 'telegram:owner-1' }, pairing })

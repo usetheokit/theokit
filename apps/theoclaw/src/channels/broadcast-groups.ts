@@ -1,9 +1,3 @@
-import type { BasePlatformAdapter, MessageEvent, PlatformName, SendResult } from '@theokit/gateway'
-import { createBroadcastGroups } from '@theokit/gateway-agent'
-import type { BroadcastGroups } from '@theokit/gateway-agent'
-
-import { maskSecrets } from '@theokit/gateway'
-
 /**
  * Broadcast groups (OC-21, FR-008): channels on several platforms that share one agent thread. The
  * member list is typed here, not imported from the authorization policy, which has the same shape:
@@ -14,64 +8,73 @@ export interface BroadcastGroupConfig {
   readonly members: ReadonlyArray<{ readonly platform: string; readonly channelId: string }>
 }
 
-/** Broadcast groups and how their other members are reached (OC-21). */
-export interface BroadcastOptions {
-  readonly groups: readonly BroadcastGroupConfig[]
-  /** The started adapter of a platform, or undefined while it is not started. */
-  readonly adapterFor: (platform: string) => BasePlatformAdapter | undefined
-  /** Where a member that could not be reached is reported; never with a token or a sender id. */
-  readonly write: (line: string) => void
-  /** Values no recorded or forwarded text may carry. Default: none. */
-  readonly secrets?: readonly string[]
+export interface TranscriptTurn {
+  readonly role: 'user' | 'assistant'
+  readonly platform: string
+  readonly text: string
 }
 
-/** At most 10 exchanges (20 turns) and 16 384 characters of thread (NFR-003). */
-const MAX_EXCHANGES = 10
+export interface BroadcastGroup {
+  readonly name: string
+  readonly members: BroadcastGroupConfig['members']
+  /** The bounded thread, oldest first: at most 20 turns and 16 384 characters (NFR-003). */
+  transcript(): readonly TranscriptTurn[]
+  /** The prompt of a new message: the thread so far, then the message; the message alone when empty. */
+  prompt(text: string): string
+  /** Append one completed exchange, then drop the oldest turns past either bound. */
+  record(platform: string, userText: string, assistantText: string): void
+  /** Run `work` after every earlier turn of this group settled, so turns never interleave. */
+  run<T>(work: () => Promise<T>): Promise<T>
+}
+
+export interface BroadcastGroups {
+  groupOf(platform: string, channelId: string): BroadcastGroup | undefined
+}
+
+const MAX_TURNS = 20
 const MAX_CHARACTERS = 16_384
 
-/**
- * The package's broadcast groups over the app's configuration: members are reached through the
- * adapter their platform has when the answer is sent (it starts after this is built), a member that
- * cannot be reached is written with the group's name and platform only, and the message that joins
- * the thread is masked as the answer is.
- */
-export function createMaskedBroadcast(options: BroadcastOptions): BroadcastGroups {
-  const secrets = options.secrets ?? []
-  const report = (group: string, platform: string, code: string): void =>
-    options.write(`broadcast group ${group}: ${platform}: the answer was not delivered (${code})`)
-  const groups = createBroadcastGroups(
-    options.groups.map((config) => ({
-      id: config.name,
-      maxTurns: MAX_EXCHANGES,
-      maxChars: MAX_CHARACTERS,
-      members: config.members.map(({ platform, channelId }) => {
-        // Resolved at send time. A refusal or a throw is written here, because the package's
-        // delivery keeps only a code it does not return.
-        const forwarding = {
-          platform: platform as PlatformName,
-          sendMessage: async (message: Parameters<BasePlatformAdapter['sendMessage']>[0]): Promise<SendResult> => {
-            const adapter = options.adapterFor(platform)
-            if (adapter === undefined) {
-              report(config.name, platform, 'not started')
-              return { ok: false } as SendResult
-            }
-            let result: SendResult
-            try {
-              result = await adapter.sendMessage(message)
-            } catch (error) {
-              report(config.name, platform, error instanceof Error ? error.name : 'unknown error')
-              throw error
-            }
-            if (!result.ok) report(config.name, platform, result.error?.code ?? 'send failed')
-            return result
-          },
-        } as BasePlatformAdapter
-        return { adapter: forwarding, channelId, channelType: 'group' as const }
-      }),
-    })),
-  )
-  return {
-    ...groups,
-    onTurnEnd: (event: MessageEvent, outcome) => groups.onTurnEnd({ ...event, text: maskSecrets(event.text, secrets) }, outcome),
+function line(turn: TranscriptTurn): string {
+  return `${turn.role === 'user' ? 'User' : 'Assistant'} (${turn.platform}): ${turn.text}`
+}
+
+function createGroup(config: BroadcastGroupConfig): BroadcastGroup {
+  const turns: TranscriptTurn[] = []
+  let characters = 0
+  let tail: Promise<unknown> = Promise.resolve()
+
+  const dropOldest = (): void => {
+    while (turns.length > MAX_TURNS || characters > MAX_CHARACTERS) {
+      characters -= turns.shift()?.text.length ?? 0
+    }
   }
+
+  return {
+    name: config.name,
+    members: config.members,
+    transcript: () => [...turns],
+    prompt: (text) =>
+      turns.length === 0 ? text : `Earlier in this conversation:\n${turns.map(line).join('\n')}\n\nNow: ${text}`,
+    record(platform, userText, assistantText) {
+      turns.push({ role: 'user', platform, text: userText }, { role: 'assistant', platform, text: assistantText })
+      characters += userText.length + assistantText.length
+      dropOldest()
+    },
+    run(work) {
+      const next = tail.then(work)
+      // A failed turn must not stop the group's later turns from running.
+      tail = next.catch(() => undefined)
+      return next
+    },
+  }
+}
+
+/** Index the configured groups by `platform:channelId`; a channel belongs to at most one (EC-7). */
+export function createBroadcastGroups(configs: readonly BroadcastGroupConfig[]): BroadcastGroups {
+  const byChannel = new Map<string, BroadcastGroup>()
+  for (const config of configs) {
+    const group = createGroup(config)
+    for (const member of config.members) byChannel.set(`${member.platform}:${member.channelId}`, group)
+  }
+  return { groupOf: (platform, channelId) => byChannel.get(`${platform}:${channelId}`) }
 }

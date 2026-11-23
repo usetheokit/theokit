@@ -1,8 +1,4 @@
-import { assertProviderKeyWhenRequired } from '@theokit/agents/testing'
 import { defineConfig } from 'vitest/config'
-
-// Fails the run at config load under THEOKIT_LIVE_REQUIRED=1 with no provider key.
-assertProviderKeyWhenRequired(process.env)
 
 /**
  * Live proof run by the live-model CI job (B-407, B-415): the A2A call reaches a REAL provider, so
@@ -18,5 +14,6 @@ export default defineConfig({
     include: ['packages/agent/tests/live/an-a2a-call-reaches-a-real-model.test.ts'],
     environment: 'node',
     testTimeout: 180_000,
+    globalSetup: ['tools/require-provider-key.mjs'],
   },
 })

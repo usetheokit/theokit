@@ -18,7 +18,7 @@ import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
 import type { Guardrail } from '../guardrails/index.js'
-import { resolveSkillsSettings } from '../skills-resolver.js'
+import { resolveEnabledSkills } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
@@ -1058,9 +1058,12 @@ export function toAgentFactory(
     const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
     // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream).
     const skillRt = wireInlineSkillRead(sdkTools, rt, compiled)
-    // A function-valued selection must reach the SDK as static `skills` in every read mode, so the
-    // listing, `skill_read` and a settings-returning resolver (`bundledDirs`, `skillsDir`, …) agree.
-    const created = await withResolvedSkills(compiled, runContext)
+    // `read: 'advertised'` only: a function-valued selection must reach the SDK as a static `enabled` list so
+    // the listing and `skill_read` agree. The default `'inline'` path is left exactly as it was.
+    const created =
+      compiled.skillsRead === 'advertised'
+        ? await withResolvedSkills(compiled, runContext)
+        : compiled
     const { options: m8 } = assembleM8CreateOptions(created)
     applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
@@ -1199,8 +1202,8 @@ async function withResolvedSkills(
   runContext: Record<string, unknown> | undefined,
 ): Promise<CompiledAgentOptions> {
   if (!compiled.skillsResolver) return compiled
-  const settings = await resolveSkillsSettings(compiled.skillsResolver, runContext ?? {})
-  return settings === undefined
+  const enabled = await resolveEnabledSkills(compiled.skillsResolver, runContext ?? {})
+  return enabled === undefined
     ? compiled
-    : { ...compiled, skills: { ...compiled.skills, ...settings } }
+    : { ...compiled, skills: { ...compiled.skills, enabled, autoInject: true } }
 }

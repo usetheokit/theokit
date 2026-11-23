@@ -76,7 +76,7 @@ describe("incognito sessions (OC-92)", () => {
   });
 
   it("sends no tool input, status detail or reasoning in progress lines", () => {
-    const display = { tool_progress: "all", live_status: "full", show_reasoning: true, reasoning_style: "plain", tool_preview_length: 40 } as const;
+    const display = { tool_progress: "all", live_status: "full", cleanup_progress: true, show_reasoning: true, reasoning_style: "plain", streaming: true, tool_preview_length: 40 } as const;
     const events = [
       { type: "reasoning", text: "secret thoughts" },
       { type: "tool-call", name: "read", input: { path: "/secret" } },

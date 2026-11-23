@@ -14,6 +14,8 @@ export const GOAL_USAGE_REPLY = 'Usage: /goal <what you want done>'
 /** The text after the status when the goal loop gave no final answer. */
 const NO_FINAL_ANSWER = 'the goal ended with no final answer.'
 
+const GOAL_COMMAND = /^\/goal(?:\s+([\s\S]*))?$/
+
 /**
  * What every `/goal` runs with. The budget is read and checked at start; the model and its key
  * are resolved when a goal runs, as the chat agent's own are, so a start with no model still
@@ -44,6 +46,15 @@ export function readGoalSettings(env: Readonly<Record<string, string | undefined
       return { agentModel: model, judgeApiKey: modelKey }
     },
   }
+}
+
+/**
+ * The goal of a `/goal` message, matched on the whole trimmed text: `''` for a bare `/goal`, the
+ * text after it otherwise, and undefined for anything else (`/goals x` is an ordinary message).
+ */
+export function goalOf(text: string): string | undefined {
+  const match = GOAL_COMMAND.exec(text.trim())
+  return match === null ? undefined : (match[1] ?? '').trim()
 }
 
 /** Run `goal` on the session's agent to its end and say how it ended, as `<status>: <final text>`. */

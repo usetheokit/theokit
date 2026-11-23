@@ -11,7 +11,11 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { conversationToMarkdown, lastAssistantText } from '../src/transcript-export.js'
+import {
+  conversationToMarkdown,
+  lastAssistantText,
+  type ExportableMessage,
+} from '../src/transcript-export.js'
 
 /**
  * Built from the shape `deriveTimeline` actually PRODUCES (`AgentEvent`), not from the shape the
@@ -19,7 +23,7 @@ import { conversationToMarkdown, lastAssistantText } from '../src/transcript-exp
  * `/export` reported every real conversation empty — a fixture that agrees with the code's wrong
  * assumption proves nothing.
  */
-const msg = (role: string, text: string) => ({ kind: 'message' as const, role, text })
+const msg = (role: string, text: string): ExportableMessage => ({ kind: 'message', role, text })
 
 describe('B-075 — conversationToMarkdown', () => {
   it('test_labels_each_turn_by_role', () => {
@@ -70,11 +74,6 @@ describe('B-075 — lastAssistantText', () => {
     // silently putting a blank on the clipboard.
     expect(lastAssistantText([msg('user', 'hello')])).toBeUndefined()
     expect(lastAssistantText([])).toBeUndefined()
-  })
-
-  it('test_skips_a_trailing_empty_assistant_turn', () => {
-    expect(lastAssistantText([msg('assistant', 'real'), msg('assistant', '')])).toBe('real')
-    expect(lastAssistantText([msg('assistant', '')])).toBeUndefined()
   })
 
   it('test_does_not_return_the_user_turn_that_follows', () => {

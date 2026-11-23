@@ -21,7 +21,7 @@ import { CONVERSATION_LAYERS, type ConversationSlotProps } from '../../src/compo
 const settled = (over: Partial<InputSlotProps> = {}): InputSlotProps =>
   ({
     trusted: true,
-    consent: { pendingHooks: [] },
+    consent: { hooksReviewed: true, pendingHooks: [] },
     pendingHooks: [],
     pendingApproval: undefined,
     ...over,
@@ -49,7 +49,7 @@ describe('B-008 — which surface owns the input row', () => {
       claimant(
         INPUT_LAYERS,
         settled({
-          consent: { pendingHooks: ['x'] } as never,
+          consent: { hooksReviewed: false, pendingHooks: ['x'] } as never,
           pendingHooks: ['x'] as never,
           pendingApproval: { approvalId: 'a' } as never,
         }),

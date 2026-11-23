@@ -1,6 +1,7 @@
-import type { GatewayHook, MessageEvent, PairingStore } from '@theokit/gateway'
+import type { GatewayHook, MessageEvent } from '@theokit/gateway'
 
 import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
+import type { PairingStore } from './authorization/pairing-store.js'
 import { type AuthorizationPolicy, isPolicyOwner } from './authorization/policy.js'
 import { createAcpCommandHook, type AcpSessions } from './channels/acp-command.js'
 import { createInfoHook } from './channels/info-commands.js'

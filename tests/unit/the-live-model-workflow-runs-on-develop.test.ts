@@ -159,11 +159,12 @@ describe('live-model.yml', () => {
     expect(pkg.scripts['test:live']).toBe('vitest run --config vitest.live.config.ts')
     const configPath = resolve(THEOCODE, 'vitest.live.config.ts')
     expect(existsSync(configPath), configPath).toBe(true)
-    const source = readFileSync(configPath, 'utf8')
-    expect(source).toContain(`include: ['${A2A_LIVE_TEST}']`)
+    const { default: LIVE_A2A_CONFIG } = (await import(configPath)) as {
+      default: { test?: { include?: string[]; globalSetup?: string[] } }
+    }
+    expect(LIVE_A2A_CONFIG.test?.include).toEqual([A2A_LIVE_TEST])
     expect(existsSync(resolve(THEOCODE, A2A_LIVE_TEST))).toBe(true)
-    expect(source).toContain("assertProviderKeyWhenRequired } from '@theokit/agents/testing'")
-    expect(source).toContain('assertProviderKeyWhenRequired(process.env)')
+    expect(LIVE_A2A_CONFIG.test?.globalSetup).toEqual(['tools/require-provider-key.mjs'])
   })
 
   // One job-level LIVE_MODEL feeds the preflight and both live steps, and its default is the

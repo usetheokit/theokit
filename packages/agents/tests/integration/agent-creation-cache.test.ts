@@ -199,7 +199,6 @@ describe('getOrCreateReporting against the real SDK', () => {
     await releasing
     expect(second).not.toBe(first)
     expect(Agent.registry.get(id)).toBe(second)
-    await releaseSharedAgent(second)
   })
 })
 

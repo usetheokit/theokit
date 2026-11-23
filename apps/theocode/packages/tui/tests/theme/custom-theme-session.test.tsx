@@ -11,12 +11,11 @@ import { Text } from 'ink'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ReactElement } from 'react'
 
 import { useTheoTheme } from '@theokit/tui'
 
-import { waitFor } from '../helpers/wait-for.js'
 import { loadCustomTheme } from '../../src/theme/custom-theme.js'
 import {
   resetSessionThemeForTest,
@@ -47,10 +46,7 @@ afterEach(() => {
 describe('a custom theme reaches the provider', () => {
   it('test_the_custom_value_is_what_a_child_reads', () => {
     const loaded = loadCustomTheme('midnight', home)
-    expect(
-      loaded,
-      'the fixture theme did not load — the assertion below would be vacuous',
-    ).not.toBeNull()
+    expect(loaded, 'the fixture theme did not load — the assertion below would be vacuous').not.toBeNull()
 
     const frame = render(
       <ThemedSurface>
@@ -69,41 +65,5 @@ describe('a custom theme reaches the provider', () => {
     )
     expect(frame.lastFrame()).toContain('addedBg=#0a0a0a')
     frame.unmount()
-  })
-
-  it('test_a_custom_theme_repaints_a_mounted_frame_without_a_rerender', async () => {
-    const loaded = loadCustomTheme('midnight', home)
-    expect(loaded).not.toBeNull()
-    const frame = render(
-      <ThemedSurface>
-        <Probe />
-      </ThemedSurface>,
-    )
-
-    setSessionTheme(loaded!.prop, 'custom:midnight')
-
-    await waitFor(
-      () => frame.lastFrame()?.includes('addedBg=#0a0a0a') === true,
-      'the mounted frame to repaint with the custom theme',
-    )
-    frame.unmount()
-  })
-
-  it('test_no_color_still_outranks_a_custom_theme', async () => {
-    vi.stubEnv('NO_COLOR', '1')
-    const loaded = loadCustomTheme('midnight', home)
-    expect(loaded).not.toBeNull()
-    const frame = render(
-      <ThemedSurface>
-        <Probe />
-      </ThemedSurface>,
-    )
-
-    setSessionTheme(loaded!.prop, 'custom:midnight')
-    await new Promise((resolve) => setTimeout(resolve, 100))
-
-    expect(frame.lastFrame()).toContain('addedBg=(empty)')
-    frame.unmount()
-    vi.unstubAllEnvs()
   })
 })

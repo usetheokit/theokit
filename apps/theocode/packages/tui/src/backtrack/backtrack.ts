@@ -10,10 +10,7 @@ import {
   forkSessionBeforeUserTurn,
   readUserTurnPreviewsAsync,
 } from '@theocode/agent/session'
-import { CLOSED_BACKTRACK } from '@theokit/tui'
-
-/** `selected` of an armed ladder with nothing chosen yet — the framework's own value. */
-export const SENTINEL = CLOSED_BACKTRACK.selected
+import { SENTINEL } from './backtrack-select.js'
 import type { ToastPayload } from '../screen-types.js'
 
 export interface PrimeBacktrackDeps {

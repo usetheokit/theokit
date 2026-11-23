@@ -4,7 +4,7 @@
  * raw seam). `--surface` is a flag (mirrors `--backend`); the boilerplate lives in scaffolder templates.
  */
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -458,19 +458,11 @@ describe('build:bin (#1890)', () => {
     expect(pkg.scripts['build:bin']).toBe('node scripts/build-bin.mjs')
     expect(pkg.scripts.build).toBe('tsc --noEmit')
     expect(pkg.devDependencies.esbuild).toBeDefined()
-    expect(pkg.devDependencies['create-theokit']).toBeDefined()
   })
 
   it('the scaffolded bundleOptions use esm format and the createRequire banner', async () => {
     scaffold(targetDir, 'my-tui')
     applySurface({ targetDir, projectName: 'my-tui', surface: 'tui' })
-    // Stand in for `pnpm install`: the script imports the shared helper from this package.
-    mkdirSync(join(targetDir, 'node_modules'), { recursive: true })
-    symlinkSync(
-      join(import.meta.dirname, '..', '..'),
-      join(targetDir, 'node_modules', 'create-theokit'),
-      'dir',
-    )
     const mod = (await import(pathToFileURL(join(targetDir, 'scripts/build-bin.mjs')).href)) as {
       bundleOptions: (root: string) => Record<string, unknown> & {
         banner: { js: string }

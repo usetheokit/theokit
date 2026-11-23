@@ -17,16 +17,13 @@
  * pre-fix tree in a way that costs a user something: a live transcript unlinked, or a sweep that
  * reports a removal it did not perform.
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename } from 'node:path'
 
 import { transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
-import { runProjectsGC, sessionPointerPath } from '@theokit/agents/session'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import { claimRoot, OWNER, THEOCODE_MARKER } from '../../../src/session/gc/root-ownership.js'
-import { planSessionGCAllProjects, type LegacyPlan } from './legacy-plan.js'
+import { runSessionGCAllProjects } from '../../../src/session/gc/all-sessions-apply.js'
+import { planSessionGCAllProjects, type AllPlan } from '../../../src/session/gc/all-sessions.js'
 
 const CWD = '/home/operator/a-project'
 const PROJECT = 'a-project'
@@ -46,18 +43,11 @@ interface Seams {
   registry?: { agentId: string; lastModified?: number; archived?: boolean }[]
   onDisk?: { name: string; mtimeMs?: number }[]
   pointer?: string
-  /** A real transcript root, so the apply phase has files to remove. */
-  base?: string
 }
 
-const bases: string[] = []
-afterEach(() => {
-  for (const b of bases.splice(0)) rmSync(b, { recursive: true, force: true })
-})
-
-async function plan(seams: Seams): Promise<LegacyPlan> {
+async function plan(seams: Seams): Promise<AllPlan> {
   return planSessionGCAllProjects({
-    projectsRoot: seams.base ?? '/transcripts',
+    projectsRoot: '/projects',
     now: () => NOW,
     keepLast: 0,
     maxAgeDays: 30,
@@ -75,104 +65,75 @@ async function plan(seams: Seams): Promise<LegacyPlan> {
   })
 }
 
-/** A real tree under a scratch transcript root, so the apply phase removes real files. */
-function realTree(
-  names: string[],
-  ageDays: number[] = [],
-): { base: string; files: string[]; pointer: string } {
-  const base = mkdtempSync(join(tmpdir(), 'theocode-gc-ns-'))
-  bases.push(base)
-  const files = names.map((n) => {
-    const file = join(base, 'projects', basename(join(transcriptPath(base, CWD, 'x'), '..')), n)
-    mkdirSync(join(file, '..'), { recursive: true })
-    writeFileSync(file, `${JSON.stringify({ cwd: CWD })}\n`)
-    // The SDK's own "most recent session" guard reads these mtimes, so they match the plan's.
-    const when = new Date(NOW - (ageDays[names.indexOf(n)] ?? 0) * DAY)
-    utimesSync(file, when, when)
-    return file
-  })
-  claimRoot(join(base, 'projects'))
-  return { base, files, pointer: sessionPointerPath(CWD, base) }
-}
-
-function apply(framework: LegacyPlan['framework'], deleted: string[]) {
-  return runProjectsGC(framework, {
-    apply: true,
-    owner: OWNER,
-    existingMarker: THEOCODE_MARKER,
-    removeFromRegistry: (id) => void deleted.push(id),
-  })
+function applySpy(pointer?: string): {
+  opts: Parameters<typeof runSessionGCAllProjects>[1]
+  calls: string[]
+} {
+  const calls: string[] = []
+  return {
+    calls,
+    opts: {
+      apply: true,
+      unlink: async (p) => void calls.push(`unlink ${p}`),
+      rmdir: async (p) => void calls.push(`rmdir ${p}`),
+      deleteAgent: async (id) => void calls.push(`deleteAgent ${id}`),
+      readPointer: () => pointer,
+      hasLiveWriter: () => false,
+    },
+  }
 }
 
 describe('the all-projects sweep speaks one id namespace', () => {
   it('test_the_apply_backstop_refuses_a_transcript_whose_session_became_the_live_pointer', async () => {
-    // #49 — the TOCTOU backstop compares a filename stem against the pointer (a session id). Before
-    // the fix the refusal list is empty and the LIVE session's transcript is unlinked. The pointer
-    // is set at APPLY time only — that is the TOCTOU shape: at plan time this session was not live,
-    // so nothing protected it. A newer decoy is needed because the most recent transcript is always
-    // protected.
-    const t = realTree([fileOf(OLD_ID), fileOf(LIVE_ID)], [0, 90])
+    // #49 — the TOCTOU backstop compares `c.id` (a filename stem) against the pointer (a session
+    // id). Before the fix the refusal list is empty and the LIVE session's transcript is unlinked.
+    // The pointer is set at APPLY time only — that is the TOCTOU shape: at plan time this session
+    // was not live, so nothing protected it. A newer decoy is needed because the most recent
+    // transcript is always protected.
     const p = await plan({
-      base: t.base,
       onDisk: [
         { name: fileOf(OLD_ID), mtimeMs: NOW },
         { name: fileOf(LIVE_ID), mtimeMs: NOW - 90 * DAY },
       ],
     })
-    expect(
-      p.candidates,
-      'the fixture must produce a candidate, or this case proves nothing',
-    ).toHaveLength(1)
-    writeFileSync(t.pointer, `${LIVE_ID}\n`)
+    expect(p.candidates, 'the fixture must produce a candidate, or this case proves nothing').toHaveLength(1)
 
-    const result = await apply(p.framework, [])
+    const { opts, calls } = applySpy(LIVE_ID)
+    const result = await runSessionGCAllProjects(p, opts)
 
-    expect(existsSync(t.files[1] as string), 'the live session transcript was removed').toBe(true)
-    expect(result.removed).toEqual([])
-    expect(result.refused.map((r) => r.reason).join(' ')).toMatch(/pointer|resum|live/i)
+    expect(calls, 'the live session transcript was removed').toEqual([])
+    expect(result.errors.join(' ')).toMatch(/refused/)
   })
 
   it('test_a_registered_transcript_is_deleted_by_its_session_id_not_its_filename', async () => {
-    // #51 — the registry delete requires a session id. Passing the filename makes it a no-op that
-    // never touches the .jsonl, while `removed` reports the file gone. Every run, forever.
-    // ARCHIVED, because that is the reachable shape: every UNarchived registry entry is protected,
-    // so a live registered transcript is never a candidate. An archived session's transcript is
-    // collectable AND in the registry. A second, NEWER transcript is required: the most recent one
-    // is always protected, so a lone file can never be collected.
-    const t = realTree([fileOf(LIVE_ID), fileOf(OLD_ID)], [0, 90])
+    // #51 — `deleteAgent` requires a session id. Passing the filename makes it a no-op that never
+    // touches the .jsonl, while `removed` reports the file gone. Every run, forever.
+    // ARCHIVED, because that is the reachable shape: `resolveGuards` protects every UNarchived
+    // registry entry, so a live registered transcript is never a candidate. An archived session's
+    // transcript is collectable AND in the registry — the only way into the `deleteAgent` arm, and
+    // the reason nothing had entered it.
+    // A second, NEWER transcript is required: `resolveGuards` always protects the most recent one
+    // (`datable[0]`), so a lone file on disk can never be collected whatever else is true of it.
     const p = await plan({
-      base: t.base,
-      // The framework protects the registry's most recently modified session, so the newer one is
-      // listed too; the archived one is then genuinely collectable.
-      registry: [
-        { agentId: LIVE_ID, lastModified: NOW },
-        { agentId: OLD_ID, lastModified: NOW - 90 * DAY, archived: true },
-      ],
+      registry: [{ agentId: OLD_ID, lastModified: NOW - 90 * DAY, archived: true }],
       onDisk: [
         { name: fileOf(LIVE_ID), mtimeMs: NOW },
         { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
       ],
     })
-    const transcripts = p.candidates.filter((c) => c.kind === 'transcript')
-    expect(transcripts, 'the archived transcript must be the one candidate').toHaveLength(1)
-    expect(basename(transcripts[0]?.target ?? '')).toBe(fileOf(OLD_ID))
+    expect(p.candidates, 'the archived transcript must be the one candidate').toHaveLength(1)
+    expect(p.candidates[0]?.id).toBe(nameOf(OLD_ID))
+    expect(p.candidates[0]?.inRegistry, 'a registered transcript must be recognised as registered').toBe(true)
 
-    const deleted: string[] = []
-    await apply(p.framework, deleted)
+    const { opts, calls } = applySpy()
+    await runSessionGCAllProjects(p, opts)
 
-    expect(
-      deleted.every((id) => id === OLD_ID),
-      `deleted by filename: ${deleted.join(',')}`,
-    ).toBe(true)
-    expect(
-      existsSync(t.files[1] as string),
-      'the transcript of the archived session survived',
-    ).toBe(false)
+    expect(calls).toEqual([`deleteAgent ${OLD_ID}`])
   })
 
   it('test_a_registry_entry_whose_transcript_is_on_disk_is_not_collected_separately', async () => {
-    // #52 — a session id compared against filename stems: the sweep protects the transcript and
-    // deletes the registry entry that names it.
+    // #52 — `idsOnDisk.has(entry.agentId)` compares a session id against filename stems, so the
+    // sweep protects the transcript and deletes the registry entry that names it.
     const p = await plan({
       registry: [{ agentId: LIVE_ID, lastModified: NOW - 90 * DAY }],
       onDisk: [{ name: fileOf(LIVE_ID), mtimeMs: NOW }],
@@ -186,65 +147,13 @@ describe('the all-projects sweep speaks one id namespace', () => {
 
   it('test_an_undated_registry_entry_is_never_collected', async () => {
     // #55 — `entry.lastModified ?? 0` dates an undated entry to 1970, so ageDays reads ~19000 and it
-    // is collected on sight. Absence of a date is not evidence of age.
+    // is collected on sight. B-020 removed exactly this coercion for `mtimeMs` 300 lines earlier;
+    // absence of a date is not evidence of age.
     const p = await plan({ registry: [{ agentId: OLD_ID }] })
 
     expect(
       p.candidates.filter((c) => c.kind === 'registry'),
       'an entry with no date was aged to 1970 and collected',
     ).toEqual([])
-  })
-})
-
-describe('pointer and registry protections hold across plan and apply', () => {
-  it('test_the_pointer_session_transcript_is_not_planned_at_all', async () => {
-    const p = await plan({
-      pointer: OLD_ID,
-      onDisk: [
-        { name: fileOf(LIVE_ID), mtimeMs: NOW },
-        { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
-      ],
-    })
-
-    expect(p.candidates).toEqual([])
-  })
-
-  it('test_an_unarchived_registry_entry_protects_its_stale_transcript', async () => {
-    const p = await plan({
-      registry: [{ agentId: OLD_ID, lastModified: NOW - 90 * DAY }],
-      onDisk: [
-        { name: fileOf(LIVE_ID), mtimeMs: NOW },
-        { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
-      ],
-    })
-
-    expect(p.candidates).toEqual([])
-  })
-
-  it('test_an_unregistered_stale_transcript_is_unlinked_by_path_not_deleted_by_id', async () => {
-    const t = realTree([fileOf(LIVE_ID), fileOf(OLD_ID)], [0, 90])
-    const p = await plan({
-      base: t.base,
-      onDisk: [
-        { name: fileOf(LIVE_ID), mtimeMs: NOW },
-        { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
-      ],
-    })
-    expect(p.candidates).toHaveLength(1)
-
-    const deleted: string[] = []
-    await apply(p.framework, deleted)
-
-    expect(existsSync(t.files[1] as string)).toBe(false)
-    expect(deleted, 'an unregistered transcript was deleted through the registry').toEqual([])
-  })
-
-  it('test_a_stale_registry_entry_with_no_transcript_is_a_registry_candidate', async () => {
-    const p = await plan({
-      registry: [{ agentId: OLD_ID, lastModified: NOW - 90 * DAY }],
-      onDisk: [{ name: fileOf(LIVE_ID), mtimeMs: NOW }],
-    })
-
-    expect(p.candidates.filter((c) => c.kind === 'registry').map((c) => c.target)).toContain(OLD_ID)
   })
 })

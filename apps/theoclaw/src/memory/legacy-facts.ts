@@ -1,7 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { addMemoryFact, listMemoryFacts } from '@theokit/sdk'
+// NOTE for the owner: this sub-path is declared in the SDK's `exports` but is semver-exempt; replace it
+// with a public API once the SDK has one for writing facts into a partition.
+import { appendFact, readFacts } from '@theokit/sdk/internal/memory-store'
 
 import { OWNER_SCOPE } from './memory-store.js'
 import { userIdOf } from './wiring.js'
@@ -42,11 +44,11 @@ export async function importLegacyFacts(
     const wanted = legacyFacts(file, scope)
     if (wanted.length === 0) return
     const config = { enabled: true, directory, userId: userIdOf(scope) }
-    const have = new Set((await listMemoryFacts(directory, config)).map((fact) => fact.text))
+    const have = new Set((await readFacts(directory, config)).map((fact) => fact.text))
     for (const text of wanted) {
       if (have.has(text)) continue
       have.add(text)
-      await addMemoryFact(directory, text, config)
+      await appendFact(directory, config, { text })
     }
   } catch (error) {
     report(`theoclaw: importing earlier memory facts failed: ${String(error)}`)

@@ -1,11 +1,6 @@
 import { join } from 'node:path'
 
-import {
-  planTranscriptGC,
-  runTranscriptGC,
-  startInProcessSweeper,
-  type GCSession,
-} from '@theokit/agents/session'
+import { planTranscriptGC, runTranscriptGC } from '@theokit/agents/session'
 
 import type { Generations } from './generations.js'
 
@@ -57,24 +52,23 @@ export async function collectTranscripts(
   apply: boolean,
 ): Promise<TranscriptSweep> {
   const root = join(deps.workspace, '.theoclaw')
+  // The framework protects by the path it derives from an id, which is not always the file's name,
+  // so the candidates are checked by id here as well, against the daemon's state as it is now.
   const now = deps.now?.() ?? Date.now()
-  // Asked by each transcript's real file, at planning and again when applying, against the daemon's
-  // state as it is then. A transcript with no readable owner cannot be matched to a chat: kept.
-  const isProtected = (session: GCSession): string | undefined =>
-    session.id === undefined
-      ? session.idReadable
-        ? 'transcript is not stored under its own id (a fork or a renamed file); owner unknown'
-        : 'transcript id unreadable'
-      : protection(session.id, deps.generations, new Set(deps.heldIds?.() ?? []))
   const plan = await planTranscriptGC({
     cwd: deps.workspace,
     root,
     keepLast: KEEP_LAST,
     maxAgeDays: retentionDays,
     now,
-    isProtected,
   })
-  const result = await runTranscriptGC(plan, { apply, isProtected })
+  // A transcript whose id was not read cannot be matched to a chat: kept rather than removed blind.
+  const held = new Set(deps.heldIds?.() ?? [])
+  const candidates = plan.candidates.filter(
+    (candidate) =>
+      candidate.id !== undefined && protection(candidate.id, deps.generations, held) === undefined,
+  )
+  const result = await runTranscriptGC({ ...plan, candidates }, { apply })
   return {
     dryRun: result.dryRun,
     removed: result.removed,
@@ -95,18 +89,37 @@ export function startTranscriptSweeper(
   },
   intervalMs: number = DAY_MS,
 ): TranscriptSweeper {
-  return startInProcessSweeper(intervalMs, async () => {
-    try {
-      const result = await collectTranscripts(deps, deps.retentionDays, true)
-      if (result.removed.length + result.orphaned.length > 0)
+  let running: Promise<void> = Promise.resolve()
+  let busy = false
+  let stopped = false
+  const sweep = (): void => {
+    if (busy || stopped) return
+    busy = true
+    running = collectTranscripts(deps, deps.retentionDays, true)
+      .then((result) => {
+        if (result.removed.length + result.orphaned.length > 0)
+          deps.write(
+            `theoclaw: removed ${result.removed.length + result.orphaned.length} old chat transcripts`,
+          )
+        for (const error of result.errors) deps.write(`theoclaw: transcript collection: ${error}`)
+      })
+      .catch((error: unknown) => {
         deps.write(
-          `theoclaw: removed ${result.removed.length + result.orphaned.length} old chat transcripts`,
+          `theoclaw: transcript collection failed: ${error instanceof Error ? error.message : String(error)}`,
         )
-      for (const error of result.errors) deps.write(`theoclaw: transcript collection: ${error}`)
-    } catch (error: unknown) {
-      deps.write(
-        `theoclaw: transcript collection failed: ${error instanceof Error ? error.message : String(error)}`,
-      )
-    }
-  })
+      })
+      .finally(() => {
+        busy = false
+      })
+  }
+  sweep()
+  const timer = setInterval(sweep, intervalMs)
+  timer.unref()
+  return {
+    stop: async () => {
+      stopped = true
+      clearInterval(timer)
+      await running
+    },
+  }
 }

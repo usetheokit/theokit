@@ -9,7 +9,7 @@ import { THEME_BASES, type ThemeBase } from './theme-base.js'
 /**
  * Where the operator's colour preference is kept (#72).
  *
- * Under the unified state directory, beside `tui-goal.json` — the convention this
+ * Under the unified state directory, beside `tui-session` and `tui-goal.json` — the convention this
  * surface already uses for its own durable state. NOT in `config.toml`: `theme-base.ts` records why,
  * and that reason is unchanged. The theme is a rendering concern and `AgentConfig` is the agent's
  * contract; a key there would push a surface preference through the layer boundary

@@ -11,8 +11,12 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { createHumanProcessor, createJsonlProcessor } from './wire-driver.js'
-import { execExitCode, type ExecIo } from '../../src/runtime/events.js'
+import {
+  createHumanProcessor,
+  createJsonlProcessor,
+  execExitCode,
+  type ExecIo,
+} from '../../src/runtime/events.js'
 import { USAGE } from '../../src/runtime/usage.js'
 
 function capture() {

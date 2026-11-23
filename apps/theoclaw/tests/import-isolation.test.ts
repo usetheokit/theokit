@@ -5,6 +5,7 @@ import WebSocket from 'ws'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { AgentImport, TheoClawAgentOptions } from '../src/agent/create-agent.js'
+import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
 import { createAgentFactory } from '../src/control-plane/agent-factory.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { importedMcpPaths, importedMcpSecrets } from '../src/migration/import-start.js'
@@ -184,7 +185,7 @@ describe('the workers of a /control agent that carries an import', () => {
 
     expect(built).toHaveLength(2)
     const worker = built[1]!
-    expect(worker.systemPrompt).toBe('')
+    expect(worker.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
     // Only the built-in skills every agent carries (#1692); never the custodian ones, which are the /control agent's alone (#1577).
     expect(worker.skills?.inline.map((skill) => skill.name).sort()).toEqual(['git-helper', 'summarize-text'])
     expect(worker).not.toHaveProperty('mcpServers')

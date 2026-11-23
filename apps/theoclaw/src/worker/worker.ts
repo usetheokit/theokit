@@ -10,7 +10,6 @@ import {
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
-import { PairingRefusedError, redeemPairing, type RedeemedPairing } from '@theokit/agents/control'
 import type { RunResult } from '@theokit/sdk'
 
 import { UsageError } from '../cli-args.js'
@@ -90,21 +89,29 @@ async function pair(args: readonly string[], io: WorkerIo): Promise<number> {
   const inference = inf.value ?? 'worker'
   if (inference !== 'worker' && inference !== 'gateway')
     throw new UsageError('theoclaw worker: --inference expects worker or gateway')
+  let base: URL
   try {
-    new URL(url)
+    base = new URL(url)
   } catch {
     throw new UsageError('theoclaw worker: the control url is not a URL')
   }
   const name = named.value ?? `worker-${randomBytes(3).toString('hex')}`
-  let paired: RedeemedPairing
-  try {
-    paired = await redeemPairing({ url, code, name, fetch: io.fetch })
-  } catch (error) {
-    if (!(error instanceof PairingRefusedError)) throw error
-    io.stderr.write(`theoclaw worker: the gateway refused the pairing: ${error.message}\n`)
+  const token = randomBytes(32).toString('hex')
+  const pairUrl = new URL('/control/pair', base)
+  pairUrl.protocol =
+    base.protocol === 'wss:' ? 'https:' : base.protocol === 'ws:' ? 'http:' : base.protocol
+  const response = await (io.fetch ?? fetch)(pairUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code, name, token }),
+  })
+  if (response.status !== 202) {
+    io.stderr.write(`theoclaw worker: the gateway refused the pairing: HTTP ${response.status}\n`)
     return 1
   }
-  const profile: WorkerProfile = { url: paired.url, token: paired.credential, name, inference }
+  const socket = new URL('/control', base)
+  socket.protocol = pairUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+  const profile: WorkerProfile = { url: socket.toString(), token, name, inference }
   mkdirSync(stateDir(io.env), { recursive: true, mode: 0o700 })
   writeFileSync(profilePath(io.env), JSON.stringify(profile, null, 2), { mode: 0o600 })
   chmodSync(profilePath(io.env), 0o600)

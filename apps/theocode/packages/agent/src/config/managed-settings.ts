@@ -1,6 +1,5 @@
-import { MANAGED_SETTINGS_PATHS } from '@theokit/agents/config'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { CONFIG_SCHEMA_KEYS } from './config-contract.js'
 import { translateSettings, type SettingsRead } from './settings-json.js'
@@ -18,7 +17,11 @@ import { translateSettings, type SettingsRead } from './settings-json.js'
  * path and can also see the Windows one through `/mnt/c`, and a machine with neither loses nothing by
  * the extra `existsSync`.
  */
-const MANAGED_PATHS = MANAGED_SETTINGS_PATHS
+const MANAGED_PATHS: readonly string[] = [
+  '/Library/Application Support/ClaudeCode/managed-settings.json',
+  '/etc/claude-code/managed-settings.json',
+  join('C:\\', 'ProgramData', 'ClaudeCode', 'managed-settings.json'),
+]
 
 /** The managed file as Claude Code's dialect: translated like a foreign-root settings file (#1908). */
 export interface ManagedSettingsRead extends SettingsRead {

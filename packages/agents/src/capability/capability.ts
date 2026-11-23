@@ -17,12 +17,6 @@ export interface ProvenanceEntry {
   readonly contributed: readonly string[]
 }
 
-/** A tool that is available but switched off, and why. */
-export interface OffTool {
-  readonly name: string
-  readonly reason: string
-}
-
 /** The mutable draft a capability enriches. `tools`/`agents` are pre-seeded (required in the waist). */
 export interface CompiledAgentOptionsDraft extends Partial<
   Omit<CompiledAgentOptions, 'tools' | 'agents'>
@@ -30,22 +24,6 @@ export interface CompiledAgentOptionsDraft extends Partial<
   tools: CompiledAgentOptions['tools']
   agents: CompiledAgentOptions['agents']
   readonly provenance: ProvenanceEntry[]
-  /** Tools that are available but off, each with a reason. Absent until a capability reports one. */
-  offTools?: OffTool[]
-}
-
-/** Reports tools that are available but off, with the reason each one is. Accumulates, never overwrites. */
-export class OffToolsCapability implements Capability {
-  readonly name = 'off-tools'
-  readonly #off: readonly OffTool[]
-  constructor(off: readonly OffTool[]) {
-    this.#off = off.map((o) => Object.freeze({ ...o }))
-  }
-  apply(draft: CompiledAgentOptionsDraft): void {
-    if (this.#off.length === 0) return
-    draft.offTools = [...(draft.offTools ?? []), ...this.#off]
-    draft.provenance.push({ capability: this.name, contributed: ['offTools'] })
-  }
 }
 
 /**

@@ -1,8 +1,6 @@
 /** The WebChat page: an HTML shell that loads the bundle `build:web` writes, and where that bundle is. */
 
-import { renderHostedChatShell } from 'theokit/server/http'
-
-import { WEBCHAT_ROUTE } from './paths.js'
+import { WEBCHAT_ASSETS_PREFIX } from './paths.js'
 
 /** The assets `build:web` writes, served by name and nothing else (no URL path reaches the file system). */
 export const WEBCHAT_ASSETS = {
@@ -18,5 +16,20 @@ export const WEBCHAT_ASSETS_DIR = new URL('../../dist/web/assets/', import.meta.
 
 /** The page's shell. `main.tsx` mounts the app on `#root` (EC-10). */
 export function renderPage(): string {
-  return renderHostedChatShell(WEBCHAT_ROUTE, 'TheoClaw')
+  return [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<title>TheoClaw</title>',
+    `<link rel="stylesheet" href="${WEBCHAT_ASSETS_PREFIX}app.css">`,
+    '</head>',
+    '<body>',
+    '<div id="root"></div>',
+    `<script type="module" src="${WEBCHAT_ASSETS_PREFIX}app.js"></script>`,
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n')
 }

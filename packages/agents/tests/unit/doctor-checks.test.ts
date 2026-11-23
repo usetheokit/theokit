@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
-import { checks, credentialState, diagnose } from '../../src/doctor/index.js'
+import { checks, diagnose } from '../../src/doctor/index.js'
 
 describe('doctor checks', () => {
   it('credential rows: present ok, expired warn, absent and unreadable fail', () => {
@@ -84,39 +84,6 @@ describe('skillsInventory', () => {
     expect(row.detail).toContain('declared, not on disk: gone')
     expect(checks.skillsInventory({ declared: ['alpha', 'stray'], roots: [root] }).status).toBe(
       'ok',
-    )
-  })
-})
-
-describe('credentialState', () => {
-  const NOW = 1_700_000_000_000
-  const file = (contents: string): string => {
-    const dir = mkdtempSync(join(tmpdir(), 'agents-cred-'))
-    const path = join(dir, 'auth.json')
-    writeFileSync(path, contents)
-    return path
-  }
-
-  it('absent, unreadable, present and expired', () => {
-    expect(credentialState(join(tmpdir(), 'agents-cred-none', 'auth.json'))).toBe('absent')
-    expect(credentialState(file('{ nope'))).toBe('unreadable')
-    expect(credentialState(file('{"x":1}'))).toBe('unreadable')
-    expect(credentialState(file('{"provider":"p"}'), { now: NOW })).toBe('present')
-    expect(credentialState(file('{"provider":"p","expires":"soon"}'), { now: NOW })).toBe('present')
-    expect(credentialState(file(`{"provider":"p","expires":${NOW + 1}}`), { now: NOW })).toBe(
-      'present',
-    )
-    expect(credentialState(file(`{"provider":"p","expires":${NOW}}`), { now: NOW })).toBe('expired')
-  })
-
-  it('the environment wins over an absent or expired file', () => {
-    const fromEnvironment = (): boolean => true
-    expect(credentialState('/nonexistent/auth.json', { fromEnvironment })).toBe('present')
-    expect(
-      credentialState(file(`{"provider":"p","expires":1}`), { now: NOW, fromEnvironment }),
-    ).toBe('present')
-    expect(credentialState('/nonexistent/auth.json', { fromEnvironment: () => false })).toBe(
-      'absent',
     )
   })
 })

@@ -7,13 +7,7 @@ import { pipeline } from 'node:stream/promises'
 
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
-import {
-  LEGACY_ROOTS,
-  packDirectory,
-  unpackInto,
-  unpackLegacyInto,
-  verifyBackupDir,
-} from './archive.js'
+import { packDirectory, unpackInto, verifyBackupDir } from './archive.js'
 import { BackupError } from './errors.js'
 import { MANIFEST_NAME } from './manifest.js'
 import { isEmptyOrAbsent, mkdirPrivate, tempSibling } from './paths.js'
@@ -26,7 +20,7 @@ import {
   remotePut,
   type RemoteLocation,
 } from './remote-storage.js'
-import { keyOf, newKey, openLegacy, openSealed, seal, type SealOptions } from './seal.js'
+import { keyOf, newKey, openSealed, seal, type SealOptions } from './seal.js'
 
 export interface StorageLocation {
   readonly root: string
@@ -54,7 +48,7 @@ interface Entry {
   token?: string
 }
 
-const NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/i
+const NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/
 const ARCHIVE = /^backup-\d{8}T\d{9}Z-[0-9a-f]{8}\.tcbk$/
 /** Written after the archive is fully uploaded; an archive without it is not a backup. */
 const MARKER = /^(backup-\d{8}T\d{9}Z-[0-9a-f]{8}\.tcbk)\.manifest\.json$/
@@ -64,8 +58,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function checkName(name: string): void {
-  if (!NAME.test(name))
-    throw new BackupError('storage name must match [A-Za-z0-9][A-Za-z0-9_-]{0,63}')
+  if (!NAME.test(name)) throw new BackupError('storage name must match [a-z0-9][a-z0-9_-]{0,63}')
 }
 
 function archiveName(): string {
@@ -73,43 +66,12 @@ function archiveName(): string {
   return `backup-${stamp}-${randomBytes(4).toString('hex')}.tcbk`
 }
 
-/** An archive of an older TheoClaw: `backup-<ISO time with - for : and .>.tcb`, base64 JSON. */
-const LEGACY_ARCHIVE = /^backup-(\d{4})-(\d\d)-(\d\d)T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z\.tcb$/
-
-/** The time an archive was written, as `YYYYMMDDTHHMMSSmmmZ`, for either format. */
-function stampOf(name: string): string {
-  const legacy = LEGACY_ARCHIVE.exec(name)
-  if (legacy !== null) return `${legacy.slice(1, 4).join('')}T${legacy.slice(4, 8).join('')}Z`
-  return name.slice('backup-'.length, 'backup-'.length + 19)
-}
-
-function byAge(x: string, y: string): number {
-  return stampOf(x).localeCompare(stampOf(y)) || x.localeCompare(y)
-}
-
 async function archives(root: string): Promise<string[]> {
   const names = await readdir(root).catch((cause: unknown) => {
     if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw new BackupError(`cannot read storage ${root}`, { path: root, cause })
   })
-  return names.filter((n) => ARCHIVE.test(n) || LEGACY_ARCHIVE.test(n)).sort(byAge)
-}
-
-/** The flat `{ name: { root, encrypted, key? } }` registry of an older TheoClaw; its keys are hex. */
-function isLegacyRegistry(value: Record<string, unknown>): boolean {
-  return Object.values(value).every((v) => isRecord(v) && typeof v.root === 'string')
-}
-
-function legacyLocations(value: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const [name, raw] of Object.entries(value)) {
-    const entry = { ...(raw as Record<string, unknown>) }
-    if (typeof entry.key === 'string' && /^[0-9a-f]{64}$/i.test(entry.key)) {
-      entry.key = Buffer.from(entry.key, 'hex').toString('base64')
-    }
-    out[name] = entry
-  }
-  return out
+  return names.filter((n) => ARCHIVE.test(n)).sort((x, y) => x.localeCompare(y))
 }
 
 /**
@@ -121,8 +83,6 @@ export function createStorageRegistry(options: {
   defaultRoot: string
   /** PEM certificate authorities trusted for remote locations, besides the system's. */
   ca?: string
-  /** Milliseconds a remote request may stay silent before it is abandoned (default 60000). */
-  timeoutMs?: number
 }): StorageRegistry {
   async function read(): Promise<Record<string, Entry>> {
     let text: string
@@ -138,10 +98,7 @@ export function createStorageRegistry(options: {
     } catch (cause) {
       throw new BackupError(`${options.file} is not valid JSON`, { path: options.file, cause })
     }
-    let locations = isRecord(value) ? value.locations : undefined
-    if (isRecord(value) && locations === undefined && isLegacyRegistry(value)) {
-      locations = legacyLocations(value)
-    }
+    const locations = isRecord(value) ? value.locations : undefined
     if (!isRecord(locations)) {
       throw new BackupError(`${options.file} is not a storage registry`, { path: options.file })
     }
@@ -193,7 +150,6 @@ export function createStorageRegistry(options: {
       url: entry.root,
       ...(entry.token === undefined ? {} : { token: entry.token }),
       ...(options.ca === undefined ? {} : { ca: options.ca }),
-      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     }
   }
 
@@ -205,20 +161,6 @@ export function createStorageRegistry(options: {
       .filter((n): n is string => n !== undefined)
       .sort((x, y) => x.localeCompare(y))
       .at(-1)
-  }
-
-  async function unpackArchive(
-    source: string,
-    sealOptions: SealOptions,
-    staging: string,
-  ): Promise<void> {
-    if (source.endsWith('.tcb')) {
-      await unpackLegacyInto(await openLegacy(source, sealOptions), staging)
-      await verifyBackupDir(staging, LEGACY_ROOTS)
-    } else {
-      await unpackInto(openSealed(source, sealOptions), staging)
-      await verifyBackupDir(staging)
-    }
   }
 
   return {
@@ -305,7 +247,8 @@ export function createStorageRegistry(options: {
           await remoteGet(remote, `${latest}.manifest.json`) // the completion marker must be readable
           source = download
         }
-        await unpackArchive(source, sealOptions, staging)
+        await unpackInto(openSealed(source, sealOptions), staging)
+        await verifyBackupDir(staging)
         if (!(await isEmptyOrAbsent(target))) {
           throw new BackupError(`${target} is not empty`, { path: target })
         }

@@ -8,19 +8,14 @@ import {
   execExitCode,
   silentEmptyTurnDiagnostic,
 } from '../runtime/index.js'
-import {
-  EmptyPromptError,
-  exitAfterDrain,
-  readHeadlessPrompt,
-  runHeadlessTurn,
-} from '@theokit/agents/commands'
+import { exitAfterDrain, runHeadlessTurn } from '@theokit/agents/commands'
 import { sessionHasWriter, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
 import { streamTurnForkingIfBusy } from '@theokit/agents/session'
 import type { WireChunk } from '@theokit/presenter/wire'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { readFileSync, writeFileSync } from 'node:fs'
-import type { ExecFinish, ExecRun } from '../runtime/index.js'
+import type { ExecRun } from '../runtime/index.js'
 import type { Shutdown } from '@theokit/agents/commands'
 import { resolveSession } from '../runtime/index.js'
 import { fireSessionStart } from '../runtime/session-start.js'
@@ -31,19 +26,19 @@ import {
 } from '@theocode/shared/turn-failure-reporting'
 
 function readPrompt(args: ExecRun): string | undefined {
-  try {
-    return readHeadlessPrompt({
-      prompt: args.prompt,
-      // This product requires stdin for `forced`; the framework's `forced` falls back to the argument.
-      stdin: args.stdinBehavior === 'forced' ? 'required' : (args.stdinBehavior === 'none' ? 'ignore' : args.stdinBehavior),
-      readStdin: () => readFileSync(0, 'utf8'),
-    })
-  } catch (err) {
-    if (!(err instanceof EmptyPromptError)) throw err
-    process.stderr.write('No prompt provided\n')
-    exitAfterDrain(1)
-    return undefined
+  if (args.stdinBehavior === 'required' || args.stdinBehavior === 'forced') {
+    const lido = readFileSync(0, 'utf8').trim()
+    if (lido.length === 0) {
+      process.stderr.write('No prompt provided\n')
+      exitAfterDrain(1)
+      return undefined
+    }
+    return lido
   }
+  const base = args.prompt ?? ''
+  if (args.stdinBehavior !== 'append') return base
+  const stdin = readFileSync(0, 'utf8').trim()
+  return stdin.length > 0 ? `${base}\n\n<stdin>\n${stdin}\n</stdin>` : base
 }
 
 /**
@@ -249,64 +244,6 @@ function openTurnStream(
   )
 }
 
-interface DrivenTurn {
-  status: 'finished' | 'error'
-  error: string | undefined
-  finish: ExecFinish
-}
-
-/**
- * The framework opens the stream (forking once on `session_busy`), drains it and classifies the
- * turn; `format` hands each canonical event to the processor, which is what writes to stdout and
- * stderr, so this product's output formats are untouched.
- */
-async function driveTurn(
-  sessionId: string,
-  openStream: ReturnType<typeof openTurnStream>,
-  processor: ExecProcessor,
-): Promise<DrivenTurn> {
-  let error: string | undefined
-  let processorFailed = false
-  const forked = streamTurnForkingIfBusy(sessionId, openStream as never, {
-    onFork: (from, to) =>
-      process.stderr.write(
-        `[exec] session ${from} is being written by another process — forking to ${to}\n`,
-      ),
-  })
-  // `runHeadlessTurn` turns a thrown stream into an `error` outcome without its message; this
-  // wrapper only keeps the message for the `[exec]` line and the JSONL `turn.failed`.
-  async function* keepStreamError(chunks: AsyncIterable<WireChunk>): AsyncGenerator<WireChunk> {
-    try {
-      yield* chunks
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err)
-      throw err
-    }
-  }
-  const turn = await runHeadlessTurn(keepStreamError(forked.chunks), {
-    io: { out: () => {}, err: () => {} },
-    format: (event) => {
-      try {
-        processor.event(event)
-      } catch (err) {
-        // The framework swallows a `format` that throws; a processor that failed is a failed run.
-        processorFailed = true
-        error ??= err instanceof Error ? err.message : String(err)
-      }
-      return undefined
-    },
-  })
-  return {
-    status: turn.outcome === 'error' || processorFailed ? 'error' : 'finished',
-    error,
-    finish: {
-      finalText: turn.finalText,
-      ...(turn.stopReason === undefined ? {} : { stopReason: turn.stopReason }),
-      ...(turn.usage === undefined ? {} : { usage: turn.usage }),
-    },
-  }
-}
-
 export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<void> {
   const prompt = readPrompt(args)
   if (prompt === undefined) return
@@ -319,9 +256,8 @@ export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<voi
   const sessionId = await openSession(args)
   const processor = createProcessor(args.json === true, sessionId, shellTimeoutMs)
 
-  let status: 'finished' | 'error'
+  let status: 'finished' | 'error' = 'finished'
   let errorMsg: string | undefined
-  let finish: ExecFinish = {}
   // Named, because the framework's watchdog reports WHICH cleanup hung, not merely that one did.
   shutdown.register({
     name: 'finish-processor',
@@ -335,18 +271,34 @@ export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<voi
     // case). The count comes from the SDK's own `rate_limit` event, not from anything invented here.
     const failure = turnFailureReporting({ diagnosticsEnabled })
     const openStream = openTurnStream(streamAgentTurnInProcess, target, prompt, failure)
-    const turn = await driveTurn(sessionId, openStream, processor)
-    status = turn.status
-    errorMsg = turn.error
-    finish = turn.finish
+    // The framework opens the stream (forking once on `session_busy`) and drains it; the processor
+    // taps each chunk on the way, so this product's output formats are untouched. The framework's
+    // own output is silenced: the processor is what writes to stdout and stderr.
+    const quiet = { out: () => {}, err: () => {} }
+    const forked = streamTurnForkingIfBusy(sessionId, openStream as never, {
+      onFork: (from, to) =>
+        process.stderr.write(
+          `[exec] session ${from} is being written by another process — forking to ${to}\n`,
+        ),
+    })
+    async function* tap(chunks: AsyncIterable<WireChunk>): AsyncGenerator<WireChunk> {
+      try {
+        for await (const chunk of chunks) {
+          processor.process(chunk)
+          yield chunk
+        }
+      } catch (err) {
+        status = 'error'
+        errorMsg = err instanceof Error ? err.message : String(err)
+        throw err
+      }
+    }
+    await runHeadlessTurn(tap(forked.chunks), { io: quiet })
   } catch (err) {
     status = 'error'
     errorMsg = err instanceof Error ? err.message : String(err)
   }
-  const result = processor.finish(status, {
-    ...finish,
-    ...(errorMsg !== undefined ? { error: errorMsg } : {}),
-  })
+  const result = processor.finish(status, errorMsg !== undefined ? { error: errorMsg } : {})
   const emptyTurn = silentEmptyTurnDiagnostic(result, status)
   if (emptyTurn !== undefined) process.stderr.write(`${emptyTurn}\n`)
   if (args.outputLastMessage !== undefined) {

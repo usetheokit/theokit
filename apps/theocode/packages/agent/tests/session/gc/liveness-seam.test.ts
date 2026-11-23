@@ -54,7 +54,7 @@ afterEach(() => {
 })
 
 /** A project directory holding one transcript whose first record names `cwd`. */
-function projectFor(cwd: string, transcript = 'sess-a.jsonl', withFresh = true): string {
+function projectFor(cwd: string, transcript = 'sess-a.jsonl'): string {
   const name = encodeProjectDir(cwd)
   const dir = join(root, name)
   mkdirSync(dir, { recursive: true })
@@ -65,9 +65,6 @@ function projectFor(cwd: string, transcript = 'sess-a.jsonl', withFresh = true):
   // to be normalised (the GC's own invariant), so age has to come from the fixture.
   const old = new Date(Date.now() - 90 * 86_400_000)
   utimesSync(file, old, old)
-  // A newer sibling spends the framework's keepLast floor of 1, so the old transcript is collectable.
-  if (withFresh)
-    writeFileSync(join(dir, 'sess-fresh.jsonl'), `${JSON.stringify({ cwd })}\n`, 'utf8')
   return name
 }
 
@@ -75,10 +72,9 @@ describe('the liveness seam — what the framework cannot test for us', () => {
   it('test_a_project_whose_cwd_exists_is_not_planned_for_deletion', async () => {
     // Anti-vacuity floor. Without it, an adapter that reported everything UNDETERMINED would satisfy
     // every case below while doing nothing.
-    // One transcript, spent on the keepLast floor: only the verdict could make it collectable.
-    projectFor(live, 'sess-a.jsonl', false)
+    projectFor(live)
 
-    const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 1, maxAgeDays: 1 })
+    const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 0, maxAgeDays: 1 })
 
     expect(plan.candidates.map((c) => c.target).join(' ')).not.toContain(encodeProjectDir(live))
   })
@@ -89,7 +85,7 @@ describe('the liveness seam — what the framework cannot test for us', () => {
     const gone = join(live, 'a-directory-that-was-removed')
     projectFor(gone)
 
-    const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 1, maxAgeDays: 1 })
+    const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 0, maxAgeDays: 1 })
 
     expect(plan.candidates.map((c) => c.target).join(' ')).toContain(encodeProjectDir(gone))
   })
@@ -105,7 +101,7 @@ describe('the liveness seam — what the framework cannot test for us', () => {
     chmodSync(parent, 0o000)
 
     try {
-      const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 1, maxAgeDays: 1 })
+      const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 0, maxAgeDays: 1 })
 
       expect(
         plan.candidates.map((c) => c.target).join(' '),
@@ -125,7 +121,7 @@ describe('the liveness seam — what the framework cannot test for us', () => {
     const name = encodeProjectDir(join(live, 'no-transcript-here'))
     mkdirSync(join(root, name), { recursive: true })
 
-    const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 1, maxAgeDays: 1 })
+    const plan = await planAllProjectsOnDisk({ projectsRoot: root, keepLast: 0, maxAgeDays: 1 })
 
     expect(plan.candidates.map((c) => c.target).join(' ')).not.toContain(name)
   })

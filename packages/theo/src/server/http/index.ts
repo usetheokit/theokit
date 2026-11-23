@@ -52,5 +52,3 @@ export {
   isInputError,
   extractUniversalIssues,
 } from '../../core/contracts/action-protocol.js'
-export { createHostedChat, hashedSessionScope, renderHostedChatShell } from './hosted-chat.js'
-export type { HostedChatAccess, HostedChatEvent, HostedChatOptions } from './hosted-chat.js'

@@ -2,12 +2,12 @@ import { chmodSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, 
 import { join } from 'node:path'
 
 import { loadMcpJson } from '@theokit/agents/bridge'
-import { type ForeignSetup, type UntranslatedEntry, readForeignSetup } from '@theokit/agents/foreign-setup'
 import { type InlineSkill, type McpServerConfig, Skill } from '@theokit/sdk'
 import { stringify as stringifyYaml } from 'yaml'
 
 import { describeError, TheoClawConfigError } from '../control-plane/errors.js'
-import { binaryOnPath } from '@theokit/sdk/skills'
+import { type DroppedEntry, type ForeignSetup, readSkillsDir, SAFE_SKILL_NAME } from './foreign-setup.js'
+import { binaryOnPath } from '../skills/registry.js'
 
 /** The MCP servers of an import, as `loadMcpJson` returns them (the shape of `@theokit/agents`'s `McpServersMap`). */
 export type ImportedMcpServers = Record<string, McpServerConfig>
@@ -34,16 +34,8 @@ interface Manifest {
   readonly source: string
   readonly importedAt: string
   readonly counts: ImportCounts
-  readonly dropped: UntranslatedEntry[]
+  readonly dropped: DroppedEntry[]
   readonly skills: string[]
-}
-
-/** A skill name staged as a directory name: no separator, no dot-led name. */
-const SAFE_SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
-
-/** The skills staged under `dir/skills`, read as the shared reader reads a Hermes root. */
-function readStagedSkills(dir: string): ForeignSetup['skills'] {
-  return readForeignSetup('hermes', { home: dir, configDir: dir }).skills
 }
 
 const IMPORT = 'import'
@@ -183,7 +175,7 @@ function stage(dir: string, setup: ForeignSetup, now: Date): void {
     source: setup.source,
     importedAt: now.toISOString(),
     counts: countsOf(setup),
-    dropped: setup.untranslated,
+    dropped: setup.dropped,
     skills: setup.skills.map((skill) => skill.name),
   }
   writePrivate(join(dir, FILES.manifest), `${JSON.stringify(manifest, null, 2)}\n`)
@@ -250,7 +242,7 @@ function validate(staging: string, staged: number): Validation {
 
 /** Why a staged skill would not read back as `readImport` reads it, or `undefined` when all do. */
 function unreadSkills(staging: string, setup: ForeignSetup): string | undefined {
-  const read = new Set(readStagedSkills(staging).map((skill) => skill.name))
+  const read = new Set(readSkillsDir(join(staging, 'skills'), 'skills', []).map((skill) => skill.name))
   const lost = setup.skills.map((skill) => skill.name).filter((name) => !read.has(name))
   if (lost.length === 0) return undefined
   return `skills refused: ${lost.map((name) => `"${name}"`).join(', ')} (each would not read back once staged)`
@@ -354,7 +346,7 @@ export function readImport(
     throw unreadable(mcpPath, 'is not a valid MCP file')
   }
   for (const name of manifest.skills) readStaged(join(dir, 'skills', name, 'SKILL.md'))
-  const staged = readStagedSkills(dir)
+  const staged = readSkillsDir(join(dir, 'skills'), 'skills', [])
   if (staged.map((skill) => skill.name).sort().join('\n') !== [...manifest.skills].sort().join('\n')) {
     throw unreadable(manifestPath, 'names other skills than the ones staged')
   }

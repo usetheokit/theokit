@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { maskSecrets } from '@theokit/gateway'
+import { maskSecrets } from '../src/channels/channel-loop.js'
 import { Security } from '@theokit/sdk'
 
 const createStreamMask = (secrets: readonly string[]) => Security.createMask(secrets, { minLength: 1 }).stream()

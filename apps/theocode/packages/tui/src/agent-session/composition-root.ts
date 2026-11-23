@@ -1,6 +1,7 @@
 import { resumeRequested } from './resume-request.js'
 import { fireSessionStart } from './session-start.js'
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -24,6 +25,7 @@ export interface TuiRoot {
   readonly session: TuiSession
   readonly ptyOwner: SessionPtyOwner
   readonly transport: ReturnType<typeof createChatTransport>
+  readonly sessionPointer: string
   readonly goalPointer: string
   readonly resumeOnStartup: boolean
   readonly customCommands: ReturnType<typeof loadCustomCommands>
@@ -64,11 +66,13 @@ function createVetoRelay(): {
 
 function build(): TuiRoot {
   const cwd = workingDirectory()
-  // Both halves must hold. `resumeRequested` answers "was continuing asked for"; the session's
-  // `resumed` answers "was there something to continue". Presence alone used to decide it, and since
-  // nothing removes the pointer, a directory used once resumed on every later launch.
-  const session = createTuiSession({ cwd, resume: resumeRequested() })
-  const resumeOnStartup = session.resumed
+  const sessionPointer = join(cwd, '.theokit', 'tui-session')
+  // Both halves must hold. `existsSync` answers "is there something to continue"; `resumeRequested`
+  // answers "was continuing asked for". Presence alone used to decide it, and since nothing removes
+  // the pointer, a directory used once resumed on every later launch with no way to opt out.
+  const resumeOnStartup = resumeRequested() && existsSync(sessionPointer)
+
+  const session = createTuiSession({ cwd, sessionPointer, resume: resumeOnStartup })
 
   // #132 — a launch that does NOT resume is a session starting. Resuming is not: a hook that ran on
   // every resume would be announcing an event that did not happen.
@@ -108,6 +112,7 @@ function build(): TuiRoot {
     session,
     ptyOwner,
     transport,
+    sessionPointer,
     onHookVeto: vetoRelay.install,
     goalPointer: join(cwd, '.theokit', 'tui-goal.json'),
     resumeOnStartup,
@@ -116,7 +121,7 @@ function build(): TuiRoot {
     resetSession: () => {
       session.setSession(`tui-${randomUUID()}`)
       ptyOwner.rotate()
-      void persistSessionId(cwd, session.session())
+      void persistSessionId(sessionPointer, session.session())
       // #132 — `/new` starts a session, so `SessionStart` fires here. NOT through the framework's
       // `on_session_start`: that one is once per loop context, and this product builds an agent per
       // turn, so the mapping would run the hook on every message. `void` because a hook must not
@@ -131,12 +136,12 @@ function build(): TuiRoot {
         current: () => session.session(),
         commit: (id) => {
           session.setSession(id)
-          void persistSessionId(cwd, id)
+          void persistSessionId(sessionPointer, id)
         },
       }),
     pointToSession: (id) => {
       session.setSession(id)
-      void persistSessionId(cwd, id)
+      void persistSessionId(sessionPointer, id)
     },
   }
 }

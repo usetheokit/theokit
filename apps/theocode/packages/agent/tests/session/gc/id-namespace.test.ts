@@ -20,10 +20,9 @@
  */
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 
 import { transcriptPath } from '@theokit/agents/persistence'
-import { sessionPointerPath } from '@theokit/agents/session'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
@@ -36,7 +35,7 @@ const LIVE = 'exec-522dc0ef-9247-4a5b-bdce-e421c29d11b8'
 const PLAIN = 'exec-8918b35d-2341-4545-84a7-c62dc9bee641'
 
 // The framework planner has no `readdir`/`list`/`readPointer` seams: the three transcripts are real
-// files under a temp root, the pointer is the real `last-session` file, and only the registry
+// files under a temp root, the pointer is the real `.theokit/tui-session` file, and only the registry
 // listing stays injected. The framework names a candidate by the session id it reads from the file.
 let root = ''
 let cwd = ''
@@ -67,8 +66,8 @@ function options(
     utimesSync(path, new Date(NOW - age * DAY), new Date(NOW - age * DAY))
   }
   if (overrides.pointer !== undefined) {
-    mkdirSync(dirname(sessionPointerPath(cwd, root)), { recursive: true })
-    writeFileSync(sessionPointerPath(cwd, root), `${overrides.pointer}\n`)
+    mkdirSync(join(cwd, '.theokit'), { recursive: true })
+    writeFileSync(join(cwd, '.theokit', 'tui-session'), `${overrides.pointer}\n`)
   }
   return {
     cwd,

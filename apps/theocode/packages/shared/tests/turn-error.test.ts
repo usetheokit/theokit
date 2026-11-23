@@ -188,7 +188,7 @@ describe('the SDK typed error codes reach a hint', () => {
    */
   const hintFor = (code: string) => {
     const out = turnErrorText({ code, message: 'the provider refused' }, {})
-    const at = out.indexOf(']: ')
+    const at = out.indexOf(' — ')
     return at === -1 ? '' : out.slice(at + 3)
   }
 
@@ -263,28 +263,5 @@ describe('a tool result the provider cannot carry', () => {
     const said = turnErrorText({ message: 'the image file could not be read' })
 
     expect(said).not.toContain('a tool returned an image')
-  })
-})
-
-describe('the text is the framework layout with this product hints', () => {
-  it.each(['server_error', 'invalid_request'])('test_%s_gets_no_framework_default_hint', (code) => {
-    expect(turnErrorText({ code, message: 'boom' })).toBe(`boom [${code}]`)
-  })
-
-  it('test_an_unrecognised_provider_code_is_still_printed', () => {
-    expect(turnErrorText({ code: 'overloaded_error', message: 'busy' })).toBe(
-      'busy [overloaded_error]',
-    )
-  })
-
-  it('test_hint_attempts_and_diagnostics_follow_the_label_in_order', () => {
-    expect(
-      turnErrorText(
-        { code: 'auth_failed', message: 'refused' },
-        { attempts: 3, diagnosticsEnabled: false },
-      ),
-    ).toMatch(
-      /^refused \[auth_failed\]: the credential was refused.* after 3 attempts — set THEOCODE_DIAGNOSTICS=stderr/,
-    )
   })
 })

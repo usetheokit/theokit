@@ -63,7 +63,7 @@ it('does not publish a completion manifest after an upload failure', async () =>
 it('rejects a malicious downloaded manifest and removes the partial download', async () => {
   const root = scratch(), dir = join(root, 'download')
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ version: 1, files: [{ path: 'state/../../escape', sha256: '', size: 0 }] }))))
-  await expect(downloadBackup(dir, 'https://backup.example/new')).rejects.toThrow('malformed entry')
+  await expect(downloadBackup(dir, 'https://backup.example/new')).rejects.toThrow('leaves state/')
   expect(existsSync(dir)).toBe(false)
   expect(existsSync(join(root, 'escape'))).toBe(false)
 })
@@ -75,7 +75,7 @@ it.each(['../escape', 'state/../../escape', '/tmp/theoclaw-escape', 'state\\..\\
     mkdirSync(join(root, 'inner'))
     const fetcher = vi.fn(async () => new Response(JSON.stringify({ version: 1, files: [{ path, sha256: '0'.repeat(64), size: 1 }] })))
     vi.stubGlobal('fetch', fetcher)
-    await expect(downloadBackup(dir, 'https://backup.example/new')).rejects.toThrow('declared root')
+    await expect(downloadBackup(dir, 'https://backup.example/new')).rejects.toThrow('leaves state/')
     expect(fetcher).toHaveBeenCalledTimes(1)
     expect(existsSync(dir)).toBe(false)
     expect(readdirSync(join(root, 'inner'))).toEqual([])
