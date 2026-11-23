@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertBootstrapped,
   BootstrapNotRunError,
+  type BootstrapContext,
   BootstrapStepError,
   defineAppBootstrap,
   projectEnvStep,
@@ -17,7 +18,11 @@ import {
   secretRefsStep,
 } from '../../src/config-entry.js'
 
-const ctx = (env: NodeJS.ProcessEnv = {}, cwd = '/tmp') => ({ env, cwd, home: '/home/x' })
+const ctx = (env: NodeJS.ProcessEnv = {}, cwd = '/tmp'): BootstrapContext => ({
+  env,
+  cwd,
+  home: '/home/x',
+})
 
 describe('app bootstrap', () => {
   const dirs: string[] = []
