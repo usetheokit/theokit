@@ -171,6 +171,7 @@ export {
   type DefineAgentConfig,
   type InferAgentInput,
   type InferAgentToolNames,
+  type SubagentAgentDefinition,
 } from './define-agent.js'
 // `AgentBuilder` / `ContextualTool` are each a TYPE (generic interface) and a VALUE (static factory:
 // `AgentBuilder.create()` / `ContextualTool.of()`) — M57 replaced the free `agent()`/`contextualTool()`

@@ -1,14 +1,13 @@
 /**
- * Not `loadMcpServersFile` from `@theokit/agents/bridge` (gap, tracked from #2599). It cannot do three
- * things this file needs: accept a document that also holds `acpAgents`, accept OAuth `auth` entries,
- * and read through an injected `ReadFile` instead of the disk. The framework issue for these gaps is
- * usetheokit/theokit#2657.
+ * Servers are read by `loadMcpServersFile` from `@theokit/agents/bridge` (#2599; its gaps, usetheokit/theokit#2657,
+ * are closed). What it still does not cover stays here: the `acpAgents` key, refusing a TheoClaw server name,
+ * an http(s)-only `url`, and the shape of an OAuth `auth` entry (`oauth` required, no `CLIENT_SECRET`).
  */
 import { readFileSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 
-import type { McpHttpServerConfig, McpServerConfig, McpStdioServerConfig } from '@theokit/sdk'
-import { mcpSecretValues } from '@theokit/agents/bridge'
+import type { McpServerConfig } from '@theokit/sdk'
+import { loadMcpServersFile, McpFileError, mcpSecretValues } from '@theokit/agents/bridge'
 import { z } from 'zod'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -44,9 +43,6 @@ type ReadFile = (path: string, encoding: 'utf8') => string
 
 const NONE: ExternalTools = { mcpServers: {}, acpAgents: [], secrets: [], startLine: undefined }
 
-// A name the SDK's `sanitize` (`[^a-zA-Z0-9-]+` to `_`, edge hyphens stripped) leaves unchanged,
-// so two distinct servers can never share one tool prefix.
-const SERVER_NAME = /^[a-z](?:[a-z0-9-]{0,62}[a-z0-9])?$/
 const ACP_NAME = /^[a-z][a-z0-9_]{0,63}$/
 const MCP_TOOL_PREFIX = 'mcp_'
 // The SDK's builtin names (`shell` is withheld, the memory tools are reserved even with memory off):
@@ -64,23 +60,9 @@ const command = z
   .refine((value) => !value.includes('/') || isAbsolute(value), {
     message: 'must be an absolute path or a bare name looked up on PATH',
   })
-const stringMap = z.record(z.string(), z.string())
 // Node clamps a delay above 2^31 - 1 ms to 1 ms, so a longer timeout would fail every call at once.
 const MAX_TIMER_MS = 2_147_483_647
 const timeout = z.number().int().positive().max(MAX_TIMER_MS)
-// A relative cwd resolves against the start directory, whose `files/` is the tool root.
-const directory = z.string().min(1).refine(isAbsolute, { message: 'must be an absolute path' })
-
-const stdioServer = z.strictObject({
-  type: z.literal('stdio').optional(),
-  command,
-  args: z.array(z.string()).optional(),
-  env: stringMap.optional(),
-  cwd: directory.optional(),
-  requestTimeoutMs: timeout.optional(),
-  // `all` would hand a third-party binary every host secret, the model key included.
-  envPolicy: z.enum(['inherit-scrubbed', 'core']).optional(),
-})
 
 // The SDK sends a bearer only for `auth.oauth` (a stored token, refreshed, or the PKCE flow) and
 // refuses an `auth` without it at `Agent.create`, so the file must carry it. `CLIENT_SECRET` is not
@@ -98,13 +80,8 @@ const mcpAuth = z.strictObject({
   }),
 })
 
-const httpServer = z.strictObject({
-  type: z.enum(['http', 'sse']).optional(),
-  url: z.url({ protocol: /^https?$/ }),
-  headers: stringMap.optional(),
-  auth: mcpAuth.optional(),
-  requestTimeoutMs: timeout.optional(),
-})
+// Only what the framework loader leaves open: it checks that `url` parses, not that it is http(s).
+const remoteExtras = z.looseObject({ url: z.url({ protocol: /^https?$/ }), auth: mcpAuth.optional() })
 
 const acpAgent = z.strictObject({
   name: z.string().regex(ACP_NAME, 'must match ^[a-z][a-z0-9_]{0,63}$'),
@@ -115,10 +92,8 @@ const acpAgent = z.strictObject({
   timeoutMs: timeout.optional(),
 })
 
-const file = z.strictObject({
-  mcpServers: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
-  acpAgents: z.array(acpAgent).optional(),
-})
+// The loader accepts a document with other keys; this file does not, so a typo such as `mcpServer` still fails.
+const file = z.strictObject({ mcpServers: z.unknown().optional(), acpAgents: z.array(acpAgent).optional() })
 
 function refuse(path: string, detail: string): never {
   throw new TheoClawConfigError(`${VARIABLE} ${path}: ${detail}`, { variable: VARIABLE })
@@ -149,18 +124,12 @@ function readJson(path: string, readFile: ReadFile): unknown {
   }
 }
 
-/** One server: HTTP when it names a `url`, stdio otherwise. */
-function parseServer(name: string, raw: Readonly<Record<string, unknown>>, path: string): McpServerConfig {
-  if (!SERVER_NAME.test(name)) {
-    refuse(path, `mcpServers.${name}: a server name must match ${SERVER_NAME.source}, so the SDK names its tools mcp_${name}_<tool> unchanged`)
-  }
+/** The checks the framework loader leaves to the caller, for one server of the file. */
+function checkServer(name: string, raw: unknown, path: string): void {
   if (BUILT_SERVER_NAMES.includes(name)) {
     refuse(path, `mcpServers.${name}: ${name} is the name of a TheoClaw server (THEOCLAW_BROWSER), which this one would replace`)
   }
-  if ('url' in raw) {
-    return parseWith(httpServer, raw, path, ['mcpServers', name]) as McpHttpServerConfig
-  }
-  return parseWith(stdioServer, raw, path, ['mcpServers', name]) as McpStdioServerConfig
+  if (typeof raw === 'object' && raw !== null && 'url' in raw) parseWith(remoteExtras, raw, path, ['mcpServers', name])
 }
 
 function checkAcpNames(agents: readonly AcpAgentConfig[], path: string): void {
@@ -200,9 +169,19 @@ function startLineOf(servers: readonly string[], agents: readonly AcpAgentConfig
 export function resolveExternalTools(env: Env, readFile: ReadFile = readFileSync): ExternalTools {
   const path = env[VARIABLE]?.trim()
   if (path === undefined || path === '') return NONE
-  const parsed = parseWith(file, readJson(path, readFile), path, [])
-  const mcpServers: Record<string, McpServerConfig> = {}
-  for (const [name, raw] of Object.entries(parsed.mcpServers ?? {})) mcpServers[name] = parseServer(name, raw, path)
+  // One read serves both the loader and the `acpAgents` parse.
+  let text: string | undefined
+  const cached: ReadFile = (target, encoding) => (text ??= readFile(target, encoding))
+  const document = readJson(path, cached) as { mcpServers?: Record<string, unknown> }
+  const parsed = parseWith(file, document, path, [])
+  let mcpServers: Record<string, McpServerConfig>
+  try {
+    mcpServers = { ...loadMcpServersFile(path, { readFile: cached, env: env as Record<string, string | undefined>, onWarn: () => undefined }) } as Record<string, McpServerConfig>
+  } catch (error) {
+    if (error instanceof McpFileError) return refuse(path, error.message)
+    throw error
+  }
+  for (const name of Object.keys(mcpServers)) checkServer(name, document.mcpServers?.[name], path)
   const acpAgents: AcpAgentConfig[] = parsed.acpAgents ?? []
   checkAcpNames(acpAgents, path)
   return {

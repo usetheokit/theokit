@@ -77,6 +77,22 @@ describe('delegated task worktrees', () => {
     await expect(runner.run({ id: '../x', work: async () => 1 })).rejects.toThrow(/invalid task id/)
   })
 
+  it('rejects an unsafe task id before any git call', async () => {
+    // Neither path is a git repository, so a git call would fail with git's own error, not the id's.
+    const base = mkdtempSync(join(tmpdir(), 'wt-'))
+    dirs.push(base)
+    const runner = createWorktreeRunner({ repo: join(base, 'missing'), root: join(base, 'trees') })
+    let worked = false
+    for (const id of ['../x', 'a/b', '-rf', '', 'a..b/c']) {
+      await expect(runner.run({ id, work: async () => { worked = true } })).rejects.toThrow(/invalid task id/)
+    }
+    expect(worked).toBe(false)
+    for (const id of ['../x', 'a/b', '-rf', 'a..b']) {
+      await expect(runner.remove(id)).rejects.toThrow(`unsafe task id: ${id}`)
+    }
+    expect(existsSync(join(base, 'trees'))).toBe(false)
+  })
+
   it('keeps a successful kept task until remove, and can keep its branch', async () => {
     const dirs_ = repo()
     const runner = createWorktreeRunner(dirs_)
