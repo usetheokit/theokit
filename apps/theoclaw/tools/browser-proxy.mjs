@@ -120,9 +120,16 @@ function snapshotContent(link) {
     const root = realpathSync(workDir)
     const path = realpathSync(resolve(root, link))
     const rel = relative(root, path)
-    if (rel === '' || rel.startsWith('..') || resolve(rel) === rel) return undefined
-    return readFileSync(path, 'utf8').trimEnd()
-  } catch {
+    if (rel === '' || rel.startsWith('..') || resolve(rel) === rel) {
+      process.stderr.write(`browser-proxy: snapshot link ${link} is outside the output directory; left as it was\n`)
+      return undefined
+    }
+    const content = readFileSync(path, 'utf8').trimEnd()
+    if (content === '') process.stderr.write(`browser-proxy: snapshot file ${link} is empty\n`)
+    return content
+  } catch (error) {
+    // The model then reads a link no tool of its own can open, so the run's log must say why.
+    process.stderr.write(`browser-proxy: snapshot link ${link} could not be read: ${error.message}\n`)
     return undefined
   }
 }

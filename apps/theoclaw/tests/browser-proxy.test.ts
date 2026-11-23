@@ -59,6 +59,9 @@ interface Answer {
   readonly error?: { readonly code: number; readonly message: string }
 }
 
+/** The stderr of the last `exchange`, where the wrapper says why it left a snapshot link as it was. */
+let lastStderr = ''
+
 /** Start the configured server, send `requests` (ids 1..n), and resolve with each answer by id once the child has closed. */
 async function exchange(requests: readonly object[], env: NodeJS.ProcessEnv = process.env, raw: readonly string[] = [], cdpEndpoint?: string): Promise<Map<number, Answer>> {
   const server = browserServer({ cliPath: standInCli(), ...(cdpEndpoint === undefined ? {} : { cdpEndpoint }) }) as { command: string; args: string[] }
@@ -85,6 +88,7 @@ async function exchange(requests: readonly object[], env: NodeJS.ProcessEnv = pr
   await all
   child.stdin.end()
   await closed
+  lastStderr = stderr
   return answers
 }
 
@@ -161,6 +165,14 @@ describe('the browser server wrapper', () => {
     const text = (answers.get(1)?.result as { content: { text: string }[] }).content[0]?.text
     expect(text).toContain('- [Snapshot](../theoclaw-outside.yml)')
     expect(text).not.toContain('outside\n')
+    expect(lastStderr).toContain('snapshot link ../theoclaw-outside.yml is outside the output directory')
+  })
+
+  it('says on stderr why a snapshot link it cannot read stays a link, so a page the model calls empty can be traced', async () => {
+    const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: { link: './gone.yml' } } }])
+    const text = (answers.get(1)?.result as { content: { text: string }[] }).content[0]?.text
+    expect(text).toContain('- [Snapshot](./gone.yml)')
+    expect(lastStderr).toMatch(/snapshot link \.\/gone\.yml could not be read: .*ENOENT/)
   })
 
   it('refuses a JSON-RPC batch, so a tools/call inside it cannot bypass the offered set', async () => {
