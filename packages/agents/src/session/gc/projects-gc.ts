@@ -14,7 +14,11 @@ import { classifyProjects, type FsSeam, type LivenessVerdict } from '../liveness
 import { protectedTranscriptPaths } from '../session-lifecycle.js'
 import { sessionPointerPath } from '../session-pointer.js'
 
-import { collectorRootOwner, CollectorRootNotOwnedError } from './collector-root.js'
+import {
+  collectorRootOwner,
+  CollectorRootNotOwnedError,
+  type CollectorRootOptions,
+} from './collector-root.js'
 import { awaitRegistryRemoval } from './registry-remover.js'
 import { GCFloorError } from './transcript-gc.js'
 
@@ -107,6 +111,21 @@ export interface PlanProjectsGCOptions {
    * `true` here a live project is kept whole, whatever `candidateCwds` returns.
    */
   readonly candidateCwdsComplete?: boolean
+  /**
+   * Where the resumable-session pointer of a cwd lives. Default: the framework's own pointer
+   * (`<transcript root>/projects/<project>/last-session`). A caller with its own convention names it
+   * here; a read failure other than "not found" skips the project.
+   */
+  readonly pointerPath?: (cwd: string) => string
+  /**
+   * How a live project's cwd coverage is established. `'declared'` (default): the caller's
+   * `candidateCwds` + `candidateCwdsComplete: true`. `'transcripts'`: the cwds recorded in the
+   * transcript headers are the whole collision class, and `candidateCwds` is optional extra input.
+   * The tradeoff is the caller's to accept: a colliding cwd that has a registry but no transcript
+   * in the project cannot be discovered, so only its registry entries (not its pointer) are at risk.
+   * Every transcript must still name a cwd of the project, or the project is kept whole.
+   */
+  readonly cwdCoverage?: 'declared' | 'transcripts'
   readonly fs?: ProjectsGCFs
 }
 
@@ -226,6 +245,8 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
   const cutoff = now - options.maxAgeDays * DAY_MS
   const root = dirname(options.projectsRoot) // the transcript root the SDK helpers take
   const listRegistry = options.listRegistry ?? defaultListRegistry
+  const pointerPathOf =
+    options.pointerPath ?? ((member: string) => sessionPointerPath(member, root))
 
   const candidates: ProjectsGCCandidate[] = []
   const kept: { project: string; reason: string }[] = []
@@ -346,7 +367,10 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       // The encoding is many-to-one and registries cannot be enumerated: a colliding live cwd may
       // appear in no header and no verdict, only in its own registry. Registry coverage is complete
       // only when the caller declares the cwds it knows; otherwise the project is kept whole.
-      if (options.candidateCwds === undefined || options.candidateCwdsComplete !== true) {
+      const covered =
+        options.cwdCoverage === 'transcripts' ||
+        (options.candidateCwds !== undefined && options.candidateCwdsComplete === true)
+      if (!covered) {
         kept.push({
           project,
           reason:
@@ -357,13 +381,13 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       // A dead verdict can rest on the headers that read: a colliding cwd that is alive but appears
       // only in its own registry makes it wrong, so the same guard and registry reads apply.
       const cwds = new Set([...(cwd === undefined ? [] : [cwd]), ...headerCwds])
-      for (const extra of options.candidateCwds()) {
+      for (const extra of options.candidateCwds?.() ?? []) {
         if (encodeProjectDir(extra) === project) cwds.add(extra)
       }
       try {
         for (const member of cwds) {
           try {
-            const id = fs.readFile(sessionPointerPath(member, root)).trim()
+            const id = fs.readFile(pointerPathOf(member)).trim()
             if (id.length > 0) protect(id, member, 'resumable session pointer')
           } catch (error) {
             if (!isNotFound(error)) throw new Error(`pointer read failed: ${messageOf(error)}`)
@@ -512,6 +536,10 @@ export interface RunProjectsGCOptions {
   readonly registryTimeoutMs?: number
   /** Extra protection re-read just before each removal. A throw refuses the candidate. */
   readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>
+  /** The pointer location the plan was made with; re-read before each removal. */
+  readonly pointerPath?: (cwd: string) => string
+  /** A marker another app wrote in its own format, accepted as the owner's claim. */
+  readonly existingMarker?: CollectorRootOptions['existingMarker']
   readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>
 }
 
@@ -538,7 +566,9 @@ function protectionNow(
   }
   for (const cwd of plan.liveCwds) {
     try {
-      const id = fs.readFile(sessionPointerPath(cwd, root)).trim()
+      const id = fs
+        .readFile((options.pointerPath ?? ((c: string) => sessionPointerPath(c, root)))(cwd))
+        .trim()
       if (id.length > 0) protect(id, cwd, 'the session pointer now names it')
     } catch (error) {
       if (!isNotFound(error)) throw new Error(`pointer read failed: ${messageOf(error)}`)
@@ -576,7 +606,7 @@ export async function runProjectsGC(
     return { dryRun: true, removed: plan.candidates.map((c) => c.target), refused, errors }
   }
 
-  const actual = collectorRootOwner(plan.projectsRoot)
+  const actual = collectorRootOwner(plan.projectsRoot, { existingMarker: options.existingMarker })
   if (options.owner === undefined || actual?.app !== options.owner.app) {
     throw new CollectorRootNotOwnedError(
       plan.projectsRoot,

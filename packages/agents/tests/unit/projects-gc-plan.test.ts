@@ -349,6 +349,44 @@ describe('planProjectsGC protection edge cases', () => {
     expect(undeclared.kept.some((k) => k.reason.includes('candidateCwdsComplete'))).toBe(true)
   })
 
+  it('cwdCoverage "transcripts" plans a live project without a declared cwd list', async () => {
+    transcript('new', 1)
+    const old = transcript('old', 300)
+    const registered = transcript('registered', 300)
+    const result = await plan({
+      candidateCwds: undefined,
+      candidateCwdsComplete: undefined,
+      cwdCoverage: 'transcripts',
+      listRegistry: () => Promise.resolve([{ id: 'registered' }]),
+    })
+    expect(result.candidates.map((c) => c.target)).toEqual([old])
+    expect(result.candidates.map((c) => c.target)).not.toContain(registered)
+  })
+
+  it('cwdCoverage "transcripts" still keeps a project whole when a header names no cwd of it', async () => {
+    transcript('new', 1)
+    transcript('old', 300)
+    writeFileSync(join(projects, NAME, 'stray.jsonl'), '{"cwd":"/elsewhere"}\n')
+    const result = await plan({
+      candidateCwds: undefined,
+      candidateCwdsComplete: undefined,
+      cwdCoverage: 'transcripts',
+    })
+    expect(result.candidates).toEqual([])
+    expect(result.kept.some((k) => k.reason.includes('project kept whole'))).toBe(true)
+  })
+
+  it('pointerPath moves where the resumable pointer is read', async () => {
+    transcript('new', 1)
+    const pinned = transcript('pinned', 300)
+    const pointer = join(root, 'my-pointer')
+    writeFileSync(pointer, 'pinned\n')
+    const withPointer = await plan({ pointerPath: () => pointer })
+    expect(withPointer.candidates.map((c) => c.target)).not.toContain(pinned)
+    const without = await plan({ pointerPath: () => join(root, 'absent') })
+    expect(without.candidates.map((c) => c.target)).toContain(pinned)
+  })
+
   it('a dead verdict does not hide a live cwd known only to its registry', async () => {
     const hidden = '/work-app'
     transcript('new', 1)
