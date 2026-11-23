@@ -56,3 +56,31 @@ describe('the names Codex answers to also answer here', () => {
     expect(BUILTIN_COMMAND_NAMES.has('pwd'), '/pwd is routable but absent from the menu').toBe(true)
   })
 })
+
+describe('aliases, hidden names and custom shadowing come from the framework registry', () => {
+  it('test_a_custom_command_shadowing_a_canonical_name_wins_and_the_alias_still_quits', () => {
+    expect(routeCommand('/quit', new Set(['quit']))).toEqual({
+      kind: 'custom',
+      name: 'quit',
+      arg: '',
+    })
+    expect(routeCommand('/exit', new Set(['quit']))).toEqual({ kind: 'quit' })
+  })
+
+  it('test_a_custom_command_shadowing_an_alias_wins_over_it', () => {
+    expect(routeCommand('/exit now', new Set(['exit']))).toEqual({
+      kind: 'custom',
+      name: 'exit',
+      arg: 'now',
+    })
+    expect(routeCommand('/quit', new Set(['exit']))).toEqual({ kind: 'quit' })
+  })
+
+  it('test_a_custom_command_shadowing_a_codex_name_wins', () => {
+    expect(routeCommand('/memories', new Set(['memories']))).toEqual({
+      kind: 'custom',
+      name: 'memories',
+      arg: '',
+    })
+  })
+})

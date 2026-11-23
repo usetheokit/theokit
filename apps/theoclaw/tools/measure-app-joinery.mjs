@@ -19,11 +19,19 @@
  * `joined` counts files that import the framework (@theokit/*), so the report also says how much
  * of the app is built on it. Adding a signal can turn the gate red; that is its purpose.
  *
+ * A second signal is by name: a file that declares (top level) a function or class named like an export
+ * of a `@theokit/*` package the app depends on is reported as a `duplicate`, and the gate fails on it,
+ * unless `ALLOWED` lists the file (and symbol) with a reason. Exports are read from each package's
+ * declaration files through the TypeScript checker, over every subpath of its `exports` map; when the
+ * surface cannot be read the gate throws rather than pass on an empty set.
+ *
  * Exit: 0 gap and presenter are 0; 1 either is above 0; 2 nothing resolved.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, sep } from 'node:path'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import ts from 'typescript'
 
 /** @type {ReadonlyArray<{ pattern: RegExp, category: 'gap' | 'presenter' | 'mixed' | 'app', reason: string }>} */
 export const RULES = []
@@ -42,6 +50,12 @@ export const SIGNALS = [
   { category: 'presenter', pattern: /\\u001b\[|\\x1b\[/, reason: 'hand-written ANSI rendering' },
   { category: 'presenter', pattern: /function\s+(render|format)(Agent)?(Reply|Message|Transcript)\w*\(/, reason: 'hand-written reply presenter' },
 ]
+
+/**
+ * Files allowed to declare a framework export's name. Each entry needs a substantive reason.
+ * @type {ReadonlyArray<{ path: string, symbol?: string, reason: string }>}
+ */
+export const ALLOWED = []
 
 const FRAMEWORK_IMPORT = /from\s+['"]@theokit\//
 
@@ -90,8 +104,98 @@ export function categoryOf(path, text = '', rules = RULES, signals = SIGNALS) {
   return signals.find((signal) => signal.pattern.test(text))?.category ?? 'app'
 }
 
-/** The measurement: `{ resolved, rows, totals }`. Pure of process state apart from reading `root`. */
-export function measure(root = APP_ROOT, rules = RULES, signals = SIGNALS) {
+function typesEntry(target) {
+  if (typeof target === 'string') return target
+  if (Array.isArray(target)) return target.map(typesEntry).find((t) => t !== undefined)
+  if (target === null || typeof target !== 'object') return undefined
+  for (const key of ['types', 'import', 'default', 'require']) {
+    const found = typesEntry(target[key])
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
+function declarationFor(file) {
+  const candidates = [file, file.replace(/\.([cm]?)js$/, '.d.$1ts')]
+  return candidates.find((c) => /\.d\.[cm]?ts$/.test(c) && existsSync(c))
+}
+
+function packageDir(root, name) {
+  for (let dir = root; ; dir = dirname(dir)) {
+    const candidate = join(dir, 'node_modules', name)
+    if (existsSync(join(candidate, 'package.json'))) return candidate
+    if (dirname(dir) === dir) return undefined
+  }
+}
+
+function readDeps(root) {
+  const pkgPath = join(root, 'package.json')
+  if (!existsSync(pkgPath)) return []
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+  return Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).filter((n) => n.startsWith('@theokit/'))
+}
+
+/** `{ module, file }` for each code subpath of a dependency's export map. */
+function entriesOf(root, dep) {
+  const dir = packageDir(root, dep)
+  if (dir === undefined) throw new Error(`joinery: cannot resolve ${dep}; install and build before measuring`)
+  const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+  const map = manifest.exports ?? { '.': manifest.types ?? manifest.main }
+  const found = []
+  for (const [sub, target] of Object.entries(typeof map === 'string' ? { '.': map } : map)) {
+    // Known blind spot: wildcard subpaths (`./x/*`) name no single module, so their exports are not read.
+    if (!sub.startsWith('.') || sub.includes('*') || sub.endsWith('package.json')) continue
+    const rel = typesEntry(target)
+    if (rel !== undefined && !/\.[cm]?[jt]sx?$/.test(rel)) continue
+    const file = rel === undefined ? undefined : declarationFor(resolve(dir, rel))
+    if (file === undefined) throw new Error(`joinery: no declaration file for ${dep}${sub.slice(1)}; build the package first`)
+    found.push({ module: dep + sub.slice(1), file })
+  }
+  return found
+}
+
+/** Names exported by every subpath of every `@theokit/*` dependency of the app at `root`. */
+export function frameworkExports(root = APP_ROOT) {
+  const deps = readDeps(root)
+  if (deps.length === 0) return new Map()
+  const entries = deps.flatMap((dep) => entriesOf(root, dep))
+  const program = ts.createProgram(entries.map((e) => e.file), {
+    allowJs: false,
+    skipLibCheck: true,
+    noEmit: true,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ES2022,
+  })
+  const checker = program.getTypeChecker()
+  /** @type {Map<string, string[]>} name -> modules exporting it */
+  const names = new Map()
+  for (const { module, file } of entries) {
+    const source = program.getSourceFile(file)
+    const symbol = source === undefined ? undefined : checker.getSymbolAtLocation(source)
+    if (symbol === undefined) throw new Error(`joinery: cannot read the exports of ${module}`)
+    for (const exported of checker.getExportsOfModule(symbol)) {
+      const list = names.get(exported.name) ?? []
+      list.push(module)
+      names.set(exported.name, list)
+    }
+  }
+  if (names.size === 0) throw new Error('joinery: read no framework export')
+  return names
+}
+
+/** Top-level function and class names declared in `text`. */
+export function declaredNames(text, path = 'x.ts') {
+  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, false, path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+  const out = []
+  for (const node of source.statements) {
+    if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name !== undefined) out.push(node.name.text)
+  }
+  return out
+}
+
+/** The measurement: `{ resolved, rows, totals, duplicates }`. Pure of process state apart from reading `root`. */
+export function measure(root = APP_ROOT, rules = RULES, signals = SIGNALS, exportsByName = frameworkExports(root), allowed = ALLOWED) {
   let files = []
   try {
     files = sourceFiles(join(root, 'src'))
@@ -108,12 +212,22 @@ export function measure(root = APP_ROOT, rules = RULES, signals = SIGNALS) {
       joined: FRAMEWORK_IMPORT.test(text),
     }
   })
+  const duplicates = []
+  for (const row of rows) {
+    const text = readFileSync(join(root, row.path), 'utf8')
+    for (const name of declaredNames(text, row.path)) {
+      const modules = exportsByName.get(name)
+      if (modules === undefined) continue
+      if (allowed.some((a) => a.path === row.path && (a.symbol === undefined || a.symbol === name) && a.reason.trim() !== '')) continue
+      duplicates.push({ path: row.path, symbol: name, modules })
+    }
+  }
   const totals = { gap: 0, presenter: 0, mixed: 0, app: 0, total: 0 }
   for (const row of rows) {
     totals[row.category] += row.lines
     totals.total += row.lines
   }
-  return { resolved: rows.length, joined: rows.filter((row) => row.joined).length, rows, totals }
+  return { resolved: rows.length, joined: rows.filter((row) => row.joined).length, rows, totals, duplicates }
 }
 
 /** `{ code, report }` for a measurement. */
@@ -126,11 +240,12 @@ export function verdict(result) {
       report: `${summary}\nresolved no source file: the zeros above are the absence of the query's targets, not the absence of joinery.`,
     }
   }
-  if (gap > 0 || presenter > 0) {
+  const dupes = (result.duplicates ?? []).map((d) => `  duplicate ${d.symbol} ${d.path} (exported by ${d.modules.join(', ')})`)
+  if (gap > 0 || presenter > 0 || dupes.length > 0) {
     const offenders = result.rows
       .filter((row) => (row.category === 'gap' || row.category === 'presenter') && row.lines > 0)
       .map((row) => `  ${row.category} ${row.lines} ${row.path}`)
-    return { code: 1, report: [summary, 'gap or presenter above 0:', ...offenders].join('\n') }
+    return { code: 1, report: [summary, 'gap, presenter or framework-name duplicate above 0:', ...offenders, ...dupes].join('\n') }
   }
   return { code: 0, report: summary }
 }

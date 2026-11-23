@@ -35,7 +35,7 @@ Twenty-four entry points. Import the one you need — the barrel is not the API.
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
-| `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer; `createDevicePairing` and `pairRoute`: setup-code device pairing |
+| `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer; `createDevicePairing`, `pairRoute` and `redeemPairing`: setup-code device pairing |
 | `./testing` | Test seams: compiled-agent inspection, mock streams, the live-suite provider-key guard |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
@@ -907,6 +907,8 @@ After `close()`, `run` answers `turn_failed`.
 ## Device pairing
 
 `createDevicePairing({ dir })` (from `@theokit/agents/control`) lets a phone or second machine reach a control surface. The owner calls `issueCode()` (valid `codeTtlMs`, default 10 minutes, and for one request). The device redeems it with a name (max 64 characters) and a credential it chose: `request(code, name, credential)` refuses `bad_credential` (shorter than `minCredentialLength`, default 32, or fewer than 10 distinct characters), `bad_name`, `unknown_or_expired` and `too_many_pending` (`maxPending`, default 20). The owner lists `pending()`, then `approve(id)` or `deny(id)`. Approved devices are stored in `<dir>/devices.json` (mode 0600) as SHA-256 digests only; `accepts(authorization)` compares a `Bearer` header in constant time.
+
+`redeemPairing({ url, code, name })` is the device side: it generates a credential, POSTs `{ code, name, token }` to `/control/pair` on the origin of `url` (`http(s)://` or `ws(s)://`) and returns `{ url, credential }`, where `url` is the `ws(s)://…/control` address. A refused or expired code throws `PairingRefusedError` (`status`, `reason`) and returns no credential. The device is only pending then: `createControlClient({ url, authorization: \`Bearer ${credential}\` })` connects after the owner calls `approve`.
 
 ```ts
 import { createDevicePairing, pairRoute } from '@theokit/agents/control'
