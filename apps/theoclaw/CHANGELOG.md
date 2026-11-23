@@ -11,6 +11,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
+
+- Telegram runs on `@theokit/gateway-telegram` 0.14.0 and its own descriptor: the adapter reads a voice note's audio lazily, after the owner and group hooks, so the local descriptor and the 0.4.0 pin are gone. TheoClaw still reads only `THEOCLAW_TELEGRAM_TOKEN`; the descriptor's `allowedUsers`, `apiBase` and `requireMention` stay unset (#2834).
 - A start the gateway abandoned that later fails is written once (by the runner, masked) instead of twice; the channel loop's own second timer is gone (#2777).
 
 - The `/webchat` routes are mounted by `createHostedChat` from `theokit/server/http`; `webchat/routes.ts` keeps the token check, the trusted-proxy and visitor gate and the turn adapter. No change in what a client sees (#2733).
@@ -18,6 +21,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - Pairing and the owner policy hook now come from `@theokit/gateway` 0.30.0 (`createFilePairingStore`, `createAccessPolicyHook` with its `messages` option, `senderKey`); `pairing-store.ts` is gone and `owner-policy-hook.ts` wraps the gateway hook with TheoClaw's reply texts. TheoClaw still answers an owner's bare `/approve` in a DM with the invalid-code text, lets an owner's `/approve` in a group go on to the agent without pairing anyone (only a DM pairs), and admits an unauthenticated-platform DM under `open`. Observable differences: pairing codes run 100000 to 999999 (no leading zeros); a failed write is no longer logged with its path (the code is still kept for a retry); an owner's DM no longer fails when the pairing store's `isPaired` throws, since the owner is known before the store is read; a pairing file that cannot be read still stops the start and names the path and `THEOCLAW_STATE_DIR` (#2704).
 - `@theokit/sdk-tools` moves from 0.29.0 to 0.34.0, so the computer tool, the XWD helpers, `resolveWebSearchAdapter` and `baseDir` on the patch and edit tools are reachable from the app (#2696).
 ### Changed
+
+- `@theokit/tui` is pinned at 0.83.8 (was 0.83.4) and the TUI drops its own stream reducer for an interrupted turn: the framework's `interrupted` and `notice` events now fold it. Visible differences: a tool still running when the owner presses Esc is shown as cancelled (it stayed running), and the line reads "Interrupted by user" (was "interrupted"); a notice posted after the interruption is drawn below the turn (#2728).
+
+- The profile of `THEOCLAW_PROFILE` is now resolved and applied by the SDK's `resolveProfile` and `applyProfile` (`@theokit/sdk/persistence`); the app keeps the name message, the conflict refusal before the instance lock and `TheoClawConfigError` (#2715).
 
 - Session generations (`sessions.json`) are read and written by the SDK's `jsonGenerations`; the app no longer defines the file format. The file is the same, and an unreadable or foreign file is still refused with a `TheoClawConfigError` naming it (#2709).
 
@@ -31,6 +38,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 - The channel loop passes `reconnect.retryFalse` and uses the gateway's `maskSecrets`, replacing its `watchConnect` wrapper and its own copy; a connect that fails after its timeout is now reported as `start failed` (was `abandoned start failed`) (#2706).
 
+- The default model key resolves through the framework's `resolveAgentCredential` (`THEOKIT_API_KEY`, then `OPENROUTER_API_KEY`; still no credentials file), and custom-provider plugins come from `customProviderPlugin` in `@theokit/agents/auth`.
+
 - `tests/fakes.ts` re-exports `FakeAgent` from `@theokit/agents/testing` and no longer defines it. The gateway's `FakeAdapter` and `messageEvent` stay local: `@theokit/gateway` 0.30.0 has no `testing` subpath yet (#2759).
 
 - Display settings `cleanup_progress` and `streaming` are removed: nothing read them, so `THEOCLAW_DISPLAY_CLEANUP_PROGRESS` is now ignored. Per-platform display tiers stay in TheoClaw as product policy; the gateway's `progressFor` keeps deciding by edit capability alone (#2756).
@@ -42,6 +51,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - The turn event mask moved into `@theokit/agents/bridge` as `createAgentEventMask`, and `runAgentTurn` takes the same masking as `secrets`; `control-plane/event-mask.ts` is gone (#2735).
 - `theoclaw skills publish` now reads `THEOCLAW_SKILLS_REGISTRY` and `THEOCLAW_SKILLS_TOKEN` from the instance configuration file too, as `skills search` and `skills install` do; before, it read the process environment only (#2764).
 
+
+- `theoclaw worker pair` redeems its setup code with `redeemPairing` from `@theokit/agents/control` instead of a hand-written POST. A control URL whose scheme is not `http(s)` or `ws(s)` is now refused with exit code 1 (#2711).
 - A fact the post-turn reviewer saves now reaches the configured memory mirror through the SDK itself, and the legacy-facts import writes through the SDK's `addMemoryFact`; the app no longer mirrors by hand and imports nothing from `@theokit/sdk/internal/`. The SDK 11.0.0 does not mirror the reviewer's fact, so the repository carries a pnpm patch (`patches/@theokit__sdk@11.0.0.patch`) until an SDK release does (#2743).
 - `@theokit/gateway` is pinned at 0.30.0 (was 0.25.0). It brings `keys` on `scopedStrategy`, `reconnect.retryFalse` with the late-connect `failed` event, and `messages` on `createAccessPolicyHook`; the app code that these replace is left for later issues (#2703).
 - `@theokit/gateway-sms` is pinned at 0.7.0 (was 0.6.0), and the phone-call route is built with `createVoiceCallHandler`; the app no longer builds TwiML. Caller-visible differences: a silence repeats the greeting instead of "Are you still there?"; a disallowed caller is hung up on without a spoken refusal; the goodbye text is "Goodbye."; call state expires after an hour instead of an LRU of 1000 calls; a request without `CallSid` or `From` answers 400; the `<Redirect>` after `<Gather>` is gone, so a call left silent may end without posting again (#2708).
