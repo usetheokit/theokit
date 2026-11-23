@@ -11,12 +11,15 @@
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
 import type {
+  AgentOptions,
   BuiltinToolName,
   CustomTool,
   InlineSkill,
   McpServerConfig,
   MemorySettings,
+  ModelFallbackOptions,
   ModelSelection,
+  SkillsSettings,
   TelemetrySettings,
 } from '@theokit/sdk'
 import type { z } from 'zod'
@@ -129,6 +132,14 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * gate — exactly what the `<skills>` block lists.
    */
   skillsRead?: 'inline' | 'advertised'
+  /** `Agent.create({ sendDefaults })`: tool-result guard, pruning and per-tool timeout applied to every send. */
+  sendDefaults?: AgentOptions['sendDefaults']
+  /** `Agent.create({ modelFallback })`: models a turn retries on when the primary fails before output. */
+  modelFallback?: ModelFallbackOptions
+  /** `Agent.create({ local: { sessionDir } })`: where session transcripts live (wins over `baseDir`). */
+  sessionDir?: string
+  /** `Agent.create({ thinking })`, e.g. `'off'`. Distinct from `reasoningEffort`; both are forwarded. */
+  thinking?: string
   /**
    * Subagents this agent carries, registered by name — `AgentOptions.agents` in the SDK.
    *
@@ -319,6 +330,7 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
     ...compileSkillsSelection(def.skills),
     ...(def.skillsRead !== undefined ? { skillsRead: def.skillsRead } : {}),
+    ...compileSdkPassthrough(def),
     // #825 — the author's own subagents, carried verbatim. Absent ⇒ no key, so an agent that
     // declares none is indistinguishable from one written before the field existed, and the SDK
     // goes on discovering from `settingSources` exactly as it did.
@@ -410,14 +422,28 @@ function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly Code
   return { plugins: [...explicit, plugin] }
 }
 
+/** The SDK options the builder carries verbatim; absent ⇒ no key, so the SDK default is untouched. */
+function compileSdkPassthrough(
+  def: AgentDefinition,
+): Pick<CompiledAgentOptions, 'sendDefaults' | 'modelFallback' | 'sessionDir' | 'thinking'> {
+  return {
+    ...(def.sendDefaults !== undefined ? { sendDefaults: def.sendDefaults } : {}),
+    ...(def.modelFallback !== undefined ? { modelFallback: def.modelFallback } : {}),
+    ...(def.sessionDir !== undefined ? { sessionDir: def.sessionDir } : {}),
+    ...(def.thinking !== undefined ? { thinking: def.thinking } : {}),
+  }
+}
+
 export function compileSkillsSelection(
   skills: SkillsSelection | undefined,
 ): Pick<CompiledAgentOptions, 'skills' | 'skillsResolver'> {
   if (skills === undefined) return {}
   if (typeof skills === 'function') return { skillsResolver: skills }
+  if (!Array.isArray(skills)) return { skills: skills as SkillsSettings }
+  const entries = skills as readonly (string | InlineSkill)[]
   const enabled: string[] = []
   const inline: InlineSkill[] = []
-  for (const entry of skills) {
+  for (const entry of entries) {
     if (typeof entry === 'string') enabled.push(entry)
     else inline.push(entry)
   }
