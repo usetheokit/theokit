@@ -4008,6 +4008,14 @@
           "references": [],
           "internals": {}
         },
+        "OffCapability": {
+          "tier": "stable",
+          "declaration": "interface OffCapability extends WiringOffReason {\n    readonly capability: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "OpenAIChatMessage": {
           "tier": "stable",
           "declaration": "interface OpenAIChatMessage {\n    readonly role: 'system' | 'developer' | 'user' | 'assistant';\n    readonly content: string | readonly OpenAITextPart[];\n}",
@@ -6630,7 +6638,23 @@
         },
         "WiredEntity": {
           "tier": "stable",
-          "declaration": "interface WiredEntity {\n    readonly active: readonly string[];\n    readonly requested: readonly string[];\n    readonly suppressedByTrust: boolean;\n}",
+          "declaration": "interface WiredEntity {\n    readonly active: readonly string[];\n    readonly requested: readonly string[];\n    readonly suppressedByTrust: boolean;\n    readonly entities: readonly WiredEntityScope[];\n    readonly off: WiringOffReason | undefined;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "WiredEntityScope": {
+          "tier": "stable",
+          "declaration": "interface WiredEntityScope {\n    readonly name: string;\n    readonly scope: string | undefined;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "WiringOffReason": {
+          "tier": "stable",
+          "declaration": "interface WiringOffReason {\n    readonly reason: WiringOffReasonCode;\n    readonly detail?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -9331,6 +9355,14 @@
             "dist/agent-orchestrator-<hash>.d.ts#ReflectionResult": "interface ReflectionResult {\n    readonly feedback?: string;\n    readonly continue: boolean;\n}",
             "dist/agent-orchestrator-<hash>.d.ts#ReflectionStrategy": "interface ReflectionStrategy {\n    readonly name: string;\n    reflect(outcome: LoopOutcome, ctx?: ReflectionContext): ReflectionResult;\n}"
           }
+        },
+        "offCapabilities": {
+          "tier": "stable",
+          "declaration": "declare function offCapabilities(record: Readonly<Record<string, WiredEntity>>): OffCapability[];",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
         },
         "outputModeration": {
           "tier": "stable",
