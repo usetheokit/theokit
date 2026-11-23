@@ -22,9 +22,9 @@ const KEEP_PER_PROJECT = 10
 const DEFAULT_WINDOW_DAYS = 30
 
 /** The artifact kinds this product reports, which are not the framework's names. */
-export type CollectableKind = 'transcript' | 'lock-file' | 'lock-directory' | 'tmp' | 'registry'
+type CollectableKind = 'transcript' | 'lock-file' | 'lock-directory' | 'tmp' | 'registry'
 
-export interface AllCandidate {
+interface AllCandidate {
   project: string
   kind: CollectableKind
   target: string
@@ -198,7 +198,9 @@ function adapt(framework: ProjectsGCPlan, projects: readonly string[]): AllPlan 
     touchedProjects: framework.touchedProjects.map((p) => join(framework.projectsRoot, p)),
     liveCwds: [...framework.liveCwds],
     totalByKind,
-    errors: framework.errors.map((e) => (e.project === '' ? e.message : `${e.project}: ${e.message}`)),
+    errors: framework.errors.map((e) =>
+      e.project === '' ? e.message : `${e.project}: ${e.message}`,
+    ),
     framework,
   }
 }

@@ -40,9 +40,9 @@ describe('createThemeController', () => {
   })
 
   it('rejects an invalid theme prop', () => {
-    expect(() => createThemeController('nope' as TheoThemeProp)).toThrow()
+    expect(() => createThemeController('nope' as TheoThemeProp)).toThrow(/unknown theme "nope"/)
     const c = createThemeController('dark')
-    expect(() => c.set('nope' as TheoThemeProp)).toThrow()
+    expect(() => c.set('nope' as TheoThemeProp)).toThrow(/unknown theme "nope"/)
     expect(c.get()).toBe('dark')
   })
 })

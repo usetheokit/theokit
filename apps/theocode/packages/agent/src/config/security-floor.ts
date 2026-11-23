@@ -27,7 +27,7 @@ export const MORE_PERMISSIVE = {
   approval_policy: ['untrusted', 'on-request', 'never'],
 } as const
 
-export type SecurityKey = keyof typeof MORE_PERMISSIVE
+type SecurityKey = keyof typeof MORE_PERMISSIVE
 
 /** Layers that may only tighten the user's choice. */
 const CANNOT_LOOSEN = ['project', 'project_local', 'profile', 'env'] as const

@@ -121,7 +121,9 @@ describe('#2869 — the pointer is protected once, under the name on disk', () =
     writeTranscript('src', 100)
     const dst = writeTranscript('live', 1)
     point('live')
-    await expect(forkSession('src', 'live', { cwd, baseDir: base })).rejects.toThrow()
+    await expect(forkSession('src', 'live', { cwd, baseDir: base })).rejects.toThrow(
+      /refusing to write over a live session transcript/,
+    )
     expect(readFileSync(dst, 'utf8')).toBe('{}\n')
   })
 })

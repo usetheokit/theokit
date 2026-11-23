@@ -13,7 +13,7 @@ import { workingDirectory } from '../working-directory.js'
 
 type Consent = ReturnType<typeof import('../consent/index.js').useConsent>
 
-export const HOOK_WARNING =
+const HOOK_WARNING =
   'This command runs on every matching tool call. Approve only what you recognise — ' +
   'declining leaves it inert, and you will be asked again next launch.'
 

@@ -102,36 +102,47 @@ const NO_BINDING_TO_REMOVE =
  * Ink router matches `ctrl+<letter>` only — and the report for `null`, which the framework treats
  * as a legitimate unbind of a chord that was never bound.
  */
-export function readKeybindings(document: unknown): KeybindingsRead {
+function readKeybindings(document: unknown): KeybindingsRead {
   const { keymap, notApplied: reports } = parseKeybindings(document, {
     actions: REBINDABLE,
     reserved: [...RESERVED_FOR_REFERENCE],
     claimed: [...CLAIMED_BY_ROUTER],
   })
-  const bound: Keybinding[] = []
   const notApplied = reports.map((r) => `"${r.chord}": ${r.reason}`)
-
-  const reported = new Set(reports.map((r) => r.chord))
-  const groups = (document as { bindings?: unknown } | null)?.bindings
-  for (const group of Array.isArray(groups) ? groups : []) {
-    const map = (group as { bindings?: unknown } | null)?.bindings
-    if (typeof map !== 'object' || map === null) continue
-    for (const [keystroke, action] of Object.entries(map as Record<string, unknown>)) {
-      if (action !== null) continue
-      if (reported.has(keystroke) || reported.has(keystroke.trim().toLowerCase())) continue
-      notApplied.push(`"${keystroke}": ${NO_BINDING_TO_REMOVE}`)
-    }
-  }
-
+  notApplied.push(...unboundNullReports(document, new Set(reports.map((r) => r.chord))))
+  const bound: Keybinding[] = []
   for (const [chord, action] of keymap) {
-    const match = CTRL_LETTER.exec(chord)
-    if (match?.[1] === undefined) {
-      notApplied.push(`"${chord}": this product matches ctrl+<letter> only`)
-    } else if ((REBINDABLE as readonly string[]).includes(action)) {
-      bound.push({ ctrl: true, letter: match[1], action: action as RebindableAction })
-    }
+    const read = readChord(chord, action)
+    if (typeof read === 'string') notApplied.push(read)
+    else if (read !== undefined) bound.push(read)
   }
   return { bound, notApplied }
+}
+
+/** The `null` entries the framework accepted as unbinds, each reported: nothing here is a table entry. */
+function unboundNullReports(document: unknown, reported: ReadonlySet<string>): string[] {
+  const groups = (document as { bindings?: unknown } | null)?.bindings
+  return (Array.isArray(groups) ? groups : []).flatMap((group) =>
+    nullKeystrokes((group as { bindings?: unknown } | null)?.bindings)
+      .filter((k) => !reported.has(k) && !reported.has(k.trim().toLowerCase()))
+      .map((k) => `"${k}": ${NO_BINDING_TO_REMOVE}`),
+  )
+}
+
+/** The keystrokes one group binds to `null`. */
+function nullKeystrokes(map: unknown): string[] {
+  if (typeof map !== 'object' || map === null) return []
+  return Object.entries(map as Record<string, unknown>)
+    .filter(([, action]) => action === null)
+    .map(([keystroke]) => keystroke)
+}
+
+/** One parsed chord: a binding, the report of why it was not applied, or nothing for a foreign action. */
+function readChord(chord: string, action: string): Keybinding | string | undefined {
+  const match = CTRL_LETTER.exec(chord)
+  if (match?.[1] === undefined) return `"${chord}": this product matches ctrl+<letter> only`
+  if (!(REBINDABLE as readonly string[]).includes(action)) return undefined
+  return { ctrl: true, letter: match[1], action: action as RebindableAction }
 }
 
 export function loadKeybindings(home: string = homedir()): KeybindingsRead {
