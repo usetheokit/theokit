@@ -1,23 +1,25 @@
-import { redactSecrets } from '@theokit/gateway'
-import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
+import { AsyncLocalStorage } from 'node:async_hooks'
 
-import type { PairingStore } from './pairing-store.js'
-import { isAuthenticatedSender, isPolicyOwner, senderKey } from './policy.js'
+import { createAccessPolicyHook, redactSecrets } from '@theokit/gateway'
+import type { GatewayHook, HookDecision, MessageEvent, PairingStore, PreInboundContext } from '@theokit/gateway'
+
+import { isAuthenticatedSender, isPolicyOwner } from './policy.js'
 import type { AuthorizationPolicy } from './policy.js'
 
 const HOOK_NAME = 'theoclaw-owner-policy'
-/** A refused DM sender is answered at most once per hour (NFR-004), which ends a two-instance loop (D1). */
-const REFUSAL_MEMORY_MS = 3_600_000
 /** The command word alone or followed by whitespace; `/approver` is not it. */
 const APPROVE_COMMAND = /^\/approve(\s|$)/
 /** What answers an exec question rather than a pairing code. */
 const EXEC_ANSWER = /^\/approve(?:\s+always)?$/
-const APPROVE = /^\/approve\s+(\d{6})$/
+const APPROVE_WITH_CODE = /^\/approve\s+\d{6}$/
 
 const PAIRED = 'Paired.'
 const INVALID_CODE = 'That code is not valid or has expired.'
 const NOT_SAVED = 'The pairing could not be saved.'
 const PAIRING_OFF = 'Pairing is off: set THEOCLAW_STATE_DIR to keep pairings.'
+
+/** What the gateway hook puts before the reason of a failure it caught. */
+const GATEWAY_FAILURE_PREFIX = 'access-policy: hook failed: '
 
 const SILENT: HookDecision = { block: true }
 
@@ -32,82 +34,101 @@ export interface OwnerPolicyHookOptions {
   readonly write?: (line: string) => void
 }
 
-function pairingMessage(code: string): string {
-  return `Pairing code: ${code}. Ask the owner to send /approve ${code} in a direct message.`
-}
-
-/** The owner's `/approve <code>`: always blocked, so the command never reaches the agent (D2). */
-async function approval(text: string, pairing: PairingStore | undefined): Promise<HookDecision> {
-  if (pairing === undefined) return { block: true, message: PAIRING_OFF }
-  const code = APPROVE.exec(text)?.[1]
-  if (code === undefined) return { block: true, message: INVALID_CODE }
-  const result = await pairing.approve(code)
-  if (result.ok) return { block: true, message: PAIRED }
-  return { block: true, message: result.reason === 'write_failed' ? NOT_SAVED : INVALID_CODE }
-}
-
 /**
  * The `pre_inbound` hook that lets owners and paired senders through and refuses everyone else as
- * the DM policy says. In a group a refused sender gets no reply under any policy (FR-004), so two
- * instances there never answer each other.
+ * the DM policy says: the gateway's access policy with TheoClaw's reply texts, plus three things
+ * the gateway does not do. An owner's `/approve` in a group goes on to the agent untouched (only a
+ * DM approves a pairing); a bare `/approve` in a DM answers "not valid" unless it answers a waiting
+ * exec; and a DM from an unauthenticated platform is let through under the `open` policy.
  */
 export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayHook {
   const { policy, pairing } = options
-  const clock = options.clock ?? Date.now
-  const write = options.write ?? ((line: string) => void process.stderr.write(`${line}\n`))
-  const refusals = new Map<string, number>()
+  const owns = (event: MessageEvent): boolean => isPolicyOwner(policy, event.platform, event.sender.id)
+  const isDm = (event: MessageEvent): boolean => event.channel.type === 'dm'
+  const authenticated = (keys: ReadonlySet<string>): Set<string> =>
+    new Set([...keys].filter((key) => isAuthenticatedSender(key.slice(0, Math.max(key.indexOf(':'), 0)))))
 
-  const forgetOld = (now: number): void => {
-    for (const [key, at] of refusals) if (now - at >= REFUSAL_MEMORY_MS) refusals.delete(key)
-  }
-  const refusalFor = (event: MessageEvent): string =>
-    policy.dmPolicy === 'pairing' && pairing !== undefined
-      ? pairingMessage(pairing.issue(event.platform, event.sender.id))
-      : policy.refusalText
-
-  /** A DM from someone neither an owner nor paired. */
-  const refuseDm = (event: MessageEvent, key: string, now: number): HookDecision | undefined => {
-    if (policy.dmPolicy === 'open') return undefined
-    // An unauthenticated sender can never be admitted, and a reply would go to the address it
-    // wrote, so answering would send mail or texts to whoever a forger names (backscatter).
-    if (policy.dmPolicy === 'disabled' || !isAuthenticatedSender(event.platform) || refusals.has(key)) return SILENT
-    // The reply is built first: a sender whose code could not be issued is not silenced for an hour.
-    const message = refusalFor(event)
-    refusals.set(key, now)
-    return { block: true, message }
-  }
-
-  const decide = async (event: MessageEvent): Promise<HookDecision | undefined> => {
-    const now = clock()
-    forgetOld(now)
-    const isOwner = isPolicyOwner(policy, event.platform, event.sender.id)
-    const isDm = event.channel.type === 'dm'
-    const text = event.text.trim()
-    if (isOwner && isDm && APPROVE_COMMAND.test(text) && !(options.execPending?.(event) === true && EXEC_ANSWER.test(text))) {
-      return approval(text, pairing)
+  // The gateway records a refusal before it asks the store for a code, so a failed issue() would
+  // silence the sender for the hour. Counting failures lets the hook start over without that memory.
+  let issueFailures = 0
+  const issuing: PairingStore | undefined =
+    pairing === undefined
+      ? undefined
+      : {
+          issue: (platform, senderId) => {
+            try {
+              return pairing.issue(platform, senderId)
+            } catch (error) {
+              issueFailures += 1
+              throw error
+            }
+          },
+          approve: (code) => pairing.approve(code),
+          isPaired: (platform, senderId) => pairing.isPaired(platform, senderId),
+        }
+  // The platform of the event being decided, so a log line names it as the app's own hook did.
+  const platformOfEvent = new AsyncLocalStorage<string>()
+  // A log sink that throws must not turn the silent block into the runner's chat reply.
+  const log = (line: string): void => {
+    const platform = platformOfEvent.getStore() ?? 'unknown'
+    try {
+      ;(options.write ?? ((text: string) => void process.stderr.write(`${text}\n`)))(`${HOOK_NAME}: ${platform}: ${line.replace(GATEWAY_FAILURE_PREFIX, '')}`)
+    } catch {
+      process.stderr.write(`${HOOK_NAME}: ${platform}: the hook failed and its log line could not be written\n`)
     }
-    const paired = isAuthenticatedSender(event.platform) && (pairing?.isPaired(event.platform, event.sender.id) ?? false)
-    const listed = isAuthenticatedSender(event.platform) && policy.allowed.has(senderKey(event.platform, event.sender.id))
-    if (isOwner || paired || listed) return undefined
-    return isDm ? refuseDm(event, senderKey(event.platform, event.sender.id), now) : SILENT
+  }
+
+  const build = (): GatewayHook => createAccessPolicyHook({
+    owners: authenticated(policy.owners),
+    allowed: authenticated(policy.allowed),
+    // Without a store `pairing` cannot issue codes: the refusal text answers instead.
+    dm: policy.dmPolicy === 'pairing' && pairing === undefined ? 'allowlist' : policy.dmPolicy,
+    groups: 'silent',
+    isAuthenticated: isAuthenticatedSender,
+    ...(issuing === undefined ? {} : { pairing: issuing }),
+    refusalText: policy.refusalText,
+    messages: {
+      pairingCode: (code) => `Pairing code: ${code}. Ask the owner to send /approve ${code} in a direct message.`,
+      invalidCode: INVALID_CODE,
+      failedSave: NOT_SAVED,
+      paired: PAIRED,
+      pairingOff: PAIRING_OFF,
+    },
+    ...(options.clock === undefined ? {} : { clock: options.clock }),
+    write: log,
+    passThrough: (event) => {
+      // The owner's group `/approve` is not a pairing: it goes on, as every other owner message does.
+      if (owns(event)) return !isDm(event)
+      return policy.dmPolicy === 'open' && isDm(event)
+    },
+  })
+  let gateway = build()
+  const decideByGateway = async (context: PreInboundContext): Promise<HookDecision | void> => {
+    const failures = issueFailures
+    const decision = await gateway.pre_inbound?.(context)
+    if (issueFailures !== failures) gateway = build()
+    return decision
+  }
+
+  const decide = async (context: PreInboundContext): Promise<HookDecision | void> => {
+    const { event } = context
+    try {
+      const text = event.text.trim()
+      if (owns(event) && isDm(event) && APPROVE_COMMAND.test(text) && !(options.execPending?.(event) === true && EXEC_ANSWER.test(text))) {
+        if (pairing === undefined) return { block: true, message: PAIRING_OFF }
+        // The gateway lets a bare `/approve` through to the agent; here it is a pairing command without its code.
+        if (!APPROVE_WITH_CODE.test(text)) return { block: true, message: INVALID_CODE }
+      }
+      return await decideByGateway(context)
+    } catch (error) {
+      // Never thrown on: the runner would answer "hook failed" into the chat, a group included (EC-1).
+      log(redactSecrets(error instanceof Error ? `${error.name}: ${error.message}` : String(error)))
+      return SILENT
+    }
   }
 
   return {
     name: HOOK_NAME,
-    async pre_inbound({ event }) {
-      try {
-        return await decide(event)
-      } catch (error) {
-        // Never thrown on: the runner would answer "hook failed" into the chat, a group included (EC-1).
-        const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-        try {
-          write(`${HOOK_NAME}: ${event.platform}: ${redactSecrets(reason)}`)
-        } catch {
-          // A failing log sink must not turn this silent block into the runner's chat reply.
-          process.stderr.write(`${HOOK_NAME}: ${event.platform}: the hook failed and its log line could not be written\n`)
-        }
-        return SILENT
-      }
-    },
+    pre_inbound: (context) => platformOfEvent.run(context.event.platform, () => decide(context)),
   }
 }
