@@ -62,4 +62,26 @@ describe('trust state through the framework consent adapter', () => {
     })
     expect(c.get().trusted).toBe(false)
   })
+
+  it('starts trusted when the directory is already trusted', () => {
+    m.level = 'trusted'
+    expect(mount().get().trusted).toBe(true)
+  })
+
+  it('does not persist trust again for a directory that is already trusted', () => {
+    m.level = 'trusted'
+    mount()
+    expect(m.trustDir).not.toHaveBeenCalled()
+  })
+
+  it('allows trust to be retried after a persistence failure', async () => {
+    m.trustDir.mockRejectedValueOnce(new Error('read-only'))
+    const c = mount()
+    await act(async () => {
+      await expect(c.get().trust()).rejects.toThrow('read-only')
+    })
+    await act(() => c.get().trust())
+    expect(m.trustDir).toHaveBeenCalledTimes(2)
+    expect(c.get().trusted).toBe(true)
+  })
 })

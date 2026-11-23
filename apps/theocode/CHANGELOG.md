@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - Pins `@theokit/sdk` 12.0.0 (#2744).
+- Tests: consent adapter and gates now cover initial trust, trust and approval retry after a persistence failure, accumulated refusals, fingerprint-to-spec mapping and gate refusals (hook refuse, trust quit) and prompt/warning/key-hint order (#2798). Mutation check was manual, not a tool: 2 mutations in `use-consent.ts` and 9 in `ConsentGates.tsx` (approve/refuse branches, trust quit, both error toasts, config reload, warning/hint order) were all caught; the framework reducer in `@theokit/tui` was not mutated.
 - Removes `config/layers.ts` and the unused `applySecurityFloor` wrapper, dead since `resolveConfig` moved to `defineLayeredConfig`; their tests now run through `resolveConfig` (#2714).
 - Tests: the collection-floor test gives its all-projects classifier the cwd a DEAD verdict carries, and the tool-header test imports without the `.ts` extension, so the typecheck passes again (#2854).
 
