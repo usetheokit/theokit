@@ -145,6 +145,7 @@
       "picomatch@>=4.0.0 <=4.0.7": "file:./vendor/picomatch"
     },
     "patchedDependencies": {
+      "@theokit/sdk@11.0.0": "patches/@theokit__sdk@11.0.0.patch",
       "@vitest/utils@4.1.12": "patches/@vitest__utils@4.1.12.patch"
     }
   },

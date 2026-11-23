@@ -6,7 +6,7 @@ import type { InlineSkill } from '@theokit/sdk'
 
 import type { EffectiveConfig, TrustPosture } from '../config/index.js'
 import { projectSourceAllowed } from '../config/project-source.js'
-import { agentsMdChain, loadRules, loadUserRules } from '../context/index.js'
+import { loadRules, loadUserRules } from '../context/index.js'
 import type { RulesLoad } from '../context/rules.js'
 import { parseHooks } from '../hooks/index.js'
 import type { McpScopes } from '../mcp-scopes.js'
@@ -40,7 +40,6 @@ function configuredHookEvents(cfg: EffectiveConfig): readonly string[] {
  */
 function wiringRecord(
   posture: TrustPosture,
-  cwd: string,
   cfg: EffectiveConfig,
   mcp: McpScopes,
   /**
@@ -57,6 +56,7 @@ function wiringRecord(
    * has already answered, which is the disagreement this whole record exists to prevent.
    */
   rules: ReturnType<typeof wiredCapabilities>['rules'],
+  agentsMdFiles: readonly string[],
 ): ReturnType<typeof wiredCapabilities> {
   return wiredCapabilities({
     posture,
@@ -68,9 +68,9 @@ function wiringRecord(
     operatorSkills,
     ...(rules !== undefined ? { rules } : {}),
     hookEvents: configuredHookEvents(cfg),
-    // The same walk `projectDocument` runs below, so the record and the prompt cannot name
+    // The same load the prompt was composed from (the builder reads it once), so the record and the prompt cannot name
     // different files. Paths only — the record is a listing, never a copy of the instructions.
-    agentsMdFiles: agentsMdChain(cwd),
+    agentsMdFiles,
     // Already carries the session override — `chatContext` applied it once, above.
     sandboxMode: cfg.sandbox_mode,
   })
@@ -140,16 +140,18 @@ export function publishWiring(
     operatorSkills: readonly InlineSkill[]
     rules: ReturnType<typeof bothRuleRoots>
     aggregateCuts?: readonly InstructionCut[]
+    /** The instruction files the prompt was composed from, loaded once by the builder. */
+    agentsMdFiles: readonly string[]
   },
   compiled?: CompiledWiring,
 ): void {
   const record = wiringRecord(
     from.posture,
-    from.cwd,
     from.cfg,
     from.mcp,
     from.operatorSkills.map((s) => s.name),
     withAggregateCut(from.rules.record, from.aggregateCuts ?? []),
+    from.agentsMdFiles,
   )
   onWired?.(compiled === undefined ? record : withCompiledWiring(record, compiled))
 }
