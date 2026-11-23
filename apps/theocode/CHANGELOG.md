@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- Slash commands: `commands/registry.ts` builds its routing table with `createCommandRegistry`; `/exit` is declared as an alias of `/quit` and Codex-only names as hidden, so alias and hidden-name resolution come from `@theokit/agents/commands` (#2606).
 - Model routing: `routeToCredential` and the subscription-route check use the shared `modelForCredential` / `isSubscriptionRoute` helpers from `@theokit/agents/auth` (#2576).
 
 ### Changed
