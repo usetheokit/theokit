@@ -1,11 +1,9 @@
-import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { createInterface } from 'node:readline/promises'
 import type { Readable, Writable } from 'node:stream'
 
 import { parseAuthorizationPolicy } from './authorization/policy.js'
-import { assertWritable, configurationPath, writeConfiguration } from './config-file.js'
+import { asConfigError, assertWritable, configurationPath, theoclawConfig } from './config-file.js'
 import { TheoClawConfigError } from './control-plane/errors.js'
 import { readControlPlaneSettings, requireModel } from './control-plane/settings.js'
 import { resolveInstance, type TheoClawInstance } from './instance.js'
@@ -42,14 +40,6 @@ export interface OnboardIo {
 const DEFAULT_MODEL = 'openrouter/google/gemini-2.5-flash-lite'
 const DEFAULT_PORT = '8787'
 
-interface Answers {
-  readonly model: string
-  readonly key: string
-  readonly port: string
-  readonly owners: string
-  readonly workspace: string
-}
-
 function defaultWorkspace(io: OnboardIo, instance: TheoClawInstance): string {
   if (instance.workspace !== undefined) return instance.workspace
   const data = io.env.XDG_DATA_HOME?.trim() || join(io.homeDir, '.local', 'share')
@@ -61,93 +51,26 @@ function required(value: string | undefined, flag: string): string {
   return value
 }
 
-function fromFlags(opts: OnboardOptions, io: OnboardIo, instance: TheoClawInstance): Answers {
+/** The keys onboarding collects, in the order it asks; the generated token is never asked for. */
+const ONBOARD_KEYS = ['THEOCLAW_MODEL', 'OPENROUTER_API_KEY', 'THEOCLAW_PORT', 'THEOCLAW_OWNERS', 'THEOCLAW_WORKSPACE', 'THEOCLAW_STATE_DIR', 'THEOCLAW_CONTROL_TOKEN'] as const
+type OnboardKey = (typeof ONBOARD_KEYS)[number]
+
+/** The model key's variable and the values the flags give (`--yes`), checked before anything is asked. */
+function fromFlags(opts: OnboardOptions, io: OnboardIo, instance: TheoClawInstance): { variable: string; answers: Partial<Record<OnboardKey, string>> } {
   const variable = required(opts.apiKeyEnv, '--api-key-env <NAME>')
   const key = io.env[variable]
   if (key === undefined || key === '') {
     throw new TheoClawConfigError(`--api-key-env names ${variable}, which is not set`, { variable })
   }
   return {
-    model: required(opts.model, '--model'),
-    key,
-    port: required(opts.port, '--port'),
-    owners: required(opts.owners, '--owners'),
-    workspace: opts.workspace ?? defaultWorkspace(io, instance),
+    variable,
+    answers: {
+      THEOCLAW_MODEL: required(opts.model, '--model'),
+      THEOCLAW_PORT: required(opts.port, '--port'),
+      THEOCLAW_OWNERS: required(opts.owners, '--owners'),
+      THEOCLAW_WORKSPACE: opts.workspace ?? defaultWorkspace(io, instance),
+    },
   }
-}
-
-async function question(io: OnboardIo, prompt: string, fallback?: string): Promise<string> {
-  // One interface per question: an interface left open in terminal mode echoes every keypress,
-  // the key's included, so it is closed before the key is read.
-  const rl = createInterface({ input: io.stdin, output: io.stdout, terminal: true })
-  try {
-    const answer = (await rl.question(fallback === undefined ? `${prompt}: ` : `${prompt} [${fallback}]: `)).trim()
-    return answer === '' && fallback !== undefined ? fallback : answer
-  } finally {
-    rl.close()
-  }
-}
-
-/** The key, read in raw mode with nothing written back; Enter is `\r` or `\n`, Ctrl-C aborts. */
-async function secret(io: OnboardIo, prompt: string): Promise<string> {
-  const input = io.stdin
-  const setRawMode = input.setRawMode?.bind(input)
-  if (setRawMode === undefined) throw new TheoClawConfigError('theoclaw onboard needs a terminal; pass --yes and flags instead')
-  io.stdout.write(`${prompt}: `)
-  setRawMode(true)
-  input.resume()
-  try {
-    return await new Promise<string>((resolve, reject) => {
-      let value = ''
-      const onData = (chunk: Buffer | string): void => {
-        for (const character of chunk.toString()) {
-          if (character === '\r' || character === '\n') return finish(() => resolve(value))
-          if (character === '\u0003') return finish(() => reject(new TheoClawConfigError('theoclaw onboard: interrupted')))
-          value = character === '\u007f' || character === '\b' ? value.slice(0, -1) : value + character
-        }
-      }
-      const finish = (settle: () => void): void => {
-        input.removeListener('data', onData)
-        settle()
-      }
-      input.on('data', onData)
-    })
-  } finally {
-    setRawMode(false)
-    input.pause()
-    io.stdout.write('\n')
-  }
-}
-
-async function ask(io: OnboardIo, instance: TheoClawInstance): Promise<Answers> {
-  const model = await question(io, 'Model', DEFAULT_MODEL)
-  const key = await secret(io, 'OpenRouter API key (not shown)')
-  const port = await question(io, 'Port', DEFAULT_PORT)
-  const owners = await question(io, 'Owners, as platform:senderId separated by commas')
-  // A profile owns its workspace, so there is nothing to ask.
-  const workspace = instance.workspace ?? (await question(io, 'Workspace directory', defaultWorkspace(io, instance)))
-  return { model, key, port, owners, workspace }
-}
-
-function entriesFor(answers: Answers, io: OnboardIo, instance: TheoClawInstance): Record<string, string> {
-  if (instance.workspace !== undefined && answers.workspace !== instance.workspace) {
-    throw new TheoClawConfigError(`THEOCLAW_PROFILE sets the workspace to ${instance.workspace}; unset the profile to choose another`, {
-      variable: 'THEOCLAW_WORKSPACE',
-    })
-  }
-  const state = io.env.XDG_STATE_HOME?.trim() || join(io.homeDir, '.local', 'state')
-  const entries: Record<string, string> = {
-    THEOCLAW_MODEL: answers.model,
-    OPENROUTER_API_KEY: answers.key,
-    THEOCLAW_PORT: answers.port,
-    THEOCLAW_OWNERS: answers.owners,
-    THEOCLAW_WORKSPACE: answers.workspace,
-    THEOCLAW_STATE_DIR: join(state, 'theoclaw'),
-    THEOCLAW_CONTROL_TOKEN: randomBytes(24).toString('hex'),
-  }
-  // A profile sets what it owns itself and refuses an explicit value beside it (src/instance.ts).
-  for (const name of Object.keys(instance.overrides)) delete entries[name]
-  return entries
 }
 
 /**
@@ -173,14 +96,52 @@ export async function onboard(opts: OnboardOptions, io: OnboardIo): Promise<stri
   }
   if (!opts.yes && !io.isTTY) throw new TheoClawConfigError('theoclaw onboard needs a terminal; pass --yes and flags instead')
   const instance = resolveInstance(io.env, { homeDir: io.homeDir })
-  const answers = opts.yes ? fromFlags(opts, io, instance) : await ask(io, instance)
-  const entries = entriesFor(answers, io, instance)
-  assertWritable(entries)
-  validate(entries, io, answers.workspace)
-  mkdirSync(answers.workspace, { recursive: true, mode: 0o700 })
-  const stateDir = entries.THEOCLAW_STATE_DIR ?? instance.overrides.THEOCLAW_STATE_DIR
-  if (stateDir !== undefined) mkdirSync(stateDir, { recursive: true, mode: 0o700 })
-  await writeConfiguration(path, entries, { force: opts.force, ownsDirectory: !io.env.THEOCLAW_CONFIG?.trim() })
+  const flags = opts.yes ? fromFlags(opts, io, instance) : undefined
+  const workspace = flags?.answers.THEOCLAW_WORKSPACE ?? instance.workspace ?? defaultWorkspace(io, instance)
+  if (instance.workspace !== undefined && workspace !== instance.workspace) {
+    throw new TheoClawConfigError(`THEOCLAW_PROFILE sets the workspace to ${instance.workspace}; unset the profile to choose another`, {
+      variable: 'THEOCLAW_WORKSPACE',
+    })
+  }
+  const state = io.env.XDG_STATE_HOME?.trim() || join(io.homeDir, '.local', 'state')
+  // A profile sets what it owns itself and refuses an explicit value beside it (src/instance.ts).
+  const only = ONBOARD_KEYS.filter((key) => !Object.hasOwn(instance.overrides, key))
+  // A profile owns its workspace, so there is nothing to ask.
+  let refusal: unknown
+  try {
+    await theoclawConfig.onboard(
+      { stdin: io.stdin, stdout: io.stdout, env: io.env, homeDir: io.homeDir },
+      {
+        interactive: !opts.yes,
+        force: opts.force,
+        only,
+        answers: { ...flags?.answers, THEOCLAW_STATE_DIR: join(state, 'theoclaw') },
+        ...(flags === undefined ? {} : { secretFromEnv: { OPENROUTER_API_KEY: flags.variable } }),
+        prompts: {
+          THEOCLAW_MODEL: { question: 'Model', default: DEFAULT_MODEL },
+          OPENROUTER_API_KEY: { question: 'OpenRouter API key (not shown)' },
+          THEOCLAW_PORT: { question: 'Port', default: DEFAULT_PORT },
+          THEOCLAW_OWNERS: { question: 'Owners, as platform:senderId separated by commas' },
+          THEOCLAW_WORKSPACE: { question: 'Workspace directory', default: workspace },
+        },
+        validate: (entries) => {
+          // The package hides what validation threw; the refusal the start would make is kept and rethrown below.
+          try {
+            assertWritable(entries)
+            validate(entries, io, entries.THEOCLAW_WORKSPACE ?? workspace)
+            mkdirSync(entries.THEOCLAW_WORKSPACE ?? workspace, { recursive: true, mode: 0o700 })
+            const stateDir = entries.THEOCLAW_STATE_DIR ?? instance.overrides.THEOCLAW_STATE_DIR
+            if (stateDir !== undefined) mkdirSync(stateDir, { recursive: true, mode: 0o700 })
+          } catch (error) {
+            refusal = error
+            throw error
+          }
+        },
+      },
+    )
+  } catch (error) {
+    throw refusal ?? asConfigError(error, path)
+  }
   io.stdout.write(`theoclaw: configuration written to ${path}\n`)
   return path
 }

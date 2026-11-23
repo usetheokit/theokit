@@ -35,7 +35,8 @@
     },
     "./instance-config": {
       "types": "./dist/instance-config/index.d.ts",
-      "import": "./dist/instance-config/index.js"
+      "import": "./dist/instance-config/index.js",
+      "default": "./dist/instance-config/index.js"
     },
     "./discovery": {
       "types": "./dist/discovery/index.d.ts",
