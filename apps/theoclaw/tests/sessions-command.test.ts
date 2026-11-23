@@ -1,7 +1,7 @@
 import { lstatSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
 import { harness, scratchDir } from './support/cli-harness.js'
