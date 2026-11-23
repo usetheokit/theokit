@@ -1,18 +1,16 @@
-import { existsSync, mkdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
-
-import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { configurationPath, loadConfiguration } from './config-file.js'
 import { resolveInstance } from './instance.js'
-import type { Runner } from './run-command.js'
 
 export type { Runner, RunResult } from './run-command.js'
 
 /**
- * What the three daemon backends share (B-374, B-692): the injected `Runner`, the process IO, the
- * instance's label and configuration path, and the checks every install makes before it writes.
+ * What the daemon commands share (B-374, B-692): the process IO, the instance's label and
+ * configuration path, and the checks every install makes before it writes. The service managers
+ * themselves are `@theokit/host/service`'s.
  */
 
 export interface DaemonIo {
@@ -44,13 +42,6 @@ export interface InstallTarget extends DaemonTarget {
   readonly workingDirectory: string
 }
 
-/** One platform's service manager. */
-export interface DaemonBackend {
-  install(io: DaemonIo, runner: Runner, target: InstallTarget): Promise<number>
-  uninstall(io: DaemonIo, runner: Runner, target: DaemonTarget): Promise<number>
-  status(io: DaemonIo, runner: Runner, target: DaemonTarget): Promise<number>
-}
-
 /** The instance's label and its absolute configuration path. */
 export function resolveTarget(io: DaemonIo): DaemonTarget {
   const instance = resolveInstance(io.env, { homeDir: io.homeDir })
@@ -74,13 +65,7 @@ export function checkInstallable(io: DaemonIo): InstallTarget | undefined {
   return { ...target, workingDirectory: settings.THEOCLAW_WORKSPACE ?? target.workspace ?? io.homeDir }
 }
 
-/** The mode a plain `writeFile` gives: 0666 less the umask. The SDK sets its `mode` exactly, so it is passed on. */
-export function umaskFileMode(): number {
-  return 0o666 & ~process.umask()
-}
-
-/** Writes beside the destination and renames, so a reader never sees half a definition. */
-export async function writeAtomically(path: string, content: string): Promise<void> {
-  mkdirSync(dirname(path), { recursive: true })
-  await replaceFileAtomic(path, content, { mode: umaskFileMode() })
+/** The launchd log the service writes and `theoclaw logs` reads. */
+export function logPath(label: string, home: string): string {
+  return join(home, 'Library', 'Logs', 'theoclaw', `${label}.log`)
 }

@@ -78,7 +78,7 @@ async function serve(handler: (request: Request) => Promise<Response>): Promise<
   return `http://127.0.0.1:${server.address().port}`
 }
 
-function shutdownHarness(
+async function shutdownHarness(
   stopAll: () => Promise<void> = async () => undefined,
   close: () => Promise<void> = async () => undefined,
 ) {
@@ -87,7 +87,7 @@ function shutdownHarness(
   const closeServer = vi.fn(close)
   const stop = vi.fn(stopAll)
   const lines: string[] = []
-  installShutdown({ signals, stopAll: stop, closeServer, exit, write: (line) => lines.push(line) })
+  await installShutdown({ signals, stopAll: stop, closeServer, exit, write: (line) => lines.push(line) })
   return { signals, exit, closeServer, stopAll: stop, lines }
 }
 
@@ -115,7 +115,7 @@ describe('the process entry', () => {
   })
 
   it('stops every started runner on SIGTERM', async () => {
-    const harness = shutdownHarness()
+    const harness = await shutdownHarness()
 
     harness.signals.emit('SIGTERM')
 
@@ -123,6 +123,26 @@ describe('the process entry', () => {
     expect(harness.stopAll).toHaveBeenCalledTimes(1)
     expect(harness.closeServer).toHaveBeenCalledTimes(1)
     expect(harness.exit).toHaveBeenCalledWith(0)
+  })
+
+  it('drains the runners before it closes the control plane, and a runner failure is written', async () => {
+    const order: string[] = []
+    const harness = await shutdownHarness(
+      async () => {
+        order.push('runners')
+        throw new Error('drain failed')
+      },
+      async () => {
+        order.push('control plane')
+      },
+    )
+
+    harness.signals.emit('SIGTERM')
+
+    await waitFor(() => harness.exit.mock.calls.length === 1, 1000, 'exit after SIGTERM')
+    expect(order).toEqual(['runners', 'control plane'])
+    expect(harness.lines).toEqual(['theoclaw: stopping the runners failed: drain failed'])
+    expect(harness.exit).toHaveBeenCalledWith(1)
   })
 
   it('unconfigured platform answers 404 and unstarted answers 503', async () => {
@@ -148,7 +168,7 @@ describe('the process entry', () => {
 
   it('a second signal during shutdown is ignored', async () => {
     const gate = deferred<void>()
-    const harness = shutdownHarness(() => gate.promise)
+    const harness = await shutdownHarness(() => gate.promise)
 
     harness.signals.emit('SIGTERM')
     harness.signals.emit('SIGTERM')
@@ -156,11 +176,11 @@ describe('the process entry', () => {
 
     await waitFor(() => harness.exit.mock.calls.length === 1, 1000, 'exit after SIGTERM')
     expect(harness.stopAll).toHaveBeenCalledTimes(1)
-    expect(harness.lines).toEqual(['theoclaw: SIGTERM ignored, already stopping'])
+    expect(harness.lines).toEqual(['theoclaw: signal ignored, already stopping'])
   })
 
   it('a runner that fails to stop still closes the server and exits 1', async () => {
-    const harness = shutdownHarness(async () => {
+    const harness = await shutdownHarness(async () => {
       throw new Error('drain failed')
     })
 
@@ -285,7 +305,7 @@ describe('the process entry', () => {
   })
 
   it('a server that fails to close still exits 1', async () => {
-    const harness = shutdownHarness(undefined, async () => {
+    const harness = await shutdownHarness(undefined, async () => {
       throw new Error('server not running')
     })
 
@@ -296,9 +316,9 @@ describe('the process entry', () => {
     expect(harness.lines).toEqual(['theoclaw: closing the control plane failed: server not running'])
   })
 
-  it('removing the shutdown listeners leaves the signal source as it was', () => {
+  it('removing the shutdown listeners leaves the signal source as it was', async () => {
     const signals = new EventEmitter()
-    const remove = installShutdown({
+    const remove = await installShutdown({
       signals,
       stopAll: async () => undefined,
       closeServer: async () => undefined,
@@ -383,7 +403,7 @@ describe('the process entry', () => {
         telegram: { chatId: 1, messageId: 1, raw: null },
       })
       await waitFor(() => handled === 1, 1000, 'the turn to start')
-      const harness = shutdownHarness(() => loop.stopAll())
+      const harness = await shutdownHarness(() => loop.stopAll())
 
       harness.signals.emit('SIGTERM')
       await waitFor(() => harness.stopAll.mock.calls.length === 1, 1000, 'stopAll to start')

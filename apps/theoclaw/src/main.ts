@@ -6,6 +6,7 @@ import { homedir } from 'node:os'
 import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
 import { resolveSecretRefs } from '@theokit/agents/auth'
+import { restartSelf, waitForPredecessor } from '@theokit/host/service'
 
 import { startTheoClaw } from './composition.js'
 import { createObjectGenerator } from './workflows/object-generator.js'
@@ -14,7 +15,6 @@ import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from 
 import { loadConfiguration } from './config-file.js'
 import { teeToLogFile } from './ops/log-tee.js'
 import { watchConfiguration } from './ops/hot-reload.js'
-import { RESTART_EXIT_CODE, spawnSuccessor, supervised, waitForPredecessor } from './ops/self-restart.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
 import { resolveInstance, type TheoClawInstance } from './instance.js'
@@ -74,9 +74,13 @@ try {
       write: (line) => process.stderr.write(`${line}\n`),
       restart: () => {
         // Under a supervisor the exit alone is the restart; otherwise this process starts its own successor.
-        if (supervised(process.env, process.platform)) restartCode = RESTART_EXIT_CODE
-        else if (!spawnSuccessor(startEnv)) return process.stderr.write('config: cannot restart; the change needs a restart by the owner\n')
-        process.kill(process.pid, 'SIGTERM')
+        void restartSelf({ startEnv, env: process.env, platform: process.platform }).then(
+          (outcome) => {
+            if (outcome.kind === 'exit') restartCode = outcome.code
+            process.kill(process.pid, 'SIGTERM')
+          },
+          () => process.stderr.write('config: cannot restart; the change needs a restart by the owner\n'),
+        )
       },
     })
   }

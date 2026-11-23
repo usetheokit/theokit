@@ -3,8 +3,10 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { daemonInstall, unitFor, unitPath } from '../src/daemon.js'
+import { daemonInstall, definitionPath } from '../src/daemon.js'
 import { harness, systemctl } from './support/daemon-harness.js'
+
+const unitPath = (label: string, home: string): string => definitionPath('linux', label, home)
 
 describe('theoclaw daemon unit file', () => {
   it('writes the unit with the mode the umask allows, also when it puts the previous unit back', async () => {
@@ -48,18 +50,5 @@ describe('theoclaw daemon unit file', () => {
     expect(await daemonInstall(h.io, h.runner)).toBe(0)
     const unit = readFileSync(unitPath('theoclaw-a', h.home), 'utf8')
     expect(unit).toMatch(new RegExp(`^WorkingDirectory=${join(h.home, '.theokit', 'profiles', 'a', 'workspace')}$`, 'm'))
-  })
-
-  it('Environment and WorkingDirectory keep a literal $ and WorkingDirectory is never quoted', () => {
-    const unit = unitFor({ label: 'theoclaw', nodePath: '/n', entryPath: '/e', configPath: '/c/$x b.env', workingDirectory: '/home/a b/100%' })
-    // systemd.exec(5): Environment= expands no variable and WorkingDirectory= removes no quotes.
-    expect(unit).toContain('Environment="THEOCLAW_CONFIG=/c/$x b.env"')
-    expect(unit).toMatch(/^WorkingDirectory=\/home\/a b\/100%%$/m)
-  })
-
-  it('a value holding a line break is refused, since it would end the directive', () => {
-    for (const bad of [{ nodePath: '/n\nExecStartPre=/x' }, { configPath: '/c\r.env' }, { workingDirectory: '/w\n' }]) {
-      expect(() => unitFor({ label: 'theoclaw', nodePath: '/n', entryPath: '/e', configPath: '/c', workingDirectory: '/w', ...bad })).toThrow(/line break/)
-    }
   })
 })

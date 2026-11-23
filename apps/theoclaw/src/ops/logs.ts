@@ -6,7 +6,7 @@ import { redactSecrets } from '@theokit/gateway'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { loadConfiguration } from '../config-file.js'
 import { UsageError } from '../cli-args.js'
-import { logPath } from '../daemon-launchd.js'
+import { logPath } from '../daemon-common.js'
 import { resolveInstance } from '../instance.js'
 import type { Runner } from '../run-command.js'
 

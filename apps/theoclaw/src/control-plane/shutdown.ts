@@ -1,3 +1,5 @@
+import { createAppHost } from '@theokit/host/app-host'
+
 import { describeError } from './errors.js'
 
 export type ShutdownSignal = 'SIGINT' | 'SIGTERM'
@@ -18,48 +20,51 @@ export interface ShutdownOptions {
   readonly write: (line: string) => void
 }
 
+/** The whole-teardown bound: the runners drain their in-flight turns, which takes longer than the host's 10 s default. */
+const STOP_TIMEOUT_MS = 60_000
+
+const FAILED: Readonly<Record<string, string>> = {
+  runners: 'stopping the runners failed',
+  'control plane': 'closing the control plane failed',
+}
+
 /**
  * On the first SIGINT or SIGTERM: stop every runner, then close the listener, then exit 0. A
  * `stopAll` that rejects, or a listener that fails to close, is written and the exit code is 1;
  * the listener is closed even when `stopAll` rejected. A second signal while stopping is written
- * and ignored. Returns what removes the listeners.
+ * and ignored. Resolves, once the signals are listened to, with what removes the listeners.
+ *
+ * The teardown is `@theokit/host`'s `createAppHost`, which stops services in reverse order of their
+ * registration: the control plane is registered first so it is stopped last.
  *
  * The channel loop's `stopAll` does not reject: it writes a runner whose `stop()` rejects and goes
  * on with the others. A failing `disconnect()` is not seen at all, because `GatewayRunner.stop()`
  * in `@theokit/gateway` 0.11 discards it, so a platform that failed to disconnect still exits 0.
  */
-export function installShutdown(options: ShutdownOptions): () => void {
-  let stopping = false
-  const shutdown = async (): Promise<number> => {
-    let code = 0
-    try {
-      await options.stopAll()
-    } catch (error) {
-      code = 1
-      options.write(`theoclaw: stopping the runners failed: ${describeError(error)}`)
-    }
-    try {
-      await options.closeServer()
-    } catch (error) {
-      code = 1
-      options.write(`theoclaw: closing the control plane failed: ${describeError(error)}`)
-    }
-    return code
-  }
-  const listenerFor = (signal: ShutdownSignal) => (): void => {
-    if (stopping) {
-      options.write(`theoclaw: ${signal} ignored, already stopping`)
-      return
-    }
-    stopping = true
-    void shutdown().then(options.exit)
-  }
-  const onSigint = listenerFor('SIGINT')
-  const onSigterm = listenerFor('SIGTERM')
-  options.signals.on('SIGINT', onSigint)
-  options.signals.on('SIGTERM', onSigterm)
+export async function installShutdown(options: ShutdownOptions): Promise<() => void> {
+  let disarmed = false
+  const listeners: [ShutdownSignal, () => void][] = []
+  const host = createAppHost({
+    // Tracked here so that removing them is synchronous; the host only drops its own at close.
+    signals: {
+      on: (event, listener) => {
+        listeners.push([event, listener])
+        options.signals.on(event, listener)
+      },
+      off: (event, listener) => options.signals.off(event, listener),
+    },
+    exit: options.exit,
+    stopTimeoutMs: STOP_TIMEOUT_MS,
+    onError: (step, error) => {
+      if (step === 'signal') options.write('theoclaw: signal ignored, already stopping')
+      else options.write(`theoclaw: ${FAILED[step] ?? `stopping ${step} failed`}: ${describeError(error)}`)
+    },
+  })
+  host.service('control plane', () => undefined, () => (disarmed ? undefined : options.closeServer()))
+  host.service('runners', () => undefined, () => (disarmed ? undefined : options.stopAll()))
+  await host.start()
   return () => {
-    options.signals.off('SIGINT', onSigint)
-    options.signals.off('SIGTERM', onSigterm)
+    disarmed = true
+    for (const [event, listener] of listeners.splice(0)) options.signals.off(event, listener)
   }
 }
