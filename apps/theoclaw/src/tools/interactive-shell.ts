@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import type { InteractiveBackend } from '@theokit/agents/interactive'
 import { createConfinedPtyBackend, probeConfinement } from '@theokit/sdk-pty'
+import type { ConfinedPtyBackendOptions } from '@theokit/sdk-pty'
 
 import type { ToolSettings } from './tool-settings.js'
 
@@ -11,6 +12,8 @@ export interface InteractiveDeps {
   readonly warn?: (message: string) => void
   /** The environment the shell's kept variables come from. Default: the process's. */
   readonly processEnv?: Readonly<Record<string, string | undefined>>
+  /** Test seam: the backend that actually spawns. */
+  readonly createInner?: ConfinedPtyBackendOptions['createInner']
 }
 
 /** A confined backend for these settings: fixed root, scrubbed environment, the session's sandbox. Not yet probed. */
@@ -19,6 +22,7 @@ export function createConfinedInteractive(settings: ToolSettings, deps: Interact
     root: settings.toolRoot,
     mode: settings.mode,
     sourceEnv: deps.processEnv ?? process.env,
+    ...(deps.createInner === undefined ? {} : { createInner: deps.createInner }),
   })
 }
 

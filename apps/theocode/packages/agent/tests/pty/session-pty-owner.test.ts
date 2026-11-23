@@ -1,6 +1,13 @@
 /**
- * B-014 — tightening the sandbox reaches the sessions already running. The owner is the framework's
- * `createPtyOwner`; this pins the configuration TheoCode gives it and the transitions it relies on.
+ * B-014 — tightening the sandbox reaches the sessions already running.
+ *
+ * `wrapCommand` reads the current mode at call time, so a NEW command always runs under the current
+ * confinement. What `setMode` could not reach is a process already spawned: a `bash -i` started
+ * under `danger-full-access` keeps that wrap for its whole life. The owner is the framework's
+ * `createPtyOwner`, configured as TheoCode configures it.
+ *
+ * Loosening is deliberately not disruptive: a session running under a stricter wrap than the current
+ * mode is not a hazard, and killing the user's REPL to grant it more access would be gratuitous.
  */
 import { createPtyOwner } from '@theokit/agents-pty'
 import type { OwnedPtyBackend } from '@theokit/agents-pty'
@@ -23,22 +30,29 @@ function owner(mode: 'read-only' | 'workspace-write' | 'danger-full-access') {
   return { o, created }
 }
 
-describe('B-014 — the sandbox mode and the live sessions', () => {
-  it('tightening kills the running backend and installs a fresh one', () => {
+describe('B-014 — tightening the sandbox ends live sessions', () => {
+  it('test_tightening_kills_the_running_backend', () => {
     const { o, created } = owner('danger-full-access')
     o.setMode('read-only')
     expect(created[0]?.killAll).toHaveBeenCalled()
+  })
+
+  it('test_tightening_installs_a_fresh_backend', () => {
+    const { o, created } = owner('danger-full-access')
+    o.setMode('workspace-write')
     expect(created).toHaveLength(2)
     expect(o.backend()).toBe(created[1] as never)
   })
+})
 
-  it('loosening leaves a running session alone', () => {
+describe('B-014 — loosening and no-ops leave sessions alone', () => {
+  it('test_loosening_does_not_kill_a_running_session', () => {
     const { o, created } = owner('read-only')
     o.setMode('danger-full-access')
     expect(created[0]?.killAll).not.toHaveBeenCalled()
   })
 
-  it('setting the same mode is a no-op', () => {
+  it('test_setting_the_same_mode_is_a_no_op', () => {
     const { o, created } = owner('workspace-write')
     o.setMode('workspace-write')
     expect(created[0]?.killAll).not.toHaveBeenCalled()

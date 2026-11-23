@@ -76,6 +76,30 @@ describe('the interactive shell in the session sandbox', () => {
     backend.kill(sessionId)
   })
 
+  it('the shell environment leaves out TMPDIR and the XDG variables but keeps the allowlist', async () => {
+    const settings = resolveToolSettings({ THEOCLAW_HOST_TOOLS: 'on' }, workspace(), quiet)
+    const seen: { command: string; cwd: string | undefined }[] = []
+    const backend = createConfinedInteractive(settings, {
+      ...quiet,
+      processEnv: { PATH: '/usr/bin', TMPDIR: '/tmp/x', XDG_CONFIG_HOME: '/x', XDG_DATA_HOME: '/y', MODEL_KEY: 'sekrit' },
+      createInner: () =>
+        new (class extends InteractiveBackend {
+          startInteractive = (command: string, opts?: { cwd?: string }) => {
+            seen.push({ command, cwd: opts?.cwd })
+            return Promise.resolve({ sessionId: 's', output: '' })
+          }
+          writeStdin = () => Promise.resolve({ output: '', alive: false })
+          kill = () => undefined
+        })(),
+    })
+    await backend.startInteractive('true', { cwd: '/' })
+    const { command, cwd } = seen[0]!
+    expect(cwd).toBe(settings.toolRoot)
+    expect(command).toContain('PATH=')
+    expect(command).toContain(`HOME='${settings.toolRoot}'`)
+    for (const dropped of ['TMPDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'MODEL_KEY', 'sekrit']) expect(command).not.toContain(dropped)
+  })
+
   it('is registered only when the probe passed: not without host tools, not without an enforced sandbox', async () => {
     const off = resolveToolSettings({}, workspace(), { detect: notEnforced, ...quiet })
     expect((await withInteractiveShell(off, quiet)).interactive).toBeUndefined()
