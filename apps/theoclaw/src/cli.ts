@@ -255,12 +255,12 @@ function backupCommand(name: 'backup' | 'restore'): Command {
     try {
       if (location !== undefined) {
         if (name === 'backup') {
-          const { files } = backupInstance(io.env, dir, { homeDir: io.homeDir, live })
+          const { files } = await backupInstance(io.env, dir, { homeDir: io.homeDir, live })
           const archive = storeBackup(io.env, io.homeDir, location, dir)
           io.stdout.write(`theoclaw: backed up ${files.length} files to ${location} (${archive})\n`)
         } else {
           fetchBackup(io.env, io.homeDir, location, dir)
-          const { files } = restoreInstance(io.env, dir, { homeDir: io.homeDir })
+          const { files } = await restoreInstance(io.env, dir, { homeDir: io.homeDir })
           io.stdout.write(`theoclaw: restored ${files.length} files from ${location}\n`)
         }
         return 0
@@ -269,7 +269,7 @@ function backupCommand(name: 'backup' | 'restore'): Command {
       if (name === 'restore' && target)
         await downloadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
       const run = name === 'backup' ? backupInstance : restoreInstance
-      const { files } = run(io.env, dir, { homeDir: io.homeDir, live })
+      const { files } = await run(io.env, dir, { homeDir: io.homeDir, live })
       if (name === 'backup' && target) await uploadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
       io.stdout.write(
         `theoclaw: ${name === 'backup' ? 'backed up' : 'restored'} ${files.length} files ${name === 'backup' ? 'to' : 'from'} ${dir}\n`,

@@ -66,6 +66,7 @@
     "@theokit/gateway-x": "0.4.0",
     "@theokit/gateway-yuanbao": "0.3.0",
     "@theokit/gateway-zalo": "0.3.0",
+    "@theokit/host": "workspace:*",
     "@theokit/http": "workspace:*",
     "@theokit/presenter": "workspace:*",
     "pg": "8.23.0",
