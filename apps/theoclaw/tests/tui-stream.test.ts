@@ -1,38 +1,56 @@
 /**
- * B-376 — the TUI's frame adapter (`src/tui/frames.ts`): how a turn's control frames become the stream
- * `AgentSession` runs, and where Esc (the abort signal) reaches the instance. Unit tests, no socket.
+ * B-376 — the TUI's frame adapter (`src/tui/frames.ts`): how a turn's control frames become the
+ * `AgentStreamSource` that `@theokit/tui`'s `agentStreamReducer` folds, and which frame-level notices
+ * TheoClaw adds and where they sit in the turn. Unit tests, no socket and no terminal.
  */
 import { type AgentStreamEvent, agentStreamReducer, initialAgentStreamState } from '@theokit/tui'
 import { describe, expect, it } from 'vitest'
 
-import type { ControlClient, ControlFrame } from '../src/control-client/control-client.js'
-import { controlStream } from '../src/tui/frames.js'
+import { deferred, waitFor } from './fakes.js'
+
+import { type ControlClient, type ControlFrame, nextArrival } from '../src/control-client/control-client.js'
+import {
+  controlStream,
+  createTurnInbox,
+  nextSessionId,
+  type TranscriptEntry,
+  type TurnNotice,
+  turnEntries,
+} from '../src/tui/frames.js'
 
 const SESSION = 'owner'
 
+/** A turn event frame; the event's shape is the SDK translator's, so the test spells only its fields. */
 function event(fields: Record<string, unknown>): ControlFrame {
   return { type: 'event', session: SESSION, event: fields } as unknown as ControlFrame
 }
 
-const DONE: ControlFrame = { type: 'done', session: SESSION }
-
+/** Run a turn's frames as the TUI does: the stream folds in the framework reducer, ending with its done. */
 async function run(frames: readonly ControlFrame[], fail?: Error) {
-  const interrupts: string[] = []
+  const notices: TurnNotice[] = []
+  let ended = 0
   const client = {
     chat: async function* () {
       yield* frames
       if (fail !== undefined) throw fail
     },
-    interrupt: (session: string) => interrupts.push(session),
   } as unknown as ControlClient
-  const controller = new AbortController()
   const events: AgentStreamEvent[] = []
-  for await (const e of controlStream(client, 'hi', SESSION, controller.signal)) events.push(e)
+  for await (const e of controlStream(
+    client,
+    'hi',
+    SESSION,
+    (n) => notices.push(n),
+    () => (ended += 1),
+  ))
+    events.push(e)
   const state = [...events, { type: 'done' }].reduce(agentStreamReducer, initialAgentStreamState)
-  return { events, state, interrupts, controller }
+  return { state, notices, ended, entries: turnEntries(state.events, notices) }
 }
 
-describe('controlStream', () => {
+const DONE: ControlFrame = { type: 'done', session: SESSION }
+
+describe('controlStream: text deltas', () => {
   it('joins consecutive deltas into one assistant message', async () => {
     const { state } = await run([
       event({ type: 'text_delta', content: 'Hel' }),
@@ -40,64 +58,421 @@ describe('controlStream', () => {
       DONE,
     ])
     expect(state.events).toMatchObject([{ kind: 'message', role: 'assistant', text: 'Hello' }])
+    expect(state.status).toBe('done')
   })
 
-  it('draws a tool call and settles it by its result', async () => {
+  it('starts a new assistant message after a tool card', async () => {
     const { state } = await run([
-      event({ type: 'tool_call', callId: 'c1', toolName: 'lookup' }),
-      event({ type: 'tool_result', callId: 'c1', isError: false }),
+      event({ type: 'text_delta', content: 'one' }),
+      event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
+      event({ type: 'text_delta', content: 'two' }),
       DONE,
     ])
-    expect(state.events).toMatchObject([{ kind: 'tool', name: 'lookup', status: 'success' }])
+    expect(state.events).toMatchObject([
+      { kind: 'message', text: 'one' },
+      { kind: 'tool' },
+      { kind: 'message', text: 'two' },
+    ])
+  })
+})
+
+describe('controlStream: tool cards', () => {
+  it('draws a running card for a tool call (until the turn ends)', async () => {
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' })
+      },
+    } as unknown as ControlClient
+    const first = await controlStream(
+      client,
+      'hi',
+      SESSION,
+      () => undefined,
+      () => undefined,
+    ).next()
+    expect(
+      agentStreamReducer(initialAgentStreamState, first.value as AgentStreamEvent).events,
+    ).toMatchObject([{ kind: 'tool', name: 'ReadFile', status: 'running' }])
   })
 
-  it('fails a tool whose result is an error and ignores a result with no call', async () => {
+  it('settles the matching card as success, leaving the other card running', async () => {
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' })
+        yield event({ type: 'tool_call', callId: 'c2', toolName: 'Grep' })
+        yield event({ type: 'tool_result', callId: 'c1', isError: false })
+      },
+    } as unknown as ControlClient
+    let state = initialAgentStreamState
+    for await (const e of controlStream(
+      client,
+      'hi',
+      SESSION,
+      () => undefined,
+      () => undefined,
+    ))
+      state = agentStreamReducer(state, e)
+    expect(state.events).toMatchObject([
+      { kind: 'tool', name: 'ReadFile', status: 'success' },
+      { kind: 'tool', name: 'Grep', status: 'running' },
+    ])
+  })
+
+  it('settles a card as failed only when the result says isError: true', async () => {
     const { state } = await run([
-      event({ type: 'tool_call', callId: 'c1', toolName: 'lookup' }),
+      event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
+      event({ type: 'tool_call', callId: 'c2', toolName: 'Grep' }),
       event({ type: 'tool_result', callId: 'c1', isError: true }),
-      event({ type: 'tool_result', callId: 'ghost' }),
+      event({ type: 'tool_result', callId: 'c2', isError: false }),
+      DONE,
+    ])
+    expect(state.events).toMatchObject([
+      { kind: 'tool', name: 'ReadFile', status: 'failed' },
+      { kind: 'tool', name: 'Grep', status: 'success' },
+    ])
+  })
+
+  it('ignores a result whose call id matches no card', async () => {
+    const { state } = await run([
+      event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
+      event({ type: 'tool_result', callId: 'c1', isError: false }),
+      event({ type: 'tool_result', callId: 'missing', isError: true }),
       DONE,
     ])
     expect(state.events).toHaveLength(1)
-    expect(state.events[0]).toMatchObject({ kind: 'tool', status: 'failed' })
+    expect(state.events[0]).toMatchObject({ name: 'ReadFile', status: 'success' })
   })
+})
 
-  it('turns an error event inside the turn into a notice and keeps going', async () => {
-    const { state } = await run([
-      event({ type: 'text_delta', content: 'a' }),
-      event({ type: 'error', code: 'boom' }),
-      event({ type: 'text_delta', content: 'b' }),
+describe('controlStream: the end of a turn', () => {
+  it('done ends the turn and keeps the text', async () => {
+    const { state, notices, ended } = await run([
+      event({ type: 'text_delta', content: 'hi' }),
       DONE,
     ])
-    expect(state.events.map((e) => e.kind)).toEqual(['message', 'notice', 'message'])
-    expect(state.events[1]).toMatchObject({ variant: 'error', text: 'the turn failed (boom)' })
+    expect(state.events).toMatchObject([{ text: 'hi' }])
+    expect(notices).toEqual([])
+    expect(ended).toBe(1)
   })
 
-  it('ends at an error frame with a notice, and at interrupted without one', async () => {
-    const failed = await run([{ type: 'error', session: SESSION, code: 'limit' } as ControlFrame])
-    expect(failed.state.events).toMatchObject([{ kind: 'notice', text: 'the turn ended: limit' }])
-    const stopped = await run([{ type: 'interrupted', session: SESSION } as ControlFrame])
-    expect(stopped.events).toEqual([])
+  it('interrupted ends the turn with a warning line after the partial output, failing the unfinished tool', async () => {
+    const { entries, notices, ended } = await run([
+      event({ type: 'text_delta', content: 'part' }),
+      event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
+      { type: 'interrupted', session: SESSION },
+    ])
+    expect(entries).toMatchObject([
+      { kind: 'event', event: { kind: 'message', text: 'part' } },
+      { kind: 'event', event: { kind: 'tool', status: 'failed' } },
+      { kind: 'notice', variant: 'warning', text: 'interrupted' },
+    ])
+    expect(notices).toHaveLength(1)
+    expect(ended).toBe(1)
   })
 
-  it('reports a failed connection as an error notice', async () => {
-    const { state } = await run([], new Error('socket closed'))
-    expect(state.events).toMatchObject([{ kind: 'notice', variant: 'error', text: 'socket closed' }])
+  it('an error frame ends the turn with an error line naming its code', async () => {
+    const { entries } = await run([{ type: 'error', code: 'busy', session: SESSION }])
+    expect(entries).toEqual([{ kind: 'notice', variant: 'error', text: 'the turn ended: busy' }])
   })
 
-  it('sends the instance an interrupt for the session when the signal aborts', async () => {
-    const interrupts: string[] = []
+  it('an error event inside the turn adds an error line in place and the turn goes on', async () => {
+    const { entries, state } = await run([
+      event({ type: 'text_delta', content: 'before' }),
+      event({ type: 'error', code: 'rate_limited' }),
+      event({ type: 'text_delta', content: 'after' }),
+      DONE,
+    ])
+    expect(entries).toMatchObject([
+      { kind: 'event', event: { text: 'before' } },
+      { kind: 'notice', variant: 'error', text: 'the turn failed (rate_limited)' },
+      { kind: 'event', event: { text: 'after' } },
+    ])
+    expect(state.status).toBe('done')
+  })
+
+  it('a failed connection ends the turn with the reason as an error line', async () => {
+    const { notices, ended } = await run([], new Error('connection closed before the turn ended'))
+    expect(notices).toMatchObject([
+      { variant: 'error', text: 'connection closed before the turn ended' },
+    ])
+    expect(ended).toBe(1)
+  })
+
+  it('draws nothing for interrupt_ok, no_turn and an unknown event type', async () => {
+    const { state, notices } = await run([
+      { type: 'interrupt_ok', session: SESSION },
+      { type: 'no_turn', session: SESSION },
+      event({ type: 'usage', tokens: 12 }),
+      DONE,
+    ])
+    expect(state.events).toEqual([])
+    expect(notices).toEqual([])
+  })
+})
+
+describe('nextSessionId', () => {
+  it('appends -n to a short base', () => {
+    expect(nextSessionId('owner', 2)).toBe('owner-2')
+  })
+
+  it('keeps a 64-character base within the 64-character limit by shortening the base', () => {
+    const id = nextSessionId('a'.repeat(64), 12)
+    expect(id).toHaveLength(64)
+    expect(id.endsWith('-12')).toBe(true)
+  })
+
+  it('leaves a base that fits exactly with its suffix unshortened', () => {
+    const base = 'b'.repeat(62)
+    expect(nextSessionId(base, 3)).toBe(`${base}-3`)
+  })
+})
+
+describe('controlStream: interruption fallback and notices from the app', () => {
+  it('an interrupted turn hands over the local transcript, the unfinished tool still running', async () => {
+    let handed: readonly TranscriptEntry[] | undefined
     const client = {
-      chat: () => ({
-        [Symbol.asyncIterator]: () => ({ next: () => new Promise<never>(() => undefined) }),
-      }),
-      interrupt: (session: string) => interrupts.push(session),
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'part' })
+        yield event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' })
+        yield { type: 'interrupted', session: SESSION } as ControlFrame
+      },
     } as unknown as ControlClient
-    const controller = new AbortController()
-    const iterator = controlStream(client, 'hi', SESSION, controller.signal)
-    void iterator.next()
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    controller.abort()
-    expect(interrupts).toEqual([SESSION])
+    const inbox = createTurnInbox()
+    for await (const e of controlStream(
+      client,
+      'hi',
+      SESSION,
+      () => undefined,
+      () => undefined,
+      inbox,
+      (t) => (handed = t),
+    ))
+      void e
+    expect(handed).toEqual([
+      { kind: 'assistant', text: 'part' },
+      { kind: 'tool', callId: 'c1', name: 'ReadFile', status: 'running' },
+      { kind: 'notice', variant: 'warning', text: 'interrupted' },
+    ])
+  })
+
+  it('a notice posted mid-turn is placed when posted, so text received before and after it sits on each side', async () => {
+    const gate = deferred<void>()
+    const gate2 = deferred<void>()
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'before' })
+        await gate.promise
+        yield event({ type: 'text_delta', content: 'after' })
+        await gate2.promise
+        yield DONE
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    const notices: TurnNotice[] = []
+    const events: AgentStreamEvent[] = []
+    const consume = (async () => {
+      for await (const e of controlStream(
+        client,
+        'hi',
+        SESSION,
+        (n) => notices.push(n),
+        () => undefined,
+        inbox,
+      ))
+        events.push(e)
+    })()
+    await waitFor(() => events.length === 1, 2000, 'the first delta')
+    inbox.post({ variant: 'warning', text: 'queued' })
+    await waitFor(() => notices.length === 1, 2000, 'the notice to be placed')
+    gate.resolve()
+    gate2.resolve()
+    await consume
+    const state = [...events, { type: 'done' } as AgentStreamEvent].reduce(
+      agentStreamReducer,
+      initialAgentStreamState,
+    )
+    expect(turnEntries(state.events, notices)).toMatchObject([
+      { kind: 'event', event: { text: 'before' } },
+      { kind: 'notice', text: 'queued' },
+      { kind: 'event', event: { text: 'after' } },
+    ])
+  })
+
+  it('a notice posted after frames arrived is placed after all of them, however late the stream resumes', async () => {
+    for (const frames of [
+      [event({ type: 'text_delta', content: 'a' }), event({ type: 'text_delta', content: 'b' })],
+      [
+        event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
+        event({ type: 'tool_call', callId: 'c2', toolName: 'Grep' }),
+      ],
+    ]) {
+      // Both frames reach the client at once; the consumer is busy with the first when the warning is posted.
+      const client = {
+        chat: async function* () {
+          yield* frames
+          yield DONE
+        },
+      } as unknown as ControlClient
+      const inbox = createTurnInbox()
+      const notices: TurnNotice[] = []
+      const stream = controlStream(
+        client,
+        'hi',
+        SESSION,
+        (n) => notices.push(n),
+        () => undefined,
+        inbox,
+      )
+      const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      inbox.post({ variant: 'warning', text: 'late' })
+      for await (const e of stream) events.push(e)
+      const state = [...events, { type: 'done' } as AgentStreamEvent].reduce(
+        agentStreamReducer,
+        initialAgentStreamState,
+      )
+      const entries = turnEntries(state.events, notices)
+      expect(entries.at(-1)).toMatchObject({ kind: 'notice', text: 'late' })
+      expect(entries.filter((entry) => entry.kind === 'event')).toHaveLength(state.events.length)
+    }
+  })
+
+  it('a notice posted before a frame resolves in the same tick is placed before that frame', async () => {
+    const gate = deferred<void>()
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'before' })
+        await gate.promise
+        yield event({ type: 'text_delta', content: 'after' })
+        yield DONE
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    const notices: TurnNotice[] = []
+    const stream = controlStream(client, 'hi', SESSION, (n) => notices.push(n), () => undefined, inbox)
+    const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
+    inbox.post({ variant: 'warning', text: 'queued' })
+    gate.resolve()
+    for await (const e of stream) events.push(e)
+    const state = [...events, { type: 'done' } as AgentStreamEvent].reduce(
+      agentStreamReducer,
+      initialAgentStreamState,
+    )
+    expect(turnEntries(state.events, notices)).toMatchObject([
+      { kind: 'event', event: { text: 'before' } },
+      { kind: 'notice', text: 'queued' },
+      { kind: 'event', event: { text: 'after' } },
+    ])
+  })
+
+  it('a frame that arrived before a notice posted in the same tick is placed before it', async () => {
+    const gate = deferred<void>()
+    let arrivedAt = 0
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'before' })
+        await gate.promise
+        yield { ...event({ type: 'text_delta', content: 'after' }), arrivedAt } as ControlFrame
+        yield DONE
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    const notices: TurnNotice[] = []
+    const stream = controlStream(client, 'hi', SESSION, (n) => notices.push(n), () => undefined, inbox)
+    const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
+    // The frame comes off the socket (stamped), then the notice is posted, before the consumer resumes.
+    arrivedAt = nextArrival()
+    gate.resolve()
+    inbox.post({ variant: 'warning', text: 'queued' })
+    for await (const e of stream) events.push(e)
+    const state = [...events, { type: 'done' } as AgentStreamEvent].reduce(
+      agentStreamReducer,
+      initialAgentStreamState,
+    )
+    expect(turnEntries(state.events, notices)).toMatchObject([
+      { kind: 'event', event: { text: 'beforeafter' } },
+      { kind: 'notice', text: 'queued' },
+    ])
+  })
+
+  it('an interrupted frame that arrived before a notice posted in the same tick keeps the warning first', async () => {
+    const gate = deferred<void>()
+    let arrivedAt = 0
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'part' })
+        await gate.promise
+        yield { type: 'interrupted', session: SESSION, arrivedAt } as ControlFrame
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    let handed: readonly TranscriptEntry[] | undefined
+    const stream = controlStream(client, 'hi', SESSION, () => undefined, () => undefined, inbox, (t) => (handed = t))
+    await stream.next()
+    arrivedAt = nextArrival()
+    gate.resolve()
+    inbox.post({ variant: 'warning', text: 'queued' })
+    for await (const e of stream) void e
+    expect(handed).toEqual([
+      { kind: 'assistant', text: 'part' },
+      { kind: 'notice', variant: 'warning', text: 'interrupted' },
+      { kind: 'notice', variant: 'warning', text: 'queued' },
+    ])
+  })
+
+  it('a notice posted before the interrupted frame resolves is frozen before the warning', async () => {
+    const gate = deferred<void>()
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'part' })
+        await gate.promise
+        yield { type: 'interrupted', session: SESSION } as ControlFrame
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    let handed: readonly TranscriptEntry[] | undefined
+    const stream = controlStream(client, 'hi', SESSION, () => undefined, () => undefined, inbox, (t) => (handed = t))
+    await stream.next()
+    inbox.post({ variant: 'warning', text: 'queued' })
+    gate.resolve()
+    for await (const e of stream) void e
+    expect(handed).toEqual([
+      { kind: 'assistant', text: 'part' },
+      { kind: 'notice', variant: 'warning', text: 'queued' },
+      { kind: 'notice', variant: 'warning', text: 'interrupted' },
+    ])
+  })
+
+  it('a notice posted while the interrupted frame waits for the consumer stays in the frozen transcript, after the warning', async () => {
+    const gate = deferred<void>()
+    const client = {
+      chat: async function* () {
+        yield event({ type: 'text_delta', content: 'part' })
+        await gate.promise
+        yield { type: 'interrupted', session: SESSION } as ControlFrame
+      },
+    } as unknown as ControlClient
+    const inbox = createTurnInbox()
+    let handed: readonly TranscriptEntry[] | undefined
+    const stream = controlStream(
+      client,
+      'hi',
+      SESSION,
+      () => undefined,
+      () => undefined,
+      inbox,
+      (t) => (handed = t),
+    )
+    await stream.next()
+    gate.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    inbox.post({ variant: 'warning', text: 'queued' })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    for await (const e of stream) void e
+    expect(handed).toEqual([
+      { kind: 'assistant', text: 'part' },
+      { kind: 'notice', variant: 'warning', text: 'interrupted' },
+      { kind: 'notice', variant: 'warning', text: 'queued' },
+    ])
   })
 })
