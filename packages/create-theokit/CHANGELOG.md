@@ -1,5 +1,11 @@
 # create-theo
 
+## 3.3.1
+
+### Patch Changes
+
+- ce3dc5c: The `--surface tui` template builds its timeline with `useAgentTimeline` from `@theokit/tui` (now `^0.83.8`) instead of calling `messagesToAgentEvents` itself.
+
 ## 3.3.0
 
 ### Minor Changes
