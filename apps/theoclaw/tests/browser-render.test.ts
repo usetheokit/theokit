@@ -94,5 +94,13 @@ describe.skipIf(!CHROMIUM)('browser_navigate on the installed Chromium', () => {
 
     const snapshot = await request('tools/call', { name: 'browser_snapshot', arguments: {} })
     expect(textOf(snapshot)).toContain(value)
+
+    // A model may send a navigation and a snapshot in one turn; the snapshot must wait for the page.
+    await request('tools/call', { name: 'browser_navigate', arguments: { url: 'about:blank' } })
+    const [, together] = await Promise.all([
+      request('tools/call', { name: 'browser_navigate', arguments: { url } }),
+      request('tools/call', { name: 'browser_snapshot', arguments: {} }),
+    ])
+    expect(textOf(together), `stderr: ${stderr}`).toContain(value)
   })
 })
