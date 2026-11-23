@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The joinery gate (`tools/measure-app-joinery.mjs`) now reports, and fails on, every app file that declares a function or class named like an export of a `@theokit/*` dependency, unless `ALLOWED` lists it with a reason; `resolveSecretRefs` and `hookFingerprint` are no longer listed because #2597 and #2598 already moved them to the framework (#2610). The gate is red on purpose today: it lists 14 same-named declarations (`parsePort`, `senderKey`, `assistantText`, `maskSecrets` and others) still to be moved to the framework or put in `ALLOWED` with a reason.
 - `theoclaw backup` and `theoclaw restore` now run on `backup` and `restore` from `@theokit/host/backup`; TheoClaw keeps its instance lock, exclusions, workspace re-homing, named storage and HTTPS transfer. Backups written before the change still restore, and new ones still record the workspace (#2603).
 - Chat transcripts are collected: the daemon removes transcripts older than `THEOCLAW_TRANSCRIPT_RETENTION_DAYS` (default 30) at start and daily, never a chat's current one, and `theoclaw sessions gc [--dry-run]` runs the same collection by hand (#2602).
 
