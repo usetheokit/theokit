@@ -19,6 +19,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
+import { dropDeadMarkers } from '../../src/consent/use-approvals.js'
 import { createApprovalLedger, findNextApproval, ingest, prune, settle } from '@theokit/tui'
 
 /** One assistant message carrying a part in the `approval-requested` state. */
@@ -27,7 +28,13 @@ const pendingThread = (id: string): Parameters<typeof ingest>[1] => [
     id: 'm1',
     role: 'assistant',
     parts: [
-      { type: 'tool-Bash', state: 'approval-requested', toolCallId: id, toolName: 'Bash', input: {} },
+      {
+        type: 'tool-Bash',
+        state: 'approval-requested',
+        toolCallId: id,
+        toolName: 'Bash',
+        input: {},
+      },
     ],
   },
 ]
@@ -73,5 +80,18 @@ describe('B-011 — the ledger is load-bearing while the thread lags', () => {
     ledger = ingest(prune(ledger, 0), [])
 
     expect(findNextApproval(ledger)).toBeUndefined()
+  })
+
+  it('test_an_id_reused_on_a_later_message_is_offered_once_the_thread_moved_past_the_settled_one', () => {
+    const first = pendingThread('call-1')
+    let ledger = ingest(createApprovalLedger(), first)
+    ledger = settle(ledger, 'call-1')
+    const step = (thread: Parameters<typeof ingest>[1]) =>
+      dropDeadMarkers(ingest(prune(ledger, thread.length), thread), thread.length)
+    const second = { id: 'm2', role: 'assistant' as const, parts: [] }
+    ledger = step([...first, second])
+    ledger = step([...first, second, { ...pendingThread('call-1')[0]!, id: 'm3' }])
+
+    expect(findNextApproval(ledger)?.approvalId).toBe('call-1')
   })
 })

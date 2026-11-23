@@ -23,9 +23,8 @@ import { ClipboardWriteError, copyToClipboard } from '../src/clipboard/clipboard
 import { DIFF_TIMEOUT_MS, diffSpawnOptions } from '../src/commands/command-content.js'
 
 describe('the clipboard write is bounded', () => {
-  it('test_the_toolkit_bound_reaches_the_runner_and_is_generous_enough', () => {
-    // The bound is `@theokit/tui/terminal`'s now; what this app still owes is that a copy runs under
-    // one. Too tight and a slow-but-working clipboard starts failing.
+  /** Run one copy through a stub runner and report the timeout the toolkit handed it. */
+  const timeoutSeen = (): number | undefined => {
     let seen: number | undefined
     copyToClipboard('x', {
       candidates: [{ bin: 'xclip', args: [] }],
@@ -34,7 +33,21 @@ describe('the clipboard write is bounded', () => {
         return { status: 0 }
       }) as never,
     })
-    expect(seen).toBeGreaterThanOrEqual(2_000)
+    return seen
+  }
+
+  it('test_it_declares_a_timeout', () => {
+    expect(timeoutSeen()).toBeGreaterThan(0)
+  })
+
+  it('test_the_bound_actually_REACHES_spawnSync', () => {
+    // The bound is the toolkit's; this asserts it is PASSED to the runner, not merely declared.
+    expect(timeoutSeen()).toBeTypeOf('number')
+  })
+
+  it('test_the_bound_is_generous_enough_for_a_real_clipboard', () => {
+    // Too tight and a slow-but-working clipboard starts failing.
+    expect(timeoutSeen()).toBeGreaterThanOrEqual(2_000)
   })
 
   it('test_a_timed_out_clipboard_is_reported_as_a_write_failure_not_a_success', () => {
