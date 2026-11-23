@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 import { Agent, TheokitAgentError } from '@theokit/agents'
-import { forkTranscript, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
+import { forkTranscript, legacyTranscriptPath, transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
 import {
   deleteSession as deleteInFramework,
   protectedTranscriptPaths,
@@ -264,7 +264,12 @@ export async function protectedSessions(cwd: string, baseDir: string): Promise<s
   // The framework set already holds the `last-session` pointer, but its reader treats an unreadable
   // file as "no pointer". This read refuses instead, so an unreadable pointer blocks the deletion.
   const pointed = readPointerId(cwd, baseDir)
-  if (pointed !== undefined) paths.add(transcriptPath(baseDir, cwd, pointed))
+  if (pointed !== undefined) {
+    // Add the derived name only when the framework set holds neither naming for this id (the pointer
+    // changed between reads); otherwise the session would be listed twice under two names.
+    const names = [transcriptPath(baseDir, cwd, pointed), legacyTranscriptPath(baseDir, cwd, pointed)]
+    if (!names.some((name) => paths.has(name))) paths.add(names[0])
+  }
   return [...paths]
 }
 

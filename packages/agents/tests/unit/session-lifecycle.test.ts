@@ -601,4 +601,15 @@ describe('protectedTranscriptPaths — legacy name of the pointer (#2746)', () =
     const got = await protectedTranscriptPaths(CWD, root)
     expect(got.get(legacyTranscriptPath(root, CWD, 'pointed'))).toBe('resumable session pointer')
   })
+
+  it('names only the file on disk when the pointed session has one', async () => {
+    const { legacyTranscriptPath } = await import('@theokit/sdk/persistence')
+    writeTranscriptFile('pointed', 0)
+    await persistSessionId(CWD, 'pointed', root)
+    const got = await protectedTranscriptPaths(CWD, root)
+    expect(got.get(transcriptPath(root, CWD, 'pointed'))).toBe('resumable session pointer')
+    expect(got.has(legacyTranscriptPath(root, CWD, 'pointed'))).toBe(false)
+    const pointerPaths = [...got].filter(([, why]) => why === 'resumable session pointer')
+    expect(pointerPaths).toHaveLength(1)
+  })
 })
