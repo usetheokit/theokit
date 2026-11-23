@@ -32,24 +32,24 @@ function ctxFor(event: MessageEvent, log: string[]): GatewayContext {
 
 /** Typing is the runner's: the app's own loop is gone, so a turn and a `/goal` are checked through it. */
 describe('typing indicator through GatewayRunner (OC-106)', () => {
-  async function runThrough(text: string, agent: TurnAgent) {
-    const adapter = new TypingAdapter('telegram')
+  async function runThrough(text: string, agent: TurnAgent, adapter: TypingAdapter = new TypingAdapter('telegram')) {
     const event = messageEvent('telegram', text)
     const replies: string[] = []
     const handler = createReplyHandler({
-      withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => undefined }),
+      withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => void adapter.calls.push('release') }),
       reset: async () => undefined,
       goal: readGoalSettings({ THEOCLAW_MODEL: 'openrouter/chat-model', OPENROUTER_API_KEY: 'router-key' }),
     })
     const runner = new GatewayRunner({
       adapters: [adapter],
       handler: async (inbound, ctx) => {
-        await handler(inbound, { ...ctx, reply: async (reply, options) => (replies.push(reply), ctx.reply(reply, options)) })
+        await handler(inbound, { ...ctx, reply: async (reply, options) => (replies.push(reply), adapter.calls.push('reply'), ctx.reply(reply, options)) })
       },
     })
     await runner.start()
     await adapter.deliver(event)
-    await waitFor(() => adapter.calls.includes(`stop:${event.channel.id}`), 2000, 'typing to stop')
+    await waitFor(() => adapter.calls.includes('release') && adapter.calls.length >= 2, 2000, 'the turn to end')
+    await new Promise((r) => setTimeout(r, 20))
     await runner.stop()
     return { calls: adapter.calls, replies, channel: event.channel.id }
   }
@@ -57,8 +57,30 @@ describe('typing indicator through GatewayRunner (OC-106)', () => {
   it('starts typing before a turn replies and stops it after', async () => {
     const { calls, replies, channel } = await runThrough('hello', new FakeAgent({ frames: [assistant('Hi!'), finished()] }) as unknown as TurnAgent)
     expect(replies).toEqual(['Hi!'])
+    // Typing shows while the turn runs; the runner stops it once the handler has replied and released the lease.
     expect(calls[0]).toBe(`start:${channel}`)
+    expect(calls.indexOf('reply')).toBeLessThan(calls.indexOf('release'))
+    expect(calls.indexOf('release')).toBeLessThan(calls.indexOf(`stop:${channel}`))
     expect(calls.at(-1)).toBe(`stop:${channel}`)
+  })
+
+  it('still replies when the adapter cannot show typing (it throws)', async () => {
+    const adapter = new TypingAdapter('telegram')
+    adapter.startTyping = async () => {
+      throw new Error('boom')
+    }
+    const { calls, replies, channel } = await runThrough('hello', new FakeAgent({ frames: [assistant('Hi!'), finished()] }) as unknown as TurnAgent, adapter)
+    expect(replies).toEqual(['Hi!'])
+    expect(calls).toEqual(['reply', 'release', `stop:${channel}`])
+  })
+
+  it('replies on a platform whose adapter has no typing indicator', async () => {
+    const adapter = new TypingAdapter('telegram')
+    adapter.startTyping = FakeAdapter.prototype.startTyping
+    adapter.stopTyping = FakeAdapter.prototype.stopTyping
+    const { calls, replies } = await runThrough('hello', new FakeAgent({ frames: [assistant('Hi!'), finished()] }) as unknown as TurnAgent, adapter)
+    expect(replies).toEqual(['Hi!'])
+    expect(calls).toEqual(['reply', 'release'])
   })
 
   it('starts typing around a /goal run and stops it after', async () => {
@@ -140,7 +162,7 @@ describe('the commands /help lists', () => {
       throw new Error('the model was reached')
     }
     const handler = createReplyHandler({
-      withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => undefined }),
+      withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => void adapter.calls.push('release') }),
       reset: async () => undefined,
       goal: { tokenBudget: 1, judge: () => never() },
       compact: { run: async () => ({ preTokens: 2, postTokens: 1 }), write: () => undefined },
