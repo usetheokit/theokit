@@ -10,7 +10,7 @@ import { describeSource } from '../../src/auth/credential-provenance.js'
 describe('the label a credential source is given', () => {
   const dotenvPath = '/proj/.env'
 
-  it('test_describe_source_says_shell_when_the_variable_is_not_loaded_from_the_dotenv_file', () => {
+  it('test_describe_source_says_shell_when_the_variable_is_not_in_the_dotenv_file', () => {
     // Anti-vacuity floor for this half: a labeller hard-wired to `(.env)` — or one that ignored the
     // declared set — passes the `.env` assertion below and fails this one. It is also the direction
     // that wastes the user's time, sending them to edit a file that is not the source.

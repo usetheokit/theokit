@@ -4,6 +4,7 @@ import { describeSource } from '@theocode/agent/auth'
 import { resolveCredential, type ResolvedCredential } from '@theocode/agent/auth'
 import type { ProjectEnvRecord } from '@theokit/agents/config'
 
+// Only the TUI sets this; the CLI and ACP surfaces show no credential label, so they never read it.
 let projectEnv: ProjectEnvRecord | undefined
 
 /** Called once after bootstrap; an absent record means no key was loaded from `.env`. */

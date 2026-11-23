@@ -72,3 +72,54 @@ describe('bootstrapSurface project .env', () => {
     }
   })
 })
+
+describe('the record bootstrapSurface returns', () => {
+  async function record(contents: string, env: Record<string, string | undefined> = {}) {
+    const cwd = project(contents)
+    const ctx = await bootstrapSurface({ env, cwd, home: cwd, onWarn: () => {} })
+    return { cwd, rec: ctx.projectEnv! }
+  }
+
+  it('names the file, the loaded keys and the refused keys', async () => {
+    const { cwd, rec } = await record('A=1\nTHEOCODE_TRUST_ALL_DIRS=1\nB=2\n')
+    expect(rec.file).toBe(join(cwd, '.env'))
+    expect(rec.loaded).toEqual(['A', 'B'])
+    expect(rec.refused).toEqual(['THEOCODE_TRUST_ALL_DIRS'])
+  })
+
+  it('leaves a key the environment already had out of loaded', async () => {
+    const env = { A: 'shell' }
+    const { rec } = await record('A=file\nB=2\n', env)
+    expect(rec.loaded).toEqual(['B'])
+    expect(env.A).toBe('shell')
+  })
+
+  it('records an empty load when there is no .env', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'penv-'))
+    dirs.push(cwd)
+    const ctx = await bootstrapSurface({ env: {}, cwd, home: cwd, onWarn: () => {} })
+    expect(ctx.projectEnv?.loaded).toEqual([])
+  })
+
+  it('does not read a name from inside a multiline value', async () => {
+    const { rec } = await record('NOTE="first\nANTHROPIC_API_KEY=not-a-declaration\nlast"\n')
+    expect(rec.loaded).toEqual(['NOTE'])
+  })
+
+  it('reads plain, export-prefixed, commented and CRLF files', async () => {
+    expect((await record('A=1\nOPENAI=2\n')).rec.loaded).toEqual(['A', 'OPENAI'])
+    expect((await record('export A=1\n# c\n\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
+    expect((await record('A=1\r\nB=2\r\n')).rec.loaded).toEqual(['A', 'B'])
+  })
+
+  it('keeps the declarations after multiline values, however they close', async () => {
+    expect((await record('A="one line"\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
+    expect((await record('A="first\nlast"\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
+    expect((await record("A='first\nlast'\nB=2\n")).rec.loaded).toEqual(['A', 'B'])
+    expect((await record('A="first\nmiddle\n"\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
+  })
+
+  it('ignores lines with no name or no equals sign', async () => {
+    expect((await record('=V\nNO_EQUALS\nGOOD=y\n')).rec.loaded).toEqual(['GOOD'])
+  })
+})
