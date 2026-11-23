@@ -74,6 +74,7 @@ import type { MemoryWiring } from './memory/wiring.js'
 import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
 import { Generations } from './sessions/generations.js'
 import type { SessionAgent, SessionAgents } from './sessions/session-agents.js'
+import { startTranscriptSweeper, type TranscriptSweeper } from './sessions/transcript-gc.js'
 import { readSessionSettings, type SessionSettings } from './sessions/session-settings.js'
 import { withFailedStatusLog } from './channels/whatsapp-status-log.js'
 import { describeError } from './control-plane/errors.js'
@@ -605,6 +606,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
   let acpSessions: AcpSessions | undefined
   let mcpConnector: McpRelayConnector | undefined
   let mcpEvents: McpEvents | undefined
+  let transcriptSweeper: TranscriptSweeper | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
   let announcement: LanAnnouncement | undefined
@@ -617,6 +619,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
     await closeScheduleStore()
     await acpSessions?.stopAll()
     await composedApp?.loop.stopAll()
+    await transcriptSweeper?.stop()
     await composedApp?.sessions.disposeAll()
     // After the sessions: their browser servers are gone before the browser they were attached to.
     await shared.browser?.close()
@@ -659,6 +662,13 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
     secrets: secretValues,
   })
   composedApp = composed
+  transcriptSweeper = startTranscriptSweeper({
+    workspace: sessionSettings.workspace,
+    generations,
+    heldIds: () => composed.sessions.heldIds(),
+    retentionDays: sessionSettings.transcriptRetentionDays,
+    write: stderr,
+  })
   // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }

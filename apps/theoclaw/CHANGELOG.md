@@ -11,6 +11,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Chat transcripts are collected: the daemon removes transcripts older than `THEOCLAW_TRANSCRIPT_RETENTION_DAYS` (default 30) at start and daily, never a chat's current one, and `theoclaw sessions gc [--dry-run]` runs the same collection by hand (#2602).
+
 - Model credentials: custom-provider keys now resolve through the framework chain (`resolveAgentCredential`), and the `openai-chatgpt/` route is detected with `isSubscriptionRoute` (#2576).
 
 ### Changed
