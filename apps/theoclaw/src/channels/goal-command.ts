@@ -35,10 +35,7 @@ export function readGoalSettings(env: Readonly<Record<string, string | undefined
   const raw = (env[GOAL_BUDGET_VARIABLE] ?? '').trim()
   const tokenBudget = raw === '' ? DEFAULT_TOKEN_BUDGET : Number(raw)
   if (raw !== '' && (!/^\d+$/.test(raw) || tokenBudget <= 0)) {
-    throw new TheoClawConfigError(
-      `${GOAL_BUDGET_VARIABLE} must be a positive whole number of tokens`,
-      { variable: GOAL_BUDGET_VARIABLE },
-    )
+    throw new TheoClawConfigError(`${GOAL_BUDGET_VARIABLE} must be a positive whole number of tokens`, { variable: GOAL_BUDGET_VARIABLE })
   }
   return {
     tokenBudget,
@@ -50,11 +47,7 @@ export function readGoalSettings(env: Readonly<Record<string, string | undefined
 }
 
 /** Run `goal` on the session's agent to its end and say how it ended, as `<status>: <final text>`. */
-export async function runGoal(
-  agent: TurnAgent,
-  goal: string,
-  settings: GoalSettings,
-): Promise<GoalOutcome> {
+export async function runGoal(agent: TurnAgent, goal: string, settings: GoalSettings): Promise<GoalOutcome> {
   if (agent.runUntil === undefined) return { reply: 'failed: this agent cannot run a goal.' }
   try {
     const loop = agent.runUntil(goal, { tokenBudget: settings.tokenBudget, ...settings.judge() })

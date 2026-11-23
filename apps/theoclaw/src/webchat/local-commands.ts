@@ -1,3 +1,4 @@
+
 import { createCommandRegistry, type CommandDefinition } from '@theokit/agents/commands'
 
 import { CHAT_COMMANDS, infoReply } from '../channels/info-commands.js'
@@ -106,12 +107,7 @@ export function withLocalCommands(runner: TurnRunner, context: LocalCommandConte
     const reply = exchange.reply
     if (reply === undefined) return runner(message, emit, signal)
     emit({ type: 'text_delta', content: reply })
-    emit({
-      type: 'done',
-      result: reply,
-      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-      durationMs: 0,
-    })
+    emit({ type: 'done', result: reply, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 0 })
     return { ok: true }
   }
 }

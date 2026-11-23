@@ -10,10 +10,7 @@ export const COMPACT_FAILED_REPLY = 'I could not compact this conversation; it g
 
 export interface CompactSettings {
   /** Compacts the agent's persisted transcript; `Agent.compact` in production. */
-  readonly run: (
-    agentId: string,
-    trigger: 'manual' | 'auto',
-  ) => Promise<{ readonly preTokens: number; readonly postTokens: number }>
+  readonly run: (agentId: string, trigger: 'manual' | 'auto') => Promise<{ readonly preTokens: number; readonly postTokens: number }>
   /** Compact after a turn whose input reached this many tokens; absent: only `/compact`. */
   readonly at?: number
   readonly write: (line: string) => void
@@ -31,23 +28,13 @@ export function readCompactSettings(
   const raw = (env[COMPACT_AT_VARIABLE] ?? '').trim()
   const at = Number(raw)
   if (raw !== '' && (!/^\d+$/.test(raw) || at <= 0)) {
-    throw new TheoClawConfigError(
-      `${COMPACT_AT_VARIABLE} must be a positive whole number of tokens`,
-      { variable: COMPACT_AT_VARIABLE },
-    )
+    throw new TheoClawConfigError(`${COMPACT_AT_VARIABLE} must be a positive whole number of tokens`, { variable: COMPACT_AT_VARIABLE })
   }
-  return {
-    run: run ?? ((agentId, trigger) => Agent.compact(agentId, { trigger })),
-    ...(raw === '' ? {} : { at }),
-    write,
-  }
+  return { run: run ?? ((agentId, trigger) => Agent.compact(agentId, { trigger })), ...(raw === '' ? {} : { at }), write }
 }
 
 /** Compact the session's transcript and say so in one line; a failure is a line, never a thrown error. */
-export async function runCompact(
-  settings: CompactSettings,
-  agentId: string | undefined,
-): Promise<string> {
+export async function runCompact(settings: CompactSettings, agentId: string | undefined): Promise<string> {
   try {
     if (agentId === undefined) throw new Error('the session has no agent id')
     const { preTokens, postTokens } = await settings.run(agentId, 'manual')

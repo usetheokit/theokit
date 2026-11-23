@@ -35,6 +35,21 @@ export interface TheoClawTuiProps {
   readonly onExit: () => void
 }
 
+/** What the terminal's own commands act on; the component supplies it on each submit. */
+interface TuiActions {
+  readonly interrupt: () => void
+  readonly fresh: () => void
+  readonly quit: () => void
+}
+
+// `exact`: `/new chat` is a message to the agent, not a new session.
+const COMMANDS = createCommandRegistry<TuiActions>([
+  defineCommand<TuiActions>({ name: 'interrupt', description: 'stop the running turn (same as Esc)', exact: true, run: (_arg, actions) => actions.interrupt() }),
+  defineCommand<TuiActions>({ name: 'new', description: 'start a fresh session', exact: true, run: (_arg, actions) => actions.fresh() }),
+  defineCommand<TuiActions>({ name: 'quit', description: 'close the connection and exit', exact: true, run: (_arg, actions) => actions.quit() }),
+])
+const PALETTE = COMMANDS.palette()
+
 /** One line of the transcript; a turn folds its own text and tools through `useAgentStream`. */
 type Item =
   | { readonly kind: 'user'; readonly text: string }
@@ -178,42 +193,25 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
     if (key.escape) interrupt()
   })
 
-  // `exact`: `/new chat` is a message to the agent, not a new session.
-  const commands = createCommandRegistry([
-    defineCommand({
-      name: 'interrupt',
-      description: 'stop the running turn (same as Esc)',
-      exact: true,
-      run: interrupt,
-    }),
-    defineCommand({
-      name: 'new',
-      description: 'start a fresh session',
-      exact: true,
-      run: () => {
-        // The running turn stays on this session: switching now would leave Esc nothing to stop.
-        if (running.current)
-          return notice({ variant: 'warning', text: 'a turn is running: press Esc first' })
-        fresh.current += 1
-        setSession(nextSessionId(base, fresh.current))
-        setItems([])
-      },
-    }),
-    defineCommand({
-      name: 'quit',
-      description: 'close the connection and exit',
-      exact: true,
-      run: () => void client.close().then(onExit),
-    }),
-  ])
+  const actions: TuiActions = {
+    interrupt,
+    quit: () => void client.close().then(onExit),
+    fresh: () => {
+      // The running turn stays on this session: switching now would leave Esc nothing to stop.
+      if (running.current) return notice({ variant: 'warning', text: 'a turn is running: press Esc first' })
+      fresh.current += 1
+      setSession(nextSessionId(base, fresh.current))
+      setItems([])
+    },
+  }
 
   const submit = (text: string): void => {
     const trimmed = text.trim()
     if (trimmed === '') return
-    const routed = commands.route(trimmed)
+    const routed = COMMANDS.route(trimmed)
     if (routed.kind === 'command') {
       // Run in place, not through `dispatch`: a command's effect lands before the next keystroke.
-      void routed.command.run?.(routed.arg)
+      void routed.command.run?.(routed.arg, actions)
       return
     }
     // One turn at a time: a message typed while one runs is sent when it ends (by Esc or by itself).
@@ -235,7 +233,7 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
           <ChatComposer
             onSubmit={submit}
             multiLine
-            commands={commands.palette()}
+            commands={PALETTE}
             placeholder="Message TheoClaw"
           />
           <Text dimColor>session {session}</Text>

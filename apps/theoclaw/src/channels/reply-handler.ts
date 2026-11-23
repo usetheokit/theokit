@@ -1,10 +1,4 @@
-import type {
-  BasePlatformAdapter,
-  GatewayContext,
-  GatewayHandler,
-  MessageEvent,
-  SendResult,
-} from '@theokit/gateway'
+import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@theokit/gateway'
 import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
 import { fromSdkMessage } from '@theokit/presenter'
 import type { ChatMessage } from '@theokit/presenter'
@@ -48,14 +42,9 @@ function turnEnded(agent: object): void {
   runningTurns.set(agent, Math.max(0, (runningTurns.get(agent) ?? 1) - 1))
 }
 
-function answerThink(
-  think: (event: MessageEvent, level: ThinkingLevel) => void,
-  event: MessageEvent,
-  arg: string,
-): string {
+function answerThink(think: (event: MessageEvent, level: ThinkingLevel) => void, event: MessageEvent, arg: string): string {
   const level = arg.toLowerCase()
-  if (!(THINKING_LEVELS as readonly string[]).includes(level))
-    return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
+  if ( !(THINKING_LEVELS as readonly string[]).includes(level)) return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
   think(event, level as ThinkingLevel)
   return `Thinking level set to ${level}.`
 }
@@ -76,10 +65,7 @@ export interface ReplyHandlerOptions {
    * One request boundary per message, holding a lease on the agent of the message's session; the
    * composition root's chat `withAgent`.
    */
-  readonly withAgent: <R>(
-    event: MessageEvent,
-    work: (lease: SessionLease) => R | Promise<R>,
-  ) => Promise<R>
+  readonly withAgent: <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
   /** Start the event's session afresh; `SessionAgents.reset`. */
   readonly reset: (event: MessageEvent) => Promise<void>
   /** `/think <level>`: set the session's thinking level; without it, `/think` is an ordinary message. */
@@ -156,8 +142,7 @@ async function send(
       `${ctx.event.platform}: the turn failed and its reply could not be sent`,
     )
   }
-  if (!result.ok)
-    throw new ReplyDeliveryError(ctx.event.platform, result.error?.code ?? 'unknown', cause)
+  if (!result.ok) throw new ReplyDeliveryError(ctx.event.platform, result.error?.code ?? 'unknown', cause)
 }
 
 type TurnOutcome =
@@ -221,13 +206,7 @@ interface TurnRecord {
  * group's fan-out), and ends the stream with the `/usage` footer, which the handler masks and
  * replies with like any other text.
  */
-function observed(
-  agent: TurnAgent,
-  record: TurnRecord,
-  options: ReplyHandlerOptions,
-  event: MessageEvent,
-  advisor: AdvisorWatch | undefined,
-): TurnAgent {
+function observed(agent: TurnAgent, record: TurnRecord, options: ReplyHandlerOptions, event: MessageEvent, advisor: AdvisorWatch | undefined): TurnAgent {
   return {
     send: async (prompt, sendOptions) => {
       const run = await agent.send(prompt, sendOptions)
@@ -280,52 +259,34 @@ function assistantText(text: string): { readonly type: string; readonly message:
  * `SessionAgents`: the request boundary of `withAgent` stays open until the handler releases the
  * lease, after the reply.
  */
-async function answerTurn(
-  options: ReplyHandlerOptions,
-  event: MessageEvent,
-  ctx: GatewayContext,
-  prompt: string,
-): Promise<string> {
+async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
   const secrets = options.secrets ?? []
-  const gate = createProgressGate(
-    resolveDisplay(event.platform, options.display),
-    options.incognito === true,
-  )
+  const gate = createProgressGate(resolveDisplay(event.platform, options.display), options.incognito === true)
   const record: TurnRecord = { answer: '', streamFailed: false }
   let boundary: Promise<void> = Promise.resolve()
   const agentFor = (forEvent: MessageEvent): Promise<AgentLease> =>
     new Promise<AgentLease>((resolve, reject) => {
-      boundary = options.withAgent(
-        forEvent,
-        (lease) =>
-          new Promise<void>((released) => {
-            turnStarted(lease.agent)
-            const advisor =
-              options.advisor === undefined
-                ? undefined
-                : watchTurn(
-                    options.advisor,
-                    advisorHistoryOf(options.advisor),
-                    lease.agentId ?? event.channel.id,
-                  )
-            resolve({
-              agent: observed(lease.agent, record, options, event, advisor),
-              release: async () => {
-                try {
-                  const result = record.result
-                  if (result !== undefined && result.status !== 'error' && !record.streamFailed) {
-                    advisor?.record(record.answer)
-                    if (options.compact !== undefined && lease.agentId !== undefined)
-                      await compactIfNeeded(options.compact, lease.agentId, result)
-                  }
-                } finally {
-                  turnEnded(lease.agent)
-                  lease.release()
-                  released()
+      boundary = options.withAgent(forEvent, (lease) =>
+        new Promise<void>((released) => {
+          turnStarted(lease.agent)
+          const advisor = options.advisor === undefined ? undefined : watchTurn(options.advisor, advisorHistoryOf(options.advisor), lease.agentId ?? event.channel.id)
+          resolve({
+            agent: observed(lease.agent, record, options, event, advisor),
+            release: async () => {
+              try {
+                const result = record.result
+                if (result !== undefined && result.status !== 'error' && !record.streamFailed) {
+                  advisor?.record(record.answer)
+                  if (options.compact !== undefined && lease.agentId !== undefined) await compactIfNeeded(options.compact, lease.agentId, result)
                 }
-              },
-            })
-          }),
+              } finally {
+                turnEnded(lease.agent)
+                lease.release()
+                released()
+              }
+            },
+          })
+        }),
       )
       boundary.catch(reject)
     })
@@ -339,9 +300,7 @@ async function answerTurn(
       const lines = gate.lines(output)
       return lines.length === 0 ? undefined : lines.join('\n')
     },
-    ...(options.ack === undefined
-      ? {}
-      : { ackEmoji: options.ack.emoji, adapters: [...options.ack.adapters()] }),
+    ...(options.ack === undefined ? {} : { ackEmoji: options.ack.emoji, adapters: [...options.ack.adapters()] }),
   })
   let failure: { readonly error: unknown } | undefined
   try {
@@ -350,21 +309,14 @@ async function answerTurn(
     failure = { error }
   }
   // The boundary's own failure (a disposal that threw) surfaces when the turn itself did not fail.
-  const disposal = await boundary.then(
-    () => undefined,
-    (error: unknown) => ({ error }),
-  )
+  const disposal = await boundary.then(() => undefined, (error: unknown) => ({ error }))
   const thrown = failure ?? disposal
   if (thrown !== undefined) throw thrown.error
   return maskSecrets(record.answer === '' ? NO_ANSWER_REPLY : record.answer, secrets)
 }
 
 /** Inject `note` into the session's running turn; with none running, nothing is sent and the person is told. */
-async function answerSteer(
-  options: ReplyHandlerOptions,
-  event: MessageEvent,
-  note: string,
-): Promise<string> {
+async function answerSteer(options: ReplyHandlerOptions, event: MessageEvent, note: string): Promise<string> {
   return options.withAgent(event, async (lease) => {
     try {
       if ((runningTurns.get(lease.agent) ?? 0) === 0) return STEER_IDLE_REPLY
@@ -377,33 +329,19 @@ async function answerSteer(
 }
 
 /** Why one member could not be reached; a code or an error name, never the message or an id. */
-async function sendToMember(
-  adapter: BasePlatformAdapter | undefined,
-  channelId: string,
-  answer: string,
-): Promise<string | undefined> {
+async function sendToMember(adapter: BasePlatformAdapter | undefined, channelId: string, answer: string): Promise<string | undefined> {
   if (adapter === undefined) return 'not started'
   // Rendered for the member's own platform, not the origin's dialect.
   return deliverText(adapter, channelId, answer, 'group')
 }
 
 /** Send the answer to every other member, each on its own: one that fails costs only itself. */
-async function fanOut(
-  broadcast: BroadcastOptions,
-  group: BroadcastGroup,
-  event: MessageEvent,
-  answer: string,
-): Promise<void> {
-  const others = group.members.filter(
-    (member) => member.platform !== event.platform || member.channelId !== event.channel.id,
-  )
+async function fanOut(broadcast: BroadcastOptions, group: BroadcastGroup, event: MessageEvent, answer: string): Promise<void> {
+  const others = group.members.filter((member) => member.platform !== event.platform || member.channelId !== event.channel.id)
   await Promise.all(
     others.map(async ({ platform, channelId }) => {
       const failure = await sendToMember(broadcast.adapterFor(platform), channelId, answer)
-      if (failure !== undefined)
-        broadcast.write(
-          `broadcast group ${group.name}: ${platform}: the answer was not delivered (${failure})`,
-        )
+      if (failure !== undefined) broadcast.write(`broadcast group ${group.name}: ${platform}: the answer was not delivered (${failure})`)
     }),
   )
 }
@@ -414,19 +352,9 @@ async function fanOut(
  * rethrown after that reply, so the runner fires `on_error`. In a broadcast group it is the
  * session's own goal, with no fan-out.
  */
-async function answerGoal(
-  settings: GoalSettings,
-  options: ReplyHandlerOptions,
-  event: MessageEvent,
-  ctx: GatewayContext,
-  goal: string,
-): Promise<void> {
+async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, goal: string): Promise<void> {
   if (goal === '') {
-    await send(
-      ctx,
-      { text: GOAL_USAGE_REPLY, format: 'plain' },
-      { failed: false, answer: GOAL_USAGE_REPLY },
-    )
+    await send(ctx, { text: GOAL_USAGE_REPLY, format: 'plain' }, { failed: false, answer: GOAL_USAGE_REPLY })
     return
   }
   const outcome = await options.withAgent(event, async (lease) => {
@@ -440,10 +368,7 @@ async function answerGoal(
   })
   // B-398 FR-006 holds for a goal's reply too: no configured value reaches the chat.
   const reply = maskSecrets(outcome.reply, options.secrets ?? [])
-  const failure: TurnOutcome =
-    outcome.error === undefined
-      ? { failed: false, answer: reply }
-      : { failed: true, error: outcome.error }
+  const failure: TurnOutcome = outcome.error === undefined ? { failed: false, answer: reply } : { failed: true, error: outcome.error }
   await send(ctx, { text: reply, format: 'plain' }, failure)
   if (outcome.error !== undefined) throw outcome.error
 }
