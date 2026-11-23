@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1605 export(s) across 30 entry point(s).
+1607 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@11.0.0`.
 
@@ -1477,6 +1477,8 @@ Measured against `@theokit/sdk@11.0.0`.
 | `transcriptRootHint` | value |
 | `transcriptToText` | value |
 | `ClassifyProjectsOptions` | type |
+| `CollectorRootMarkerFormat` | type |
+| `CollectorRootOptions` | type |
 | `DeleteSessionOptions` | type |
 | `DeleteSessionResult` | type |
 | `ForkIfBusyOptions` | type |
