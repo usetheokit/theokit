@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `@theokit/tui` is pinned at 0.83.4 (was 0.80.0) (#2607).
 - Chat transcripts are collected: the daemon removes transcripts older than `THEOCLAW_TRANSCRIPT_RETENTION_DAYS` (default 30) at start and daily, never a chat's current one, and `theoclaw sessions gc [--dry-run]` runs the same collection by hand (#2602).
 
 - Control plane: the listener runs on `createNodeServer` with its trusted-proxy stamping, the bind and bearer rules are `@theokit/http/guards`, and the `/control` socket, device pairing, `/control/pair` route and terminal, desktop and worker client are `@theokit/agents/control` (`attachControlSocket`, `createDevicePairing`, `pairRoute`, `createControlClient`). The `/control` sessions are the framework's `createSessionStore` with the app's turn (secret masking, timeline events, usage) as its `runTurn`. Changes visible to a client: a trusted-proxy identity is stamped as `x-theokit-trusted-identity`, and an internal server error answers `Internal Server Error` as text (#2608).

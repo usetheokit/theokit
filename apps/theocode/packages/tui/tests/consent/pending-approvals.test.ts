@@ -19,30 +19,34 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { createApprovalLedger, findNextApproval, ingest, settle } from '../../src/consent/pending-approvals.js'
+import { createApprovalLedger, findNextApproval, ingest, prune, settle } from '@theokit/tui'
 
 /** One assistant message carrying a part in the `approval-requested` state. */
 const pendingThread = (id: string): Parameters<typeof ingest>[1] => [
-  { parts: [{ state: 'approval-requested', toolCallId: id, toolName: 'Bash', input: {} }] },
+  {
+    id: 'm1',
+    role: 'assistant',
+    parts: [
+      { type: 'tool-Bash', state: 'approval-requested', toolCallId: id, toolName: 'Bash', input: {} },
+    ],
+  },
 ]
 
 describe('B-011 — the ledger is load-bearing while the thread lags', () => {
   it('test_a_pending_approval_is_offered', () => {
     // Anti-vacuity floor: if nothing were ever offered, everything below passes for free.
-    const ledger = createApprovalLedger()
-    ingest(ledger, pendingThread('call-1'))
+    const ledger = ingest(createApprovalLedger(), pendingThread('call-1'))
 
     expect(findNextApproval(ledger)?.approvalId).toBe('call-1')
   })
 
   it('test_a_settled_approval_is_not_offered_again_while_the_thread_still_shows_it', () => {
-    const ledger = createApprovalLedger()
     const thread = pendingThread('call-1')
-    ingest(ledger, thread)
+    let ledger = ingest(createApprovalLedger(), thread)
 
-    settle(ledger, 'call-1')
+    ledger = settle(ledger, 'call-1')
     // The SDK has not mutated the thread yet — this is the exact window in question.
-    ingest(ledger, thread)
+    ledger = ingest(ledger, thread)
 
     expect(
       findNextApproval(ledger),
@@ -54,12 +58,20 @@ describe('B-011 — the ledger is load-bearing while the thread lags', () => {
 
   it('test_a_second_distinct_approval_is_still_offered_after_the_first_settles', () => {
     // The ledger must suppress the ANSWERED one, not stop offering approvals altogether.
-    const ledger = createApprovalLedger()
-    ingest(ledger, pendingThread('call-1'))
-    settle(ledger, 'call-1')
+    let ledger = ingest(createApprovalLedger(), pendingThread('call-1'))
+    ledger = settle(ledger, 'call-1')
 
-    ingest(ledger, pendingThread('call-2'))
+    ledger = ingest(ledger, pendingThread('call-2'))
 
     expect(findNextApproval(ledger)?.approvalId).toBe('call-2')
+  })
+
+  it('test_a_backtrack_that_cuts_the_thread_drops_its_approvals', () => {
+    // `use-approvals.ts` prunes before it ingests; the toolkit ledger does not do it on its own.
+    let ledger = ingest(createApprovalLedger(), pendingThread('call-1'))
+
+    ledger = ingest(prune(ledger, 0), [])
+
+    expect(findNextApproval(ledger)).toBeUndefined()
   })
 })

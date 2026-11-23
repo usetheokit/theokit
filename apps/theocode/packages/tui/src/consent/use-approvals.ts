@@ -7,12 +7,14 @@ import {
   createApprovalLedger,
   findNextApproval,
   ingest,
+  prune,
   settle,
   type ApprovalLedger,
-} from './pending-approvals.js'
+  type UIMessageLike,
+} from '@theokit/tui'
 
 interface AgentWithApproval {
-  thread: Parameters<typeof ingest>[1]
+  thread: readonly UIMessageLike[]
   approve: (approvalId: string, decision: { approved: boolean }) => unknown
 }
 
@@ -33,14 +35,16 @@ export function useApprovals(
 
   const pendingApproval = useMemo(() => {
     void epoch
-    ingest(registry.current, agent.thread)
+    // The toolkit ledger is immutable: every step returns the next value, and a backtrack that cut
+    // the thread is dropped by `prune` BEFORE `ingest` so a re-used message index is read again.
+    registry.current = ingest(prune(registry.current, agent.thread.length), agent.thread)
     return findNextApproval(registry.current)
   }, [agent.thread, epoch])
 
   const approve = agent.approve
   const settleApproval = useCallback(
     (approvalId: string, approved: boolean): void => {
-      settle(registry.current, approvalId)
+      registry.current = settle(registry.current, approvalId)
       setEpoch((n) => n + 1)
       void approve(approvalId, { approved })
     },
