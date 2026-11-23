@@ -664,21 +664,11 @@ if (isMain()) {
     uid: process.getuid?.(),
     runner: runCommand,
   }
-  // process.exit() truncates what is still buffered on a pipe (the update output); wait for both streams to drain first.
-  const exitAfterFlush = (code: number): void => {
-    let pending = 2
-    const done = (): void => {
-      pending -= 1
-      if (pending === 0) process.exit(code)
-    }
-    process.stdout.write('', done)
-    process.stderr.write('', done)
-  }
   runCli(process.argv.slice(2), io).then(
-    (code) => exitAfterFlush(code),
+    (code) => process.exit(code),
     (error: unknown) => {
       process.stderr.write(`theoclaw: ${describeError(error)}\n`)
-      exitAfterFlush(1)
+      process.exit(1)
     },
   )
 }
