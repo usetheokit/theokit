@@ -1,6 +1,6 @@
 import {
   defineCommand,
-  routeCommand as classifyInput,
+  createCommandRegistry,
   type CommandDefinition,
 } from '@theokit/agents/commands'
 import type { ChatComposerCommand } from '@theokit/tui'
@@ -268,15 +268,39 @@ function routeWithArgument(trimmed: string): CommandAction | undefined {
  */
 function definitions(customNames?: ReadonlySet<string>): CommandDefinition[] {
   const builtins = [...EXACT_COMMANDS.keys(), ...COMMANDS_WITH_ARGUMENT.map(([name]) => name)]
-  const names = new Set([
-    ...builtins.map((n) => n.slice(1)),
+    .map((n) => n.slice(1))
+    // `/exit` is an alias of `/quit`, declared below, not a command of its own.
+    .filter((n) => n !== 'exit')
+  const declared: { name: string; aliases?: string[]; hidden?: boolean }[] = [
+    ...builtins.map((name) => (name === 'quit' ? { name, aliases: ['exit'] } : { name })),
     // Every Codex name, INCLUDING the ones the menu does not offer: being answerable when typed
     // and being advertised are different jobs, and only the first one is what stops a person
     // arriving from Codex hitting `unknown command`.
-    ...CODEX_NAMES.keys(),
-    ...(customNames ?? []),
-  ])
-  return [...names].map((name) => defineCommand({ name, description: '', arg: 'optional' }))
+    ...[...CODEX_NAMES].map(([name, v]) => ({ name, hidden: !v.listed })),
+  ]
+  const defs: CommandDefinition[] = []
+  const claimed = new Set<string>()
+  const add = (def: CommandDefinition): void => {
+    if (claimed.has(def.name)) return
+    for (const n of [def.name, ...(def.aliases ?? [])]) claimed.add(n)
+    defs.push(def)
+  }
+  // A custom command owns its name outright, so a builtin name or alias it shadows is dropped
+  // before the registry (which rejects duplicates) sees it.
+  for (const name of customNames ?? []) add(defineCommand({ name, description: '' }))
+  for (const { name, aliases, hidden } of declared) {
+    const [first, ...rest] = [name, ...(aliases ?? [])].filter((n) => !claimed.has(n))
+    if (first === undefined) continue
+    add(
+      defineCommand({
+        name: first,
+        description: '',
+        ...(rest.length > 0 ? { aliases: rest } : {}),
+        ...(hidden === true ? { hidden: true } : {}),
+      }),
+    )
+  }
+  return defs
 }
 
 /**
@@ -294,7 +318,7 @@ export function routeCommand(input: string, customNames?: ReadonlySet<string>): 
   const trimmed = input.trim()
   if (trimmed.length === 0) return { kind: 'noop' }
 
-  const routed = classifyInput(trimmed, definitions(customNames))
+  const routed = createCommandRegistry(definitions(customNames)).route(trimmed)
   if (routed.kind === 'message') return { kind: 'send', text: routed.text }
   if (routed.kind === 'error') {
     return { kind: 'commandError', reason: routed.reason, input: trimmed }

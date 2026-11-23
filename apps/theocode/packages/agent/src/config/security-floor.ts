@@ -20,6 +20,7 @@
  * confine and never widen", which is the part every agent product rebuilds identically.
  */
 import { applySecurityFloor as applyFloor } from '@theokit/agents'
+import type { SecurityFloorSpec } from '@theokit/agents/config'
 
 import { LAYERS } from './layers.js'
 
@@ -32,10 +33,24 @@ export const MORE_PERMISSIVE = {
 export type SecurityKey = keyof typeof MORE_PERMISSIVE
 
 /** Layers that may only tighten the user's choice. */
-const CANNOT_LOOSEN = ['project', 'project_local', 'profile', 'env'] as const
+export const CANNOT_LOOSEN = ['project', 'project_local', 'profile', 'env'] as const
 
 /** The layer that wins outright in both directions — the operator's explicit flag. */
-const OPERATOR_OVERRIDE = 'cli'
+export const OPERATOR_OVERRIDE = 'cli'
+
+/** The same vocabulary as the `floors` declaration `defineLayeredConfig` takes. */
+export const SECURITY_FLOORS = {
+  sandbox_mode: floorFor('sandbox_mode'),
+  approval_policy: floorFor('approval_policy'),
+}
+
+function floorFor(key: SecurityKey): SecurityFloorSpec {
+  return {
+    permissiveness: MORE_PERMISSIVE[key],
+    restricted: CANNOT_LOOSEN,
+    override: OPERATOR_OVERRIDE,
+  }
+}
 
 export interface LayeredValues {
   defaults?: string | undefined

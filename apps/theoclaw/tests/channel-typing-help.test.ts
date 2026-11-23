@@ -2,6 +2,7 @@ import 'reflect-metadata'
 
 import { describe, expect, it } from 'vitest'
 
+import { GatewayRunner } from '@theokit/gateway'
 import type { GatewayContext, MessageEvent, PlatformName, SendResult } from '@theokit/gateway'
 
 import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
@@ -10,8 +11,10 @@ import { createAcpCommandHook, createAcpSessions } from '../src/channels/acp-com
 import { CHAT_COMMANDS } from '../src/channels/info-commands.js'
 import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
-import { readAckReaction, showTyping } from '../src/channels/typing.js'
-import { FakeAdapter, FakeAgent, assistant, finished, messageEvent } from './fakes.js'
+import { readAckReaction } from '../src/channels/typing.js'
+import { readGoalSettings } from '../src/channels/goal-command.js'
+import type { TurnAgent } from '../src/agent-port.js'
+import { FakeAdapter, FakeAgent, assistant, finished, messageEvent, waitFor } from './fakes.js'
 
 class TypingAdapter extends FakeAdapter {
   readonly calls: string[] = []
@@ -27,37 +30,70 @@ function ctxFor(event: MessageEvent, log: string[]): GatewayContext {
   return { event, reply: async (text) => (log.push(`reply:${text}`), { ok: true, messageId: 'm' }) }
 }
 
-describe('typing indicator (OC-106)', () => {
-  it('shows while the turn runs and stops before the lease is released, then the reply is sent', async () => {
-    const adapter = new TypingAdapter('telegram')
-    const event = messageEvent('telegram', 'hello')
-    const log: string[] = []
-    const agent = new FakeAgent({ frames: [assistant('Hi!'), finished()] })
+/** Typing is the runner's: the app's own loop is gone, so a turn and a `/goal` are checked through it. */
+describe('typing indicator through GatewayRunner (OC-106)', () => {
+  async function runThrough(text: string, agent: TurnAgent, adapter: TypingAdapter = new TypingAdapter('telegram')) {
+    const event = messageEvent('telegram', text)
+    const replies: string[] = []
     const handler = createReplyHandler({
-      withAgent: async (_e, work) => work({ agent, release: () => void log.push('release') }),
+      withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => void adapter.calls.push('release') }),
       reset: async () => undefined,
-      typing: { adapterFor: () => adapter },
+      goal: readGoalSettings({ THEOCLAW_MODEL: 'openrouter/chat-model', OPENROUTER_API_KEY: 'router-key' }),
     })
-    await handler(event, ctxFor(event, log))
-    expect(adapter.calls).toEqual([`start:${event.channel.id}`, `stop:${event.channel.id}`])
-    expect(log.at(-1)).toBe('release')
-    expect(log.some((line) => line.startsWith('reply:'))).toBe(true)
+    const runner = new GatewayRunner({
+      adapters: [adapter],
+      handler: async (inbound, ctx) => {
+        await handler(inbound, { ...ctx, reply: async (reply, options) => (replies.push(reply), adapter.calls.push('reply'), ctx.reply(reply, options)) })
+      },
+    })
+    await runner.start()
+    await adapter.deliver(event)
+    await waitFor(() => adapter.calls.includes('release') && adapter.calls.length >= 2, 2000, 'the turn to end')
+    await new Promise((r) => setTimeout(r, 20))
+    await runner.stop()
+    return { calls: adapter.calls, replies, channel: event.channel.id }
+  }
+
+  it('starts typing before a turn replies and stops it after', async () => {
+    const { calls, replies, channel } = await runThrough('hello', new FakeAgent({ frames: [assistant('Hi!'), finished()] }) as unknown as TurnAgent)
+    expect(replies).toEqual(['Hi!'])
+    // Typing shows while the turn runs; the runner stops it once the handler has replied and released the lease.
+    expect(calls[0]).toBe(`start:${channel}`)
+    expect(calls.indexOf('reply')).toBeLessThan(calls.indexOf('release'))
+    expect(calls.indexOf('release')).toBeLessThan(calls.indexOf(`stop:${channel}`))
+    expect(calls.at(-1)).toBe(`stop:${channel}`)
   })
 
-  it('renews while running, stops once, and survives an adapter that throws', async () => {
+  it('still replies when the adapter cannot show typing (it throws)', async () => {
     const adapter = new TypingAdapter('telegram')
     adapter.startTyping = async () => {
       throw new Error('boom')
     }
-    const stop = showTyping({ adapterFor: () => adapter, renewMs: 5 }, 'telegram', 'c1')
-    await new Promise((r) => setTimeout(r, 30))
-    await stop()
-    await stop()
-    expect(adapter.calls).toEqual(['stop:c1'])
+    const { calls, replies, channel } = await runThrough('hello', new FakeAgent({ frames: [assistant('Hi!'), finished()] }) as unknown as TurnAgent, adapter)
+    expect(replies).toEqual(['Hi!'])
+    expect(calls).toEqual(['reply', 'release', `stop:${channel}`])
   })
 
-  it('does nothing for a platform that is not started', async () => {
-    await showTyping({ adapterFor: () => undefined }, 'telegram', 'c1')()
+  it('replies on a platform whose adapter has no typing indicator', async () => {
+    const adapter = new TypingAdapter('telegram')
+    adapter.startTyping = FakeAdapter.prototype.startTyping
+    adapter.stopTyping = FakeAdapter.prototype.stopTyping
+    const { calls, replies } = await runThrough('hello', new FakeAgent({ frames: [assistant('Hi!'), finished()] }) as unknown as TurnAgent, adapter)
+    expect(replies).toEqual(['Hi!'])
+    expect(calls).toEqual(['reply', 'release'])
+  })
+
+  it('starts typing around a /goal run and stops it after', async () => {
+    const agent = Object.assign(new FakeAgent({ frames: [] }) as unknown as TurnAgent, {
+      runUntil: async function* () {
+        yield { type: 'turn_started' }
+        return { status: 'achieved', finalResponse: 'done' }
+      },
+    })
+    const { calls, replies, channel } = await runThrough('/goal tidy the notes', agent)
+    expect(replies).toEqual(['achieved: done'])
+    expect(calls[0]).toBe(`start:${channel}`)
+    expect(calls.at(-1)).toBe(`stop:${channel}`)
   })
 })
 
@@ -190,7 +226,7 @@ async function runTurn(adapter: FakeAdapter, ackReaction: string | undefined) {
         release: () => undefined,
       }),
     reset: async () => undefined,
-    typing: { adapterFor: () => adapter, ...(ackReaction === undefined ? {} : { ackReaction }) },
+    ...(ackReaction === undefined ? {} : { ack: { emoji: ackReaction, adapters: () => [adapter] } }),
   })
   await handler(event, ctxFor(event, log))
   await new Promise((r) => setTimeout(r, 5))

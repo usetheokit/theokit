@@ -45,3 +45,22 @@ describe('B-041 — profiles accumulate across layers, per name', () => {
     ).toThrow(/unknown profile/)
   })
 })
+
+describe('a same-named profile is replaced whole, and `-c` may define one', () => {
+  it('test_a_later_definition_of_a_profile_replaces_it_rather_than_merging', () => {
+    const cfg = resolveConfig({
+      user: { profile: 'p', profiles: { p: { reasoning_effort: 'low', memory: true } } },
+      project: { profiles: { p: { reasoning_effort: 'high' } } },
+    })
+    expect(cfg.reasoning_effort).toBe('high')
+    expect(cfg.memory).toBe(false)
+  })
+
+  it('test_a_profile_defined_by_cli_is_selectable', () => {
+    const cfg = resolveConfig({
+      cli: { profile: 'q', profiles: { q: { reasoning_effort: 'minimal' } } },
+    })
+    expect(cfg.reasoning_effort).toBe('minimal')
+    expect(cfg.profile).toBe('q')
+  })
+})

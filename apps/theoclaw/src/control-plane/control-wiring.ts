@@ -1,6 +1,8 @@
+import { createDevicePairing, type DevicePairing } from '@theokit/agents/control'
+
 import type { TurnAgent } from '../agent-port.js'
 import { createControlSessions } from './control-sessions.js'
-import { createDevicePairing, type DevicePairing } from './device-pairing.js'
+import { describeError, TheoClawConfigError } from './errors.js'
 import type { ControlSocketOptions } from './control-socket.js'
 import { createTurnRunner, type WithAgent } from './turn.js'
 
@@ -27,6 +29,26 @@ export function controlOptions(
   }
 }
 
+/** What `openDevicePairing` takes: the state directory, and the clock and report line a test replaces. */
+export interface PairingOptions {
+  readonly dir: string
+  readonly clock?: () => number
+  readonly write?: (line: string) => void
+}
+
+/**
+ * The framework's device store over `devices.json` in the state directory. A file that cannot be
+ * read or parsed stops the start with `TheoClawConfigError` naming `THEOCLAW_STATE_DIR`.
+ */
+export function openDevicePairing(options: PairingOptions): DevicePairing {
+  const write = options.write ?? ((line: string) => void process.stderr.write(`${line}\n`))
+  try {
+    return createDevicePairing({ dir: options.dir, report: write, ...(options.clock === undefined ? {} : { now: options.clock }) })
+  } catch (error) {
+    throw new TheoClawConfigError(describeError(error), { variable: 'THEOCLAW_STATE_DIR' })
+  }
+}
+
 /**
  * Device pairing (OC-91) needs a state directory to keep the approved devices and a control token
  * for the owner to approve with; without either it is off and `/control` is unchanged.
@@ -36,5 +58,5 @@ export function devicePairingFor(
   controlToken: string | undefined,
   write: (line: string) => void,
 ): DevicePairing | undefined {
-  return stateDir === undefined || controlToken === undefined ? undefined : createDevicePairing({ dir: stateDir, write })
+  return stateDir === undefined || controlToken === undefined ? undefined : openDevicePairing({ dir: stateDir, write })
 }

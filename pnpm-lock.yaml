@@ -273,8 +273,8 @@ importers:
         specifier: 0.25.0
         version: 0.25.0(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
       '@theokit/gateway-agent':
-        specifier: 0.3.1
-        version: 0.3.1(@theokit/gateway@0.25.0(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(@theokit/presenter@packages+presenter)(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
+        specifier: 0.3.2
+        version: 0.3.2(@theokit/gateway@0.25.0(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(@theokit/presenter@packages+presenter)(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
       '@theokit/gateway-discord':
         specifier: 0.8.0
         version: 0.8.0(@theokit/gateway@0.25.0(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(discord.js@14.27.0)
@@ -338,6 +338,9 @@ importers:
       '@theokit/gateway-zalo':
         specifier: 0.3.0
         version: 0.3.0(@theokit/gateway@0.25.0(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
+      '@theokit/host':
+        specifier: workspace:*
+        version: link:../../packages/host
       '@theokit/http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -3380,8 +3383,8 @@ packages:
     peerDependencies:
       reflect-metadata: ^0.2.0
 
-  '@theokit/gateway-agent@0.3.1':
-    resolution: {integrity: sha512-ku6nYaQYYNiAjAfE1PfQ1Xz/ajfMFP5IhBrtHbDzej82i2oo9c21tlWw+edj6YCZU3uIfMlEoU2ETayCQpA3Rg==}
+  '@theokit/gateway-agent@0.3.2':
+    resolution: {integrity: sha512-yD8eKMIzL1xTAL/gdUTqzobtoMxxPykWzg3DK41iFvjSFw4lM4jpb6k0uoteScDd1GS3KHYcqR2h+pxJufmKmA==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@theokit/gateway': '>=0.19.0 <1.0.0'
@@ -11156,7 +11159,7 @@ snapshots:
     dependencies:
       reflect-metadata: 0.2.2
 
-  '@theokit/gateway-agent@0.3.1(@theokit/gateway@0.25.0(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(@theokit/presenter@packages+presenter)(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))':
+  '@theokit/gateway-agent@0.3.2(@theokit/gateway@0.25.0(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(@theokit/presenter@packages+presenter)(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))':
     dependencies:
       '@theokit/gateway': 0.25.0(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
       '@theokit/presenter': link:packages/presenter

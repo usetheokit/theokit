@@ -1,5 +1,5 @@
-import { bearerCheck } from './bearer.js'
-import type { DevicePairing } from './device-pairing.js'
+import type { DevicePairing } from '@theokit/agents/control'
+import { bearerCheck } from '@theokit/http/guards'
 import type { PartialHandler } from './http-dispatch.js'
 
 /** The path prefix of the opt-in HTTP form of control-plane methods (OC-128). */
@@ -32,7 +32,7 @@ export function rpcRoute(token: string, devices: DevicePairing): PartialHandler 
     }
     if (request.method !== 'GET')
       return Promise.resolve(new Response(null, { status: 405, headers: { Allow: 'GET' } }))
-    return Promise.resolve(Response.json({ ok: true, devices: devices.pending() }))
+    return Promise.resolve(Response.json({ ok: true, devices: devices.pending().map(({ id, name, city }) => ({ id, name, ...(city === undefined ? {} : { city }) })) }))
   }
 }
 

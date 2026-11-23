@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type ControlClient, createControlClient, TheoClawControlError } from "../src/control-client/control-client.js";
+import { type ControlClient, connectControlClient, TheoClawControlError } from "../src/control-client/control-client.js";
 import { runWithOutputMask } from "../src/control-client/masked-entry.js";
 import { readControlClientSettings } from "../src/control-client/settings.js";
 import { createContainer } from "../src/composition.js";
@@ -53,7 +53,7 @@ async function startInstance(turn: FakeTurn): Promise<{ url: string; agents: Fak
 }
 
 async function connected(url: string, token = TOKEN): Promise<ControlClient> {
-  const client = await createControlClient({ url, token });
+  const client = await connectControlClient({ url, token });
   clients.push(client);
   return client;
 }
@@ -64,7 +64,7 @@ async function frames(iterable: AsyncIterable<Record<string, unknown>>): Promise
   return out;
 }
 
-describe("createControlClient (T3.1)", () => {
+describe("connectControlClient (T3.1)", () => {
   it("chat yields the frames of one turn and ends after the final frame", async () => {
     const { url } = await startInstance({ frames: [assistant("hello"), finished()], deltas: ["hel", "lo"] });
     const client = await connected(url);
@@ -89,7 +89,7 @@ describe("createControlClient (T3.1)", () => {
   it("a wrong token rejects with the 401 and prints no token", async () => {
     const { url } = await startInstance({ frames: [finished()] });
     const wrong = "w".repeat(40);
-    const error = await createControlClient({ url, token: wrong }).catch((e: unknown) => e);
+    const error = await connectControlClient({ url, token: wrong }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(TheoClawControlError);
     expect((error as Error).message).toContain("401");
     expect((error as Error).message).not.toContain(wrong);
@@ -103,7 +103,7 @@ describe("createControlClient (T3.1)", () => {
         probe.close(() => resolve(free));
       });
     });
-    const error = await createControlClient({ url: `ws://127.0.0.1:${port}/control`, token: TOKEN }).catch((e: unknown) => e);
+    const error = await connectControlClient({ url: `ws://127.0.0.1:${port}/control`, token: TOKEN }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(TheoClawControlError);
     expect((error as Error).message).toContain(`127.0.0.1:${port}`);
     expect((error as Error).message).not.toContain(TOKEN);
