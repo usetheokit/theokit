@@ -115,4 +115,54 @@ describe('theoclaw sessions gc', () => {
     expect(existsSync(paths['theoclaw-x-g0']!)).toBe(false)
     expect(existsSync(paths['theoclaw-x-g1']!)).toBe(true)
   })
+
+  function capture(workspace: string): {
+    io: Parameters<typeof sessionsCommand>[1]
+    out: () => string
+    err: () => string
+  } {
+    let out = ''
+    let err = ''
+    const sink = (add: (s: string) => void): Writable =>
+      new Writable({ write: (chunk, _e, done) => (add(String(chunk)), done()) })
+    return {
+      io: {
+        env: { THEOCLAW_WORKSPACE: workspace },
+        homeDir: workspace,
+        stdout: sink((s) => (out += s)),
+        stderr: sink((s) => (err += s)),
+      },
+      out: () => out,
+      err: () => err,
+    }
+  }
+
+  it('prints only one JSON line on stdout with --json and honours --days and generations', async () => {
+    const { workspace, paths } = setup(FILES)
+    writeFileSync(
+      join(workspace, '.theoclaw', 'sessions.json'),
+      JSON.stringify({ version: 1, generations: { a: 1, b: 2, c: 1, d: 0 } }),
+    )
+    const cap = capture(workspace)
+    expect(await sessionsCommand(['gc', '--dry-run', '--json', '--days', '55'], cap.io)).toBe(0)
+    const lines = cap.out().trim().split('\n')
+    expect(lines).toHaveLength(1)
+    const report = JSON.parse(lines[0]!) as { dryRun: boolean; removed: string[] }
+    expect(report.dryRun).toBe(true)
+    // 60d and 70d old and retired; the 50d one is inside the 55-day window; d is still current.
+    expect([...report.removed].sort()).toEqual(['theoclaw-b-g0', 'theoclaw-c-g0'])
+    expect(cap.err()).toBe('')
+    for (const path of Object.values(paths)) expect(existsSync(path)).toBe(true)
+  })
+
+  it('rejects --keep-last and says why a flag was refused', async () => {
+    const { workspace } = setup(FILES)
+    const cap = capture(workspace)
+    await expect(sessionsCommand(['gc', '--keep-last', '5'], cap.io)).rejects.toThrow(
+      /--keep-last is not supported/,
+    )
+    await expect(sessionsCommand(['gc', '--days', '0'], cap.io)).rejects.toThrow(
+      /--days requires a positive integer/,
+    )
+  })
 })
