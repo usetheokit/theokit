@@ -11,6 +11,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Model credentials: custom-provider keys now resolve through the framework chain (`resolveAgentCredential`), and the `openai-chatgpt/` route is detected with `isSubscriptionRoute` (#2576).
+
 ### Changed
 
 - The live computer-tool test (OC-62) drives the real model one step per turn (screenshot, pointer and typing, then a second screenshot asked for the code), so a model that stops early or a screenshot description that omits the code no longer fails the promotion's `Live model` check (#2551).

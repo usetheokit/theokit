@@ -16,6 +16,8 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- Model routing: `routeToCredential` and the subscription-route check use the shared `modelForCredential` / `isSubscriptionRoute` helpers from `@theokit/agents/auth` (#2576).
+
 ### Changed
 
 - Turn-failure classification uses `classifyTurnFailure` from `@theokit/agents/errors` (#1845, part of #1930); the retry wording and the message-text fallback stay here. A typed `metadata.statusCode` is now also recognised as transient.
