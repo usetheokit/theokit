@@ -55,7 +55,7 @@ export interface ControlStreamOptions {
   readonly onEnd?: () => void
 }
 
-/** A source for the TUI's `useAgentStream`, bound to one session: calling it opens the turn. */
+/** A stream source for the TUI, bound to one session: calling it opens the turn. */
 export interface ControlStreamSource {
   (): AsyncGenerator<ControlStreamEvent>
   /** Stops the session's running turn; a closed connection has none, so it is quiet. */
