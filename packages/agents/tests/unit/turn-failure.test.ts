@@ -97,4 +97,40 @@ describe('turn failure', () => {
     expect(text).toContain('tool returned an image')
     expect(describeTurnFailure({ ...failure, message: 'boom' })).toBe('boom [tool_runtime_error]')
   })
+
+  it('keeps and prints an unknown provider code', () => {
+    const f = classifyTurnFailure(Object.assign(new Error('busy'), { code: 'overloaded_error' }))
+    expect(f.code).toBe('unknown')
+    expect(f.rawCode).toBe('overloaded_error')
+    expect(describeTurnFailure(f)).toBe('busy [overloaded_error]')
+    expect(classifyTurnFailure(new Error('x')).rawCode).toBeUndefined()
+  })
+
+  it('prefers a known code in the cause chain for rawCode', () => {
+    const err = Object.assign(new Error('top'), {
+      code: 'E123',
+      cause: Object.assign(new Error('inner'), { code: 'rate_limit' }),
+    })
+    const f = classifyTurnFailure(err)
+    expect(f.code).toBe('rate_limit')
+    expect(f.rawCode).toBe('rate_limit')
+  })
+
+  it('lets a probe win over the per-code hint and falls through on undefined', () => {
+    const f = classifyTurnFailure(provider('rate_limit'))
+    expect(describeTurnFailure(f, { probe: () => 'custom' })).toContain(': custom')
+    expect(describeTurnFailure(f, { probe: () => undefined })).toBe(describeTurnFailure(f))
+    const odd = classifyTurnFailure(new Error('weird'))
+    expect(describeTurnFailure(odd, { probe: (x) => `saw ${x.message}` })).toBe(
+      'weird: saw weird',
+    )
+  })
+
+  it('appends a suffix after the attempts text', () => {
+    const f = classifyTurnFailure(new Error('boom'))
+    expect(describeTurnFailure(f, { attempts: 2, suffix: 'set DEBUG=1' })).toBe(
+      'boom after 2 attempts set DEBUG=1',
+    )
+    expect(describeTurnFailure(f, { suffix: '' })).toBe('boom')
+  })
 })

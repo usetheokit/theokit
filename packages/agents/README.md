@@ -391,7 +391,7 @@ when both are set, the union is passed.
 
 ## Describing a failed turn
 
-Import from `@theokit/agents/errors`. `classifyTurnFailure(err)` walks `err.cause` (at most eight links) and returns `{ code, transient, message }`. A typed code anywhere in the chain wins over text, and `transient` comes only from `isTransientError` and typed provider status fields, never from digits in a message. `describeTurnFailure(failure, { attempts, hints })` renders `"<message> [<code>]: <hint>"` and appends `after N attempts` only when `attempts > 1`. `DEFAULT_TURN_FAILURE_HINTS` is neutral; pass `hints` to replace the wording for single codes.
+Import from `@theokit/agents/errors`. `classifyTurnFailure(err)` walks `err.cause` (at most eight links) and returns `{ code, rawCode?, transient, message }`; `rawCode` is the code string as given, kept when `code` is coerced to `'unknown'`. A typed code anywhere in the chain wins over text, and `transient` comes only from `isTransientError` and typed provider status fields, never from digits in a message. `describeTurnFailure(failure, { attempts, hints, probe, suffix })` renders `"<message> [<code>]: <hint>"` (an unknown code prints `rawCode`), lets `probe(failure)` return a hint that wins over the per-code hint, appends `suffix` last, and appends `after N attempts` only when `attempts > 1`. `DEFAULT_TURN_FAILURE_HINTS` is neutral; pass `hints` to replace the wording for single codes.
 
 ## Hooks the host owns
 
