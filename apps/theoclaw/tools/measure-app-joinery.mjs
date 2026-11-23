@@ -143,6 +143,7 @@ function entriesOf(root, dep) {
   const map = manifest.exports ?? { '.': manifest.types ?? manifest.main }
   const found = []
   for (const [sub, target] of Object.entries(typeof map === 'string' ? { '.': map } : map)) {
+    // Known blind spot: wildcard subpaths (`./x/*`) name no single module, so their exports are not read.
     if (!sub.startsWith('.') || sub.includes('*') || sub.endsWith('package.json')) continue
     const rel = typesEntry(target)
     if (rel !== undefined && !/\.[cm]?[jt]sx?$/.test(rel)) continue

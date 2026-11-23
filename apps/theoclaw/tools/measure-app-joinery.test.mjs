@@ -5,7 +5,15 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { categoryOf, countCodeLines, declaredNames, frameworkExports, measure, SIGNALS, verdict } from './measure-app-joinery.mjs'
+import {
+  categoryOf,
+  countCodeLines,
+  declaredNames,
+  frameworkExports,
+  measure,
+  SIGNALS,
+  verdict,
+} from './measure-app-joinery.mjs'
 
 const CLI = fileURLToPath(new URL('./measure-app-joinery.mjs', import.meta.url))
 const scratch = []
@@ -39,10 +47,11 @@ describe('measure-app-joinery', () => {
     const run = spawnSync(process.execPath, [CLI], { encoding: 'utf8' })
     expect(run.status).toBe(1)
     expect(run.stderr).toMatch(/joined: \d+ {2}total: \d+ {2}gap: 0 {2}presenter: 0/)
-    for (const name of ['createControlClient', 'createDevicePairing', 'attachControlSocket', 'resolveSecretRefs']) {
+    for (const name of ['createControlClient', 'createDevicePairing', 'attachControlSocket']) {
       expect(run.stderr).toContain(`duplicate ${name} `)
     }
-    // #2598 moved hookFingerprint to the framework; the app imports it, so it is no longer a duplicate.
+    // #2597 and #2598 moved resolveSecretRefs and hookFingerprint to the framework; the app imports them.
+    expect(run.stderr).not.toContain('duplicate resolveSecretRefs ')
     expect(run.stderr).not.toContain('duplicate hookFingerprint ')
   })
 
@@ -54,18 +63,25 @@ describe('measure-app-joinery', () => {
   })
 
   it('exits 1 naming the file when a gap or presenter file has lines', () => {
-    const root = app({ 'glue.ts': 'export const a = 1\nexport const b = 2\n', 'ok.ts': 'export const c = 3\n' })
+    const root = app({
+      'glue.ts': 'export const a = 1\nexport const b = 2\n',
+      'ok.ts': 'export const c = 3\n',
+    })
     const rules = [{ pattern: /glue\.ts$/, category: 'gap', reason: 'test' }]
     const out = verdict(measure(root, rules))
     expect(out.code).toBe(1)
     expect(out.report).toContain('gap 2 src/glue.ts')
-    const presenter = verdict(measure(root, [{ pattern: /ok\.ts$/, category: 'presenter', reason: 'test' }]))
+    const presenter = verdict(
+      measure(root, [{ pattern: /ok\.ts$/, category: 'presenter', reason: 'test' }]),
+    )
     expect(presenter.code).toBe(1)
   })
 
   it('does not fail on mixed or app lines', () => {
     const root = app({ 'a.ts': 'export const a = 1\n' })
-    expect(verdict(measure(root, [{ pattern: /a\.ts$/, category: 'mixed', reason: 'test' }])).code).toBe(0)
+    expect(
+      verdict(measure(root, [{ pattern: /a\.ts$/, category: 'mixed', reason: 'test' }])).code,
+    ).toBe(0)
   })
 })
 
@@ -78,7 +94,11 @@ describe('signals are not vacuous', () => {
       'class ServiceContainer {}',
       'const providers = new Map<string, Provider>()',
     ],
-    presenter: ["const red = '\\u001b[31m'", 'function renderReply(r) {}', 'function formatAgentMessage(m) {}'],
+    presenter: [
+      "const red = '\\u001b[31m'",
+      'function renderReply(r) {}',
+      'function formatAgentMessage(m) {}',
+    ],
   }
   for (const [category, texts] of Object.entries(samples)) {
     for (const text of texts) {
@@ -89,7 +109,10 @@ describe('signals are not vacuous', () => {
   }
 
   it('a file carrying a signal turns a measured app red', () => {
-    const root = app({ 'sse.ts': "res.setHeader('content-type', 'text/event-stream')\n", 'ok.ts': 'export const c = 3\n' })
+    const root = app({
+      'sse.ts': "res.setHeader('content-type', 'text/event-stream')\n",
+      'ok.ts': 'export const c = 3\n',
+    })
     const out = verdict(measure(root))
     expect(out.code).toBe(1)
     expect(out.report).toContain('gap 1 src/sse.ts')
@@ -101,14 +124,29 @@ describe('signals are not vacuous', () => {
 })
 
 describe('framework-name duplicates', () => {
-  function appWithDep(files, exportsMap = { '.': { types: './dist/index.d.ts' }, './sub': { types: './dist/sub.d.ts' } }) {
+  function appWithDep(
+    files,
+    exportsMap = { '.': { types: './dist/index.d.ts' }, './sub': { types: './dist/sub.d.ts' } },
+  ) {
     const root = app(files)
     const pkg = join(root, 'node_modules', '@theokit', 'fw')
     mkdirSync(join(pkg, 'dist'), { recursive: true })
-    writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@theokit/fw', exports: exportsMap }))
-    writeFileSync(join(pkg, 'dist', 'index.d.ts'), 'export declare function alpha(): void\nexport { beta } from "./sub.js"\n')
-    writeFileSync(join(pkg, 'dist', 'sub.d.ts'), 'export declare class Gamma {}\nexport declare function beta(): void\n')
-    writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { '@theokit/fw': '1.0.0' } }))
+    writeFileSync(
+      join(pkg, 'package.json'),
+      JSON.stringify({ name: '@theokit/fw', exports: exportsMap }),
+    )
+    writeFileSync(
+      join(pkg, 'dist', 'index.d.ts'),
+      'export declare function alpha(): void\nexport { beta } from "./sub.js"\n',
+    )
+    writeFileSync(
+      join(pkg, 'dist', 'sub.d.ts'),
+      'export declare class Gamma {}\nexport declare function beta(): void\n',
+    )
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ dependencies: { '@theokit/fw': '1.0.0' } }),
+    )
     return root
   }
 
@@ -119,11 +157,19 @@ describe('framework-name duplicates', () => {
   })
 
   it('finds function and class declarations, not other statements', () => {
-    expect(declaredNames('export function a() {}\nclass B {}\nconst c = () => {}\nfunction d() { function e() {} }')).toEqual(['a', 'B', 'd'])
+    expect(
+      declaredNames(
+        'export function a() {}\nclass B {}\nconst c = () => {}\nfunction d() { function e() {} }',
+      ),
+    ).toEqual(['a', 'B', 'd'])
   })
 
   it('reports a same-named declaration and exits 1', () => {
-    const root = appWithDep({ 'a.ts': 'export function alpha() {}\n', 'b.ts': 'export class Gamma {}\n', 'c.ts': 'export function other() {}\n' })
+    const root = appWithDep({
+      'a.ts': 'export function alpha() {}\n',
+      'b.ts': 'export class Gamma {}\n',
+      'c.ts': 'export function other() {}\n',
+    })
     const out = verdict(measure(root))
     expect(out.code).toBe(1)
     expect(out.report).toContain('duplicate alpha src/a.ts')
@@ -133,14 +179,22 @@ describe('framework-name duplicates', () => {
 
   it('an allow-list entry with a reason silences it', () => {
     const root = appWithDep({ 'a.ts': 'export function alpha() {}\n' })
-    const allowed = [{ path: 'src/a.ts', symbol: 'alpha', reason: 'wraps the framework call with app policy' }]
+    const allowed = [
+      { path: 'src/a.ts', symbol: 'alpha', reason: 'wraps the framework call with app policy' },
+    ]
     expect(verdict(measure(root, undefined, undefined, undefined, allowed)).code).toBe(0)
-    expect(verdict(measure(root, undefined, undefined, undefined, [{ path: 'src/a.ts', reason: ' ' }])).code).toBe(1)
+    expect(
+      verdict(measure(root, undefined, undefined, undefined, [{ path: 'src/a.ts', reason: ' ' }]))
+        .code,
+    ).toBe(1)
   })
 
   it('throws when a declared dependency cannot be measured', () => {
     const root = appWithDep({})
-    writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { '@theokit/missing': '1.0.0' } }))
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ dependencies: { '@theokit/missing': '1.0.0' } }),
+    )
     expect(() => frameworkExports(root)).toThrow(/cannot resolve/)
   })
 })
