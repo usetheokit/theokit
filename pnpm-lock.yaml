@@ -354,8 +354,8 @@ importers:
         specifier: 0.4.0
         version: 0.4.0(@theokit/sdk@9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
       '@theokit/sdk-tools':
-        specifier: 0.29.0
-        version: 0.29.0(@theokit/sdk@9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)
+        specifier: 0.34.0
+        version: 0.34.0(@theokit/sdk@9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)
       '@theokit/skills-registry':
         specifier: 0.1.0
         version: 0.1.0
@@ -649,8 +649,8 @@ importers:
         specifier: 9.0.0
         version: 9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
       '@theokit/sdk-tools':
-        specifier: ^0.29.0
-        version: 0.29.0(@theokit/sdk@9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)
+        specifier: ^0.34.0
+        version: 0.34.0(@theokit/sdk@9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)
       react:
         specifier: '>=18'
         version: 19.2.7
@@ -3598,8 +3598,8 @@ packages:
     peerDependencies:
       '@theokit/sdk': 9.0.0
 
-  '@theokit/sdk-tools@0.29.0':
-    resolution: {integrity: sha512-O96htwfh40QlQgEAcWbSMqdJ9555XjpqWqopoT3sGQ7B4QW58v7sQw0a0WgILeJUlR8EXxmMDK8RP7LBRNFMuQ==}
+  '@theokit/sdk-tools@0.34.0':
+    resolution: {integrity: sha512-5uBvu20lBI2+caDziPwbfd1u9Wo6r2dhtIuBVRJLn/yKrFuGG+U8uJ0zInm1Q8pb55AeYuhKsiB9Vd4Euj4EQw==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@theokit/sdk': 9.0.0
@@ -11328,7 +11328,7 @@ snapshots:
     optionalDependencies:
       node-pty: 1.1.0
 
-  '@theokit/sdk-tools@0.29.0(@theokit/sdk@9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)':
+  '@theokit/sdk-tools@0.34.0(@theokit/sdk@9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)':
     dependencies:
       '@theokit/sdk': 9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@opentelemetry/exporter-metrics-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-prometheus@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/exporter-trace-otlp-http@0.300.0(@opentelemetry/api@1.10.0))(@opentelemetry/resources@3.0.0(@opentelemetry/api@1.10.0))(@opentelemetry/sdk-metrics@3.0.0(@opentelemetry/api@1.10.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
       zod: 4.6.7
@@ -11337,7 +11337,7 @@ snapshots:
       unpdf: 2.1.0
       vitest: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.3)(@vitest/coverage-v8@4.1.12)(happy-dom@21.0.4)(jsdom@25.0.1)(msw@2.14.6(@types/node@22.20.3)(typescript@5.9.3))(vite@7.3.7(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
 
-  '@theokit/sdk-tools@0.29.0(@theokit/sdk@9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)':
+  '@theokit/sdk-tools@0.34.0(@theokit/sdk@9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(mammoth@1.13.0)(unpdf@2.1.0)(vitest@4.1.12)(zod@4.6.7)':
     dependencies:
       '@theokit/sdk': 9.0.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
       zod: 4.6.7
