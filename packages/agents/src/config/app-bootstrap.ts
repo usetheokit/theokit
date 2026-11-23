@@ -137,7 +137,10 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
       const refused: string[] = []
       loadProjectEnv(ctx.env, () => {
         if (!existsSync(file)) return
-        for (const [key, value] of Object.entries(parseEnv(readFileSync(file, 'utf8')))) {
+        const raw = readFileSync(file, 'utf8')
+        const declared = declaredNames(raw)
+        for (const [key, value] of Object.entries(parseEnv(raw))) {
+          if (!declared.has(key)) continue
           if (protectedKeys.has(key)) {
             refused.push(key)
           } else if (ctx.env[key] === undefined) {
@@ -149,6 +152,45 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
       ctx.projectEnv = { file, loaded, refused }
     },
   }
+}
+
+/**
+ * Names declared by `raw`, stricter than `parseEnv`: only identifiers count, and scanning stops at a
+ * quoted value that never closes (everything after it is that value's text, not declarations).
+ */
+function declaredNames(raw: string): Set<string> {
+  const names = new Set<string>()
+  const lines = raw.split(/\r?\n/)
+  let i = 0
+  while (i < lines.length) {
+    const decl = splitDeclaration(lines[i].trim())
+    i++
+    if (decl === undefined) continue
+    const end = valueEnd(decl.value, lines, i)
+    if (end === undefined) return names
+    i = end
+    if (/^[A-Za-z_]\w*$/.test(decl.name)) names.add(decl.name)
+  }
+  return names
+}
+
+function splitDeclaration(line: string): { name: string; value: string } | undefined {
+  if (line === '' || line.startsWith('#')) return undefined
+  const eq = line.indexOf('=')
+  if (eq <= 0) return undefined
+  const name = line
+    .slice(0, eq)
+    .replace(/^export\s+/, '')
+    .trim()
+  return { name, value: line.slice(eq + 1).trimStart() }
+}
+
+/** The index of the line after the value, or `undefined` when a quoted value never closes. */
+function valueEnd(value: string, lines: readonly string[], next: number): number | undefined {
+  const q = value[0]
+  if ((q !== '"' && q !== "'" && q !== '`') || value.slice(1).includes(q)) return next
+  const close = lines.findIndex((l, idx) => idx >= next && l.includes(q))
+  return close === -1 ? undefined : close + 1
 }
 
 /** `projectEnvStepWith()` with no extra protected keys. */
