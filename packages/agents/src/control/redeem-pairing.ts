@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto'
-
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /** The gateway refused a setup code. `status` is the HTTP status; the message never contains the credential. */
@@ -48,7 +46,9 @@ export async function redeemPairing(options: RedeemPairingOptions): Promise<Rede
   if (!secure && base.protocol !== 'http:' && base.protocol !== 'ws:') {
     throw new PairingRefusedError('the address must start with http(s):// or ws(s)://', 0)
   }
-  const credential = randomBytes(32).toString('hex')
+  const credential = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('')
   const pairUrl = new URL('/control/pair', base)
   pairUrl.protocol = secure ? 'https:' : 'http:'
   const response = await (options.fetch ?? fetch)(pairUrl, {

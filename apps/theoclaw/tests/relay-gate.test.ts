@@ -12,16 +12,23 @@ const hold = vi.hoisted(() => ({
   entered: undefined as (() => void) | undefined,
 }))
 
-vi.mock('@theokit/sdk/persistence', async (importOriginal) => {
-  const real = await importOriginal<typeof import('@theokit/sdk/persistence')>()
+vi.mock('@theokit/sdk/a2a', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@theokit/sdk/a2a')>()
   return {
     ...real,
-    replaceFileAtomic: async (...args: Parameters<typeof real.replaceFileAtomic>) => {
-      if (hold.pending !== undefined) {
-        hold.entered?.()
-        await hold.pending
+    // The counter write is held open while `hold.pending` is set.
+    jsonSequenceStore: (file: string) => {
+      const inner = real.jsonSequenceStore(file)
+      return {
+        nextSent: (peer: string) => inner.nextSent(peer),
+        acceptReceived: async (peer: string, seq: number) => {
+          if (hold.pending !== undefined) {
+            hold.entered?.()
+            await hold.pending
+          }
+          return inner.acceptReceived(peer, seq)
+        },
       }
-      return real.replaceFileAtomic(...args)
     },
   }
 })
@@ -34,8 +41,10 @@ describe('relay send gate while the state write is pending', () => {
     const idB = await RelayState.load(fileB, new Map())
     const a = await RelayState.load(join(dir(), 'a.json'), new Map([['bob', idB.publicKey]]))
     const b = await RelayState.load(fileB, new Map([['alice', a.publicKey]]))
-    const envelope = await a.seal('bob', 'hi')
-    const client = { take: async () => [envelope], put: async () => undefined } as unknown as RelayClient
+    const box: unknown[] = []
+    const transport = { send: async (m: unknown) => void box.push(m), poll: async () => box.splice(0) }
+    await a.send(transport as never, 'bob', 'hi')
+    const client = { transport } as unknown as RelayClient
     const gate = new RelayTurnGate()
     const tools = relayTools(b, client, gate)
     const send = tools.find((t) => t.name === 'relay_send')!
