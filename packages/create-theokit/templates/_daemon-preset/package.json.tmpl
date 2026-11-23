@@ -1,0 +1,20 @@
+{
+  "name": "{{name}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "{{name}}": "./main.mjs"
+  },
+  "scripts": {
+    "start": "node main.mjs",
+    "onboard": "node main.mjs onboard"
+  },
+  "dependencies": {
+    "@theokit/host": "^0.2.1",
+    "@theokit/sdk": "^5.32.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

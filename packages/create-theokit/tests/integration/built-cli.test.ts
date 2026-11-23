@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -71,5 +71,28 @@ describe.skipIf(!hasBundle)('built CLI (dist/cli.js) — runs as a published bin
     expect(status).toBe(1)
     expect(stderr).toContain('--bare cannot be combined with --surface=cli')
     expect(existsSync(join(workDir, 'bare-cli'))).toBe(false)
+  })
+})
+
+describe.skipIf(!hasBundle)('built CLI --preset=daemon', () => {
+  it('scaffolds the daemon template and refuses incompatible flags before writing', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ctk-built-daemon-'))
+    try {
+      execFileSync(
+        process.execPath,
+        [CLI, 'd', '--preset=daemon', '--skip-install', '--disable-git'],
+        { cwd: dir, stdio: 'pipe' },
+      )
+      expect(existsSync(join(dir, 'd/main.mjs'))).toBe(true)
+      const bad = spawnSync(process.execPath, [CLI, 'e', '--preset=daemon', '--bare'], {
+        cwd: dir,
+        encoding: 'utf-8',
+      })
+      expect(bad.status).toBe(1)
+      expect(bad.stderr).toContain('--bare')
+      expect(existsSync(join(dir, 'e'))).toBe(false)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

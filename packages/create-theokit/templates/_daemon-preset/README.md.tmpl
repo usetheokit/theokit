@@ -1,0 +1,24 @@
+# {{name}}
+
+A long-running agent app on `@theokit/host`. `main.mjs` is the entry; `app.mjs` declares the config file.
+
+```sh
+npm install
+node main.mjs onboard --yes   # writes the config file (omit --yes to be asked)
+node main.mjs                 # runs; SIGINT or SIGTERM stops it cleanly
+node main.mjs daemon install  # login service (systemd --user, launchd, Task Scheduler)
+node main.mjs daemon status
+node main.mjs daemon uninstall
+```
+
+The service registered in `main.mjs` is a placeholder; replace it with your agent workload.
+
+## Container
+
+```sh
+docker build -t {{name}} .
+docker run --rm -v {{name}}-data:/data {{name}} onboard --yes
+docker run -d -v {{name}}-data:/data {{name}}
+```
+
+`/data` holds `config/`, `state/` and logs, and is the only volume. The image runs as the non-root `node` user (uid 1000); a bind-mounted directory must be writable by it.

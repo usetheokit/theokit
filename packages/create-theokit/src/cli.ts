@@ -41,6 +41,7 @@ function showHelp(): void {
     --surface=<kind>              App surface: web (default), tui (Ink), desktop (Tauri), cli (one-shot)
     --bare                        Minimal app (no @theokit/* deps)
     --preset=bot                  Layer the unattended-agent shape over the template
+    --preset=daemon               Long-running agent app on @theokit/host (config, service, Dockerfile)
     --skip-install                Scaffold files only, skip package install
     --disable-git                 Skip git init
     --use-npm                     Use npm as package manager
@@ -59,6 +60,7 @@ function showHelp(): void {
     npx create-theokit my-app --surface=tui
     npx create-theokit my-app --surface=cli
     npx create-theokit my-app --preset=bot
+    npx create-theokit my-daemon --preset=daemon
     npx create-theokit my-app --surface=desktop
     npx create-theokit my-app --use-bun --biome
     npx create-theokit my-app --example=https://github.com/user/repo
@@ -67,22 +69,22 @@ function showHelp(): void {
 }
 
 export /**
- * `--preset=<name>` — today only `bot` (#467).
+ * `--preset=<name>` — `bot` (#467) or `daemon` (#2573).
  *
  * Extracted rather than inlined because an unknown value must be REFUSED by name: a typo that
  * silently scaffolds the plain template is a person wondering for ten minutes where their bots
  * went. Ignoring an unrecognised flag is the failure this whole session kept finding — a
  * declaration that reports something the code did not do.
  */
-function parsePresetFlag(args: string[]): boolean {
+function parsePresetFlag(args: string[]): 'bot' | 'daemon' | undefined {
   const preset = getFlag(args, 'preset')
-  if (preset === undefined) return false
-  if (preset !== 'bot') {
+  if (preset === undefined) return undefined
+  if (preset !== 'bot' && preset !== 'daemon') {
     console.error('')
-    console.error(`Unknown preset "${preset}". The only preset today is \`bot\`.`)
+    console.error(`Unknown preset "${preset}". The presets are \`bot\` and \`daemon\`.`)
     process.exit(1)
   }
-  return true
+  return preset
 }
 
 async function main(): Promise<void> {
@@ -119,7 +121,9 @@ async function main(): Promise<void> {
   // Parse flags
   const templateName = getFlag(args, 'template') ?? 'default'
   const bare = hasFlag(args, 'bare')
-  const botPreset = parsePresetFlag(args)
+  const preset = parsePresetFlag(args)
+  const botPreset = preset === 'bot'
+  const daemonPreset = preset === 'daemon'
   const skipInstall = hasFlag(args, 'skip-install')
   const useDefaults = hasFlag(args, 'yes')
   const disableGit = hasFlag(args, 'disable-git')
@@ -163,7 +167,49 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
+  // The daemon preset is its own template: refuse what would only apply to the web app, before writing.
+  if (daemonPreset) {
+    const conflicts = [
+      ['--template', getFlag(args, 'template') !== undefined],
+      ['--bare', bare],
+      ['--surface', surface !== 'web'],
+      ['--example', getFlag(args, 'example') !== undefined],
+      ['--backend', backends.length > 0],
+    ]
+      .filter(([, used]) => used)
+      .map(([name]) => name as string)
+    if (conflicts.length > 0) {
+      console.error(`\n--preset=daemon cannot be combined with ${conflicts.join(', ')}.\n`)
+      process.exit(1)
+    }
+  }
+
   const targetDir = resolve(process.cwd(), projectName)
+
+  if (daemonPreset) {
+    try {
+      console.log(`\nCreating TheoKit daemon "${projectName}"...\n`)
+      scaffold(targetDir, projectName, 'default', { daemonPreset: true })
+      const pkgManager = pkgManagerOverride ?? detectPkgManager()
+      if (skipInstall) {
+        console.log(`Skipping install (--skip-install). Run \`${pkgManager} install\` manually.\n`)
+      } else {
+        console.log(`Installing dependencies with ${pkgManager}...\n`)
+        runInstall(targetDir, pkgManager)
+      }
+      if (!disableGit) initGit(targetDir)
+      console.log(`\n  ✓ Project created at ${targetDir}\n`)
+      console.log('  Next steps:\n')
+      console.log(`    cd ${projectName}`)
+      if (skipInstall) console.log(`    ${pkgManager} install`)
+      console.log('    node main.mjs onboard --yes')
+      console.log('    node main.mjs\n')
+      process.exit(0)
+    } catch (err) {
+      console.error(`\n  ✗ ${(err as Error).message}\n`)
+      process.exit(1)
+    }
+  }
 
   // --example: clone from GitHub
   if (exampleFlag) {

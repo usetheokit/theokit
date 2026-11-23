@@ -35,6 +35,8 @@ interface ScaffoldOptions {
   bare?: boolean
   /** `--preset=bot`: layer the unattended-agent shape over the default template (#467). */
   botPreset?: boolean
+  /** `--preset=daemon`: scaffold the standalone `@theokit/host` daemon template instead of a web app. */
+  daemonPreset?: boolean
   /** Test-only — force the bare transform to throw to validate EC-4 rollback. */
   _testForceTransformError?: string
 }
@@ -45,6 +47,14 @@ export function scaffold(
   templateName = 'default',
   options: ScaffoldOptions = {},
 ): void {
+  if (options.daemonPreset) {
+    if (templateName !== 'default' || options.bare || options.botPreset) {
+      throw new Error(
+        '--preset=daemon is a standalone template; it cannot be combined with --template, --bare or --preset=bot.',
+      )
+    }
+    templateName = '_daemon-preset'
+  }
   // EC-4 + ADR D5: --bare only applies to default template
   if (options.bare && templateName !== 'default') {
     throw new Error(
@@ -84,6 +94,7 @@ export function scaffold(
   for (const [from, to] of [
     ['_gitignore', '.gitignore'],
     ['_prettierignore', '.prettierignore'],
+    ['_dockerignore', '.dockerignore'],
   ]) {
     const src = join(targetDir, from)
     if (existsSync(src)) {
