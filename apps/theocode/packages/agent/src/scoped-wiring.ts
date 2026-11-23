@@ -1,7 +1,7 @@
 import { recordWiring, type WiredEntity, type WiringOffReason } from '@theokit/sdk'
 
 /** Entities of one capability that share a scope and a gate. */
-export interface ScopedWiringGroup {
+interface ScopedWiringGroup {
   /** The names handed to the builder for this scope. */
   readonly names: readonly string[]
   /** Where they came from (`project`, `personal`, `operator`, …); undefined records no scope. */

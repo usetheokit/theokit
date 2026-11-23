@@ -113,6 +113,8 @@ describe('all-projects collection through the framework', () => {
   })
 
   it('refuses a keepLast below the framework floor', async () => {
-    await expect(planAllProjectsOnDisk(options({ keepLast: 0 }))).rejects.toThrow()
+    await expect(planAllProjectsOnDisk(options({ keepLast: 0 }))).rejects.toThrow(
+      /`keepLast` must be at least 1, received 0/,
+    )
   })
 })
