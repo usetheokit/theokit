@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1535 export(s) across 28 entry point(s).
+1547 export(s) across 29 entry point(s).
 
 Measured against `@theokit/sdk@9.0.0`.
 
@@ -1075,6 +1075,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `LAYERS_ARE_POSITIONED` | value |
 | `loadCustomCommands` | value |
 | `loadInstructionTree` | value |
+| `loadInstructionWalk` | value |
 | `loadOutputStyle` | value |
 | `loadSettings` | value |
 | `mcpServerAdmitted` | value |
@@ -1132,10 +1133,12 @@ Measured against `@theokit/sdk@9.0.0`.
 | `LayerValues` | type |
 | `LoadCustomCommandsInput` | type |
 | `LoadInstructionTreeInput` | type |
+| `LoadInstructionWalkInput` | type |
 | `LoadOutputStyleInput` | type |
 | `LoadSettingsInput` | type |
 | `LoadSettingsResult` | type |
 | `OperatorDefinition` | type |
+| `OperatorInstruction` | type |
 | `OperatorOrigin` | type |
 | `OperatorPolicy` | type |
 | `OperatorRootsOptions` | type |
@@ -1689,3 +1692,17 @@ Measured against `@theokit/sdk@9.0.0`.
 | `YIELD_MAX_MS` | value |
 | `YIELD_MIN_MS` | value |
 | `PtyInteractiveBackendOptions` | type |
+
+## `@theokit/agents/foreign-setup`
+
+| Symbol | Kind |
+|---|---|
+| `readForeignSetup` | value |
+| `ForeignHook` | type |
+| `ForeignMcpServer` | type |
+| `ForeignSetup` | type |
+| `ForeignSetupKind` | type |
+| `ForeignSkill` | type |
+| `ForeignTextFile` | type |
+| `ReadForeignSetupOptions` | type |
+| `UntranslatedEntry` | type |
