@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1620 export(s) across 30 entry point(s).
+1624 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@12.0.0`.
 
@@ -179,6 +179,7 @@ Measured against `@theokit/sdk@12.0.0`.
 | `NetworkError` | value |
 | `noopReflectionStrategy` | value |
 | `NoResultSubmittedError` | value |
+| `OffToolsCapability` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
 | `parseModelId` | value |
@@ -431,6 +432,7 @@ Measured against `@theokit/sdk@12.0.0`.
 | `ModelFallbackAttempt` | type |
 | `ModelOption` | type |
 | `NamedTool` | type |
+| `OffTool` | type |
 | `OpenAIChatMessage` | type |
 | `OpenAIChatRequest` | type |
 | `OpenAICompatibleRoutesOptions` | type |
@@ -1633,7 +1635,9 @@ Measured against `@theokit/sdk@12.0.0`.
 | Symbol | Kind |
 |---|---|
 | `codingAgentPreset` | value |
+| `codingAgentTools` | value |
 | `CodingAgentPresetOptions` | type |
+| `CodingAgentTools` | type |
 
 ## `@theokit/agents/evals`
 

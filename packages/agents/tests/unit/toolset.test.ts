@@ -100,3 +100,32 @@ describe('U-3 — ToolsetError is a TheokitAgentError', () => {
     expect(err.message).toBe('nope')
   })
 })
+
+describe('Toolset profiles', () => {
+  const ts = Toolset.from([t('a'), t('b'), t('c')], { min: ['b', 'a'], none: [] })
+
+  it('narrow returns the profile tools in the profile order', () => {
+    expect(ts.narrow('min').names()).toEqual(['b', 'a'])
+    expect(ts.narrow('none').names()).toEqual([])
+    expect(ts.profileNames()).toEqual(['min', 'none'])
+  })
+
+  it('a narrowed toolset keeps the profiles it can still satisfy', () => {
+    const wide = Toolset.from([t('a'), t('b'), t('c')], {
+      min: ['b', 'a'],
+      one: ['a'],
+      all: ['a', 'c'],
+    })
+    const narrowed = wide.narrow('min')
+    expect(narrowed.profileNames()).toEqual(['min', 'one'])
+    expect(narrowed.narrow('one').names()).toEqual(['a'])
+  })
+
+  it('an unknown profile fails loud', () => {
+    expect(() => ts.narrow('x')).toThrow(/unknown tool profile "x"/)
+  })
+
+  it('a profile naming an unregistered tool fails at construction', () => {
+    expect(() => Toolset.from([t('a')], { p: ['zzz'] })).toThrow(/zzz/)
+  })
+})

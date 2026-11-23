@@ -60,7 +60,7 @@ export class ToolsetError extends TheokitAgentError {
 
   constructor(
     message: string,
-    readonly code: 'unknown_tool' | 'duplicate_tool',
+    readonly code: 'unknown_tool' | 'duplicate_tool' | 'unknown_profile',
   ) {
     super(message)
   }
@@ -69,8 +69,14 @@ export class ToolsetError extends TheokitAgentError {
 export class Toolset<T extends NamedTool> {
   readonly #byName: ReadonlyMap<string, T>
 
-  private constructor(byName: ReadonlyMap<string, T>) {
+  readonly #profiles: ReadonlyMap<string, readonly string[]>
+
+  private constructor(
+    byName: ReadonlyMap<string, T>,
+    profiles: ReadonlyMap<string, readonly string[]> = new Map(),
+  ) {
     this.#byName = byName
+    this.#profiles = profiles
     Object.freeze(this)
   }
 
@@ -79,7 +85,10 @@ export class Toolset<T extends NamedTool> {
    * — not at resolution: a descriptor with two tools of the same name is wrong the moment it is
    * written, and deferring the error to the first `resolve` hides half the cases.
    */
-  static from<T extends NamedTool>(tools: readonly T[]): Toolset<T> {
+  static from<T extends NamedTool>(
+    tools: readonly T[],
+    profiles: Readonly<Record<string, readonly string[]>> = {},
+  ): Toolset<T> {
     const byName = new Map<string, T>()
     for (const tool of tools) {
       if (byName.has(tool.name)) {
@@ -87,7 +96,46 @@ export class Toolset<T extends NamedTool> {
       }
       byName.set(tool.name, tool)
     }
-    return new Toolset(byName)
+    // Profiles are checked at construction too: a profile naming a tool nobody registered would
+    // otherwise silently grant less than it declares.
+    const checked = new Map<string, readonly string[]>()
+    for (const [profile, names] of Object.entries(profiles)) {
+      for (const name of names) {
+        if (!byName.has(name)) {
+          throw new ToolsetError(
+            `profile "${profile}" names unknown tool "${name}"`,
+            'unknown_tool',
+          )
+        }
+      }
+      checked.set(profile, Object.freeze([...names]))
+    }
+    return new Toolset(byName, checked)
+  }
+
+  /** The declared profile names, in declaration order. */
+  profileNames(): readonly string[] {
+    return [...this.#profiles.keys()]
+  }
+
+  /**
+   * Narrows to the tools a named profile lists, in the profile's order. Fails loud on an unknown
+   * profile and on a duplicate within it, as {@link resolve} does for a whitelist.
+   */
+  narrow(profile: string): Toolset<T> {
+    const names = this.#profiles.get(profile)
+    if (names === undefined) {
+      throw new ToolsetError(`unknown tool profile "${profile}"`, 'unknown_profile')
+    }
+    const narrowed = this.resolve(names)
+    // A profile survives narrowing only when every tool it lists is still present, so the narrowed
+    // toolset never declares a profile it cannot satisfy.
+    const kept = new Set(narrowed.map((tool) => tool.name))
+    const profiles: Record<string, readonly string[]> = {}
+    for (const [name, listed] of this.#profiles) {
+      if (listed.every((tool) => kept.has(tool))) profiles[name] = listed
+    }
+    return Toolset.from(narrowed, profiles)
   }
 
   /** One tool by name. Throws with the name in the error — never returns `undefined` silently. */
