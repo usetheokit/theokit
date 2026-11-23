@@ -43,14 +43,17 @@ describe('measure-app-joinery', () => {
     expect(result.totals.presenter).toBe(0)
   })
 
-  it('the CLI exits 1 on this app and names the framework symbols it re-declares', () => {
+  it('the CLI exits 1 on this app and names the framework symbols it still re-declares', () => {
     const run = spawnSync(process.execPath, [CLI], { encoding: 'utf8' })
     expect(run.status).toBe(1)
     expect(run.stderr).toMatch(/joined: \d+ {2}total: \d+ {2}gap: 0 {2}presenter: 0/)
-    for (const name of ['createControlClient', 'createDevicePairing', 'attachControlSocket']) {
+    for (const name of ['readBearerToken', 'waitForPredecessor', 'parsePort']) {
       expect(run.stderr).toContain(`duplicate ${name} `)
     }
-    // #2597 and #2598 moved resolveSecretRefs and hookFingerprint to the framework; the app imports them.
+    // #2597, #2598 and #2608 moved these to the framework; the app imports them.
+    for (const name of ['createControlClient', 'createDevicePairing', 'attachControlSocket']) {
+      expect(run.stderr).not.toContain(`duplicate ${name} `)
+    }
     expect(run.stderr).not.toContain('duplicate resolveSecretRefs ')
     expect(run.stderr).not.toContain('duplicate hookFingerprint ')
   })
