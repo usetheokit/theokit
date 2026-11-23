@@ -127,7 +127,15 @@ export class Toolset<T extends NamedTool> {
     if (names === undefined) {
       throw new ToolsetError(`unknown tool profile "${profile}"`, 'unknown_profile')
     }
-    return Toolset.from(this.resolve(names))
+    const narrowed = this.resolve(names)
+    // A profile survives narrowing only when every tool it lists is still present, so the narrowed
+    // toolset never declares a profile it cannot satisfy.
+    const kept = new Set(narrowed.map((tool) => tool.name))
+    const profiles: Record<string, readonly string[]> = {}
+    for (const [name, listed] of this.#profiles) {
+      if (listed.every((tool) => kept.has(tool))) profiles[name] = listed
+    }
+    return Toolset.from(narrowed, profiles)
   }
 
   /** One tool by name. Throws with the name in the error — never returns `undefined` silently. */

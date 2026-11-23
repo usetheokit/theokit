@@ -110,6 +110,17 @@ describe('Toolset profiles', () => {
     expect(ts.profileNames()).toEqual(['min', 'none'])
   })
 
+  it('a narrowed toolset keeps the profiles it can still satisfy', () => {
+    const wide = Toolset.from([t('a'), t('b'), t('c')], {
+      min: ['b', 'a'],
+      one: ['a'],
+      all: ['a', 'c'],
+    })
+    const narrowed = wide.narrow('min')
+    expect(narrowed.profileNames()).toEqual(['min', 'one'])
+    expect(narrowed.narrow('one').names()).toEqual(['a'])
+  })
+
   it('an unknown profile fails loud', () => {
     expect(() => ts.narrow('x')).toThrow(/unknown tool profile "x"/)
   })

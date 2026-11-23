@@ -1,5 +1,9 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { resolveTrustPosture } from '@theokit/sdk'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { declareAgentShape, applyCapabilities } from '../../src/capability/index.js'
 import { codingAgentPreset } from '../../src/presets-entry.js'
@@ -139,16 +143,80 @@ describe('codingAgentPreset', () => {
     ])
   })
 
-  it('accepts writeRoot, allowAbsolute and defaultTimeoutMs', () => {
-    const d = applyCapabilities([
-      codingAgentPreset({
-        ...base,
-        sandboxMode: 'danger-full-access',
-        writeRoot: '/',
-        allowAbsolute: true,
-        defaultTimeoutMs: 5000,
-      }),
-    ])
-    expect(names(d)).toEqual(expect.arrayContaining(['Read', 'ApplyPatch', 'Edit', 'Bash']))
+  describe('writeRoot, allowAbsolute and defaultTimeoutMs act on the tools', () => {
+    type Handler = (input: Record<string, unknown>, ctx: never) => Promise<string>
+    const run = (d: ReturnType<typeof applyCapabilities>, name: string, input: object) => {
+      const tool = d.tools.find((t) => t.name === name)
+      if (tool === undefined) throw new Error(`no ${name}`)
+      return (tool.handler as unknown as Handler)(input as never, undefined as never).then(
+        (r) => JSON.parse(r) as Record<string, unknown>,
+      )
+    }
+    let project = ''
+    let outside = ''
+    beforeEach(() => {
+      // The project sits inside `outside`: a write root must contain the directory it anchors.
+      outside = mkdtempSync(join(tmpdir(), 'preset-outside-'))
+      project = join(outside, 'project')
+      mkdirSync(project)
+    })
+    afterEach(() => {
+      rmSync(outside, { recursive: true, force: true })
+    })
+    const build = (extra: object) =>
+      applyCapabilities([
+        codingAgentPreset({
+          cwd: project,
+          posture: posture(true),
+          sandboxMode: 'workspace-write',
+          ...extra,
+        }),
+      ])
+    const add = (path: string) => `*** Begin Patch\n*** Add File: ${path}\n+x\n*** End Patch`
+
+    it('a relative write under a distinct writeRoot lands under cwd', async () => {
+      const d = build({ writeRoot: '/' })
+      expect(await run(d, 'ApplyPatch', { patch: add('hello.txt') })).toMatchObject({ ok: true })
+      expect(readFileSync(join(project, 'hello.txt'), 'utf8')).toBe('x\n')
+    })
+
+    it('a write outside writeRoot is refused, and one inside it succeeds', async () => {
+      const d = build({ writeRoot: outside })
+      const target = join(outside, 'in.txt')
+      expect(await run(d, 'ApplyPatch', { patch: add(target) })).toMatchObject({ ok: true })
+      expect(readFileSync(target, 'utf8')).toBe('x\n')
+      const refused = await run(d, 'ApplyPatch', { patch: add('/etc/theokit-nope.txt') })
+      expect(refused.ok).not.toBe(true)
+      expect(existsSync('/etc/theokit-nope.txt')).toBe(false)
+    })
+
+    it('without writeRoot an absolute write outside cwd is refused', async () => {
+      const refused = await run(build({}), 'ApplyPatch', { patch: add(join(outside, 'x.txt')) })
+      expect(refused.ok).not.toBe(true)
+      expect(existsSync(join(outside, 'x.txt'))).toBe(false)
+    })
+
+    it('Read of an absolute path outside cwd works only with allowAbsolute', async () => {
+      const file = join(outside, 'r.txt')
+      writeFileSync(file, 'secret\n')
+      expect(await run(build({ allowAbsolute: true }), 'Read', { path: file })).toMatchObject({
+        ok: true,
+      })
+      expect((await run(build({}), 'Read', { path: file })).ok).not.toBe(true)
+    })
+
+    it('defaultTimeoutMs reaches Bash, and a call timeout overrides it', async () => {
+      const seen: (number | undefined)[] = []
+      const sandbox = {
+        execute: (_c: string, o?: { timeoutMs?: number }) => {
+          seen.push(o?.timeoutMs)
+          return Promise.resolve({ stdout: '', stderr: '', exitCode: 0, timedOut: false })
+        },
+      }
+      const d = build({ sandbox, defaultTimeoutMs: 1234 })
+      await run(d, 'Bash', { command: 'true' })
+      await run(d, 'Bash', { command: 'true', timeout_ms: 99 })
+      expect(seen).toEqual([1234, 99])
+    })
   })
 })
