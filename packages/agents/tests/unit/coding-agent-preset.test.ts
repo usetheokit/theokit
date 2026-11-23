@@ -1,7 +1,8 @@
 import { resolveTrustPosture } from '@theokit/sdk'
 import { describe, expect, it } from 'vitest'
 
-import { applyCapabilities, codingAgentPreset } from '../../src/capability/index.js'
+import { applyCapabilities } from '../../src/capability/index.js'
+import { codingAgentPreset } from '../../src/presets-entry.js'
 import { ConfigurationError } from '../../src/errors.js'
 
 const posture = (trusted: boolean) =>
