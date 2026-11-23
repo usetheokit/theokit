@@ -138,8 +138,6 @@ describe('routeCommand resolves aliases', () => {
     expect(routed).toEqual({ kind: 'command', command: quit, arg: 'now' })
   })
 })
-import { describe, expect, it } from 'vitest'
-import { defineCommand, routeCommand } from '../../src/commands/index.js'
 
 describe('exact commands', () => {
   const cmds = [defineCommand({ name: 'new', description: 'x', arg: 'none', exact: true })]

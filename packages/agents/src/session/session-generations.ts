@@ -20,8 +20,10 @@ export interface SessionGenerations {
 }
 
 function readCounters(file: string): Record<string, number> {
+  /* eslint-disable security/detect-non-literal-fs-filename -- the caller chooses the file */
   if (!existsSync(file)) return {}
   const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
+  /* eslint-enable security/detect-non-literal-fs-filename */
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw new Error(`session generations file is malformed: ${file}`)
   }
@@ -37,8 +39,12 @@ function readCounters(file: string): Record<string, number> {
 
 export function createSessionGenerations(file: string): SessionGenerations {
   return {
-    async current(key) {
-      return readCounters(file)[key] ?? 0
+    current(key) {
+      try {
+        return Promise.resolve(readCounters(file)[key] ?? 0)
+      } catch (error) {
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+      }
     },
     async next(key) {
       ensureSecureDir(file)
