@@ -404,7 +404,9 @@ describe('planProjectsGC protection edge cases', () => {
       listRegistry,
     })
     expect(result.errors).toEqual([])
-    expect(result.candidates.map((c) => c.target).sort()).toEqual([old, pinned].sort())
+    expect(result.candidates.map((c) => c.target).sort((a, b) => a.localeCompare(b))).toEqual(
+      [old, pinned].sort((a, b) => a.localeCompare(b)),
+    )
     const inspected = await plan({
       classify: dead,
       pointerPath: () => pointer,
