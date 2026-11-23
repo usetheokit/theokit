@@ -1,5 +1,15 @@
 # create-theo
 
+## 3.3.0
+
+### Minor Changes
+
+- 5b3edb7: `--preset=daemon` scaffolds a long-running agent app on `@theokit/host`: an entry built on `createAppHost`, `defineInstanceConfig` with an `onboard` command, `daemon install|uninstall|status`, and a Dockerfile with a `/data` volume and a non-root user.
+
+### Patch Changes
+
+- 8b414d6: `@theokit/agents` adds `codingAgentPreset({ cwd, sandboxMode, posture, approvals, interactive })`, from the new `@theokit/agents/presets` subpath: a `CapabilityPreset` that wires the coding tool set by sandbox mode (no write or shell tool in `read-only`), withholds the built-in shell, gates side-effecting tools, and loads project MCP servers, skills, subagents and hooks only when the trust posture grants `projectSettings`. The scaffold's agents skill shows it.
+
 ## 3.2.5
 
 ### Patch Changes
