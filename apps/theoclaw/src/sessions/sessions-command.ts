@@ -13,6 +13,7 @@ import {
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
+import { parseSessionsGcArgs, sessionsGcCommand } from '@theokit/agents/commands'
 import { listSessions } from '@theokit/agents/session'
 
 import { UsageError } from '../cli-args.js'
@@ -213,31 +214,42 @@ export async function resumeCommand(args: readonly string[], io: SessionsIo): Pr
  * holds, which the daemon's own sweep protects, but such a transcript is being written and so is not old.
  */
 async function gcCommand(args: readonly string[], io: SessionsIo): Promise<number> {
-  const dryRun = args.includes('--dry-run')
-  const rest = args.filter((arg) => arg !== '--dry-run')
-  const at = rest.indexOf('--days')
-  const daysText = at >= 0 ? rest[at + 1] : undefined
-  const left = rest.filter((_, index) => at < 0 || (index !== at && index !== at + 1))
-  if (
-    left.length > 0 ||
-    (at >= 0 && (daysText === undefined || !/^\d+$/.test(daysText) || Number(daysText) < 1))
-  )
-    throw new UsageError(USAGE_TEXT)
+  // TheoClaw applies by default (`--dry-run` previews); `--days` is the retention in days.
+  const parsed = parseSessionsGcArgs(args, { apply: true })
+  if (!parsed.ok) throw new UsageError(USAGE_TEXT)
   const env: NodeJS.ProcessEnv = { ...io.env }
   const workspace = chatWorkspace(env, io)
-  const days = daysText === undefined ? readRetentionDays(env) : Number(daysText)
-  const result = await collectTranscripts(
-    { workspace, generations: Generations.load(sessionsFile(workspace)) },
-    days,
-    !dryRun,
-  )
-  const verb = dryRun ? 'would remove' : 'removed'
-  for (const id of result.removed) io.stdout.write(`${verb} ${id}\n`)
-  for (const path of result.orphaned) io.stdout.write(`${verb} ${path} (id unreadable)\n`)
-  for (const error of result.errors) io.stderr.write(`theoclaw: ${error}\n`)
-  const total = result.removed.length + result.orphaned.length
-  io.stdout.write(`${verb} ${total} transcripts older than ${days} days\n`)
-  return result.errors.length > 0 ? 1 : 0
+  const days = parsed.maxAgeDays ?? readRetentionDays(env)
+  const generations = Generations.load(sessionsFile(workspace))
+  const outcome = await sessionsGcCommand({
+    cwd: workspace,
+    apply: parsed.apply,
+    json: parsed.json,
+    maxAgeDays: days,
+    human: (_plan, result) => {
+      const verb = result.dryRun ? 'would remove' : 'removed'
+      return [
+        ...result.removed.map((id) => `${verb} ${id}`),
+        ...result.orphaned.map((path) => `${verb} ${path} (id unreadable)`),
+        ...result.errors.map((error) => `theoclaw: ${error.message}`),
+        `${verb} ${result.removed.length + result.orphaned.length} transcripts older than ${days} days`,
+      ]
+    },
+    run: async ({ apply }) => {
+      const swept = await collectTranscripts({ workspace, generations }, days, apply)
+      return {
+        plan: { cwd: workspace, root: join(workspace, '.theoclaw'), candidates: [], kept: [] },
+        result: {
+          dryRun: swept.dryRun,
+          removed: [...swept.removed],
+          orphaned: [...swept.orphaned],
+          errors: swept.errors.map((message) => ({ id: undefined, message })),
+        },
+      }
+    },
+  })
+  for (const line of outcome.lines) io.stdout.write(`${line}\n`)
+  return outcome.failed > 0 ? 1 : 0
 }
 
 export async function sessionsCommand(args: readonly string[], io: SessionsIo): Promise<number> {

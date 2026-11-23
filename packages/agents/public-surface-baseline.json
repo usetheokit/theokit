@@ -18242,6 +18242,42 @@
           "references": [],
           "internals": {}
         },
+        "SessionsGcArgs": {
+          "tier": "stable",
+          "declaration": "type SessionsGcArgs = {\n    readonly ok: true;\n    readonly apply: boolean;\n    readonly json: boolean;\n    readonly keepLast?: number;\n    readonly maxAgeDays?: number;\n} | {\n    readonly ok: false;\n    readonly message: string;\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "SessionsGcOptions": {
+          "tier": "stable",
+          "declaration": "interface SessionsGcOptions {\n    readonly apply?: boolean;\n    readonly keepLast?: number;\n    readonly maxAgeDays?: number;\n    readonly cwd?: string;\n    readonly json?: boolean;\n    readonly human?: (plan: TranscriptGCPlan, result: RunTranscriptGCResult) => readonly string[];\n    readonly run?: (resolved: {\n        readonly apply: boolean;\n        readonly keepLast: number;\n        readonly maxAgeDays: number;\n        readonly cwd: string;\n    }) => Promise<{\n        plan: TranscriptGCPlan;\n        result: RunTranscriptGCResult;\n    }>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
+          ],
+          "internals": {
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+          }
+        },
+        "SessionsGcOutcome": {
+          "tier": "stable",
+          "declaration": "interface SessionsGcOutcome {\n    readonly lines: readonly string[];\n    readonly failed: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "Shutdown": {
           "tier": "stable",
           "declaration": "interface Shutdown {\n    register(task: CleanupTask): () => void;\n    run(): Promise<ShutdownOutcome>;\n}",
@@ -18339,6 +18375,56 @@
             "dist/commands.d.ts#ExitAfterDrainDeps": "interface ExitAfterDrainDeps {\n    readonly exit?: (code: number) => void;\n    readonly setExitCode?: (code: number) => void;\n    readonly capMs?: number;\n}"
           }
         },
+        "formatGcJson": {
+          "tier": "stable",
+          "declaration": "declare function formatGcJson(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
+          ],
+          "internals": {
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+          }
+        },
+        "formatGcPlan": {
+          "tier": "stable",
+          "declaration": "declare function formatGcPlan(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string[];",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
+          ],
+          "internals": {
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+          }
+        },
+        "parseSessionsGcArgs": {
+          "tier": "stable",
+          "declaration": "declare function parseSessionsGcArgs(args: readonly string[], defaults?: {\n    readonly apply?: boolean;\n}): SessionsGcArgs;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/commands.d.ts#SessionsGcArgs"],
+          "internals": {
+            "dist/commands.d.ts#SessionsGcArgs": "type SessionsGcArgs = {\n    readonly ok: true;\n    readonly apply: boolean;\n    readonly json: boolean;\n    readonly keepLast?: number;\n    readonly maxAgeDays?: number;\n} | {\n    readonly ok: false;\n    readonly message: string;\n};"
+          }
+        },
         "readHeadlessPrompt": {
           "tier": "stable",
           "declaration": "declare function readHeadlessPrompt(input: {\n    prompt?: string;\n    stdin: 'ignore' | 'append' | 'required' | 'forced';\n    readStdin: () => string;\n}): string;",
@@ -18397,6 +18483,30 @@
             "dist/commands.d.ts#CommandArgument": "type CommandArgument = 'none' | 'optional' | 'required';",
             "dist/commands.d.ts#CommandDefinition": "interface CommandDefinition<Ctx = void> {\n    readonly name: string;\n    readonly description: string;\n    readonly arg: CommandArgument;\n    readonly aliases?: readonly string[];\n    readonly hidden?: boolean;\n    readonly exact?: boolean;\n    readonly run?: (arg: string, ctx: Ctx) => void | Promise<void>;\n}",
             "dist/commands.d.ts#SessionCommandHandlers": "interface SessionCommandHandlers {\n    reset?: () => void | Promise<void>;\n    stop?: () => void | Promise<void>;\n    steer?: (text: string) => void | Promise<void>;\n    compact?: () => void | Promise<void>;\n    setModel?: (model: string) => void | Promise<void>;\n    setEffort?: (effort: string) => void | Promise<void>;\n    status?: () => void | Promise<void>;\n}"
+          }
+        },
+        "sessionsGcCommand": {
+          "tier": "stable",
+          "declaration": "declare function sessionsGcCommand(options?: SessionsGcOptions): Promise<SessionsGcOutcome>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/commands.d.ts#SessionsGcOptions",
+            "dist/commands.d.ts#SessionsGcOutcome",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
+          ],
+          "internals": {
+            "dist/commands.d.ts#SessionsGcOptions": "interface SessionsGcOptions {\n    readonly apply?: boolean;\n    readonly keepLast?: number;\n    readonly maxAgeDays?: number;\n    readonly cwd?: string;\n    readonly json?: boolean;\n    readonly human?: (plan: TranscriptGCPlan, result: RunTranscriptGCResult) => readonly string[];\n    readonly run?: (resolved: {\n        readonly apply: boolean;\n        readonly keepLast: number;\n        readonly maxAgeDays: number;\n        readonly cwd: string;\n    }) => Promise<{\n        plan: TranscriptGCPlan;\n        result: RunTranscriptGCResult;\n    }>;\n}",
+            "dist/commands.d.ts#SessionsGcOutcome": "interface SessionsGcOutcome {\n    readonly lines: readonly string[];\n    readonly failed: number;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
           }
         }
       }
@@ -23378,9 +23488,9 @@
           "declaration": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/session.d.ts#GCError"],
+          "references": ["dist/transcript-gc-<hash>.d.ts#GCError"],
           "internals": {
-            "dist/session.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}"
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}"
           }
         },
         "ScheduleSessionSweepOptions": {
@@ -23480,10 +23590,13 @@
           "declaration": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/session.d.ts#GCCandidate", "dist/session.d.ts#GCKept"],
+          "references": [
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCKept"
+          ],
           "internals": {
-            "dist/session.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
-            "dist/session.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}"
           }
         },
         "TranscriptToTextOptions": {
@@ -23640,16 +23753,16 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/session.d.ts#GCCandidate",
-            "dist/session.d.ts#GCKept",
-            "dist/session.d.ts#TranscriptGCOptions",
-            "dist/session.d.ts#TranscriptGCPlan"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCOptions",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
           ],
           "internals": {
-            "dist/session.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
-            "dist/session.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
-            "dist/session.d.ts#TranscriptGCOptions": "interface TranscriptGCOptions {\n    readonly cwd: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly root?: string;\n    readonly now?: number;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n}",
-            "dist/session.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCOptions": "interface TranscriptGCOptions {\n    readonly cwd: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly root?: string;\n    readonly now?: number;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
           }
         },
         "projectDirFor": {
@@ -23744,18 +23857,18 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/session.d.ts#GCCandidate",
-            "dist/session.d.ts#GCError",
-            "dist/session.d.ts#GCKept",
-            "dist/session.d.ts#RunTranscriptGCResult",
-            "dist/session.d.ts#TranscriptGCPlan"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
           ],
           "internals": {
-            "dist/session.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
-            "dist/session.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
-            "dist/session.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
-            "dist/session.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
-            "dist/session.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
           }
         },
         "scheduleSessionSweep": {
