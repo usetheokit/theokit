@@ -5,7 +5,6 @@ import type { McpEventDelivery, McpEventSubscriber } from '@theokit/sdk/mcp-even
 import type { TurnAgent } from '../agent-port.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { deliverText, runAgentText } from '@theokit/gateway-agent'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from '../control-plane/errors.js'
 import type { McpEventsSettings } from './mcp-events-settings.js'
 
@@ -62,7 +61,7 @@ export async function startMcpEvents(options: McpEventsOptions): Promise<McpEven
 
   const handle = async (server: string, delivery: McpEventDelivery): Promise<void> => {
     await post(`event received from ${server}`)
-    const outcome = await options.withAgent((agent) => runAgentText(agent, promptOf(settings, server, delivery.event), { sendOptions: { ...untrustedContentSendOptions() } }))
+    const outcome = await options.withAgent((agent) => runAgentText(agent, promptOf(settings, server, delivery.event)))
     if (!outcome.ok) {
       write(`mcp events: ${server}: run failed (${outcome.failure})`)
       return

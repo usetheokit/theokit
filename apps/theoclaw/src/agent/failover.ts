@@ -1,5 +1,4 @@
 import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
-import { untrustedContentSendOptions } from './untrusted-content.js'
 
 /** The thinking levels `THEOCLAW_THINKING` accepts (OC-48). */
 export const THINKING_LEVELS = ['off', 'low', 'medium', 'high'] as const
@@ -73,7 +72,7 @@ function failoverRun(
       try {
         active = await (
           await secondary()
-        ).send(message, { ...untrustedContentSendOptions(), ...options })
+        ).send(message, options)
       } catch (error) {
         throw new Error(
           `the primary model failed and so did the fallback: ${error instanceof Error ? error.message : String(error)}`,
@@ -93,9 +92,9 @@ export function withFailover(primary: TurnAgent, secondary: () => Promise<TurnAg
     async send(message, options) {
       let first: TurnRun
       try {
-        first = await primary.send(message, { ...untrustedContentSendOptions(), ...options })
+        first = await primary.send(message, options)
       } catch {
-        return (await secondary()).send(message, { ...untrustedContentSendOptions(), ...options })
+        return (await secondary()).send(message, options)
       }
       return failoverRun(first, message, options, secondary)
     },

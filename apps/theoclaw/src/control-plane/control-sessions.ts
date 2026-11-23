@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from './errors.js'
 import { runSessionTurn } from './session-turn.js'
 import type { TurnEvent, TurnOutcome } from './turn.js'
@@ -295,7 +294,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
       const turn = entry?.running
       if (entry?.agent === undefined || turn === undefined || turn.eventsEnded || turn.cancelRequested) return 'no_turn'
       try {
-        await entry.agent.send(message, { ...untrustedContentSendOptions(), queueMode: 'steer' })
+        await entry.agent.send(message, { queueMode: 'steer' })
       } catch (error) {
         options.report(`theoclaw: control session steer failed: ${describeError(error)}`)
         return 'no_turn'

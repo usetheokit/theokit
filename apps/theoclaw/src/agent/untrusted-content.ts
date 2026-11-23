@@ -2,8 +2,8 @@
  * OC-88 (B-398): what the model is told about a tool result, and the option that frames it.
  *
  * The SDK wraps a tool result's text in `<untrusted-tool-output>` tags, escaping a forged closing
- * tag, only when a send passes `toolResultGuard`; it reads the option per send, so every send site
- * spreads `untrustedContentSendOptions()`. The SDK adds no instruction about the tag, so every
+ * tag, only when a send passes `toolResultGuard`; it reads the option per send, so
+ * `theoClawAgentOptions` sets it once as the agent's `sendDefaults` and no send site passes it. The SDK adds no instruction about the tag, so every
  * agent's system prompt opens with the notice (`theoClawAgentOptions`).
  */
 
@@ -26,7 +26,7 @@ export interface UntrustedContentSendOptions {
   readonly pruneToolResults: { readonly olderThanRounds: number }
 }
 
-/** The options each agent `send` spreads, so the run's tool results reach the model framed. */
+/** The agent's `sendDefaults`, so every send's tool results reach the model framed. */
 export function untrustedContentSendOptions(): UntrustedContentSendOptions {
   return { toolResultGuard: { delimit: true }, pruneToolResults: { olderThanRounds: pruneToolResultRounds() } }
 }

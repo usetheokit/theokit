@@ -13,7 +13,7 @@ import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import type { ThinkingLevel } from './failover.js'
 import { createHookApprovalGate } from './hook-approval.js'
-import { UNTRUSTED_CONTENT_NOTICE } from './untrusted-content.js'
+import { UNTRUSTED_CONTENT_NOTICE, untrustedContentSendOptions, type UntrustedContentSendOptions } from './untrusted-content.js'
 
 /**
  * The SDK's local options TheoClaw sets. `hooks` is on every agent (B-397 FR-007): the SDK reads a
@@ -57,6 +57,8 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
    * import has the import's instructions and read-only memory after it (FR-008).
    */
   readonly systemPrompt: string
+  /** The SDK reads these per send; set once here, so no send site passes them (OC-88). */
+  readonly sendDefaults: UntrustedContentSendOptions
   /**
    * The SDK's `SkillsSettings`: `bundledDirs` (workspace, then user; the SDK takes the
    * first skill of a name) and `inline` (custodian, import, legacy `requires:` skills).
@@ -123,6 +125,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     withheldBuiltinTools: ['shell'] as const,
     memory: input.toolOptions?.memory ?? ({ enabled: false } as const),
     systemPrompt: UNTRUSTED_CONTENT_NOTICE,
+    sendDefaults: untrustedContentSendOptions(),
     local: {
       hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
       ...(input.pluginWorkspace === undefined ? {} : { cwd: input.pluginWorkspace }),
@@ -332,6 +335,7 @@ export async function createTheoClawAgent<Model extends string | ModelSelection>
     ...(options.tools === undefined ? {} : { tools: options.tools }),
     ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
     systemPrompt: options.systemPrompt,
+    sendDefaults: options.sendDefaults,
     ...(skills === undefined ? {} : { skills }),
     ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
     ...(options.telemetry === undefined ? {} : { telemetry: { ...options.telemetry } }),

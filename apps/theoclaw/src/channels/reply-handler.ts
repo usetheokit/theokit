@@ -4,7 +4,6 @@ import { ChatPresenter, fromSdkMessage } from '@theokit/presenter'
 import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from './channel-loop.js'
 import { createStreamMask } from './stream-mask.js'
 import type { StreamMask } from './stream-mask.js'
@@ -202,7 +201,7 @@ function watchTurn(settings: AdvisorSettings, history: AdvisorHistory, key: stri
         }
         if (!running) return
         try {
-          await agent.send(steerNote(advice), { ...untrustedContentSendOptions(), queueMode: 'steer' })
+          await agent.send(steerNote(advice), { queueMode: 'steer' })
           settings.write(`advisor: steered session ${key}: ${advice}`)
         } catch {
           settings.write(`advisor: could not steer session ${key}`)
@@ -276,7 +275,7 @@ async function streamTurn(
   // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
   const streamed: StreamedTurn = { answer: '', error: undefined, mask: createStreamMask(secrets), progress: [], gate }
   try {
-    const run = await agent.send(prompt, untrustedContentSendOptions())
+    const run = await agent.send(prompt)
     advisor?.start(agent, prompt)
     try {
       for await (const frame of run.stream()) {
@@ -366,7 +365,7 @@ async function answerSteer(options: ReplyHandlerOptions, event: MessageEvent, no
   return options.withAgent(event, async (lease) => {
     try {
       if ((runningTurns.get(lease.agent) ?? 0) === 0) return STEER_IDLE_REPLY
-      await lease.agent.send(note, { ...untrustedContentSendOptions(), queueMode: 'steer' })
+      await lease.agent.send(note, { queueMode: 'steer' })
       return STEERED_REPLY
     } finally {
       lease.release()

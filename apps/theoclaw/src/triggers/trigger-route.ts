@@ -4,7 +4,6 @@ import { github } from 'theokit/server/webhook'
 import type { VerifyFn } from 'theokit/server/webhook'
 
 import type { TurnAgent } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { describeError } from '../control-plane/errors.js'
 import type { WebhookRoute } from '../webhooks/router.js'
@@ -57,7 +56,7 @@ export function createTriggerRoute(options: TriggerRouteOptions): WebhookRoute {
   const { platform, channelId } = trigger.replyTo
 
   const run = async (body: string): Promise<void> => {
-    const outcome = await withAgent((agent) => runAgentText(agent, promptOf(trigger, body), { sendOptions: { ...untrustedContentSendOptions() } }))
+    const outcome = await withAgent((agent) => runAgentText(agent, promptOf(trigger, body)))
     if (!outcome.ok) {
       write(`trigger ${trigger.name}: run failed (${outcome.failure})`)
       return

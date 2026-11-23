@@ -15,7 +15,6 @@ import type { RunResult } from '@theokit/sdk'
 import { UsageError } from '../cli-args.js'
 import type { ControlClient } from '../control-client/control-client.js'
 import type { TurnAgent } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from '../control-plane/errors.js'
 
 /**
@@ -144,7 +143,7 @@ async function runLocal(message: string, profile: WorkerProfile, io: WorkerIo): 
       io.env,
       `provider request: model=${io.env.THEOCLAW_MODEL ?? 'unset'} device=${profile.name} inference=worker`,
     )
-    const run = await agent.send(message, untrustedContentSendOptions())
+    const run = await agent.send(message)
     for await (const event of run.stream()) {
       const text = (event as { type: string; text?: unknown }).text
       if (event.type === 'text-delta' && typeof text === 'string') io.stdout.write(text)
