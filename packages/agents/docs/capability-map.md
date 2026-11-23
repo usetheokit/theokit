@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1584 export(s) across 30 entry point(s).
+1590 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@11.0.0`.
 
@@ -210,6 +210,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `resolveMcpServers` | value |
 | `resolveModelCapabilities` | value |
 | `resolveSettingSources` | value |
+| `resolveSkillsSettings` | value |
 | `resolveTrustPosture` | value |
 | `Retry` | value |
 | `runAgentTurn` | value |
@@ -806,6 +807,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `createMockAgentStream` | value |
 | `createMockOutputEvents` | value |
 | `createMockWireStream` | value |
+| `FakeAgent` | value |
 | `inspectCompiled` | value |
 | `LIVE_KEY_NAMES` | value |
 | `MissingProviderKeyError` | value |
@@ -813,10 +815,14 @@ Measured against `@theokit/sdk@11.0.0`.
 | `wireChunk` | value |
 | `AgentOutputEvent` | type |
 | `CompiledInspection` | type |
+| `FakeTimelineEvent` | type |
+| `FakeTurn` | type |
+| `InteractionUpdate` | type |
 | `MockAgentStreamOptions` | type |
 | `MockResponse` | type |
 | `MockStreamEvent` | type |
 | `ProviderKeyGuardOptions` | type |
+| `SdkFrame` | type |
 
 ## `@theokit/agents/sandbox`
 
@@ -967,6 +973,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `credentialHome` | value |
 | `CredentialNotFoundError` | value |
 | `credentialSources` | value |
+| `customProviderPlugin` | value |
 | `DeclaredProviderError` | value |
 | `DEFAULT_PROVIDERS` | value |
 | `deviceLogin` | value |
