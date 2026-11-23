@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   APPROVAL_KEY_HINT,
@@ -184,24 +184,16 @@ describe('the body of a rejected call', () => {
 
   it('test_a_rejection_reads_as_a_rejection_not_as_a_shell_result', () => {
     expect(
-      result(
-        JSON.stringify({
-          stdout: '',
-          stderr: "Tool 'Bash' denied by human approver",
-          exitCode: 126,
-        }),
-      ),
+      result(JSON.stringify({ stdout: '', stderr: "Tool 'Bash' denied by human approver", exitCode: 126 })),
     ).toBe('rejected — nothing ran')
   })
 
   it('test_a_real_shell_failure_still_shows_its_output_and_code', () => {
     // Anti-vacuity, and the reason 126 alone is not the signal: a real shell returns 126 for
     // "command not executable", which deserves different words from "you said no".
-    expect(
-      result(
-        JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }),
-      ),
-    ).toBe('bash: ./x: Permission denied\n(exit code: 126)')
+    expect(result(JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }))).toBe(
+      'bash: ./x: Permission denied\n(exit code: 126)',
+    )
   })
 
   it('test_a_successful_run_is_untouched', () => {
@@ -242,11 +234,8 @@ describe('the explored grouping is worth more than a verb on a card', () => {
       } as never)?.name,
     ).toBe('Running echo hi')
     expect(
-      formatToolHeader({
-        name: 'ViewImage',
-        status: 'completed',
-        input: { path: 'a.png' },
-      } as never)?.name,
+      formatToolHeader({ name: 'ViewImage', status: 'completed', input: { path: 'a.png' } } as never)
+        ?.name,
     ).toBe('Viewed a.png')
   })
 })
@@ -283,14 +272,10 @@ const refused = (name: string, input: Record<string, unknown>) =>
 describe('a tool call a policy refused is not reported as one that ran', () => {
   it('test_a_refused_patch_is_not_reported_as_an_edit', () => {
     const header = formatToolHeader(
-      refused('ApplyPatch', {
-        patch: '*** Begin Patch\n*** Add File: hello.txt\n+tui-ok\n*** End Patch',
-      }),
+      refused('ApplyPatch', { patch: '*** Begin Patch\n*** Add File: hello.txt\n+tui-ok\n*** End Patch' }),
     )
 
-    expect(header?.name, 'the transcript claims a refused patch edited a file').not.toMatch(
-      /^Edited /,
-    )
+    expect(header?.name, 'the transcript claims a refused patch edited a file').not.toMatch(/^Edited /)
     expect(header?.name).toBe('Blocked the patch')
     expect(header?.summary).toContain('nothing ran')
   })
@@ -349,11 +334,7 @@ describe('a tool call a policy refused is not reported as one that ran', () => {
       name: 'Bash',
       status: 'failed',
       input: { command: './x' },
-      output: JSON.stringify({
-        stdout: '',
-        stderr: 'bash: ./x: Permission denied',
-        exit_code: 126,
-      }),
+      output: JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }),
     } as never
 
     expect(formatToolHeader(ran)?.name).toBe('Ran ./x')
@@ -383,5 +364,15 @@ describe('Bash, Edit and ApplyPatch headers come from the toolkit presentation',
     expect(header('ApplyPatch', { patch: wrapped }, 'running')?.name).toMatch(/^Editing /)
     const counted = '*** Begin Patch\n*** Update File: a.ts\n@@\n-a\n+b\n*** End Patch'
     expect(header('ApplyPatch', { patch: counted })?.name).toMatch(/^Edited a\.ts.*\+1/)
+  })
+
+  it('fails loudly when the installed toolkit has no entry for an aliased tool', async () => {
+    vi.resetModules()
+    vi.doMock('@theokit/tui', () => ({ toolPresentation: () => new Map() }))
+    const mod = await import('../../src/formatting/tool-header.ts')
+    expect(() =>
+      mod.formatToolHeader({ kind: 'tool', name: 'Bash', status: 'completed', input: {} } as never),
+    ).toThrow(/@theokit\/tui >= 0\.83\.4/)
+    vi.doUnmock('@theokit/tui')
   })
 })

@@ -153,11 +153,7 @@ export function formatToolHeader(
 }
 
 /** `Ran x` → `Rejected x` / `Blocked x`, per tool, so the noun still matches what was refused. */
-function refusedName(
-  verb: 'Rejected' | 'Blocked',
-  tool: string,
-  input: Record<string, unknown>,
-): string {
+function refusedName(verb: 'Rejected' | 'Blocked', tool: string, input: Record<string, unknown>): string {
   const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
   switch (tool) {
     case 'Bash':
@@ -191,7 +187,10 @@ const PRESENTATION = toolPresentation(
 )
 
 function presented(tool: string, input: Record<string, unknown>, active: boolean): string {
-  return PRESENTATION.get(tool)?.header(input, active) ?? ''
+  const entry = PRESENTATION.get(tool)
+  // An installed `@theokit/tui` older than 0.83.4 ignores `aliases`; an empty header would hide that.
+  if (!entry) throw new Error(`@theokit/tui >= 0.83.4 is required: no presentation for ${tool}`)
+  return entry.header(input, active)
 }
 
 const HEADERS_BY_TOOL: ReadonlyMap<
