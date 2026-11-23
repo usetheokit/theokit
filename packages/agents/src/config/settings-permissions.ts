@@ -150,13 +150,17 @@ function translate(
   action: PermissionAction,
   specifierArg: Readonly<Record<string, string>>,
   baseDir: string | undefined,
+  toolAliases: Readonly<Record<string, string>>,
 ): PermissionRule | UnsupportedPermissionEntry {
   const parsed = splitEntry(entry.trim())
   if (parsed === undefined) {
     return { entry, reason: 'not of the form `Tool` or `Tool(specifier)`.' }
   }
 
-  const { tool, spec } = parsed
+  const { tool: written, spec } = parsed
+  // The rule is written for `written`; the framework's tool may carry another name. The specifier
+  // argument is still looked up by the written name, so `Bash(ls:*)` keeps addressing `command`.
+  const tool = Object.hasOwn(toolAliases, written) ? toolAliases[written]! : written
   if (spec === undefined) return { tool, action }
   // Which argument the specifier addresses. `Bash(rm:*)` means the shell's `command`;
   // `Read(./secret)` means the reader's `path`. Rendering both against `command` produced a matcher
@@ -165,14 +169,14 @@ function translate(
   // and the file was read anyway.
   // `Object.hasOwn`, never `in`: `in` walks the prototype, so a tool named `constructor` would
   // resolve an argument nobody declared.
-  const argName = Object.hasOwn(specifierArg, tool) ? specifierArg[tool] : undefined
+  const argName = Object.hasOwn(specifierArg, written) ? specifierArg[written] : undefined
   if (argName === undefined) {
     return {
       entry,
       reason:
-        `names no argument this runtime can address for tool \`${tool}\`. A specifier matches one ` +
+        `names no argument this runtime can address for tool \`${written}\`. A specifier matches one ` +
         'named argument, and rendering it against the wrong one produces a rule that never fires — ' +
-        `worse than none, because you would believe a control is in force. Write \`${tool}\` to ` +
+        `worse than none, because you would believe a control is in force. Write \`${written}\` to ` +
         'address the whole tool, or declare its specifier argument.',
     }
   }
@@ -253,6 +257,11 @@ export function permissionRulesFromSettings(
      * anchored to this directory and nowhere else.
      */
     readonly baseDir?: string
+    /**
+     * Rename tools: `{ Bash: 'shell_exec' }` makes `Bash(ls:*)` match the tool `shell_exec`. The
+     * key is the name as written in the settings file; `specifierArg` is still keyed by that name.
+     */
+    readonly toolAliases?: Readonly<Record<string, string>>
   } = {},
 ): PermissionTranslation {
   if (block === undefined) return { rules: [], unsupported: [] }
@@ -275,7 +284,13 @@ export function permissionRulesFromSettings(
 
   for (const action of ACTIONS) {
     for (const entry of block[action] ?? []) {
-      const translated = translate(entry, action, specifierArg, opts.baseDir)
+      const translated = translate(
+        entry,
+        action,
+        specifierArg,
+        opts.baseDir,
+        opts.toolAliases ?? {},
+      )
       if (isRule(translated)) rules.push(translated)
       else unsupported.push(translated)
     }

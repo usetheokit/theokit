@@ -211,6 +211,7 @@ export interface ReadSettingsFileOptions {
   readonly renames?: Readonly<Record<string, string>>
   readonly baseDir?: string
   readonly specifierArg?: Readonly<Record<string, string>>
+  readonly toolAliases?: Readonly<Record<string, string>>
   readonly onWarn?: (message: string) => void
 }
 
@@ -264,6 +265,7 @@ export function readSettingsFile(
       const translated = permissionRulesFromSettings(value as PermissionsBlock | undefined, {
         ...(options.specifierArg === undefined ? {} : { specifierArg: options.specifierArg }),
         ...(options.baseDir === undefined ? {} : { baseDir: options.baseDir }),
+        ...(options.toolAliases === undefined ? {} : { toolAliases: options.toolAliases }),
       })
       permissionRules = translated.rules
       unsupportedPermissions = translated.unsupported.map((u) => ({
@@ -305,4 +307,20 @@ export function firstSettingsFile(
     if (read !== undefined) return read
   }
   return undefined
+}
+
+/**
+ * The rules of several settings reads as one list: every `deny` first, then `ask`, then `allow`,
+ * each keeping read order. The engine is first-match-wins, so a deny in any layer beats an allow in
+ * any other, whichever file came first.
+ */
+export function permissionRulesFromLayers(
+  reads: readonly (Pick<SettingsFileRead, 'permissionRules'> | undefined)[],
+): PermissionRule[] {
+  const all = reads.flatMap((read) => read?.permissionRules ?? [])
+  return [
+    ...all.filter((r) => r.action === 'deny'),
+    ...all.filter((r) => r.action === 'ask'),
+    ...all.filter((r) => r.action === 'allow'),
+  ]
 }
