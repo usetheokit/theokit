@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { UsageError } from '../cli-args.js'
 import type { CliIo } from '../cli.js'
 import { readBearerToken } from '../control-plane/bearer.js'
-import { resolveBindAddress } from '../control-plane/bind.js'
+import { resolveControlHost } from '../control-plane/bind.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { buildTools } from '../tools/tool-registry.js'
 import { resolveToolSettings } from '../tools/tool-settings.js'
@@ -34,7 +34,7 @@ async function serve(rest: readonly string[], io: CliIo): Promise<number> {
       variable: 'THEOCLAW_MCP_RELAY_TOKEN',
     })
   }
-  const address = resolveBindAddress(
+  const address = resolveControlHost(
     host === undefined ? io.env : { ...io.env, THEOCLAW_HOST: host },
   )
   const server = createMcpRelay({ instanceToken, grantsPath: grantsPath(io.env, io.homeDir) })

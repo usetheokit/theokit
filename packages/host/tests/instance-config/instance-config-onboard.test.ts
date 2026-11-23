@@ -143,3 +143,25 @@ describe('onboard', () => {
     expect(readFileSync(file, 'utf8')).toContain('MODEL="n"')
   })
 })
+
+describe('generated key', () => {
+  it('writes generate() and asks nothing for it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'onboard-'))
+    const file = join(dir, 'a.env')
+    const generate = vi.fn(() => 'tok-123')
+    const config = defineInstanceConfig({
+      app: 'my-agent',
+      keys: { MODEL: {}, TOKEN: { secret: true, generate } },
+    })
+    const t = fakeTty()
+    feed(t, 'm1\r')
+    const result = await config.onboard(
+      { stdin: t.stdin, stdout: t.stdout as never, env: { MY_AGENT_CONFIG: file }, homeDir: dir },
+      { interactive: true, answers: { TOKEN: 'ignored' } },
+    )
+    expect(t.stdin.setRawMode.mock.calls.filter(([m]) => m === true)).toHaveLength(1)
+    expect(result.written).toEqual(['MODEL', 'TOKEN'])
+    expect(readFileSync(file, 'utf8')).toContain('TOKEN="tok-123"')
+    expect(generate).toHaveBeenCalledTimes(1)
+  })
+})

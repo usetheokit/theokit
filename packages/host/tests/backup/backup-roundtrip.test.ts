@@ -92,3 +92,28 @@ it.skipIf(process.platform === 'win32')('round-trips a file name holding a backs
   await restore({ from: out, roots: { a: target } })
   expect(await readFile(join(target, 'we\\ird.txt'), 'utf8')).toBe('odd')
 })
+
+it('restore with transform writes the mapped path only, and rejects escapes and collisions', async () => {
+  const base = await scratch()
+  const a = join(base, 'a')
+  await put(a, 'old/x.txt', 'hello')
+  await put(a, 'old/y.txt', 'why')
+  const out = join(base, 'out')
+  await backup({ roots: { alpha: a }, out })
+  const target = join(base, 'restored')
+  await restore({
+    from: out,
+    roots: { alpha: target },
+    transform: (rel) => rel.replace(/^old\//, 'new/'),
+  })
+  expect(await readFile(join(target, 'new/x.txt'), 'utf8')).toBe('hello')
+  await expect(stat(join(target, 'old'))).rejects.toThrow()
+  const other = join(base, 'other')
+  await expect(
+    restore({ from: out, roots: { alpha: other }, transform: () => '../escape' }),
+  ).rejects.toThrow(/outside its root/)
+  await expect(
+    restore({ from: out, roots: { alpha: other }, transform: () => 'same' }),
+  ).rejects.toThrow(/two files/)
+  await expect(stat(other)).rejects.toThrow()
+})

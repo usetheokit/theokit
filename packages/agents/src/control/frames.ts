@@ -37,7 +37,8 @@ export function parseControlFrame(raw: string): ControlClientFrame | undefined {
   switch (type) {
     case 'chat':
       if (!isNonEmptyString(message)) return undefined
-      if (session === undefined) return { type: 'chat', message }
+      // `null` reads as absent: a client that sends `session: null` means no session.
+      if (session === undefined || session === null) return { type: 'chat', message }
       if (!isNonEmptyString(session)) return undefined
       return { type: 'chat', message, session }
     case 'interrupt':

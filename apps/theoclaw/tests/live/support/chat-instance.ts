@@ -73,7 +73,7 @@ for (const turn of turns) {
   replies.push(reply)
 }
 if (process.env.THEOCLAW_LIVE_BACKUP_DIR) {
-  backupInstance({ THEOCLAW_STATE_DIR: stateDir, THEOCLAW_WORKSPACE: workspace }, process.env.THEOCLAW_LIVE_BACKUP_DIR, { homeDir: process.env.HOME!, live: true })
+  await backupInstance({ THEOCLAW_STATE_DIR: stateDir, THEOCLAW_WORKSPACE: workspace }, process.env.THEOCLAW_LIVE_BACKUP_DIR, { homeDir: process.env.HOME!, live: true })
   await uploadBackup(process.env.THEOCLAW_LIVE_BACKUP_DIR, process.env.THEOCLAW_BACKUP_TARGET!, process.env.THEOCLAW_BACKUP_TOKEN)
 }
 signals.emit('SIGTERM')

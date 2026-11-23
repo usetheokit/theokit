@@ -153,3 +153,21 @@ describe('createDevicePairing edge cases', () => {
     expect(pairing.accepts(`Bearer ${CRED}`)).toBe(true)
   })
 })
+
+describe('createDevicePairing: by id', () => {
+  it('keeps the city, finds the device id by credential and revokes by id', async () => {
+    const { pairing } = setup()
+    const request = pairing.request(pairing.issueCode(), 'laptop', CRED, 'Oslo')
+    if (!request.ok) throw new Error('request refused')
+    expect(pairing.pending()).toMatchObject([{ id: request.id, name: 'laptop', city: 'Oslo' }])
+    await pairing.approve(request.id)
+    expect(pairing.deviceIdFor(`Bearer ${CRED}`)).toBe(request.id)
+    expect(pairing.deviceIdFor('Bearer nothing')).toBeUndefined()
+    const revoked: string[] = []
+    pairing.onRevoke((id) => revoked.push(id))
+    expect(await pairing.revokeDevice('other')).toBe(false)
+    expect(await pairing.revokeDevice(request.id)).toBe(true)
+    expect(revoked).toEqual([request.id])
+    expect(pairing.accepts(`Bearer ${CRED}`)).toBe(false)
+  })
+})

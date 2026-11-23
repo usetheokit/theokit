@@ -5,7 +5,6 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -13,6 +12,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  chmodSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
@@ -395,10 +395,10 @@ function filesUnder(dir: string): string[] {
 }
 
 describe('theoclaw backup (FR-008)', () => {
-  it('backup files are written 0600 and directories 0700', () => {
+  it('backup files are written 0600 and directories 0700', async () => {
     const source = populated()
     const dir = join(tempDir(), 'backup')
-    backupInstance(source.env, dir, HOME(source))
+    await backupInstance(source.env, dir, HOME(source))
     for (const file of filesUnder(dir)) expect(statSync(file).mode & 0o777).toBe(0o600)
     for (const sub of [
       dir,
@@ -410,18 +410,18 @@ describe('theoclaw backup (FR-008)', () => {
     }
   })
 
-  it('backup refuses a target directory that is not empty', () => {
+  it('backup refuses a target directory that is not empty', async () => {
     const source = populated()
     const dir = tempDir()
     writeFileSync(join(dir, 'keep.txt'), 'mine')
-    expect(() => backupInstance(source.env, dir, HOME(source))).toThrow(/is not empty/)
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(/is not empty/)
     expect(readdirSync(dir)).toEqual(['keep.txt'])
   })
 
-  it('a backup leaves out the migration import, and no byte it writes contains a configured or imported secret', () => {
+  it('a backup leaves out the migration import, and no byte it writes contains a configured or imported secret', async () => {
     const source = populated()
     const dir = join(tempDir(), 'backup')
-    const manifest = backupInstance(source.env, dir, HOME(source))
+    const manifest = await backupInstance(source.env, dir, HOME(source))
     expect(
       manifest.files.map((entry) => entry.path).filter((path) => path.startsWith('state/')),
     ).toEqual(['state/pairing.json'])
@@ -432,18 +432,18 @@ describe('theoclaw backup (FR-008)', () => {
     }
   })
 
-  it('backup refuses naming THEOCLAW_STATE_DIR when it is unset', () => {
+  it('backup refuses naming THEOCLAW_STATE_DIR when it is unset', async () => {
     const source = populated()
     const env = { ...source.env, THEOCLAW_STATE_DIR: undefined }
-    expect(() => backupInstance(env, join(tempDir(), 'b'), HOME(source))).toThrow(
+    await expect(backupInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(
       /THEOCLAW_STATE_DIR is unset/,
     )
   })
 
-  it('backup refuses a directory inside the workspace it copies (EC-2)', () => {
+  it('backup refuses a directory inside the workspace it copies (EC-2)', async () => {
     const source = populated()
     const dir = join(source.workspace, 'backups', 'today')
-    expect(() => backupInstance(source.env, dir, HOME(source))).toThrow(
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(
       new RegExp(`${dir}.*inside ${source.workspace}`),
     )
     expect(existsSync(join(source.workspace, 'backups'))).toBe(false)
@@ -454,7 +454,7 @@ describe('theoclaw backup (FR-008)', () => {
     const { symlinkSync } = await import('node:fs')
     symlinkSync('/etc/hostname', join(source.workspace, 'link'))
     const dir = join(tempDir(), 'backup')
-    expect(() => backupInstance(source.env, dir, HOME(source))).toThrow(/link is a symbolic link/)
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(/link is a symbolic link/)
     expect(existsSync(dir)).toBe(false)
   })
 
@@ -463,7 +463,7 @@ describe('theoclaw backup (FR-008)', () => {
     const holder = lockChild(source.state)
     expect(await holder.answer).toBe('took')
     const dir = join(tempDir(), 'backup')
-    expect(() => backupInstance(source.env, dir, HOME(source))).toThrow(
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(
       `is held by process ${holder.pid}`,
     )
     expect(existsSync(dir)).toBe(false)
@@ -472,17 +472,16 @@ describe('theoclaw backup (FR-008)', () => {
 })
 
 describe('theoclaw restore (FR-009)', () => {
-  function backedUp(): { source: Instance; dir: string; manifest: Manifest } {
-    const source = populated()
+  async function backedUp(source: Instance = populated()): Promise<{ source: Instance; dir: string; manifest: Manifest }> {
     const dir = join(tempDir(), 'backup')
-    return { source, dir, manifest: backupInstance(source.env, dir, HOME(source)) }
+    return { source, dir, manifest: await backupInstance(source.env, dir, HOME(source)) }
   }
 
-  it('a backup restored into an empty profile reproduces every file byte for byte', () => {
-    const { source, dir, manifest } = backedUp()
+  it('a backup restored into an empty profile reproduces every file byte for byte', async () => {
+    const { source, dir, manifest } = await backedUp()
     const target = instance()
     const started = Date.now()
-    restoreInstance(target.env, dir, HOME(target))
+    await restoreInstance(target.env, dir, HOME(target))
     // NFR-003: a 3-session restore well under 10 s, modes 0700 and 0600.
     expect(Date.now() - started).toBeLessThan(10_000)
     for (const entry of manifest.files) {
@@ -497,34 +496,34 @@ describe('theoclaw restore (FR-009)', () => {
     expect(existsSync(join(target.state, 'import'))).toBe(false)
   })
 
-  it('restore refuses a non-empty workspace and writes nothing', () => {
-    const { dir } = backedUp()
+  it('restore refuses a non-empty workspace and writes nothing', async () => {
+    const { dir } = await backedUp()
     const target = instance()
     mkdirSync(target.workspace, { recursive: true })
     writeFileSync(join(target.workspace, 'mine.txt'), 'keep')
-    expect(() => restoreInstance(target.env, dir, HOME(target))).toThrow(
+    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(
       new RegExp(`${target.workspace} is not empty`),
     )
     expect(readdirSync(target.workspace)).toEqual(['mine.txt'])
     expect(existsSync(target.state)).toBe(false)
   })
 
-  it('restore refuses a file whose sha256 differs, naming its path', () => {
-    const { dir } = backedUp()
+  it('restore refuses a file whose sha256 differs, naming its path', async () => {
+    const { dir } = await backedUp()
     const tampered = join(dir, 'workspace', '.theoclaw', 'sessions', 'session-1.jsonl')
     const bytes = readFileSync(tampered)
     bytes[0] = bytes[0]! ^ 1
     writeFileSync(tampered, bytes)
     const target = instance()
-    expect(() => restoreInstance(target.env, dir, HOME(target))).toThrow(
+    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(
       /workspace\/\.theoclaw\/sessions\/session-1\.jsonl does not match its sha256/,
     )
     expect(existsSync(target.state)).toBe(false)
     expect(existsSync(target.workspace)).toBe(false)
   })
 
-  it('restore refuses a manifest entry that leaves its root, and writes nothing (EC-3)', () => {
-    const { dir } = backedUp()
+  it('restore refuses a manifest entry that leaves its root, and writes nothing (EC-3)', async () => {
+    const { dir } = await backedUp()
     const target = instance()
     for (const path of ['../../.bashrc', 'state/../../outside', '/etc/passwd', 'other/file']) {
       const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as Manifest
@@ -535,8 +534,8 @@ describe('theoclaw restore (FR-009)', () => {
           files: [...manifest.files, { path, sha256: '0'.repeat(64), size: 0 }],
         }),
       )
-      expect(() => restoreInstance(target.env, dir, HOME(target))).toThrow(BackupRefusal)
-      expect(() => restoreInstance(target.env, dir, HOME(target))).toThrow(
+      await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(BackupRefusal)
+      await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(
         /leaves state\/ and workspace\//,
       )
       writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest))
@@ -545,8 +544,8 @@ describe('theoclaw restore (FR-009)', () => {
     expect(existsSync(join(target.root, 'outside'))).toBe(false)
   })
 
-  it('a restore that fails midway leaves the target unchanged and a retry succeeds (EC-1)', () => {
-    const { dir, manifest } = backedUp()
+  it('a restore that fails midway leaves the target unchanged and a retry succeeds (EC-1)', async () => {
+    const { dir, manifest } = await backedUp()
     const target = instance()
     let copied = 0
     const failing = {
@@ -556,55 +555,62 @@ describe('theoclaw restore (FR-009)', () => {
         if (copied === 2) throw new Error('disk full')
       },
     }
-    expect(() => restoreInstance(target.env, dir, failing)).toThrow('disk full')
+    await expect(restoreInstance(target.env, dir, failing)).rejects.toThrow('disk full')
     expect(existsSync(target.state)).toBe(false)
     expect(existsSync(target.workspace)).toBe(false)
     expect(readdirSync(target.root).filter((name) => name.includes('.restore-'))).toEqual([])
-    restoreInstance(target.env, dir, HOME(target))
+    await restoreInstance(target.env, dir, HOME(target))
     expect(filesUnder(target.state).length + filesUnder(target.workspace).length).toBe(
       manifest.files.length,
     )
   })
 
-  it('a restore whose workspace rename fails puts the state target back and changes neither (EC-1)', () => {
-    const { dir } = backedUp()
-    const target = instance()
-    const rename = (from: string, to: string) => {
-      if (to === target.workspace) throw new Error('rename refused')
-      renameSync(from, to)
+  it('a backup written before the package switch restores, re-homing its transcripts', async () => {
+    const { encodeProjectDir } = await import('@theokit/sdk/persistence')
+    const { createHash } = await import('node:crypto')
+    const source = populated()
+    const projects = join(source.workspace, '.theoclaw', 'projects', encodeProjectDir(source.workspace))
+    mkdirSync(projects, { recursive: true })
+    writeFileSync(join(projects, 'session.jsonl'), '{"turn":"old"}\n')
+    const { dir } = await backedUp(source)
+    // The manifest the app wrote before the switch: no `roots`, the workspace recorded.
+    const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as Manifest & { roots?: unknown }
+    delete manifest.roots
+    for (const entry of manifest.files) {
+      expect(createHash('sha256').update(readFileSync(join(dir, entry.path))).digest('hex')).toBe(entry.sha256)
     }
-    expect(() => restoreInstance(target.env, dir, { ...HOME(target), rename })).toThrow(
-      'rename refused',
-    )
-    expect(existsSync(target.state)).toBe(false)
-    expect(existsSync(target.workspace)).toBe(false)
-    expect(readdirSync(target.root).filter((name) => name.includes('.restore-'))).toEqual([])
+    const legacy = JSON.stringify(manifest, null, 2)
+    writeFileSync(join(dir, 'manifest.json'), legacy)
+    const target = instance()
+    await restoreInstance(target.env, dir, HOME(target))
+    expect(readFileSync(join(target.state, 'pairing.json'), 'utf8')).toContain('paired')
+    expect(
+      readFileSync(join(target.workspace, '.theoclaw', 'projects', encodeProjectDir(target.workspace), 'session.jsonl'), 'utf8'),
+    ).toBe('{"turn":"old"}\n')
+    expect(readFileSync(join(dir, 'manifest.json'), 'utf8')).toBe(legacy)
   })
 
-  it('a failed workspace rename leaves a state target that existed empty still present, empty, with its mode', () => {
-    const { dir } = backedUp()
+  it('a restore that cannot place the workspace leaves a state target that existed empty as it was', async () => {
+    const { dir } = await backedUp()
     const target = instance()
     mkdirSync(target.state, { recursive: true })
     chmodSync(target.state, 0o750)
-    const rename = (from: string, to: string) => {
-      if (to === target.workspace) throw new Error('rename refused')
-      renameSync(from, to)
-    }
-    expect(() => restoreInstance(target.env, dir, { ...HOME(target), rename })).toThrow(
-      'rename refused',
-    )
+    // The workspace's parent is a file, so the workspace cannot be staged.
+    writeFileSync(join(target.root, 'blocked'), 'x')
+    const env = { ...target.env, THEOCLAW_WORKSPACE: join(target.root, 'blocked', 'workspace') }
+    await expect(restoreInstance(env, dir, HOME(target))).rejects.toThrow()
     expect(readdirSync(target.state)).toEqual([])
     expect(statSync(target.state).mode & 0o777).toBe(0o750)
   })
 
-  it('restore into an absent profile while holding the instance lock places both targets', () => {
-    const { dir } = backedUp()
+  it('restore into an absent profile while holding the instance lock places both targets', async () => {
+    const { dir } = await backedUp()
     const home = tempDir()
     const target = {
       root: home,
       env: { THEOCLAW_PROFILE: 'restored', XDG_CONFIG_HOME: join(home, 'config') },
     }
-    restoreInstance(target.env, dir, { homeDir: home })
+    await restoreInstance(target.env, dir, { homeDir: home })
     const profile = join(home, '.theokit', 'profiles', 'restored')
     expect(readdirSync(join(profile, 'workspace', '.theoclaw', 'sessions'))).toHaveLength(3)
     expect(readFileSync(join(profile, 'state', 'pairing.json'), 'utf8')).toContain('paired')
@@ -623,9 +629,9 @@ describe('theoclaw restore (FR-009)', () => {
     mkdirSync(projects, { recursive: true })
     writeFileSync(join(projects, 'session.jsonl'), '{"turn":"kept"}\n')
     const dir = join(tempDir(), 'backup')
-    backupInstance(source.env, dir, HOME(source))
+    await backupInstance(source.env, dir, HOME(source))
     const target = instance()
-    restoreInstance(target.env, dir, HOME(target))
+    await restoreInstance(target.env, dir, HOME(target))
     const moved = join(
       target.workspace,
       '.theoclaw',
@@ -638,28 +644,28 @@ describe('theoclaw restore (FR-009)', () => {
 
   it('restore refuses a backup whose state or workspace is a symbolic link, and writes nothing', async () => {
     const { symlinkSync } = await import('node:fs')
-    const { dir } = backedUp()
+    const { dir } = await backedUp()
     const elsewhere = tempDir()
     renameSync(join(dir, 'workspace'), join(elsewhere, 'workspace'))
     symlinkSync(join(elsewhere, 'workspace'), join(dir, 'workspace'))
     const target = instance()
-    expect(() => restoreInstance(target.env, dir, HOME(target))).toThrow(/is a symbolic link/)
+    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(/is a symbolic link/)
     expect(existsSync(target.state)).toBe(false)
   })
 
-  it('backup and restore refuse a workspace inside the state directory', () => {
+  it('backup and restore refuse a workspace inside the state directory', async () => {
     const source = populated()
     const env = { ...source.env, THEOCLAW_WORKSPACE: join(source.state, 'workspace') }
-    expect(() => backupInstance(env, join(tempDir(), 'b'), HOME(source))).toThrow(/overlap/)
-    expect(() => restoreInstance(env, join(tempDir(), 'b'), HOME(source))).toThrow(/overlap/)
+    await expect(backupInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(/overlap/)
+    await expect(restoreInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(/overlap/)
   })
 
   it('restore refuses while instance.lock names a live process', async () => {
-    const { dir } = backedUp()
+    const { dir } = await backedUp()
     const target = instance()
     const holder = lockChild(target.state)
     expect(await holder.answer).toBe('took')
-    expect(() => restoreInstance(target.env, dir, HOME(target))).toThrow(
+    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(
       `is held by process ${holder.pid}`,
     )
     expect(existsSync(target.workspace)).toBe(false)
@@ -672,14 +678,14 @@ describe('theoclaw restore (FR-009)', () => {
       writeFileSync(join(source.workspace, `file-${n}.txt`), `content ${n}`)
     const dir = join(tempDir(), 'backup')
     const gate = join(tempDir(), 'go')
-    const script = join(tempDir(), 'backup.ts')
+    const script = join(tempDir(), 'backup.mts')
     writeFileSync(
       script,
       [
         `import { existsSync, writeFileSync } from "node:fs";`,
         `import { backupInstance } from ${JSON.stringify(join(APP_DIR, 'src', 'backup', 'backup.ts'))};`,
         `let paused = false;`,
-        `backupInstance(JSON.parse(process.argv[2]), process.argv[3], { homeDir: process.argv[5], onFileCopied: () => {`,
+        `await backupInstance(JSON.parse(process.argv[2]), process.argv[3], { homeDir: process.argv[5], onFileCopied: () => {`,
         `  if (paused) return; paused = true; process.stdout.write("copying\\n");`,
         `  while (!existsSync(process.argv[4])) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);`,
         `} });`,
@@ -703,7 +709,7 @@ describe('theoclaw restore (FR-009)', () => {
     await waitFor(() => output.includes('done'), 30_000, 'the backup to finish')
 
     const target = instance()
-    restoreInstance(target.env, dir, HOME(target))
+    await restoreInstance(target.env, dir, HOME(target))
     expect(readdirSync(target.workspace).filter((name) => name.startsWith('file-'))).toHaveLength(
       200,
     )

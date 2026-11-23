@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto'
-
+import { hookFingerprint, type HookIdentity } from '@theokit/agents/hooks'
 import type { HookApprovalGate, HookApprovalRequest } from '@theokit/sdk'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -30,12 +29,18 @@ export function parseApprovedHooks(env: Readonly<Record<string, string | undefin
 }
 
 /**
- * The hex sha256 of the hook's event key as its file spells it, its command and the timeout the
- * SDK will apply, one per line. The SDK reports all three so an approval matches what the owner
- * was shown (`HookApprovalRequest.sourceEvent`).
+ * The framework identity of a hook request: the event key as its file spells it (`sourceEvent`),
+ * the command, the matcher and the timeout the SDK will apply.
  */
-export function hookFingerprint(request: Pick<HookApprovalRequest, 'sourceEvent' | 'command' | 'timeoutMs'>): string {
-  return createHash('sha256').update(`${request.sourceEvent}\n${request.command}\n${request.timeoutMs}`).digest('hex')
+export function hookIdentity(
+  request: Pick<HookApprovalRequest, 'sourceEvent' | 'command' | 'timeoutMs' | 'matcher'>,
+): HookIdentity {
+  return {
+    command: request.command,
+    event: request.sourceEvent,
+    ...(request.matcher === undefined ? {} : { matcher: request.matcher }),
+    timeoutMs: request.timeoutMs,
+  }
 }
 
 /** One gate for every agent built with no approved hook, so two such option objects stay equal. */
@@ -44,5 +49,5 @@ const REFUSE_ALL_HOOKS: HookApprovalGate = { approve: () => false }
 /** A gate that runs a hook command only when its fingerprint is in `approved`. */
 export function createHookApprovalGate(approved: ReadonlySet<string>): HookApprovalGate {
   if (approved.size === 0) return REFUSE_ALL_HOOKS
-  return { approve: (request) => approved.has(hookFingerprint(request)) }
+  return { approve: (request) => approved.has(hookFingerprint(hookIdentity(request))) }
 }

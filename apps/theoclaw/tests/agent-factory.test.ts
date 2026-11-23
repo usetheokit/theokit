@@ -21,7 +21,8 @@ import type { TurnAgent } from "../src/control-plane/turn.js";
 import { theoClawAgentOptions, type AgentImport } from "../src/agent/create-agent.js";
 import { UNTRUSTED_CONTENT_NOTICE } from "../src/agent/untrusted-content.js";
 import type { ImportedSetup } from "../src/migration/import-store.js";
-import { hookFingerprint } from "../src/agent/hook-approval.js";
+import { hookFingerprint } from "@theokit/agents/hooks";
+import { hookIdentity } from "../src/agent/hook-approval.js";
 import { agentToolOptions } from "../src/tools/tool-registry.js";
 import { resolveToolSettings } from "../src/tools/tool-settings.js";
 import { makeHostToolsWorkspace } from "./host-tools-workspace.js";
@@ -32,7 +33,7 @@ import { FakeAgent, assistant, finished, messageEvent, waitFor } from "./fakes.j
 const MODEL_ENV = { THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" } as const;
 const LISTED_HOOK = { command: "touch listed", event: "stop", sourceEvent: "Stop", timeoutMs: 30_000 } as const;
 const UNLISTED_HOOK = { ...LISTED_HOOK, command: "touch unlisted" } as const;
-const APPROVED = hookFingerprint(LISTED_HOOK);
+const APPROVED = hookFingerprint(hookIdentity(LISTED_HOOK));
 
 const unusedAgent: TurnAgent = { send: () => Promise.reject(new Error("not used")) };
 

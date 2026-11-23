@@ -133,8 +133,8 @@ describe('broadcast groups', () => {
     const app = setup([HOME], { failTurns: true })
     await expect(app.deliver(inChannel('telegram', 'tg-chat', 'first question'))).rejects.toThrow(AgentTurnError)
     expect(app.prompts).toEqual(['first question'])
-    // The failed turn still sends its one reply, what it streamed before failing, to its origin.
-    expect(app.sent('telegram')).toEqual([['tg-chat', 'answer to first question']])
+    // The failed turn still sends its one reply, the error sentence, to its origin.
+    expect(app.sent('telegram')).toEqual([['tg-chat', 'Something went wrong on my side and I could not finish that.']])
     expect(app.groups.groupOf('telegram', 'tg-chat')?.transcript()).toEqual([])
     // The failed turn's own reply goes to its origin only, never to the other members.
     expect(app.sent('discord')).toEqual([])

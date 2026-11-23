@@ -37,6 +37,10 @@
       "types": "./dist/instance-config/index.d.ts",
       "import": "./dist/instance-config/index.js"
     },
+    "./discovery": {
+      "types": "./dist/discovery/index.d.ts",
+      "import": "./dist/discovery/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
