@@ -9,7 +9,7 @@ import {
 import type { InteractionUpdate } from '@theokit/sdk'
 
 import { type SdkMessageLike, toSdkMessage, type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
-import { maskSecrets } from '../channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import { describeError } from './errors.js'
 import { createEventMask } from './event-mask.js'

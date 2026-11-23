@@ -2,7 +2,7 @@ import type { BasePlatformAdapter, MessageEvent, PlatformName, SendResult } from
 import { createBroadcastGroups } from '@theokit/gateway-agent'
 import type { BroadcastGroups } from '@theokit/gateway-agent'
 
-import { maskSecrets } from './channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 
 /**
  * Broadcast groups (OC-21, FR-008): channels on several platforms that share one agent thread. The
