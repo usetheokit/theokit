@@ -19975,6 +19975,32 @@
             "dist/control.d.ts#SocketVerdict": "interface SocketVerdict {\n    owner?: boolean;\n    revoked?: (close: () => void) => (() => void) | undefined;\n}"
           }
         },
+        "ControlStreamEvent": {
+          "tier": "stable",
+          "declaration": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ControlStreamFrame": {
+          "tier": "stable",
+          "declaration": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ControlStreamSource": {
+          "tier": "stable",
+          "declaration": "interface ControlStreamSource {\n    (): AsyncGenerator<ControlStreamEvent>;\n    interrupt(): void;\n    steer(message: string): void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/control.d.ts#ControlStreamEvent"],
+          "internals": {
+            "dist/control.d.ts#ControlStreamEvent": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n}"
+          }
+        },
         "DevicePairing": {
           "tier": "stable",
           "declaration": "interface DevicePairing {\n    issueCode(): string;\n    request(code: string, name: string, credential: string, city?: string): PairingRequestResult;\n    pending(): readonly {\n        id: string;\n        name: string;\n        since: number;\n        city?: string;\n    }[];\n    approve(id: string): Promise<PairingApproval>;\n    deny(id: string): boolean;\n    revoke(name: string): Promise<boolean>;\n    revokeDevice(id: string): Promise<boolean>;\n    deviceIdFor(authorization: string | undefined): string | undefined;\n    accepts(authorization: string | undefined): boolean;\n    onRevoke(listener: (id: string) => void): () => void;\n}",
@@ -20364,6 +20390,82 @@
             "dist/control.d.ts#AgentTurnUsage": "type AgentTurnUsage = NonNullable<Extract<AgentTurnOutcome, {\n    ok: true;\n}>['usage']>;",
             "dist/control.d.ts#ControlClient": "interface ControlClient {\n    chat(message: string, session: string): AsyncIterable<ControlServerFrame>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n    close(): Promise<void>;\n}",
             "dist/control.d.ts#ControlServerFrame": "type ControlServerFrame = {\n    type: 'event';\n    event: AgentStreamEvent;\n    session?: string;\n} | {\n    type: 'done';\n    session?: string;\n    usage?: AgentTurnUsage;\n} | {\n    type: 'interrupted' | 'interrupt_ok' | 'steer_ok' | 'no_turn';\n    session: string;\n} | {\n    type: 'error';\n    code: string;\n    session?: string;\n};",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+          }
+        },
+        "createControlFrameConverter": {
+          "tier": "stable",
+          "declaration": "declare function createControlFrameConverter(): (frame: ControlStreamFrame) => ControlStreamEvent | undefined;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/control.d.ts#ControlStreamEvent",
+            "dist/control.d.ts#ControlStreamFrame"
+          ],
+          "internals": {
+            "dist/control.d.ts#ControlStreamEvent": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n}",
+            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n}"
+          }
+        },
+        "createControlStreamSource": {
+          "tier": "stable",
+          "declaration": "declare function createControlStreamSource(client: ControlClient, session: string, message: string): ControlStreamSource;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
+            "dist/control.d.ts#AgentTurnUsage",
+            "dist/control.d.ts#ControlClient",
+            "dist/control.d.ts#ControlServerFrame",
+            "dist/control.d.ts#ControlStreamEvent",
+            "dist/control.d.ts#ControlStreamSource",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome"
+          ],
+          "internals": {
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent": "type ApprovalRequiredEvent = {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent": "type ArtifactChunkEvent = {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent": "type ArtifactStartEvent = {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent": "type CheckpointSavedEvent = {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent": "type DoneEvent = {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    finishReason?: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent": "type ErrorEvent = {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent": "type FileEditEvent = {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent": "type InputRequestedEvent = {\n    type: 'input_requested';\n    requestId: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent": "type IterationEvent = {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent": "type PartialToolCallEvent = {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent": "type RunStartedEvent = {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent": "type ShellOutputEvent = {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent": "type StateUpdateEvent = {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent": "type TaskProgressEvent = {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent": "type TextDeltaEvent = {\n    type: 'text_delta';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
+            "dist/control.d.ts#AgentTurnUsage": "type AgentTurnUsage = NonNullable<Extract<AgentTurnOutcome, {\n    ok: true;\n}>['usage']>;",
+            "dist/control.d.ts#ControlClient": "interface ControlClient {\n    chat(message: string, session: string): AsyncIterable<ControlServerFrame>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n    close(): Promise<void>;\n}",
+            "dist/control.d.ts#ControlServerFrame": "type ControlServerFrame = {\n    type: 'event';\n    event: AgentStreamEvent;\n    session?: string;\n} | {\n    type: 'done';\n    session?: string;\n    usage?: AgentTurnUsage;\n} | {\n    type: 'interrupted' | 'interrupt_ok' | 'steer_ok' | 'no_turn';\n    session: string;\n} | {\n    type: 'error';\n    code: string;\n    session?: string;\n};",
+            "dist/control.d.ts#ControlStreamEvent": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n}",
+            "dist/control.d.ts#ControlStreamSource": "interface ControlStreamSource {\n    (): AsyncGenerator<ControlStreamEvent>;\n    interrupt(): void;\n    steer(message: string): void;\n}",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },

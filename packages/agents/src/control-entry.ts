@@ -31,6 +31,13 @@ export {
   type ControlClient,
 } from './control/control-client.js'
 export {
+  createControlFrameConverter,
+  createControlStreamSource,
+  type ControlStreamEvent,
+  type ControlStreamFrame,
+  type ControlStreamSource,
+} from './control/control-stream-source.js'
+export {
   PairingRefusedError,
   redeemPairing,
   type RedeemedPairing,

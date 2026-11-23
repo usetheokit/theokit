@@ -1,3 +1,4 @@
+import { createControlFrameConverter } from '@theokit/agents/control'
 import {
   type AgentEvent,
   type AgentStreamEvent,
@@ -132,6 +133,7 @@ export async function* controlStream(
     return event
   }
   const raise = (n: TuiNotice): void => notice({ ...n, after: mirror.events.length })
+  const convert = createControlFrameConverter()
   const iterator = client.chat(text, session)[Symbol.asyncIterator]()
   try {
     // Frames are pulled as soon as they come and ordered by the stamp the client took when the frame came off
@@ -179,25 +181,9 @@ export async function* controlStream(
       local = applyFrame(local, frame)
       if (frame.type === 'event') {
         const { event } = frame
-        if (event.type === 'text_delta') {
-          yield emit({ type: 'text-delta', text: String(event.content) })
-        } else if (event.type === 'tool_call') {
-          yield emit({
-            type: 'tool_call',
-            call_id: String(event.callId),
-            name: String(event.toolName),
-            status: 'running',
-          })
-        } else if (event.type === 'tool_result') {
-          const id = `tool-${String(event.callId)}`
-          // A result whose call is unknown draws nothing (the framework would make a card named `tool`).
-          if (mirror.events.some((item) => item.kind === 'tool' && item.id === id)) {
-            yield emit({
-              type: 'tool_call',
-              call_id: String(event.callId),
-              status: event.isError === true ? 'error' : 'completed',
-            })
-          }
+        const converted = convert(frame)
+        if (converted !== undefined) {
+          yield emit(converted)
         } else if (event.type === 'error') {
           // An error event inside the turn does not end it, and the framework's `error` is terminal: a notice instead.
           raise({ variant: 'error', text: `the turn failed (${String(event.code)})` })
