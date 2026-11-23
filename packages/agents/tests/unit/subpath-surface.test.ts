@@ -64,6 +64,9 @@ const MAJOR_SCOPED_GAPS = new Set([
   'sandbox: EgressProxy',
   'sandbox: EgressRule',
   'sandbox: startEgressProxy',
+  // Added by `@theokit/sdk` 11, absent at the 5.32 floor.
+  'sandbox: SANDBOX_MODES',
+  'sandbox: parseSandboxMode',
 ])
 
 describe('M90 — the infra subpath surface is locked', () => {
