@@ -110,7 +110,7 @@ describe("createAgentFactory", () => {
       await createAgentFactory({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, create)(agentToolOptions(settings));
 
       expect(options[0]?.tools?.map((tool) => tool.name)).toContain("read_file");
-      expect(options[0]?.plugins?.map((plugin) => plugin.name)).toEqual(["theoclaw-path-veto", 'theoclaw-provenance-guard', 'theoclaw-loop-detection']);
+      expect(options[0]?.plugins?.map((plugin) => plugin.name)).toEqual(["theoclaw-path-veto", 'theoclaw-provenance-guard']);
     } finally {
       workspace.remove();
     }
