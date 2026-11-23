@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GatewayRunner } from '@theokit/gateway'
 import type { GatewayContext, MessageEvent } from '@theokit/gateway'
 import { parseInbound, telegramChannel } from '@theokit/gateway-telegram'
@@ -148,9 +148,48 @@ describe('voice note replies', () => {
     expect((request.mock.calls[4]?.[1]?.body as FormData).get('message_thread_id')).toBe('7')
   })
 
-  it('runs on the published Telegram descriptor, which defers the audio read until after the hooks', () => {
-    expect(telegramChannel.platform).toBe('telegram')
-    expect(telegramChannel.config.find((field) => field.key === 'token')).toMatchObject({ required: true, secret: true })
+  describe('the published Telegram adapter', () => {
+    const voiceCtx = (getFile: ReturnType<typeof vi.fn>) => ({
+      chat: { id: 42, type: 'private' }, from: { id: 1 }, getFile,
+      message: { message_id: 3, date: 10, chat: { id: 42, type: 'private' }, from: { id: 1 }, voice: { file_id: 'voice-id', mime_type: 'audio/ogg' } },
+    })
+    async function dispatch(ownerOnly: boolean, sender: number) {
+      const getFile = vi.fn(async () => ({ file_path: 'voice/a.ogg' }))
+      const download = vi.fn(async () => new Response(new Uint8Array([1, 2, 3])))
+      vi.stubGlobal('fetch', download)
+      const adapter = telegramChannel.create({ token: '123:abc' }) as unknown as {
+        onInbound(h: (e: MessageEvent) => Promise<void>): () => void
+        handleInbound(ctx: unknown): Promise<void>
+      }
+      const order: string[] = []
+      adapter.onInbound(async (event) => {
+        order.push('hook')
+        if (ownerOnly && sender !== 1) return
+        order.push('read')
+        const audio = (event as { audio?: { read(): Promise<Uint8Array> } }).audio
+        expect(await audio?.read()).toEqual(new Uint8Array([1, 2, 3]))
+      })
+      const ctx = voiceCtx(getFile)
+      ctx.from.id = sender
+      await adapter.handleInbound(ctx)
+      return { getFile, download, order }
+    }
+
+    it('reads no audio for a sender the hooks reject', async () => {
+      const { getFile, download, order } = await dispatch(true, 2)
+      expect(order).toEqual(['hook'])
+      expect(getFile).not.toHaveBeenCalled()
+      expect(download).not.toHaveBeenCalled()
+    })
+
+    it('reads the audio only after the hooks accept the sender', async () => {
+      const { getFile, download, order } = await dispatch(true, 1)
+      expect(order).toEqual(['hook', 'read'])
+      expect(getFile).toHaveBeenCalledOnce()
+      expect(download).toHaveBeenCalledOnce()
+    })
+
+    afterEach(() => { vi.unstubAllGlobals() })
   })
 
   it('requires explicit audio and Telegram credentials', () => {
