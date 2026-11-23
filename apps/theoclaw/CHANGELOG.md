@@ -11,7 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- Control plane: the listener runs on `createNodeServer` with its trusted-proxy stamping, the bind and bearer rules are `@theokit/http/guards`, and the `/control` socket, device pairing, `/control/pair` route and terminal, desktop and worker client are `@theokit/agents/control` (`attachControlSocket`, `createDevicePairing`, `pairRoute`, `createControlClient`). The app keeps its own sessions (secret masking, timeline events). Changes visible to a client: a pairing refusal for a bad token now reads `bad_credential`, a trusted-proxy identity is stamped as `x-theokit-trusted-identity`, and an internal server error answers `Internal Server Error` as text (#2608).
+- Control plane: the listener runs on `createNodeServer` with its trusted-proxy stamping, the bind and bearer rules are `@theokit/http/guards`, and the `/control` socket, device pairing, `/control/pair` route and terminal, desktop and worker client are `@theokit/agents/control` (`attachControlSocket`, `createDevicePairing`, `pairRoute`, `createControlClient`). The `/control` sessions are the framework's `createSessionStore` with the app's turn (secret masking, timeline events, usage) as its `runTurn`. Changes visible to a client: a trusted-proxy identity is stamped as `x-theokit-trusted-identity`, and an internal server error answers `Internal Server Error` as text (#2608).
 - Model credentials: custom-provider keys now resolve through the framework chain (`resolveAgentCredential`), and the `openai-chatgpt/` route is detected with `isSubscriptionRoute` (#2576).
 
 ### Changed

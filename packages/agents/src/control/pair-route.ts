@@ -62,6 +62,8 @@ export function pairRoute(
   options: {
     /** The coarse city for a request (from its peer address), kept with the pending device. */
     cityOf?: (request: Request) => string | undefined
+    /** Renames a refusal reason in the `{ error }` body, for a client that knows another name. */
+    errorNames?: Partial<Record<keyof typeof STATUS, string>>
   } = {},
 ): (request: Request) => Promise<Response> {
   return async (request) => {
@@ -74,6 +76,9 @@ export function pairRoute(
     const result = pairing.request(body.code, body.name, body.credential, options.cityOf?.(request))
     if (result.ok) return Response.json({ id: result.id }, { status: 202 })
     const status = STATUS[result.reason]
-    return Response.json({ error: result.reason }, { status })
+    return Response.json(
+      { error: options.errorNames?.[result.reason] ?? result.reason },
+      { status },
+    )
   }
 }

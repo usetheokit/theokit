@@ -34,7 +34,7 @@ export function serveHandler(
   relay?: HttpHandler,
   cityOf?: CityLookup,
 ): HttpHandler {
-  const pair = devices === undefined ? undefined : pairRoute(devices, { cityOf: (request) => cityOf?.(peerAddress(request)) })
+  const pair = devices === undefined ? undefined : pairRoute(devices, { errorNames: { bad_credential: 'bad_token' }, cityOf: (request) => cityOf?.(peerAddress(request)) })
   return async (request) => {
     const { pathname } = new URL(request.url)
     if (pathname === '/health') return healthHandler(request)

@@ -76,4 +76,17 @@ describe('pending_devices city', () => {
     expect(pending.find((d) => d.name === 'phone')?.city).toBe('Paris')
     expect(pending.find((d) => d.name === 'desk')).not.toHaveProperty('city')
   })
+
+  it('keeps `bad_token` as the pairing refusal for a weak token on the wire', async () => {
+    const devices = createDevicePairing({ dir: dir() })
+    const handler = serveHandler(() => Promise.resolve(new Response(null, { status: 404 })), undefined, devices)
+    const response = await handler(
+      new Request('http://x/control/pair', {
+        method: 'POST',
+        body: JSON.stringify({ code: devices.issueCode(), name: 'phone', token: 'short' }),
+      }),
+    )
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'bad_token' })
+  })
 })

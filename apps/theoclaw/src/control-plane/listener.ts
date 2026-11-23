@@ -76,6 +76,8 @@ export async function listenControlPlane(options: ListenOptions): Promise<Contro
   try {
     await node.listen(options.port, options.host)
   } catch (error) {
+    // A socket attached to a server that never listened still holds its upgrade listener.
+    await control?.close()
     throw bindFailure(error, options)
   }
   let closing: Promise<void> | undefined
