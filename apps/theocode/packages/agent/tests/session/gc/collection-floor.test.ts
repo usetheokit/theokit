@@ -21,7 +21,7 @@ const allProjectsSeams = {
   projectsRoot: '/projects',
   listProjects: () => [],
   listProject: () => [],
-  classify: () => ({ state: 'DEAD' as const }),
+  classify: () => ({ state: 'DEAD' as const, cwd: '/home/operator/a-project' }),
   listRegistry: async () => [] as never,
   hasLiveWriter: () => false,
   readPointer: () => undefined,
