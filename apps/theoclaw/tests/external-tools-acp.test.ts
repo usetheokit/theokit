@@ -5,7 +5,7 @@ import type { CustomTool } from '@theokit/sdk'
 import { AcpRequestTimeoutError, AcpTransportClosedError } from 'theokit/server/agent'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { AcpPermissionOptions } from '../src/tools/acp-permission.js'
+import { acpPermissionHandler, type AcpPermissionOptions } from '../src/tools/acp-permission.js'
 import { buildTools } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { notEnforced, tempCwd } from './tool-start-fixtures.js'
@@ -80,6 +80,14 @@ describe('the owner is asked for an ACP agent permission request (B-684)', () =>
     const ask = vi.fn(async () => 'once' as const)
     expect(await answerOf({ ask })).toBe('allow-once')
     expect(ask).toHaveBeenCalledWith('ACP agent asker asks permission: write a file (edit)')
+  })
+
+  it('asks again after an always answer', async () => {
+    const ask = vi.fn(async () => 'always' as const)
+    const handler = acpPermissionHandler('agent', { ask })
+    await handler({})
+    await handler({})
+    expect(ask).toHaveBeenCalledTimes(2)
   })
 
   it('grants on an always answer, once', async () => {

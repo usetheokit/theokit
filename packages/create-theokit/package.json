@@ -24,10 +24,12 @@
   },
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "tools"
   ],
   "dependencies": {
-    "cross-spawn": "^7.0.6"
+    "cross-spawn": "^7.0.6",
+    "esbuild": "^0.28.2"
   },
   "publishConfig": {
     "provenance": true,

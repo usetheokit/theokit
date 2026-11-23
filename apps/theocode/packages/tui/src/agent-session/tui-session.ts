@@ -16,6 +16,9 @@ export interface TuiSession {
   effort: () => ReasoningEffort
   setEffort: (e: ReasoningEffort) => void
 
+  /** True when this launch took its session from a stored pointer rather than minting one. */
+  readonly resumed: boolean
+
   session: () => string
   setSession: (id: string) => void
 
@@ -31,14 +34,34 @@ export interface TuiSession {
 
 export interface SessionOptions {
   readonly cwd?: string
-  readonly sessionPointer: string
+  /** Transcript root the framework pointer lives under; the framework default when absent. */
+  readonly pointerRoot?: string
   /**
    * Whether to READ the pointer. It is written either way, so a later `--continue` can find the
    * session; reading it is what makes this launch inherit the previous conversation.
    */
   readonly resume?: boolean
-  readonly loadSession?: (pointer: string, fresh: () => string) => string
+  readonly loadSession?: (
+    cwd: string,
+    fresh: () => string,
+    root?: string,
+  ) => { readonly sessionId: string; readonly resumed: boolean }
   readonly loadConfig?: typeof resolveEffectiveConfig
+}
+
+/** The initial config load: a file that cannot be read yields the confined posture (#827). */
+function loadConfigOrConfined(
+  loadConfig: typeof resolveEffectiveConfig,
+  cwd: string,
+): ReturnType<typeof resolveEffectiveConfig> {
+  try {
+    return loadConfig({ cwd })
+  } catch {
+    // Through the `cli` layer, in its `key=value` form: that is the layer `security-floor.ts`
+    // designates as the operator's override, and this only ever HARDENS.
+    const posture = Object.entries(fallbackConfigPosture()).map(([k, v]) => `${k}=${v}`)
+    return loadConfig({ cwd: tmpdir(), cli: posture })
+  }
 }
 
 export function createTuiSession(opts: SessionOptions): TuiSession {
@@ -59,16 +82,7 @@ export function createTuiSession(opts: SessionOptions): TuiSession {
   // that could not be read, and granting write authority on the strength of a file we just failed
   // to parse is the opposite of what the failure warrants. `configHealthNotice` puts the reason on
   // screen so the narrow posture is explained rather than mysterious.
-  let cfg = ((): ReturnType<typeof loadConfig> => {
-    try {
-      return loadConfig({ cwd })
-    } catch {
-      // Through the `cli` layer, in its `key=value` form: that is the layer `security-floor.ts`
-      // designates as the operator's override, and this only ever HARDENS.
-      const posture = Object.entries(fallbackConfigPosture()).map(([k, v]) => `${k}=${v}`)
-      return loadConfig({ cwd: tmpdir(), cli: posture })
-    }
-  })()
+  let cfg = loadConfigOrConfined(loadConfig, cwd)
   let effort: ReasoningEffort = cfg.reasoning_effort
   // READING the pointer is what makes this launch inherit a conversation; WRITING it is what makes
   // the NEXT launch able to. Only the first is gated by `resume`.
@@ -80,17 +94,21 @@ export function createTuiSession(opts: SessionOptions): TuiSession {
   // session — a turn, a delegation, a custom command — and the file was not there.
   const freshSession = () => `tui-${randomUUID()}`
   let session: string
+  let resumed = false
   if (opts.resume === true) {
-    session = loadSession(opts.sessionPointer, freshSession)
+    const loaded = loadSession(cwd, freshSession, opts.pointerRoot)
+    session = loaded.sessionId
+    resumed = loaded.resumed
   } else {
     session = freshSession()
-    void persistSessionId(opts.sessionPointer, session)
+    void persistSessionId(cwd, session, undefined, opts.pointerRoot)
   }
   let images: AttachedImage[] | undefined
   let model: string | undefined
   let fixedModel: string | undefined
 
   return {
+    resumed,
     cfg: () => cfg,
     reloadConfig: () => {
       cfg = loadConfig({ cwd })

@@ -16,15 +16,50 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `protectedSessions` returns the `last-session` pointer's transcript once, under the name of the file on disk, and still blocks deletion when the pointer is unreadable (#2869).
+- `ToolRegistry` builds its tools from `codingAgentTools` in `@theokit/agents/presets` instead of binding each factory itself (#2741).
+- `sessions gc` leaves identity and legacy-name protection to `planTranscriptGC` (`knownIds`, `isProtected`); `assignOwnIdentities` and `withholdLegacyNamed` are gone (#2746).
+- Pins `@theokit/sdk` 13.0.0 (#2744, #2742).
+- The wiring record now carries each MCP server and skill with the scope it came from (project, personal, operator) and, per capability, why it is off, instead of merging scopes by hand (#2742).
+- Tests: consent adapter and gates now cover initial trust, trust and approval retry after a persistence failure, accumulated refusals, fingerprint-to-spec mapping and gate refusals (hook refuse, trust quit) and prompt/warning/key-hint order (#2798). Mutation check was manual, not a tool: 2 mutations in `use-consent.ts` and 9 in `ConsentGates.tsx` (approve/refuse branches, trust quit, both error toasts, config reload, warning/hint order) were all caught; the framework reducer in `@theokit/tui` was not mutated.
+- Removes `config/layers.ts` and the unused `applySecurityFloor` wrapper, dead since `resolveConfig` moved to `defineLayeredConfig`; their tests now run through `resolveConfig` (#2714).
+- Tests: the collection-floor test gives its all-projects classifier the cwd a DEAD verdict carries, and the tool-header test imports without the `.ts` extension, so the typecheck passes again (#2854).
+
+- Keybinding parsing, transcript export, resumed history and backtrack come from `@theokit/tui` (`parseKeybindings`, `agentEventsToMarkdown`/`lastAssistantText`, `sessionMessagesToThread`, `backtrackReducer`, `BacktrackOverlay`); `backtrack-ladder.ts` and `backtrack-select.ts` are gone. The overlay now has the library border and no cyan; the session fork, `REBINDABLE` and the reserved sets stay (#2727).
+
+- `tools/build-cli.mjs` takes its esbuild settings from `create-theokit/tools/build-ink-cli.mjs`, which the scaffolded TUI's `build:bin` also calls, so the two no longer carry copies (#2761).
+- The `Bash`, `Edit` and `ApplyPatch` headers come from `toolPresentation` with `aliases` (`shell_exec`, `edit_file`, `apply_patch`); TheoCode keeps the one-line command, the `file`/`files` fallbacks, the patch +/- counts, the refusal wording and the other headers. The `ToolPresentation` → `{formatToolHeader, formatToolResult}` adapter is not in `@theokit/tui` yet (theokit-tui#295), so the body and approval tables stay TheoCode's own (#2722).
+- Maintenance: the unused `join` import in `managed-settings.ts` is gone, and `createTuiSession` loads its initial config through a helper (`loadConfigOrConfined`) with the same confined fallback (#2845).
+- A refused tool call is recognised by the typed `refusal` on the event (`@theokit/tui` 0.83.4), not by marker text or exit code 126 in its output; `human` and `timeout` read as `Rejected`, `policy` and `hook` as `Blocked` (#2721). A call that carries marker text or exit code 126 but no typed `refusal` now renders as an ordinary failure, and the Bash "rejected — nothing ran" body is gone (the framework's `errorText` is shown). Not verified: that the typed refusal reaches the TUI parts on the in-process presenter path; the test feeds a part carrying `refusal` to `messagesToAgentEvents`.
+- `theocode doctor` derives the credential state with `credentialState` from `@theokit/agents/doctor`; the local `credentialState` is gone.
+- The directory trust and hook review gates render `WorkspaceTrustPrompt` and `HookReviewPrompt` over `useWorkspaceConsent` from `@theokit/tui`; the consent state and hook-decision modules are gone, and a hook command is shown with control characters escaped (#2724).
+- Each built-in command is declared once with its description and action, and the composer's `/` menu comes from `registry.palette()`; `BUILTIN_COMMANDS` is gone (#2725).
+- The credential source stays the framework's typed `SourceOrigin` from resolution to the TUI footer; `toLocalSource` and the regular expression in `credential-helpers.ts` that rebuilt it from a string are gone.
+- The live config takes its provider-key guard from `@theokit/agents/testing`; `tools/require-provider-key.mjs` and its test are gone (#2760).
+- Tests: the session GC suites again pin pointer protection, DEAD and undetermined projects, transcript age and live-writer rules (plan and apply), foreign files and registry entries (#2829).
+- The footer's credential source comes from the keys the bootstrap's `.env` step actually loaded, so a shell value that overrides a `.env` declaration reads `(shell)`; the app-local `dotenvNames` scanner is gone (#2812).
+- `orderedPermissionRules` builds its rules with `permissionRulesFromLayers` from `@theokit/agents/config`; the app-local deny-first partition is gone (#2745).
+- `foreign-keys.ts` is gone: the settings keys recognised from a `.claude` file are `CLAUDE_SETTINGS_KEYS` from `@theokit/agents/config` (#2712).
+- The doctor's `settings` and `credential-strays` rows come from `checks.settingsReport` and `checks.leftovers` in `@theokit/agents/doctor`; their wording changes (`not implemented` for `not implemented here`, `permissions not supported` for `permission entries not honoured`, `path (…)` for `path — …`, `, ` separators, and `… no longer read; remove if you no longer need it` for the stray row).
+- `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
+- The TUI session pointer is the framework's `last-session` (`loadOrCreateSessionId` / `persistSessionId` from `@theokit/agents/session`) instead of `<cwd>/.theokit/tui-session`; the old file is read once, when no `last-session` exists, and its id is copied across. Writes stay serialised per pointer and a failed write is still reported. `gc/pointer.ts` is gone: session delete, fork and `sessions gc` read `last-session` through `readPointerId`, which still refuses when the file cannot be read (#2754).
+- `/theme` with `NO_COLOR` set no longer claims a colour switch the provider would not draw: it refuses, says why, and persists nothing (#2731).
+- The upward instruction walk is `loadInstructionWalk` from `@theokit/agents/config`; `agents-md.ts` defines no directory walk. `loadAgentsMd` and `agentsMdChain` are async, the chain is read once per build, and files come out root-most first with base before local at each level (#2739).
+- `run` passes `format` to `runHeadlessTurn` and uses its result (final text, usage, stop reason) instead of tapping a muted turn; `readPrompt`, `finalMessage`, `toContentChunk` and the failed-call set are gone in favour of `readHeadlessPrompt`, `finalMessageOf`, `contentChunkFromEvent` and the fold's `isError` (#2723).
+- Settings reading uses the framework: `settingsCandidates` builds the own and legacy roots (`layerCandidates` keeps the per-path hook delivery), and the managed-settings paths come from `MANAGED_SETTINGS_PATHS` (#2713).
+- The write tools take `baseDir` from `@theokit/agents` (sdk-tools 0.32) instead of TheoCode rewriting relative paths itself; `anchor-relative-writes.ts` is gone.
 - The session PTY owner is `createPtyOwner` from `@theokit/agents-pty`; `createSessionPtyOwner` is gone (#2577).
-- Framework helpers (#2605): the `update_goal` tool and judge come from `createGoalSignal`, one per goal run; `resolveMentions` delegates to `resolveFileMentions`; agent shapes go through `declareAgentShape` and `shapeToolsAsCustomTools`; the session PTY owner wraps `createPtyOwner`. `turnErrorText` keeps its own text, with the gap named in `turn-error.ts`.
+- Framework helpers (#2605): the `update_goal` tool and judge come from `createGoalSignal`, one per goal run; `resolveMentions` delegates to `resolveFileMentions`; agent shapes go through `declareAgentShape` and `shapeToolsAsCustomTools`; the session PTY owner wraps `createPtyOwner`. `turnErrorText` calls `describeTurnFailure` with the app hint table as a `probe` (#2738).
 - `@theokit/tui` is `^0.83.4`: the approval ledger is the toolkit's `createApprovalLedger` (immutable, pruned on backtrack), the clipboard copy is the toolkit's `copyToClipboard` with this app's `/export` guidance on top, and the terminal title is `sanitizeTitle` and `pushTerminalTitle`; `consent/pending-approvals.ts`, `consent/approvals.ts` and the three `clipboard-*` helpers are deleted (#2607).
 - Slash commands: `commands/registry.ts` builds its routing table with `createCommandRegistry`; `/exit` is declared as an alias of `/quit` and Codex-only names as hidden, so alias and hidden-name resolution come from `@theokit/agents/commands` (#2606).
 - Model routing: `routeToCredential` and the subscription-route check use the shared `modelForCredential` / `isSubscriptionRoute` helpers from `@theokit/agents/auth` (#2576).
 
 ### Changed
 
-- The standalone consumer pins `@theokit/sdk` 9.0.0 (`standalone/released.json`, the three manifests and the lockfile), so the registry-consumer check passes against the current SDK.
+- The runtime theme switch (`/theme`) is driven by a `createThemeController` held by `ThemedSurface`, and `theme-session.tsx` no longer keeps its own `useSyncExternalStore` slot. `@theokit/tui` 0.83.4 has no controller, so a local pnpm patch (`patches/@theokit__tui@0.83.4.patch`, root and standalone) backports one that accepts any theme prop — a built-in name, an override, or `{base, override}` — and `<TheoTUIProvider controller>`. Drop the patch when `theokit-tui` ships a controller that takes theme objects (usetheokit/theokit-tui#294); it must be removed once that release lands.
+- The standalone consumer pins `@theokit/sdk` 11.0.0 (`standalone/released.json`, the three manifests and the lockfile), so the registry-consumer check passes against the current SDK.
+- `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`; the registry and live-session protections and the output are unchanged.
+
 - `resolveConfig` declares its keys, defaults, environment knobs, floors and profiles once and delegates the merge to `defineLayeredConfig` from `@theokit/agents/config` (#2604). Resolved values are unchanged. The helper merges fields inside a same-named profile and ignores profile tables in the `cli` layer, so the whole-profile replacement and `-c`-defined profiles are settled here before the call.
 - Turn-failure classification uses `classifyTurnFailure` from `@theokit/agents/errors` (#1845, part of #1930); the retry wording and the message-text fallback stay here. A typed `metadata.statusCode` is now also recognised as transient.
 - The standalone consumer has `standalone/released.json` and `tools/sync-standalone.mjs` (`--check` / `--write`); `pnpm check:standalone` (drift check, frozen install, `standalone/auth.test.mjs`) now runs before `pnpm release` and `pnpm version-packages` (#2334).
@@ -38,9 +73,14 @@ for `release.yml` in this repository will not find it, and should not have been 
   `gc/sweep-wiring.ts`). A backtrack index past the last turn is now the framework's error, not a
   `RangeError`. The sweep's child is now detached (own process group, so it survives the terminal
   closing) and a stamp that cannot be written is reported with the framework's wording. The
-  cross-project collector (`gc/all-sessions*`, `filesystem`, `root-claim`, `root-ownership`) stays:
-  `planProjectsGC` keeps a live project whole unless the caller declares its cwd list complete, which
-  TheoCode cannot enumerate, and the framework's ownership marker is not TheoCode's.
+  cross-project collector is now `planProjectsGC` / `runProjectsGC` (#2747): `gc/all-sessions*`,
+  `remove-tolerant`, `transcript-names` and `collection-window` are gone, and `filesystem.ts` adapts
+  the framework plan to this product's `byKind` names (`lock-file`, `tmp`). It plans with
+  `cwdCoverage: 'transcripts'`, `deadProjects: 'keep-last'` and the `<cwd>/.theokit/tui-session`
+  pointer, and recognises its own `.theocode-collector.json` marker through `existingMarker`.
+  Two behaviour changes: `--keep 0` is now refused (the framework floor for `keepLast` is 1), and a
+  project, live or dead, with a transcript whose header names no cwd of that project is now kept
+  whole instead of being collected from.
 
 ### Fixed
 

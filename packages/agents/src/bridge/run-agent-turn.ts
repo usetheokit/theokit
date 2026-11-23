@@ -1,10 +1,13 @@
 /**
  * One cancellable, streamed turn on an agent the caller already holds, with a typed outcome.
  *
- * Ported from TheoClaw's `runTheoClawTurn`, without its secret masking or untrusted-content policy:
- * those are caller hooks (`sendOptions`, `mapEvent`).
+ * Ported from TheoClaw's `runTheoClawTurn`, without its untrusted-content policy: that is a
+ * caller hook (`sendOptions`, `mapEvent`). Secret masking is `secrets`.
  */
+import type { SDKUserMessage } from '@theokit/sdk'
+
 import type { AgentStreamEvent } from './agent-stream-events.js'
+import { createAgentEventMask, type AgentEventMask } from './event-mask.js'
 import {
   translateInteractionUpdate,
   translateSdkEvent,
@@ -16,16 +19,54 @@ import {
   type OpenAICompatibleRoutesOptions,
   type OpenAICompletion,
 } from './openai-compatible-routes.js'
-import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
+import type { SdkAgentHandle, SdkSendOptions } from './sdk-adapter.js'
+import { describeError as describe, describeStreamedError } from './stream-errors.js'
 
-/** How a turn ended. `reason` is for logs; it is never meant for a client. */
+/** What one `send` carries: the text alone, or the text with images the model reads on that turn. */
+export type AgentTurnMessage = string | SDKUserMessage
+
+/**
+ * The run of one turn, as `runAgentTurn` reads it. Looser than `SdkTurnHandle`: a stream message
+ * needs only its `type`, and `cancel` and `stream` may be absent.
+ */
+export interface AgentTurnRun {
+  stream?(): AsyncIterable<{ readonly type: string }>
+  wait(): Promise<{
+    readonly status?: string
+    readonly result?: string
+    readonly error?: { readonly message?: string; readonly code?: string }
+    readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number }
+    // `| undefined` stays: an app's run type declares it so under exactOptionalPropertyTypes.
+    // eslint-disable-next-line sonarjs/no-redundant-optional
+    readonly cost?: { readonly amountUsd?: number | undefined }
+  }>
+  cancel?(): unknown
+}
+
+/**
+ * What `runAgentTurn` needs of an agent: `send`, nothing else. It has no `agentId` and no `dispose`;
+ * whoever built the agent disposes it (`Symbol.asyncDispose` included). A `SdkAgentHandle` satisfies it.
+ */
+export interface AgentTurnAgent {
+  send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>
+}
+
+/**
+ * How a turn ended. `reason` is for logs; it is never meant for a client. A run the SDK reports as
+ * cancelled (`cancelled: true`) is not a failure: the turn ran to the SDK's own end. `turn_cancelled`
+ * is a turn this call cancelled, because its signal aborted.
+ */
 export type AgentTurnOutcome =
-  | { ok: true; usage?: { inputTokens: number; outputTokens: number; costUsd?: number } }
+  | {
+      ok: true
+      cancelled?: true
+      usage?: { inputTokens: number; outputTokens: number; costUsd?: number }
+    }
   | { ok: false; code: 'turn_failed' | 'turn_cancelled'; reason: string }
 
 export interface RunAgentTurnOptions {
-  agent: SdkAgentHandle<SdkMessage>
-  message: string
+  agent: AgentTurnAgent
+  message: AgentTurnMessage
   runId: string
   emit: (event: AgentStreamEvent) => void
   signal?: AbortSignal
@@ -33,6 +74,12 @@ export interface RunAgentTurnOptions {
   sendOptions?: SdkSendOptions
   /** Optional hook on each event before `emit`; return `undefined` to drop it. */
   mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined
+  /**
+   * Values never to emit: every string in an event is masked, and text that could still grow into
+   * one is held back and released as an extra `text_delta` before the next other event, or when the
+   * turn ends (not when it is cancelled).
+   */
+  secrets?: readonly string[]
 }
 
 const ABORTED = Symbol('aborted')
@@ -42,25 +89,17 @@ function ignore(): void {
   // a rejection nobody waits on
 }
 
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function failed(reason: string): AgentTurnOutcome {
   return { ok: false, code: 'turn_failed', reason }
-}
-
-function describeStreamedError(event: object): string {
-  const { code, message } = event as { code?: unknown; message?: unknown }
-  const text = typeof code === 'string' ? code : 'error'
-  return typeof message === 'string' && message !== '' ? `${text}: ${message}` : text
 }
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function finishedOutcome(result: Awaited<ReturnType<SdkTurnHandle['wait']>>): AgentTurnOutcome {
+function finishedOutcome(
+  result: Awaited<ReturnType<AgentTurnRun['wait']>>,
+): Extract<AgentTurnOutcome, { ok: true }> {
   const input = finiteNumber(result.usage?.inputTokens)
   const output = finiteNumber(result.usage?.outputTokens)
   if (input === undefined && output === undefined) return { ok: true }
@@ -82,7 +121,7 @@ async function microtasks(hops: number): Promise<void> {
 
 /** Cancel the run and close the iterator, waiting on neither past a few microtask turns. */
 async function cancelRun(
-  run: SdkTurnHandle<SdkMessage> | undefined,
+  run: AgentTurnRun | undefined,
   iterator?: AsyncIterator<unknown>,
 ): Promise<AgentTurnOutcome> {
   const reasons: string[] = []
@@ -122,9 +161,8 @@ function raceAbort<T>(
 }
 
 /** The translator ignores raw `error` messages; a streamed error fails the turn all the same. */
-function translateMessage(message: SdkMessage, runId: string): AgentStreamEvent[] {
-  const kind: string = message.type
-  if (kind === 'error') {
+function translateMessage(message: { readonly type: string }, runId: string): AgentStreamEvent[] {
+  if (message.type === 'error') {
     const { code, message: text } = message as { code?: unknown; message?: unknown }
     return [
       {
@@ -135,14 +173,15 @@ function translateMessage(message: SdkMessage, runId: string): AgentStreamEvent[
       },
     ]
   }
-  return translateSdkEvent(message, runId)
+  return translateSdkEvent(message as SdkMessage, runId)
 }
 
 interface TurnState {
-  run?: SdkTurnHandle<SdkMessage>
+  run?: AgentTurnRun
   iterator?: AsyncIterator<unknown>
   /** False from the moment the turn is cancelled or ends: nothing is emitted after that. */
   live: boolean
+  mask?: AgentEventMask
 }
 
 /**
@@ -173,6 +212,9 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<AgentT
     const wasLive = state.live
     state.live = false
     if (!wasLive) return await cancelRun(state.run, state.iterator)
+    state.live = wasLive
+    state.mask?.flush()
+    state.live = false
     const { iterator } = state
     if (iterator?.return !== undefined) {
       void Promise.resolve()
@@ -192,13 +234,20 @@ async function runTurn(
   aborted: Promise<Aborted> | undefined,
 ): Promise<AgentTurnOutcome> {
   const isLive = (): boolean => state.live
+  if (options.secrets !== undefined && options.secrets.length > 0) {
+    state.mask = createAgentEventMask(options.secrets, (event) => {
+      if (state.live) options.emit(event)
+    })
+  }
   let textStreamed = false as boolean
   let streamedError: string | undefined
   const send = (event: AgentStreamEvent): void => {
     if (!state.live) return
     const mapped = options.mapEvent === undefined ? event : options.mapEvent(event)
     // `mapEvent` may itself have aborted the signal: recheck before emitting.
-    if (mapped !== undefined && isLive()) options.emit(mapped)
+    if (mapped === undefined || !isLive()) return
+    if (state.mask === undefined) options.emit(mapped)
+    else state.mask.emit(mapped)
   }
   const onDelta = ({ update }: { update: { type: string } }): void => {
     if (!state.live) return
@@ -242,23 +291,28 @@ async function runTurn(
       if (typeof message !== 'object' || message === null || typeof message.type !== 'string') {
         continue
       }
+      const typed = message as { readonly type: string }
       const isAssistant = message.type === 'assistant'
       // The step's finished `assistant` message repeats text its deltas already sent.
       const skipText = isAssistant && textStreamed
       if (isAssistant) textStreamed = false
-      for (const event of translateMessage(message as SdkMessage, options.runId)) {
+      for (const event of translateMessage(typed, options.runId)) {
         if (skipText && event.type === 'text_delta') continue
-        if (event.type === 'error') streamedError ??= describeStreamedError(event)
+        if (event.type === 'error')
+          streamedError ??= describeStreamedError(
+            typeof (event as { code?: unknown }).code === 'string'
+              ? event
+              : { ...event, code: undefined },
+          )
         send(event)
       }
     }
   }
   const result = await raceAbort(run.wait(), aborted)
   if (result === ABORTED || !isLive()) return cancelRun(run)
+  state.mask?.flush()
   if (streamedError !== undefined) return failed(`the run streamed an error (${streamedError})`)
-  if (result.status === 'cancelled') {
-    return { ok: false, code: 'turn_cancelled', reason: 'the run ended with status cancelled' }
-  }
+  if (result.status === 'cancelled') return { ...finishedOutcome(result), cancelled: true }
   if (result.status === 'error') {
     const detail = result.error === undefined ? '' : `: ${result.error.message}`
     return failed(`the run ended with status error${detail}`)
@@ -295,6 +349,7 @@ export function completeFromTurn(
       }),
     )
     if (!outcome.ok) throw new Error(outcome.reason)
+    if (outcome.cancelled === true) throw new Error('the run ended with status cancelled')
     const usage = outcome.usage
     return {
       text: text.join(''),

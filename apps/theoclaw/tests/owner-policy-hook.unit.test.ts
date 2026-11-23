@@ -1,9 +1,10 @@
-import type { MessageEvent, PlatformName } from '@theokit/gateway'
+import type { MessageEvent, PairingStore, PlatformName } from '@theokit/gateway'
 import { describe, expect, it } from 'vitest'
 
 import { createOwnerPolicyHook } from '../src/authorization/owner-policy-hook.js'
-import type { ApprovalResult, PairingStore } from '../src/authorization/pairing-store.js'
 import type { AuthorizationPolicy, DmPolicy } from '../src/authorization/policy.js'
+
+type ApprovalResult = Awaited<ReturnType<PairingStore['approve']>>
 
 // No I/O: the clock, the log sink and the pairing store are all in-memory fakes.
 

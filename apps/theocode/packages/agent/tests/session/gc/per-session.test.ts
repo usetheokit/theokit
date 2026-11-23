@@ -14,11 +14,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { transcriptPath } from '@theokit/agents/persistence'
-import { planTranscriptGC, runTranscriptGC } from '@theokit/agents/session'
+import { planTranscriptGC, runTranscriptGC, sessionPointerPath } from '@theokit/agents/session'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
-import { gcProtectedIds, pointerPath } from '../../../src/session/gc/pointer.js'
+import { readPointerId } from '../../../src/session/session-ops.js'
 
 const LIVE = 'live-session'
 const OLD = 'old-session'
@@ -26,7 +26,7 @@ const DAY = 86_400_000
 const NOW = 1_000 * DAY
 
 // The framework planner has no `readdir`/`readPointer` seams and no hand-built plans: transcripts are
-// real files under a temp root, the pointer is the real `.theokit/tui-session` file, and the
+// real files under a temp root, the pointer is the real `last-session` file, and the
 // registry remover (`Agent.delete`) is the injected `delete`.
 let root = ''
 let cwd = ''
@@ -49,8 +49,8 @@ function seed(id: string, ageDays: number): string {
 }
 
 function point(id: string): void {
-  mkdirSync(join(pointerPath(cwd), '..'), { recursive: true })
-  writeFileSync(pointerPath(cwd), `${id}\n`)
+  mkdirSync(join(sessionPointerPath(cwd, root), '..'), { recursive: true })
+  writeFileSync(sessionPointerPath(cwd, root), `${id}\n`)
 }
 
 const runSessionGC = (opts: {
@@ -122,7 +122,11 @@ describe('runSessionGC', () => {
     // The plan is a snapshot: a pointer written AFTER planning must still stop the apply.
     seed('newest', 1)
     const late = seed(LIVE, 99)
-    const protectedIds = gcProtectedIds(cwd)
+    // The framework reads `last-session` itself; this provider adds the fail-closed read.
+    const protectedIds = () => {
+      const id = readPointerId(cwd, root)
+      return new Map<string, string>(id === undefined ? [] : [[id, 'live-session pointer']])
+    }
     const plan = await planTranscriptGC({
       cwd,
       root,

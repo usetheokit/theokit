@@ -13,7 +13,11 @@ export interface RemoteLocation {
   readonly token?: string
   /** PEM certificate authorities to trust in addition to the system's (for a private server). */
   readonly ca?: string
+  /** Milliseconds a request may stay silent, while connecting, waiting or receiving, before it is abandoned. Default 60000. */
+  readonly timeoutMs?: number
 }
+
+const DEFAULT_TIMEOUT_MS = 60_000
 
 export function isRemoteRoot(root: string): boolean {
   return /^https:\/\//i.test(root)
@@ -54,9 +58,13 @@ function send(
           ...(location.token === undefined ? {} : { authorization: `Bearer ${location.token}` }),
         },
         ...(location.ca === undefined ? {} : { ca: location.ca }),
+        timeout: location.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       },
       resolve,
     )
+    req.on('timeout', () => {
+      req.destroy(new Error(`no answer within ${location.timeoutMs ?? DEFAULT_TIMEOUT_MS} ms`))
+    })
     req.on('error', (cause) => {
       reject(new BackupError(`cannot reach the remote storage at ${url.origin}`, { cause }))
     })
@@ -68,7 +76,11 @@ function send(
 
 async function readBody(res: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = []
-  for await (const chunk of res) chunks.push(chunk as Buffer)
+  try {
+    for await (const chunk of res) chunks.push(chunk as Buffer)
+  } catch (cause) {
+    throw new BackupError('the remote storage stopped answering', { cause })
+  }
   return Buffer.concat(chunks)
 }
 
@@ -122,5 +134,9 @@ export async function remoteDownload(
 ): Promise<void> {
   const res = await send(location, 'GET', name, {})
   if (res.statusCode !== 200) throw fail(`cannot download ${name}`, res)
-  await pipeline(res, createWriteStream(file, { flags: 'wx', mode: 0o600 }))
+  try {
+    await pipeline(res, createWriteStream(file, { flags: 'wx', mode: 0o600 }))
+  } catch (cause) {
+    throw new BackupError(`cannot download ${name}`, { cause })
+  }
 }

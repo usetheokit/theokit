@@ -25,7 +25,8 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { transcriptPath } from '@theokit/agents/persistence'
+import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
+import { sessionPointerPath } from '@theokit/agents/session'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -66,11 +67,72 @@ afterEach(() => {
   rmSync(cwd, { recursive: true, force: true })
 })
 
+function writeLegacyTranscript(id: string): string {
+  const path = legacyTranscriptPath(base, cwd, id)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, '{}\n')
+  return path
+}
+
+function point(id: string): void {
+  mkdirSync(dirname(sessionPointerPath(cwd, base)), { recursive: true })
+  writeFileSync(sessionPointerPath(cwd, base), `${id}\n`)
+}
+
+describe('#2869 — the pointer is protected once, under the name on disk', () => {
+  it('test_a_legacy_only_transcript_gives_exactly_the_legacy_path', async () => {
+    const legacy = writeLegacyTranscript('legacy-id')
+    point('legacy-id')
+    expect(await protectedSessions(cwd, base)).toEqual([legacy])
+  })
+
+  it('test_a_pointer_without_a_file_keeps_the_derived_path', async () => {
+    point('ghost')
+    expect(await protectedSessions(cwd, base)).toContain(transcriptPath(base, cwd, 'ghost'))
+  })
+
+  it('test_an_unreadable_pointer_still_blocks_protection_and_deletion', async () => {
+    const old = writeTranscript('old', 5000)
+    writeTranscript('new', 1)
+    // A directory where the pointer file should be: reading it fails with EISDIR, not ENOENT.
+    mkdirSync(sessionPointerPath(cwd, base), { recursive: true })
+
+    await expect(protectedSessions(cwd, base)).rejects.toThrow(/refusing/)
+    await expect(
+      deleteSession('old', { cwd, baseDir: base, removeFromRegistry: async () => {} }),
+    ).rejects.toThrow(/refusing/)
+    expect(existsSync(old)).toBe(true)
+  })
+
+  it('test_deleteSession_never_removes_a_pointed_legacy_only_file', async () => {
+    // Deletion targets the derived name, which does not exist here; the legacy file is untouched.
+    const legacy = writeLegacyTranscript('legacy-id')
+    point('legacy-id')
+    const result = await deleteSession('legacy-id', {
+      cwd,
+      baseDir: base,
+      removeFromRegistry: async () => {},
+    })
+    expect(result.transcriptRemoved).toBe(false)
+    expect(existsSync(legacy)).toBe(true)
+  })
+
+  it('test_forkSession_refuses_to_write_onto_the_pointed_session', async () => {
+    writeTranscript('src', 100)
+    const dst = writeTranscript('live', 1)
+    point('live')
+    await expect(forkSession('src', 'live', { cwd, baseDir: base })).rejects.toThrow(
+      /refusing to write over a live session transcript/,
+    )
+    expect(readFileSync(dst, 'utf8')).toBe('{}\n')
+  })
+})
+
 describe('B-003 — protectedSessions covers what the caller can see', () => {
   it('test_the_live_pointer_is_protected', async () => {
     const pointed = writeTranscript('tui-pointed', 10)
-    mkdirSync(join(cwd, '.theokit'), { recursive: true })
-    writeFileSync(join(cwd, '.theokit', 'tui-session'), 'tui-pointed\n')
+    mkdirSync(dirname(sessionPointerPath(cwd, base)), { recursive: true })
+    writeFileSync(sessionPointerPath(cwd, base), 'tui-pointed\n')
 
     expect(await protectedSessions(cwd, base)).toContain(pointed)
   })
@@ -126,8 +188,8 @@ describe('B-003 — protectedSessions covers what the caller can see', () => {
 
   it('test_the_pointer_and_the_most_recent_are_not_duplicated', async () => {
     writeTranscript('only-one', 5)
-    mkdirSync(join(cwd, '.theokit'), { recursive: true })
-    writeFileSync(join(cwd, '.theokit', 'tui-session'), 'only-one\n')
+    mkdirSync(dirname(sessionPointerPath(cwd, base)), { recursive: true })
+    writeFileSync(sessionPointerPath(cwd, base), 'only-one\n')
 
     expect(await protectedSessions(cwd, base)).toHaveLength(1)
   })
@@ -293,8 +355,8 @@ describe("deleteSession — the transcript mechanics are the framework's", () =>
 
 describe('#1905 — the TUI pointer protects an idle, older session', () => {
   function point(id: string): void {
-    mkdirSync(join(cwd, '.theokit'), { recursive: true })
-    writeFileSync(join(cwd, '.theokit', 'tui-session'), `${id}\n`)
+    mkdirSync(dirname(sessionPointerPath(cwd, base)), { recursive: true })
+    writeFileSync(sessionPointerPath(cwd, base), `${id}\n`)
   }
 
   it('test_deleteSession_refuses_the_pointed_session_that_is_not_newest', async () => {

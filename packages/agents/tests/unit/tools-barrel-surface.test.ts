@@ -10,6 +10,7 @@ import * as tools from '../../src/tools-entry.js'
 
 const REQUIRED = [
   'createApplyPatchTool',
+  'createComputerTool',
   'createCurrentTimeTool',
   'createEditFileTool',
   'createGenericHttpSearchAdapter',
@@ -23,6 +24,9 @@ const REQUIRED = [
   'createWebFetchTool',
   'createWebSearchTool',
   'createWriteStdinTool',
+  'readXwdHeader',
+  'resolveWebSearchAdapter',
+  'xwdToPng',
   'withDescription',
   'withName',
 ] as const

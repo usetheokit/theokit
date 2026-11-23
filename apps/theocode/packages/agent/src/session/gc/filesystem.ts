@@ -1,31 +1,53 @@
-import {
-  existsSync,
-  readdirSync,
-  statSync,
-  openSync,
-  readSync,
-  closeSync,
-  promises as fsp,
-} from 'node:fs'
+import { readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { Agent } from '@theokit/agents'
 import { sessionHasWriter } from '@theokit/agents/persistence'
-import { classifyProjects, projectsRoot, type FsSeam } from '@theokit/agents/session'
+import {
+  classifyProjects,
+  planProjectsGC,
+  projectsRoot,
+  runProjectsGC,
+  type FsSeam,
+  type ProjectsGCKind,
+  type ProjectsGCPlan,
+} from '@theokit/agents/session'
 
 import { listAgents } from '../agent-list.js'
-import { runSessionGCAllProjects } from './all-sessions-apply.js'
-import {
-  planSessionGCAllProjects,
-  type Liveness,
-  type ProjectEntry,
-  type CollectableKind,
-  type AllPlan,
-  type AllResult,
-} from './all-sessions.js'
-import { readPointerId } from './pointer.js'
 import { claimDefaultRoot } from './root-claim.js'
-import { OWNERSHIP_MARKER, rootIsOurs } from './root-ownership.js'
+import { OWNERSHIP_MARKER, OWNER, THEOCODE_MARKER, rootIsOurs } from './root-ownership.js'
+
+/** The retention defaults of `sessions gc --all-projects`. */
+const KEEP_PER_PROJECT = 10
+const DEFAULT_WINDOW_DAYS = 30
+
+/** The artifact kinds this product reports, which are not the framework's names. */
+type CollectableKind = 'transcript' | 'lock-file' | 'lock-directory' | 'tmp' | 'registry'
+
+interface AllCandidate {
+  project: string
+  kind: CollectableKind
+  target: string
+  ageDays: number
+}
+
+export interface AllPlan {
+  candidates: AllCandidate[]
+  /** Projects left whole: nothing in them is collectable, or they could not be classified. */
+  kept: string[]
+  touchedProjects: string[]
+  liveCwds: string[]
+  totalByKind: Record<CollectableKind, number>
+  errors: string[]
+  /** The framework plan this one was adapted from, handed back to `runAllProjectsOnDisk`. */
+  framework?: ProjectsGCPlan
+}
+
+export interface AllResult {
+  dryRun: boolean
+  removed: string[]
+  errors: string[]
+}
 
 const FIRST_LINE_CAP = 64 * 1024
 
@@ -42,7 +64,18 @@ const FIRST_LINE_CAP = 64 * 1024
  */
 const SWEEP_FS_BUDGET = 200_000
 
-const io: FsSeam = {
+const io: FsSeam & { readText: (path: string) => string } = {
+  // Capped: callers want a first line (a transcript header) or a one-line pointer. A header longer
+  // than the cap fails to parse and keeps its project whole.
+  readText(file) {
+    const fd = openSync(file, 'r')
+    try {
+      const buf = Buffer.alloc(FIRST_LINE_CAP)
+      return buf.subarray(0, readSync(fd, buf, 0, FIRST_LINE_CAP, 0)).toString('utf8')
+    } finally {
+      closeSync(fd)
+    }
+  },
   listEntries: (dir) => readdirSync(dir),
   firstLine(file) {
     const fd = openSync(file, 'r')
@@ -68,26 +101,6 @@ const io: FsSeam = {
   },
 }
 
-function listRealProject(root: string, project: string): ProjectEntry[] {
-  const dir = join(root, project)
-  return readdirSync(dir, { withFileTypes: true }).map((e) => {
-    let mtimeMs: number | undefined
-    try {
-      mtimeMs = statSync(join(dir, e.name)).mtimeMs
-    } catch {
-      // B-020 — left UNDEFINED, which the planner reads as "no age to compare" and never collects.
-      //
-      // This used to be `mtimeMs = 0`, justified by assuming the only cause is the node vanishing
-      // between `readdir` and `stat`. That reasoning does not hold for EACCES, EMFILE (plausible
-      // precisely here, since the collector stats every entry of every project in one pass), ELOOP
-      // or a transient EIO: those leave the file on disk while dating it to 1970. `ageDays` then
-      // computed as ~20 000 and cleared every window — and mtime 0 also sorts LAST, so `keepLast`,
-      // which slices the newest, could not protect it either.
-    }
-    return { name: e.name, isDirectory: e.isDirectory(), mtimeMs }
-  })
-}
-
 interface CliOptions {
   apply?: boolean
   keepLast?: number
@@ -95,128 +108,141 @@ interface CliOptions {
   projectsRoot?: string
 }
 
-async function listProjectRegistry(cwd: string): Promise<Awaited<ReturnType<typeof listAgents>>> {
-  return listAgents(cwd)
+const KIND_OF: Record<ProjectsGCKind, CollectableKind> = {
+  transcript: 'transcript',
+  'writer-lock': 'lock-file',
+  'lock-directory': 'lock-directory',
+  temp: 'tmp',
+  registry: 'registry',
+}
+
+function emptyByKind(): Record<CollectableKind, number> {
+  return { transcript: 0, 'lock-file': 0, 'lock-directory': 0, tmp: 0, registry: 0 }
 }
 
 /** The encoded project directories under `root`. Absent root lists nothing rather than throwing. */
 function listProjectDirs(root: string): string[] {
-  return existsSync(root)
-    ? readdirSync(root, { withFileTypes: true })
-        .filter((e) => e.isDirectory())
-        .map((e) => e.name)
-    : []
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+  } catch {
+    // Only the kept-count needs this list; the framework lists the root itself and REPORTS a root
+    // it could not read, so "could not look" is never shown as "nothing to collect".
+    return []
+  }
+}
+
+function refusedPlan(root: string): AllPlan {
+  // REFUSED, and loudly: enumerating a directory nobody marked and reporting a clean sweep was
+  // measured on 2026-09-04 as `DRY-RUN — 0 would remove; 0 kept` over an empty root, exit 0.
+  return {
+    candidates: [],
+    kept: [],
+    touchedProjects: [],
+    liveCwds: [],
+    totalByKind: {} as AllPlan['totalByKind'],
+    errors: [
+      `${root}: this collector did not create this directory and will not delete inside it — ` +
+        `write ${OWNERSHIP_MARKER} beside it to claim it deliberately`,
+    ],
+  }
 }
 
 export async function planAllProjectsOnDisk(opts: CliOptions = {}): Promise<AllPlan> {
   const root = opts.projectsRoot ?? projectsRoot()
   claimDefaultRoot(root)
-  if (!rootIsOurs(root)) {
-    // REFUSED, and loudly. The alternative is what this used to do: enumerate a directory nobody
-    // marked, find nothing it recognises, and report a clean sweep — measured 2026-09-04 as
-    // `DRY-RUN — 0 would remove; 0 kept` over an empty root, exit 0.
-    //
-    // An empty plan is the honest shape: nothing IS a candidate. `errors` carries the reason so the
-    // operator reads a refusal rather than inferring one from a zero.
-    return {
-      candidates: [],
-      kept: [],
-      touchedProjects: [],
-      liveCwds: [],
-      totalByKind: {} as AllPlan['totalByKind'],
-      errors: [
-        `${root}: this collector did not create this directory and will not delete inside it — ` +
-          `write ${OWNERSHIP_MARKER} beside it to claim it deliberately`,
-      ],
-    }
-  }
-  // Enumerated ONCE and shared: the framework's sweep classifies the whole list in one call against
-  // one budget, so it needs the names up front — and reading the directory twice could hand the two
-  // halves different sets on a tree that changes under them.
+  if (!rootIsOurs(root)) return refusedPlan(root)
+  // Enumerated ONCE: the classifier takes the whole list against one budget.
   const projects = listProjectDirs(root)
-  return planSessionGCAllProjects({
+  const framework = await planProjectsGC({
     projectsRoot: root,
-    ...(opts.keepLast !== undefined ? { keepLast: opts.keepLast } : {}),
-    ...(opts.maxAgeDays !== undefined ? { maxAgeDays: opts.maxAgeDays } : {}),
-    listProjects: () => projects,
-    listProject: (p) => listRealProject(root, p),
-    classify: sweepClassifier(root, projects),
-    listRegistry: (cwd) => listProjectRegistry(cwd),
-    hasLiveWriter: (transcript) => sessionHasWriter(transcript),
-    readPointer: (cwd) => readPointerId(cwd),
+    keepLast: opts.keepLast ?? KEEP_PER_PROJECT,
+    maxAgeDays: opts.maxAgeDays ?? DEFAULT_WINDOW_DAYS,
+    classify: (names) => sweepClassify(root, names),
+    // This product cannot enumerate its cwds: the cwds its transcripts record are the whole class.
+    cwdCoverage: 'transcripts',
+    // It applies retention alone to a project whose cwd is gone.
+    deadProjects: 'keep-last',
+    listRegistry: async (cwd) =>
+      (await listAgents(cwd)).map((a) => ({
+        id: a.agentId,
+        archived: a.archived,
+        lastModified: a.lastModified,
+      })),
+    fs: {
+      readdir: (dir) => readdirSync(dir),
+      stat: (path) => {
+        const s = statSync(path)
+        return { isDirectory: s.isDirectory(), mtimeMs: s.mtimeMs }
+      },
+      readFile: (path) => io.readText(path),
+      hasLiveWriter: (transcript) => sessionHasWriter(transcript),
+    },
   })
+  return adapt(framework, projects)
+}
+
+function adapt(framework: ProjectsGCPlan, projects: readonly string[]): AllPlan {
+  const totalByKind = emptyByKind()
+  const candidates = framework.candidates.map((c): AllCandidate => {
+    const kind = KIND_OF[c.kind]
+    totalByKind[kind] += 1
+    return { project: c.project, kind, target: c.target, ageDays: c.ageDays }
+  })
+  const touched = new Set(framework.touchedProjects)
+  const failed = new Set(framework.errors.map((e) => e.project))
+  return {
+    candidates,
+    kept: projects.filter((p) => !touched.has(p) && !failed.has(p)),
+    touchedProjects: framework.touchedProjects.map((p) => join(framework.projectsRoot, p)),
+    liveCwds: [...framework.liveCwds],
+    totalByKind,
+    errors: framework.errors.map((e) =>
+      e.project === '' ? e.message : `${e.project}: ${e.message}`,
+    ),
+    framework,
+  }
 }
 
 /**
- * `classify`, backed by the framework's sweep.
- *
- * What this replaces is 188 lines of oracle that lived here and answered the same question. The
- * shared budget it was built for is now structural rather than threaded by hand: `classifyProjects`
- * takes the whole list and spends ONE budget across it, so the per-project ceiling cannot multiply
- * into the ~64M readdir calls that motivated B-054.
- *
- * ONE capability is not carried over, and it is recorded rather than glossed: the deleted oracle
- * searched the filesystem from `/` for a project whose transcript held no cwd. The framework takes a
- * `candidatePaths` pool instead, and this product has none to give — enumerating the disk is what
- * the framework's design rejects. Measured on a real tree of 13 624 projects before the swap: 5
- * verdicts change, every one of them from a decided verdict to `undetermined`, which the collector
- * KEEPS. So the loss costs stale directories surviving, never a live project deleted — the safe
- * direction, and the only one that matters on a path that unlinks user data (B-020).
+ * The framework's sweep classifier over ONE shared budget (B-054), reading each transcript's
+ * recorded cwd. There is no candidate pool: a project it cannot place is UNDETERMINED and kept
+ * whole (B-020) — the safe direction on the only path that deletes user data.
  */
-function sweepClassifier(root: string, projects: readonly string[]): (project: string) => Liveness {
-  const verdicts = classifyProjects(projects, {
+function sweepClassify(root: string, projects: readonly string[]) {
+  return classifyProjects(projects, {
     projectsRoot: root,
     candidatePaths: () => [],
     budget: SWEEP_FS_BUDGET,
     fs: io,
   })
-  return (project) => toLiveness(verdicts.get(project))
-}
-
-/**
- * Framework verdict → the GC's vocabulary.
- *
- * `alive` without a `cwd` is treated as UNDETERMINED rather than trusted. The framework types `cwd`
- * as optional because `undetermined` has none, so nothing at the type level guarantees it here — and
- * the GC uses that path to consult the registry and the pointer. Fail-safe: a project we cannot
- * place is one we keep.
- */
-function toLiveness(
-  verdict: { liveness: string; reason: string; cwd?: string } | undefined,
-): Liveness {
-  if (verdict === undefined)
-    return { state: 'UNDETERMINED', reason: 'not classified in this sweep' }
-  if (verdict.liveness === 'alive') {
-    return verdict.cwd === undefined
-      ? { state: 'UNDETERMINED', reason: `alive but no cwd resolved: ${verdict.reason}` }
-      : { state: 'ALIVE', cwd: verdict.cwd }
-  }
-  if (verdict.liveness === 'dead') {
-    return verdict.cwd === undefined ? { state: 'DEAD' } : { state: 'DEAD', cwd: verdict.cwd }
-  }
-  return { state: 'UNDETERMINED', reason: verdict.reason }
 }
 
 export async function runAllProjectsOnDisk(
   plan: AllPlan,
   opts: CliOptions = {},
 ): Promise<AllResult> {
-  const root = opts.projectsRoot ?? projectsRoot()
-  return runSessionGCAllProjects(plan, {
-    ...(opts.apply === true ? { apply: true } : {}),
-    unlink: (path) => fsp.unlink(path),
-    rmdir: (path) => fsp.rmdir(path),
-    deleteAgent: (id) => Agent.delete(id),
-    hasLiveWriter: (transcript) => sessionHasWriter(transcript),
-    readPointer: (cwd) => readPointerId(cwd),
-    listProject: (p) => {
-      try {
-        return listRealProject(root, p)
-      } catch {
-        return [{ name: '<unreadable>', isDirectory: false, mtimeMs: 0 }]
-      }
+  const apply = opts.apply === true
+  if (plan.framework === undefined) return { dryRun: !apply, removed: [], errors: [] }
+  const result = await runProjectsGC(plan.framework, {
+    apply,
+    owner: OWNER,
+    existingMarker: THEOCODE_MARKER,
+    removeFromRegistry: (id) => Agent.delete(id),
+    fs: {
+      readFile: (path) => io.readText(path),
+      hasLiveWriter: (transcript) => sessionHasWriter(transcript),
     },
   })
+  return {
+    dryRun: result.dryRun,
+    removed: [...result.removed],
+    errors: [
+      ...result.refused.map((r) => `${r.target}: refused — ${r.reason}`),
+      ...result.errors.map((e) => `${e.target}: ${e.message}`),
+    ],
+  }
 }
 
 const LABEL: Record<CollectableKind, string> = {

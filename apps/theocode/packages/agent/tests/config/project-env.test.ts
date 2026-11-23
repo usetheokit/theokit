@@ -71,4 +71,28 @@ describe('bootstrapSurface project .env', () => {
       Object.assign(process.env, saved)
     }
   })
+
+  it('returns what it loaded, so a shell value that overrides a .env declaration is not labelled .env', async () => {
+    const cwd = project('SHELL_WINS=from-file\nFILE_ONLY=1\nBAD-NAME=x\nOPEN="never closed\nHIDDEN=2\n')
+    const env: Record<string, string | undefined> = { SHELL_WINS: 'from-shell' }
+
+    const record = await bootstrapSurface({ env, cwd, home: cwd, onWarn: () => {} })
+
+    expect(record?.file).toBe(join(cwd, '.env'))
+    expect(record?.loaded).toEqual(['FILE_ONLY'])
+    expect(env.SHELL_WINS).toBe('from-shell')
+    expect(env.HIDDEN).toBeUndefined()
+    expect(env['BAD-NAME']).toBeUndefined()
+  })
+
+  it('reports a TheoCode-protected key as refused and leaves it unset', async () => {
+    const cwd = project('THEOCODE_TRUST_ALL_DIRS=1\nOTHER=1\n')
+    const env: Record<string, string | undefined> = {}
+
+    const record = await bootstrapSurface({ env, cwd, home: cwd, onWarn: () => {} })
+
+    expect(record?.refused).toEqual(['THEOCODE_TRUST_ALL_DIRS'])
+    expect(record?.loaded).toEqual(['OTHER'])
+    expect(env.THEOCODE_TRUST_ALL_DIRS).toBeUndefined()
+  })
 })

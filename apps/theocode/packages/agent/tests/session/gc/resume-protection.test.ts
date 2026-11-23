@@ -16,10 +16,15 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { basename } from 'node:path'
+
+import { transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 
 const NOW = Date.UTC(2026, 8, 3)
 const DAY = 86_400_000
+/** The transcript is named the way the SDK names the session, which the guard matches by. */
+const OLD = basename(transcriptPath(transcriptRoot(), '/cwd/p', 'resumed-long-ago'))
 
 /** One very old transcript plus enough newer ones that `keepLast` cannot reach it. */
 const entries = [
@@ -28,7 +33,7 @@ const entries = [
     isDirectory: false,
     mtimeMs: NOW - (i + 1) * DAY,
   })),
-  { name: 'resumed-long-ago.jsonl', isDirectory: false, mtimeMs: NOW - 400 * DAY },
+  { name: OLD, isDirectory: false, mtimeMs: NOW - 400 * DAY },
 ]
 
 async function planWith(registry: { agentId: string; archived?: boolean }[]) {
@@ -46,7 +51,8 @@ async function planWith(registry: { agentId: string; archived?: boolean }[]) {
   } as never)
 }
 
-const targets = (p: { candidates: { target: string }[] }): string[] => p.candidates.map((c) => c.target)
+const targets = (p: { candidates: { target: string }[] }): string[] =>
+  p.candidates.map((c) => c.target)
 
 describe('a session the registry lists', () => {
   it('test_it_is_kept_however_old_it_is_and_with_no_pointer_written', async () => {
@@ -54,16 +60,16 @@ describe('a session the registry lists', () => {
     const plan = await planWith([{ agentId: 'resumed-long-ago' }])
 
     expect(
-      targets(plan),
+      targets(plan).some((t) => t.endsWith(OLD)),
       'a session the registry still lists was planned for deletion',
-    ).not.toContain('/s/p/resumed-long-ago.jsonl')
+    ).toBe(false)
   })
 
   it('test_the_same_transcript_IS_collected_when_the_registry_does_not_list_it', async () => {
     // Anti-vacuity: without this the test above would pass for a collector that deletes nothing.
     const plan = await planWith([])
 
-    expect(targets(plan)).toContain('/s/p/resumed-long-ago.jsonl')
+    expect(targets(plan).some((t) => t.endsWith(OLD))).toBe(true)
   })
 
   it('test_an_archived_session_is_not_protected_by_the_registry', async () => {
@@ -71,6 +77,6 @@ describe('a session the registry lists', () => {
     // removal. If archiving did not release the guard, nothing archived could ever be collected.
     const plan = await planWith([{ agentId: 'resumed-long-ago', archived: true }])
 
-    expect(targets(plan)).toContain('/s/p/resumed-long-ago.jsonl')
+    expect(targets(plan).some((t) => t.endsWith(OLD))).toBe(true)
   })
 })

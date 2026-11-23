@@ -1,7 +1,6 @@
 import { mkdirSync } from 'node:fs'
 
 import { createApprovalGate, PermissionStore, type ApprovalLedger } from '@theokit/agents/auth'
-import type { PreToolCallContext } from '@theokit/sdk'
 
 import { describeError } from '../control-plane/errors.js'
 import type { GeneralPlugin } from './general-plugin.js'
@@ -89,20 +88,31 @@ export interface ExecDecision {
 /** Words for who decided, as the app has always shown them. */
 const BY: Readonly<Record<string, string>> = { waiver: 'elevated mode', saved: 'saved approval' }
 
-/** Standing approval first, then the reviewer, then the person. Never throws. */
-export function createExecApproval(options: ExecApprovalOptions): (command: string, call?: ExecCall & { readonly name?: string; readonly runId?: string }) => Promise<ExecDecision> {
+function buildGate(options: ExecApprovalOptions) {
   const { store, reviewer, ask, waived } = options
-  const gate = createApprovalGate({
+  return createApprovalGate({
     ledger: options.ledger,
     store: store.permissions,
-    key: (ctx) => ({ tool: APPROVAL_TOOL, scope: store.scope, command: encodeCommand(String(ctx.args.command)) }),
+    recordUngoverned: false,
+    key: (ctx) => {
+      if (!EXEC_TOOLS.includes(ctx.name)) return undefined
+      const command = (ctx.args as { command?: unknown } | undefined)?.command
+      if (typeof command !== 'string' || command === '') throw new Error('the command is missing')
+      return { tool: APPROVAL_TOOL, scope: store.scope, command: encodeCommand(command) }
+    },
     waived: waived === undefined ? undefined : (ctx) => waived({ agentId: ctx.agentId }),
     reviewer: reviewer === undefined ? undefined : (query) => reviewer(decodeURIComponent(query.command)),
     ask:
       ask === undefined
         ? undefined
         : (query, ctx) => ask(decodeURIComponent(query.command), { agentId: ctx.agentId }),
+    refusal: (_name, reason) => `theoclaw: exec refused: ${reason}`,
   })
+}
+
+/** Standing approval first, then the reviewer, then the person. Never throws. */
+export function createExecApproval(options: ExecApprovalOptions): (command: string, call?: ExecCall & { readonly name?: string; readonly runId?: string }) => Promise<ExecDecision> {
+  const gate = buildGate(options)
   return async (command, call) => {
     const decision = await gate.decide({ name: call?.name ?? 'shell_exec', args: { command }, agentId: call?.agentId ?? '', runId: call?.runId ?? 'unknown' } as Parameters<typeof gate.decide>[0])
     return { allowed: decision.allowed, reason: decision.reason, by: BY[decision.by] ?? decision.by }
@@ -111,20 +121,5 @@ export function createExecApproval(options: ExecApprovalOptions): (command: stri
 
 /** A `pre_tool_call` plugin that holds every `shell_exec` and `interactive_shell` call to the decision. */
 export function execApprovalPlugin(options: ExecApprovalOptions): GeneralPlugin {
-  const decide = createExecApproval(options)
-  return {
-    kind: 'general',
-    name: 'theoclaw-exec-approval',
-    version: '1.0.0',
-    register: (ctx) => {
-      ctx.on('pre_tool_call', async (context: unknown) => {
-        const call = (context ?? {}) as Partial<PreToolCallContext>
-        if (call.name === undefined || !EXEC_TOOLS.includes(call.name)) return undefined
-        const command = (call.args as { command?: unknown } | undefined)?.command
-        if (typeof command !== 'string' || command === '') return { block: true, message: 'theoclaw: the command is missing' }
-        const decision = await decide(command, { agentId: call.agentId, name: call.name, runId: typeof call.runId === 'string' ? call.runId : undefined })
-        return decision.allowed ? undefined : { block: true, message: `theoclaw: exec refused: ${decision.reason}` }
-      })
-    },
-  }
+  return { ...(buildGate(options).plugin as unknown as GeneralPlugin), name: 'theoclaw-exec-approval' }
 }

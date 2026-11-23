@@ -1,4 +1,5 @@
 import {
+  createAgentEventMask,
   createToolSeen,
   flushPendingToolResults,
   translateSdkEvent,
@@ -6,8 +7,7 @@ import {
 } from '@theokit/agents/bridge'
 
 import { toSdkMessage, toSdkTimelineEvent, type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
-import { maskSecrets } from '../channels/channel-loop.js'
-import { createEventMask } from './event-mask.js'
+import { maskSecrets } from '@theokit/gateway'
 import { describeStreamedError, outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
 
 /** Where a session turn's translated events go, and who learns of the run once it exists. */
@@ -58,7 +58,7 @@ async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<
 export async function runSessionTurn(agent: TurnAgent, options: SessionTurnOptions): Promise<TurnOutcome> {
   const run = await agent.send(options.message, { signal: options.signal })
   options.onRun(run)
-  const mask = createEventMask(options.secrets ?? [], options.emit)
+  const mask = createAgentEventMask(options.secrets ?? [], options.emit)
   const streamedError = await emitTimeline(run, { ...options, emit: mask.emit })
   // An interrupted turn emits nothing more: what the mask still holds is dropped, never sent.
   if (!options.signal.aborted) mask.flush()

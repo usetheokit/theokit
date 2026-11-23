@@ -122,4 +122,31 @@ describe('M8 AgentBuilder.create() builder', () => {
     expect(built.tools).toEqual([tool])
     expect(built.model).toBe('m')
   })
+
+  it('forwards sendDefaults, modelFallback, sessionDir, skills settings and thinking to the SDK', async () => {
+    const { Agent } = await import('@theokit/sdk')
+    const skills = { bundledDirs: ['/skills'], skillsDir: '/skills', inline: [] }
+    const sendDefaults = { toolResultGuard: { delimit: true }, perToolTimeoutMs: 5000 }
+    const modelFallback = { models: ['fallback-model'] }
+    const def = AgentBuilder.create()
+      .model('m')
+      .sendDefaults(sendDefaults)
+      .modelFallback(modelFallback)
+      .sessionDir('/sessions')
+      .skills(skills)
+      .thinking('off')
+      .build()
+
+    const compiled = compileAgentDefinition(def)
+    const factory = createSdkAgentStream(compiled, compiled.tools, 'test-key')
+    await drain(factory('go', 'sess-all'))
+
+    const calls = vi.mocked(Agent.getOrCreate).mock.calls
+    const opts = calls[calls.length - 1]?.[1] as Record<string, unknown>
+    expect(opts.sendDefaults).toEqual(sendDefaults)
+    expect(opts.modelFallback).toEqual(modelFallback)
+    expect(opts.thinking).toBe('off')
+    expect(opts.skills).toEqual(skills)
+    expect((opts.local as { sessionDir?: string }).sessionDir).toBe('/sessions')
+  })
 })

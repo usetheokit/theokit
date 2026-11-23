@@ -88,7 +88,7 @@ describe('B-073 — the resolution reaches the user', () => {
     const { statusPanel } = await import('../../src/commands/command-content.js')
     const { THEME_RESOLUTION } = await import('../../src/theme/theme.js')
 
-    const panel = statusPanel(
+    const panel = await statusPanel(
       {
         sessionModel: () => 'gpt-5.4',
         effort: () => 'medium',

@@ -137,7 +137,7 @@ export function sessionAgentOptions(env: BindEnvironment, workspace: string): Se
   const persona = readPersonaPrompt(workspace)
   return {
     ...options,
-    systemPrompt: persona === '' ? options.systemPrompt : `${options.systemPrompt}\n\n${persona}`,
+    systemPrompt: [options.systemPrompt, persona].filter((part) => part !== '').join('\n\n'),
     // Incognito: the transcript goes to a fresh path under the temp root, never the workspace, created by
     // the SDK only when it writes; the chat sessions remove it when the agent is disposed.
     local: { ...options.local, cwd: workspace, sessionDir: transient ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : join(workspace, '.theoclaw') },

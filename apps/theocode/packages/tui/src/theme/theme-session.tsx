@@ -9,9 +9,8 @@
  *
  * The seam is the base, not the theme. `resolveThemeBase` is already a pure function of the
  * environment, so the only thing this module adds is a value that can sit IN FRONT of its answer —
- * a one-slot override, read through `useSyncExternalStore` so React learns about the write. That is
- * the whole mechanism: mutating a module variable is not enough, and a test that only asserted the
- * variable changed would have passed against the very defect this replaces.
+ * a toolkit `createThemeController` holding the whole theme prop, handed to the provider as
+ * `controller` so React learns about the write. TheoCode keeps no external store of its own.
  *
  * The OVERRIDE is per-session; the CHOICE is not, since #72. This paragraph used to read "NOT
  * PERSISTED, deliberately", borrowing `memory-switch.ts`'s argument that a durable preference
@@ -28,16 +27,14 @@
  * A CUSTOM theme is the exception and is genuinely session-only: `storeThemeBase` takes a
  * `ThemeBase`, and there is nowhere for a slug to go.
  *
- * The override outranks `NO_COLOR`, which is the one ordering worth defending. `NO_COLOR` wins the
- * ENVIRONMENT race because it is the more specific of two ambient signals; an override is not
- * ambient at all — it was typed, just now, by the person watching the screen, and refusing it would
- * make the accessibility signal a trap rather than a default. What the environment resolved stays
- * visible in the same line, so nothing about that decision is hidden.
+ * `NO_COLOR` outranks the override. `TheoTUIProvider` returns the no-colour theme whenever the
+ * variable is non-empty, whatever this slot holds, so `handleTheme` refuses colour selections while
+ * it is set and says why (`/theme no-color` is still accepted) instead of reporting a switch the
+ * frame would never show.
  */
-import { useSyncExternalStore } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 
-import { TheoTUIProvider } from '@theokit/tui'
+import { TheoTUIProvider, createThemeController } from '@theokit/tui'
 
 import type { TheoThemeProp } from '@theokit/tui'
 
@@ -45,28 +42,19 @@ import type { ThemeBase } from './theme-base.js'
 import { THEME_RESOLUTION, THEMES } from './theme.js'
 
 /**
- * The one-slot override, holding a whole THEME PROP rather than a base name.
- *
- * It was a `ThemeBase`, which is all a built-in switch needs. A custom theme
- * (`~/.claude/themes/*.json`) carries a base AND an override object, and neither half survives being
- * reduced to a name. Storing the resolved prop keeps the referential stability the toolkit's
- * provider requires — it memoizes on the IDENTITY of the prop, so the object is built ONCE at
- * selection rather than per read; building it inside `activeTheme()` would re-merge and re-render
- * every consumer on every parent render.
+ * The controller holds a whole THEME PROP (a built-in, or a custom theme's base plus override),
+ * built once at selection: the provider memoizes on the IDENTITY of the prop.
  */
-let override: TheoThemeProp | undefined
-const listeners = new Set<() => void>()
+const initialTheme = (): TheoThemeProp => THEMES[THEME_RESOLUTION.base]
+const controller = createThemeController(initialTheme())
 
 /**
  * What `/theme` selected, for `/status` and for `/theme`'s own report: a base name, or
  * `custom:<slug>`. `undefined` while the environment still decides.
  *
- * #14 — this used to sit beside `sessionThemeBase()`, which answered the NARROWER question "which
- * of the three built-in bases", and both reports read that one. So after `/theme custom:midnight`
- * they were handed `undefined`, reported the environment's answer while the frame was drawn in the
- * operator's own file, and `/theme` listed that very file under "also" — as one still available to
- * switch to. The narrow accessor had no other caller and is gone: one selection, one fact, and no
- * second accessor that can silently answer about a different one.
+ * #14 — this used to sit beside a narrower accessor that answered only "which of the three built-in
+ * bases", so after `/theme custom:midnight` the reports described the environment's answer while
+ * the frame was drawn in the operator's own file. One selection, one fact, no second accessor.
  */
 let sessionLabelValue: string | undefined
 
@@ -77,9 +65,9 @@ export function sessionThemeLabel(): string | undefined {
 /**
  * Switch the base and tell the frame.
  *
- * The notification is the load-bearing half. Without it the next render would pick the new base up
- * by accident and the one after it would not, which is worse than never switching: a UI that
- * repaints on unrelated keystrokes is read as a rendering bug rather than as a command.
+ * The notification is load-bearing: without it the next render would pick the new base up by
+ * accident and the one after it would not — a UI that repaints on unrelated keystrokes is read as
+ * a rendering bug rather than as a command.
  */
 export function setSessionThemeBase(base: ThemeBase): void {
   sessionLabelValue = base
@@ -89,60 +77,25 @@ export function setSessionThemeBase(base: ThemeBase): void {
 /**
  * Switch to a whole theme prop — the path a custom theme takes.
  *
- * `label` is what `/status` and `/theme` report; a custom theme passes `custom:<slug>` so the line
- * names the file the operator wrote rather than the base it happens to sit on.
+ * `label` is what `/status` and `/theme` report; a custom theme passes `custom:<slug>`.
  */
 export function setSessionTheme(prop: TheoThemeProp, label?: string): void {
-  override = prop
   if (label !== undefined) sessionLabelValue = label
-  for (const listener of listeners) listener()
+  controller.set(prop)
 }
 
-/**
- * The prop the provider is given.
- *
- * It used to return a primitive so `useSyncExternalStore` could compare snapshots by value. It now
- * returns an OBJECT, and the comparison is by identity — which is why the object is stored in the
- * slot rather than built here. `THEMES` is frozen and hoisted, and a custom prop is built once at
- * selection, so every read of an unchanged selection returns the same reference.
- */
-function activeTheme(): TheoThemeProp {
-  return override ?? THEMES[THEME_RESOLUTION.base]
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-/**
- * The provider, subscribed to the override.
- *
- * A component rather than a hook called inside `App` so the subscription and the provider it feeds
- * cannot drift apart — and so the wiring can be MOUNTED in a test. Proving `/theme` works means
- * proving a switch reaches `useTheoTheme()` in a child; a hook exported on its own would let a test
- * assert the value while `App` kept rendering the old constant.
- */
+/** The provider, driven by the controller, so a switch reaches `useTheoTheme()` in a child. */
 export function ThemedSurface({ children }: { children: ReactNode }): ReactElement {
-  const theme = useSyncExternalStore(subscribe, activeTheme, activeTheme)
-  return <TheoTUIProvider theme={theme}>{children}</TheoTUIProvider>
+  return <TheoTUIProvider controller={controller}>{children}</TheoTUIProvider>
 }
 
 /** Test-only: drop the override so each test starts from the environment's answer. */
 export function resetSessionThemeForTest(): void {
-  override = undefined
+  controller.set(initialTheme())
   sessionLabelValue = undefined
 }
 
-/**
- * Test-only: how many frames are listening.
- *
- * Exposed because the unsubscribe is otherwise unobservable, and "it did not throw" is not a test
- * of it — a listener left behind after unmount survives every assertion a frame can make while
- * growing the set on each remount.
- */
-export function themeSubscriberCountForTest(): number {
-  return listeners.size
+/** Test-only: the shared controller, so a test can spy on `subscribe` to see the unsubscribe. */
+export function themeControllerForTest(): typeof controller {
+  return controller
 }

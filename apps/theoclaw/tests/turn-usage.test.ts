@@ -1,3 +1,4 @@
+import { formatUsd } from '@theokit/agents/usage'
 import { describe, expect, it } from 'vitest'
 
 import type { TurnRun } from '../src/agent-port.js'
@@ -55,6 +56,14 @@ describe('formatUsageLine', () => {
     expect(formatUsageLine('control', usage)).toBe(`theoclaw: usage control ${MODEL} in=1 out=1 cost=$0.0123457`)
     const round = usageOf(finished({ cost: { amountUsd: 0.5 } }), MODEL)
     expect(formatUsageLine('control', round)).toBe(`theoclaw: usage control ${MODEL} in=0 out=0 cost=$0.5`)
+  })
+})
+
+describe('cost formatting', () => {
+  it.each([0, 4e-7, 0.00042, 12.3456789, 1e21])('the line and the footer print formatUsd(%s)', (amountUsd) => {
+    const usage = usageOf(finished({ cost: { amountUsd } }), MODEL)
+    expect(formatUsageLine('channel', usage)).toContain(`cost=$${formatUsd(amountUsd)}`)
+    expect(formatUsageFooter('cost', usage)).toBe(`— $${formatUsd(amountUsd)}`)
   })
 })
 

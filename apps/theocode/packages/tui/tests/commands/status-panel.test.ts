@@ -14,7 +14,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { agentsMdRow, statusPanel } from '../../src/commands/command-content.js'
-import type { PtysTheInterpreterUses, SessionTheInterpreterUses } from '../../src/commands/command-capabilities.js'
+import type {
+  PtysTheInterpreterUses,
+  SessionTheInterpreterUses,
+} from '../../src/commands/command-capabilities.js'
 
 function session(over: Partial<ReturnType<SessionTheInterpreterUses['cfg']>> = {}) {
   return {
@@ -62,10 +65,10 @@ function valueColumn(row: string): number {
 }
 
 describe('the status panel aligns its values on one column', () => {
-  it('test_every_row_starts_its_value_at_the_same_column', () => {
-    const columns = rows(statusPanel(session(), 'suggest', () => 'tui-1', ptys, NO_RULES).body).map(
-      valueColumn,
-    )
+  it('test_every_row_starts_its_value_at_the_same_column', async () => {
+    const columns = rows(
+      (await statusPanel(session(), 'suggest', () => 'tui-1', ptys, NO_RULES)).body,
+    ).map(valueColumn)
 
     expect(
       new Set(columns).size,
@@ -74,10 +77,10 @@ describe('the status panel aligns its values on one column', () => {
     ).toBe(1)
   })
 
-  it('test_a_longer_label_moves_every_value_together', () => {
+  it('test_a_longer_label_moves_every_value_together', async () => {
     // Anti-vacuity: padding every row to a hard-coded constant would satisfy the test above while
     // still breaking the moment a label outgrows it. This proves the width is COMPUTED.
-    const body = statusPanel(session(), 'suggest', () => 'tui-1', ptys, NO_RULES).body
+    const body = (await statusPanel(session(), 'suggest', () => 'tui-1', ptys, NO_RULES)).body
     const widest = Math.max(...rows(body).map((r) => r.indexOf(':')))
 
     expect(
@@ -88,10 +91,10 @@ describe('the status panel aligns its values on one column', () => {
 })
 
 describe('the status panel does not repeat a column label inside its value', () => {
-  it('test_the_sandbox_row_names_the_mode_once', () => {
-    const sandboxRow = rows(statusPanel(session(), 'suggest', () => 'tui-1', ptys, NO_RULES).body).find((r) =>
-      r.startsWith('sandbox:'),
-    )
+  it('test_the_sandbox_row_names_the_mode_once', async () => {
+    const sandboxRow = rows(
+      (await statusPanel(session(), 'suggest', () => 'tui-1', ptys, NO_RULES)).body,
+    ).find((r) => r.startsWith('sandbox:'))
 
     expect(sandboxRow, 'the sandbox row vanished').toBeDefined()
     expect(
@@ -101,16 +104,18 @@ describe('the status panel does not repeat a column label inside its value', () 
     ).toBe(1)
   })
 
-  it('test_the_sandbox_row_still_carries_the_unenforced_warning', () => {
+  it('test_the_sandbox_row_still_carries_the_unenforced_warning', async () => {
     // The prefix is what was redundant, not the warning. Dropping `⚠ tool-gating` would remove the
     // one thing that tells a user commands are auto-approved with no confinement behind them.
     const row = rows(
-      statusPanel(
-        session({ sandboxDetail: 'danger-full-access ⚠ tool-gating' }),
-        'full-auto',
-        () => 'tui-1',
-        ptys,
-        NO_RULES,
+      (
+        await statusPanel(
+          session({ sandboxDetail: 'danger-full-access ⚠ tool-gating' }),
+          'full-auto',
+          () => 'tui-1',
+          ptys,
+          NO_RULES,
+        )
       ).body,
     ).find((r) => r.startsWith('sandbox:'))
 
@@ -133,12 +138,12 @@ describe('the status panel says what is steering the agent', () => {
     // whether the checkout has `.claude/rules/` (B-161).
     ({ agentsMd, rules: { count: 0, read: 0 } }) as unknown as Parameters<typeof statusPanel>[4]
 
-  const agentsRow = (w?: Parameters<typeof statusPanel>[4]): string =>
-    rows(statusPanel(session(), 'suggest', () => 'tui-1', ptys, w).body).find((r) =>
+  const agentsRow = async (w?: Parameters<typeof statusPanel>[4]): Promise<string> =>
+    rows((await statusPanel(session(), 'suggest', () => 'tui-1', ptys, w)).body).find((r) =>
       r.startsWith('agents.md:'),
     ) ?? ''
 
-  it('test_before_the_first_build_it_reports_what_is_on_disk_without_claiming_it_is_loaded', () => {
+  it('test_before_the_first_build_it_reports_what_is_on_disk_without_claiming_it_is_loaded', async () => {
     // `/status` is what a person runs BEFORE the first turn, which is exactly when there is no
     // wiring record — so the row used to answer `<unknown>` at the only moment it was asked. The
     // walk is a pure read of the disk, so the question does have an answer.
@@ -148,19 +153,25 @@ describe('the status panel says what is steering the agent', () => {
     expect(row, 'the row does not say the trust gate has not run yet').toContain('not loaded yet')
   })
 
-  it('test_a_repository_with_no_instruction_file_reads_the_same_before_and_after_a_build', () => {
+  it('test_a_repository_with_no_instruction_file_reads_the_same_before_and_after_a_build', async () => {
     // Anti-vacuity, and a real equivalence: "the walk found nothing" is the same fact whether or
     // not an agent has been built, so inventing a second wording for it would be noise.
     // The user chain is injected for the same reason the project one is: leaving it ambient makes
     // the result depend on whether the machine running the suite happens to have a
     // `~/.theocode/AGENTS.md`, which is a real file on a real developer's machine.
-    expect(agentsMdRow(undefined, () => [], () => [])).toBe('<none>')
+    expect(
+      agentsMdRow(
+        undefined,
+        () => [],
+        () => [],
+      ),
+    ).toBe('<none>')
   })
 
-  it('test_an_untrusted_directory_is_reported_as_a_REFUSAL_not_an_absence', () => {
+  it('test_an_untrusted_directory_is_reported_as_a_REFUSAL_not_an_absence', async () => {
     // The case the row exists for. `<none>` here would tell the user their repository has no
     // AGENTS.md, when in fact it has one and the agent was forbidden to read it.
-    const row = agentsRow(
+    const row = await agentsRow(
       wired({ active: [], requested: ['/repo/AGENTS.md'], suppressedByTrust: true }),
     )
 
@@ -169,7 +180,7 @@ describe('the status panel says what is steering the agent', () => {
     expect(row, 'the row does not say how many files were ignored').toContain('1 file')
   })
 
-  it('test_a_repository_with_no_instruction_file_reports_none', () => {
+  it('test_a_repository_with_no_instruction_file_reports_none', async () => {
     expect(
       agentsMdRow(
         wired({ active: [], requested: [], suppressedByTrust: false }),
@@ -179,8 +190,8 @@ describe('the status panel says what is steering the agent', () => {
     ).toContain('<none>')
   })
 
-  it('test_loaded_files_are_named', () => {
-    const row = agentsRow(
+  it('test_loaded_files_are_named', async () => {
+    const row = await agentsRow(
       wired({
         active: ['/repo/AGENTS.md'],
         requested: ['/repo/AGENTS.md'],
@@ -206,17 +217,25 @@ describe('the status panel says what is steering the agent', () => {
  * line nobody can trust.
  */
 describe('agentsMdRow — the user layer', () => {
-  it('test_a_user_file_is_named_when_no_project_chain_exists', () => {
-    expect(agentsMdRow(undefined, () => [], () => ['/home/u/.theocode/AGENTS.md'])).toContain(
-      'user',
-    )
+  it('test_a_user_file_is_named_when_no_project_chain_exists', async () => {
+    expect(
+      agentsMdRow(
+        undefined,
+        () => [],
+        () => ['/home/u/.theocode/AGENTS.md'],
+      ),
+    ).toContain('user')
   })
 
-  it('test_the_untrusted_row_no_longer_claims_nothing_was_loaded', () => {
+  it('test_the_untrusted_row_no_longer_claims_nothing_was_loaded', async () => {
     const wired = {
       agentsMd: { suppressedByTrust: true, requested: ['/repo/AGENTS.md'], active: [] },
     } as never
-    const row = agentsMdRow(wired, () => [], () => ['/home/u/.theocode/AGENTS.md'])
+    const row = agentsMdRow(
+      wired,
+      () => [],
+      () => ['/home/u/.theocode/AGENTS.md'],
+    )
 
     expect(row, 'the project chain being ignored still has to be said').toContain('untrusted')
     expect(
@@ -225,10 +244,22 @@ describe('agentsMdRow — the user layer', () => {
     ).toContain('user')
   })
 
-  it('test_no_user_file_leaves_the_existing_rows_untouched', () => {
+  it('test_no_user_file_leaves_the_existing_rows_untouched', async () => {
     // Anti-regression: the common case is an operator with no user file at all, and its wording
     // must not acquire an empty clause.
-    expect(agentsMdRow(undefined, () => [], () => [])).toBe('<none>')
-    expect(agentsMdRow(undefined, () => ['/repo/AGENTS.md'], () => [])).toContain('on disk')
+    expect(
+      agentsMdRow(
+        undefined,
+        () => [],
+        () => [],
+      ),
+    ).toBe('<none>')
+    expect(
+      agentsMdRow(
+        undefined,
+        () => ['/repo/AGENTS.md'],
+        () => [],
+      ),
+    ).toContain('on disk')
   })
 })

@@ -19,7 +19,7 @@
  */
 import { render } from 'ink-testing-library'
 import { Text } from 'ink'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement } from 'react'
 
 import { themes, useTheoTheme } from '@theokit/tui'
@@ -30,7 +30,7 @@ import {
   resetSessionThemeForTest,
   setSessionThemeBase,
   ThemedSurface,
-  themeSubscriberCountForTest,
+  themeControllerForTest,
 } from '../../src/theme/theme-session.js'
 import { THEME_RESOLUTION } from '../../src/theme/theme.js'
 import { waitFor } from '../helpers/wait-for.js'
@@ -66,14 +66,23 @@ function probeTextFor(base: (typeof THEME_BASES)[number]): string {
  * instead of a false red, and a commit that never comes is reported as "the frame never repainted"
  * rather than as a theme that failed to resolve.
  */
-const repainted = async (lastFrame: () => string | undefined, before: string | undefined): Promise<void> =>
+const repainted = async (
+  lastFrame: () => string | undefined,
+  before: string | undefined,
+): Promise<void> =>
   waitFor(() => lastFrame() !== before, 'the mounted frame to repaint after the base changed')
 
 /** A base the environment did NOT resolve, so "it switched" cannot be satisfied by standing still. */
 const OTHER_BASE = THEME_BASES.find((base) => base !== THEME_RESOLUTION.base) as
-  (typeof THEME_BASES)[number] | undefined
+  | (typeof THEME_BASES)[number]
+  | undefined
+
+beforeEach(() => {
+  vi.stubEnv('NO_COLOR', '')
+})
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   resetSessionThemeForTest()
 })
 
@@ -123,7 +132,12 @@ describe('a theme picked in the session reaches the rendered provider', () => {
     )
     const before = lastFrame()
 
-    handleTheme(OTHER_BASE as string, vi.fn(), () => true, () => '<store>')
+    handleTheme(
+      OTHER_BASE as string,
+      vi.fn(),
+      () => true,
+      () => '<store>',
+    )
     await repainted(lastFrame, before)
 
     expect(lastFrame(), '/theme did not reach the provider').toContain(
@@ -165,20 +179,52 @@ describe('a theme picked in the session reaches the rendered provider', () => {
     // The subscription's other half. A listener left in the set after unmount is a leak that grows
     // with every remount and calls `setState` on a tree React has already thrown away — and it
     // throws nothing, which is why this counts rather than watching for an error.
-    const before = themeSubscriberCountForTest()
+    const controller = themeControllerForTest()
+    const unsubscribes: Array<ReturnType<typeof vi.fn>> = []
+    const real = controller.subscribe
+    const spy = vi.spyOn(controller, 'subscribe').mockImplementation((listener) => {
+      const off = vi.fn(real(listener))
+      unsubscribes.push(off)
+      return off
+    })
     const { unmount } = render(
       <ThemedSurface>
         <DiffBackgroundProbe />
       </ThemedSurface>,
     )
-    const mounted = themeSubscriberCountForTest()
 
+    expect(unsubscribes.length, 'the mounted frame never subscribed at all').toBeGreaterThan(0)
     unmount()
 
-    expect(mounted, 'the mounted frame never subscribed at all').toBeGreaterThan(before)
-    expect(
-      themeSubscriberCountForTest(),
-      'unmounting left a listener behind — the next switch will notify a dead tree',
-    ).toBe(before)
+    for (const off of unsubscribes) {
+      expect(
+        off,
+        'unmounting left a listener behind — the next switch notifies a dead tree',
+      ).toHaveBeenCalled()
+    }
+    spy.mockRestore()
+  })
+})
+
+describe('NO_COLOR outranks a session selection', () => {
+  it('test_theme_light_with_no_color_set_says_why_and_the_frame_stays_colourless', async () => {
+    vi.stubEnv('NO_COLOR', '1')
+    const { lastFrame, unmount } = render(
+      <ThemedSurface>
+        <DiffBackgroundProbe />
+      </ThemedSurface>,
+    )
+    const setToast = vi.fn()
+    const persist = vi.fn(() => true)
+
+    handleTheme('light', setToast, persist, () => '<store>')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    const toast = setToast.mock.calls[0]?.[0] as { message: string; variant: string }
+    expect(toast.variant).toBe('error')
+    expect(toast.message).toContain('NO_COLOR')
+    expect(persist).not.toHaveBeenCalled()
+    expect(lastFrame()).toContain(probeTextFor('no-color'))
+    unmount()
   })
 })

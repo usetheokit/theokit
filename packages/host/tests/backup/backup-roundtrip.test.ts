@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, expect, it } from 'vitest'
 
-import { backup, restore } from '../../src/backup/index.js'
+import { backup, rehomeTranscripts, restore } from '../../src/backup/index.js'
 
 const dirs: string[] = []
 afterEach(async () => {
@@ -116,4 +116,35 @@ it('restore with transform writes the mapped path only, and rejects escapes and 
     restore({ from: out, roots: { alpha: other }, transform: () => 'same' }),
   ).rejects.toThrow(/two files/)
   await expect(stat(other)).rejects.toThrow()
+})
+
+it('restores to a new project path and resumes the session there', async () => {
+  const { listSessions, transcriptPath } = await import('@theokit/sdk/persistence')
+  const base = await scratch()
+  const state = join(base, 'state')
+  const oldCwd = join(base, 'old-project')
+  const newCwd = join(base, 'new-project')
+  const id = 'session-1'
+  const record = JSON.stringify({ type: 'user', sessionId: id, cwd: oldCwd }) + '\n'
+  const rel = (cwd: string): string => transcriptPath('.app', cwd, id)
+  await put(state, rel(oldCwd), record)
+  await put(state, 'other/keep.txt', 'k')
+  const out = join(base, 'out')
+  await backup({ roots: { state }, out })
+  const target = join(base, 'restored')
+  await restore({
+    from: out,
+    roots: { state: target },
+    transform: rehomeTranscripts({
+      root: 'state',
+      projectsDir: '.app/projects',
+      from: oldCwd,
+      to: newCwd,
+    }),
+  })
+  expect(await readFile(join(target, rel(newCwd)), 'utf8')).toBe(record)
+  await expect(stat(join(target, rel(oldCwd)))).rejects.toThrow()
+  expect(await readFile(join(target, 'other/keep.txt'), 'utf8')).toBe('k')
+  const found = await listSessions(newCwd, { baseDir: join(target, '.app') })
+  expect(found.map((s) => s.id)).toEqual([id])
 })

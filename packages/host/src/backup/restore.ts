@@ -1,6 +1,8 @@
 import { copyFile, chmod, lstat, rename, rm, rmdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import { encodeProjectDir } from '@theokit/sdk/persistence'
+
 import { withLock, type BackupLock } from './backup.js'
 import { BackupError } from './errors.js'
 import { readManifest, sha256File, splitEntryPath, type BackupManifest } from './manifest.js'
@@ -22,6 +24,42 @@ export interface RestoreOptions {
    * stay inside the root and may not collide with another file's destination.
    */
   readonly transform?: (relativePath: string, root: string) => string
+}
+
+export interface RehomeTranscriptsOptions {
+  /** The backup root that holds the transcripts (a name from `roots`). */
+  readonly root: string
+  /** Where `projects/` lives below that root, `/`-separated, e.g. `.app/projects`. */
+  readonly projectsDir: string
+  /** The project path the backup was taken from. */
+  readonly from: string
+  /** The project path being restored to. */
+  readonly to: string
+}
+
+function trimSlashes(value: string): string {
+  let start = 0
+  let end = value.length
+  while (start < end && value[start] === '/') start++
+  while (end > start && value[end - 1] === '/') end--
+  return value.slice(start, end)
+}
+
+/**
+ * A `restore` `transform` that moves the SDK's per-project transcripts from
+ * `<projectsDir>/<encodeProjectDir(from)>/` to the folder named for `to`, so sessions resume from
+ * the new path. Everything else, and every other root, keeps its place.
+ */
+export function rehomeTranscripts(
+  options: RehomeTranscriptsOptions,
+): (relativePath: string, root: string) => string {
+  const base = trimSlashes(options.projectsDir)
+  const prefix = `${base}/${encodeProjectDir(options.from)}/`
+  const target = `${base}/${encodeProjectDir(options.to)}/`
+  return (relativePath, root) =>
+    root === options.root && relativePath.startsWith(prefix)
+      ? target + relativePath.slice(prefix.length)
+      : relativePath
 }
 
 /** Refuse a symbolic link in any component of `relative` below `base`. */

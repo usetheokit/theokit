@@ -62,8 +62,9 @@ export function agentIdFor(key: string, generation: number): string {
 
 /**
  * The owner of every chat session's agent. One `getOrCreate` in flight per agent id, shared by
- * every message that asks while it resolves: the SDK's has no single-flight, and with its cache off
- * nothing else deduplicates two instances of one id (FR-004).
+ * every message that asks while it resolves. The SDK's `getOrCreate` single-flights too, but with
+ * its registry cache off (`maxAgents: 0`) nothing shares an instance across callers, so this pool
+ * keeps its own entry per id (FR-004).
  */
 export class SessionAgents {
   readonly #entries = new Map<string, Entry>()

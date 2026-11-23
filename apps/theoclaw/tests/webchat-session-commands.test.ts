@@ -87,4 +87,16 @@ describe('WebChat slash commands', () => {
     expect(stop.text()).toBe('Stopped 1 running turn.')
     expect(await turn).toMatchObject({ ok: false, code: 'turn_cancelled' })
   })
+
+  it('refuses /model <id> without switching and leaves /stop with an argument to the model', async () => {
+    const runner = vi.fn<TurnRunner>(async () => ({ ok: true }))
+    const { turnFor } = build(runner)
+    const run = turnFor('c1')
+    const a = collect()
+    await run('/model other-model', a.emit)
+    expect(a.text()).toContain('not supported')
+    expect(runner).not.toHaveBeenCalled()
+    await run('/stop now', collect().emit)
+    expect(runner).toHaveBeenCalledTimes(1)
+  })
 })

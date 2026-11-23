@@ -19,7 +19,9 @@
  * (the posture gates eight things, and durable memory is not a list), plus the two fields that are
  * not entities at all — whether project sources loaded, and which sandbox mode the build was given.
  */
-import { recordWiring, type WiredEntity } from '@theokit/agents'
+import type { WiredEntity } from '@theokit/agents'
+
+import { recordScopedWiring } from './scoped-wiring.js'
 
 export type { WiredEntity }
 
@@ -128,42 +130,44 @@ export function wiredCapabilities(input: {
   readonly rules?: WiredCapabilities['rules']
   readonly sandboxMode: string
 }): WiredCapabilities {
-  const record = recordWiring({
+  const personalMcp = new Set(input.mcpPersonal ?? [])
+  const record = recordScopedWiring({
     posture: input.posture,
     requested: {
       // Sorted because the map's key order is insertion order from a JSON file, and a listing whose
-      // order changes when someone reorders `.mcp.json` looks like something moved.
-      // Only the project's. The personal ones are added back below, outside the gate they are not
-      // subject to.
-      mcp: [
-        ...Object.keys(input.mcpServers).filter(
-          (name) => !(input.mcpPersonal ?? []).includes(name),
-        ),
-        ...(input.mcpWithheld ?? []),
-      ].sort(),
-      skills: input.configuredSkills,
-      hooks: input.hookEvents,
+      // order changes when someone reorders `.mcp.json` looks like something moved. The project's
+      // share goes through the trust gate; the operator's own share does not (#72, #65), so it is
+      // its own group. A name both withheld (project) and personal keeps one row per scope.
+      mcp: {
+        sort: true,
+        groups: [
+          {
+            names: [
+              ...Object.keys(input.mcpServers).filter((name) => !personalMcp.has(name)),
+              ...(input.mcpWithheld ?? []),
+            ].sort(),
+            scope: 'project',
+            gated: true,
+          },
+          { names: [...personalMcp].sort(), scope: 'personal', gated: false },
+        ],
+      },
+      skills: {
+        sort: true,
+        groups: [
+          { names: input.configuredSkills, scope: 'project', gated: true },
+          { names: [...new Set(input.operatorSkills ?? [])], scope: 'operator', gated: false },
+        ],
+      },
+      hooks: { groups: [{ names: input.hookEvents, gated: true }] },
       // NOT sorted: the walk's order is root-most first, which is the order they are composed into
       // the prompt. Sorting would present a precedence that is not the one in effect.
-      agentsMd: input.agentsMdFiles,
+      agentsMd: { groups: [{ names: input.agentsMdFiles, gated: true }] },
     },
   })
 
   return {
     ...record,
-    // Both facts survive: what is running, and whether the repository's share was withheld.
-    // Collapsing them would leave an operator unable to tell "my server" from "their server got in".
-    mcp: {
-      ...record.mcp,
-      active: [...new Set([...record.mcp.active, ...(input.mcpPersonal ?? [])])].sort(),
-    },
-    // #65 — same shape as `mcp` above, and for the same reason: what is running, without erasing
-    // whose it is. Sorted, because the two sources are read from different directories and an
-    // operator should not see the order change with an unrelated edit.
-    skills: {
-      ...record.skills,
-      active: [...new Set([...record.skills.active, ...(input.operatorSkills ?? [])])].sort(),
-    },
     ...(input.rules !== undefined ? { rules: input.rules } : {}),
     projectSources: input.projectSourcesAllowed,
     sandboxMode: input.sandboxMode,

@@ -1,6 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
-import { atomicWriteText } from '@theokit/agents/persistence'
+import {
+  loadOrCreateSessionId as loadFrameworkSessionId,
+  persistSessionId as persistFrameworkSessionId,
+  sessionPointerPath,
+} from '@theokit/agents/session'
 
 import { enqueue } from '../terminal-io/index.js'
 import { fireAndForget } from './fire-and-forget.js'
@@ -21,28 +26,66 @@ import { fireAndForget } from './fire-and-forget.js'
  * and swallowing it is Unbreakable Rule 8.
  */
 export function persistSessionId(
-  file: string,
+  cwd: string,
   id: string,
   report?: (message: string) => void,
+  root?: string,
 ): Promise<void> {
   return fireAndForget(
-    writeSessionId(file, id),
+    writeSessionId(cwd, id, root),
     'the session pointer',
     ...(report === undefined ? [] : ([report] as const)),
   )
 }
 
-/** The raw write. Private: it rejects, and the whole point of B-031 is that no export does. */
-function writeSessionId(file: string, id: string): Promise<void> {
-  return enqueue(file, () => atomicWriteText(file, id))
+/**
+ * The raw write. Private: it rejects, and the whole point of B-031 is that no export does.
+ *
+ * The framework's `persistSessionId` reports `{ persisted }` instead of throwing; it is turned back
+ * into a rejection HERE so `fireAndForget` reports it through the diagnostic sink. Writes to one
+ * pointer stay serialised through `enqueue`, which the framework does not do.
+ */
+function writeSessionId(cwd: string, id: string, root?: string): Promise<void> {
+  const file = sessionPointerPath(cwd, ...(root === undefined ? [] : ([root] as const)))
+  return enqueue(file, async () => {
+    const { persisted } = await persistFrameworkSessionId(
+      cwd,
+      id,
+      ...(root === undefined ? [] : ([root] as const)),
+    )
+    if (!persisted) throw new Error(`the write to ${file} failed`)
+  })
 }
 
-export function loadOrCreateSessionId(file: string, generate: () => string): string {
-  if (existsSync(file)) {
-    const stored = readFileSync(file, 'utf8').trim()
-    if (stored) return stored
+/** The pointer this app wrote before it moved to the framework's `last-session` (#2754). */
+function legacyPointerPath(cwd: string): string {
+  return join(cwd, '.theokit', 'tui-session')
+}
+
+function readLegacyId(cwd: string): string | undefined {
+  try {
+    const id = readFileSync(legacyPointerPath(cwd), 'utf8').trim()
+    return id === '' ? undefined : id
+  } catch {
+    return undefined
   }
-  const id = generate()
-  void persistSessionId(file, id)
-  return id
+}
+
+/**
+ * The session to resume for `cwd`, or a fresh one. The framework pointer wins; the old
+ * `<cwd>/.theokit/tui-session` is read only when the framework has none, and its id is then written
+ * to the new pointer so later launches never need the old file. A fresh id is persisted too.
+ */
+export function loadOrCreateSessionId(
+  cwd: string,
+  generate: () => string,
+  root?: string,
+): { readonly sessionId: string; readonly resumed: boolean } {
+  const rootArg = root === undefined ? [] : ([root] as const)
+  const found = loadFrameworkSessionId(cwd, generate, ...rootArg)
+  if (found.resumed) return found
+  const legacy = readLegacyId(cwd)
+  const sessionId = legacy ?? found.sessionId
+  void persistSessionId(cwd, sessionId, undefined, root)
+  return { sessionId, resumed: legacy !== undefined }
 }

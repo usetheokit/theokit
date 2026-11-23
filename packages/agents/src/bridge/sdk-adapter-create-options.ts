@@ -9,8 +9,10 @@
 import { createRequire } from 'node:module'
 
 import type {
+  AgentOptions,
   BuiltinToolName,
   ContextSettings,
+  ModelFallbackOptions,
   SkillsSettings,
   SystemPromptResolver,
 } from '@theokit/sdk'
@@ -38,6 +40,9 @@ import type { ResolvedCompatSource } from './setting-sources-gate.js'
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
 interface M8CreateOptions {
   skills?: SkillsSettings
+  sendDefaults?: AgentOptions['sendDefaults']
+  modelFallback?: ModelFallbackOptions
+  thinking?: string
   context?: ContextSettings
   systemPrompt?: string | SystemPromptResolver
   /** SDK local options: settings source for SKILL.md discovery (EC-1) + per-run cwd (V4-L.2). */
@@ -46,6 +51,7 @@ interface M8CreateOptions {
     compatSources?: ResolvedCompatSource[]
     cwd?: string
     baseDir?: string
+    sessionDir?: string
     /** #686 — the pre-spawn approval gate, forwarded to `Agent.create({ local: { hooks } })`. */
     hooks?: HookApprovalGate
     /**
@@ -423,6 +429,12 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   if (compiled.skills) {
     options.skills = compiled.skills
     applied.push('skills')
+  }
+  if (compiled.sendDefaults !== undefined) options.sendDefaults = compiled.sendDefaults
+  if (compiled.modelFallback !== undefined) options.modelFallback = compiled.modelFallback
+  if (compiled.thinking !== undefined) options.thinking = compiled.thinking
+  if (compiled.sessionDir !== undefined) {
+    options.local = { ...options.local, sessionDir: compiled.sessionDir }
   }
   // theokit-file-based-config — project `.theokit/` discovery sources into `local`, DECOUPLED from
   // inline skills (an agent may want hooks/mcp/subagents/context/cron with no inline skill). cwd is

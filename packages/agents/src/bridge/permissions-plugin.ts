@@ -78,7 +78,8 @@ export function createPermissionsPlugin(
   options: PermissionsPluginOptions,
 ): Plugin | undefined {
   if (rules.length === 0) return undefined
-  // `PermissionEngine` keeps its own explicit-deny-wins rule, and nothing here re-decides it. What is
+  // `PermissionEngine` returns the first rule that matches, so a deny only wins when it comes before
+  // an allow for the same call; the caller orders the rules (`permissionRulesFromLayers`). What is
   // decided here is only the verdict the engine leaves open: `ask`, which has no answer of its own.
   return PermissionPlugin.create(new PermissionEngine([...rules]), {
     canUseTool: (toolName, input) => options.onAsk(toolName, input),

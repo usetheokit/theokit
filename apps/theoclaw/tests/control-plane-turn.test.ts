@@ -1,7 +1,8 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
+import { createAgentEventMask } from '@theokit/agents/bridge'
 import type { SDKAgent, SDKMessage } from '@theokit/sdk'
+import { isAgentStreamEvent } from '@theokit/agents/bridge'
 import {
-  isAgentStreamEvent,
   toSdkMessage,
   toSdkTimelineEvent,
   type TurnTimelineEvent,
@@ -12,7 +13,6 @@ import type {
   TurnRun as ReplyTurnRun,
 } from '../src/channels/reply-handler.js'
 import { runSessionTurn } from '../src/control-plane/session-turn.js'
-import { createEventMask } from '../src/control-plane/event-mask.js'
 import { createContainer } from '../src/composition.js'
 import {
   createTurnRunner,
@@ -770,7 +770,7 @@ describe('the typed conversions of the port (#2317)', () => {
 
   it('keeps the event type and the other fields through masking', () => {
     const out: TurnEvent[] = []
-    const mask = createEventMask(['sekret'], (event) => out.push(event))
+    const mask = createAgentEventMask(['sekret'], (event) => out.push(event))
     mask.emit({
       type: 'tool_result',
       callId: 'c1',

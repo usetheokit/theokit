@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   APPROVAL_KEY_HINT,
@@ -6,7 +6,6 @@ import {
   formatApproval,
   formatToolHeader,
   formatToolResult,
-  REJECTED_BODY,
 } from '../../src/formatting/tool-header.js'
 
 /**
@@ -81,16 +80,9 @@ describe('approvalChoices', () => {
 /**
  * A rejected call must not be reported as one that ran.
  *
- * Measured in the TUI by rejecting a real approval and dumping the event the renderer receives:
- *
- *     {"kind":"tool","name":"Ran echo probe2","status":"failed",
- *      "output":"{\"stdout\":\"\",\"stderr\":\"Tool 'Bash' denied by human approver\",
- *                \"exitCode\":126}"}
- *
  * Every header here reads `failed` as "not active" and prints the past tense, so the transcript
- * said `Ran echo probe2` for a command that never executed. B-027 deleted a detector for this exact
- * shape on the grounds that "nothing in this repository or the SDK produces exit code 126"; the
- * measurement above says otherwise.
+ * said `Ran echo probe2` for a command that never executed. The refusal is the typed `refusal` on
+ * the event (`@theokit/tui` `ToolRefusal`); the result text and exit code are never consulted.
  */
 const denied = (name: string, input: Record<string, unknown>) =>
   ({
@@ -98,11 +90,7 @@ const denied = (name: string, input: Record<string, unknown>) =>
     name,
     status: 'failed',
     input,
-    output: JSON.stringify({
-      stdout: '',
-      stderr: `Tool '${name}' denied by human approver`,
-      exitCode: 126,
-    }),
+    refusal: { by: 'human' },
   }) as never
 
 describe('a rejected tool call is not reported as one that ran', () => {
@@ -126,20 +114,24 @@ describe('a rejected tool call is not reported as one that ran', () => {
     expect(formatToolHeader(denied('Edit', { path: 'a.ts' }))?.name).toBe('Rejected the edit')
   })
 
-  it('test_it_recognises_the_body_the_RESULT_formatter_already_produced', () => {
-    // The ordering trap. Since usetheokit/theokit-tui#156 the result formatter runs FIRST and
-    // replaces `output`, so the header no longer sees the runtime's raw payload — it sees
-    // `REJECTED_BODY`. Matching only the raw form stopped working the moment that fix landed, and
-    // the symptom was a body reading `rejected — nothing ran` under a header saying `Ran echo …`.
-    const afterResultFormatter = {
-      kind: 'tool',
-      name: 'Bash',
-      status: 'failed',
-      input: { command: 'echo parity-final' },
-      output: REJECTED_BODY,
-    } as never
+  it('test_a_timeout_reads_as_a_rejection', () => {
+    expect(
+      formatToolHeader({
+        ...(denied('Bash', { command: 'ls' }) as object),
+        refusal: { by: 'timeout' },
+      } as never)?.name,
+    ).toBe('Rejected ls')
+  })
 
-    expect(formatToolHeader(afterResultFormatter)?.name).toBe('Rejected echo parity-final')
+  it('test_a_rejection_keeps_its_header_whatever_the_output_became', () => {
+    for (const output of ['rejected — nothing ran', 'nothing ran: x', '']) {
+      const event = {
+        ...(denied('Bash', { command: 'echo parity-final' }) as object),
+        output,
+      } as never
+      expect(formatToolHeader(event)?.name).toBe('Rejected echo parity-final')
+      expect(formatToolHeader(event)?.summary).toContain('nothing ran')
+    }
   })
 
   it('test_a_call_that_actually_ran_is_untouched', () => {
@@ -170,30 +162,40 @@ describe('a rejected tool call is not reported as one that ran', () => {
 })
 
 /**
- * The BODY of a rejected call, which used to reach the user as raw JSON:
- *
- *     ⎿ {"stdout":"","stderr":"Tool 'Bash' denied by human approver","exitCode":126}
- *
- * Not a formatting oversight here — `formatToolResult` was never CALLED on the failure path.
- * `toToolEvent` gated the override on a field an errored part does not populate
- * (usetheokit/theokit-tui#156). With the gate fixed upstream, this is the body it produces.
+ * The BODY of a refused call. The toolkit supplies it from the typed `refusal` (`nothing ran:
+ * <reason>`), so the shell formatter has no refusal branch and treats marker text as the ordinary
+ * shell output it is.
  */
 describe('the body of a rejected call', () => {
   const result = (raw: unknown) =>
     formatToolResult({ name: 'Bash', status: 'failed' } as never, raw)?.output
 
-  it('test_a_rejection_reads_as_a_rejection_not_as_a_shell_result', () => {
+  it('test_marker_text_in_the_output_is_not_a_refusal', () => {
     expect(
-      result(JSON.stringify({ stdout: '', stderr: "Tool 'Bash' denied by human approver", exitCode: 126 })),
-    ).toBe('rejected — nothing ran')
+      result(
+        JSON.stringify({
+          stdout: '',
+          stderr: "Tool 'Bash' denied by human approver",
+          exitCode: 126,
+        }),
+      ),
+    ).toBe("Tool 'Bash' denied by human approver")
+  })
+
+  it('test_a_refused_call_has_no_shell_body_so_the_toolkit_states_the_reason', () => {
+    const event = { name: 'Bash', status: 'failed', refusal: { by: 'human' } } as never
+
+    expect(formatToolResult(event, undefined)).toBeUndefined()
   })
 
   it('test_a_real_shell_failure_still_shows_its_output_and_code', () => {
     // Anti-vacuity, and the reason 126 alone is not the signal: a real shell returns 126 for
     // "command not executable", which deserves different words from "you said no".
-    expect(result(JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }))).toBe(
-      'bash: ./x: Permission denied\n(exit code: 126)',
-    )
+    expect(
+      result(
+        JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }),
+      ),
+    ).toBe('bash: ./x: Permission denied\n(exit code: 126)')
   })
 
   it('test_a_successful_run_is_untouched', () => {
@@ -234,8 +236,11 @@ describe('the explored grouping is worth more than a verb on a card', () => {
       } as never)?.name,
     ).toBe('Running echo hi')
     expect(
-      formatToolHeader({ name: 'ViewImage', status: 'completed', input: { path: 'a.png' } } as never)
-        ?.name,
+      formatToolHeader({
+        name: 'ViewImage',
+        status: 'completed',
+        input: { path: 'a.png' },
+      } as never)?.name,
     ).toBe('Viewed a.png')
   })
 })
@@ -243,16 +248,9 @@ describe('the explored grouping is worth more than a verb on a card', () => {
 /**
  * A call a policy refused must not be reported as one that ran either.
  *
- * Measured in the TUI on 2026-10-02 (TheoCode 0.27.0 on `@theokit/agents@15.0.2`): the operator's
- * `~/.claude/settings.json` carried a `permissions.allow` list without `ApplyPatch`, so the
- * permissions gate refused the call before it ran. `ctrl+o` showed
- *
- *     •  Edited hello.txt (+1 -0)
- *       ⎿ {"stdout":"","stderr":"`ApplyPatch` matched no rule in your `permissions` block, ...",
- *          "exitCode":126}
- *
- * and no `hello.txt` existed. The human-rejection branch above only recognises "denied by human
- * approver", so every other refusal fell through to the past tense.
+ * Measured in the TUI on 2026-10-02: a permissions gate refused `ApplyPatch` before it ran and
+ * `ctrl+o` showed `Edited hello.txt (+1 -0)` for a file that was never written. The signal is the
+ * typed `refusal` (`policy`, `hook`), whatever the output says.
  */
 const refused = (name: string, input: Record<string, unknown>) =>
   ({
@@ -260,83 +258,100 @@ const refused = (name: string, input: Record<string, unknown>) =>
     name,
     status: 'failed',
     input,
-    output: JSON.stringify({
-      stdout: '',
-      stderr:
-        `\`${name}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
-        'approval_policy="on-request" means that decision is yours.',
-      exitCode: 126,
-    }),
+    refusal: { by: 'policy', reason: `\`${name}\` matched no rule in your \`permissions\` block` },
   }) as never
 
 describe('a tool call a policy refused is not reported as one that ran', () => {
   it('test_a_refused_patch_is_not_reported_as_an_edit', () => {
     const header = formatToolHeader(
-      refused('ApplyPatch', { patch: '*** Begin Patch\n*** Add File: hello.txt\n+tui-ok\n*** End Patch' }),
+      refused('ApplyPatch', {
+        patch: '*** Begin Patch\n*** Add File: hello.txt\n+tui-ok\n*** End Patch',
+      }),
     )
 
-    expect(header?.name, 'the transcript claims a refused patch edited a file').not.toMatch(/^Edited /)
+    expect(header?.name, 'the transcript claims a refused patch edited a file').not.toMatch(
+      /^Edited /,
+    )
     expect(header?.name).toBe('Blocked the patch')
     expect(header?.summary).toContain('nothing ran')
-  })
-
-  it('test_the_payload_as_the_TUI_receives_it_with_the_diagnostics_hint_appended', () => {
-    // The fixture above is the runtime's payload; the event the renderer received on 2026-10-02 had
-    // already gone through `turnErrorText`, which appends ` — <hint>` after the JSON. A unit test on
-    // the bare payload passed while the real binary still printed `Edited hello.txt (+1 -0)`.
-    const raw = (refused('ApplyPatch', {}) as { output: string }).output
-    const received = {
-      kind: 'tool',
-      name: 'ApplyPatch',
-      status: 'failed',
-      input: {},
-      output: `${raw} — set THEOCODE_DIAGNOSTICS=stderr to see the retry sequence and the underlying error`,
-    } as never
-
-    expect(formatToolHeader(received)?.name).toBe('Blocked the patch')
   })
 
   it('test_a_refused_command_is_not_reported_as_run', () => {
     expect(formatToolHeader(refused('Bash', { command: 'ls' }))?.name).toBe('Blocked ls')
   })
 
-  it('test_the_shell_body_says_it_was_blocked_and_why', () => {
-    const raw = (refused('Bash', { command: 'ls' }) as { output: string }).output
-    const body = formatToolResult({ name: 'Bash', status: 'failed' } as never, raw)?.output
-
-    expect(body).toMatch(/^blocked — nothing ran: /)
-    expect(body).toContain('matched no rule in your `permissions` block')
+  it('test_the_refusal_wins_over_whatever_the_output_became', () => {
+    // The result formatter and `turnErrorText` rewrite `output` before the header sees it; the
+    // header must not depend on what they left there.
+    for (const output of [
+      'nothing ran: x',
+      '{"stdout":"hi"} — set THEOCODE_DIAGNOSTICS=stderr',
+      '',
+    ]) {
+      const event = { ...(refused('ApplyPatch', {}) as object), output } as never
+      expect(formatToolHeader(event)?.name).toBe('Blocked the patch')
+    }
   })
 
-  it('test_the_header_recognises_the_body_the_result_formatter_produced', () => {
-    const raw = (refused('Bash', { command: 'ls' }) as { output: string }).output
-    const body = formatToolResult({ name: 'Bash', status: 'failed' } as never, raw)?.output
-    const afterResultFormatter = {
-      kind: 'tool',
-      name: 'Bash',
-      status: 'failed',
-      input: { command: 'ls' },
-      output: body,
-    } as never
-
-    expect(formatToolHeader(afterResultFormatter)?.name).toBe('Blocked ls')
+  it('test_a_hook_refusal_reads_as_a_block', () => {
+    expect(
+      formatToolHeader({
+        ...(refused('Bash', { command: 'ls' }) as object),
+        refusal: { by: 'hook' },
+      } as never)?.name,
+    ).toBe('Blocked ls')
   })
 
   it('test_a_human_rejection_still_reads_as_a_rejection', () => {
     expect(formatToolHeader(denied('ApplyPatch', {}))?.name).toBe('Rejected the patch')
   })
 
-  it('test_a_real_shell_126_is_not_a_block', () => {
-    // snake_case `exit_code` is what a real shell run carries; only the runtime's camelCase veto
-    // shape is a refusal.
+  it('test_a_real_shell_126_without_a_refusal_is_not_a_block', () => {
+    // Only a typed `refusal` marks a refused call; the exit code and the text never do.
     const ran = {
       kind: 'tool',
       name: 'Bash',
       status: 'failed',
       input: { command: './x' },
-      output: JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }),
+      output: JSON.stringify({ stdout: '', stderr: 'denied by human approver', exitCode: 126 }),
     } as never
 
     expect(formatToolHeader(ran)?.name).toBe('Ran ./x')
+  })
+})
+
+describe('Bash, Edit and ApplyPatch headers come from the toolkit presentation', () => {
+  const header = (name: string, input: Record<string, unknown>, status = 'completed') =>
+    formatToolHeader({ kind: 'tool', name, status, input } as never)
+
+  it('words Bash and Edit by tense and flattens a multi-line command', () => {
+    expect(header('Bash', { command: 'ls\nx' }, 'running')?.name).toBe('Running ls⏎x')
+    expect(header('Bash', { command: 'ls' })?.name).toBe('Ran ls')
+    expect(header('Edit', { path: 'a.ts' })?.name).toBe('Edited a.ts')
+  })
+
+  it('keeps the own fallbacks for a missing target, and the patch counts', () => {
+    expect(header('Bash', {})?.name).toBe('Ran')
+    expect(header('Bash', { command: '' }, 'running')?.name).toBe('Running')
+    expect(header('Edit', {})?.name).toBe('Edited file')
+    expect(header('ApplyPatch', { patch: 'garbage' })?.name).toBe('Edited files')
+    const patch = [1, 2, 3, 4].map((n) => `*** Update File: f${n}.ts\n@@\n-a\n+b`).join('\n')
+    const wrapped = `*** Begin Patch\n${patch}\n*** End Patch`
+    expect(header('ApplyPatch', { patch: wrapped })?.name).toMatch(
+      /^Edited f1\.ts, f2\.ts, f3\.ts \+1 more/,
+    )
+    expect(header('ApplyPatch', { patch: wrapped }, 'running')?.name).toMatch(/^Editing /)
+    const counted = '*** Begin Patch\n*** Update File: a.ts\n@@\n-a\n+b\n*** End Patch'
+    expect(header('ApplyPatch', { patch: counted })?.name).toMatch(/^Edited a\.ts.*\+1/)
+  })
+
+  it('fails loudly when the installed toolkit has no entry for an aliased tool', async () => {
+    vi.resetModules()
+    vi.doMock('@theokit/tui', () => ({ toolPresentation: () => new Map() }))
+    const mod = await import('../../src/formatting/tool-header.js')
+    expect(() =>
+      mod.formatToolHeader({ kind: 'tool', name: 'Bash', status: 'completed', input: {} } as never),
+    ).toThrow(/@theokit\/tui >= 0\.83\.4/)
+    vi.doUnmock('@theokit/tui')
   })
 })

@@ -15,7 +15,7 @@
  */
 import { routeThroughLayers, type KeyLayer } from '@theokit/tui/keys'
 
-import { stepBacktrack } from '../backtrack/backtrack-select.js'
+import { backtrackReducer } from '@theokit/tui'
 import type { Keybinding } from './keybindings.js'
 
 export interface KeyboardState {
@@ -229,8 +229,15 @@ function routeEscape(state: KeyboardState): KeyAction[] {
     return [{ kind: 'prime-backtrack' }]
   }
 
-  const next = stepBacktrack(state.backtrackNth, state.backtrackTotal)
-  if (next === null) return [{ kind: 'reset-backtrack' }]
+  if (state.backtrackTotal <= 0) return [{ kind: 'reset-backtrack' }]
+  const next = backtrackReducer(
+    {
+      armed: true,
+      selected: state.backtrackNth,
+      previews: Array.from({ length: state.backtrackTotal }, () => ''),
+    },
+    { type: 'older' },
+  ).selected
   return [{ kind: 'advance-backtrack', next, total: state.backtrackTotal }]
 }
 

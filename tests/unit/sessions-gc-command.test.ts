@@ -188,3 +188,36 @@ describe('sessionsGcCommand — the seam the formatter tests never crossed', () 
     expect(result.failed).toBe(0)
   })
 })
+
+describe('parseSessionsGcArgs and the JSON report', () => {
+  it('parses apply, dry-run, age and keep, and refuses a contradiction', async () => {
+    const { parseSessionsGcArgs } = await import('../../packages/agents/src/commands/index.js')
+    expect(parseSessionsGcArgs([])).toEqual({ ok: true, apply: false, json: false })
+    expect(parseSessionsGcArgs([], { apply: true })).toMatchObject({ apply: true })
+    expect(parseSessionsGcArgs(['--dry-run'], { apply: true })).toMatchObject({ apply: false })
+    expect(parseSessionsGcArgs(['--apply', '--days', '7', '--keep-last', '2', '--json'])).toEqual({
+      ok: true,
+      apply: true,
+      json: true,
+      keepLast: 2,
+      maxAgeDays: 7,
+    })
+    expect(parseSessionsGcArgs(['--apply', '--dry-run']).ok).toBe(false)
+    expect(parseSessionsGcArgs(['--days', '0']).ok).toBe(false)
+    expect(parseSessionsGcArgs(['--bogus']).ok).toBe(false)
+  })
+
+  it('prints one JSON line when asked, through a custom runner', async () => {
+    const { sessionsGcCommand: command } =
+      await import('../../packages/agents/src/commands/index.js')
+    const out = await command({
+      json: true,
+      run: async () => ({
+        plan,
+        result: { dryRun: true, removed: ['old-1'], orphaned: [], errors: [] },
+      }),
+    })
+    expect(JSON.parse(out.lines[0]!)).toMatchObject({ type: 'sessions.gc', removed: ['old-1'] })
+    expect(out.failed).toBe(0)
+  })
+})

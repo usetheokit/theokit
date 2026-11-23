@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GatewayRunner } from '@theokit/gateway'
 import type { GatewayContext, MessageEvent } from '@theokit/gateway'
-import { parseInbound } from '@theokit/gateway-telegram'
+import { parseInbound, telegramChannel } from '@theokit/gateway-telegram'
 import { composeTheoClaw } from '../src/composition.js'
 import { fakeBuilders, noAgent, WORKSPACE } from './composition-fixtures.js'
 import { processSecrets } from '../src/secrets.js'
@@ -62,12 +62,13 @@ describe('voice note replies', () => {
       expect(adapter.sent).toEqual([])
       expect(request).toHaveBeenCalledTimes(5)
       const speech = request.mock.calls[3]?.[1]
-      expect(JSON.parse(String(speech?.body))).toEqual({ model: 'gpt-4o-mini-tts', voice: 'alloy', input: 'Hello [redacted]', response_format: 'opus' })
+      expect(JSON.parse(String(speech?.body))).toEqual({ model: 'gpt-4o-mini-tts', voice: 'alloy', input: 'Hello [redacted]', response_format: 'mp3' })
       const upload = request.mock.calls[4]?.[1]?.body as FormData
       expect(upload.get('chat_id')).toBe('42')
       expect(upload.get('reply_parameters')).toBe('{"message_id":3}')
       expect(await (upload.get('voice') as Blob).text()).toBe('OggS-reply')
       const transcription = request.mock.calls[2]?.[1]?.body as FormData
+      expect((transcription.get('file') as File).name).toBe('voice.ogg')
       expect(transcription.get('model')).toBe('gpt-4o-mini-transcribe')
       expect(await (transcription.get('file') as Blob).text()).toBe('OggS')
     } finally { await runner.stop() }
@@ -145,6 +146,50 @@ describe('voice note replies', () => {
     const handler = vi.fn(async (_event, ctx: GatewayContext) => { await ctx.reply('answer') })
     await withVoiceReplies(handler, configuredVoiceReplies(env, request))(event, context(event))
     expect((request.mock.calls[4]?.[1]?.body as FormData).get('message_thread_id')).toBe('7')
+  })
+
+  describe('the published Telegram adapter', () => {
+    const voiceCtx = (getFile: ReturnType<typeof vi.fn>) => ({
+      chat: { id: 42, type: 'private' }, from: { id: 1 }, getFile,
+      message: { message_id: 3, date: 10, chat: { id: 42, type: 'private' }, from: { id: 1 }, voice: { file_id: 'voice-id', mime_type: 'audio/ogg' } },
+    })
+    async function dispatch(ownerOnly: boolean, sender: number) {
+      const getFile = vi.fn(async () => ({ file_path: 'voice/a.ogg' }))
+      const download = vi.fn(async () => new Response(new Uint8Array([1, 2, 3])))
+      vi.stubGlobal('fetch', download)
+      const adapter = telegramChannel.create({ token: '123:abc' }) as unknown as {
+        onInbound(h: (e: MessageEvent) => Promise<void>): () => void
+        handleInbound(ctx: unknown): Promise<void>
+      }
+      const order: string[] = []
+      adapter.onInbound(async (event) => {
+        order.push('hook')
+        if (ownerOnly && sender !== 1) return
+        order.push('read')
+        const audio = (event as { audio?: { read(): Promise<Uint8Array> } }).audio
+        expect(await audio?.read()).toEqual(new Uint8Array([1, 2, 3]))
+      })
+      const ctx = voiceCtx(getFile)
+      ctx.from.id = sender
+      await adapter.handleInbound(ctx)
+      return { getFile, download, order }
+    }
+
+    it('reads no audio for a sender the hooks reject', async () => {
+      const { getFile, download, order } = await dispatch(true, 2)
+      expect(order).toEqual(['hook'])
+      expect(getFile).not.toHaveBeenCalled()
+      expect(download).not.toHaveBeenCalled()
+    })
+
+    it('reads the audio only after the hooks accept the sender', async () => {
+      const { getFile, download, order } = await dispatch(true, 1)
+      expect(order).toEqual(['hook', 'read'])
+      expect(getFile).toHaveBeenCalledOnce()
+      expect(download).toHaveBeenCalledOnce()
+    })
+
+    afterEach(() => { vi.unstubAllGlobals() })
   })
 
   it('requires explicit audio and Telegram credentials', () => {

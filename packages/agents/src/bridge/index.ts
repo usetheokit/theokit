@@ -62,6 +62,8 @@ export {
 
 export {
   delegationPortFromAgentFactory,
+  type DelegationFactoryAgent,
+  type DelegationMessagePort,
   type DelegationPortFromAgentFactoryOptions,
 } from './delegation-port-from-factory.js'
 
@@ -313,9 +315,13 @@ export type { CompiledWiring } from './compiled-wiring.js'
 export {
   runAgentTurn,
   completeFromTurn,
+  type AgentTurnAgent,
+  type AgentTurnMessage,
   type AgentTurnOutcome,
+  type AgentTurnRun,
   type RunAgentTurnOptions,
 } from './run-agent-turn.js'
+export { createAgentEventMask, type AgentEventMask } from './event-mask.js'
 export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'
 export {
   createResultCapture,

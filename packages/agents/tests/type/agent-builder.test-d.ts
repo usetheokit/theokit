@@ -82,3 +82,22 @@ const rootTool = ContextualTool.of(
   // DoD 5: InferAgentInput extracts the inferred input shape (used by typed client codegen).
   expectTypeOf<InferAgentInput<typeof def>>().toEqualTypeOf<{ q: string }>()
 }
+
+// ── SDK pass-through options accept the SDK's own types and keep the type-state ───────────────
+{
+  const def = AgentBuilder.create()
+    .model('m')
+    .sendDefaults({ toolResultGuard: { delimit: true }, perToolTimeoutMs: 1 })
+    .modelFallback({ models: ['b'] })
+    .sessionDir('/s')
+    .thinking('off')
+    .skills({ bundledDirs: ['/a'], skillsDir: '/a' })
+    .skills(() => ({ skillsDir: '/a' }))
+    .build()
+  expectTypeOf(def).toExtend<AgentDefinition>()
+
+  // @ts-expect-error — sessionDir takes a string
+  AgentBuilder.create().sessionDir(1)
+  // @ts-expect-error — sendDefaults rejects an unknown key
+  AgentBuilder.create().sendDefaults({ nope: true })
+}

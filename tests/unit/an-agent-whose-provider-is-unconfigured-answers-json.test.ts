@@ -50,8 +50,8 @@ describe('mountAgent with a key resolver that throws', () => {
     expect(await response.json()).toEqual({
       error: {
         code: 'INTERNAL',
-        message:
-          'Model "openrouter/openai/gpt-4o-mini" declares provider "openrouter", but OPENROUTER_API_KEY is not set.',
+        // The resolver's own text stays in the server log (CodeQL js/stack-trace-exposure).
+        message: 'The agent has no usable provider credential. See the server log for the reason.',
       },
     })
   })

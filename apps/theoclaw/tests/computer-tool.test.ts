@@ -140,18 +140,19 @@ describe('the computer tool: xdotool', () => {
       [SETTINGS.xdotool, ['getmouselocation']],
     ])
     expect(runner.calls[0]?.env.DISPLAY).toBe(':99')
-    expect(result).toBe('pointer at x:3 y:0')
+    expect(result).toBe('mouse_move done; pointer at x:3 y:0 screen:0 window:1')
   })
 
-  it('clicks at a position, or where the pointer is when none is given', async () => {
+  it('clicks at a position', async () => {
     const runner = fakeRunner()
-    const tool = build({ run: runner.run })
-    await tool.handler({ action: 'left_click', x: 2, y: 0 }, {})
-    expect(runner.calls.map((call) => call.argv[0])).toEqual(['mousemove', 'click', 'getmouselocation'])
-    expect(runner.calls[1]?.argv).toEqual(['click', '1'])
-    runner.calls.length = 0
-    await tool.handler({ action: 'left_click' }, {})
-    expect(runner.calls.map((call) => call.argv[0])).toEqual(['click', 'getmouselocation'])
+    await build({ run: runner.run }).handler({ action: 'left_click', x: 2, y: 0 }, {})
+    expect(runner.calls.map((call) => call.argv)).toEqual([['mousemove', '2', '0'], ['click', '1'], ['getmouselocation']])
+  })
+
+  it('refuses a click without coordinates and clicks nothing: the app no longer clicks at the pointer', async () => {
+    const runner = fakeRunner()
+    await expectToolError(build({ run: runner.run }), { action: 'left_click' }, 'x')
+    expect(runner.calls).toEqual([])
   })
 
   it('passes -- before typed text', async () => {
@@ -200,15 +201,15 @@ describe('the computer tool: xdotool', () => {
     const tool = build({ run: runner.run })
     const first = tool.handler({ action: 'type', text: 'a' }, {})
     const second = tool.handler({ action: 'type', text: 'b' }, {})
-    await expect(first).rejects.toThrow('computer type failed')
-    await expect(second).rejects.toThrow('computer type failed')
+    await expect(first).rejects.toThrow('computer type: xdotool type failed')
+    await expect(second).rejects.toThrow('computer type: xdotool type failed')
     expect(runner.calls).toHaveLength(2)
   })
 
-  it('reports an unreadable pointer location as a tool error', async () => {
+  it('passes an unreadable pointer location through, as the SDK tool does', async () => {
     const runner = fakeRunner({ location: 'garbage' })
     const outcome = build({ run: runner.run }).handler({ action: 'mouse_move', x: 1, y: 0 }, {})
-    await expect(outcome).rejects.toThrow('computer mouse_move failed: unreadable pointer location')
+    await expect(outcome).resolves.toBe('mouse_move done; pointer at garbage')
   })
 
   it.each([
@@ -217,7 +218,7 @@ describe('the computer tool: xdotool', () => {
   ])('reports an xdotool run that %s as a tool error naming the action', async (_how, failure) => {
     const runner = fakeRunner({ fail: failure })
     const outcome = build({ run: runner.run }).handler({ action: 'type', text: 'hi' }, {})
-    await expect(outcome).rejects.toThrow(`computer type failed: ${failure.message}`)
+    await expect(outcome).rejects.toThrow(`computer type: xdotool type failed: ${failure.message}`)
   })
 })
 
@@ -229,10 +230,11 @@ describe('the computer tool: screenshot', () => {
     expect(describer.log.messages).toHaveLength(1)
     const message = describer.log.messages[0] as Exclude<TurnMessage, string>
     expect(message.images).toHaveLength(1)
-    expect(message.images[0]?.mimeType).toBe('image/png')
-    expect(Buffer.from(message.images[0]?.data ?? '', 'base64').subarray(1, 4).toString()).toBe('PNG')
+    const image = message.images?.[0] as { readonly data: string; readonly mimeType: string } | undefined
+    expect(image?.mimeType).toBe('image/png')
+    expect(Buffer.from(image?.data ?? '', 'base64').subarray(1, 4).toString()).toBe('PNG')
     expect(message.text).toContain('4x1')
-    expect(result).toBe('screen 4x1\na window at 10,20')
+    expect(result).toContain('a window at 10,20')
     expect(describer.log.disposed).toBe(1)
   })
 
@@ -244,7 +246,7 @@ describe('the computer tool: screenshot', () => {
 
   it('disposes the describer when its run fails, and names the screenshot', async () => {
     const describer = fakeDescriber('errors')
-    await expect(build({}, describer).handler({ action: 'screenshot' }, {})).rejects.toThrow('computer screenshot failed')
+    await expect(build({}, describer).handler({ action: 'screenshot' }, {})).rejects.toThrow('computer screenshot:')
     expect(describer.log.disposed).toBe(1)
   })
 
@@ -254,14 +256,14 @@ describe('the computer tool: screenshot', () => {
     const pending = build({}, describer).handler({ action: 'screenshot' }, { signal: controller.signal })
     await new Promise((resolve) => setTimeout(resolve, 20))
     controller.abort()
-    await expect(pending).rejects.toThrow('computer screenshot failed')
+    await expect(pending).rejects.toThrow('computer screenshot:')
     expect(describer.log.disposed).toBe(1)
     expect(describer.log.signal?.aborted).toBe(true)
   })
 
   it('reports an unreadable framebuffer as a tool error naming the screenshot', async () => {
     const tool = computerTool(SETTINGS, fakeDescriber('answers').build, { readFile: () => Buffer.alloc(10) })
-    await expect(tool.handler({ action: 'screenshot' }, {})).rejects.toThrow('computer screenshot failed')
+    await expect(tool.handler({ action: 'screenshot' }, {})).rejects.toThrow('computer screenshot:')
   })
 })
 

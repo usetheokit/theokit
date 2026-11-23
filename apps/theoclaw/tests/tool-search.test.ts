@@ -114,6 +114,27 @@ describe('web search', () => {
     expect(buildTools(settings).map((tool) => tool.name)).toContain('web_search')
   })
 
+  it('a Tavily key alone does not turn search on, and is still masked', () => {
+    const settings = settingsFor({ TAVILY_API_KEY: 'tvly-secret' })
+    expect(settings.search.kind).toBe('off')
+    expect(settings.secrets).toContain('tvly-secret')
+    expect(settings.offLines).toContain(OFF_LINE)
+    expect(buildTools(settings).map((tool) => tool.name)).not.toContain('web_search')
+  })
+
+  it('a Tavily key does not outrank Brave or the generic adapter', () => {
+    expect(settingsFor({ TAVILY_API_KEY: 'tvly-secret', BRAVE_API_KEY: BRAVE_KEY }).search.kind).toBe('brave')
+    expect(settingsFor({ TAVILY_API_KEY: 'tvly-secret', THEOKIT_SEARCH_API_URL: SEARCH_URL, THEOKIT_SEARCH_API_KEY: SEARCH_KEY }).search.kind).toBe('generic')
+  })
+
+  it('a configuration error names the TheoClaw variable', () => {
+    expect(() => settingsFor({ THEOCLAW_SEARCH: 'tavily' })).toThrow(expect.objectContaining({ variable: 'TAVILY_API_KEY' }))
+    expect(() => settingsFor({ THEOCLAW_SEARCH: 'duck' })).toThrow(expect.objectContaining({ variable: 'THEOCLAW_SEARCH' }))
+    expect(() => settingsFor({ THEOKIT_SEARCH_API_URL: SEARCH_URL })).toThrow(expect.objectContaining({ variable: 'THEOKIT_SEARCH_API_KEY' }))
+    expect(() => settingsFor({ THEOKIT_SEARCH_API_KEY: SEARCH_KEY })).toThrow(expect.objectContaining({ variable: 'THEOKIT_SEARCH_API_URL' }))
+    expect(() => settingsFor({ THEOCLAW_SEARCH: 'searxng:nope' })).toThrow(expect.objectContaining({ variable: 'THEOCLAW_SEARCH' }))
+  })
+
   it('refuses a bad THEOCLAW_SEARCH', () => {
     expect(() => settingsFor({ THEOCLAW_SEARCH: 'duck' })).toThrow('THEOCLAW_SEARCH')
     expect(() => settingsFor({ THEOCLAW_SEARCH: 'searxng:nope' })).toThrow('http(s) URL')

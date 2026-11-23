@@ -59,4 +59,12 @@ describe('theoclaw worker', () => {
     await workerCommand(['pair', 'http://127.0.0.1:1', 'code', '--name', 'w1'], io)
     expect(await workerCommand(['run', 'hello'], io)).toBe(code)
   })
+
+  it('refuses a gateway answer other than 202 and an unsupported scheme with exit 1', async () => {
+    const { env, io } = setup()
+    const refuse = { ...io, fetch: (() => Promise.resolve(new Response('{"error":"unknown_or_expired"}', { status: 404 }))) as typeof fetch }
+    expect(await workerCommand(['pair', 'http://127.0.0.1:1', 'code'], refuse)).toBe(1)
+    expect(await workerCommand(['pair', 'ftp://127.0.0.1:1', 'code'], io)).toBe(1)
+    expect(existsSync(join(env.THEOCLAW_STATE_DIR ?? '', 'worker.json'))).toBe(false)
+  })
 })

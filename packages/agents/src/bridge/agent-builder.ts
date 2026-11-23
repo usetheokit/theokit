@@ -16,6 +16,8 @@
  * PURE metadata (sdk-runtime.md / G2): the builder describes an agent, it NEVER calls an LLM.
  */
 import type {
+  AgentOptions,
+  ModelFallbackOptions,
   BuiltinToolName,
   CustomTool,
   MemorySettings,
@@ -265,6 +267,16 @@ export interface AgentBuilder<
   subagents(
     map: Record<string, SubagentAgentDefinition>,
   ): AgentBuilder<TInput, TModel, TContext, TTools>
+  /** `Agent.create({ sendDefaults })`: tool-result guard, pruning and per-tool timeout for every send. */
+  sendDefaults(
+    defaults: NonNullable<AgentOptions['sendDefaults']>,
+  ): AgentBuilder<TInput, TModel, TContext, TTools>
+  /** `Agent.create({ modelFallback })`: models a turn retries on when the primary fails before output. */
+  modelFallback(options: ModelFallbackOptions): AgentBuilder<TInput, TModel, TContext, TTools>
+  /** `Agent.create({ local: { sessionDir } })`: where session transcripts are stored. */
+  sessionDir(dir: string): AgentBuilder<TInput, TModel, TContext, TTools>
+  /** `Agent.create({ thinking })`, e.g. `'off'`. Independent of {@link reasoningEffort}; both are forwarded. */
+  thinking(level: string): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
    * theokit-file-based-config — opt into `.theokit/` file-based config (skills, subagents, hooks,
    * MCP, context, cron), discovered by the SDK from the app root (`project` = `<cwd>/.theokit/`,
@@ -425,6 +437,12 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
         skills: selection,
         ...(options?.read !== undefined ? { skillsRead: options.read } : {}),
       }),
+    sendDefaults: (defaults: NonNullable<AgentOptions['sendDefaults']>) =>
+      makeBuilder({ ...config, sendDefaults: defaults }),
+    modelFallback: (options: ModelFallbackOptions) =>
+      makeBuilder({ ...config, modelFallback: options }),
+    sessionDir: (dir: string) => makeBuilder({ ...config, sessionDir: dir }),
+    thinking: (level: string) => makeBuilder({ ...config, thinking: level }),
     subagents: (map: Record<string, SubagentAgentDefinition>) =>
       makeBuilder({ ...config, subagents: map }),
     settingSources: (selection: SettingSourcesSelection) =>

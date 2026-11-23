@@ -48,6 +48,8 @@ export {
   type GCCandidate,
   type GCError,
   type GCKept,
+  type GCProtectionPredicate,
+  type GCSession,
   type RunTranscriptGCResult,
   type TranscriptGCOptions,
   type TranscriptGCPlan,
@@ -68,7 +70,9 @@ export {
 
 export {
   scheduleSessionSweep,
+  startInProcessSweeper,
   sweepDecision,
+  type InProcessSweeper,
   type ScheduleSessionSweepOptions,
   type SweepDecision,
   type SweepScheduleResult,
@@ -79,6 +83,8 @@ export {
   CollectorRootError,
   collectorRootOwner,
   CollectorRootNotOwnedError,
+  type CollectorRootMarkerFormat,
+  type CollectorRootOptions,
 } from './gc/collector-root.js'
 
 /**
@@ -95,13 +101,15 @@ export { transcriptRootHint } from './transcript-root-hint.js'
  */
 export {
   readThreadHistory,
+  readThreadHistoryFile,
+  type ReadThreadHistoryFileOptions,
   type ReadThreadHistoryOptions,
   type ThreadHistory,
   type ThreadHistoryState,
 } from './thread-history.js'
 
 // #2578 — rows to UI messages and UI messages to an exported transcript.
-export { threadToUIMessages } from './thread-to-ui-messages.js'
+export { threadToUIMessages, type ThreadToUIMessagesOptions } from './thread-to-ui-messages.js'
 export {
   transcriptToText,
   type TranscriptFormat,

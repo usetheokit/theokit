@@ -27,6 +27,12 @@ export interface ApprovalGateOptions {
   /** How long the person has to answer; a timeout is a deny. */
   timeoutMs?: number
   ledger?: ApprovalLedger
+  /** `false`: a call `key` leaves ungoverned writes no receipt. Default `true`. */
+  recordUngoverned?: boolean
+  /** `false`: an `'always'` answer allows this call only and is not saved. Default `true`. */
+  persistAlways?: boolean
+  /** The `plugin`'s refusal text; default `"<name>" refused: <reason>`. */
+  refusal?: (name: string, reason: string) => string
   onError?: (error: unknown, stage: 'reviewer' | 'ask' | 'save' | 'ledger') => void
 }
 
@@ -84,6 +90,9 @@ export function createApprovalGate(options: ApprovalGateOptions): {
       const answer: unknown = typeof result === 'string' ? result : result.answer
       const by = typeof result === 'string' ? 'person' : `person:${result.by}`
       if (answer === 'deny') return { allowed: false, reason: `${note}the person denied it`, by }
+      if (answer === 'always' && options.persistAlways === false) {
+        return { allowed: true, reason: `${note}the person approved once`, by }
+      }
       if (answer === 'always') {
         try {
           options.store.grant(query)
@@ -149,7 +158,10 @@ export function createApprovalGate(options: ApprovalGateOptions): {
     } catch (error) {
       decision = { allowed: false, reason: `the decision failed: ${message(error)}`, by: 'none' }
     }
-    if (options.ledger !== undefined) {
+    if (
+      options.ledger !== undefined &&
+      (query !== undefined || options.recordUngoverned !== false)
+    ) {
       try {
         await options.ledger.append({
           at: new Date().toISOString(),
@@ -176,7 +188,12 @@ export function createApprovalGate(options: ApprovalGateOptions): {
     register(ctx: { on(hook: string, handler: (c: PreToolCallContext) => unknown): void }) {
       ctx.on('pre_tool_call', async (c: PreToolCallContext) => {
         const d = await decide(c)
-        return d.allowed ? undefined : { block: true, message: `"${c.name}" refused: ${d.reason}` }
+        return d.allowed
+          ? undefined
+          : {
+              block: true,
+              message: options.refusal?.(c.name, d.reason) ?? `"${c.name}" refused: ${d.reason}`,
+            }
       })
     },
   } as unknown as Plugin

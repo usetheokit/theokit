@@ -1,12 +1,12 @@
+import { classifyTurnFailure, describeTurnFailure } from '@theokit/agents/errors'
+import type { TurnFailure } from '@theokit/agents/errors'
+
 /**
- * NOT built on `describeTurnFailure` (`@theokit/agents/errors`), and this is what stops it (#2662):
- * the framework helper takes a `TurnFailure` whose code is coerced to the known set, so an
- * unrecognised provider code (`overloaded_error`, `E123`) becomes `unknown` and is no longer printed,
- * and every text this product pins differs from the helper's `"<message> [<code>]: <hint>"` form.
- * The helper's `hints` option replaces its wording per KNOWN code but cannot carry a hint for a
- * message-matched failure of this product (the `/image` tool-result hint) or the diagnostics
- * variable. What it would need: keep the original code on `TurnFailure`, and accept a caller-supplied
- * message probe plus a trailing suffix. Until then this module owns the text.
+ * Built on `describeTurnFailure` (`@theokit/agents/errors`), which owns the layout:
+ * `"<message> [<code>]: <hint>"`, then `after N attempts`, then a suffix. What stays here is the
+ * product's own: the hint table below, handed over as a `probe` so it wins over the framework's
+ * default wording. The probe answers `''` when this product has no hint, so a code it never hinted
+ * (`server_error`, `invalid_request`) stays unhinted instead of inheriting a framework default.
  *
  * What a failed turn TELLS the user.
  *
@@ -158,40 +158,30 @@ const DIAGNOSTICS_HINT =
   'set THEOCODE_DIAGNOSTICS=stderr to see the retry sequence and the underlying error'
 
 /**
- * The next step for a failure, or `undefined` when there is no honest one to give.
+ * The next step for a failure, or `''` when there is no honest one to give (the framework treats an
+ * empty hint as none, where `undefined` would fall through to its own defaults).
  *
- * The typed code first, the message only when no hint claimed the code — a provider that supplies no
- * code falls through to the text patterns exactly as before. Extracted because inlining it pushed
- * `turnErrorText` past the complexity gate, and because "which hint answers this failure" is one
- * question that should be readable on its own.
- *
- * `undefined` is a real answer: `unknown` means the SDK could not classify the failure, and inventing
- * a next step for it would be a guess dressed as guidance.
+ * The typed code first, the message only when no hint claimed the code. `unknown` means the SDK could
+ * not classify the failure, and inventing a next step for it would be a guess dressed as guidance.
  */
-function hintFor(code: string | undefined, probe: string): string | undefined {
+function probeHint(failure: TurnFailure): string {
+  const code = failure.rawCode
+  const text = `${code ?? ''} ${failure.message}`.toLowerCase()
   const byCode = code === undefined ? undefined : HINTS.find((h) => h.codes?.has(code))
-  return (byCode ?? HINTS.find((h) => h.matches(probe)))?.hint
+  return (byCode ?? HINTS.find((h) => h.matches(text)))?.hint ?? ''
 }
 
 export function turnErrorText(
   error: { message: string; code?: string },
   context: TurnErrorContext = {},
 ): string {
-  const message = error.message.trim()
-  const named = message.length > 0 ? message : 'the turn failed with no message'
-  const labelled = error.code === undefined ? named : `${named} [${error.code}]`
-
-  const probe = `${error.code ?? ''} ${message}`.toLowerCase()
-  const hint = hintFor(error.code, probe)
-
+  const failure = classifyTurnFailure(error)
+  const attempts = context.attempts ?? 0
   // Order is deliberate and pinned by a test: what happened, then what to do, then the context. The
   // original defect was a user left with nothing to act on, so nothing may push the message down.
-  const parts = [hint === undefined ? labelled : `${labelled} — ${hint}`]
-
-  const attempts = context.attempts ?? 0
-  if (attempts > 1) parts.push(`after ${String(attempts)} attempts`)
-
-  if (context.diagnosticsEnabled === false) parts.push(DIAGNOSTICS_HINT)
-
-  return parts.join(' — ')
+  return describeTurnFailure(failure, {
+    attempts,
+    probe: probeHint,
+    ...(context.diagnosticsEnabled === false ? { suffix: `— ${DIAGNOSTICS_HINT}` } : {}),
+  })
 }

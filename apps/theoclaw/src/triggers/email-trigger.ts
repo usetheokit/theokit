@@ -1,7 +1,7 @@
 import type { BasePlatformAdapter, GatewayHook, PlatformName } from '@theokit/gateway'
 
 import type { TurnAgent } from '../agent-port.js'
-import { maskSecrets } from '../channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { deliverText, frameUntrusted, runAgentText } from '@theokit/gateway-agent'
 import { describeError } from '../control-plane/errors.js'
 import type { EmailTriggerSettings } from './trigger-settings.js'

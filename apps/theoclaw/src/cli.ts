@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import './runtime.js'
 import { spawn } from 'node:child_process'
-import { readFileSync, realpathSync, rmSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
 
 import type { DockerRunner } from '@theokit/agents/sandbox'
@@ -25,14 +25,7 @@ import {
   uploadBackup,
   downloadBackup,
 } from './backup/backup.js'
-import {
-  fetchBackup,
-  initStorage,
-  listStorage,
-  scratchDir,
-  storeBackup,
-  testStorage,
-} from './backup/storage.js'
+import { BackupError, createStorageRegistry, type StorageRegistry } from '@theokit/host/backup'
 import { portState, StatePortRefusal } from './state-port.js'
 import type { DatabaseDeps } from './scheduler/postgres-job-store.js'
 import { InstanceLockedError } from '@theokit/sdk/persistence'
@@ -56,7 +49,7 @@ import { triageCommand } from './ops/triage.js'
 import { statusCommand } from './ops/status.js'
 import { loginWhatsApp } from './channels/whatsapp-qr.js'
 import { readControlClientSettings } from './control-client/settings.js'
-import { loadConfiguration } from './config-file.js'
+import { configurationPath, loadConfiguration } from './config-file.js'
 import { whatsappSessionDir } from './channels/platforms.js'
 import { auditCommand } from './ops/audit.js'
 import { securityCommand } from './security-audit.js'
@@ -239,6 +232,17 @@ function directoryArgument(name: string, args: readonly string[]): string {
   return dir
 }
 
+/** The named storage locations of this instance: `storage.json` beside the configuration file. */
+function storageRegistry(io: CliIo): StorageRegistry {
+  const home = dirname(configurationPath(io.env, io.homeDir))
+  return createStorageRegistry({ file: join(home, 'storage.json'), defaultRoot: join(home, 'storage') })
+}
+
+/** A scratch directory name for staging a backup on its way to or from a location. */
+function scratchDir(): string {
+  return join(mkdtempSync(join(tmpdir(), 'theoclaw-storage-')), 'backup')
+}
+
 /** `--to`/`--from <name>` and the rest of the arguments. */
 function takeOption(flag: string, args: readonly string[]): { value?: string; rest: string[] } {
   const at = args.indexOf(flag)
@@ -266,10 +270,10 @@ function backupCommand(name: 'backup' | 'restore'): Command {
       if (location !== undefined) {
         if (name === 'backup') {
           const { files } = await backupInstance(io.env, dir, { homeDir: io.homeDir, live })
-          const archive = storeBackup(io.env, io.homeDir, location, dir)
+          const archive = await storageRegistry(io).store(location, dir)
           io.stdout.write(`theoclaw: backed up ${files.length} files to ${location} (${archive})\n`)
         } else {
-          fetchBackup(io.env, io.homeDir, location, dir)
+          await storageRegistry(io).fetchLatest(location, dir)
           const { files } = await restoreInstance(io.env, dir, { homeDir: io.homeDir })
           io.stdout.write(`theoclaw: restored ${files.length} files from ${location}\n`)
         }
@@ -286,7 +290,7 @@ function backupCommand(name: 'backup' | 'restore'): Command {
       )
       return 0
     } catch (error) {
-      if (!(error instanceof BackupRefusal) && !(error instanceof InstanceLockedError)) throw error
+      if (!(error instanceof BackupRefusal) && !(error instanceof BackupError) && !(error instanceof InstanceLockedError)) throw error
       io.stderr.write(`theoclaw: ${error.message}\n`)
       return 1
     } finally {
@@ -319,8 +323,9 @@ async function stateCommand(args: readonly string[], io: CliIo): Promise<number>
 }
 
 /** `storage init|list|test`: exit 0, 1 on a refusal or a failed test. */
-function storageCommand(args: readonly string[], io: CliIo): Promise<number> {
+async function storageCommand(args: readonly string[], io: CliIo): Promise<number> {
   const [verb, ...rest] = args
+  const registry = storageRegistry(io)
   try {
     if (verb === 'init') {
       const encrypted = !rest.includes('--no-encrypt')
@@ -331,28 +336,42 @@ function storageCommand(args: readonly string[], io: CliIo): Promise<number> {
       const [name, ...extra] = pathOption.rest
       if (name === undefined || extra.length > 0)
         throw new UsageError('theoclaw storage init: expected <name> [--path <dir>] [--no-encrypt]')
-      const location = initStorage(io.env, io.homeDir, name, {
-        ...(pathOption.value === undefined ? {} : { path: pathOption.value }),
+      if (pathOption.value !== undefined && !isAbsolute(pathOption.value))
+        throw new BackupRefusal('--path must be an absolute directory')
+      const location = await registry.init(name, {
+        ...(pathOption.value === undefined ? {} : { root: pathOption.value }),
         encrypted,
       })
       io.stdout.write(
         `theoclaw: storage location ${name} initialized at ${location.root}${location.encrypted ? ' (encrypted)' : ''}\n`,
       )
-      return Promise.resolve(0)
+      return 0
     }
     if (verb === 'list' && rest.length === 0) {
-      io.stdout.write(`${JSON.stringify(listStorage(io.env, io.homeDir), null, 2)}\n`)
-      return Promise.resolve(0)
+      const locations = (await registry.list()).map((location) => ({
+        ...location,
+        state: /^https:\/\//i.test(location.root) || existsSync(location.root) ? 'ok' : 'error',
+      }))
+      io.stdout.write(`${JSON.stringify(locations, null, 2)}\n`)
+      return 0
     }
     if (verb === 'test' && rest.length === 1 && rest[0] !== undefined) {
-      const status = testStorage(io.env, io.homeDir, rest[0])
-      io.stdout.write(`${JSON.stringify(status)}\n`)
-      return Promise.resolve(status.state === 'ok' ? 0 : 1)
+      const name = rest[0]
+      const result = await registry.test(name)
+      const encrypted = (await registry.list()).find((l) => l.name === name)?.encrypted ?? false
+      io.stdout.write(
+        `${JSON.stringify(
+          result.ok
+            ? { name, state: 'ok', encrypted, sizeBytes: result.sizeBytes, ...(result.freeBytes === undefined ? {} : { freeBytes: result.freeBytes }) }
+            : { name, state: 'error', encrypted, error: result.reason },
+        )}\n`,
+      )
+      return result.ok ? 0 : 1
     }
   } catch (error) {
-    if (!(error instanceof BackupRefusal)) throw error
+    if (!(error instanceof BackupRefusal) && !(error instanceof BackupError)) throw error
     io.stderr.write(`theoclaw: ${error.message}\n`)
-    return Promise.resolve(1)
+    return 1
   }
   throw new UsageError('theoclaw storage: expected init <name>, list or test <name>')
 }
@@ -496,8 +515,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       throw new UsageError(
         'theoclaw skills: expected search <term>, install <name>[@<version>] or publish <dir>',
       )
-    const registry = (io.env.THEOCLAW_SKILLS_REGISTRY ?? '').trim()
-    const token = (io.env.THEOCLAW_SKILLS_TOKEN ?? '').trim()
+    const env = { ...io.env }
+    loadConfiguration(env, io.homeDir)
+    const registry = (env.THEOCLAW_SKILLS_REGISTRY ?? '').trim()
+    const token = (env.THEOCLAW_SKILLS_TOKEN ?? '').trim()
     try {
       if (registry === '') throw new TheoClawConfigError('THEOCLAW_SKILLS_REGISTRY is not set')
       if (token === '') throw new TheoClawConfigError('THEOCLAW_SKILLS_TOKEN is not set')
