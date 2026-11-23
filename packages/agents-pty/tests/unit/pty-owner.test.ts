@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, it, expect } from 'vitest'
 
 import { createPtyOwner, PtyOwnerConfigError } from '../../src/index.js'
@@ -87,5 +91,77 @@ describe('createPtyOwner', () => {
     expect(error).toBeInstanceOf(PtyOwnerConfigError)
     expect((error as PtyOwnerConfigError).code).toBe('pty_owner_invalid')
     expect(owner.mode()).toBe('read-only')
+  })
+
+  it('env keep/home scrubs the command through env -i', () => {
+    const built: PtyInteractiveBackendOptions[] = []
+    const owner = createPtyOwner<Mode>({
+      mode: 'read-only',
+      maxSessions: 1,
+      env: { keep: ['PATH'], home: "/r'oot" },
+      wrapFor: () => (command) => command,
+      createBackend: (o) => {
+        built.push(o)
+        return { killAll: () => undefined } as unknown as OwnedPtyBackend
+      },
+    })
+    const wrapped = built[0]?.wrapCommand?.('env', '/w') ?? ''
+    expect(wrapped.startsWith('/usr/bin/env -i PATH=')).toBe(true)
+    expect(wrapped).toContain(`HOME='/r'\\''oot'`)
+    owner.shutdown()
+  })
+
+  it('a pinned cwd overrides the caller cwd', async () => {
+    const calls: Array<string | undefined> = []
+    const owner = createPtyOwner<Mode>({
+      mode: 'read-only',
+      maxSessions: 1,
+      cwd: '/pinned',
+      wrapFor: () => (command) => command,
+      createBackend: () =>
+        ({
+          startInteractive: (_c: string, o?: { cwd?: string }) => {
+            calls.push(o?.cwd)
+            return Promise.resolve({})
+          },
+          killAll: () => undefined,
+          activeSessionCount: () => 0,
+        }) as unknown as OwnedPtyBackend,
+    })
+    await owner.backend().startInteractive('x', { cwd: '/elsewhere' })
+    expect(calls).toEqual(['/pinned'])
+    owner.shutdown()
+  })
+
+  it('a real session sees only the kept names and HOME', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pty-home-'))
+    const owner = createPtyOwner<Mode>({
+      mode: 'read-only',
+      maxSessions: 1,
+      env: { keep: ['PATH'], home },
+      cwd: home,
+      wrapFor: () => (command) => command,
+    })
+    try {
+      const started = await owner.backend().startInteractive('env; pwd', { yieldMs: 1000 })
+      let out = started.output
+      for (
+        let i = 0;
+        i < 10 && started.sessionId && !out.includes(home + '\n') && !out.includes(home + '\r');
+        i++
+      ) {
+        out += (await owner.backend().writeStdin(started.sessionId, '', { yieldMs: 250 })).output
+      }
+      const names = out
+        .split(/\r?\n/)
+        .filter((l) => /^[A-Za-z_]+=/.test(l))
+        .map((l) => l.split('=')[0])
+        .filter((n) => n !== 'PWD' && n !== '_' && n !== 'SHLVL' && n !== 'OLDPWD')
+        .sort((a, b) => a.localeCompare(b))
+      expect(names).toEqual(['HOME', 'PATH'])
+    } finally {
+      owner.shutdown()
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 })

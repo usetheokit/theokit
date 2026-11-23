@@ -36,5 +36,6 @@ describe('@theokit/agents-pty', () => {
   it('adds the per-session owner on top', () => {
     expect(typeof pty.createPtyOwner).toBe('function')
     expect(typeof pty.PtyOwnerConfigError).toBe('function')
+    expect(typeof pty.probeConfinement).toBe('function')
   })
 })

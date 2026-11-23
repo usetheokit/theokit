@@ -65,3 +65,12 @@ owner.shutdown() // kill on exit
 ## Licence
 
 Apache-2.0
+
+## Scrubbed environment, pinned directory, confinement probe
+
+`createPtyOwner` accepts `env: { keep: ['PATH'], home }` (the command runs through `/usr/bin/env -i` with only
+those names from the process plus `HOME`; default `'inherit'`) and `cwd` (every session starts there, and a
+`cwd` passed to `startInteractive` is ignored).
+
+`probeConfinement(backend, root)` runs a real session and resolves `true` only when a write inside `root`
+succeeded and a write to a sibling of `root` was refused; any failure or timeout resolves `false`.
