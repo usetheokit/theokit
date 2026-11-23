@@ -22,6 +22,8 @@ describe('model routing helpers', () => {
     const oauth = { kind: 'oauth', provider: 'openai' }
     expect(modelForCredential(oauth, 'openai/gpt-5')).toBe('openai-chatgpt/gpt-5')
     expect(modelForCredential(oauth, 'gpt-5')).toBe('openai-chatgpt/gpt-5')
-    expect(modelForCredential({ kind: 'api-key', provider: 'openai' }, 'openai/gpt-5')).toBe('openai/gpt-5')
+    expect(modelForCredential({ kind: 'api-key', provider: 'openai' }, 'openai/gpt-5')).toBe(
+      'openai/gpt-5',
+    )
   })
 })

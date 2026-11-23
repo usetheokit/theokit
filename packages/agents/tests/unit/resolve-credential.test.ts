@@ -574,7 +574,9 @@ describe('resolveCredential — the api-key variant in the store', () => {
 })
 
 describe('resolveAgentCredential with customProviders', () => {
-  const custom = [{ name: 'particle', baseUrl: 'https://api.particle.ai/v1', keyEnv: 'PARTICLE_API_KEY' }]
+  const custom = [
+    { name: 'particle', baseUrl: 'https://api.particle.ai/v1', keyEnv: 'PARTICLE_API_KEY' },
+  ]
   it('reads the key from the custom provider variable for its prefix', () => {
     const r = resolveAgentCredential({
       env: { PARTICLE_API_KEY: 'sk-or-not-a-real-shape', OPENROUTER_API_KEY: 'sk-or-other' },
@@ -586,7 +588,11 @@ describe('resolveAgentCredential with customProviders', () => {
   })
   it('refuses when the prefixed provider has no key', () => {
     expect(() =>
-      resolveAgentCredential({ env: { OPENROUTER_API_KEY: 'sk-or-x' }, model: 'particle/m1', customProviders: custom }),
+      resolveAgentCredential({
+        env: { OPENROUTER_API_KEY: 'sk-or-x' },
+        model: 'particle/m1',
+        customProviders: custom,
+      }),
     ).toThrow(/PARTICLE_API_KEY/)
   })
 })
