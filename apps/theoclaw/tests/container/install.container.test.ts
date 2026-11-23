@@ -52,7 +52,7 @@ async function turn(startedAt: number): Promise<{ status: string; text: string; 
 }
 
 async function startInstance(): Promise<number> {
-  const started = await asUser('echo $$ > ~/theoclaw.pid; exec theoclaw start > ~/theoclaw.log 2>&1', 30_000, { detach: true })
+  const started = await asUser('echo $$ > ~/theoclaw.pid; export NODE_OPTIONS=--import=/src/scripts/live-openrouter-cap.mjs; exec theoclaw start > ~/theoclaw.log 2>&1', 30_000, { detach: true })
   expect(started.code).toBe(0)
   return Date.now()
 }

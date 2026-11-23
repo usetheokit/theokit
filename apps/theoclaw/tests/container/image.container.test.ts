@@ -20,6 +20,8 @@ const CONTAINER = process.env.THEOCLAW_CONTAINER === '1'
 const APP_DIR = fileURLToPath(new URL('../..', import.meta.url))
 const REPO = join(APP_DIR, '..', '..')
 
+const CAP = join(REPO, 'scripts', 'live-openrouter-cap.mjs')
+
 let docker: Docker | undefined
 let image: string | undefined
 let container: string | undefined
@@ -82,7 +84,7 @@ describe.skipIf(!CONTAINER)("TheoClaw's image", () => {
 
     container = `theoclaw-image-${run}`
     const user = `${process.getuid!()}:${process.getgid!()}`
-    const started = await docker.run(['run', '-d', '--name', container, '--user', user, '-v', `${data}:/data`, '-p', '127.0.0.1::8787', image], 120_000)
+    const started = await docker.run(['run', '-d', '--name', container, '--user', user, '-v', `${data}:/data`, '-v', `${CAP}:/live-openrouter-cap.mjs:ro`, '-e', 'NODE_OPTIONS=--import=/live-openrouter-cap.mjs', '-p', '127.0.0.1::8787', image], 120_000)
     const startedAt = Date.now()
     expect(started.code, started.stderr).toBe(0)
     const portLine = await docker.run(['port', container, '8787/tcp'], 30_000)

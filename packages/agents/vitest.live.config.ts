@@ -11,6 +11,10 @@ export default defineConfig({
     include: ['tests/live/**/*.test.ts'],
     testTimeout: 120_000,
     // Under THEOKIT_LIVE_REQUIRED=1 an absent provider key fails the run instead of skipping it.
+    // Bounds the output each OpenRouter request reserves, so a low balance does not answer 402.
+    setupFiles: ['../../scripts/live-openrouter-cap.mjs'],
+    // One file at a time: parallel files each reserve credit while the others are in flight.
+    fileParallelism: false,
     globalSetup: ['tests/live/require-provider-key.ts'],
   },
 })
