@@ -695,7 +695,10 @@ others out. A file that fails to read for any reason except `ENOENT` is reported
 `await loadInstructionWalk({ cwd, alternatives: ['THEO.md', 'AGENTS.md'], local: ['AGENTS.local.md'], maxChars })`
 walks from `cwd` to the git root with the SDK's `git-root-walk` discovery. Per directory the first
 present alternative wins; the `local` chain is independent and loads after the public one. Blocks come
-back root first; over `maxChars` the root-most files are cut first and `onWarn` says so.
+back root first; over `maxChars` the root-most files are cut first (the walk stops at the first block that
+does not fit) and `onWarn` says so. Symlink containment is rooted at the shallowest directory holding a
+hit, not at the git root. `operator: [paths]` takes `resolveOperatorRoots().instructions[].path`; those files
+are read first, each contained to its own directory, so an operator `AGENTS.md` loads for a project with none.
 
 `composeInstructions` sources take `priority`: the lowest is cut first (omitted counts as 0, ties cut the
 later-listed source first); the text keeps the listed order and each cut appears in `cuts`.

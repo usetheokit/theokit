@@ -604,6 +604,12 @@ export interface LoadInstructionWalkInput {
   /** Cut each file at this many characters (marker '[truncated]'). */
   readonly maxCharsPerFile?: number
   readonly onWarn?: (message: string) => void
+  /**
+   * Operator files (`resolveOperatorRoots().instructions[].path`), read through the same parser and
+   * placed BEFORE the project chain: the most general layer, and the first cut under `maxChars`.
+   * Each is contained to its own directory.
+   */
+  readonly operator?: readonly string[]
 }
 
 const WALK_DEFAULT_ALTERNATIVES = ['THEO.md', 'AGENTS.md'] as const
@@ -616,7 +622,8 @@ const WALK_DEFAULT_ALTERNATIVES = ['THEO.md', 'AGENTS.md'] as const
  * the same. The public chain and the `local` chain are two specs, so a local file never replaces
  * its public sibling. Blocks come back public chain first, then the local chain, each root-first.
  *
- * When `maxChars` is exceeded the farthest (root-most) files go first: the nearest instruction is
+ * Containment root is the shallowest directory holding a hit (at most the git root), not the git
+ * root itself. When `maxChars` is exceeded the farthest (root-most) files go first: the nearest instruction is
  * the most specific one. The cut is reported through `onWarn` and `truncated`.
  */
 export async function loadInstructionWalk(
@@ -645,6 +652,10 @@ export async function loadInstructionWalk(
   // Containment root: the shallowest directory a hit sits in (the repository root).
   const root = ordered.map((path) => dirname(path)).sort((a, b) => a.length - b.length)[0] ?? cwd
   const parsed: InstructionBlock[] = []
+  for (const path of input.operator ?? []) {
+    const block = parseInstructionFile(path, dirname(path), warn, input.maxCharsPerFile)
+    if (block !== undefined) parsed.push({ ...block, path })
+  }
   for (const path of ordered) {
     try {
       assertNoSymlinkEscape(path, root)
@@ -666,7 +677,9 @@ export async function loadInstructionWalk(
       warn(
         `instruction budget: ${block.path} cut to stay under ${String(input.maxChars)} characters`,
       )
-      continue
+      // Stop at the first file that does not fit: keeping a farther, smaller file while dropping a
+      // nearer one would invert the rule that the nearest instruction is the most specific.
+      break
     }
     chars += block.content.length
     keep.add(block)

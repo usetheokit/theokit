@@ -197,3 +197,38 @@ describe('the upward walk', () => {
     expect(warnings.some((w) => w.includes('budget'))).toBe(true)
   })
 })
+
+describe('operator files in the walk', () => {
+  it('loads the operator AGENTS.md first for a project that has none', async () => {
+    const cwd = projectWith({ '.git/HEAD': 'x' })
+    const home = projectWith({ 'AGENTS.md': 'operator' })
+    const out = await loadInstructionWalk({
+      cwd,
+      operator: [join(home, 'AGENTS.md')],
+      maxChars: 1000,
+    })
+    expect(out.blocks.map((b) => b.content.trim())).toEqual(['operator'])
+  })
+
+  it('puts operator text before the project chain', async () => {
+    const cwd = projectWith({ '.git/HEAD': 'x', 'AGENTS.md': 'project' })
+    const home = projectWith({ 'AGENTS.md': 'operator' })
+    const out = await loadInstructionWalk({
+      cwd,
+      operator: [join(home, 'AGENTS.md')],
+      maxChars: 1000,
+    })
+    expect(out.blocks.map((b) => b.content.trim())).toEqual(['operator', 'project'])
+  })
+
+  it('stops at the first block that does not fit rather than skipping to a smaller one', async () => {
+    const cwd = projectWith({
+      '.git/HEAD': 'x',
+      'AGENTS.md': 'tiny',
+      'a/AGENTS.md': 'm'.repeat(50),
+      'a/b/AGENTS.md': 'near',
+    })
+    const out = await loadInstructionWalk({ cwd: join(cwd, 'a/b'), maxChars: 20 })
+    expect(out.blocks.map((b) => b.content.trim())).toEqual(['near'])
+  })
+})
