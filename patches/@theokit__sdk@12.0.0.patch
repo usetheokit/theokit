@@ -1,7 +1,7 @@
-diff --git a/dist/chunk-QUXT72WJ.cjs b/dist/chunk-QUXT72WJ.cjs
+diff --git a/dist/chunk-YXOUXH4M.cjs b/dist/chunk-YXOUXH4M.cjs
 index 71b2ffe..7db3923 100644
---- a/dist/chunk-QUXT72WJ.cjs
-+++ b/dist/chunk-QUXT72WJ.cjs
+--- a/dist/chunk-YXOUXH4M.cjs
++++ b/dist/chunk-YXOUXH4M.cjs
 @@ -2271,7 +2271,7 @@ User: ${turn.prompt}
  Assistant: ${turn.reply}
  </turn>`;
@@ -78,10 +78,10 @@ index 71b2ffe..7db3923 100644
      );
      registerLocalAgent({
        agentId: this.agentId,
-diff --git a/dist/chunk-X3S3EQEK.js b/dist/chunk-X3S3EQEK.js
+diff --git a/dist/chunk-4ZHBVSEM.js b/dist/chunk-4ZHBVSEM.js
 index 221def5..3472506 100644
---- a/dist/chunk-X3S3EQEK.js
-+++ b/dist/chunk-X3S3EQEK.js
+--- a/dist/chunk-4ZHBVSEM.js
++++ b/dist/chunk-4ZHBVSEM.js
 @@ -2269,7 +2269,7 @@ User: ${turn.prompt}
  Assistant: ${turn.reply}
  </turn>`;
