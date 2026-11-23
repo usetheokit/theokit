@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 
-import { createDevicePairing } from '../src/control-plane/device-pairing.js'
+import { openDevicePairing as createDevicePairing } from '../src/control-plane/control-wiring.js'
 import { serveHandler } from '../src/control-plane/http-dispatch.js'
 import { type ControlPlaneHandle, listenControlPlane } from '../src/control-plane/listener.js'
 

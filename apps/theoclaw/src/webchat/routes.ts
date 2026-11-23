@@ -9,7 +9,7 @@ import {
   readCappedBody,
 } from '@theokit/agents/bridge'
 
-import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from '../control-plane/bearer.js'
+import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from '@theokit/http/guards'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { MAX_MESSAGE_BYTES } from '../control-plane/limits.js'
 import { TRUSTED_IDENTITY_HEADER } from '../control-plane/trusted-proxy.js'
