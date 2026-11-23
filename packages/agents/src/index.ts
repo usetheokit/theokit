@@ -330,18 +330,11 @@ export {
   applySecurityFloor,
   auditEnvReachability,
   foldLayers,
-  offCapabilities,
   recordWiring,
   resolveTrustPosture,
   verifyLayerOrdering,
 } from '@theokit/sdk'
-export type {
-  OffCapability,
-  ToolResultContentBlock,
-  WiredEntity,
-  WiredEntityScope,
-  WiringOffReason,
-} from '@theokit/sdk'
+export type { ToolResultContentBlock, WiredEntity } from '@theokit/sdk'
 
 // M67 (review fix) — the typed errors of the root bar. `export * from '@theokit/sdk/errors'` above
 // covers the `/errors` SUBPATH; these five are `@public` and live only on the root bar, so that line
