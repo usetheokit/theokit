@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 export default defineConfig({
   resolve: {
     alias: {
+      '@theokit/http/guards': resolve(__dirname, '../http/src/guards-entry.ts'),
       '@theokit/http/runtime/node': resolve(__dirname, '../http/src/runtime-node.ts'),
       '@theokit/http': resolve(__dirname, '../http/src/index.ts'),
       // The subpath comes BEFORE the barrel: the alias is prefix-first, so mapping only

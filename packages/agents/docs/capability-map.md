@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1536 export(s) across 28 entry point(s).
+1547 export(s) across 29 entry point(s).
 
 Measured against `@theokit/sdk@9.0.0`.
 
@@ -744,6 +744,22 @@ Measured against `@theokit/sdk@9.0.0`.
 | `ToolWalkResult` | type |
 | `WorkspaceProvider` | type |
 | `WorkspaceRecipe` | type |
+
+## `@theokit/agents/mcp-relay`
+
+| Symbol | Kind |
+|---|---|
+| `answerRelayJob` | value |
+| `createMcpRelayServer` | value |
+| `MCP_PATH` | value |
+| `POLL_PATH` | value |
+| `RESPOND_PATH` | value |
+| `startMcpRelayConnector` | value |
+| `McpRelayConnector` | type |
+| `McpRelayConnectorOptions` | type |
+| `McpRelayServerOptions` | type |
+| `RelayJob` | type |
+| `RelayTool` | type |
 
 ## `@theokit/agents/control`
 
