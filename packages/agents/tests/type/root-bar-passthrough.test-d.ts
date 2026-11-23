@@ -18,10 +18,17 @@
  */
 import { expectTypeOf } from 'vitest'
 
-import type { ToolResultContentBlock, WiredEntity } from '../../src/index.js'
+import type {
+  ToolResultContentBlock,
+  WiredEntity,
+  WiredEntityScope,
+  WiringOffReason,
+} from '../../src/index.js'
 import type {
   ToolResultContentBlock as SdkToolResultContentBlock,
   WiredEntity as SdkWiredEntity,
+  WiredEntityScope as SdkWiredEntityScope,
+  WiringOffReason as SdkWiringOffReason,
 } from '@theokit/sdk'
 
 // ── 1. Both types are nameable from the barrel ────────────────────────────────────────────────
@@ -37,3 +44,5 @@ expectTypeOf<ToolResultContentBlock>().not.toBeAny()
 // upstream silently; identity is what makes the re-export a door rather than a duplicate.
 expectTypeOf<WiredEntity>().toEqualTypeOf<SdkWiredEntity>()
 expectTypeOf<ToolResultContentBlock>().toEqualTypeOf<SdkToolResultContentBlock>()
+expectTypeOf<WiredEntityScope>().toEqualTypeOf<SdkWiredEntityScope>()
+expectTypeOf<WiringOffReason>().toEqualTypeOf<SdkWiringOffReason>()

@@ -2,7 +2,6 @@
  * Asset reads: the URL names an entry of the closed `assets` map, never a path, so no request text
  * reaches the file system.
  */
-import { createHash } from 'node:crypto'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -65,7 +64,7 @@ export interface HostedChatOptions {
   /** The most bytes a chat post's body may hold; more is 413. */
   readonly maxBodyBytes: number
   /** The session-key prefix of one authenticated identity, so two identities naming one chat id get two sessions. Default: no scoping. */
-  readonly sessionScope?: (identity: string) => string
+  readonly sessionScope?: (identity: string) => string | Promise<string>
   /** The assets served by name (and nothing else) with their content types. Default: `app.js` and `app.css`. */
   readonly assets?: Readonly<Record<string, string>>
   /** The shell's `<title>`. Default: `Chat`. */
@@ -309,8 +308,14 @@ async function boundedChat(
 }
 
 /** A session-key prefix from an identity, hashed so the identity never reaches a key or a file name. */
-export function hashedSessionScope(identity: string): string {
-  return `u${createHash('sha256').update(identity).digest('hex').slice(0, 16)}.`
+export async function hashedSessionScope(identity: string): Promise<string> {
+  // Web Crypto, not node:crypto: server/ keeps runtime node:* imports to its documented leaves.
+  const digest = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(identity),
+  )
+  const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
+  return `u${hex.slice(0, 16)}.`
 }
 
 /**
@@ -345,7 +350,9 @@ export function createHostedChat(
     if (access instanceof Response) return access
     const identity = access.identity ?? ''
     const scope =
-      identity === '' || options.sessionScope === undefined ? '' : options.sessionScope(identity)
+      identity === '' || options.sessionScope === undefined
+        ? ''
+        : await options.sessionScope(identity)
     return boundedChat(request, options, chatPath, scope)
   }
 }

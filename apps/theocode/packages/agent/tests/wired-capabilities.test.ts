@@ -52,7 +52,7 @@ describe('B-069/B-070/B-071 — wiredCapabilities', () => {
         mcpServers: {},
         configuredSkills: [],
         hookEvents: [],
-    agentsMdFiles: [],
+        agentsMdFiles: [],
       }),
     )
     expect(w.mcp.suppressedByTrust).toBe(false)
@@ -144,5 +144,63 @@ describe('B-076 — the record carries the sandbox mode', () => {
     // The whole point: `chatContext` applies the override before this is built, so what arrives
     // here is what the agent got — not what config says.
     expect(wiredCapabilities(input({ sandboxMode: 'read-only' })).sandboxMode).toBe('read-only')
+  })
+  it('test_each_entity_carries_the_scope_it_came_from', () => {
+    const w = wiredCapabilities(
+      input({
+        mcpServers: { api: {}, mine: {} },
+        mcpPersonal: ['mine'],
+        operatorSkills: ['own-skill'],
+      }),
+    )
+    expect(w.mcp.entities).toEqual([
+      { name: 'api', scope: 'project' },
+      { name: 'mine', scope: 'personal' },
+    ])
+    expect(w.skills.entities).toEqual([
+      { name: 'daily-briefing', scope: 'project' },
+      { name: 'own-skill', scope: 'operator' },
+    ])
+    expect(w.hooks.entities).toEqual([{ name: 'PreToolUse', scope: undefined }])
+  })
+
+  it('test_trust_withholds_the_project_share_but_not_the_personal_one', () => {
+    const w = wiredCapabilities(
+      input({
+        posture: allows(false, true, true),
+        mcpServers: { mine: {} },
+        mcpPersonal: ['mine'],
+        mcpWithheld: ['theirs'],
+      }),
+    )
+    expect(w.mcp.active).toEqual(['mine'])
+    expect(w.mcp.suppressedByTrust).toBe(true)
+    expect(w.mcp.off).toBeUndefined()
+    expect(w.mcp.entities).toEqual([
+      { name: 'theirs', scope: 'project' },
+      { name: 'mine', scope: 'personal' },
+    ])
+  })
+
+  it('test_a_capability_that_is_off_says_why', () => {
+    const trust = wiredCapabilities(input({ posture: allows(false, true, true) }))
+    expect(trust.mcp.off?.reason).toBe('suppressed-by-trust')
+    expect(wiredCapabilities(input()).mcp.off).toBeUndefined()
+  })
+
+  it('test_a_name_in_both_scopes_keeps_both_rows_and_both_scopes', () => {
+    const w = wiredCapabilities(
+      input({
+        posture: allows(false, true, true),
+        mcpServers: { shared: {} },
+        mcpPersonal: ['shared'],
+        mcpWithheld: ['shared'],
+      }),
+    )
+    expect(w.mcp.active).toEqual(['shared'])
+    expect(w.mcp.entities).toEqual([
+      { name: 'shared', scope: 'project' },
+      { name: 'shared', scope: 'personal' },
+    ])
   })
 })

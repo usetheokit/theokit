@@ -156,7 +156,7 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     const patched = (
       readPkg('package.json').pnpm as { patchedDependencies: Record<string, string> }
     ).patchedDependencies
-    expect(patched['@theokit/sdk@12.0.0']).toBe('patches/@theokit__sdk@12.0.0.patch')
+    expect(patched['@theokit/sdk@13.0.0']).toBe('patches/@theokit__sdk@13.0.0.patch')
   })
 
   it('test_isClosed_rejects_the_open_shapes', () => {

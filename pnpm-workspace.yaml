@@ -32,6 +32,6 @@ allowBuilds:
   node-pty: true
 
 # The dep-check jobs install other `@theokit/sdk` versions (the floor, the bottom of each range), so
-# the patch pinned to `@theokit/sdk@12.0.0` has nothing to apply to there and pnpm would abort with
+# the patch pinned to `@theokit/sdk@13.0.0` has nothing to apply to there and pnpm would abort with
 # ERR_PNPM_UNUSED_PATCH. The normal install still applies it.
 allowUnusedPatches: true

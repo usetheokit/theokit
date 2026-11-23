@@ -72,7 +72,7 @@
     "@theokit/plugin-voice": "0.12.0",
     "@theokit/presenter": "workspace:*",
     "pg": "8.23.0",
-    "@theokit/sdk": "12.0.0",
+    "@theokit/sdk": "13.0.0",
     "@theokit/sdk-pty": "0.4.0",
     "@theokit/sdk-tools": "0.34.0",
     "@theokit/skills-registry": "0.1.0",

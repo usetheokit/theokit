@@ -5,7 +5,12 @@ import type { CompiledTool } from '../bridge/agent-compiler.js'
 import { ConfigurationError } from '../errors.js'
 import type { ReasoningEffort } from '../types.js'
 
-import { applyCapabilities, type Capability, type ProvenanceEntry } from './capability.js'
+import {
+  applyCapabilities,
+  type Capability,
+  type OffTool,
+  type ProvenanceEntry,
+} from './capability.js'
 
 /**
  * M69 — the composed shape of an agent, as a value the construction sites can consume.
@@ -50,6 +55,8 @@ export interface AgentShape {
   readonly reasoningEffort?: ReasoningEffort
   /** Which capability contributed which field. */
   readonly provenance: readonly ProvenanceEntry[]
+  /** Tools that are available but off, each with the reason. Present only when some capability reported one. */
+  readonly offTools?: readonly OffTool[]
 }
 
 /**
@@ -74,6 +81,7 @@ export function declareAgentShape(name: string, members: readonly Capability[]):
     name,
     tools: Object.freeze([...draft.tools]),
     provenance: Object.freeze([...draft.provenance]),
+    ...(draft.offTools !== undefined && { offTools: Object.freeze([...draft.offTools]) }),
     ...(draft.model !== undefined && { model: draft.model }),
     ...(draft.reasoningEffort !== undefined && { reasoningEffort: draft.reasoningEffort }),
   }
