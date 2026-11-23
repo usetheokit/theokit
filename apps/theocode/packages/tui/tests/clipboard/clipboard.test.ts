@@ -6,10 +6,13 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { copyToClipboard } from '../../src/clipboard/clipboard.js'
-import { NoClipboardError } from '../../src/clipboard/clipboard-errors.js'
-import { ClipboardWriteError } from '../../src/clipboard/clipboard-write-error.js'
-import type { ClipboardCommand } from '../../src/clipboard/clipboard-commands.js'
+import type { ClipboardCommand } from '@theokit/tui/terminal'
+
+import {
+  ClipboardWriteError,
+  NoClipboardError,
+  copyToClipboard,
+} from '../../src/clipboard/clipboard.js'
 
 const CANDIDATES: readonly ClipboardCommand[] = [
   { bin: 'first', args: ['-a'] },

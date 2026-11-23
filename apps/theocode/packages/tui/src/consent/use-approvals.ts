@@ -7,12 +7,27 @@ import {
   createApprovalLedger,
   findNextApproval,
   ingest,
+  prune,
   settle,
   type ApprovalLedger,
-} from './pending-approvals.js'
+  type UIMessageLike,
+} from '@theokit/tui'
+
+/**
+ * Drop settled entries whose message is no longer the last one. The toolkit keeps them until a
+ * prune, which would suppress an approval id the agent reuses on a later message; the thread has
+ * moved past them by then, so the marker has done its job (the ingest watermark keeps older
+ * messages from being re-read and re-offered).
+ */
+export function dropDeadMarkers(ledger: ApprovalLedger, threadLength: number): ApprovalLedger {
+  return {
+    ...ledger,
+    entries: ledger.entries.filter((e) => !(e.settled && e.messageIndex < threadLength - 1)),
+  }
+}
 
 interface AgentWithApproval {
-  thread: Parameters<typeof ingest>[1]
+  thread: readonly UIMessageLike[]
   approve: (approvalId: string, decision: { approved: boolean }) => unknown
 }
 
@@ -33,14 +48,19 @@ export function useApprovals(
 
   const pendingApproval = useMemo(() => {
     void epoch
-    ingest(registry.current, agent.thread)
+    // The toolkit ledger is immutable: every step returns the next value, and a backtrack that cut
+    // the thread is dropped by `prune` BEFORE `ingest` so a re-used message index is read again.
+    registry.current = dropDeadMarkers(
+      ingest(prune(registry.current, agent.thread.length), agent.thread),
+      agent.thread.length,
+    )
     return findNextApproval(registry.current)
   }, [agent.thread, epoch])
 
   const approve = agent.approve
   const settleApproval = useCallback(
     (approvalId: string, approved: boolean): void => {
-      settle(registry.current, approvalId)
+      registry.current = settle(registry.current, approvalId)
       setEpoch((n) => n + 1)
       void approve(approvalId, { approved })
     },
