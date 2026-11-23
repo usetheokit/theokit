@@ -1,6 +1,6 @@
 {
   "name": "create-theokit",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "type": "module",
   "description": "Scaffold a new TheoKit project",
   "repository": {
@@ -24,10 +24,12 @@
   },
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "tools"
   ],
   "dependencies": {
-    "cross-spawn": "^7.0.6"
+    "cross-spawn": "^7.0.6",
+    "esbuild": "^0.28.2"
   },
   "publishConfig": {
     "provenance": true,

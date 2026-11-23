@@ -4,7 +4,6 @@ import {
   cpSync,
   existsSync,
   lstatSync,
-  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -16,7 +15,13 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
-import { backup as hostBackup, BackupError, restore as hostRestore } from '@theokit/host/backup'
+import {
+  backup as hostBackup,
+  BackupError,
+  downloadDirectory,
+  restore as hostRestore,
+  uploadDirectory,
+} from '@theokit/host/backup'
 import { encodeProjectDir } from '@theokit/sdk/persistence'
 
 import { assertSupportedRuntime } from '../runtime.js'
@@ -96,11 +101,6 @@ function resolveTargets(source: NodeJS.ProcessEnv, homeDir: string): Targets {
     throw new BackupRefusal(`THEOCLAW_STATE_DIR ${targets.state} and THEOCLAW_WORKSPACE ${targets.workspace} overlap; each must be outside the other`)
   }
   return targets
-}
-
-function mkdirPrivate(path: string): void {
-  mkdirSync(path, { recursive: true, mode: 0o700 })
-  chmodSync(path, 0o700)
 }
 
 function sha256Of(path: string): string {
@@ -319,51 +319,15 @@ export async function restoreInstance(env: NodeJS.ProcessEnv, dir: string, optio
   }
 }
 
-/** An HTTPS object directory: files first, manifest last as the completion marker. */
-function offsiteUrl(target: string, path: string): URL {
-  const base = new URL(target.endsWith('/') ? target : `${target}/`)
-  if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) {
-    throw new BackupRefusal('THEOCLAW_BACKUP_TARGET must be an HTTPS object directory without credentials, query or fragment')
-  }
-  return new URL(path.split('/').map(encodeURIComponent).join('/'), base)
-}
-
-async function transfer(target: string, path: string, token: string | undefined, body?: Buffer): Promise<Buffer> {
-  const response = await fetch(offsiteUrl(target, path), {
-    method: body === undefined ? 'GET' : 'PUT',
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body === undefined ? {} : { 'If-None-Match': '*' }) },
-    ...(body === undefined ? {} : { body: new Uint8Array(body) }),
-    redirect: 'error',
-    signal: AbortSignal.timeout(60_000),
-  })
-  if (!response.ok) throw new BackupRefusal(`offsite ${body === undefined ? 'download' : 'upload'} failed (${response.status})`)
-  return Buffer.from(await response.arrayBuffer())
-}
-
+/**
+ * Upload a verified backup directory to an HTTPS object directory through `@theokit/host/backup`:
+ * every file first, the manifest last as the completion marker.
+ */
 export async function uploadBackup(dir: string, target: string, token?: string): Promise<void> {
-  const manifest = readManifest(dir)
-  const files = verifyBackup(dir, manifest)
-  for (const file of files) await transfer(target, file.entry.path, token, readFileSync(file.from))
-  await transfer(target, MANIFEST, token, readFileSync(join(dir, MANIFEST)))
+  await refusing(() => uploadDirectory(dir, target, token === undefined ? {} : { token }))
 }
 
 /** Download to a fresh local directory; verify all bytes before it can be restored. */
 export async function downloadBackup(dir: string, target: string, token?: string): Promise<void> {
-  if (existsSync(dir)) throw new BackupRefusal('offsite download requires an absent local directory', dir)
-  mkdirPrivate(dir)
-  try {
-    writeFileSync(join(dir, MANIFEST), await transfer(target, MANIFEST, token), { mode: 0o600 })
-    const manifest = readManifest(dir)
-    for (const root of ROOTS) mkdirPrivate(join(dir, root))
-    for (const entry of manifest.files) {
-      const place = placeOf(entry)
-      const to = join(dir, place.root, place.path)
-      mkdirPrivate(dirname(to))
-      writeFileSync(to, await transfer(target, entry.path, token), { mode: 0o600, flag: 'wx' })
-    }
-    verifyBackup(dir, manifest)
-  } catch (error) {
-    rmSync(dir, { recursive: true, force: true })
-    throw error
-  }
+  await refusing(() => downloadDirectory(dir, target, token === undefined ? {} : { token }))
 }

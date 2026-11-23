@@ -1,5 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+
+import { collectorRootOwner, type CollectorRootMarkerFormat } from '@theokit/agents/session'
 
 /**
  * Which product may delete inside a transcript root.
@@ -27,24 +29,21 @@ import { dirname, join } from 'node:path'
  */
 export const OWNERSHIP_MARKER = '.theocode-collector.json'
 
-/** What a marker this product wrote says. A future schema bumps `version` and is refused by old builds. */
-interface Ownership {
-  readonly product: string
-  readonly version: number
-}
+/** The app name under which this product owns a root. */
+export const OWNER = { app: 'theocode' } as const
 
-const PRODUCT = 'theocode'
 const VERSION = 1
 
 /**
- * Beside the projects directory, never inside it.
- *
- * `listProjectDirs` enumerates everything under `projects/`, so a marker in there would be a file in
- * the middle of the one path that deletes user data. `stampPath` already made this call for
- * `.last-session-gc`; this follows it rather than re-deciding it.
+ * The marker this product writes, in the framework's terms: its own file name and `{product,
+ * version}` schema. A future version is not understood and is refused, never downgraded.
  */
-function markerPath(projectsRoot: string): string {
-  return join(dirname(projectsRoot), OWNERSHIP_MARKER)
+export const THEOCODE_MARKER: CollectorRootMarkerFormat = {
+  fileName: OWNERSHIP_MARKER,
+  ownerOf: (parsed) => {
+    const own = parsed as { product?: unknown; version?: unknown } | null
+    return own?.product === OWNER.app && own.version === VERSION ? OWNER.app : undefined
+  },
 }
 
 /**
@@ -56,34 +55,28 @@ function markerPath(projectsRoot: string): string {
  */
 export function rootIsOurs(projectsRoot: string): boolean {
   try {
-    const raw: unknown = JSON.parse(readFileSync(markerPath(projectsRoot), 'utf8'))
-    const own = raw as Partial<Ownership>
-    return own.product === PRODUCT && own.version === VERSION
+    return collectorRootOwner(projectsRoot, { existingMarker: THEOCODE_MARKER })?.app === OWNER.app
   } catch {
     return false
   }
 }
 
 /**
- * Claim `projectsRoot` for this product, tolerantly.
+ * Claim `projectsRoot` for this product, tolerantly, in this product's own marker format.
  *
- * Called when the product creates its own default root. A claim that cannot be written is reported
- * by `rootIsOurs` staying false — the collector then refuses rather than sweeping a root it could
- * not mark, which is the safe direction and the honest one: a read-only home means we do not know
- * the root is ours, not that it is.
+ * Any marker that EXISTS and is not ours (another product's, a future version of ours, a malformed
+ * file) is never overwritten: claiming must not be a way to seize a root from whoever marked it
+ * first. A claim that cannot be written is reported by `rootIsOurs` staying false — the collector
+ * then refuses, which is the safe direction.
  */
 export function claimRoot(projectsRoot: string): void {
   try {
-    // A marker that EXISTS and is not ours is never overwritten. `rootIsOurs` cannot answer this on
-    // its own — it returns false for "absent" and for "someone else's" alike, and only one of those
-    // is a directory we may take. Claiming must not be a way to seize a root from whoever marked it
-    // first, and a build that does not understand a future version of our own marker must not
-    // downgrade it.
-    if (existsSync(markerPath(projectsRoot))) return
+    if (existsSync(join(dirname(projectsRoot), OWNERSHIP_MARKER))) return
+    if (collectorRootOwner(projectsRoot, { existingMarker: THEOCODE_MARKER }) !== undefined) return
     mkdirSync(dirname(projectsRoot), { recursive: true })
-    const own: Ownership = { product: PRODUCT, version: VERSION }
-    writeFileSync(markerPath(projectsRoot), `${JSON.stringify(own, null, 2)}\n`)
+    const own = { product: OWNER.app, version: VERSION }
+    writeFileSync(join(dirname(projectsRoot), OWNERSHIP_MARKER), `${JSON.stringify(own, null, 2)}\n`)
   } catch {
-    // Deliberate: see the docblock. The absence of the marker IS the report.
+    // Deliberate: the absence of the marker IS the report.
   }
 }

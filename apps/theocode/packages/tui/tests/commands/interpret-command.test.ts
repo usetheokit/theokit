@@ -175,7 +175,7 @@ describe('interpretCommand — later groups claim their own', () => {
     expect(h.setMode).toHaveBeenCalled()
   })
 
-  it('test_showStatus_reaches_the_inspection_group', () => {
+  it('test_showStatus_reaches_the_inspection_group', async () => {
     // B-161: with no record published, `statusPanel` falls back to reading the rules off disk, so
     // this test's coverage depended on whether the checkout it ran in had `.claude/rules/` — a
     // 248,682-char corpus here, absent in a clean clone, which took the truncation path with it.
@@ -186,7 +186,7 @@ describe('interpretCommand — later groups claim their own', () => {
       rules: { count: 0, read: 0 },
     } as never)
     const h = run({ kind: 'showStatus' } as CommandAction)
-    expect(h.setPanel).toHaveBeenCalled()
+    await vi.waitFor(() => expect(h.setPanel).toHaveBeenCalled())
   })
 
   it('test_send_reaches_the_conduct_group_and_the_agent', () => {

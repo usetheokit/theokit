@@ -18,9 +18,9 @@ describe('display resolver', () => {
   })
 
   it('resolves each key from the tier', () => {
-    expect(resolveDisplay('discord')).toMatchObject({ tool_progress: 'all', live_status: 'full', cleanup_progress: true, reasoning_style: 'subtext' })
+    expect(resolveDisplay('discord')).toMatchObject({ tool_progress: 'all', live_status: 'full', reasoning_style: 'subtext' })
     expect(resolveDisplay('matrix')).toMatchObject({ tool_progress: 'new', live_status: 'verb' })
-    expect(resolveDisplay('whatsapp')).toMatchObject({ tool_progress: 'off', live_status: 'off', cleanup_progress: false, streaming: false })
+    expect(resolveDisplay('whatsapp')).toMatchObject({ tool_progress: 'off', live_status: 'off' })
     expect(resolveDisplay('email')).toMatchObject({ tool_progress: 'off', tool_preview_length: 0 })
   })
 
@@ -51,5 +51,6 @@ describe('display resolver', () => {
     expect(resolveDisplay('telegram', config)).toMatchObject({ tool_progress: 'all', live_status: 'verb' })
     expect(resolveDisplay('slack', config)).toMatchObject({ tool_progress: 'off', show_reasoning: true })
     expect(() => readDisplayConfig({ THEOCLAW_DISPLAY_TOOL_PROGRESS: 'loud' })).toThrow(/THEOCLAW_DISPLAY_TOOL_PROGRESS/)
+    expect(readDisplayConfig({ THEOCLAW_DISPLAY_CLEANUP_PROGRESS: 'maybe' })).toEqual({ global: {}, platforms: {} })
   })
 })

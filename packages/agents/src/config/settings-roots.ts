@@ -7,7 +7,7 @@
  * `ignored` (known to Claude Code) or `unrecognised` (not known), never silently absorbed.
  */
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import type { PermissionRule } from '@theokit/sdk'
 
@@ -175,12 +175,14 @@ export interface SettingsCandidates {
 export function settingsCandidates(input: {
   readonly cwd: string
   readonly home: string
-  readonly ownRoot: string
+  /** One own root, or several in precedence order (each wins over the ones after it). */
+  readonly ownRoot: string | readonly string[]
   readonly foreignRoot?: string | false
 }): SettingsCandidates {
   const foreign = input.foreignRoot ?? '.claude'
+  const own = typeof input.ownRoot === 'string' ? [input.ownRoot] : input.ownRoot
   const roots: { root: string; foreignRoot: boolean }[] = [
-    { root: input.ownRoot, foreignRoot: false },
+    ...own.map((root) => ({ root, foreignRoot: false })),
     ...(foreign === false ? [] : [{ root: foreign, foreignRoot: true }]),
   ]
   const scope = (base: string, file: string): readonly SettingsCandidate[] =>
@@ -213,6 +215,13 @@ export interface ReadSettingsFileOptions {
   readonly specifierArg?: Readonly<Record<string, string>>
   readonly toolAliases?: Readonly<Record<string, string>>
   readonly onWarn?: (message: string) => void
+  /** Throw on a file that exists and is not valid JSON, instead of warning and skipping it. */
+  readonly throwOnMalformed?: boolean
+}
+
+/** A `permissions` value that is not an object is treated as absent, not cast. */
+function asPermissionsBlock(value: unknown): PermissionsBlock | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : undefined
 }
 
 function isConvention(key: string): boolean {
@@ -225,20 +234,28 @@ function isKnownForeign(key: string): boolean {
   )
 }
 
-function parseFile(path: string, warn: (m: string) => void): Record<string, unknown> | undefined {
+function parseFile(
+  path: string,
+  warn: (m: string) => void,
+  throwOnMalformed = false,
+): Record<string, unknown> | undefined {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- path built from the caller's roots and a fixed filename
   if (!existsSync(path)) return undefined
+  let parsed: unknown
   try {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path, existence-checked above
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    parsed = JSON.parse(readFileSync(path, 'utf8'))
+  } catch (error) {
+    if (throwOnMalformed) throw new Error(`malformed JSON at ${path}: ${(error as Error).message}`)
+    warn(`${path} could not be parsed (${(error as Error).message}) — it is NOT being applied.`)
+    return undefined
+  }
+  {
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       warn(`${path} is not a JSON object — it is NOT being applied.`)
       return undefined
     }
     return parsed as Record<string, unknown>
-  } catch (error) {
-    warn(`${path} could not be parsed (${(error as Error).message}) — it is NOT being applied.`)
-    return undefined
   }
 }
 
@@ -247,7 +264,11 @@ export function readSettingsFile(
   candidate: SettingsCandidate,
   options: ReadSettingsFileOptions,
 ): SettingsFileRead | undefined {
-  const raw = parseFile(candidate.path, options.onWarn ?? (() => undefined))
+  const raw = parseFile(
+    candidate.path,
+    options.onWarn ?? (() => undefined),
+    options.throwOnMalformed,
+  )
   if (raw === undefined) return undefined
 
   const own = new Set(options.ownKeys)
@@ -262,7 +283,7 @@ export function readSettingsFile(
   for (const [rawKey, value] of Object.entries(raw)) {
     const key = options.renames?.[rawKey] ?? rawKey
     if (key === 'permissions') {
-      const translated = permissionRulesFromSettings(value as PermissionsBlock | undefined, {
+      const translated = permissionRulesFromSettings(asPermissionsBlock(value), {
         ...(options.specifierArg === undefined ? {} : { specifierArg: options.specifierArg }),
         ...(options.baseDir === undefined ? {} : { baseDir: options.baseDir }),
         ...(options.toolAliases === undefined ? {} : { toolAliases: options.toolAliases }),
@@ -319,4 +340,48 @@ export function permissionRulesFromLayers(
 ): PermissionRule[] {
   const all = reads.flatMap((read) => read?.permissionRules ?? [])
   return [...all.filter((r) => r.action === 'deny'), ...all.filter((r) => r.action !== 'deny')]
+}
+
+/** Where an administrator deploys `managed-settings.json`: Claude Code's three platform paths. */
+export const MANAGED_SETTINGS_PATHS: readonly string[] = [
+  '/Library/Application Support/ClaudeCode/managed-settings.json',
+  '/etc/claude-code/managed-settings.json',
+  join('C:\\', 'ProgramData', 'ClaudeCode', 'managed-settings.json'),
+]
+
+export interface ReadManagedSettingsOptions {
+  /** Paths to try in order; defaults to the three platform paths. */
+  readonly paths?: readonly string[]
+  /** Keys that count as this app's own; the rest are reported as ignored or unrecognised. */
+  readonly ownKeys: readonly string[]
+  readonly renames?: Readonly<Record<string, string>>
+  readonly specifierArg?: Readonly<Record<string, string>>
+  readonly toolAliases?: Readonly<Record<string, string>>
+  readonly onWarn?: (message: string) => void
+}
+
+/**
+ * The first existing `managed-settings.json`, read as a foreign-dialect document for the caller's
+ * key set. A file that exists and does not parse is warned about and ends the search (the policy in
+ * it is not applied, and a lower-priority path must not stand in for it); `undefined` when absent.
+ */
+export function readManagedSettings(
+  options: ReadManagedSettingsOptions,
+): SettingsFileRead | undefined {
+  for (const path of options.paths ?? MANAGED_SETTINGS_PATHS) {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed platform paths or the caller's list
+    if (!existsSync(path)) continue
+    return readSettingsFile(
+      { path, foreignRoot: true },
+      {
+        ownKeys: options.ownKeys,
+        baseDir: dirname(path),
+        ...(options.renames === undefined ? {} : { renames: options.renames }),
+        ...(options.specifierArg === undefined ? {} : { specifierArg: options.specifierArg }),
+        ...(options.toolAliases === undefined ? {} : { toolAliases: options.toolAliases }),
+        ...(options.onWarn === undefined ? {} : { onWarn: options.onWarn }),
+      },
+    )
+  }
+  return undefined
 }

@@ -46,6 +46,16 @@ describe('a deny rule', () => {
     expect(rules.filter((r) => r.action === 'allow').map((r) => r.tool)).toContain('Glob')
     expect(rules.filter((r) => r.action === 'deny').map((r) => r.tool)).toContain('Read')
   })
+
+  it('test_denies_come_first_and_the_rest_keep_their_order', () => {
+    const cwd = workspace({ allow: ['Glob', 'Grep'], deny: [] }, { allow: ['Write'], deny: ['Read'] })
+
+    const actions = orderedPermissionRules(cwd, cwd).map((r) => r.action)
+    const firstNonDeny = actions.findIndex((a) => a !== 'deny')
+
+    expect(actions.slice(firstNonDeny).every((a) => a !== 'deny')).toBe(true)
+    expect(actions[0]).toBe('deny')
+  })
 })
 
 function workspace(

@@ -129,7 +129,8 @@ export interface ResolvedCredential {
   kind: 'api' | 'oauth'
   provider: Provider
   apiKey: string
-  source: string
+  /** Where it came from, as data: the framework's own origin, never a flattened string. */
+  source: SourceOrigin
   inferred: boolean
   expiresAt?: number
 }
@@ -150,9 +151,8 @@ export interface ResolvedCredential {
  *  - `MissingCredentialError`, because callers already catch it by type.
  *
  * The shapes differ in two places and are adapted rather than propagated: `kind` is `api` here and
- * `api-key` there, and `source` is a string here and a `SourceOrigin` there. The string form is the
- * lossy one — `credential-helpers.ts` re-derives the origin from it with a regex — so this is a
- * translation to keep, not a difference to celebrate.
+ * `api-key` there, and `source` is the SDK's flat string only at the refresh boundary, where it is
+ * flattened for the SDK and the typed origin is restored afterwards.
  */
 /**
  * Refuse a key whose prefix contradicts its declared provider, on the WRITE path.
@@ -186,8 +186,8 @@ function toLocalKind(kind: 'api-key' | 'oauth'): 'api' | 'oauth' {
   return kind === 'api-key' ? 'api' : 'oauth'
 }
 
-/** Flatten the framework's structured provenance into the string this product's types carry. */
-function toLocalSource(source: SourceOrigin): string {
+/** The SDK's refresh API carries the origin as a flat string; flatten it for that call only. */
+function toSdkSource(source: SourceOrigin): string {
   if (source.kind === 'env') return source.varName
   if (source.kind === 'file') return source.path
   return source.provider
@@ -210,7 +210,7 @@ export function resolveCredential(opts: {
       kind: toLocalKind(resolved.kind),
       provider: resolved.provider as Provider,
       apiKey: resolved.apiKey,
-      source: toLocalSource(resolved.source),
+      source: resolved.source,
       inferred: resolved.inferred,
     }
   } catch (err) {
@@ -255,7 +255,7 @@ export async function resolveFreshCredential(opts: {
   let fresh: Awaited<ReturnType<AuthProvider['ensureFresh']>>
   try {
     fresh = await new AuthProvider(OPENAI_OAUTH_CONFIG, credentialStore(opts.home)).ensureFresh(
-      resolved,
+      { ...resolved, source: toSdkSource(resolved.source) },
       { fetch: boundedFetch, now: opts.now ?? Date.now },
       opts.env,
     )
@@ -264,7 +264,7 @@ export async function resolveFreshCredential(opts: {
     if (!transient) throw err
     return resolved
   }
-  return { ...fresh, provider: resolved.provider }
+  return { ...fresh, provider: resolved.provider, source: resolved.source }
 }
 
 export async function resolveCredentialForModel(

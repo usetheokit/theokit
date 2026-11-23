@@ -1,5 +1,14 @@
 # @theokit/agents
 
+## 17.4.1
+
+### Patch Changes
+
+- 17bb676: Tests cover how the foreign-surface inventory follows the installed SDK's frontmatter rules, before and after SDK 10.
+- 194e124: Widen the `@theokit/sdk` range to `<12` so projects on SDK 10 and 11 install without `--force`.
+- Updated dependencies [194e124]
+  - @theokit/presenter@0.18.1
+
 ## 17.4.0
 
 ### Minor Changes

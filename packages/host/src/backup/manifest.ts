@@ -51,15 +51,40 @@ export function splitEntryPath(
   return { root, relative: rest.join('/') }
 }
 
-export async function readManifest(from: string): Promise<BackupManifest> {
+/**
+ * Read `manifest.json`. A manifest written before roots were recorded has none: `legacyRoots`
+ * names the roots to verify it with; the file itself is not changed.
+ */
+export async function readManifest(
+  from: string,
+  legacyRoots?: readonly string[],
+): Promise<BackupManifest> {
   const file = join(from, MANIFEST_NAME)
+  let text: string
+  try {
+    text = await readFile(file, 'utf8')
+  } catch (cause) {
+    throw new BackupError(`cannot read ${file}`, { path: file, cause })
+  }
+  return parseManifest(text, file, legacyRoots)
+}
+
+/** Parse and validate manifest text; `file` only names the source in errors. */
+export function parseManifest(
+  text: string,
+  file: string,
+  legacyRoots?: readonly string[],
+): BackupManifest {
   let value: unknown
   try {
-    value = JSON.parse(await readFile(file, 'utf8'))
+    value = JSON.parse(text)
   } catch (cause) {
     throw new BackupError(`cannot read ${file}`, { path: file, cause })
   }
   const m = value as Partial<BackupManifest> | null
+  if (legacyRoots !== undefined && m !== null && typeof m === 'object' && m.roots === undefined) {
+    ;(m as { roots?: readonly string[] }).roots = legacyRoots
+  }
   if (
     m === null ||
     typeof m !== 'object' ||

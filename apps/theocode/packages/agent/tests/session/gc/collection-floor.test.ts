@@ -15,13 +15,13 @@ import { GCFloorError } from '@theokit/agents/session'
 import { describe, expect, it } from 'vitest'
 
 import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 
 const allProjectsSeams = {
   projectsRoot: '/projects',
   listProjects: () => [],
   listProject: () => [],
-  classify: () => ({ state: 'DEAD' as const }),
+  classify: () => ({ state: 'DEAD' as const, cwd: '/home/operator/a-project' }),
   listRegistry: async () => [] as never,
   hasLiveWriter: () => false,
   readPointer: () => undefined,
@@ -37,17 +37,17 @@ const perSessionSeams = {
 describe('the collection floor', () => {
   it('test_the_single_project_plan_refuses_a_window_below_the_floor', async () => {
     // The framework's floor error is a GCFloorError, not a RangeError.
-    await expect(
-      planAndRunCurrentProjectGC({ ...perSessionSeams, maxAgeDays: 0 }),
-    ).rejects.toThrow(GCFloorError)
+    await expect(planAndRunCurrentProjectGC({ ...perSessionSeams, maxAgeDays: 0 })).rejects.toThrow(
+      GCFloorError,
+    )
   })
 
   it('test_the_all_projects_plan_refuses_the_same_window', async () => {
     // The arm that already held. Present so a regression that removes the floor from EITHER path
     // is caught, rather than the two drifting again.
-    await expect(
-      planSessionGCAllProjects({ ...allProjectsSeams, maxAgeDays: 0 }),
-    ).rejects.toThrow(RangeError)
+    await expect(planSessionGCAllProjects({ ...allProjectsSeams, maxAgeDays: 0 })).rejects.toThrow(
+      GCFloorError,
+    )
   })
 
   it('test_both_plans_accept_the_floor_itself', async () => {

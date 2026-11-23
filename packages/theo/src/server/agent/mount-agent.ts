@@ -11,7 +11,7 @@
  */
 import {
   compileLoadedAgentModule,
-  resolveEnabledSkills,
+  resolveSkillsSettings,
   streamAgentUIMessages,
 } from '@theokit/agents'
 
@@ -227,7 +227,14 @@ function resolveKeyOrError(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[theokit] agent "${identity}" cannot resolve a provider credential: ${message}`)
-    return { failure: jsonError(500, 'INTERNAL', message) }
+    // The resolver's own text stays in the server log: it can carry a stack or environment detail.
+    return {
+      failure: jsonError(
+        500,
+        'INTERNAL',
+        'The agent has no usable provider credential. See the server log for the reason.',
+      ),
+    }
   }
 }
 
@@ -310,8 +317,8 @@ export async function mountAgent(
   // against the M7 run-context, setting `skills.enabled` before the SDK runs. `undefined` ⇒ the
   // SDK enables every discovered skill. `compiled` is fresh per request, so mutation is safe.
   if (compiled.skillsResolver) {
-    const enabled = await resolveEnabledSkills(compiled.skillsResolver, compiled.runContext ?? {})
-    if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
+    const settings = await resolveSkillsSettings(compiled.skillsResolver, compiled.runContext ?? {})
+    if (settings !== undefined) compiled.skills = settings
   }
 
   // When the agent has @HumanInTheLoop-gated tools (M4), wire the pause: the plugin's `awaitApproval`

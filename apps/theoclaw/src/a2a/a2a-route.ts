@@ -2,7 +2,7 @@ import { buildAgentCard } from '@theokit/agents'
 import { createA2AJsonRpcHandler } from '@theokit/agents/a2a'
 
 import type { TurnAgent } from '../agent-port.js'
-import { maskSecrets } from '../channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { bearerCheck } from '@theokit/http/guards'
 import { describeError } from '../control-plane/errors.js'
 import { MAX_MESSAGE_BYTES } from '../control-plane/limits.js'

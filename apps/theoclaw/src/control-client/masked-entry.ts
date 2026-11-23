@@ -15,24 +15,23 @@ export interface OutputMask {
 /**
  * Route every write of `streams` through the SDK's exact-value mask (`Security.createMask`) until
  * `uninstall()`, so the adapters' own failure lines carry no credential either. `minLength: 1` keeps
- * a short configured value masked. The SDK has no separate flush: `flush()` unwraps (which releases
- * what is held) and wraps again. A stream already wrapped is refused by the SDK.
+ * a short configured value masked. `flush()` is the handle `wrapStreams` returns: it releases what is
+ * held and keeps the mask installed. A stream already wrapped is refused by the SDK.
  */
 export function installOutputMask(secrets: readonly string[], streams: readonly MaskableStream[] = [process.stdout, process.stderr]): OutputMask {
   const mask = Security.createMask(secrets, { minLength: 1 })
   const targets = streams as unknown as readonly NodeJS.WritableStream[]
-  let uninstallStreams = mask.wrapStreams(targets)
+  const handle = mask.wrapStreams(targets)
   let installed = true
   return {
     flush: () => {
       if (!installed) return
-      uninstallStreams()
-      uninstallStreams = mask.wrapStreams(targets)
+      handle.flush()
     },
     uninstall: () => {
       if (!installed) return
       installed = false
-      uninstallStreams()
+      handle()
     },
   }
 }

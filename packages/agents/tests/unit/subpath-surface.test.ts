@@ -143,8 +143,11 @@ describe('M90 — the infra subpath surface is locked', () => {
     //
     // 219 since the floor moved to `@theokit/sdk` ^5.32.0 (#1959): +15, nothing removed — seven in
     // `persistence`, four values and `SandboxContainer` in `sandbox`, and three types.
+    //
+    // 238 since `@theokit/sdk-tools` moved to ^0.34.0: +19 in `tools`, nothing removed — the computer
+    // tool, XWD helpers, `resolveWebSearchAdapter`, the image-generate tool and their types.
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(219)
+    expect(total).toBe(238)
   })
 
   /**

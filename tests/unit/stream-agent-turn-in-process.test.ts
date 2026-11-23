@@ -42,9 +42,13 @@ vi.mock('../../packages/agents/src/bridge/agent-endpoint.js', () => ({
 }))
 
 vi.mock('../../packages/agents/src/skills-resolver.js', () => ({
-  resolveEnabledSkills: (selection: unknown, ctx: unknown) => {
+  resolveSkillsSettings: (selection: unknown, ctx: unknown) => {
     hoisted.skillsResolved.push({ selection, ctx })
-    return Promise.resolve(hoisted.resolveEnabledSkills)
+    const resolved = hoisted.resolveEnabledSkills as string[] | { skillsDir: string } | null
+    if (resolved === null) return Promise.resolve(undefined)
+    return Promise.resolve(
+      Array.isArray(resolved) ? { enabled: resolved, autoInject: true } : resolved,
+    )
   },
 }))
 
@@ -170,6 +174,19 @@ describe('streamAgentTurnInProcess (M35)', () => {
     expect(WITH_SKILLS.__compiled).toMatchObject({
       skills: { enabled: ['deploy-skill'], autoInject: true },
     })
+  })
+
+  it('applies a SkillsSettings object a resolver returned to the compiled agent as is', async () => {
+    hoisted.chunks = [{ type: 'finish' }]
+    hoisted.skillsResolved = []
+    hoisted.resolveEnabledSkills = { skillsDir: '/skills' }
+    const WITH_SKILLS = {
+      __compiled: { tools: [], stream: true, skillsResolver: () => ({}), runContext: {} },
+    }
+    await collect(
+      streamAgentTurnInProcess(asModule(WITH_SKILLS), 'sk', { message: 'go', sessionId: 's' }),
+    )
+    expect(WITH_SKILLS.__compiled).toMatchObject({ skills: { skillsDir: '/skills' } })
   })
 
   it('does not call resolveEnabledSkills for a static (no-resolver) agent', async () => {

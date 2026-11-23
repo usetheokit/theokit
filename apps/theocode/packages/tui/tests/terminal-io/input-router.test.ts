@@ -17,7 +17,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { SENTINEL } from '../../src/backtrack/backtrack-select.js'
+import { SENTINEL } from '../../src/backtrack/backtrack.js'
 import { type KeyboardState, type KeyPress, routeKey } from '../../src/terminal-io/input-router.js'
 
 /** Trusted, idle, nothing open — the state every case below varies ONE field of. */

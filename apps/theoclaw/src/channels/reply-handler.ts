@@ -1,21 +1,20 @@
 import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@theokit/gateway'
-import { fromSdkMessage } from '@theokit/presenter'
+import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
 import type { ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
-import { maskSecrets } from './channel-loop.js'
-import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
+import { maskSecrets } from '@theokit/gateway'
+import { type BroadcastOptions, createMaskedBroadcast } from './broadcast-groups.js'
 import { type DisplayConfig, resolveDisplay } from './display-config.js'
 import { createProgressGate } from './progress.js'
-import { compactIfNeeded } from './compact-command.js'
-import { AgentTurnError, createAgentHandler, deliverText } from '@theokit/gateway-agent'
-import type { AgentLease } from '@theokit/gateway-agent'
-import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-command.js'
+import { AgentTurnError, createAgentHandler } from '@theokit/gateway-agent'
+import type { AgentLease, BroadcastGroups, RunningTurn } from '@theokit/gateway-agent'
+import { type GoalSettings, GOAL_USAGE_REPLY, runGoal } from './goal-command.js'
 import type { SessionLease } from '../sessions/session-agents.js'
-import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
+import { formatUsageFooter, formatUsageLine, usageOf } from '../usage/turn-usage.js'
 import type { UsageMode } from './usage-hook.js'
 import { THINKING_LEVELS, type ThinkingLevel } from '../agent/create-agent.js'
-import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
+import { type CompactSettings, compactIfNeeded, runCompact } from './compact-command.js'
 import { AdvisorHistory, reviewQuietly, steerNote, type AdvisorSettings } from './advisor.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
@@ -27,50 +26,30 @@ export const NEW_CONVERSATION_REPLY = 'Started a new conversation.'
 /** The one line a `/new` or `/reset` that could not be saved answers with. */
 export const RESET_FAILED_REPLY = 'I could not start a new conversation; this one goes on.'
 
-/**
- * Matched on the whole trimmed text, here rather than through the runner's command registry, whose
- * word-boundary match would also reset on `/new chat` (FR-008); and the reset needs the session,
- * which this handler already holds.
- */
-const RESET_COMMANDS: ReadonlySet<string> = new Set(['/new', '/reset'])
-
-/** `/steer <text>`: redirect the turn already running; the text after the command is what is injected. */
-const STEER_COMMAND = /^\/steer(?:\s+([\s\S]*))?$/i
-
 export const STEER_USAGE_REPLY = 'Usage: /steer <text> (redirects the turn that is running)'
 export const STEER_IDLE_REPLY = 'Nothing is running to steer; send your message as usual.'
 export const STEERED_REPLY = 'Steering the running turn.'
 
-/** How many turns each session agent is running now, so `/steer` knows whether there is one to redirect. */
-const runningTurns = new WeakMap<object, number>()
+/** The turns each session agent is running now, so `/steer` knows whether there is one to redirect. */
+const activeTurns = new WeakMap<object, Set<object>>()
 
-function turnStarted(agent: object): void {
-  runningTurns.set(agent, (runningTurns.get(agent) ?? 0) + 1)
+/** Note a running turn of `agent`; the returned function removes exactly that entry. */
+function trackTurn(agent: object, turn: object): () => void {
+  const turns = activeTurns.get(agent) ?? new Set<object>()
+  turns.add(turn)
+  activeTurns.set(agent, turns)
+  return () => void turns.delete(turn)
 }
 
-function turnEnded(agent: object): void {
-  runningTurns.set(agent, Math.max(0, (runningTurns.get(agent) ?? 1) - 1))
-}
-
-const THINK_COMMAND = /^\/think(?:\s+(\S+))?$/i
-
-function answerThink(think: (event: MessageEvent, level: ThinkingLevel) => void, event: MessageEvent, arg: string | undefined): string {
-  const level = arg?.toLowerCase()
-  if (level === undefined || !(THINKING_LEVELS as readonly string[]).includes(level)) return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
+function answerThink(think: (event: MessageEvent, level: ThinkingLevel) => void, event: MessageEvent, arg: string): string {
+  const level = arg.toLowerCase()
+  if ( !(THINKING_LEVELS as readonly string[]).includes(level)) return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
   think(event, level as ThinkingLevel)
   return `Thinking level set to ${level}.`
 }
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
-
-/** Broadcast groups and how their other members are reached (OC-21). */
-export interface BroadcastOptions {
-  readonly groups: BroadcastGroups
-  /** The started adapter of a platform, or undefined while it is not started. */
-  readonly adapterFor: (platform: string) => BasePlatformAdapter | undefined
-  /** Where a member that could not be reached is reported; never with a token or a sender id. */
-  readonly write: (line: string) => void
-}
+export type { BroadcastOptions } from './broadcast-groups.js'
 
 export interface ReplyHandlerOptions {
   /**
@@ -205,96 +184,49 @@ function advisorHistoryOf(settings: AdvisorSettings): AdvisorHistory {
   return found
 }
 
-/** What one turn left behind, read after the package handler has replied. */
-interface TurnRecord {
-  answer: string
-  streamFailed: boolean
-  result?: Awaited<ReturnType<TurnRun['wait']>>
-}
-
 /**
- * The session agent as the package handler sees it. The stream passes through untouched; the
- * wrapper only notes the answer and the result (for usage, compaction, advisor and a broadcast
- * group's fan-out), and ends the stream with the `/usage` footer, which the handler masks and
- * replies with like any other text.
+ * One agent turn on the event's prompt, and exactly one reply to the origin (FR-004, D8), by the
+ * package's `createAgentHandler`. A failed turn still replies, then throws so the runner fires
+ * `on_error`. The agent is the session's, owned by `SessionAgents`: the request boundary of
+ * `withAgent` stays open until the handler releases the lease, after the reply. The package's
+ * hooks carry the rest: `onTurnStart` (steering, advisor), `decorateReply` (the `/usage` footer)
+ * and `onTurnEnd` (advisor history, compaction, a broadcast group's thread and fan-out).
  */
-function observed(agent: TurnAgent, record: TurnRecord, options: ReplyHandlerOptions, event: MessageEvent, advisor: AdvisorWatch | undefined): TurnAgent {
-  return {
-    send: async (prompt, sendOptions) => {
-      const run = await agent.send(prompt, sendOptions)
-      advisor?.start(agent, typeof prompt === 'string' ? prompt : prompt.text)
-      let waiting: ReturnType<TurnRun['wait']> | undefined
-      const wait = (): ReturnType<TurnRun['wait']> => {
-        waiting ??= run.wait().then((result) => {
-          record.result = result
-          return result
-        })
-        return waiting
-      }
-      return {
-        ...run,
-        wait,
-        stream: async function* () {
-          try {
-            for await (const frame of run.stream()) {
-              for (const output of fromSdkMessage({ ...frame })) {
-                if (output.type === 'text') record.answer += output.text
-                else if (output.type === 'error') record.streamFailed = true
-              }
-              yield frame
-            }
-          } finally {
-            advisor?.stop()
-          }
-          const usage = options.usage
-          if (usage === undefined || record.streamFailed) return
-          const result = await wait()
-          if (result.status === 'error') return
-          const turn: TurnUsage = usageOf(result, usage.model)
-          usage.write(formatUsageLine('channel', turn))
-          const mode = usage.modeFor(event)
-          if (mode !== 'off') yield assistantText(`\n\n${formatUsageFooter(mode, turn)}`)
-        },
-      }
-    },
-  }
-}
-
-function assistantText(text: string): { readonly type: string; readonly message: unknown } {
-  return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } }
-}
-
-/**
- * One agent turn on `prompt`, and exactly one reply to the origin (FR-004, D8), by the package's
- * `createAgentHandler`. A failed turn still replies, then throws so the runner fires `on_error`.
- * Resolves the answer of a turn that succeeded. The agent is the session's, owned by
- * `SessionAgents`: the request boundary of `withAgent` stays open until the handler releases the
- * lease, after the reply.
- */
-async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
+async function answerTurn(options: ReplyHandlerOptions, broadcast: BroadcastGroups | undefined, event: MessageEvent, ctx: GatewayContext): Promise<void> {
   const secrets = options.secrets ?? []
   const gate = createProgressGate(resolveDisplay(event.platform, options.display), options.incognito === true)
-  const record: TurnRecord = { answer: '', streamFailed: false }
   let boundary: Promise<void> = Promise.resolve()
+  let agentId: string | undefined
+  let sessionAgent: TurnAgent | undefined
+  let advisor: AdvisorWatch | undefined
+  let prompt = ''
+  let result: Promise<Awaited<ReturnType<TurnRun['wait']>> | undefined> | undefined
+  let answer = ''
+  let streamFailed = false
   const agentFor = (forEvent: MessageEvent): Promise<AgentLease> =>
     new Promise<AgentLease>((resolve, reject) => {
       boundary = options.withAgent(forEvent, (lease) =>
         new Promise<void>((released) => {
-          turnStarted(lease.agent)
-          const advisor = options.advisor === undefined ? undefined : watchTurn(options.advisor, advisorHistoryOf(options.advisor), lease.agentId ?? event.channel.id)
+          agentId = lease.agentId
+          sessionAgent = lease.agent
+          // Counted from the lease, as before, so a `/steer` finds the turn until it is released.
+          const untrack = trackTurn(lease.agent, {})
           resolve({
-            agent: observed(lease.agent, record, options, event, advisor),
+            agent: lease.agent,
+            // The package releases before `onTurnEnd`, so compaction runs here, while the lease is held.
             release: async () => {
               try {
-                const result = record.result
-                if (result !== undefined && result.status !== 'error' && !record.streamFailed) {
-                  advisor?.record(record.answer)
-                  if (options.compact !== undefined && lease.agentId !== undefined) await compactIfNeeded(options.compact, lease.agentId, result)
+                const run = await result
+                if (options.compact !== undefined && lease.agentId !== undefined && run !== undefined && run.status !== 'error' && run.status !== 'cancelled' && !streamFailed) {
+                  await compactIfNeeded(options.compact, lease.agentId, run)
                 }
               } finally {
-                turnEnded(lease.agent)
-                lease.release()
-                released()
+                untrack()
+                try {
+                  lease.release()
+                } finally {
+                  released()
+                }
               }
             },
           })
@@ -304,19 +236,48 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
     })
   const handler = createAgentHandler({
     agentFor,
-    prompt: () => prompt,
+    prompt: (forEvent) => {
+      prompt = broadcast === undefined ? forEvent.text : broadcast.prompt(forEvent)
+      return prompt
+    },
     noAnswerText: NO_ANSWER_REPLY,
     errorText: ERROR_REPLY,
     secrets,
     progress: (output) => {
+      if (output.type === 'error') streamFailed = true
       const lines = gate.lines(output)
       return lines.length === 0 ? undefined : lines.join('\n')
+    },
+    onTurnStart: (_forEvent, turn: RunningTurn) => {
+      result = turn.run.wait().catch(() => undefined)
+      if (options.advisor !== undefined) {
+        advisor = watchTurn(options.advisor, advisorHistoryOf(options.advisor), agentId ?? event.channel.id)
+        if (sessionAgent !== undefined) advisor.start(sessionAgent, prompt)
+      }
+      return () => advisor?.stop()
+    },
+    decorateReply: async (reply) => {
+      answer = reply
+      const usage = options.usage
+      const run = await result
+      if (usage === undefined || run === undefined || run.status === 'error') return reply
+      const turn = usageOf(run, usage.model)
+      usage.write(formatUsageLine('channel', turn))
+      const mode = usage.modeFor(event)
+      return mode === 'off' ? reply : `${reply}\n\n${formatUsageFooter(mode, turn)}`
+    },
+    onTurnEnd: async (forEvent, outcome) => {
+      if (!outcome.failed) {
+        advisor?.record(answer)
+      }
+      // The thread and the other members get the answer without the usage footer.
+      await broadcast?.onTurnEnd(forEvent, { ...outcome, text: answer === '' ? outcome.text : answer })
     },
     ...(options.ack === undefined ? {} : { ackEmoji: options.ack.emoji, adapters: [...options.ack.adapters()] }),
   })
   let failure: { readonly error: unknown } | undefined
   try {
-    await handler(event, ctx)
+    await (broadcast === undefined ? handler : broadcast.wrap(handler))(event, ctx)
   } catch (error) {
     failure = { error }
   }
@@ -324,38 +285,19 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
   const disposal = await boundary.then(() => undefined, (error: unknown) => ({ error }))
   const thrown = failure ?? disposal
   if (thrown !== undefined) throw thrown.error
-  return maskSecrets(record.answer === '' ? NO_ANSWER_REPLY : record.answer, secrets)
 }
 
 /** Inject `note` into the session's running turn; with none running, nothing is sent and the person is told. */
 async function answerSteer(options: ReplyHandlerOptions, event: MessageEvent, note: string): Promise<string> {
   return options.withAgent(event, async (lease) => {
     try {
-      if ((runningTurns.get(lease.agent) ?? 0) === 0) return STEER_IDLE_REPLY
+      if ((activeTurns.get(lease.agent)?.size ?? 0) === 0) return STEER_IDLE_REPLY
       await lease.agent.send(note, { queueMode: 'steer' })
       return STEERED_REPLY
     } finally {
       lease.release()
     }
   })
-}
-
-/** Why one member could not be reached; a code or an error name, never the message or an id. */
-async function sendToMember(adapter: BasePlatformAdapter | undefined, channelId: string, answer: string): Promise<string | undefined> {
-  if (adapter === undefined) return 'not started'
-  // Rendered for the member's own platform, not the origin's dialect.
-  return deliverText(adapter, channelId, answer, 'group')
-}
-
-/** Send the answer to every other member, each on its own: one that fails costs only itself. */
-async function fanOut(broadcast: BroadcastOptions, group: BroadcastGroup, event: MessageEvent, answer: string): Promise<void> {
-  const others = group.members.filter((member) => member.platform !== event.platform || member.channelId !== event.channel.id)
-  await Promise.all(
-    others.map(async ({ platform, channelId }) => {
-      const failure = await sendToMember(broadcast.adapterFor(platform), channelId, answer)
-      if (failure !== undefined) broadcast.write(`broadcast group ${group.name}: ${platform}: the answer was not delivered (${failure})`)
-    }),
-  )
 }
 
 /**
@@ -370,11 +312,11 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
     return
   }
   const outcome = await options.withAgent(event, async (lease) => {
-    turnStarted(lease.agent)
+    const untrack = trackTurn(lease.agent, {})
     try {
       return await runGoal(lease.agent, goal, settings)
     } finally {
-      turnEnded(lease.agent)
+      untrack()
       lease.release()
     }
   })
@@ -385,6 +327,88 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
   if (outcome.error !== undefined) throw outcome.error
 }
 
+/** What a channel command acts on: the message and the reply path it arrived on. */
+interface ChannelCommandContext {
+  readonly event: MessageEvent
+  readonly ctx: GatewayContext
+}
+
+/** `/think` and `/steer` have always been matched without regard to case; the router's match is exact. */
+function normalised(text: string): string {
+  return text
+    .replace(/^\/(steer|think)(?=\s|$)/i, (_all, name: string) => `/${name.toLowerCase()}`)
+    .replace(/^(\/\w+)\s/, '$1 ')
+}
+
+/**
+ * The commands this handler answers itself, in one registry. `/new` and `/reset` are `exact`, so
+ * `/new chat` is no command and goes to the model (FR-008); `/think`, `/compact` and `/goal` exist
+ * only when their option does, and without it they are ordinary messages.
+ */
+function channelCommands(options: ReplyHandlerOptions) {
+  const say = async ({ ctx }: ChannelCommandContext, text: string): Promise<void> =>
+    send(ctx, { text, format: 'plain' }, { failed: false, answer: text })
+  const { think, compact, goal } = options
+  return createCommandRegistry<ChannelCommandContext>([
+    defineCommand<ChannelCommandContext>({
+      name: 'new',
+      aliases: ['reset'],
+      description: 'start a new conversation',
+      exact: true,
+      // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
+      // A reset that could not be saved moved nothing; the person is told, and the runner too.
+      run: async (_arg, c) => {
+        try {
+          await options.reset(c.event)
+        } catch (error) {
+          await send(c.ctx, { text: RESET_FAILED_REPLY, format: 'plain' }, { failed: true, error })
+          throw error
+        }
+        await say(c, NEW_CONVERSATION_REPLY)
+      },
+    }),
+    defineCommand<ChannelCommandContext>({
+      name: 'steer',
+      description: 'redirect the turn that is running',
+      run: async (arg, c) =>
+        say(c, arg === '' ? STEER_USAGE_REPLY : await answerSteer(options, c.event, arg)),
+    }),
+    ...(think === undefined
+      ? []
+      : [
+          defineCommand<ChannelCommandContext>({
+            name: 'think',
+            description: 'the thinking level',
+            run: (arg, c) => say(c, answerThink(think, c.event, arg)),
+          }),
+        ]),
+    ...(compact === undefined
+      ? []
+      : [
+          defineCommand<ChannelCommandContext>({
+            name: 'compact',
+            description: 'summarize the conversation so far',
+            run: async (_arg, c) =>
+              say(
+                c,
+                await options.withAgent(c.event, (lease) =>
+                  runCompact(compact, lease.agentId).finally(() => lease.release()),
+                ),
+              ),
+          }),
+        ]),
+    ...(goal === undefined
+      ? []
+      : [
+          defineCommand<ChannelCommandContext>({
+            name: 'goal',
+            description: 'work on a goal',
+            run: (arg, c) => answerGoal(goal, options, c.event, c.ctx, arg),
+          }),
+        ]),
+  ])
+}
+
 /**
  * The handler every runner uses: one agent turn per message with text, on the agent of the
  * message's session. In a broadcast group's member channel the turn carries the group's thread,
@@ -393,56 +417,13 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
  * disposed here: it is the session's, owned by `SessionAgents`.
  */
 export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler {
+  const registry = channelCommands(options)
+  const broadcast = options.broadcast === undefined ? undefined : createMaskedBroadcast({ secrets: options.secrets ?? [], ...options.broadcast })
   return async (event, ctx) => {
     const text = event.text.trim()
     if (text === '') return
-    if (RESET_COMMANDS.has(text)) {
-      // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
-      // A reset that could not be saved moved nothing; the person is told, and the runner too.
-      try {
-        await options.reset(event)
-      } catch (error) {
-        await send(ctx, { text: RESET_FAILED_REPLY, format: 'plain' }, { failed: true, error })
-        throw error
-      }
-      await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
-      return
-    }
-    const steer = STEER_COMMAND.exec(text)
-    if (steer !== null) {
-      const note = (steer[1] ?? '').trim()
-      const reply = note === '' ? STEER_USAGE_REPLY : await answerSteer(options, event, note)
-      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
-      return
-    }
-    const think = options.think === undefined ? null : THINK_COMMAND.exec(text)
-    if (options.think !== undefined && think !== null) {
-      const reply = answerThink(options.think, event, think[1])
-      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
-      return
-    }
-    if (options.compact !== undefined && compactOf(text) !== undefined) {
-      const reply = await options.withAgent(event, (lease) => runCompact(options.compact as CompactSettings, lease.agentId).finally(() => lease.release()))
-      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
-      return
-    }
-    const goal = options.goal === undefined ? undefined : goalOf(text)
-    if (options.goal !== undefined && goal !== undefined) {
-      await answerGoal(options.goal, options, event, ctx, goal)
-      return
-    }
-    const broadcast = options.broadcast
-    const group = broadcast?.groups.groupOf(event.platform, event.channel.id)
-    if (broadcast === undefined || group === undefined) {
-      await answerTurn(options, event, ctx, event.text)
-      return
-    }
-    // Entered before any await, so the group's turns run in delivery order.
-    await group.run(async () => {
-      const answer = await answerTurn(options, event, ctx, group.prompt(event.text))
-      // A member's own message joins the thread too, so it is masked as the answer is.
-      group.record(event.platform, maskSecrets(event.text, options.secrets ?? []), answer)
-      await fanOut(broadcast, group, event, answer)
-    })
+    const routed = await registry.dispatch(normalised(text), { event, ctx })
+    if (routed.kind === 'command') return
+    await answerTurn(options, broadcast, event, ctx)
   }
 }

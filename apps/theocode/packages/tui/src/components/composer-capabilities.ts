@@ -10,7 +10,7 @@ import type { ComposerCapabilities } from '@theokit/tui'
  * Measured at `ConversationSlot.tsx`'s single `<ChatComposer/>`:
  *
  *   onHelpToggle={...}                          -> help: true
- *   commands={composerCommands(customCommands)} -> commands: true — always spreads BUILTIN_COMMANDS,
+ *   commands={composerCommands(customCommands)} -> commands: true — always comes from the registry palette,
  *                                                  so the list is never the empty default
  *   (no onShellCommand)                         -> `shell` ABSENT
  *   (no fileSearch)                             -> mentions: true

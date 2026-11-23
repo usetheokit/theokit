@@ -2,10 +2,18 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { createFilePairingStore } from '@theokit/gateway'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createPairingStore } from '../src/authorization/pairing-store.js'
+import type { AuthorizationPolicy } from '../src/authorization/policy.js'
+import { pairingStoreFor } from '../src/composition.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
+
+
+// TheoClaw keeps no pairing store of its own: this is the gateway's file store, with the behaviors
+// the app relies on pinned. Differences from the store it replaced: codes run 100000 to 999999 (no
+// leading zeros), the state directory is made by the composition (not here), and a failed write is
+// not logged by the store.
 
 const HOUR_MS = 3_600_000
 
@@ -31,10 +39,10 @@ function scriptedRandom(values: readonly number[]) {
   return () => values[Math.min(index++, values.length - 1)] ?? 0
 }
 
-describe('createPairingStore', () => {
+describe('createFilePairingStore', () => {
   it('approves a code within 3600 seconds and refuses it after', async () => {
     const time = manualClock()
-    const store = createPairingStore({ dir, clock: time.clock })
+    const store = createFilePairingStore({ dir, clock: time.clock })
     const early = store.issue('telegram', '7')
     time.advance(HOUR_MS - 1_000)
     expect(await store.approve(early)).toEqual({ ok: true, platform: 'telegram', senderId: '7' })
@@ -48,69 +56,61 @@ describe('createPairingStore', () => {
 
   it('refuses a code at exactly 3600 seconds', async () => {
     const time = manualClock()
-    const store = createPairingStore({ dir, clock: time.clock })
+    const store = createFilePairingStore({ dir, clock: time.clock })
     const code = store.issue('telegram', '7')
     time.advance(HOUR_MS)
     expect(await store.approve(code)).toEqual({ ok: false, reason: 'unknown_or_expired' })
   })
 
   it('issues six digits and the same code to the same sender within the hour', () => {
-    const store = createPairingStore({ dir, random: scriptedRandom([42, 99]) })
+    const store = createFilePairingStore({ dir, random: scriptedRandom([100042, 100099]) })
     const code = store.issue('telegram', '7')
-    expect(code).toBe('000042')
+    expect(code).toBe('100042')
     expect(store.issue('telegram', '7')).toBe(code)
   })
 
   it('persists paired senders across a reload', async () => {
-    const store = createPairingStore({ dir })
+    const store = createFilePairingStore({ dir })
     await store.approve(store.issue('slack', 'U1'))
-    const reloaded = createPairingStore({ dir })
+    const reloaded = createFilePairingStore({ dir })
     expect(reloaded.isPaired('slack', 'U1')).toBe(true)
     expect(reloaded.isPaired('slack', 'U2')).toBe(false)
   })
 
   it('creates pairing.json with mode 0600', async () => {
-    const store = createPairingStore({ dir })
+    const store = createFilePairingStore({ dir })
     await store.approve(store.issue('slack', 'U1'))
     expect(statSync(join(dir, 'pairing.json')).mode & 0o777).toBe(0o600)
   })
 
-  it('creates a missing state directory at mode 0700', async () => {
-    const nested = join(dir, 'state')
-    const store = createPairingStore({ dir: nested })
-    expect(statSync(nested).mode & 0o777).toBe(0o700)
-    expect(await store.approve(store.issue('slack', 'U1'))).toMatchObject({ ok: true })
-  })
-
-  it('refuses to start on a corrupt pairing.json and names the path', () => {
+  it('refuses to start on a corrupt pairing.json and leaves it alone', () => {
     const path = join(dir, 'pairing.json')
     writeFileSync(path, '{')
-    expect(() => createPairingStore({ dir })).toThrow(TheoClawConfigError)
-    expect(() => createPairingStore({ dir })).toThrow(path)
+    expect(() => createFilePairingStore({ dir })).toThrow('pairing_store_unreadable')
     expect(readFileSync(path, 'utf8')).toBe('{')
   })
 
   it('refuses to start on a pairing.json without a paired list', () => {
     const path = join(dir, 'pairing.json')
     writeFileSync(path, '{"paired":[1]}')
-    expect(() => createPairingStore({ dir })).toThrow(path)
+    expect(() => createFilePairingStore({ dir })).toThrow('pairing_store_unreadable')
   })
 
   it('keeps an existing temporary file at mode 0600', async () => {
     writeFileSync(join(dir, 'pairing.json.tmp'), 'stale', { mode: 0o644 })
-    const store = createPairingStore({ dir })
+    const store = createFilePairingStore({ dir })
     await store.approve(store.issue('slack', 'U1'))
     expect(statSync(join(dir, 'pairing.json')).mode & 0o777).toBe(0o600)
   })
 
   it('keeps all 20 of 20 concurrent approvals', async () => {
-    const store = createPairingStore({ dir })
+    const store = createFilePairingStore({ dir })
     const codes = Array.from({ length: 20 }, (_, n) => store.issue('telegram', `sender-${n}`))
     const results = await Promise.all(codes.map((code) => store.approve(code)))
     expect(results.every((result) => result.ok)).toBe(true)
     const saved = JSON.parse(readFileSync(join(dir, 'pairing.json'), 'utf8')) as { paired: string[] }
     expect(new Set(saved.paired).size).toBe(20)
-    const reloaded = createPairingStore({ dir })
+    const reloaded = createFilePairingStore({ dir })
     expect(codes.every((_, n) => reloaded.isPaired('telegram', `sender-${n}`))).toBe(true)
   })
 
@@ -127,7 +127,7 @@ describe('createPairingStore', () => {
     )
     try {
       const time = manualClock()
-      const store = createPairingStore({ dir, clock: time.clock })
+      const store = createFilePairingStore({ dir, clock: time.clock })
       const approved = store.issue('telegram', '1')
       const expired = store.issue('telegram', '2')
       await store.approve(approved)
@@ -143,26 +143,23 @@ describe('createPairingStore', () => {
   })
 
   it('draws again when a code is already pending for another sender', () => {
-    const store = createPairingStore({ dir, random: scriptedRandom([111111, 111111, 222222]) })
+    const store = createFilePairingStore({ dir, random: scriptedRandom([111111, 111111, 222222]) })
     expect(store.issue('telegram', 'a')).toBe('111111')
     expect(store.issue('telegram', 'b')).toBe('222222')
   })
 
   it('a failed write pairs nobody', async () => {
-    const lines: string[] = []
-    const store = createPairingStore({ dir, write: (line) => void lines.push(line) })
+    const store = createFilePairingStore({ dir })
     const code = store.issue('telegram', '9')
     // A file where the directory was: the write fails with ENOTDIR whoever runs the test.
     rmSync(dir, { recursive: true })
     writeFileSync(dir, '')
     expect(await store.approve(code)).toEqual({ ok: false, reason: 'write_failed' })
     expect(store.isPaired('telegram', '9')).toBe(false)
-    expect(lines.join('\n')).toContain(join(dir, 'pairing.json'))
-    expect(lines.join('\n')).not.toContain(code)
   })
 
   it('approves again after a failed write', async () => {
-    const store = createPairingStore({ dir, write: () => undefined })
+    const store = createFilePairingStore({ dir })
     const failing = store.issue('telegram', '9')
     rmSync(dir, { recursive: true })
     writeFileSync(dir, '')
@@ -173,7 +170,7 @@ describe('createPairingStore', () => {
   })
 
   it('keeps a code whose save failed, so the owner can approve the same code again', async () => {
-    const store = createPairingStore({ dir, write: () => undefined })
+    const store = createFilePairingStore({ dir })
     const code = store.issue('telegram', '9')
     rmSync(dir, { recursive: true })
     writeFileSync(dir, '')
@@ -186,11 +183,44 @@ describe('createPairingStore', () => {
 
   it('drops pending codes older than 3600 seconds on the next issue', async () => {
     const time = manualClock()
-    const store = createPairingStore({ dir, clock: time.clock, random: scriptedRandom([5, 5, 6]) })
+    const store = createFilePairingStore({ dir, clock: time.clock, random: scriptedRandom([100005, 100005, 100006]) })
     const stale = store.issue('telegram', 'a')
     time.advance(HOUR_MS + 1)
     // The stale code no longer blocks its digits: the next sender may draw them.
     expect(store.issue('telegram', 'b')).toBe(stale)
     expect(await store.approve(stale)).toEqual({ ok: true, platform: 'telegram', senderId: 'b' })
+  })
+})
+
+describe('pairingStoreFor (the composition of the gateway store)', () => {
+  const policyFor = (stateDir: string | undefined): AuthorizationPolicy => ({
+    owners: new Set(['telegram:owner']),
+    dmPolicy: 'pairing',
+    groupActivation: 'mention',
+    refusalText: 'owner only',
+    stateDir,
+    broadcastGroups: [],
+    allowed: new Set(),
+  })
+
+  it('has no store without a state directory', () => {
+    expect(pairingStoreFor(policyFor(undefined))).toBeUndefined()
+  })
+
+  it('creates a missing state directory at mode 0700', async () => {
+    const nested = join(dir, 'state')
+    const store = pairingStoreFor(policyFor(nested))
+    expect(statSync(nested).mode & 0o777).toBe(0o700)
+    expect(await store?.approve(store.issue('slack', 'U1'))).toMatchObject({ ok: true })
+  })
+
+  it('refuses to start on a corrupt pairing.json and names the path and THEOCLAW_STATE_DIR', () => {
+    const path = join(dir, 'pairing.json')
+    writeFileSync(path, '{')
+    const failure = (): unknown => pairingStoreFor(policyFor(dir))
+    expect(failure).toThrow(TheoClawConfigError)
+    expect(failure).toThrow(path)
+    expect(failure).toThrow(expect.objectContaining({ variable: 'THEOCLAW_STATE_DIR' }))
+    expect(readFileSync(path, 'utf8')).toBe('{')
   })
 })

@@ -35,7 +35,7 @@ try {
   }
   loadConfiguration(process.env, homedir())
   const instance = resolveInstance(process.env, { homeDir: homedir() })
-  applyInstance(instance, process.env)
+  await applyInstance(instance, process.env)
   const secretRefs = await resolveSecretRefs(process.env)
   Object.assign(process.env, secretRefs.env)
   const workspace = instance.workspace

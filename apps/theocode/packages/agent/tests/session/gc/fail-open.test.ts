@@ -20,7 +20,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 import { CursorNotDrainedError, listAgents } from '../../../src/session/agent-list.js'
 
 const DAY = 86_400_000
@@ -135,5 +135,32 @@ describe('B-020 — the cursor guard refuses a truncated protection set', () => 
     const drained = async () => ({ items: [{ agentId: 'a1' }] })
 
     await expect(listAgents('/proj', drained)).resolves.toEqual([{ agentId: 'a1' }])
+  })
+})
+
+describe('B-020 — a DEAD project does not consult state that belongs to a live cwd', () => {
+  it('test_a_DEAD_project_reads_neither_the_registry_nor_the_pointer', async () => {
+    const listRegistry = vi.fn(async () => [])
+    const readPointer = vi.fn(() => 'sess-old')
+
+    const plan = await planSessionGCAllProjects(options({ listRegistry, readPointer }))
+
+    expect(listRegistry).not.toHaveBeenCalled()
+    expect(readPointer).not.toHaveBeenCalled()
+    expect(plan.candidates.map((c) => c.target.split('/').pop())).toEqual(['sess-old.jsonl'])
+    expect(plan.liveCwds).toEqual([])
+  })
+
+  it('test_an_UNDETERMINED_project_never_lists_its_files', async () => {
+    const listProject = vi.fn(() => [])
+
+    await planSessionGCAllProjects(
+      options({
+        listProject,
+        classify: () => ({ state: 'UNDETERMINED' as const, reason: 'EACCES' }),
+      } as never),
+    )
+
+    expect(listProject).not.toHaveBeenCalled()
   })
 })

@@ -128,6 +128,25 @@ share the issuer's host. Otherwise it throws `OidcInsecureEndpointError` (`code:
 'oidc_insecure_endpoint'`, with `field` and `url`), and the failure is not cached.
 `isSafeOidcUrl(url)` applies the same rule.
 
+## Serving a hosted chat page
+
+`createHostedChat` from `theokit/server/http` mounts a chat page behind one handler, `(request) => Promise<Response>`:
+
+```ts
+import { createHostedChat, hashedSessionScope } from 'theokit/server/http'
+
+const chat = createHostedChat({
+  route: '/chat',
+  assetsDir: new URL('./dist/web/assets/', import.meta.url), // app.js and app.css
+  maxBodyBytes: 65_536,
+  auth: (request) => (isSignedIn(request) ? { identity: userOf(request) } : new Response(null, { status: 401 })),
+  sessionScope: hashedSessionScope,
+  createRun: (message, chatId, signal) => runAgent(message, chatId, signal), // an AsyncIterable of stream events
+})
+```
+
+It serves `GET /chat` (the shell, with a CSP), `GET /chat/sandbox` (the sandboxed widget frame), `GET /chat/assets/<name>` (only the names in `assets`) and `POST /chat/chat`. `auth` runs before the body is read: return a `Response` to refuse, or `{ identity }` to let the post in. Past `maxBodyBytes` the post is 413, a message with no valid chat id is 400, both before `createRun` is called. `sessionScope(identity)` prefixes the chat id, so two identities naming one chat id get two sessions. The `signal` aborts when the client leaves or cancels the stream.
+
 ## Testing
 
 `theokit/testing` starts the app's own `theokit dev` (or `theokit start`) on a free port and resolves

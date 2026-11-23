@@ -106,6 +106,22 @@ describe('createReplyHandler', () => {
     expect(replies).toEqual([{ text: RESET_FAILED_REPLY, format: 'plain' }])
   })
 
+  it('does not reset on /new chat: it is an ordinary message', async () => {
+    let resets = 0
+    let leases = 0
+    const event = messageEvent('telegram', '/new chat')
+    const { ctx } = fakeContext(event)
+    await createReplyHandler({
+      reset: async () => void (resets += 1),
+      withAgent: async () => {
+        leases += 1
+        throw new Error('the turn starts')
+      },
+    })(event, ctx).catch(() => undefined)
+    expect(resets).toBe(0)
+    expect(leases).toBeGreaterThan(0)
+  })
+
   it('skips a message with empty text', async () => {
     let boundaries = 0
     const event = messageEvent('telegram', '  ')
@@ -186,14 +202,14 @@ describe('createReplyHandler', () => {
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
   })
 
-  it('a cancelled run is not a failure', async () => {
+  it('a cancelled run is a failed turn since @theokit/gateway-agent 0.4: one error reply, then the error', async () => {
     const agent = new FakeAgent({ frames: [], result: { status: 'cancelled' } })
     const event = messageEvent('email', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
+    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBeInstanceOf(AgentTurnError)
 
-    expect(replies.map((reply) => reply.text)).toEqual([NO_ANSWER_REPLY])
+    expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
   })
 
   it('an agent factory that rejects still replies once', async () => {

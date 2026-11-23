@@ -42,6 +42,17 @@ async function run(dir: string, base: string | undefined, token: string | null =
 }
 
 describe('theoclaw skills publish', () => {
+  it('reads the registry and token from the instance config file', async () => {
+    const { seen, base } = await registry(201)
+    const h = harness()
+    const file = join(scratchDir(), 'instance.env')
+    writeFileSync(file, `THEOCLAW_SKILLS_REGISTRY=${base}\nTHEOCLAW_SKILLS_TOKEN=${TOKEN}\n`)
+    const env = { ...h.io.env, THEOCLAW_CONFIG: file }
+    const code = await runCli(['skills', 'publish', skill()], { ...h.io, env })
+    expect(code).toBe(0)
+    expect(h.stdout()).toBe('Published demo@1.2.3\n')
+    expect(seen[0]).toMatchObject({ method: 'PUT', url: '/v1/skills/demo/1.2.3', auth: `Bearer ${TOKEN}` })
+  })
   it('publishes byte-identical files', async () => {
     const { seen, base } = await registry(201)
     const r = await run(skill(), base)

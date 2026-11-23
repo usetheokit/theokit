@@ -592,3 +592,54 @@ describe('deleteSession with a verifier', () => {
     expect(v.calls).toEqual([])
   })
 })
+
+describe('protectedTranscriptPaths — legacy name of the pointer (#2746)', () => {
+  it('protects the legacy-named file of the pointed session', async () => {
+    const { legacyTranscriptPath } = await import('@theokit/sdk/persistence')
+    writeTranscriptFile('other', 0)
+    await persistSessionId(CWD, 'pointed', root)
+    const got = await protectedTranscriptPaths(CWD, root)
+    expect(got.get(legacyTranscriptPath(root, CWD, 'pointed'))).toBe('resumable session pointer')
+  })
+
+  it('names only the file on disk when the pointed session has one', async () => {
+    const { legacyTranscriptPath } = await import('@theokit/sdk/persistence')
+    writeTranscriptFile('pointed', 0)
+    await persistSessionId(CWD, 'pointed', root)
+    const got = await protectedTranscriptPaths(CWD, root)
+    expect(got.get(transcriptPath(root, CWD, 'pointed'))).toBe('resumable session pointer')
+    expect(got.has(legacyTranscriptPath(root, CWD, 'pointed'))).toBe(false)
+    const pointerPaths = [...got].filter(([, why]) => why === 'resumable session pointer')
+    expect(pointerPaths).toHaveLength(1)
+  })
+
+  it('names only the legacy file when only it exists', async () => {
+    const { legacyTranscriptPath } = await import('@theokit/sdk/persistence')
+    const legacy = legacyTranscriptPath(root, CWD, 'pointed')
+    mkdirSync(projectDirFor(CWD, root), { recursive: true })
+    writeFileSync(legacy, `${JSON.stringify({ type: 'user', sessionId: 'pointed' })}\n`, 'utf8')
+    await persistSessionId(CWD, 'pointed', root)
+    const got = await protectedTranscriptPaths(CWD, root)
+    expect(got.get(legacy)).toBe('resumable session pointer')
+    expect(got.has(transcriptPath(root, CWD, 'pointed'))).toBe(false)
+  })
+
+  it('names both files when both exist', async () => {
+    const { legacyTranscriptPath } = await import('@theokit/sdk/persistence')
+    const legacy = legacyTranscriptPath(root, CWD, 'pointed')
+    writeTranscriptFile('pointed', 0)
+    writeFileSync(legacy, `${JSON.stringify({ type: 'user', sessionId: 'pointed' })}\n`, 'utf8')
+    await persistSessionId(CWD, 'pointed', root)
+    const got = await protectedTranscriptPaths(CWD, root)
+    expect(got.get(legacy)).toBe('resumable session pointer')
+    expect(got.get(transcriptPath(root, CWD, 'pointed'))).toBe('resumable session pointer')
+  })
+
+  it('keeps both candidates when neither file exists', async () => {
+    const { legacyTranscriptPath } = await import('@theokit/sdk/persistence')
+    await persistSessionId(CWD, 'ghost', root)
+    const got = await protectedTranscriptPaths(CWD, root)
+    expect(got.has(legacyTranscriptPath(root, CWD, 'ghost'))).toBe(true)
+    expect(got.has(transcriptPath(root, CWD, 'ghost'))).toBe(true)
+  })
+})

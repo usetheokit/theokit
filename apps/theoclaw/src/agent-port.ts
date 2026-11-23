@@ -1,4 +1,4 @@
-import type { AgentStreamEvent, SdkMessage, SdkTimelineEvent } from '@theokit/agents/bridge'
+import { type AgentStreamEvent, type AgentTurnMessage, isAgentStreamEvent, type SdkMessage, type SdkTimelineEvent } from '@theokit/agents/bridge'
 import type { InteractionUpdate } from '@theokit/sdk'
 
 /**
@@ -18,12 +18,7 @@ import type { InteractionUpdate } from '@theokit/sdk'
  * What one `send` carries: the text alone, or the text with images the model reads on that user
  * turn (the `computer` tool's screenshot, B-676 D1). The SDK agent accepts both shapes.
  */
-export type TurnMessage =
-  | string
-  | {
-      readonly text: string
-      readonly images: { readonly data: string; readonly mimeType: string }[]
-    }
+export type TurnMessage = AgentTurnMessage
 
 export interface TurnAgent {
   /**
@@ -110,133 +105,6 @@ export function toSdkTimelineEvent(event: TurnTimelineEvent): SdkTimelineEvent {
     message: toSdkMessage(event.message),
     ...(event.textAlreadyStreamed === undefined ? {} : { textAlreadyStreamed: event.textAlreadyStreamed }),
   }
-}
-
-type FieldKind =
-  | 'string'
-  | 'number'
-  | 'boolean'
-  | 'object'
-  | 'defined'
-  | 'nullableNumber'
-  | 'usage'
-  | 'fileFormat'
-  | 'stopReason'
-
-type FieldTable = Readonly<Record<string, FieldKind>>
-
-/** The required fields of each `AgentStreamEvent` variant and the kind of each. */
-const REQUIRED_FIELDS: Readonly<Record<AgentStreamEvent['type'], FieldTable>> = {
-  run_started: { runId: 'string', agentName: 'string' },
-  text_delta: { content: 'string' },
-  tool_call: { callId: 'string', toolName: 'string' },
-  partial_tool_call: { callId: 'string', toolName: 'string' },
-  tool_result: { callId: 'string', toolName: 'string', output: 'string', durationMs: 'number', isError: 'boolean' },
-  thinking: { content: 'string' },
-  iteration: { step: 'number', totalSteps: 'nullableNumber' },
-  approval_required: {
-    callId: 'string',
-    toolName: 'string',
-    question: 'string',
-    callbackUrl: 'string',
-    timeoutMs: 'number',
-  },
-  input_requested: { requestId: 'string' },
-  task_progress: {},
-  shell_output: { event: 'object' },
-  artifact_start: { artifactId: 'string', mimeType: 'string' },
-  artifact_chunk: { artifactId: 'string', chunk: 'string', isLast: 'boolean' },
-  state_update: { channel: 'string' },
-  checkpoint_saved: { checkpointId: 'string', step: 'number', resumeToken: 'string' },
-  file_edit: { file: 'string', format: 'fileFormat' },
-  error: { code: 'string', message: 'string', retryable: 'boolean' },
-  done: { result: 'string', usage: 'usage', durationMs: 'number' },
-}
-
-/** The optional fields of each variant; when present (not `undefined`) they must have their kind. */
-const OPTIONAL_FIELDS: Readonly<Record<AgentStreamEvent['type'], FieldTable>> = {
-  run_started: { model: 'string' },
-  text_delta: {},
-  tool_call: {},
-  partial_tool_call: {},
-  tool_result: { refusal: 'object' },
-  thinking: {},
-  iteration: {},
-  approval_required: { payloadSchema: 'object' },
-  input_requested: {},
-  task_progress: { status: 'string', text: 'string' },
-  shell_output: {},
-  artifact_start: { filename: 'string', metadata: 'object' },
-  artifact_chunk: {},
-  state_update: {},
-  checkpoint_saved: {},
-  file_edit: {
-    search: 'string',
-    replace: 'string',
-    content: 'string',
-    diff: 'string',
-    startLine: 'number',
-    endLine: 'number',
-  },
-  error: {},
-  done: { cost: 'number', stopReason: 'stopReason', model: 'string' },
-}
-
-const USAGE_REQUIRED: FieldTable = { inputTokens: 'number', outputTokens: 'number', totalTokens: 'number' }
-const USAGE_OPTIONAL: FieldTable = {
-  reasoningTokens: 'number',
-  cacheReadTokens: 'number',
-  cacheWriteTokens: 'number',
-}
-
-const FILE_FORMATS: readonly unknown[] = ['search-replace', 'unified-diff', 'full-file', 'line-range']
-const STOP_REASONS: readonly unknown[] = ['step_limit', 'no_progress']
-
-function fieldOf(record: object, name: string): unknown {
-  return Object.entries(record).find(([key]) => key === name)?.[1]
-}
-
-function hasKind(value: unknown, kind: FieldKind): boolean {
-  switch (kind) {
-    case 'defined':
-      return value !== undefined
-    case 'object':
-      return typeof value === 'object' && value !== null
-    case 'nullableNumber':
-      return value === null || typeof value === 'number'
-    case 'usage':
-      return typeof value === 'object' && value !== null && fieldsMatch(value, USAGE_REQUIRED, USAGE_OPTIONAL)
-    case 'fileFormat':
-      return FILE_FORMATS.includes(value)
-    case 'stopReason':
-      return STOP_REASONS.includes(value)
-    default:
-      return typeof value === kind
-  }
-}
-
-function fieldsMatch(record: object, required: FieldTable, optional: FieldTable): boolean {
-  return (
-    Object.entries(required).every(([name, kind]) => hasKind(fieldOf(record, name), kind)) &&
-    Object.entries(optional).every(([name, kind]) => {
-      const value = fieldOf(record, name)
-      return value === undefined || hasKind(value, kind)
-    })
-  )
-}
-
-function isVariantType(type: string): type is AgentStreamEvent['type'] {
-  return Object.hasOwn(REQUIRED_FIELDS, type)
-}
-
-/**
- * Whether a wire event is an `AgentStreamEvent`: its discriminant is one of the union's, every
- * required field of that variant is present with its kind, and every optional field present has its
- * kind. The one narrowing, no cast.
- */
-export function isAgentStreamEvent(event: { readonly type: string }): event is AgentStreamEvent {
-  if (!isVariantType(event.type)) return false
-  return fieldsMatch(event, REQUIRED_FIELDS[event.type], OPTIONAL_FIELDS[event.type])
 }
 
 /** The events of `events` that are `AgentStreamEvent`s, typed as such; a malformed one is dropped. */

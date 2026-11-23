@@ -2,7 +2,6 @@ import {
   type AgentStreamSource,
   AgentStreaming,
   ChatComposer,
-  type ChatComposerCommand,
   ChatMessage,
   InkInputProvider,
   Notice,
@@ -11,19 +10,17 @@ import {
   ToolCallCard,
   useAgentStream,
 } from '@theokit/tui'
+import { createControlStreamSource, type ControlStreamSource } from '@theokit/agents/control'
+import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
 import { Text, useInput } from 'ink'
 import { type ReactElement, useRef, useState } from 'react'
 
 import type { ControlClient } from '../control-client/control-client.js'
 import {
-  controlStream,
   createTurnInbox,
   nextSessionId,
-  type TranscriptEntry,
   type TurnInbox,
   type TuiNotice,
-  type TurnNotice,
-  turnEntries,
 } from './frames.js'
 
 export interface TheoClawTuiProps {
@@ -35,11 +32,20 @@ export interface TheoClawTuiProps {
   readonly onExit: () => void
 }
 
-const COMMANDS: readonly ChatComposerCommand[] = [
-  { name: 'interrupt', description: 'stop the running turn (same as Esc)' },
-  { name: 'new', description: 'start a fresh session' },
-  { name: 'quit', description: 'close the connection and exit' },
-]
+/** What the terminal's own commands act on; the component supplies it on each submit. */
+interface TuiActions {
+  readonly interrupt: () => void
+  readonly fresh: () => void
+  readonly quit: () => void
+}
+
+// `exact`: `/new chat` is a message to the agent, not a new session.
+const COMMANDS = createCommandRegistry<TuiActions>([
+  defineCommand<TuiActions>({ name: 'interrupt', description: 'stop the running turn (same as Esc)', exact: true, run: (_arg, actions) => actions.interrupt() }),
+  defineCommand<TuiActions>({ name: 'new', description: 'start a fresh session', exact: true, run: (_arg, actions) => actions.fresh() }),
+  defineCommand<TuiActions>({ name: 'quit', description: 'close the connection and exit', exact: true, run: (_arg, actions) => actions.quit() }),
+])
+const PALETTE = COMMANDS.palette()
 
 /** One line of the transcript; a turn folds its own text and tools through `useAgentStream`. */
 type Item =
@@ -49,54 +55,19 @@ type Item =
       readonly kind: 'turn'
       readonly id: number
       readonly source: AgentStreamSource
-      readonly notices: readonly TurnNotice[]
-      /** Set when the turn was interrupted: the local reducer's transcript, drawn instead of the framework's fold. */
-      readonly frozen?: readonly TranscriptEntry[]
     }
 
-function Turn({
-  source,
-  notices,
-  frozen,
-}: {
-  readonly source: AgentStreamSource
-  readonly notices: readonly TurnNotice[]
-  readonly frozen?: readonly TranscriptEntry[]
-}): ReactElement {
+function Turn({ source }: { readonly source: AgentStreamSource }): ReactElement {
   const { events } = useAgentStream(source)
-  if (frozen !== undefined) {
-    return (
-      <>
-        {frozen.map((entry, index) => {
-          if (entry.kind === 'assistant')
-            return (
-              <ChatMessage key={index} role="assistant">
-                {entry.text}
-              </ChatMessage>
-            )
-          if (entry.kind === 'tool')
-            return <ToolCallCard key={index} name={entry.name} status={entry.status} />
-          if (entry.kind === 'notice')
-            return (
-              <Notice key={index} variant={entry.variant}>
-                {entry.text}
-              </Notice>
-            )
-          return null
-        })}
-      </>
-    )
-  }
   return (
     <>
-      {turnEntries(events, notices).map((entry, index) => {
-        if (entry.kind === 'notice')
+      {events.map((event) => {
+        if (event.kind === 'notice')
           return (
-            <Notice key={`n${index}`} variant={entry.variant}>
-              {entry.text}
+            <Notice key={event.id} variant={event.variant}>
+              {event.text}
             </Notice>
           )
-        const { event } = entry
         if (event.kind === 'message')
           return (
             <ChatMessage key={event.id} role={event.role}>
@@ -116,7 +87,7 @@ function Entry({ item }: { readonly item: Item }): ReactElement {
     case 'user':
       return <ChatMessage role="user">{item.text}</ChatMessage>
     case 'turn':
-      return <Turn source={item.source} notices={item.notices} frozen={item.frozen} />
+      return <Turn source={item.source} />
     case 'notice':
       return <Notice variant={item.variant}>{item.text}</Notice>
   }
@@ -137,10 +108,11 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
   const queued = useRef<string | undefined>(undefined)
 
   const interrupt = (): void => {
-    if (running.current) client.interrupt(session)
+    if (running.current) current.current?.interrupt()
   }
 
   const turns = useRef(0)
+  const current = useRef<ControlStreamSource | undefined>(undefined)
   const inbox = useRef<TurnInbox | undefined>(undefined)
   // While a turn runs a notice goes to its stream, which places it where the turn has reached, so later output stays below it.
   const notice = (n: TuiNotice): void => {
@@ -155,14 +127,8 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
     setBusy(true)
     const mine = createTurnInbox()
     inbox.current = mine
-    const update = (change: (item: Item & { kind: 'turn' }) => Item): void =>
-      setItems((current) =>
-        current.map((item) => (item.kind === 'turn' && item.id === id ? change(item) : item)),
-      )
-    const inTurn = (n: TurnNotice): void =>
-      update((item) => ({ ...item, notices: [...item.notices, n] }))
-    const onInterrupted = (frozen: readonly TranscriptEntry[]): void =>
-      update((item) => ({ ...item, frozen }))
+    // What is left once the framework ended the fold (a notice posted after the interruption) goes below the turn.
+    const inTurn = (n: TuiNotice): void => setItems((current) => [...current, { kind: 'notice', ...n }])
     const onEnd = (): void => {
       running.current = false
       setBusy(false)
@@ -171,12 +137,16 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
       if (next !== undefined) send(next)
     }
     // A function source: the hook starts the turn when it mounts, so the stream is opened exactly once.
-    const source: AgentStreamSource = () =>
-      controlStream(client, text, session, inTurn, onEnd, mine, onInterrupted)
+    const source = createControlStreamSource(client, session, text, {
+      inbox: mine,
+      onNotice: inTurn,
+      onEnd,
+    })
+    current.current = source
     setItems((current) => [
       ...current,
       { kind: 'user', text },
-      { kind: 'turn', id, source, notices: [] },
+      { kind: 'turn', id, source },
     ])
   }
 
@@ -184,18 +154,25 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
     if (key.escape) interrupt()
   })
 
-  const submit = (text: string): void => {
-    const trimmed = text.trim()
-    if (trimmed === '') return
-    if (trimmed === '/interrupt') return interrupt()
-    if (trimmed === '/quit') return void client.close().then(onExit)
-    if (trimmed === '/new') {
+  const actions: TuiActions = {
+    interrupt,
+    quit: () => void client.close().then(onExit),
+    fresh: () => {
       // The running turn stays on this session: switching now would leave Esc nothing to stop.
-      if (running.current)
-        return notice({ variant: 'warning', text: 'a turn is running: press Esc first' })
+      if (running.current) return notice({ variant: 'warning', text: 'a turn is running: press Esc first' })
       fresh.current += 1
       setSession(nextSessionId(base, fresh.current))
       setItems([])
+    },
+  }
+
+  const submit = (text: string): void => {
+    const trimmed = text.trim()
+    if (trimmed === '') return
+    const routed = COMMANDS.route(trimmed)
+    if (routed.kind === 'command') {
+      // Run in place, not through `dispatch`: a command's effect lands before the next keystroke.
+      void routed.command.run?.(routed.arg, actions)
       return
     }
     // One turn at a time: a message typed while one runs is sent when it ends (by Esc or by itself).
@@ -217,7 +194,7 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
           <ChatComposer
             onSubmit={submit}
             multiLine
-            commands={COMMANDS}
+            commands={PALETTE}
             placeholder="Message TheoClaw"
           />
           <Text dimColor>session {session}</Text>

@@ -34,7 +34,8 @@
       "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/create-theokit": {
-      "project": ["src/**/*.{ts,tsx}"]
+      "entry": ["tools/build-ink-cli.mjs"],
+      "project": ["src/**/*.{ts,tsx}", "tools/**/*.mjs"]
     }
   },
   "ignoreDependencies": [

@@ -4,21 +4,31 @@
  * TheoClaw adds and where they sit in the turn. Unit tests, no socket and no terminal.
  */
 import { type AgentStreamEvent, agentStreamReducer, initialAgentStreamState } from '@theokit/tui'
+import { createControlStreamSource } from '@theokit/agents/control'
 import { describe, expect, it } from 'vitest'
 
 import { deferred, waitFor } from './fakes.js'
 
 import { type ControlClient, type ControlFrame, nextArrival } from '../src/control-client/control-client.js'
 import {
-  controlStream,
   createTurnInbox,
   nextSessionId,
-  type TranscriptEntry,
-  type TurnNotice,
-  turnEntries,
+  type TuiNotice,
 } from '../src/tui/frames.js'
 
 const SESSION = 'owner'
+
+/** One turn through the framework adapter, as the app builds it. */
+function controlStream(
+  client: ControlClient,
+  text: string,
+  session: string,
+  onNotice: (n: TuiNotice) => void,
+  onEnd: () => void,
+  inbox = createTurnInbox(),
+) {
+  return createControlStreamSource(client, session, text, { inbox, onNotice, onEnd })()
+}
 
 /** A turn event frame; the event's shape is the SDK translator's, so the test spells only its fields. */
 function event(fields: Record<string, unknown>): ControlFrame {
@@ -27,7 +37,7 @@ function event(fields: Record<string, unknown>): ControlFrame {
 
 /** Run a turn's frames as the TUI does: the stream folds in the framework reducer, ending with its done. */
 async function run(frames: readonly ControlFrame[], fail?: Error) {
-  const notices: TurnNotice[] = []
+  const notices: TuiNotice[] = []
   let ended = 0
   const client = {
     chat: async function* () {
@@ -45,7 +55,7 @@ async function run(frames: readonly ControlFrame[], fail?: Error) {
   ))
     events.push(e)
   const state = [...events, { type: 'done' }].reduce(agentStreamReducer, initialAgentStreamState)
-  return { state, notices, ended, entries: turnEntries(state.events, notices) }
+  return { state, notices, ended, entries: state.events }
 }
 
 const DONE: ControlFrame = { type: 'done', session: SESSION }
@@ -155,24 +165,38 @@ describe('controlStream: the end of a turn', () => {
     expect(ended).toBe(1)
   })
 
-  it('interrupted ends the turn with a warning line after the partial output, failing the unfinished tool', async () => {
-    const { entries, notices, ended } = await run([
+  it('interrupted ends the turn with the framework notice after the partial output, cancelling the unfinished tool', async () => {
+    const { entries, state, ended } = await run([
       event({ type: 'text_delta', content: 'part' }),
       event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
       { type: 'interrupted', session: SESSION },
     ])
     expect(entries).toMatchObject([
-      { kind: 'event', event: { kind: 'message', text: 'part' } },
-      { kind: 'event', event: { kind: 'tool', status: 'failed' } },
-      { kind: 'notice', variant: 'warning', text: 'interrupted' },
+      { kind: 'message', text: 'part' },
+      { kind: 'tool', name: 'ReadFile', status: 'cancelled' },
+      { kind: 'notice', variant: 'warning', text: 'Interrupted by user' },
     ])
-    expect(notices).toHaveLength(1)
+    expect(state.status).toBe('interrupted')
     expect(ended).toBe(1)
+  })
+
+  it('interrupted cancels only the tool still running; a settled one keeps its status', async () => {
+    const { entries } = await run([
+      event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
+      event({ type: 'tool_call', callId: 'c2', toolName: 'Grep' }),
+      event({ type: 'tool_result', callId: 'c1', isError: false }),
+      { type: 'interrupted', session: SESSION },
+    ])
+    expect(entries).toMatchObject([
+      { kind: 'tool', name: 'ReadFile', status: 'success' },
+      { kind: 'tool', name: 'Grep', status: 'cancelled' },
+      { kind: 'notice', text: 'Interrupted by user' },
+    ])
   })
 
   it('an error frame ends the turn with an error line naming its code', async () => {
     const { entries } = await run([{ type: 'error', code: 'busy', session: SESSION }])
-    expect(entries).toEqual([{ kind: 'notice', variant: 'error', text: 'the turn ended: busy' }])
+    expect(entries).toMatchObject([{ kind: 'notice', variant: 'error', text: 'the turn ended: busy' }])
   })
 
   it('an error event inside the turn adds an error line in place and the turn goes on', async () => {
@@ -183,17 +207,17 @@ describe('controlStream: the end of a turn', () => {
       DONE,
     ])
     expect(entries).toMatchObject([
-      { kind: 'event', event: { text: 'before' } },
+      { kind: 'message', text: 'before' },
       { kind: 'notice', variant: 'error', text: 'the turn failed (rate_limited)' },
-      { kind: 'event', event: { text: 'after' } },
+      { kind: 'message', text: 'after' },
     ])
     expect(state.status).toBe('done')
   })
 
   it('a failed connection ends the turn with the reason as an error line', async () => {
-    const { notices, ended } = await run([], new Error('connection closed before the turn ended'))
-    expect(notices).toMatchObject([
-      { variant: 'error', text: 'connection closed before the turn ended' },
+    const { entries, ended } = await run([], new Error('connection closed before the turn ended'))
+    expect(entries).toMatchObject([
+      { kind: 'notice', variant: 'error', text: 'connection closed before the turn ended' },
     ])
     expect(ended).toBe(1)
   })
@@ -227,34 +251,7 @@ describe('nextSessionId', () => {
   })
 })
 
-describe('controlStream: interruption fallback and notices from the app', () => {
-  it('an interrupted turn hands over the local transcript, the unfinished tool still running', async () => {
-    let handed: readonly TranscriptEntry[] | undefined
-    const client = {
-      chat: async function* () {
-        yield event({ type: 'text_delta', content: 'part' })
-        yield event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' })
-        yield { type: 'interrupted', session: SESSION } as ControlFrame
-      },
-    } as unknown as ControlClient
-    const inbox = createTurnInbox()
-    for await (const e of controlStream(
-      client,
-      'hi',
-      SESSION,
-      () => undefined,
-      () => undefined,
-      inbox,
-      (t) => (handed = t),
-    ))
-      void e
-    expect(handed).toEqual([
-      { kind: 'assistant', text: 'part' },
-      { kind: 'tool', callId: 'c1', name: 'ReadFile', status: 'running' },
-      { kind: 'notice', variant: 'warning', text: 'interrupted' },
-    ])
-  })
-
+describe('controlStream: notices from the app', () => {
   it('a notice posted mid-turn is placed when posted, so text received before and after it sits on each side', async () => {
     const gate = deferred<void>()
     const gate2 = deferred<void>()
@@ -268,7 +265,7 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       },
     } as unknown as ControlClient
     const inbox = createTurnInbox()
-    const notices: TurnNotice[] = []
+    const notices: TuiNotice[] = []
     const events: AgentStreamEvent[] = []
     const consume = (async () => {
       for await (const e of controlStream(
@@ -283,7 +280,7 @@ describe('controlStream: interruption fallback and notices from the app', () => 
     })()
     await waitFor(() => events.length === 1, 2000, 'the first delta')
     inbox.post({ variant: 'warning', text: 'queued' })
-    await waitFor(() => notices.length === 1, 2000, 'the notice to be placed')
+    await waitFor(() => events.length === 2, 2000, 'the notice to be placed')
     gate.resolve()
     gate2.resolve()
     await consume
@@ -291,10 +288,10 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       agentStreamReducer,
       initialAgentStreamState,
     )
-    expect(turnEntries(state.events, notices)).toMatchObject([
-      { kind: 'event', event: { text: 'before' } },
+    expect(state.events).toMatchObject([
+      { kind: 'message', text: 'before' },
       { kind: 'notice', text: 'queued' },
-      { kind: 'event', event: { text: 'after' } },
+      { kind: 'message', text: 'after' },
     ])
   })
 
@@ -314,7 +311,7 @@ describe('controlStream: interruption fallback and notices from the app', () => 
         },
       } as unknown as ControlClient
       const inbox = createTurnInbox()
-      const notices: TurnNotice[] = []
+      const notices: TuiNotice[] = []
       const stream = controlStream(
         client,
         'hi',
@@ -331,9 +328,9 @@ describe('controlStream: interruption fallback and notices from the app', () => 
         agentStreamReducer,
         initialAgentStreamState,
       )
-      const entries = turnEntries(state.events, notices)
-      expect(entries.at(-1)).toMatchObject({ kind: 'notice', text: 'late' })
-      expect(entries.filter((entry) => entry.kind === 'event')).toHaveLength(state.events.length)
+      // The frames had all arrived, so the notice is placed after them: once the stream ended, below the turn.
+      expect(state.events.some((e) => e.kind === 'notice')).toBe(false)
+      expect(notices).toEqual([{ variant: 'warning', text: 'late' }])
     }
   })
 
@@ -348,7 +345,7 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       },
     } as unknown as ControlClient
     const inbox = createTurnInbox()
-    const notices: TurnNotice[] = []
+    const notices: TuiNotice[] = []
     const stream = controlStream(client, 'hi', SESSION, (n) => notices.push(n), () => undefined, inbox)
     const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
     inbox.post({ variant: 'warning', text: 'queued' })
@@ -358,10 +355,10 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       agentStreamReducer,
       initialAgentStreamState,
     )
-    expect(turnEntries(state.events, notices)).toMatchObject([
-      { kind: 'event', event: { text: 'before' } },
+    expect(state.events).toMatchObject([
+      { kind: 'message', text: 'before' },
       { kind: 'notice', text: 'queued' },
-      { kind: 'event', event: { text: 'after' } },
+      { kind: 'message', text: 'after' },
     ])
   })
 
@@ -377,7 +374,7 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       },
     } as unknown as ControlClient
     const inbox = createTurnInbox()
-    const notices: TurnNotice[] = []
+    const notices: TuiNotice[] = []
     const stream = controlStream(client, 'hi', SESSION, (n) => notices.push(n), () => undefined, inbox)
     const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
     // The frame comes off the socket (stamped), then the notice is posted, before the consumer resumes.
@@ -389,13 +386,13 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       agentStreamReducer,
       initialAgentStreamState,
     )
-    expect(turnEntries(state.events, notices)).toMatchObject([
-      { kind: 'event', event: { text: 'beforeafter' } },
+    expect(state.events).toMatchObject([
+      { kind: 'message', text: 'beforeafter' },
       { kind: 'notice', text: 'queued' },
     ])
   })
 
-  it('an interrupted frame that arrived before a notice posted in the same tick keeps the warning first', async () => {
+  it('an interrupted frame that arrived before a notice posted in the same tick puts the interruption first and the notice below the turn', async () => {
     const gate = deferred<void>()
     let arrivedAt = 0
     const client = {
@@ -406,21 +403,22 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       },
     } as unknown as ControlClient
     const inbox = createTurnInbox()
-    let handed: readonly TranscriptEntry[] | undefined
-    const stream = controlStream(client, 'hi', SESSION, () => undefined, () => undefined, inbox, (t) => (handed = t))
-    await stream.next()
+    const below: TuiNotice[] = []
+    const stream = controlStream(client, 'hi', SESSION, (n) => below.push(n), () => undefined, inbox)
+    const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
     arrivedAt = nextArrival()
     gate.resolve()
     inbox.post({ variant: 'warning', text: 'queued' })
-    for await (const e of stream) void e
-    expect(handed).toEqual([
-      { kind: 'assistant', text: 'part' },
-      { kind: 'notice', variant: 'warning', text: 'interrupted' },
-      { kind: 'notice', variant: 'warning', text: 'queued' },
+    for await (const e of stream) events.push(e)
+    const state = events.reduce(agentStreamReducer, initialAgentStreamState)
+    expect(state.events).toMatchObject([
+      { kind: 'message', text: 'part' },
+      { kind: 'notice', text: 'Interrupted by user' },
     ])
+    expect(below).toEqual([{ variant: 'warning', text: 'queued' }])
   })
 
-  it('a notice posted before the interrupted frame resolves is frozen before the warning', async () => {
+  it('a notice posted before the interrupted frame resolves is placed before the interruption', async () => {
     const gate = deferred<void>()
     const client = {
       chat: async function* () {
@@ -430,20 +428,20 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       },
     } as unknown as ControlClient
     const inbox = createTurnInbox()
-    let handed: readonly TranscriptEntry[] | undefined
-    const stream = controlStream(client, 'hi', SESSION, () => undefined, () => undefined, inbox, (t) => (handed = t))
-    await stream.next()
+    const stream = controlStream(client, 'hi', SESSION, () => undefined, () => undefined, inbox)
+    const events: AgentStreamEvent[] = [(await stream.next()).value as AgentStreamEvent]
     inbox.post({ variant: 'warning', text: 'queued' })
     gate.resolve()
-    for await (const e of stream) void e
-    expect(handed).toEqual([
-      { kind: 'assistant', text: 'part' },
-      { kind: 'notice', variant: 'warning', text: 'queued' },
-      { kind: 'notice', variant: 'warning', text: 'interrupted' },
+    for await (const e of stream) events.push(e)
+    const state = events.reduce(agentStreamReducer, initialAgentStreamState)
+    expect(state.events).toMatchObject([
+      { kind: 'message', text: 'part' },
+      { kind: 'notice', text: 'queued' },
+      { kind: 'notice', text: 'Interrupted by user' },
     ])
   })
 
-  it('a notice posted while the interrupted frame waits for the consumer stays in the frozen transcript, after the warning', async () => {
+  it('a notice posted while the interrupted frame waits for the consumer is drawn below the turn', async () => {
     const gate = deferred<void>()
     const client = {
       chat: async function* () {
@@ -453,26 +451,14 @@ describe('controlStream: interruption fallback and notices from the app', () => 
       },
     } as unknown as ControlClient
     const inbox = createTurnInbox()
-    let handed: readonly TranscriptEntry[] | undefined
-    const stream = controlStream(
-      client,
-      'hi',
-      SESSION,
-      () => undefined,
-      () => undefined,
-      inbox,
-      (t) => (handed = t),
-    )
+    const below: TuiNotice[] = []
+    const stream = controlStream(client, 'hi', SESSION, (n) => below.push(n), () => undefined, inbox)
     await stream.next()
     gate.resolve()
     await new Promise((resolve) => setTimeout(resolve, 20))
     inbox.post({ variant: 'warning', text: 'queued' })
     await new Promise((resolve) => setTimeout(resolve, 20))
     for await (const e of stream) void e
-    expect(handed).toEqual([
-      { kind: 'assistant', text: 'part' },
-      { kind: 'notice', variant: 'warning', text: 'interrupted' },
-      { kind: 'notice', variant: 'warning', text: 'queued' },
-    ])
+    expect(below).toEqual([{ variant: 'warning', text: 'queued' }])
   })
 })

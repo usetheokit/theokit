@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { GatewayContext, MessageEvent } from '@theokit/gateway'
 
 import type { TurnAgent } from '../src/agent-port.js'
-import { GOAL_USAGE_REPLY, goalOf, readGoalSettings, runGoal } from '../src/channels/goal-command.js'
+import { GOAL_USAGE_REPLY, readGoalSettings, runGoal } from '../src/channels/goal-command.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { composeTheoClaw } from '../src/composition.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
@@ -152,12 +152,25 @@ describe('readGoalSettings and runGoal', () => {
   })
 })
 
-describe('goalOf', () => {
-  it('matches /goal on the whole trimmed text only', () => {
-    expect(goalOf('/goal fix it')).toBe('fix it')
-    expect(goalOf(' /goal ')).toBe('')
-    expect(goalOf('/goals x')).toBeUndefined()
-    expect(goalOf('please /goal x')).toBeUndefined()
+describe('goal routing', () => {
+  it('matches /goal on the whole trimmed text only', async () => {
+    const run = async (text: string) => {
+      const agent = goalAgent({ status: 'completed', finalResponse: 'done' })
+      const h = harness(agent)
+      await h.send(text)
+      return { agent, replies: h.replies }
+    }
+    const goal = await run('/goal fix it')
+    expect(goal.agent.calls.map((c) => c.goal)).toEqual(['fix it'])
+    const bare = await run(' /goal ')
+    expect(bare.agent.calls).toHaveLength(0)
+    expect(bare.replies).toEqual([GOAL_USAGE_REPLY])
+    const longer = await run('/goals x')
+    expect(longer.agent.calls).toHaveLength(0)
+    expect(longer.replies).toEqual(['an ordinary turn'])
+    const inside = await run('please /goal x')
+    expect(inside.agent.calls).toHaveLength(0)
+    expect(inside.replies).toEqual(['an ordinary turn'])
   })
 })
 

@@ -14,6 +14,7 @@ import { installDiagnosticSink } from '@theocode/shared/diagnostic-sink'
 import { setWorkingDirectory, workingDirectory } from './working-directory.js'
 import { guardedSweepStart } from '@theocode/agent/session'
 import { bootstrapSurface } from '@theocode/agent/bootstrap'
+import { recordProjectEnv } from './agent-session/credential-helpers.js'
 import { resolveEffectiveConfig } from '@theocode/agent/config'
 
 installDiagnosticSink(setDiagnosticsSink)
@@ -27,12 +28,14 @@ setWorkingDirectory(process.cwd())
 // AFTER the working directory is set and BEFORE anything resolves an SDK path: this decides which
 // directory the transcripts, the trust store and the collector all use, and it needs the cwd the
 // operator selected rather than the one the process started in.
-await bootstrapSurface({
+recordProjectEnv(
+  await bootstrapSurface({
   env: process.env,
   cwd: workingDirectory(),
   home: homedir(),
   onWarn: (m) => process.stderr.write(`${m}\n`),
-})
+}),
+)
 
 installStderrGuard(join(workingDirectory(), '.theokit', 'tui-stderr.log'))
 

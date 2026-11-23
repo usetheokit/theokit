@@ -51,3 +51,14 @@ describe('teeOutput', () => {
     expect(statSync(file).size).toBeLessThanOrEqual(5)
   })
 })
+
+describe('teeOutput root export and encodings', () => {
+  it('is exported from the package root and honours a string encoding', async () => {
+    const root = await import('../../src/index.js')
+    expect(root.teeOutput).toBe(teeOutput)
+    const { file, stream, restore } = setup(100, 1)
+    stream.write('c3a9', 'hex')
+    restore()
+    expect(readFileSync(file, 'utf8')).toBe('\u00e9')
+  })
+})

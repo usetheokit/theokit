@@ -1,18 +1,15 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
 import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, HookApprovalGate, MemorySettings, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
-import type { Skill } from '@theokit/sdk/skills'
+import { binaryOnPath, resolveSkillRoots, type Skill } from '@theokit/sdk/skills'
 
 import { custodianSkills } from '../skills/custodian.js'
 import { discoverWinners, legacyRequiresSkills } from '../skills/legacy-compat.js'
-import { binaryOnPath, bundledSkills } from '../skills/registry.js'
+import { bundledSkills } from '../skills/registry.js'
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import { createHookApprovalGate } from './hook-approval.js'
-import { UNTRUSTED_CONTENT_NOTICE, untrustedContentSendOptions, type UntrustedContentSendOptions } from './untrusted-content.js'
+import { untrustedContentSendOptions, type UntrustedContentSendOptions } from './untrusted-content.js'
 
 /**
  * The SDK's local options TheoClaw sets. `hooks` is on every agent (B-397 FR-007): the SDK reads a
@@ -70,8 +67,8 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
   readonly tools?: CustomTool[]
   readonly plugins?: Plugin[]
   /**
-   * Opens with `UNTRUSTED_CONTENT_NOTICE` on every agent (B-398 FR-002); a `/control` agent with an
-   * import has the import's instructions and read-only memory after it (FR-008).
+   * Empty on every agent but a `/control` agent with an import, which has the import's instructions and
+   * read-only memory (FR-008). The SDK adds the explanation of the tool-output tag when `delimit` is on.
    */
   readonly systemPrompt: string
   /** The SDK reads these per send; set once here, so no send site passes them (OC-88). */
@@ -143,7 +140,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     apiKey: input.apiKey,
     withheldBuiltinTools: ['shell'] as const,
     memory: input.toolOptions?.memory ?? ({ enabled: false } as const),
-    systemPrompt: UNTRUSTED_CONTENT_NOTICE,
+    systemPrompt: '',
     sendDefaults: untrustedContentSendOptions(),
     local: {
       hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
@@ -156,14 +153,14 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
   // `bundledDirs` rather than `skillsDir`: the SDK reads `skillsDir` only with the `project` setting
   // source, which would also load project hooks. It takes the first skill of a name, so workspace first.
-  const dirs = skillRoots(input)
+  const dirs = explicitSkillRoots(input)
   const custodian = input.custodian === true ? custodianSkills() : []
   const imported = input.imported?.setup.skills ?? []
   const withSkills: TheoClawAgentOptions<Model> = {
     ...withTools,
     skills: { ...dirSettings(dirs), inline: mergeByName(imported, custodian, bundledSkills()) },
     // Roots are listed again each turn: a plugin skill folder added mid-session is found.
-    skillsRefresh: () => resolveSkills(skillRoots(input), imported, custodian),
+    skillsRefresh: async () => resolveSkills(await skillRoots(input), imported, custodian),
   }
   const importedOptions = input.imported === undefined ? withSkills : withImport(withSkills, input.imported)
   const skilled = withSkillRead(withProviders(importedOptions, input.providers))
@@ -187,55 +184,24 @@ function projectSourceOn(input: TheoClawAgentInput<string | ModelSelection>): bo
 }
 
 /**
- * Every directory skills are discovered from, in precedence order (the SDK takes the first skill of a
- * name): workspace, user, then, with the `project` source on, the project roots (`.theokit`, and the
- * compat adapters `.theokit/config.json` lists) and each plugin's `skills` folder. The SDK, the `requires:` adapter and `skill_read` all use this one list.
+ * The directories skills are read from before any project discovery: workspace, then user. The SDK takes
+ * the first skill of a name, so workspace wins.
  */
-function skillRoots(input: TheoClawAgentInput<string | ModelSelection>): string[] {
-  const roots = [input.skillsDir, input.userSkillsDir].filter((dir): dir is string => dir !== undefined)
-  if (!projectSourceOn(input)) return roots
-  return [...roots, ...projectSkillRoots(input.pluginWorkspace ?? process.cwd())]
+function explicitSkillRoots(input: TheoClawAgentInput<string | ModelSelection>): string[] {
+  return [input.skillsDir, input.userSkillsDir].filter((dir): dir is string => dir !== undefined)
 }
 
 /**
- * The skill folders the SDK reads once the `project` setting source is on: the project config roots
- * (`.theokit`, and `.claude` when `.theokit/config.json` lists the `claude-code` compat adapter), then each
- * plugin bundle's `skills`. The SDK keeps this private, so it is mirrored here to gate and read what it offers.
+ * Every directory skills are discovered from, in precedence order: workspace, user, then, with the `project`
+ * source on, the project roots (`.theokit`, and the compat adapters `.theokit/config.json` lists) and each
+ * plugin's `skills` folder, as the SDK's `resolveSkillRoots` reports them. The SDK, the `requires:` adapter
+ * and `skill_read` all use this one list.
  */
-type CompatSource = string | { kind?: string; import?: string[] }
-
-function compatSources(cwd: string): CompatSource[] {
-  try {
-    const parsed = JSON.parse(readFileSync(join(cwd, '.theokit', 'config.json'), 'utf8')) as { compat?: { adapters?: unknown } }
-    return Array.isArray(parsed.compat?.adapters) ? (parsed.compat.adapters as CompatSource[]) : []
-  } catch {
-    return []
-  }
-}
-
-const kindOf = (source: CompatSource): string | undefined => (typeof source === 'string' ? source : source.kind)
-const admits = (source: CompatSource, surface: string): boolean => typeof source === 'string' || (source.import ?? []).includes(surface)
-
-function configRoots(cwd: string, sources: CompatSource[], surface: string): string[] {
-  const native = sources.filter((source) => kindOf(source) === 'theokit')
-  const own = native.length === 0 || native.some((source) => admits(source, surface)) ? [join(cwd, '.theokit')] : []
-  const claude = sources.some((source) => kindOf(source) === 'claude-code' && admits(source, surface)) ? [join(cwd, '.claude')] : []
-  return [...own, ...claude]
-}
-
-/** Project skill folders, then plugin skill folders, in the order the SDK searches them. */
-function projectSkillRoots(cwd: string): string[] {
-  const sources = compatSources(cwd)
-  const bundles: string[] = []
-  for (const root of configRoots(cwd, sources, 'plugins')) {
-    const plugins = join(root, 'plugins')
-    try {
-      for (const entry of readdirSync(plugins, { withFileTypes: true })) if (entry.isDirectory()) bundles.push(join(plugins, entry.name, 'skills'))
-    } catch {
-      // No plugins folder here.
-    }
-  }
-  return [...configRoots(cwd, sources, 'skills').map((root) => join(root, 'skills')), ...bundles]
+async function skillRoots(input: TheoClawAgentInput<string | ModelSelection>): Promise<string[]> {
+  const roots = explicitSkillRoots(input)
+  if (!projectSourceOn(input)) return roots
+  const found = await resolveSkillRoots({ cwd: input.pluginWorkspace ?? process.cwd(), settingSources: ['project', 'plugins'] })
+  return [...roots, ...found.filter((root) => root.kind === 'project' || root.kind === 'plugin').map((root) => root.dir)]
 }
 
 /** `options` with the custom provider plugins after its own. */
@@ -259,10 +225,10 @@ function withToolOptions<Model extends string | ModelSelection>(
   }
 }
 
-/** The notice, then the import's instructions, then its memory under a read-only heading. */
+/** The import's instructions, then its memory under a read-only heading. */
 function importedPrompt(setup: ImportedSetup): string {
   const memory = setup.memory === '' ? '' : `## Imported memory (read-only)\n\n${setup.memory}`
-  return [UNTRUSTED_CONTENT_NOTICE, setup.instructions, memory].filter((part) => part !== '').join('\n\n')
+  return [setup.instructions, memory].filter((part) => part !== '').join('\n\n')
 }
 
 /**

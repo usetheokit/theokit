@@ -12,8 +12,36 @@ import {
   DelegationError,
   type DelegationResult,
 } from './delegation-types.js'
-import type { SdkMessage } from './event-translator.js'
-import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
+import type { AgentTurnMessage, AgentTurnRun } from './run-agent-turn.js'
+import type { SdkSendOptions } from './sdk-adapter.js'
+
+/**
+ * The agent a factory builds. It sends and is disposed: through `dispose()` when it has one, else
+ * through `Symbol.asyncDispose`. A `SdkAgentHandle` satisfies it.
+ */
+export interface DelegationFactoryAgent {
+  send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>
+  dispose?(): Promise<void>
+  [Symbol.asyncDispose]?(): PromiseLike<void>
+}
+
+/** A `DelegationPort` whose task may also carry images; it still serves every `DelegationPort` caller. */
+export interface DelegationMessagePort extends DelegationPort {
+  run(
+    message: AgentTurnMessage,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<DelegationResult>
+}
+
+async function disposeAgent(agent: DelegationFactoryAgent): Promise<void> {
+  if (typeof agent.dispose === 'function') {
+    await agent.dispose()
+    return
+  }
+  const dispose = agent[Symbol.asyncDispose]
+  if (typeof dispose === 'function') await dispose.call(agent)
+}
+import { describeError, describeStreamedError } from './stream-errors.js'
 
 export interface DelegationPortFromAgentFactoryOptions {
   /** Options for every `send`. The delegating signal, when there is one, replaces `signal` here. */
@@ -22,18 +50,8 @@ export interface DelegationPortFromAgentFactoryOptions {
 
 const WORKER_NAME = 'worker'
 
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function describeStreamedError(event: object): string {
-  const { code, message } = event as { code?: unknown; message?: unknown }
-  const text = typeof code === 'string' || typeof code === 'number' ? String(code) : 'error'
-  return typeof message === 'string' && message !== '' ? `${text}: ${message}` : text
-}
-
 /** Drain the run's stream and return a description of the first error event, if any. */
-async function streamedErrorOf(run: SdkTurnHandle<SdkMessage>): Promise<string | undefined> {
+async function streamedErrorOf(run: AgentTurnRun): Promise<string | undefined> {
   if (run.stream === undefined) return undefined
   let streamed: string | undefined
   for await (const message of run.stream()) {
@@ -47,7 +65,7 @@ async function streamedErrorOf(run: SdkTurnHandle<SdkMessage>): Promise<string |
   return streamed
 }
 
-type Settled = Awaited<ReturnType<SdkTurnHandle<SdkMessage>['wait']>> & {
+type Settled = Awaited<ReturnType<AgentTurnRun['wait']>> & {
   readonly streamed: string | undefined
 }
 
@@ -56,10 +74,7 @@ type Settled = Awaited<ReturnType<SdkTurnHandle<SdkMessage>['wait']>> & {
  * cancellation rejects rather than being lost, and its handler is attached at once so it is never an
  * unhandled rejection.
  */
-async function untilSettled(
-  run: SdkTurnHandle<SdkMessage>,
-  signal: AbortSignal | undefined,
-): Promise<Settled> {
+async function untilSettled(run: AgentTurnRun, signal: AbortSignal | undefined): Promise<Settled> {
   let cancelling: Promise<{ readonly failure: unknown } | undefined> | undefined
   const cancel = (): void => {
     cancelling ??= (async () => {
@@ -110,8 +125,8 @@ function passesThrough(error: unknown): boolean {
 }
 
 async function runOnce(
-  create: () => Promise<SdkAgentHandle<SdkMessage>>,
-  task: string,
+  create: () => Promise<DelegationFactoryAgent>,
+  task: AgentTurnMessage,
   signal: AbortSignal | undefined,
   sendOptions: SdkSendOptions | undefined,
 ): Promise<DelegationResult> {
@@ -139,7 +154,7 @@ async function runOnce(
   } catch (error) {
     // The disposal still runs; if it fails too, both failures are reported, the run's first.
     try {
-      await agent.dispose()
+      await disposeAgent(agent)
     } catch (disposal) {
       throw new AggregateError(
         [error, disposal],
@@ -148,7 +163,7 @@ async function runOnce(
     }
     throw error
   }
-  await agent.dispose()
+  await disposeAgent(agent)
   return outcome
 }
 
@@ -158,9 +173,9 @@ async function runOnce(
  * aggregates carrying a guardrail error), which pass through unchanged.
  */
 export function delegationPortFromAgentFactory(
-  create: () => Promise<SdkAgentHandle<SdkMessage>>,
+  create: () => Promise<DelegationFactoryAgent>,
   options?: DelegationPortFromAgentFactoryOptions,
-): DelegationPort {
+): DelegationMessagePort {
   return {
     run: async (message, runOptions): Promise<DelegationResult> => {
       const signal = runOptions?.signal ?? options?.sendOptions?.signal

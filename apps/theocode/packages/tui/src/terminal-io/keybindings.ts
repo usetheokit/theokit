@@ -25,6 +25,7 @@
  * context names onto four would be a translation nobody measured. A binding applies wherever its
  * gesture applies, which for the declared set is everywhere the composer has the key.
  */
+import { parseKeybindings } from '@theokit/tui/keys'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -91,48 +92,57 @@ export interface KeybindingsRead {
  */
 const CTRL_LETTER = /^ctrl\+([a-z])$/
 
-function isRebindable(action: unknown): action is RebindableAction {
-  return typeof action === 'string' && (REBINDABLE as readonly string[]).includes(action)
+const NO_BINDING_TO_REMOVE =
+  "this product's built-in keys are computed from screen state, not table entries, so there is " +
+  'no binding to remove'
+
+/**
+ * Parse one file's document. The shape rules, reserved/claimed refusal and unknown-action refusal
+ * are the framework's `parseKeybindings`; what stays here is the narrowing it does not do — the
+ * Ink router matches `ctrl+<letter>` only — and the report for `null`, which the framework treats
+ * as a legitimate unbind of a chord that was never bound.
+ */
+function readKeybindings(document: unknown): KeybindingsRead {
+  const { keymap, notApplied: reports } = parseKeybindings(document, {
+    actions: REBINDABLE,
+    reserved: [...RESERVED_FOR_REFERENCE],
+    claimed: [...CLAIMED_BY_ROUTER],
+  })
+  const notApplied = reports.map((r) => `"${r.chord}": ${r.reason}`)
+  notApplied.push(...unboundNullReports(document, new Set(reports.map((r) => r.chord))))
+  const bound: Keybinding[] = []
+  for (const [chord, action] of keymap) {
+    const read = readChord(chord, action)
+    if (typeof read === 'string') notApplied.push(read)
+    else if (read !== undefined) bound.push(read)
+  }
+  return { bound, notApplied }
 }
 
-function readOne(
-  keystroke: string,
-  action: unknown,
-  bound: Keybinding[],
-  notApplied: string[],
-): void {
-  const key = keystroke.trim().toLowerCase()
-  if (RESERVED_FOR_REFERENCE.has(key)) {
-    notApplied.push(`"${keystroke}" is reserved and cannot be rebound`)
-    return
-  }
-  if (CLAIMED_BY_ROUTER.has(key)) {
-    notApplied.push(
-      `"${keystroke}" is a built-in gesture here and always claims the key — a binding on it ` +
-        'could never fire',
-    )
-    return
-  }
-  if (action === null) {
-    notApplied.push(
-      `"${keystroke}": this product's built-in keys are computed from screen state, not table ` +
-        'entries, so there is no binding to remove',
-    )
-    return
-  }
-  if (!isRebindable(action)) {
-    notApplied.push(
-      `"${keystroke}" -> "${String(action)}": not a gesture this product exposes ` +
-        `(${REBINDABLE.join(', ')})`,
-    )
-    return
-  }
-  const match = CTRL_LETTER.exec(key)
-  if (match?.[1] === undefined) {
-    notApplied.push(`"${keystroke}": this product matches ctrl+<letter> only`)
-    return
-  }
-  bound.push({ ctrl: true, letter: match[1], action })
+/** The `null` entries the framework accepted as unbinds, each reported: nothing here is a table entry. */
+function unboundNullReports(document: unknown, reported: ReadonlySet<string>): string[] {
+  const groups = (document as { bindings?: unknown } | null)?.bindings
+  return (Array.isArray(groups) ? groups : []).flatMap((group) =>
+    nullKeystrokes((group as { bindings?: unknown } | null)?.bindings)
+      .filter((k) => !reported.has(k) && !reported.has(k.trim().toLowerCase()))
+      .map((k) => `"${k}": ${NO_BINDING_TO_REMOVE}`),
+  )
+}
+
+/** The keystrokes one group binds to `null`. */
+function nullKeystrokes(map: unknown): string[] {
+  if (typeof map !== 'object' || map === null) return []
+  return Object.entries(map as Record<string, unknown>)
+    .filter(([, action]) => action === null)
+    .map(([keystroke]) => keystroke)
+}
+
+/** One parsed chord: a binding, the report of why it was not applied, or nothing for a foreign action. */
+function readChord(chord: string, action: string): Keybinding | string | undefined {
+  const match = CTRL_LETTER.exec(chord)
+  if (match?.[1] === undefined) return `"${chord}": this product matches ctrl+<letter> only`
+  if (!(REBINDABLE as readonly string[]).includes(action)) return undefined
+  return { ctrl: true, letter: match[1], action: action as RebindableAction }
 }
 
 export function loadKeybindings(home: string = homedir()): KeybindingsRead {
@@ -148,17 +158,7 @@ export function loadKeybindings(home: string = homedir()): KeybindingsRead {
     return { bound: [], notApplied: [`${path} could not be read: ${(err as Error).message}`] }
   }
 
-  const groups = (parsed as { bindings?: unknown }).bindings
+  const groups = (parsed as { bindings?: unknown } | null)?.bindings
   if (!Array.isArray(groups)) return { bound: [], notApplied: [`${path}: no "bindings" array`] }
-
-  const bound: Keybinding[] = []
-  const notApplied: string[] = []
-  for (const group of groups) {
-    const map = (group as { bindings?: unknown }).bindings
-    if (typeof map !== 'object' || map === null) continue
-    for (const [keystroke, action] of Object.entries(map as Record<string, unknown>)) {
-      readOne(keystroke, action, bound, notApplied)
-    }
-  }
-  return { bound, notApplied }
+  return readKeybindings(parsed)
 }

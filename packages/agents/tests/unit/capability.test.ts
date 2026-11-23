@@ -7,6 +7,7 @@ import {
   CapabilityConflictError,
   type Capability,
   createDraft,
+  OffToolsCapability,
   setOnce,
 } from '../../src/capability/capability.js'
 import {
@@ -14,6 +15,7 @@ import {
   SkillsCapability,
   ToolsCapability,
 } from '../../src/capability/capabilities.js'
+import { declareAgentShape } from '../../src/capability/agent-shape.js'
 import { ConfigurationError } from '../../src/errors.js'
 import {
   CapabilityPreset,
@@ -290,5 +292,35 @@ describe('ToolsCapability with an SDK CustomTool', () => {
     const out = applyCapabilities([new ToolsCapability([tool as never])]).tools[0]
     expect(out?.name).toBe('inh')
     expect((out as unknown as Record<symbol, unknown>)[SINK]).toBe(sink)
+  })
+})
+
+describe('OffToolsCapability', () => {
+  it('composes without overwriting, records provenance, and copies its input', () => {
+    const first = [{ name: 'Bash', reason: 'no writes' }]
+    const cap = new OffToolsCapability(first)
+    first[0] = { name: 'mutated', reason: 'x' }
+    const d = applyCapabilities([
+      cap,
+      new OffToolsCapability([{ name: 'Edit', reason: 'no writes' }]),
+    ])
+    expect(d.offTools).toEqual([
+      { name: 'Bash', reason: 'no writes' },
+      { name: 'Edit', reason: 'no writes' },
+    ])
+    expect(d.provenance.filter((p) => p.capability === 'off-tools')).toHaveLength(2)
+    expect(Object.isFrozen(d.offTools?.[0])).toBe(true)
+  })
+
+  it('an empty report contributes nothing', () => {
+    const d = applyCapabilities([new OffToolsCapability([])])
+    expect(d.offTools).toBeUndefined()
+    expect(d.provenance).toEqual([])
+  })
+
+  it('declareAgentShape exposes a frozen offTools', () => {
+    const shape = declareAgentShape('a', [new OffToolsCapability([{ name: 'Bash', reason: 'r' }])])
+    expect(shape.offTools).toEqual([{ name: 'Bash', reason: 'r' }])
+    expect(Object.isFrozen(shape.offTools)).toBe(true)
   })
 })

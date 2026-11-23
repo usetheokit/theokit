@@ -3,11 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
-import type { AgentOptions } from '@theokit/sdk'
-import { readFacts } from '@theokit/sdk/internal/memory-store'
+import { listMemoryFacts, type AgentOptions } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
 import { MemoryStore } from '../src/memory/memory-store.js'
 import { userIdOf } from '../src/memory/wiring.js'
 import { theoClawAgentOptions } from '../src/agent/create-agent.js'
@@ -243,7 +241,7 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
       write: () => undefined,
       getOrCreate: async (_id, options) => {
         const memory = memoryOf(options)
-        atOpen.push((await readFacts(memory.directory, memory)).map((fact) => fact.text))
+        atOpen.push((await listMemoryFacts(memory.directory, options.memory)).map((fact) => fact.text))
         return scripted(options, 'ok') as never
       },
     })
@@ -334,7 +332,8 @@ describe('persona in the chat session prompt (#1511)', () => {
       })
       const prompt = opened[0]?.systemPrompt ?? ''
       expect(prompt).toContain('pirate speak')
-      expect(prompt).toContain(UNTRUSTED_CONTENT_NOTICE)
+      expect(prompt).not.toContain('<untrusted-tool-output>')
+      expect(opened[0]?.sendDefaults?.toolResultGuard).toEqual({ delimit: true })
     },
   )
 })
@@ -384,6 +383,7 @@ describe('memory block with the persona files in a new session prompt (#1731)', 
     expect(prompt).toContain('pirate speak')
     expect(prompt).toContain('Never discuss the weather.')
     expect(memoryOf(opened[0]!).userId).toBe('owner')
-    expect(prompt).toContain(UNTRUSTED_CONTENT_NOTICE)
+    expect(prompt).not.toContain('<untrusted-tool-output>')
+    expect(opened[0]?.sendDefaults?.toolResultGuard).toEqual({ delimit: true })
   })
 })
