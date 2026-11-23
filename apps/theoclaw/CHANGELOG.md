@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `@theokit/sdk-tools` moves from 0.29.0 to 0.34.0, so the computer tool, the XWD helpers, `resolveWebSearchAdapter` and `baseDir` on the patch and edit tools are reachable from the app (#2696).
 ### Changed
 
 - `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
