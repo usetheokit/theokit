@@ -302,7 +302,7 @@ describe('loadMcpServersFile', () => {
     const open = readme.lastIndexOf('{', start)
     const end = readme.indexOf('\n```', open)
     const out = loadMcpServersFile('/v.json', { readFile: () => readme.slice(open, end) })
-    expect(Object.keys(out).sort((a, b) => a.localeCompare(b))).toEqual(['docs', 'files'])
+    expect(Object.keys(out).sort()).toEqual(['docs', 'files'])
   })
 
   it('an invalid JSON file error does not contain text from the file', () => {

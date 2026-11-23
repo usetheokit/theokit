@@ -39,7 +39,10 @@ async function attempt(io: DaemonIo, action: () => Promise<number>): Promise<num
   }
 }
 
-/** On Linux the user manager stops the unit at logout unless lingering is on. */
+/**
+ * On Linux the user manager stops the unit at logout unless lingering is on. `serviceBackend` has no
+ * linger check, so the app keeps this one notice; the package gap is not filed yet (the factory cannot open issues).
+ */
 async function reportLinger(io: DaemonIo, runner: Runner): Promise<void> {
   const user = io.env.USER
   if (io.platform !== 'linux' || user === undefined || user === '') return
@@ -55,7 +58,8 @@ export async function daemonInstall(io: DaemonIo, runner: Runner): Promise<numbe
   const target = checkInstallable(io)
   if (target === undefined) return 1
   return attempt(io, async () => {
-    // A task carries no environment, so on Windows the entry takes the instance as arguments (`entry-arguments.ts`).
+    // A task carries no environment, so on Windows the entry takes the instance as arguments (`entry-arguments.ts`);
+    // the package cannot carry them itself: #2570.
     const windows = io.platform === 'win32'
     const spec: ServiceSpec = {
       label: target.label,
