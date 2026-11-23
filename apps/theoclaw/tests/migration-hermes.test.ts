@@ -2,19 +2,161 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { type ForeignSetup, readForeignSetup, type UntranslatedEntry } from '@theokit/agents/foreign-setup'
+import {
+  type ForeignSetup,
+  readForeignSetup,
+  type UntranslatedEntry,
+} from '@theokit/agents/foreign-setup'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { copyFixture, FIXTURE_SECRETS, readHermesSetup } from './migration-fixtures.js'
 
-
 /** The skills under `skillsDir` (named `skills`, in its own root) as the shared reader reads a Hermes root. */
-function readSkillsDir(skillsDir: string, _rel: string, dropped: UntranslatedEntry[]): ForeignSetup['skills'] {
+function readSkillsDir(
+  skillsDir: string,
+  _rel: string,
+  dropped: UntranslatedEntry[],
+): ForeignSetup['skills'] {
   const root = dirname(skillsDir)
   const setup = readForeignSetup('hermes', { home: root, configDir: root })
   dropped.push(...setup.untranslated)
   return setup.skills
 }
+
+/** One MCP entry as the shared reader reads it from a Hermes `config.yaml` (JSON is YAML). */
+function normaliseMcpEntry(raw: unknown): {
+  entry?: ForeignSetup['mcpServers'][string]
+  reason?: string
+  notCarried: string[]
+} {
+  const root = mkdtempSync(join(tmpdir(), 'theoclaw-migration-'))
+  try {
+    writeFileSync(join(root, 'config.yaml'), JSON.stringify({ mcp_servers: { s: raw } }))
+    const setup = readHermesSetup({ root })
+    const whole = setup.untranslated.find((u) => u.path === 'config.yaml#s')
+    const notCarried = setup.untranslated
+      .filter((u) => u.path.startsWith('config.yaml#s.'))
+      .map((u) => u.path.slice('config.yaml#s.'.length))
+    return {
+      ...(setup.mcpServers.s === undefined ? {} : { entry: setup.mcpServers.s }),
+      ...(whole === undefined ? {} : { reason: whole.reason }),
+      notCarried,
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+/** FR-003: the normalisation both readers share (plan T1.1). */
+describe('MCP entry normalisation through readForeignSetup', () => {
+  it('normalises a stdio entry with type stdio and numeric env values to the carried shape', () => {
+    const result = normaliseMcpEntry({
+      type: 'stdio',
+      command: 'npx',
+      args: ['x'],
+      env: { PORT: 8080, DEBUG: true },
+      cwd: '/w',
+    })
+
+    expect(result).toEqual({
+      entry: { command: 'npx', args: ['x'], env: { PORT: '8080', DEBUG: 'true' }, cwd: '/w' },
+      notCarried: [],
+    })
+  })
+
+  it('drops an entry with neither or both transports, with non-string args, with an object env value, with an ftp url', () => {
+    expect(normaliseMcpEntry({ args: [] }).reason).toBe('neither command nor url')
+    expect(normaliseMcpEntry({ command: 'x', url: 'https://h' }).reason).toBe(
+      'both command and url',
+    )
+    expect(normaliseMcpEntry({ command: 'x', args: ['ok', 1] }).reason).toBe(
+      'args is not an array of strings',
+    )
+    expect(normaliseMcpEntry({ command: 'x', env: { K: { nested: 1 } } }).reason).toBe(
+      'env value is not a string, number or boolean',
+    )
+    expect(normaliseMcpEntry({ url: 'https://h', headers: { A: null } }).reason).toBe(
+      'headers value is not a string, number or boolean',
+    )
+    expect(normaliseMcpEntry({ url: 'ftp://h/x' }).reason).toBe('url is not http: or https:')
+    expect(normaliseMcpEntry({ url: 'not a url' }).reason).toBe('url is not http: or https:')
+    expect(normaliseMcpEntry('npx').reason).toBe('not an object')
+    expect(normaliseMcpEntry({ url: 'ftp://h/x' }).entry).toBeUndefined()
+    // loadMcpJson refuses an empty command or url (`mcp-file.ts:305`), so neither counts as present.
+    expect(normaliseMcpEntry({ command: '' }).reason).toBe('neither command nor url')
+    expect(normaliseMcpEntry({ url: '' }).reason).toBe('neither command nor url')
+  })
+
+  it('drops an entry whose args is not an array, whose env is an array, or that is itself an array', () => {
+    expect(normaliseMcpEntry({ command: 'x', args: 'x' }).reason).toBe(
+      'args is not an array of strings',
+    )
+    expect(normaliseMcpEntry({ command: 'x', env: ['A=1'] }).reason).toBe(
+      'env value is not a string, number or boolean',
+    )
+    expect(normaliseMcpEntry([]).reason).toBe('not an object')
+  })
+
+  it('keeps an empty env, and stages a url entry typed stdio as written for the import to refuse (D5)', () => {
+    expect(normaliseMcpEntry({ command: 'x', env: {} }).entry).toEqual({ command: 'x', env: {} })
+    // The shared reader drops an unsupported transport at read time instead of staging it (#2717).
+    expect(normaliseMcpEntry({ type: 'stdio', url: 'https://h' })).toEqual({
+      reason: 'transport is not http or sse',
+      notCarried: [],
+    })
+  })
+
+  it('keeps an env key named __proto__ as an own key', () => {
+    const entry = normaliseMcpEntry(JSON.parse('{"command":"x","env":{"__proto__":"v"}}'))
+      .entry as { env: Record<string, string> }
+
+    expect(Object.keys(entry.env)).toEqual(['__proto__'])
+  })
+
+  it('lists a non-string cwd as not carried and leaves it out of the entry', () => {
+    expect(normaliseMcpEntry({ command: 'npx', cwd: true })).toEqual({
+      entry: { command: 'npx' },
+      notCarried: ['cwd'],
+    })
+  })
+
+  it('never puts a value in a drop reason', () => {
+    const reason =
+      normaliseMcpEntry({ command: 'x', env: { TOKEN: { secret: 'sk-live-123' } } }).reason ?? ''
+
+    expect(reason).not.toContain('sk-live-123')
+  })
+
+  it('lists an uncarried key as not carried without dropping the entry', () => {
+    const result = normaliseMcpEntry({ command: 'npx', timeout: 5, disabled: false })
+
+    expect(result.entry).toEqual({ command: 'npx' })
+    expect(result.notCarried).toEqual(['timeout', 'disabled'])
+  })
+
+  it('stages a url entry typed streamable-http as http, and lists type on a command entry typed http as not carried (D5)', () => {
+    expect(normaliseMcpEntry({ type: 'streamable-http', url: 'https://h/mcp' }).entry).toEqual({
+      type: 'http',
+      url: 'https://h/mcp',
+    })
+    expect(normaliseMcpEntry({ url: 'https://h/mcp', headers: { 'X-N': 2 } }).entry).toEqual({
+      type: 'http',
+      url: 'https://h/mcp',
+      headers: { 'X-N': '2' },
+    })
+    expect(normaliseMcpEntry({ type: 'sse', url: 'http://h/sse' }).entry).toEqual({
+      type: 'sse',
+      url: 'http://h/sse',
+    })
+    // An unknown transport is dropped at read time (#2717); it used to be staged for the import to refuse.
+    expect(normaliseMcpEntry({ type: 'websocket', url: 'https://h' }).reason).toBe(
+      'transport is not http or sse',
+    )
+    const command = normaliseMcpEntry({ type: 'http', command: 'npx' })
+    expect(command.entry).toEqual({ command: 'npx' })
+    expect(command.notCarried).toEqual(['type'])
+  })
+})
 
 /** FR-003, EC-1, EC-7, EC-9: the `SKILL.md` directory read both readers share. */
 describe('readSkillsDir', () => {
@@ -41,7 +183,13 @@ describe('readSkillsDir', () => {
     const dropped: UntranslatedEntry[] = []
 
     expect(readSkillsDir(skillsDir, 'skills', dropped)).toEqual([
-      { name: 'one', description: 'The first skill', body: 'Say ONE.\n', requiresBins: [], path: 'skills/one/SKILL.md' },
+      {
+        name: 'one',
+        description: 'The first skill',
+        body: 'Say ONE.\n',
+        requiresBins: [],
+        path: 'skills/one/SKILL.md',
+      },
     ])
     expect(dropped).toEqual([])
   })
@@ -52,7 +200,9 @@ describe('readSkillsDir', () => {
     const dropped: UntranslatedEntry[] = []
 
     expect(readSkillsDir(skillsDir, 'skills', dropped).map((s) => s.name)).toEqual(['safe-skill'])
-    expect(dropped).toEqual([{ path: 'skills/evil/SKILL.md', reason: 'skill name is not a safe directory name' }])
+    expect(dropped).toEqual([
+      { path: 'skills/evil/SKILL.md', reason: 'skill name is not a safe directory name' },
+    ])
   })
 
   it('keeps the first skill of a duplicated name and drops the other as duplicated (EC-7)', () => {
@@ -90,9 +240,15 @@ describe('readSkillsDir', () => {
   it('reads a SKILL.md of exactly 262144 bytes and drops one of 262145 bytes (D4)', () => {
     const header = '---\nname: big\ndescription: large\n---\n'
     mkdirSync(join(skillsDir, 'exact'))
-    writeFileSync(join(skillsDir, 'exact', 'SKILL.md'), header + 'x'.repeat(262_144 - header.length))
+    writeFileSync(
+      join(skillsDir, 'exact', 'SKILL.md'),
+      header + 'x'.repeat(262_144 - header.length),
+    )
     mkdirSync(join(skillsDir, 'over'))
-    writeFileSync(join(skillsDir, 'over', 'SKILL.md'), header.replace('big', 'over') + 'x'.repeat(262_145 - header.length - 1))
+    writeFileSync(
+      join(skillsDir, 'over', 'SKILL.md'),
+      header.replace('big', 'over') + 'x'.repeat(262_145 - header.length - 1),
+    )
     const dropped: UntranslatedEntry[] = []
 
     expect(readSkillsDir(skillsDir, 'skills', dropped).map((s) => s.name)).toEqual(['big'])
@@ -102,7 +258,10 @@ describe('readSkillsDir', () => {
   it('follows a symlinked skill directory', () => {
     const elsewhere = join(dir, 'linked-target')
     mkdirSync(elsewhere)
-    writeFileSync(join(elsewhere, 'SKILL.md'), '---\nname: linked\ndescription: through a link\n---\nLinked.\n')
+    writeFileSync(
+      join(elsewhere, 'SKILL.md'),
+      '---\nname: linked\ndescription: through a link\n---\nLinked.\n',
+    )
     symlinkSync(elsewhere, join(skillsDir, 'linked'))
     try {
       expect(readSkillsDir(skillsDir, 'skills', []).map((s) => s.name)).toEqual(['linked'])
@@ -113,18 +272,27 @@ describe('readSkillsDir', () => {
 
   it('reads CRLF frontmatter and drops one that is not valid YAML', () => {
     mkdirSync(join(skillsDir, 'crlf'))
-    writeFileSync(join(skillsDir, 'crlf', 'SKILL.md'), '---\r\nname: crlf\r\ndescription: windows\r\n---\r\nBody.\r\n')
+    writeFileSync(
+      join(skillsDir, 'crlf', 'SKILL.md'),
+      '---\r\nname: crlf\r\ndescription: windows\r\n---\r\nBody.\r\n',
+    )
     skill('bad-yaml', 'name: [unclosed\ndescription: x')
     const dropped: UntranslatedEntry[] = []
 
-    expect(readSkillsDir(skillsDir, 'skills', dropped).map((s) => [s.name, s.body])).toEqual([['crlf', 'Body.\r\n']])
-    expect(dropped).toEqual([{ path: 'skills/bad-yaml/SKILL.md', reason: 'frontmatter lacks name or description' }])
+    expect(readSkillsDir(skillsDir, 'skills', dropped).map((s) => [s.name, s.body])).toEqual([
+      ['crlf', 'Body.\r\n'],
+    ])
+    expect(dropped).toEqual([
+      { path: 'skills/bad-yaml/SKILL.md', reason: 'frontmatter lacks name or description' },
+    ])
   })
 
   it('does not close the frontmatter on a line that only starts with ---', () => {
     skill('dashes', 'name: dashes\ndescription: |\n  ---x is part of the text')
 
-    expect(readSkillsDir(skillsDir, 'skills', []).map((s) => s.description)).toEqual(['---x is part of the text\n'])
+    expect(readSkillsDir(skillsDir, 'skills', []).map((s) => s.description)).toEqual([
+      '---x is part of the text\n',
+    ])
   })
 
   it('reads nothing from a missing directory', () => {
@@ -152,11 +320,24 @@ describe('readHermesSetup', () => {
     expect(setup.instructions.map((file) => file.path)).toEqual(['SOUL.md', 'AGENTS.md'])
     expect(setup.instructions[1]?.text).toContain('team is called Orbit')
     expect(setup.mcpServers).toEqual({
-      files: { command: 'npx', args: ['-y', 'fixture-files-server'], env: { PORT: '8080', FILES_TOKEN: 'fixture-secret-hermes-token' } },
-      web: { type: 'http', url: 'https://web.example.test/mcp', headers: { Authorization: 'Bearer fixture-secret-hermes-header' } },
+      files: {
+        command: 'npx',
+        args: ['-y', 'fixture-files-server'],
+        env: { PORT: '8080', FILES_TOKEN: 'fixture-secret-hermes-token' },
+      },
+      web: {
+        type: 'http',
+        url: 'https://web.example.test/mcp',
+        headers: { Authorization: 'Bearer fixture-secret-hermes-header' },
+      },
     })
-    expect(setup.skills.map((skill) => [skill.name, skill.path])).toEqual([['hermes-skill', 'skills/hermes-skill/SKILL.md']])
-    expect(setup.memories.map((file) => file.path)).toEqual(['memories/MEMORY.md', 'memories/USER.md'])
+    expect(setup.skills.map((skill) => [skill.name, skill.path])).toEqual([
+      ['hermes-skill', 'skills/hermes-skill/SKILL.md'],
+    ])
+    expect(setup.memories.map((file) => file.path)).toEqual([
+      'memories/MEMORY.md',
+      'memories/USER.md',
+    ])
     expect(setup.memories[1]?.text).toContain('metric units')
   })
 
@@ -174,7 +355,10 @@ describe('readHermesSetup', () => {
       const setup = readHermesSetup({ root })
 
       expect(setup.mcpServers, config).toEqual({ one: { command: 'a', env: { PORT: '8080' } } })
-      expect(setup.untranslated.filter((entry) => entry.path.startsWith('config.yaml')), config).toEqual([])
+      expect(
+        setup.untranslated.filter((entry) => entry.path.startsWith('config.yaml')),
+        config,
+      ).toEqual([])
     }
   })
 
@@ -250,7 +434,10 @@ describe('readHermesSetup', () => {
     const setup = readHermesSetup({ root })
 
     expect(setup.mcpServers).toEqual({ one: { command: 'a' } })
-    expect(setup.untranslated).toContainEqual({ path: 'config.yaml#servers', reason: 'not an object' })
+    expect(setup.untranslated).toContainEqual({
+      path: 'config.yaml#servers',
+      reason: 'not an object',
+    })
   })
 
   it('reads an empty config.yaml or one with no MCP map as no server and no drop', () => {
@@ -259,14 +446,20 @@ describe('readHermesSetup', () => {
       const setup = readHermesSetup({ root })
 
       expect(setup.mcpServers, config).toEqual({})
-      expect(setup.untranslated.filter((entry) => entry.path.startsWith('config.yaml')), config).toEqual([])
+      expect(
+        setup.untranslated.filter((entry) => entry.path.startsWith('config.yaml')),
+        config,
+      ).toEqual([])
     }
   })
 
   it('lists a config.yaml over 262144 bytes as dropped', () => {
     writeFileSync(join(root, 'config.yaml'), `# ${'x'.repeat(262_144)}\n`)
 
-    expect(readHermesSetup({ root }).untranslated).toContainEqual({ path: 'config.yaml', reason: 'file over 262144 bytes' })
+    expect(readHermesSetup({ root }).untranslated).toContainEqual({
+      path: 'config.yaml',
+      reason: 'file over 262144 bytes',
+    })
   })
 
   it('never puts a fixture secret in a dropped entry', () => {
@@ -281,13 +474,22 @@ describe('readHermesSetup', () => {
   })
 
   it('drops an entry whose env value is empty', () => {
-    writeFileSync(join(root, 'config.yaml'), 'mcp_servers:\n  one:\n    command: a\n    env:\n      KEY:\n')
+    writeFileSync(
+      join(root, 'config.yaml'),
+      'mcp_servers:\n  one:\n    command: a\n    env:\n      KEY:\n',
+    )
 
-    expect(readHermesSetup({ root }).untranslated).toContainEqual({ path: 'config.yaml#one', reason: 'env value is not a string, number or boolean' })
+    expect(readHermesSetup({ root }).untranslated).toContainEqual({
+      path: 'config.yaml#one',
+      reason: 'env value is not a string, number or boolean',
+    })
   })
 
   it('takes the last value of a repeated key, as Hermes does', () => {
-    writeFileSync(join(root, 'config.yaml'), 'mcp_servers:\n  one: { command: a }\n  one: { command: b }\n')
+    writeFileSync(
+      join(root, 'config.yaml'),
+      'mcp_servers:\n  one: { command: a }\n  one: { command: b }\n',
+    )
 
     const setup = readHermesSetup({ root })
 
