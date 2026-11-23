@@ -45,7 +45,22 @@ describe('environment recipes', () => {
     expect((await seen(repo({ 'a.txt': '' }))).recipe).toBeUndefined()
   })
 
-  it('skips the lockfile install when node_modules exists', async () => {
+  it('parses JSONC with comments and trailing commas', async () => {
+    const root = repo({
+      '.devcontainer.json': '{ // c\n "postCreateCommand": "a//b", /* x */ "postStartCommand": ["c", "d",],\n}',
+    })
+    expect((await seen(root)).commands).toEqual(['a//b', ['c', 'd']])
+  })
+
+  it('detects each lockfile and skips the install when node_modules exists', async () => {
+    const cases: [string, string[]][] = [
+      ['package-lock.json', ['npm', 'ci']],
+      ['yarn.lock', ['yarn', 'install', '--frozen-lockfile']],
+      ['bun.lock', ['bun', 'install', '--frozen-lockfile']],
+    ]
+    for (const [file, command] of cases) {
+      expect((await seen(repo({ [file]: '' }))).commands).toEqual([command])
+    }
     expect((await seen(repo({ 'pnpm-lock.yaml': '', 'node_modules/.keep': '' }))).recipe).toBeUndefined()
   })
 
