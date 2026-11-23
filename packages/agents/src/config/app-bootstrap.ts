@@ -162,7 +162,7 @@ function declaredNames(raw: string): Set<string> {
   const names = new Set<string>()
   const lines = raw.split(/\r?\n/)
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!.trim()
+    const line = lines[i].trim()
     if (line === '' || line.startsWith('#')) continue
     const eq = line.indexOf('=')
     if (eq <= 0) continue
@@ -175,7 +175,7 @@ function declaredNames(raw: string): Set<string> {
     if (q === '"' || q === "'" || q === '`') {
       if (!value.slice(1).includes(q)) {
         let j = i + 1
-        while (j < lines.length && !lines[j]!.includes(q)) j++
+        while (j < lines.length && !lines[j].includes(q)) j++
         if (j >= lines.length) return names
         i = j
       }
