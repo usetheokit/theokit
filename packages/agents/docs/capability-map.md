@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1482 export(s) across 27 entry point(s).
+1486 export(s) across 27 entry point(s).
 
 Measured against `@theokit/sdk@5.32.0`.
 
@@ -1372,8 +1372,10 @@ Measured against `@theokit/sdk@5.32.0`.
 | `SessionRegistryRemoverError` | value |
 | `streamTurnForkingIfBusy` | value |
 | `sweepDecision` | value |
+| `threadToUIMessages` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
+| `transcriptToText` | value |
 | `ClassifyProjectsOptions` | type |
 | `DeleteSessionOptions` | type |
 | `DeleteSessionResult` | type |
@@ -1401,8 +1403,10 @@ Measured against `@theokit/sdk@5.32.0`.
 | `SweepScheduleResult` | type |
 | `ThreadHistory` | type |
 | `ThreadHistoryState` | type |
+| `TranscriptFormat` | type |
 | `TranscriptGCOptions` | type |
 | `TranscriptGCPlan` | type |
+| `TranscriptToTextOptions` | type |
 | `UserTurnPreview` | type |
 
 ## `@theokit/agents/hooks`

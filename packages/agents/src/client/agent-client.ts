@@ -134,6 +134,12 @@ export interface AgentClientOptions {
    * leaves it nothing to store.
    */
   readonly chatId?: string
+
+  /**
+   * Committed history to start from (usetheokit/theokit#2578), e.g. `threadToUIMessages(rows)` of a
+   * resumed session. It is in `thread` before the first send; `reset()` clears it like any history.
+   */
+  readonly initialThread?: readonly UIMessage[]
 }
 
 /** How one turn ended, as `sendAndWait` reports it. */
@@ -206,6 +212,11 @@ export class AgentClient<TInput = unknown> {
     // A fresh draw stays the default: two clients built with no id must be two conversations, or
     // two unrelated tabs would share a thread — the opposite defect, and the more dangerous one.
     this.#chatId = options?.chatId ?? crypto.randomUUID()
+    if (options?.initialThread !== undefined && options.initialThread.length > 0) {
+      this.#committed = [...options.initialThread]
+      this.#committedPrefix = this.#committed
+      this.#snapshot = { ...this.#snapshot, thread: this.#committedPrefix }
+    }
   }
 
   /**

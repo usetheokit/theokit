@@ -85,6 +85,11 @@ export interface UseAgentOptions {
    * send/reconnect, so a rotating token/tenant is never stale.
    */
   context?: RequestContext | (() => RequestContext | undefined)
+  /**
+   * Committed history to start from, e.g. `threadToUIMessages(rows)` of a resumed session. Read once
+   * when the binding's store is created; later changes do not replace live history.
+   */
+  initialThread?: readonly UIMessage[]
 }
 
 /**
@@ -126,6 +131,7 @@ export function useAgent<TInput = unknown>(
           const ctx = optionsRef.current.context
           return typeof ctx === 'function' ? ctx() : ctx
         },
+        { initialThread: optionsRef.current.initialThread },
       ),
     // bindingIdentity captures api/binding; options resolve live via optionsRef (rebuild would drop messages).
     // eslint-disable-next-line react-hooks/exhaustive-deps
