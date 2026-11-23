@@ -52,3 +52,40 @@ describe('resolveMentions', () => {
     expect(r.skipped).toEqual([])
   })
 })
+
+describe('resolveMentions — lenient grammar keeps the original text', () => {
+  it('appends the attachment to the original text, punctuation intact', () => {
+    const r = resolveMentions('ok (@src/a.ts)?', project())
+    expect(r.message.startsWith('ok (@src/a.ts)?')).toBe(true)
+    expect(r.message).toContain('export const a = 1')
+  })
+
+  it('accepts an @ glued to the preceding word', () => {
+    const r = resolveMentions('see:@src/a.ts', project())
+    expect(r.attached).toEqual(['src/a.ts'])
+  })
+
+  it('strips a closing bracket after a mention', () => {
+    const r = resolveMentions('see [@src/a.ts]', project())
+    expect(r.attached).toEqual(['src/a.ts'])
+    expect(r.message.startsWith('see [@src/a.ts]')).toBe(true)
+  })
+
+  it('reports files past the total budget as skipped', () => {
+    const cwd = project()
+    const big = 'x'.repeat(7000)
+    const names = Array.from({ length: 5 }, (_, n) => `big${n}.txt`)
+    for (const n of names) writeFileSync(join(cwd, n), big)
+    const r = resolveMentions(names.map((n) => `@${n}`).join(' '), cwd)
+    expect(r.attached.length).toBeGreaterThan(0)
+    expect(r.attached.length + r.skipped.length).toBe(5)
+  })
+})
+
+describe('resolveMentions — an unreadable file is skipped, not thrown', () => {
+  it('skips a mention that names a directory', () => {
+    const r = resolveMentions('see @src', project())
+    expect(r.attached).toEqual([])
+    expect(r.skipped).toHaveLength(1)
+  })
+})

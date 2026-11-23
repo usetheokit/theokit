@@ -72,3 +72,20 @@ describe('composeInstructions trim policies', () => {
     expect(r.dropped).toEqual([])
   })
 })
+
+describe('priority', () => {
+  it('cuts the lowest priority first, reports it, and keeps listed order', async () => {
+    const { composeInstructions } = await import('../../src/config/compose-instructions.js')
+    const out = composeInstructions(
+      'base',
+      [
+        { name: 'low', content: 'l'.repeat(20), priority: 1, trim: { kind: 'drop' } as const },
+        { name: 'high', content: 'h'.repeat(20), priority: 5 },
+      ],
+      { maxChars: 30 },
+    )
+    expect(out.cuts.map((c) => c.name)).toEqual(['low'])
+    expect(out.text.endsWith('h'.repeat(20))).toBe(true)
+    expect(out.text.indexOf('l')).toBeLessThan(out.text.indexOf('h'))
+  })
+})
