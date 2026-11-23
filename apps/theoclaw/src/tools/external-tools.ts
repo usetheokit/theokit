@@ -1,8 +1,8 @@
 /**
  * Not `loadMcpServersFile` from `@theokit/agents/bridge` (gap, tracked from #2599). It cannot do three
  * things this file needs: accept a document that also holds `acpAgents`, accept OAuth `auth` entries,
- * and read through an injected `ReadFile` instead of the disk. The framework issue for these gaps is
- * usetheokit/theokit#2657.
+ * and read through an injected `ReadFile` instead of the disk. No framework issue is filed for these gaps
+ * yet (it could not be filed from the sandbox that wrote this); file one and link it here.
  */
 import { readFileSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
