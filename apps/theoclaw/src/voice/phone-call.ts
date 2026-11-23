@@ -2,7 +2,7 @@ import type { MessageEvent } from '@theokit/gateway'
 import { runAgentText } from '@theokit/gateway-agent'
 import { createVoiceCallHandler } from '@theokit/gateway-sms'
 
-import { maskSecrets } from '../channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { describeError } from '../control-plane/errors.js'
 import type { SessionLease } from '../sessions/session-agents.js'

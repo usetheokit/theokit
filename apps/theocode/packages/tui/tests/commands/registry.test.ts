@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { BUILTIN_COMMAND_NAMES, routeCommand } from '../../src/commands/registry.js'
+import { BUILTIN_COMMAND_NAMES, commandPalette, routeCommand } from '../../src/commands/registry.js'
 
 describe('routeCommand — a mistyped command is not prose', () => {
   it('test_an_unknown_slash_command_is_an_error_not_a_message', () => {
@@ -80,6 +80,30 @@ describe('aliases, hidden names and custom shadowing come from the framework reg
     expect(routeCommand('/memories', new Set(['memories']))).toEqual({
       kind: 'custom',
       name: 'memories',
+      arg: '',
+    })
+  })
+})
+
+describe('commandPalette', () => {
+  it('test_every_visible_entry_has_a_description_and_hidden_codex_names_are_absent', () => {
+    const palette = commandPalette(new Map())
+    expect(palette.every((c) => c.description.length > 0)).toBe(true)
+    const names = palette.map((c) => c.name)
+    expect(names).toEqual(expect.arrayContaining(['clear', 'quit', 'exit', 'memories']))
+    expect(names).not.toContain('pets')
+    expect(new Set(names).size).toBe(names.length)
+  })
+
+  it('test_a_custom_command_replaces_the_builtin_it_shadows_and_carries_its_description', () => {
+    const palette = commandPalette(new Map([['quit', { name: 'quit', description: 'mine' }]]))
+    expect(palette.filter((c) => c.name === 'quit')).toEqual([
+      { name: 'quit', description: 'mine' },
+    ])
+    expect(palette.some((c) => c.name === 'exit')).toBe(true)
+    expect(routeCommand('/quit', new Set(['quit']))).toEqual({
+      kind: 'custom',
+      name: 'quit',
       arg: '',
     })
   })
