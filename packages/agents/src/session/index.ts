@@ -68,7 +68,9 @@ export {
 
 export {
   scheduleSessionSweep,
+  startInProcessSweeper,
   sweepDecision,
+  type InProcessSweeper,
   type ScheduleSessionSweepOptions,
   type SweepDecision,
   type SweepScheduleResult,

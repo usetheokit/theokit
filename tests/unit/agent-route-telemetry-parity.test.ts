@@ -40,7 +40,7 @@ vi.mock('@theokit/agents', () => ({
   // `compileAgentModule` stops intercepting the moment the SUT stops calling it, and a double that
   // intercepts nothing exercises the real code in silence.
   compileLoadedAgentModule: () => ({ tools: [], agents: {}, model: MODEL }),
-  resolveEnabledSkills: () => undefined,
+  resolveSkillsSettings: () => undefined,
   streamAgentUIMessages: () => scriptedRun(),
 }))
 

@@ -848,6 +848,7 @@ change knows which of the two worlds they are in.
 
 | Variable                  | Security | What it changes                                                                                                                                                                                            | Read at                                                     |
 | ------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `PATH`                    | no       | Where an advertised skill's required binaries are looked for, when the installed SDK has no `binaryOnPath` of its own. Changing it changes which skills `skill_read` serves.                               | `src/bridge/advertised-skill-read.ts:36`                    |
 | `PROGRAMDATA`             | no       | Where the machine-wide operator policy is looked for on Windows. Changing it moves which policy file governs the run.                                                                                      | `src/config/operator-policy.ts:119`                         |
 | `THEOKIT_CODEX_CLIENT_ID` | **yes**  | Overrides the OAuth client id used for the Codex device flow. It selects which OAuth client the device authorisation is issued against, so it is a credential-path decision rather than a convenience one. | `src/auth/device-provider.ts:97`, via the constant at `:93` |
 | `THEOKIT_DEBUG`           | no       | Turns on debug logging. Log output can contain request shapes, so treat the logs as sensitive even though the switch is not.                                                                               | `src/debug-log.ts:10`                                       |
@@ -1028,6 +1029,11 @@ app's call: claim the default root, and a custom one only if it holds no project
 `CollectorRootNotOwnedError` (code `collector_root_not_owned`) when the marker is missing or names another app.
 
 ### Scheduling the sweep
+
+A long-running process can sweep on a timer inside itself: `startInProcessSweeper(intervalMs, run)` calls `run` at
+once and then every `intervalMs`, skips a tick while a run is still going, unrefs its timer, and returns
+`{ stop() }`; `stop()` resolves after a run in flight settles. A throw from `run` is swallowed, so report inside it.
+The rest of this section is the detached-child scheduler.
 
 `scheduleSessionSweep({ enabled, stampFile, command, onReport, intervalHours?, timeoutMs? })` runs the cross-project GC
 in a detached child, at most once per `intervalHours` (default 24). It reads `stampFile` (an unparseable or missing
