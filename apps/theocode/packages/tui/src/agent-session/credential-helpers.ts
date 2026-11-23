@@ -30,12 +30,6 @@ export const credentialError = (): string | undefined => {
 export const credentialSource = (): string => {
   const c = credential()
   if ('error' in c) return 'none'
-  if (c.kind === 'oauth') {
-    return describeSource({ kind: 'oauth', provider: c.provider }, dotenvKeys(), dotenvPath())
-  }
-  const isEnvVar = /^[A-Z][A-Z0-9_]*$/.test(c.source)
-  const label = isEnvVar
-    ? describeSource({ kind: 'env', varName: c.source }, dotenvKeys(), dotenvPath())
-    : describeSource({ kind: 'file', path: c.source }, dotenvKeys(), dotenvPath())
+  const label = describeSource(c.source, dotenvKeys(), dotenvPath())
   return c.inferred ? `${label} (provider inferred)` : label
 }
