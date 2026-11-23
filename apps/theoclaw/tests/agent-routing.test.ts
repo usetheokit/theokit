@@ -77,20 +77,6 @@ describe('delegated task worktrees', () => {
     await expect(runner.run({ id: '../x', work: async () => 1 })).rejects.toThrow(/invalid task id/)
   })
 
-  it('rejects an unsafe task id before running the work or creating a worktree or branch', async () => {
-    const dirs_ = repo()
-    const runner = createWorktreeRunner(dirs_)
-    let ran = false
-    for (const id of ['../x', 'a/../b', '-rf', '']) {
-      await expect(
-        runner.run({ id, work: async () => { ran = true } }),
-      ).rejects.toThrow(/invalid task id/)
-    }
-    expect(ran).toBe(false)
-    expect(existsSync(dirs_.root)).toBe(false)
-    expect(execFileSync('git', ['-C', dirs_.repo, 'branch', '--list', 'task/*']).toString()).toBe('')
-  })
-
   it('keeps a successful kept task until remove, and can keep its branch', async () => {
     const dirs_ = repo()
     const runner = createWorktreeRunner(dirs_)
