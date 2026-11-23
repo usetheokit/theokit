@@ -45,7 +45,7 @@ export interface RehomeTranscriptsOptions {
 export function rehomeTranscripts(
   options: RehomeTranscriptsOptions,
 ): (relativePath: string, root: string) => string {
-  const base = options.projectsDir.replace(/^\/+|\/+$/g, '')
+  const base = options.projectsDir.split('/').filter(Boolean).join('/')
   const prefix = `${base}/${encodeProjectDir(options.from)}/`
   const target = `${base}/${encodeProjectDir(options.to)}/`
   return (relativePath, root) =>
