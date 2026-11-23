@@ -160,7 +160,10 @@ export async function protectedTranscriptPaths(
   if (pointer !== undefined) {
     // Name the file(s) actually on disk (current and/or legacy naming); when neither exists, keep
     // both candidates so the protection stays fail-closed.
-    const candidates = [transcriptPath(root, cwd, pointer), legacyTranscriptPath(root, cwd, pointer)]
+    const candidates = [
+      transcriptPath(root, cwd, pointer),
+      legacyTranscriptPath(root, cwd, pointer),
+    ]
     const onDisk = candidates.filter((path) => existsSync(path))
     for (const path of onDisk.length > 0 ? onDisk : candidates) {
       protectedBy.set(path, 'resumable session pointer')
