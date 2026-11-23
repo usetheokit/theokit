@@ -100,6 +100,14 @@ export {
   type ThreadHistoryState,
 } from './thread-history.js'
 
+// #2578 — rows to UI messages and UI messages to an exported transcript.
+export { threadToUIMessages } from './thread-to-ui-messages.js'
+export {
+  transcriptToText,
+  type TranscriptFormat,
+  type TranscriptToTextOptions,
+} from './transcript-to-text.js'
+
 /**
  * T3.2 — is the project behind an encoded transcript directory still there?
  *
