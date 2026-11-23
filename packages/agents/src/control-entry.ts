@@ -30,6 +30,12 @@ export {
   createControlClient,
   type ControlClient,
 } from './control/control-client.js'
+export {
+  PairingRefusedError,
+  redeemPairing,
+  type RedeemedPairing,
+  type RedeemPairingOptions,
+} from './control/redeem-pairing.js'
 
 // `attachControlSocket` takes the `node:http` server it attaches to, so its type crosses this barrel.
 export type { Server } from 'node:http'

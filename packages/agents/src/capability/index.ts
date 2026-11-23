@@ -10,6 +10,7 @@ export * from './agent-capabilities.js'
 // could not serve the three construction sites.
 export * from './agent-shape.js'
 export * from './toolbox.js'
+export { codingAgentPreset, type CodingAgentPresetOptions } from './coding-agent-preset.js'
 
 // M91 — the tool-collection primitive; the counterpart missing from the sandbox and interactive
 // seams the layer already publishes.

@@ -13,32 +13,41 @@
  *                             that hang when a display server is set but not answering.
  *   `command-content.ts`    — two `git diff` calls behind `/diff`, on a working tree of any size.
  *
- * The clipboard's error handling was already right: `spawnSync` sets `result.error` on a timeout, and
+ * The clipboard's error handling is the toolkit's: `spawnSync` sets `result.error` on a timeout, and
  * the loop turns any non-ENOENT error into a `ClipboardWriteError`. What was missing was the bound
  * that produces one.
  */
 import { describe, expect, it } from 'vitest'
 
-import { CLIPBOARD_TIMEOUT_MS, clipboardSpawnOptions, copyToClipboard } from '../src/clipboard/clipboard.js'
-import { ClipboardWriteError } from '../src/clipboard/clipboard-write-error.js'
+import { ClipboardWriteError, copyToClipboard } from '../src/clipboard/clipboard.js'
 import { DIFF_TIMEOUT_MS, diffSpawnOptions } from '../src/commands/command-content.js'
 
 describe('the clipboard write is bounded', () => {
+  /** Run one copy through a stub runner and report the timeout the toolkit handed it. */
+  const timeoutSeen = (): number | undefined => {
+    let seen: number | undefined
+    copyToClipboard('x', {
+      candidates: [{ bin: 'xclip', args: [] }],
+      runner: ((_b: string, _a: readonly string[], _i: string, timeoutMs: number) => {
+        seen = timeoutMs
+        return { status: 0 }
+      }) as never,
+    })
+    return seen
+  }
+
   it('test_it_declares_a_timeout', () => {
-    expect(CLIPBOARD_TIMEOUT_MS).toBeGreaterThan(0)
+    expect(timeoutSeen()).toBeGreaterThan(0)
   })
 
   it('test_the_bound_actually_REACHES_spawnSync', () => {
-    // A mutation check found this missing: the test suite asserted the constant existed and never
-    // that it was passed, so deleting `timeout:` from the call left everything green. That is the
-    // same defect as the collector's `apply: true`, twice in one release.
-    expect(clipboardSpawnOptions('x').timeout).toBe(CLIPBOARD_TIMEOUT_MS)
+    // The bound is the toolkit's; this asserts it is PASSED to the runner, not merely declared.
+    expect(timeoutSeen()).toBeTypeOf('number')
   })
 
   it('test_the_bound_is_generous_enough_for_a_real_clipboard', () => {
-    // Copying text is instant on a working desktop; the bound exists for the one that is not
-    // answering. Too tight and a slow-but-working clipboard starts failing.
-    expect(CLIPBOARD_TIMEOUT_MS).toBeGreaterThanOrEqual(2_000)
+    // Too tight and a slow-but-working clipboard starts failing.
+    expect(timeoutSeen()).toBeGreaterThanOrEqual(2_000)
   })
 
   it('test_a_timed_out_clipboard_is_reported_as_a_write_failure_not_a_success', () => {
