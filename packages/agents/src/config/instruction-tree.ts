@@ -5,12 +5,14 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import type { Stats } from 'node:fs'
-import { basename, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 
 // Imported from the SDK directly, not from this package's own barrel: these files now LIVE in
 // `@theokit/agents`, so `from '@theokit/agents'` would be a package self-reference (and a cycle
 // through `src/index.ts`). The barrel re-exports the same SDK symbols for consumers; inside the
 // package we reach the source.
+import { runDiscovery } from '@theokit/sdk/context'
+import type { DiscoverySpec } from '@theokit/sdk/context'
 import { assertNoSymlinkEscape } from '@theokit/sdk/path-safety'
 
 import { ConfigurationError } from '../errors.js'
@@ -589,4 +591,86 @@ function parsePathsScope(frontmatter: readonly string[]): string[] {
     scopes.push(item[1].trim().replaceAll(/^["']|["']$/g, ''))
   }
   return scopes
+}
+
+export interface LoadInstructionWalkInput {
+  readonly cwd: string
+  /** Per directory, the first of these that exists wins. Default `['THEO.md', 'AGENTS.md']`. */
+  readonly alternatives?: readonly string[]
+  /** Private companion chain, independent of `alternatives`: both load. Default none. */
+  readonly local?: readonly string[]
+  /** Total characters across all blocks; the nearest files are kept first when it is exceeded. */
+  readonly maxChars: number
+  /** Cut each file at this many characters (marker '[truncated]'). */
+  readonly maxCharsPerFile?: number
+  readonly onWarn?: (message: string) => void
+}
+
+const WALK_DEFAULT_ALTERNATIVES = ['THEO.md', 'AGENTS.md'] as const
+
+/**
+ * Upward walk: the instruction files from `cwd` to the git root, root first, nearest last.
+ *
+ * Discovery is the SDK's `git-root-walk` (not a third walker); each hit is then read through the
+ * same parser as {@link loadInstructionTree}, so frontmatter, imports and symlink containment are
+ * the same. The public chain and the `local` chain are two specs, so a local file never replaces
+ * its public sibling. Blocks come back public chain first, then the local chain, each root-first.
+ *
+ * When `maxChars` is exceeded the farthest (root-most) files go first: the nearest instruction is
+ * the most specific one. The cut is reported through `onWarn` and `truncated`.
+ */
+export async function loadInstructionWalk(
+  input: LoadInstructionWalkInput,
+): Promise<InstructionTree> {
+  const warn = input.onWarn ?? IGNORE_WARNING
+  const cwd = resolve(input.cwd)
+  const spec = (id: string, pattern: readonly string[], priority: number): DiscoverySpec => ({
+    id,
+    priority,
+    pattern,
+    scope: 'git-root-walk',
+    parser: 'plain-markdown',
+    followImports: false,
+  })
+  const specs = [spec('public', input.alternatives ?? WALK_DEFAULT_ALTERNATIVES, 1)]
+  if (input.local !== undefined && input.local.length > 0) specs.push(spec('local', input.local, 2))
+
+  // The SDK reports each hit nearest-first; the chain wants the general file first.
+  const found = await runDiscovery({ cwd, maxBytesPerFile: Number.MAX_SAFE_INTEGER, specs })
+  const ordered = [
+    ...found.filter((hit) => hit.priority === 1).reverse(),
+    ...found.filter((hit) => hit.priority === 2).reverse(),
+  ].map((hit) => hit.source)
+
+  // Containment root: the shallowest directory a hit sits in (the repository root).
+  const root = ordered.map((path) => dirname(path)).sort((a, b) => a.length - b.length)[0] ?? cwd
+  const parsed: InstructionBlock[] = []
+  for (const path of ordered) {
+    try {
+      assertNoSymlinkEscape(path, root)
+    } catch {
+      warn(`instruction file escapes the project root and was skipped: ${relative(cwd, path)}`)
+      continue
+    }
+    const block = parseInstructionFile(path, root, warn, input.maxCharsPerFile)
+    if (block !== undefined) parsed.push({ ...block, path: relative(cwd, path) })
+  }
+
+  // Keep the nearest files within the ceiling, then restore the chain order.
+  const keep = new Set<InstructionBlock>()
+  let chars = 0
+  let truncated = false
+  for (const block of [...parsed].reverse()) {
+    if (chars + block.content.length > input.maxChars) {
+      truncated = true
+      warn(
+        `instruction budget: ${block.path} cut to stay under ${String(input.maxChars)} characters`,
+      )
+      continue
+    }
+    chars += block.content.length
+    keep.add(block)
+  }
+  const blocks = parsed.filter((block) => keep.has(block))
+  return { blocks, truncated, count: blocks.length }
 }
