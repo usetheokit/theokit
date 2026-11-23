@@ -6,18 +6,15 @@ import {
   createControlStreamSource,
 } from './control-stream.js'
 
-function clientOf(
-  frames: ControlStreamFrame[],
-  fail?: Error,
-): ControlStreamClient & { chat: ReturnType<typeof vi.fn> } {
+function clientOf(frames: ControlStreamFrame[], fail?: Error) {
   return {
-    chat: vi.fn(async function* () {
+    chat: vi.fn(async function* (_message: string, _session: string) {
       yield* frames
       if (fail !== undefined) throw fail
     }),
-    interrupt: vi.fn(),
-    steer: vi.fn(),
-  }
+    interrupt: vi.fn((_session: string) => undefined),
+    steer: vi.fn((_session: string, _message: string) => undefined),
+  } satisfies ControlStreamClient
 }
 
 async function collect(source: AsyncIterable<unknown>): Promise<unknown[]> {

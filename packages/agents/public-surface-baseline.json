@@ -20313,6 +20313,74 @@
             "dist/control.d.ts#SocketVerdict": "interface SocketVerdict {\n    owner?: boolean;\n    revoked?: (close: () => void) => (() => void) | undefined;\n}"
           }
         },
+        "ControlStreamClient": {
+          "tier": "stable",
+          "declaration": "interface ControlStreamClient {\n    chat(message: string, session: string): AsyncIterable<ControlStreamFrame>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/control.d.ts#ControlStreamFrame"],
+          "internals": {
+            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n    };\n    readonly code?: string;\n    readonly arrivedAt?: number;\n}"
+          }
+        },
+        "ControlStreamEvent": {
+          "tier": "stable",
+          "declaration": "type ControlStreamEvent = {\n    readonly type: 'text-delta';\n    readonly text: string;\n} | {\n    readonly type: 'tool_call';\n    readonly call_id: string;\n    readonly name?: string;\n    readonly status: 'running' | 'completed' | 'error';\n} | {\n    readonly type: 'notice';\n    readonly variant: 'warning' | 'error';\n    readonly text: string;\n} | {\n    readonly type: 'interrupted';\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ControlStreamFrame": {
+          "tier": "stable",
+          "declaration": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n    };\n    readonly code?: string;\n    readonly arrivedAt?: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ControlStreamInbox": {
+          "tier": "stable",
+          "declaration": "interface ControlStreamInbox {\n    take(before?: number): ControlStreamNotice[];\n    wait(): Promise<void>;\n    stamp(): number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/control.d.ts#ControlStreamNotice"],
+          "internals": {
+            "dist/control.d.ts#ControlStreamNotice": "interface ControlStreamNotice {\n    readonly variant: 'warning' | 'error';\n    readonly text: string;\n}"
+          }
+        },
+        "ControlStreamNotice": {
+          "tier": "stable",
+          "declaration": "interface ControlStreamNotice {\n    readonly variant: 'warning' | 'error';\n    readonly text: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ControlStreamOptions": {
+          "tier": "stable",
+          "declaration": "interface ControlStreamOptions {\n    readonly inbox?: ControlStreamInbox;\n    readonly onNotice?: (notice: ControlStreamNotice) => void;\n    readonly onEnd?: () => void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/control.d.ts#ControlStreamInbox",
+            "dist/control.d.ts#ControlStreamNotice"
+          ],
+          "internals": {
+            "dist/control.d.ts#ControlStreamInbox": "interface ControlStreamInbox {\n    take(before?: number): ControlStreamNotice[];\n    wait(): Promise<void>;\n    stamp(): number;\n}",
+            "dist/control.d.ts#ControlStreamNotice": "interface ControlStreamNotice {\n    readonly variant: 'warning' | 'error';\n    readonly text: string;\n}"
+          }
+        },
+        "ControlStreamSource": {
+          "tier": "stable",
+          "declaration": "interface ControlStreamSource {\n    (): AsyncGenerator<ControlStreamEvent>;\n    interrupt(): void;\n    steer(message: string): void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/control.d.ts#ControlStreamEvent"],
+          "internals": {
+            "dist/control.d.ts#ControlStreamEvent": "type ControlStreamEvent = {\n    readonly type: 'text-delta';\n    readonly text: string;\n} | {\n    readonly type: 'tool_call';\n    readonly call_id: string;\n    readonly name?: string;\n    readonly status: 'running' | 'completed' | 'error';\n} | {\n    readonly type: 'notice';\n    readonly variant: 'warning' | 'error';\n    readonly text: string;\n} | {\n    readonly type: 'interrupted';\n};"
+          }
+        },
         "DevicePairing": {
           "tier": "stable",
           "declaration": "interface DevicePairing {\n    issueCode(): string;\n    request(code: string, name: string, credential: string, city?: string): PairingRequestResult;\n    pending(): readonly {\n        id: string;\n        name: string;\n        since: number;\n        city?: string;\n    }[];\n    approve(id: string): Promise<PairingApproval>;\n    deny(id: string): boolean;\n    revoke(name: string): Promise<boolean>;\n    revokeDevice(id: string): Promise<boolean>;\n    deviceIdFor(authorization: string | undefined): string | undefined;\n    accepts(authorization: string | undefined): boolean;\n    onRevoke(listener: (id: string) => void): () => void;\n}",
@@ -20703,6 +20771,30 @@
             "dist/control.d.ts#ControlClient": "interface ControlClient {\n    chat(message: string, session: string): AsyncIterable<ControlServerFrame>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n    close(): Promise<void>;\n}",
             "dist/control.d.ts#ControlServerFrame": "type ControlServerFrame = {\n    type: 'event';\n    event: AgentStreamEvent;\n    session?: string;\n} | {\n    type: 'done';\n    session?: string;\n    usage?: AgentTurnUsage;\n} | {\n    type: 'interrupted' | 'interrupt_ok' | 'steer_ok' | 'no_turn';\n    session: string;\n} | {\n    type: 'error';\n    code: string;\n    session?: string;\n};",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+          }
+        },
+        "createControlStreamSource": {
+          "tier": "stable",
+          "declaration": "declare function createControlStreamSource(client: ControlStreamClient, session: string, message: string, options?: ControlStreamOptions): ControlStreamSource;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/control.d.ts#ControlStreamClient",
+            "dist/control.d.ts#ControlStreamEvent",
+            "dist/control.d.ts#ControlStreamFrame",
+            "dist/control.d.ts#ControlStreamInbox",
+            "dist/control.d.ts#ControlStreamNotice",
+            "dist/control.d.ts#ControlStreamOptions",
+            "dist/control.d.ts#ControlStreamSource"
+          ],
+          "internals": {
+            "dist/control.d.ts#ControlStreamClient": "interface ControlStreamClient {\n    chat(message: string, session: string): AsyncIterable<ControlStreamFrame>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n}",
+            "dist/control.d.ts#ControlStreamEvent": "type ControlStreamEvent = {\n    readonly type: 'text-delta';\n    readonly text: string;\n} | {\n    readonly type: 'tool_call';\n    readonly call_id: string;\n    readonly name?: string;\n    readonly status: 'running' | 'completed' | 'error';\n} | {\n    readonly type: 'notice';\n    readonly variant: 'warning' | 'error';\n    readonly text: string;\n} | {\n    readonly type: 'interrupted';\n};",
+            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n    };\n    readonly code?: string;\n    readonly arrivedAt?: number;\n}",
+            "dist/control.d.ts#ControlStreamInbox": "interface ControlStreamInbox {\n    take(before?: number): ControlStreamNotice[];\n    wait(): Promise<void>;\n    stamp(): number;\n}",
+            "dist/control.d.ts#ControlStreamNotice": "interface ControlStreamNotice {\n    readonly variant: 'warning' | 'error';\n    readonly text: string;\n}",
+            "dist/control.d.ts#ControlStreamOptions": "interface ControlStreamOptions {\n    readonly inbox?: ControlStreamInbox;\n    readonly onNotice?: (notice: ControlStreamNotice) => void;\n    readonly onEnd?: () => void;\n}",
+            "dist/control.d.ts#ControlStreamSource": "interface ControlStreamSource {\n    (): AsyncGenerator<ControlStreamEvent>;\n    interrupt(): void;\n    steer(message: string): void;\n}"
           }
         },
         "createDevicePairing": {
