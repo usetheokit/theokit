@@ -11,9 +11,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- Web search is now chosen by `resolveWebSearchAdapter` from `@theokit/sdk-tools` (pinned to 0.34.0) instead of code of TheoClaw's own. The rules are unchanged: `THEOCLAW_SEARCH` still wins, a `TAVILY_API_KEY` alone still leaves search off, every search key is still masked, and a bad value is still a `TheoClawConfigError` naming the variable (#2698).
 ### Changed
 
+- Web search is now chosen by `resolveWebSearchAdapter` from `@theokit/sdk-tools` (pinned to 0.34.0) instead of code of TheoClaw's own. The rules are unchanged: `THEOCLAW_SEARCH` still wins, a `TAVILY_API_KEY` alone still leaves search off, every search key is still masked, and a bad value is still a `TheoClawConfigError` naming the variable (#2698).
 - `THEOCLAW_LOG_FILE` is now mirrored by the host's `teeOutput`, bounded at 10 MiB with two rotated files (`.1`, `.2`); the app's own unbounded tee is removed (#2757).
 
 - Display settings `cleanup_progress` and `streaming` are removed: nothing read them, so `THEOCLAW_DISPLAY_CLEANUP_PROGRESS` is now ignored. Per-platform display tiers stay in TheoClaw as product policy; the gateway's `progressFor` keeps deciding by edit capability alone (#2756).

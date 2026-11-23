@@ -2,17 +2,27 @@ import { chmodSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import type { Stats } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import { createSandboxBackend, DockerSandbox, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
+import {
+  createSandboxBackend,
+  DockerSandbox,
+  LinuxSandbox,
+  resolveSandboxPosture,
+  writableRootsFor,
+} from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
 
 import { isSubscriptionRoute } from '@theokit/agents/auth'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import { createDockerBackend, readSandboxBackend, readSandboxMode, readSandboxSessions, sandboxModeForSession } from '../sandbox/sandbox-mode.js'
+import {
+  createDockerBackend,
+  readSandboxBackend,
+  readSandboxMode,
+  readSandboxSessions,
+  sandboxModeForSession,
+} from '../sandbox/sandbox-mode.js'
 import type { DockerBackendDeps, SandboxBackendName } from '../sandbox/sandbox-mode.js'
-import { resolveSearch } from './web-search-settings.js'
-import type { SearchSettings } from './web-search-settings.js'
 import { browserLine, readBrowser } from './browser-server.js'
 import type { BrowserDeps, BrowserSettings } from './browser-server.js'
 import { computerLine, readComputer } from './computer-settings.js'
@@ -20,9 +30,14 @@ import type { ComputerDeps, ComputerSettings } from './computer-settings.js'
 import { externalToolPaths, resolveExternalTools } from './external-tools.js'
 import type { ExternalTools } from './external-tools.js'
 import { isWithin, resolveRealPath, SymlinkLoopError } from '@theokit/agents/tool-scope'
+import { resolveWebSearchAdapter } from '@theokit/sdk-tools'
+import type { WebSearchCallback, WebSearchProvider } from '@theokit/sdk-tools'
 
 /** Where web search goes, chosen from the keys present at start. */
-
+export interface SearchSettings {
+  readonly kind: WebSearchProvider | 'off'
+  readonly adapter?: WebSearchCallback
+}
 
 /** Everything the tool list is built from, resolved once at start. */
 export interface ToolSettings {
@@ -63,7 +78,10 @@ export interface ToolSettings {
 }
 
 /** A DNS lookup shaped as `dns/promises.lookup` with `{ all: true }` (B-398 FR-003). */
-type WebFetchLookup = (host: string, options: { readonly all: true }) => Promise<{ readonly address: string; readonly family: number }[]>
+type WebFetchLookup = (
+  host: string,
+  options: { readonly all: true },
+) => Promise<{ readonly address: string; readonly family: number }[]>
 
 /** What the tests inject; the process passes nothing. */
 export interface ToolDeps extends DockerBackendDeps {
@@ -106,7 +124,10 @@ function lstatOrUndefined(path: string): Stats | undefined {
  * non-directory, or a directory whose real path is not directly under the workspace is refused;
  * a directory open to group or others is narrowed to 0700, and the returned line says so.
  */
-function prepareToolRoot(workspace: string): { readonly toolRoot: string; readonly lines: string[] } {
+function prepareToolRoot(workspace: string): {
+  readonly toolRoot: string
+  readonly lines: string[]
+} {
   const toolRoot = join(workspace, 'files')
   const existing = lstatOrUndefined(toolRoot)
   if (existing === undefined) {
@@ -115,7 +136,9 @@ function prepareToolRoot(workspace: string): { readonly toolRoot: string; readon
     return { toolRoot, lines: [] }
   }
   if (existing.isSymbolicLink()) {
-    throw new TheoClawConfigError(`the tool root ${toolRoot} is a symlink; it must be a directory inside the workspace`)
+    throw new TheoClawConfigError(
+      `the tool root ${toolRoot} is a symlink; it must be a directory inside the workspace`,
+    )
   }
   if (!existing.isDirectory()) {
     throw new TheoClawConfigError(`the tool root ${toolRoot} exists and is not a directory`)
@@ -123,7 +146,9 @@ function prepareToolRoot(workspace: string): { readonly toolRoot: string; readon
   // `workspace` is already a real path and a symlinked `files` was refused above, so this only
   // catches a parent swapped between the two checks.
   if (dirname(realpathSync(toolRoot)) !== workspace) {
-    throw new TheoClawConfigError(`the tool root ${toolRoot} does not resolve to a directory directly under ${workspace}`)
+    throw new TheoClawConfigError(
+      `the tool root ${toolRoot} does not resolve to a directory directly under ${workspace}`,
+    )
   }
   if ((existing.mode & 0o077) === 0) return { toolRoot, lines: [] }
   try {
@@ -152,7 +177,8 @@ function nonBlank(value: string | undefined): string | undefined {
   return trimmed === undefined || trimmed === '' ? undefined : trimmed
 }
 
-const SEARCH_OFF_LINE = 'tools: web search is off (no THEOCLAW_SEARCH, BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
+const SEARCH_OFF_LINE =
+  'tools: web search is off (no THEOCLAW_SEARCH, BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
 const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
 
 /**
@@ -161,7 +187,11 @@ const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unc
  * file they are given. MCP servers the operator names (`THEOCLAW_EXTERNAL_TOOLS`, an import) run
  * outside the sandbox in every mode and are not refused here.
  */
-function refuseBrowserUnderReadOnly(hostTools: boolean, sandboxMode: SandboxMode, browser: BrowserSettings | undefined): void {
+function refuseBrowserUnderReadOnly(
+  hostTools: boolean,
+  sandboxMode: SandboxMode,
+  browser: BrowserSettings | undefined,
+): void {
   if (!hostTools || sandboxMode !== 'read-only' || browser === undefined) return
   throw new TheoClawConfigError(
     'THEOCLAW_BROWSER=on is refused with THEOCLAW_SANDBOX=read-only: the browser server runs unsandboxed and writes the screenshots, console logs and PDFs it is asked for; unset THEOCLAW_BROWSER or choose workspace-write',
@@ -202,12 +232,17 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const gitRepository = isRepository(toolRoot)
   const offLines = [...lines]
   if (gitRepository && !sandboxEnforced) {
-    const { detail } = resolveSandboxPosture({ mode, ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
+    const { detail } = resolveSandboxPosture({
+      mode,
+      ...(deps.detect === undefined ? {} : { detect: deps.detect }),
+    })
     offLines.push(`tools: git_diff is off (sandbox not enforced: ${detail})`)
   }
   if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
   if (isSubscriptionRoute(nonBlank(env.THEOCLAW_MODEL) ?? '')) {
-    offLines.push('tools: view_image is off (the openai-chatgpt/ route carries tool results as text only)')
+    offLines.push(
+      'tools: view_image is off (the openai-chatgpt/ route carries tool results as text only)',
+    )
   }
   if (mode === 'danger-full-access') offLines.push(SANDBOX_OFF_LINE)
   offLines.push(browserLine(browser), computerLine(computer))
@@ -230,7 +265,9 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     external,
     // Every search key set, the unused one too: a key is a secret whether or not it is chosen.
     secrets: [
-      ...[env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY, env.TAVILY_API_KEY].flatMap((value) => nonBlank(value) ?? []),
+      ...[env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY, env.TAVILY_API_KEY].flatMap(
+        (value) => nonBlank(value) ?? [],
+      ),
       ...external.secrets,
     ],
     offLines,
@@ -242,17 +279,38 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
  * runs the chosen mode, else a copy with a backend of its own mode. With host tools off the mode is
  * already `read-only` for every session.
  */
-export function toolSettingsForSession(settings: ToolSettings, env: Env, sessionKey: string, deps: ToolDeps = {}): ToolSettings {
-  const sandboxMode = sandboxModeForSession(settings.sandboxMode, readSandboxSessions(env), sessionKey)
+export function toolSettingsForSession(
+  settings: ToolSettings,
+  env: Env,
+  sessionKey: string,
+  deps: ToolDeps = {},
+): ToolSettings {
+  const sandboxMode = sandboxModeForSession(
+    settings.sandboxMode,
+    readSandboxSessions(env),
+    sessionKey,
+  )
   if (sandboxMode === settings.sandboxMode || !settings.hostTools) return settings
-  const sandbox = buildBackend(settings.backend ?? 'bwrap', sandboxMode, settings.toolRoot, deps, sessionKey)
+  const sandbox = buildBackend(
+    settings.backend ?? 'bwrap',
+    sandboxMode,
+    settings.toolRoot,
+    deps,
+    sessionKey,
+  )
   // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
   const { interactive: _chosenMode, ...rest } = settings
   return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: isEnforced(sandbox) }
 }
 
 /** The one backend of a mode: the chosen `THEOCLAW_SANDBOX_BACKEND` over the tool root. */
-function buildBackend(backend: SandboxBackendName, mode: SandboxMode, toolRoot: string, deps: ToolDeps, session?: string): SandboxBackend {
+function buildBackend(
+  backend: SandboxBackendName,
+  mode: SandboxMode,
+  toolRoot: string,
+  deps: ToolDeps,
+  session?: string,
+): SandboxBackend {
   if (backend === 'docker') return createDockerBackend(mode, toolRoot, deps, session)
   return createSandboxBackend({
     mode,
@@ -319,7 +377,10 @@ export function checkHostToolsPosture(
   }
   if (!settings.sandboxEnforced) {
     const { sandboxMode } = settings
-    const { detail } = resolveSandboxPosture({ mode: sandboxMode, ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
+    const { detail } = resolveSandboxPosture({
+      mode: sandboxMode,
+      ...(deps.detect === undefined ? {} : { detect: deps.detect }),
+    })
     throw new TheoClawConfigError(
       `THEOCLAW_HOST_TOOLS=on needs an enforced sandbox (THEOCLAW_SANDBOX=${sandboxMode}): ${detail}; install bubblewrap and allow unprivileged user namespaces, or set THEOCLAW_SANDBOX=danger-full-access to run the shell unconfined on purpose`,
       { variable: 'THEOCLAW_SANDBOX' },
@@ -327,7 +388,10 @@ export function checkHostToolsPosture(
   }
   // The `workspace-write` roots under `read-only` too: `read-only`'s are none, which would make the
   // refusals below vacuous; `danger-full-access` returned above, its roots being every path.
-  const roots = settings.backend === 'docker' ? [settings.toolRoot] : (writableRootsFor('workspace-write', settings.toolRoot) ?? [])
+  const roots =
+    settings.backend === 'docker'
+      ? [settings.toolRoot]
+      : (writableRootsFor('workspace-write', settings.toolRoot) ?? [])
   refuseWorkspaceUnderWritableRoot(settings, roots)
   for (const target of protectedPaths) refuseWritableProtectedPath(target, roots)
 }
@@ -346,13 +410,19 @@ function refuseWorkspaceUnderWritableRoot(settings: ToolSettings, roots: readonl
 }
 
 /** Refuse a protected path whose real path (symlinks followed) lies inside any of `roots`. */
-function refuseWritableProtectedPath({ path, variable }: ProtectedPath, roots: readonly string[]): void {
+function refuseWritableProtectedPath(
+  { path, variable }: ProtectedPath,
+  roots: readonly string[],
+): void {
   let real: string
   try {
     real = resolveRealPath(path)
   } catch (error) {
     if (!(error instanceof SymlinkLoopError)) throw error
-    throw new TheoClawConfigError(`THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: ${error.message}`, { variable })
+    throw new TheoClawConfigError(
+      `THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: ${error.message}`,
+      { variable },
+    )
   }
   const root = roots.find((candidate) => isWithin(real, realPathOrSelf(candidate)))
   if (root === undefined) return
@@ -360,4 +430,64 @@ function refuseWritableProtectedPath({ path, variable }: ProtectedPath, roots: r
     `THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: it lies under ${root}, which the host tools can write`,
     { variable },
   )
+}
+
+/**
+ * Web search over the SDK's `resolveWebSearchAdapter`, fed only the variables TheoClaw honours.
+ * `THEOCLAW_SEARCH=searxng:<url>` or `tavily` (key in `TAVILY_API_KEY`) wins; else Brave when
+ * `BRAVE_API_KEY` is set, else the generic adapter when `THEOKIT_SEARCH_API_URL` and
+ * `THEOKIT_SEARCH_API_KEY` both are. A Tavily key alone never turns search on here. A blank value
+ * counts as unset.
+ */
+export function resolveSearch(env: Env, fetchImpl: typeof fetch): SearchSettings {
+  const chosen = nonBlank(env.THEOCLAW_SEARCH)
+  if (chosen !== undefined && chosen !== 'tavily' && !chosen.startsWith('searxng:')) {
+    throw new TheoClawConfigError(
+      `THEOCLAW_SEARCH must be searxng:<url> or tavily, got ${JSON.stringify(chosen)}`,
+      { variable: 'THEOCLAW_SEARCH' },
+    )
+  }
+  const input: Record<string, string | undefined> = {
+    BRAVE_API_KEY: env.BRAVE_API_KEY,
+    THEOKIT_SEARCH_API_URL: env.THEOKIT_SEARCH_API_URL,
+    THEOKIT_SEARCH_API_KEY: env.THEOKIT_SEARCH_API_KEY,
+    ...(chosen === undefined ? {} : { THEOKIT_SEARCH: chosen, TAVILY_API_KEY: env.TAVILY_API_KEY }),
+  }
+  try {
+    const { adapter, provider } = resolveWebSearchAdapter(input, { fetchImpl })
+    return adapter === undefined || provider === undefined
+      ? { kind: 'off' }
+      : { kind: provider, adapter }
+  } catch (error) {
+    throw searchConfigError(error, env, chosen)
+  }
+}
+
+/**
+ * The SDK's `ConfigurationError` as a `TheoClawConfigError` naming the variable to fix. The SDK
+ * sets only a `code`, so the variable is worked out from the environment, not from its message;
+ * an error of any other code passes through unchanged.
+ */
+function searchConfigError(error: unknown, env: Env, chosen: string | undefined): unknown {
+  const code = (error as { code?: unknown } | null)?.code
+  if (code === 'web_search_invalid_url') {
+    return new TheoClawConfigError(
+      'THEOCLAW_SEARCH=searxng:<url> needs an http(s) URL, e.g. searxng:http://localhost:8888',
+      { variable: 'THEOCLAW_SEARCH' },
+    )
+  }
+  if (code !== 'web_search_missing_variable') return error
+  if (chosen === 'tavily')
+    return new TheoClawConfigError('THEOCLAW_SEARCH=tavily needs TAVILY_API_KEY', {
+      variable: 'TAVILY_API_KEY',
+    })
+  const missing =
+    nonBlank(env.THEOKIT_SEARCH_API_URL) === undefined
+      ? 'THEOKIT_SEARCH_API_URL'
+      : 'THEOKIT_SEARCH_API_KEY'
+  const present =
+    missing === 'THEOKIT_SEARCH_API_URL' ? 'THEOKIT_SEARCH_API_KEY' : 'THEOKIT_SEARCH_API_URL'
+  return new TheoClawConfigError(`${present} is set without ${missing}; set both or neither`, {
+    variable: missing,
+  })
 }
