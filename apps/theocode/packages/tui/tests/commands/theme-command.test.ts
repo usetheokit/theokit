@@ -20,7 +20,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { statusPanel } from '../../src/commands/command-content.js'
-import type { PtysTheInterpreterUses, SessionTheInterpreterUses } from '../../src/commands/command-capabilities.js'
+import type {
+  PtysTheInterpreterUses,
+  SessionTheInterpreterUses,
+} from '../../src/commands/command-capabilities.js'
 import type { ToastPayload } from '../../src/screen-types.js'
 import { THEME_BASES } from '../../src/theme/theme-base.js'
 import { resetSessionThemeForTest, sessionThemeLabel } from '../../src/theme/theme-session.js'
@@ -65,7 +68,7 @@ const NO_RULES = {
 } as unknown as Parameters<typeof statusPanel>[4]
 
 /** The `theme` row of `/status`, or `undefined` if the panel stopped carrying one. */
-function statusThemeRow(): string | undefined {
+async function statusThemeRow(): Promise<string | undefined> {
   const session = {
     attachImages: vi.fn(),
     effort: () => 'medium' as never,
@@ -80,14 +83,19 @@ function statusThemeRow(): string | undefined {
     backend: () => ({ activeSessionCount: () => 0, killAll: vi.fn() }),
   } as unknown as PtysTheInterpreterUses
 
-  return statusPanel(session, 'suggest', () => 'tui-1', ptys, NO_RULES)
-    .body.split('\n')
+  return (await statusPanel(session, 'suggest', () => 'tui-1', ptys, NO_RULES)).body
+    .split('\n')
     .find((row) => row.startsWith('theme:'))
 }
 
 // The override is process-wide, exactly like the switch it models. Left in place it would leak into
 // whichever test ran next and quietly turn its "no override" case into a passing tautology.
+beforeEach(() => {
+  vi.stubEnv('NO_COLOR', '')
+})
+
 afterEach(() => {
+  vi.unstubAllEnvs()
   resetSessionThemeForTest()
 })
 
@@ -136,10 +144,10 @@ describe('the active theme is reported with the input that decided it', () => {
     expect(line, 'the environment resolution was dropped').toContain('dark (THEOCODE_THEME)')
   })
 
-  it('test_the_status_panel_reports_the_same_line_as_the_theme_command', () => {
+  it('test_the_status_panel_reports_the_same_line_as_the_theme_command', async () => {
     // Anti-drift. Two renderers for one resolution is how `/status` and `/theme` come to disagree
     // about which input decided the colour — the single question anyone asks about a theme.
-    const themeRow = statusThemeRow()
+    const themeRow = await statusThemeRow()
 
     expect(themeRow, 'the theme row vanished from /status').toBeDefined()
     expect(themeRow).toContain(themeResolutionLine(THEME_RESOLUTION, sessionThemeLabel()))
@@ -150,16 +158,21 @@ describe('the active theme is reported with the input that decided it', () => {
     })
   })
 
-  it('test_the_status_row_follows_a_switch_rather_than_the_environment', () => {
+  it('test_the_status_row_follows_a_switch_rather_than_the_environment', async () => {
     // `/status` and `/theme` read the override through the same accessor, so this is what catches a
     // panel that keeps rendering the startup resolution after the frame has been repainted.
-    const before = statusThemeRow()
+    const before = await statusThemeRow()
     const other = THEME_BASES.find((base) => base !== THEME_RESOLUTION.base)
 
-    handleTheme(other as string, vi.fn(), () => true, () => '<store>')
+    handleTheme(
+      other as string,
+      vi.fn(),
+      () => true,
+      () => '<store>',
+    )
 
-    expect(statusThemeRow(), 'the /status theme row ignored the switch').not.toBe(before)
-    expect(statusThemeRow(), 'the row does not name the base now being drawn').toMatch(
+    expect(await statusThemeRow(), 'the /status theme row ignored the switch').not.toBe(before)
+    expect(await statusThemeRow(), 'the row does not name the base now being drawn').toMatch(
       new RegExp(`theme:\\s+${other as string}\\b`),
     )
   })
@@ -214,7 +227,9 @@ describe('a theme this build can switch to is applied rather than explained away
     writeSucceeds = false
     const toast = toastOf('light')
 
-    expect(toast.message, 'a failed write was reported as remembered').toContain('this session only')
+    expect(toast.message, 'a failed write was reported as remembered').toContain(
+      'this session only',
+    )
     expect(toast.message, 'the file that could not be written is not named').toContain('<store>')
   })
 
@@ -238,8 +253,18 @@ describe('a theme this build can switch to is applied rather than explained away
   it('test_an_unrecognised_theme_leaves_the_active_base_alone', () => {
     // The refusal has to be a refusal. A handler that said "not a theme" and then stored the word
     // anyway would satisfy the message assertions above and hand `THEMES[base]` an `undefined`.
-    handleTheme('light', vi.fn(), () => true, () => '<store>')
-    handleTheme('drak', vi.fn(), () => true, () => '<store>')
+    handleTheme(
+      'light',
+      vi.fn(),
+      () => true,
+      () => '<store>',
+    )
+    handleTheme(
+      'drak',
+      vi.fn(),
+      () => true,
+      () => '<store>',
+    )
 
     expect(sessionThemeLabel(), 'a rejected word replaced the base that was working').toBe('light')
   })
@@ -284,12 +309,13 @@ describe('#14 — the custom theme in force is what the reports name', () => {
     return (setToast.mock.calls[0]?.[0] as ToastPayload).message
   }
 
-  it('test_status_names_the_custom_theme_rather_than_the_environment_base', () => {
+  it('test_status_names_the_custom_theme_rather_than_the_environment_base', async () => {
     select()
 
-    expect(statusThemeRow(), 'the /status theme row never names the theme being drawn').toContain(
-      'custom:midnight',
-    )
+    expect(
+      await statusThemeRow(),
+      'the /status theme row never names the theme being drawn',
+    ).toContain('custom:midnight')
   })
 
   it('test_the_bare_report_attributes_the_custom_theme_to_the_session', () => {
@@ -317,5 +343,30 @@ describe('#14 — the custom theme in force is what the reports name', () => {
     select()
 
     expect(bareReport()).toMatch(/also[^\n]*custom:solar/)
+  })
+})
+
+describe('NO_COLOR set', () => {
+  it('test_a_colour_base_is_refused_without_persisting_or_switching', () => {
+    vi.stubEnv('NO_COLOR', '1')
+    persisted = []
+    const toast = toastOf('light')
+    expect(toast.variant).toBe('error')
+    expect(toast.message).toContain('NO_COLOR')
+    expect(persisted).toEqual([])
+    expect(sessionThemeLabel()).toBeUndefined()
+  })
+
+  it('test_no_color_base_is_still_accepted', () => {
+    vi.stubEnv('NO_COLOR', '1')
+    persisted = []
+    expect(toastOf('no-color').variant).toBe('success')
+    expect(persisted).toEqual(['no-color'])
+  })
+
+  it('test_an_empty_no_color_does_not_refuse', () => {
+    vi.stubEnv('NO_COLOR', '')
+    persisted = []
+    expect(toastOf('light').variant).toBe('success')
   })
 })
