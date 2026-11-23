@@ -18,6 +18,7 @@ import {
   type OpenAICompletion,
 } from './openai-compatible-routes.js'
 import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
+import { describeError as describe, describeStreamedError } from './stream-errors.js'
 
 /** How a turn ended. `reason` is for logs; it is never meant for a client. */
 export type AgentTurnOutcome =
@@ -49,18 +50,8 @@ function ignore(): void {
   // a rejection nobody waits on
 }
 
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function failed(reason: string): AgentTurnOutcome {
   return { ok: false, code: 'turn_failed', reason }
-}
-
-function describeStreamedError(event: object): string {
-  const { code, message } = event as { code?: unknown; message?: unknown }
-  const text = typeof code === 'string' ? code : 'error'
-  return typeof message === 'string' && message !== '' ? `${text}: ${message}` : text
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -266,7 +257,12 @@ async function runTurn(
       if (isAssistant) textStreamed = false
       for (const event of translateMessage(message as SdkMessage, options.runId)) {
         if (skipText && event.type === 'text_delta') continue
-        if (event.type === 'error') streamedError ??= describeStreamedError(event)
+        if (event.type === 'error')
+          streamedError ??= describeStreamedError(
+            typeof (event as { code?: unknown }).code === 'string'
+              ? event
+              : { ...event, code: undefined },
+          )
         send(event)
       }
     }
