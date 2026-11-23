@@ -145,3 +145,17 @@ describe('T4.2 — the declared budget is a real budget', () => {
     expect(GOAL_DEFAULTS).toEqual({ maxTurns: 20, tokenBudget: 150_000 })
   })
 })
+
+describe('#2605 — the framework goal signal drives the judge (the per-run wiring in cli goalCommand is not unit-tested)', () => {
+  it('test_signal_judge_follows_update_goal_call', async () => {
+    const { createGoalSignal } = await import('@theokit/agents')
+    const a = createGoalSignal()
+    const b = createGoalSignal()
+    expect((await a.judge({} as never)).verdict).toBe('continue')
+    await (a.tool as unknown as { handler: (i: unknown) => Promise<string> }).handler({
+      status: 'blocked',
+    })
+    expect((await a.judge({} as never)).verdict).toBe('blocked')
+    expect((await b.judge({} as never)).verdict).toBe('continue')
+  })
+})
