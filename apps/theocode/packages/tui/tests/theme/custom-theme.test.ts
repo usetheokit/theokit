@@ -107,10 +107,9 @@ describe('the overrides that map', () => {
     const loaded = loadCustomTheme('x', home)
 
     expect(loaded?.notApplied.join(' ')).toContain('rate_limit_fill')
-    expect(
-      loaded?.notApplied.join(' '),
-      'a token that DID apply was reported as lost',
-    ).not.toContain('claude')
+    expect(loaded?.notApplied.join(' '), 'a token that DID apply was reported as lost').not.toContain(
+      'claude',
+    )
   })
 
   it('test_a_colour_notation_this_product_cannot_render_is_named_rather_than_forwarded', () => {
