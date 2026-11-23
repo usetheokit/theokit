@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { recordScopedWiring } from '../../src/index.js'
+import { recordScopedWiring } from '../src/scoped-wiring.js'
 
 const posture = (mcp: boolean) => ({ allows: { mcp, skills: true } })
 
