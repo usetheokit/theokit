@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Web search is now chosen by `resolveWebSearchAdapter` from `@theokit/sdk-tools` (pinned to 0.34.0) instead of code of TheoClaw's own. The rules are unchanged: `THEOCLAW_SEARCH` still wins, a `TAVILY_API_KEY` alone still leaves search off, every search key is still masked, and a bad value is still a `TheoClawConfigError` naming the variable (#2698).
 - The `theoclaw` command line (`dist/cli.js`) now exits once stdout and stderr are flushed, on success and on error. It called `process.exit` at once, so a pipe reader (`docker exec`) lost the `updated <from> -> <to>` line after a long update output (#2681).
 - The browser wrapper now sends the browser server one tool call at a time. A model that sent `browser_navigate` and `browser_snapshot` in one turn got the snapshot of a page still loading, and reported that the page was empty (the OC-60 live failure, #2673). It also no longer hands the model an empty answer or a dead link when a snapshot file cannot be read: the answer says why and tells the model to call `browser_snapshot` again.
 - `theoclaw update` now starts its `updated <from> -> <to>` line on a line of its own when the build's output ends without a newline; before, the line ran on to the build's last line and a reader of the output did not find it.

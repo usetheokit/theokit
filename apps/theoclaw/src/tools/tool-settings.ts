@@ -6,6 +6,8 @@ import { createSandboxBackend, DockerSandbox, LinuxSandbox, resolveSandboxPostur
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
 
+import { resolveWebSearchAdapter } from '@theokit/sdk-tools'
+import type { WebSearchCallback, WebSearchProvider } from '@theokit/sdk-tools'
 import { isSubscriptionRoute } from '@theokit/agents/auth'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -21,9 +23,8 @@ import { isWithin, resolveRealPath, SymlinkLoopError } from '@theokit/agents/too
 
 /** Where web search goes, chosen from the keys present at start. */
 export interface SearchSettings {
-  readonly kind: 'brave' | 'generic' | 'searxng' | 'tavily' | 'off'
-  readonly url?: string
-  readonly key?: string
+  readonly kind: WebSearchProvider | 'off'
+  readonly adapter?: WebSearchCallback
 }
 
 /** Everything the tool list is built from, resolved once at start. */
@@ -157,47 +158,45 @@ function nonBlank(value: string | undefined): string | undefined {
 const SEARCH_OFF_LINE = 'tools: web search is off (no THEOCLAW_SEARCH, BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
 const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
 
-/** `THEOCLAW_SEARCH=searxng:<url>` or `tavily` (key in `TAVILY_API_KEY`); it wins over every other search variable. */
-function readChosenSearch(chosen: string, env: Env): SearchSettings {
-  const bad = (message: string): TheoClawConfigError => new TheoClawConfigError(message, { variable: 'THEOCLAW_SEARCH' })
-  if (chosen === 'tavily') {
-    const key = nonBlank(env.TAVILY_API_KEY)
-    if (key === undefined) throw bad('THEOCLAW_SEARCH=tavily needs TAVILY_API_KEY')
-    return { kind: 'tavily', key }
+/**
+ * Web search over the SDK's `resolveWebSearchAdapter`, fed only the variables TheoClaw honours.
+ * `THEOCLAW_SEARCH=searxng:<url>` or `tavily` (key in `TAVILY_API_KEY`) wins; else Brave when
+ * `BRAVE_API_KEY` is set, else the generic adapter when `THEOKIT_SEARCH_API_URL` and
+ * `THEOKIT_SEARCH_API_KEY` both are. A Tavily key alone never turns search on here. A blank value
+ * counts as unset.
+ */
+function readSearch(env: Env, fetchImpl: typeof fetch): SearchSettings {
+  const chosen = nonBlank(env.THEOCLAW_SEARCH)
+  if (chosen !== undefined && chosen !== 'tavily' && !chosen.startsWith('searxng:')) {
+    throw new TheoClawConfigError(`THEOCLAW_SEARCH must be searxng:<url> or tavily, got ${JSON.stringify(chosen)}`, { variable: 'THEOCLAW_SEARCH' })
   }
-  if (chosen.startsWith('searxng:')) {
-    const url = chosen.slice('searxng:'.length).trim()
-    let valid = false
-    try {
-      valid = ['http:', 'https:'].includes(new URL(url).protocol)
-    } catch {
-      valid = false
-    }
-    if (!valid) throw bad('THEOCLAW_SEARCH=searxng:<url> needs an http(s) URL, e.g. searxng:http://localhost:8888')
-    return { kind: 'searxng', url }
+  const input: Record<string, string | undefined> = {
+    BRAVE_API_KEY: env.BRAVE_API_KEY,
+    THEOKIT_SEARCH_API_URL: env.THEOKIT_SEARCH_API_URL,
+    THEOKIT_SEARCH_API_KEY: env.THEOKIT_SEARCH_API_KEY,
+    ...(chosen === undefined ? {} : { THEOKIT_SEARCH: chosen, TAVILY_API_KEY: env.TAVILY_API_KEY }),
   }
-  throw bad(`THEOCLAW_SEARCH must be searxng:<url> or tavily, got ${JSON.stringify(chosen)}`)
+  try {
+    const { adapter, provider } = resolveWebSearchAdapter(input, { fetchImpl })
+    return adapter === undefined || provider === undefined ? { kind: 'off' } : { kind: provider, adapter }
+  } catch (error) {
+    throw searchConfigError(error, chosen)
+  }
 }
 
-/**
- * Brave when `BRAVE_API_KEY` is set (it wins over the generic adapter); the generic adapter when
- * both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` are; one of those two alone is refused
- * naming the other; neither is off. A blank value counts as unset.
- */
-function readSearch(env: Env): SearchSettings {
-  const chosen = nonBlank(env.THEOCLAW_SEARCH)
-  if (chosen !== undefined) return readChosenSearch(chosen, env)
-  const brave = nonBlank(env.BRAVE_API_KEY)
-  if (brave !== undefined) return { kind: 'brave', key: brave }
-  const url = nonBlank(env.THEOKIT_SEARCH_API_URL)
-  const key = nonBlank(env.THEOKIT_SEARCH_API_KEY)
-  if (url !== undefined && key !== undefined) return { kind: 'generic', url, key }
-  if (url !== undefined || key !== undefined) {
-    const missing = url === undefined ? 'THEOKIT_SEARCH_API_URL' : 'THEOKIT_SEARCH_API_KEY'
-    const present = url === undefined ? 'THEOKIT_SEARCH_API_KEY' : 'THEOKIT_SEARCH_API_URL'
-    throw new TheoClawConfigError(`${present} is set without ${missing}; set both or neither`, { variable: missing })
+/** The SDK's `ConfigurationError` as a `TheoClawConfigError` naming the variable the operator should fix. */
+function searchConfigError(error: unknown, chosen: string | undefined): unknown {
+  const code = (error as { code?: unknown } | null)?.code
+  const message = error instanceof Error ? error.message : ''
+  if (code === 'web_search_invalid_url') {
+    return new TheoClawConfigError('THEOCLAW_SEARCH=searxng:<url> needs an http(s) URL, e.g. searxng:http://localhost:8888', { variable: 'THEOCLAW_SEARCH' })
   }
-  return { kind: 'off' }
+  if (code === 'web_search_missing_variable') {
+    const variable = /^([A-Z0-9_]+) is not set/.exec(message)?.[1] ?? 'THEOCLAW_SEARCH'
+    const text = chosen === 'tavily' && variable === 'TAVILY_API_KEY' ? 'THEOCLAW_SEARCH=tavily needs TAVILY_API_KEY' : message
+    return new TheoClawConfigError(text, { variable })
+  }
+  return error
 }
 
 /**
@@ -225,7 +224,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const hostTools = readHostTools(env)
   const sandboxMode = readSandboxMode(env)
   const backend = readSandboxBackend(env)
-  const search = readSearch(env)
+  const search = readSearch(env, deps.fetchImpl ?? globalThis.fetch)
   const browser = readBrowser(env, deps.browser)
   const computer = readComputer(env, { hostTools, sandboxMode }, deps.computer)
   const external = resolveExternalTools(env)

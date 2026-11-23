@@ -72,7 +72,7 @@
     "pg": "8.23.0",
     "@theokit/sdk": "9.0.0",
     "@theokit/sdk-pty": "0.4.0",
-    "@theokit/sdk-tools": "0.29.0",
+    "@theokit/sdk-tools": "0.34.0",
     "@theokit/skills-registry": "0.1.0",
     "@theokit/tui": "0.83.4",
     "@theokit/ui": "1.13.0",
