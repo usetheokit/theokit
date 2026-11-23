@@ -87,7 +87,12 @@ function statusThemeRow(): string | undefined {
 
 // The override is process-wide, exactly like the switch it models. Left in place it would leak into
 // whichever test ran next and quietly turn its "no override" case into a passing tautology.
+beforeEach(() => {
+  vi.stubEnv('NO_COLOR', '')
+})
+
 afterEach(() => {
+  vi.unstubAllEnvs()
   resetSessionThemeForTest()
 })
 
@@ -317,5 +322,30 @@ describe('#14 — the custom theme in force is what the reports name', () => {
     select()
 
     expect(bareReport()).toMatch(/also[^\n]*custom:solar/)
+  })
+})
+
+describe('NO_COLOR set', () => {
+  it('test_a_colour_base_is_refused_without_persisting_or_switching', () => {
+    vi.stubEnv('NO_COLOR', '1')
+    persisted = []
+    const toast = toastOf('light')
+    expect(toast.variant).toBe('error')
+    expect(toast.message).toContain('NO_COLOR')
+    expect(persisted).toEqual([])
+    expect(sessionThemeLabel()).toBeUndefined()
+  })
+
+  it('test_no_color_base_is_still_accepted', () => {
+    vi.stubEnv('NO_COLOR', '1')
+    persisted = []
+    expect(toastOf('no-color').variant).toBe('success')
+    expect(persisted).toEqual(['no-color'])
+  })
+
+  it('test_an_empty_no_color_does_not_refuse', () => {
+    vi.stubEnv('NO_COLOR', '')
+    persisted = []
+    expect(toastOf('light').variant).toBe('success')
   })
 })
