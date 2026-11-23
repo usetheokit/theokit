@@ -14,7 +14,11 @@ import { classifyProjects, type FsSeam, type LivenessVerdict } from '../liveness
 import { protectedTranscriptPaths } from '../session-lifecycle.js'
 import { sessionPointerPath } from '../session-pointer.js'
 
-import { collectorRootOwner, CollectorRootNotOwnedError } from './collector-root.js'
+import {
+  collectorRootOwner,
+  CollectorRootNotOwnedError,
+  type CollectorRootOptions,
+} from './collector-root.js'
 import { awaitRegistryRemoval } from './registry-remover.js'
 import { GCFloorError } from './transcript-gc.js'
 
@@ -107,6 +111,21 @@ export interface PlanProjectsGCOptions {
    * `true` here a live project is kept whole, whatever `candidateCwds` returns.
    */
   readonly candidateCwdsComplete?: boolean
+  /**
+   * How a live project's cwd coverage is established. `'declared'` (default): the caller's
+   * `candidateCwds` + `candidateCwdsComplete: true`. `'transcripts'`: the cwds recorded in the
+   * transcript headers are the whole collision class, and `candidateCwds` is optional extra input.
+   * The tradeoff is the caller's to accept: a colliding cwd that has a registry but no transcript
+   * in the project cannot be discovered, so only its registry entries (not its pointer) are at risk.
+   * Every transcript must still name a cwd of the project, or the project is kept whole.
+   */
+  readonly cwdCoverage?: 'declared' | 'transcripts'
+  /**
+   * What a project judged dead gets. `'inspect'` (default): the same pointer and registry protection
+   * as a live one. `'keep-last'`: only the newest `keepLast` transcripts are protected, and no
+   * pointer or registry is read, for a caller whose dead projects have no cwd left to consult.
+   */
+  readonly deadProjects?: 'inspect' | 'keep-last'
   readonly fs?: ProjectsGCFs
 }
 
@@ -342,11 +361,14 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       })
       continue
     }
-    {
+    if (live || options.deadProjects !== 'keep-last') {
       // The encoding is many-to-one and registries cannot be enumerated: a colliding live cwd may
       // appear in no header and no verdict, only in its own registry. Registry coverage is complete
       // only when the caller declares the cwds it knows; otherwise the project is kept whole.
-      if (options.candidateCwds === undefined || options.candidateCwdsComplete !== true) {
+      const covered =
+        options.cwdCoverage === 'transcripts' ||
+        (options.candidateCwds !== undefined && options.candidateCwdsComplete === true)
+      if (!covered) {
         kept.push({
           project,
           reason:
@@ -357,7 +379,7 @@ export async function planProjectsGC(options: PlanProjectsGCOptions): Promise<Pr
       // A dead verdict can rest on the headers that read: a colliding cwd that is alive but appears
       // only in its own registry makes it wrong, so the same guard and registry reads apply.
       const cwds = new Set([...(cwd === undefined ? [] : [cwd]), ...headerCwds])
-      for (const extra of options.candidateCwds()) {
+      for (const extra of options.candidateCwds?.() ?? []) {
         if (encodeProjectDir(extra) === project) cwds.add(extra)
       }
       try {
@@ -512,6 +534,8 @@ export interface RunProjectsGCOptions {
   readonly registryTimeoutMs?: number
   /** Extra protection re-read just before each removal. A throw refuses the candidate. */
   readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>
+  /** A marker another app wrote in its own format, accepted as the owner's claim. */
+  readonly existingMarker?: CollectorRootOptions['existingMarker']
   readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>
 }
 
@@ -576,7 +600,7 @@ export async function runProjectsGC(
     return { dryRun: true, removed: plan.candidates.map((c) => c.target), refused, errors }
   }
 
-  const actual = collectorRootOwner(plan.projectsRoot)
+  const actual = collectorRootOwner(plan.projectsRoot, { existingMarker: options.existingMarker })
   if (options.owner === undefined || actual?.app !== options.owner.app) {
     throw new CollectorRootNotOwnedError(
       plan.projectsRoot,
