@@ -39,9 +39,11 @@ describe('measure-app-joinery', () => {
     const run = spawnSync(process.execPath, [CLI], { encoding: 'utf8' })
     expect(run.status).toBe(1)
     expect(run.stderr).toMatch(/joined: \d+ {2}total: \d+ {2}gap: 0 {2}presenter: 0/)
-    for (const name of ['createControlClient', 'createDevicePairing', 'attachControlSocket', 'resolveSecretRefs', 'hookFingerprint']) {
+    for (const name of ['createControlClient', 'createDevicePairing', 'attachControlSocket', 'resolveSecretRefs']) {
       expect(run.stderr).toContain(`duplicate ${name} `)
     }
+    // #2598 moved hookFingerprint to the framework; the app imports it, so it is no longer a duplicate.
+    expect(run.stderr).not.toContain('duplicate hookFingerprint ')
   })
 
   it('exits 2 on a directory with no source files (cannot pass vacuously)', () => {
