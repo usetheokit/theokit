@@ -1,5 +1,39 @@
 # @theokit/agents
 
+## 17.4.0
+
+### Minor Changes
+
+- 8b414d6: `@theokit/agents` adds `codingAgentPreset({ cwd, sandboxMode, posture, approvals, interactive })`, from the new `@theokit/agents/presets` subpath: a `CapabilityPreset` that wires the coding tool set by sandbox mode (no write or shell tool in `read-only`), withholds the built-in shell, gates side-effecting tools, and loads project MCP servers, skills, subagents and hooks only when the trust posture grants `projectSettings`. The scaffold's agents skill shows it.
+- 216a77b: `@theokit/agents/foreign-setup` adds `readForeignSetup(kind, { home, cwd })`, which reads a Claude Code or Hermes setup as data: instructions, skills, MCP servers (in the `.mcp.json` shape) and hooks, plus an `untranslated` list of what could not be carried and why.
+- b3fb684: `runHeadlessTurn` takes `format`, a per-event formatter that replaces the built-in rendering (exit codes unchanged), and `readHeadlessPrompt` accepts `stdin: 'forced'`, which reads piped input even when a prompt argument (such as `-`) is present.
+- 07529d9: `@theokit/http/guards` adds `createGrantStore(file)`: named, scoped, revocable credentials stored as SHA-256 hashes (`create`, `revoke`, `authenticate`). `@theokit/agents/mcp-relay` adds `createMcpRelayServer` and `startMcpRelayConnector`, a reverse relay that lets a hosted MCP client reach a local agent's tools without an open port, filtered by each grant's scopes.
+- 69eb280: Admit `@theokit/sdk` 6 through 9: the ranges are now `>=5.32.0 <10`, so npm installs these packages next to the current SDK without `--legacy-peer-deps`. The boot-time SDK compatibility check reads the bounded range, accepting 9 and refusing 10.
+- 50aa29d: Add `sessionCommands` to `@theokit/agents/commands` (the standard `/new`, `/stop`, `/steer`, `/compact`, `/model`, `/think` and `/status` commands, matched on the whole trimmed text) and `createSessionGenerations` to `@theokit/agents/session` (a persistent per-key generation counter). `CommandDefinition` gains an opt-in `exact` flag.
+- 2bf24a3: `@theokit/agents/session` adds `threadToUIMessages(rows)`, which turns transcript rows into UI messages with each tool call paired to its result, and `transcriptToText(messages, { format })` for `text`, `jsonl` and `markdown` exports. `useAgent` accepts `initialThread` to start from an existing thread.
+
+### Patch Changes
+
+- 2ed0a6c: `@theokit/agents/config` adds `sdkHomeStep` (sets `THEOKIT_HOME` and `THEOKIT_AUTH_HOME` from a directory name or an SDK profile, with `onConflict: 'refuse' | 'env-wins'` and a typed `SdkHomeConflictError`) and `secretRefsStep` (resolves secret references in the environment) for `defineAppBootstrap`.
+- 8113c1d: `@theokit/agents/auth` adds `parseModelRef`, `isSubscriptionRoute`, `modelForCredential` and a `customProviders` option on `resolveAgentCredential`, so apps stop hard-coding the `openai-chatgpt/` route.
+- 41bf88d: `@theokit/agents/doctor`: `Check.fix` and `diagnose(checks, { fix: true })` run the repair of each failing check and report the lines they return; `checks.skillsInventory({ declared, roots })` lists skills on disk that are not declared and declared skills that are not on disk.
+- 5a3cc72: `@theokit/agents/config` adds `loadInstructionWalk` (the upward AGENTS.md walk with `alternatives`, a `.local` chain and `maxChars`), a per-source `priority` on `composeInstructions`, and `instructions` and `rules` from the operator root in `resolveOperatorRoots`.
+- 9847db2: `useAgent` now returns `sendAndWait`, which resolves with the turn's settled status when the stream ends, and `asGoalLoopAgent` accepts the hook result, so a React consumer can drive a goal loop without polling.
+- 1ccf50d: `@theokit/agents/config`: `projectEnvStepWith({ protectedKeys })` refuses listed keys from the project `.env`, and the bootstrap context records `projectEnv` (file, loaded keys, refused keys).
+- 944c129: `@theokit/agents/control`: `redeemPairing({ url, code, name })` redeems a setup code at the pairing route and returns the socket URL and the credential; a refused or expired code throws `PairingRefusedError`.
+- d7fbd1e: `@theokit/agents/control`: `attachControlSocket` takes optional `runTurn` (a chat with no session), `doneFields`, `onTurnEnd` and `devices` (the owner-only `pair_code`, `pending_devices`, `approve_device` and `revoke_device` frames), accepts a store-less socket and an `authorize` verdict `{ owner, revoked }`, and reads `session: null` as no session. `createDevicePairing` keeps a request's `city`, adds `revokeDevice(id)`, `deviceIdFor` and a `report` hook. `pairRoute` takes `cityOf` and `errorNames`. `createSessionStore` is generic over the agent and takes `runTurn`, `dispose`, `steerAgent`, `badSessionCode`, `closedReason` and `reportPrefix`; an interrupt cancels the run and answers `no_turn` once the turn's events ended. `createControlClient` takes `stamp` to number frames as they arrive.
+- acc7d33: `@theokit/agents/errors`: `TurnFailure.rawCode` keeps the code string before coercion and `describeTurnFailure` prints it for an unknown code; `describeTurnFailure` takes a `probe` hint that wins over the per-code hint and a `suffix`.
+- f964142: Sort the keys in the `loadMcpServersFile` test with an explicit compare function.
+- dfefae4: Regenerate the committed capability map so it lists the model-reference and custom-provider exports added to the package.
+- b659aff: `createCodeMode` names JavaScript in its tool description and instructions, and adds `allowedTools` and `maxResultChars` options (an oversized result throws `CodeModeResultTooLongError`).
+- f403351: `loadMcpServersFile` reads the `mcpServers` member of a document that holds other keys, accepts a remote entry with OAuth `auth` when the installed `@theokit/sdk` supports it, and takes an `options.readFile` in place of the disk read.
+- 8cbfd07: Test-only: the MCP file test sorts server names with an explicit compare function.
+- 6bcd578: Add `permissionRulesFromLayers` (deny first across settings files), a `toolAliases` option for `permissionRulesFromSettings`, and `approvalPostureFor`, which maps `untrusted`, `on-request` and `never` to an `ApprovalPosture`.
+
+  `approvalPostureFor` takes `interactive` as the surface's `emit` and `awaitApproval` callbacks rather than a boolean, because the `interactive` posture cannot exist without them; leaving it out means headless.
+
+- 69eb280: `ToolScope.bind` passes the sandbox to a factory as a provider function and accepts factories whose options come from another installed copy of `@theokit/sdk`. A backend built by one SDK copy was called as a provider by the other (`provider is not a function`), and such factories failed to type-check.
+
 ## 17.3.1
 
 ### Patch Changes

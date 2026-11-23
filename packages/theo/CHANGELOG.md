@@ -1,5 +1,40 @@
 # theo
 
+## 0.86.0
+
+### Minor Changes
+
+- 69eb280: Admit `@theokit/sdk` 6 through 9: the ranges are now `>=5.32.0 <10`, so npm installs these packages next to the current SDK without `--legacy-peer-deps`. The boot-time SDK compatibility check reads the bounded range, accepting 9 and refusing 10.
+
+### Patch Changes
+
+- 1722630: `handleMcpToolsHttp` and `serveMcpToolsStdio` accept `plugins` (and `hookContext`), so a plugin's `pre_tool_call` guard also applies to `tools/call` over MCP.
+- Updated dependencies [2ed0a6c]
+- Updated dependencies [8113c1d]
+- Updated dependencies [41bf88d]
+- Updated dependencies [5a3cc72]
+- Updated dependencies [8b414d6]
+- Updated dependencies [9847db2]
+- Updated dependencies [1ccf50d]
+- Updated dependencies [944c129]
+- Updated dependencies [d7fbd1e]
+- Updated dependencies [acc7d33]
+- Updated dependencies [f964142]
+- Updated dependencies [dfefae4]
+- Updated dependencies [b659aff]
+- Updated dependencies [216a77b]
+- Updated dependencies [b3fb684]
+- Updated dependencies [f403351]
+- Updated dependencies [8cbfd07]
+- Updated dependencies [07529d9]
+- Updated dependencies [6bcd578]
+- Updated dependencies [69eb280]
+- Updated dependencies [50aa29d]
+- Updated dependencies [2bf24a3]
+- Updated dependencies [69eb280]
+  - @theokit/agents@17.4.0
+  - @theokit/http@2.10.0
+
 ## 0.85.2
 
 ### Patch Changes
@@ -673,8 +708,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                                  [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                                  were found and every /api/agents/* route will 404.
+                                                                    [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                                    were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
