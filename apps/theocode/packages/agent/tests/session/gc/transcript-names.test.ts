@@ -58,9 +58,12 @@ describe('transcript names', () => {
     const result = await plan(['a.jsonl.writer.lock', 'a.jsonl.lock', 'a.jsonl.locked', 'a.lock'])
 
     expect(base(result).sort()).toEqual(['a.jsonl.lock', 'a.jsonl.writer.lock'])
+  })
 
-    // `a.jsonl` itself is a transcript, never a lock.
+  it('a.jsonl', async () => {
+    // A bare transcript name is a transcript, never a lock: it is reported as the former.
     const plain = await plan(['a.jsonl'])
+
     expect(plain.candidates.map((c) => c.kind)).toEqual(['transcript'])
   })
 })
