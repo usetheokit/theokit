@@ -143,6 +143,7 @@ await restore({ from: '/srv/backups/2026-11-19', roots })
 - A root that is itself a symbolic link is rejected too. Backups are portable between POSIX systems; a file name holding a backslash (legal on POSIX only) cannot be restored on Windows, where `restore` refuses it.
 - SQLite files (found by header) are snapshotted with the `node:sqlite` backup API, without their `-wal`, `-shm` and `-journal` files.
 - `restore` checks every file against the manifest before writing, refuses manifest paths that leave their root, stages each root beside its target, checks the bytes again, then renames into place. An existing target is kept aside and put back if a later root fails to place.
+- `restore({ ..., transform })` maps each archived path (relative to its root, `/`-separated, with the root name as the second argument) to the path written below that root's target, e.g. to re-key a directory that encodes an absolute path. A result that is empty, absolute, holds `..` or a backslash, or that two files share, rejects before anything is written.
 - The lock protects cooperating writers only; the renames of several roots are not crash-atomic.
 
 ### Storage locations
@@ -164,6 +165,7 @@ await storage.test('offsite') // writes, reads back, decrypts and removes a prob
 - An archive is one file (`backup-<time>-<id>.tcbk`, 0600): `TCBK`, a version byte, a mode byte, then a length-prefixed stream of directories and files, read and written through streams so memory does not grow with the backup. A wrong key, a changed byte or a foreign file rejects with `BackupError`.
 - `fetchLatest` unpacks into a private staging directory beside `into`, checks the manifest, then renames it into place; on any failure nothing is left behind. Entries that are absolute, hold `..` or a backslash, or are repeated are refused.
 - `test` reports `sizeBytes` (the archives held) and `freeBytes` when the file system tells.
+- **HTTPS location.** `init('cloud', { root: 'https://host/dir', encrypted, token })` stores archives on a server instead of a directory (`createStorageRegistry({ ..., ca })` adds trusted PEM authorities for a private server). `token` is sent as `Authorization: Bearer` and kept in the registry file only; `list` and errors omit it. The server holds objects at `<url>/<name>`: `PUT` with `If-None-Match: *` (answer 412 for an existing name), `GET`, and `GET <url>/` returning `{"names": [...]}`. `store` uploads `backup-….tcbk` first and `backup-….tcbk.manifest.json` (the manifest) last; only an archive with that marker is a backup, so an interrupted upload is never fetched. `test` checks the listing only (`sizeBytes` is 0).
 - Registry updates are not locked across processes.
 
 ## `createAppHost` (`@theokit/host/app-host`)

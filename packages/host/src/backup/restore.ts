@@ -16,6 +16,12 @@ export interface RestoreOptions {
   readonly from: string
   readonly roots: BackupRoots
   readonly lock?: BackupLock
+  /**
+   * Maps an archived path (relative to its root, `/`-separated) to the path written below that
+   * root's target, so an app can re-key paths that encode an absolute directory. The result must
+   * stay inside the root and may not collide with another file's destination.
+   */
+  readonly transform?: (relativePath: string, root: string) => string
 }
 
 /** Refuse a symbolic link in any component of `relative` below `base`. */
@@ -87,6 +93,30 @@ export async function restoreWith(options: RestoreOptions, fs: RestoreFs): Promi
       await assertNoLinks(options.from, entry.path)
       await verify(join(options.from, entry.path), entry.sha256, entry.size)
     }
+    const destinations = new Map<string, string>()
+    const seenDestinations = new Set<string>()
+    for (const entry of manifest.files) {
+      const { root, relative } = splitEntryPath(entry.path, manifest.roots)
+      const mapped = options.transform === undefined ? relative : options.transform(relative, root)
+      if (
+        options.transform !== undefined &&
+        (typeof mapped !== 'string' ||
+          mapped.includes('\0') ||
+          mapped.includes('\\') ||
+          mapped.startsWith('/') ||
+          mapped.split('/').some((part) => part === '' || part === '.' || part === '..'))
+      ) {
+        throw new BackupError(`transform mapped "${entry.path}" outside its root`, {
+          path: entry.path,
+        })
+      }
+      const key = `${root}/${mapped}`
+      if (seenDestinations.has(key)) {
+        throw new BackupError(`transform maps two files to "${key}"`, { path: entry.path })
+      }
+      seenDestinations.add(key)
+      destinations.set(entry.path, mapped)
+    }
     const stages = new Map<string, string>()
     const previous = new Map<string, string>()
     const placed: string[] = []
@@ -100,8 +130,8 @@ export async function restoreWith(options: RestoreOptions, fs: RestoreFs): Promi
         await mkdirPrivate(stage)
       }
       for (const entry of manifest.files) {
-        const { root, relative } = splitEntryPath(entry.path, manifest.roots)
-        const to = join(stages.get(root)!, relative)
+        const { root } = splitEntryPath(entry.path, manifest.roots)
+        const to = join(stages.get(root)!, destinations.get(entry.path)!)
         await mkdirPrivate(dirname(to))
         await copyFile(join(options.from, entry.path), to)
         await chmod(to, 0o600)

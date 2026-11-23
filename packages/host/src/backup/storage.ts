@@ -9,7 +9,17 @@ import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { packDirectory, unpackInto, verifyBackupDir } from './archive.js'
 import { BackupError } from './errors.js'
+import { MANIFEST_NAME } from './manifest.js'
 import { isEmptyOrAbsent, mkdirPrivate, tempSibling } from './paths.js'
+import {
+  checkRemoteUrl,
+  isRemoteRoot,
+  remoteDownload,
+  remoteGet,
+  remoteList,
+  remotePut,
+  type RemoteLocation,
+} from './remote-storage.js'
 import { keyOf, newKey, openSealed, seal, type SealOptions } from './seal.js'
 
 export interface StorageLocation {
@@ -18,7 +28,11 @@ export interface StorageLocation {
 }
 
 export interface StorageRegistry {
-  init(name: string, options: { root?: string; encrypted: boolean }): Promise<StorageLocation>
+  /** A `root` starting with `https://` is a remote directory; `token` is its bearer credential. */
+  init(
+    name: string,
+    options: { root?: string; encrypted: boolean; token?: string },
+  ): Promise<StorageLocation>
   store(name: string, backupDir: string): Promise<string>
   fetchLatest(name: string, into: string): Promise<void>
   test(
@@ -31,10 +45,13 @@ interface Entry {
   root: string
   encrypted: boolean
   key?: string
+  token?: string
 }
 
 const NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/
 const ARCHIVE = /^backup-\d{8}T\d{9}Z-[0-9a-f]{8}\.tcbk$/
+/** Written after the archive is fully uploaded; an archive without it is not a backup. */
+const MARKER = /^(backup-\d{8}T\d{9}Z-[0-9a-f]{8}\.tcbk)\.manifest\.json$/
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -64,6 +81,8 @@ async function archives(root: string): Promise<string[]> {
 export function createStorageRegistry(options: {
   file: string
   defaultRoot: string
+  /** PEM certificate authorities trusted for remote locations, besides the system's. */
+  ca?: string
 }): StorageRegistry {
   async function read(): Promise<Record<string, Entry>> {
     let text: string
@@ -94,6 +113,7 @@ export function createStorageRegistry(options: {
         root: raw.root,
         encrypted: raw.encrypted,
         ...(typeof raw.key === 'string' ? { key: raw.key } : {}),
+        ...(typeof raw.token === 'string' ? { token: raw.token } : {}),
       }
     }
     return out
@@ -124,6 +144,25 @@ export function createStorageRegistry(options: {
     return { entry, seal: sealOptions }
   }
 
+  function remoteOf(entry: Entry): RemoteLocation | undefined {
+    if (!isRemoteRoot(entry.root)) return undefined
+    return {
+      url: entry.root,
+      ...(entry.token === undefined ? {} : { token: entry.token }),
+      ...(options.ca === undefined ? {} : { ca: options.ca }),
+    }
+  }
+
+  /** The newest archive whose completion marker exists. */
+  async function latestRemote(remote: RemoteLocation): Promise<string | undefined> {
+    const names = await remoteList(remote)
+    return names
+      .map((n) => MARKER.exec(n)?.[1])
+      .filter((n): n is string => n !== undefined)
+      .sort((x, y) => x.localeCompare(y))
+      .at(-1)
+  }
+
   return {
     async init(name, init) {
       checkName(name)
@@ -131,10 +170,15 @@ export function createStorageRegistry(options: {
       if (Object.hasOwn(locations, name)) {
         throw new BackupError(`storage location "${name}" already exists`)
       }
-      const root = path.resolve(init.root ?? path.join(options.defaultRoot, name))
+      const remote = init.root !== undefined && isRemoteRoot(init.root)
+      if (remote) checkRemoteUrl(init.root!)
+      const root = remote
+        ? init.root!
+        : path.resolve(init.root ?? path.join(options.defaultRoot, name))
       const entry: Entry = { root, encrypted: init.encrypted }
       if (init.encrypted) entry.key = newKey()
-      await mkdirPrivate(root)
+      if (remote && init.token !== undefined) entry.token = init.token
+      if (!remote) await mkdirPrivate(root)
       await write({ ...locations, [name]: entry })
       return { root, encrypted: init.encrypted }
     },
@@ -143,6 +187,24 @@ export function createStorageRegistry(options: {
       const { entry, seal: sealOptions } = await get(name)
       keyOf(sealOptions) // a damaged registry fails here, before any byte is written
       await verifyBackupDir(backupDir)
+      const remote = remoteOf(entry)
+      if (remote !== undefined) {
+        const archive = archiveName()
+        try {
+          await remotePut(remote, archive, seal(packDirectory(backupDir), sealOptions))
+          // The marker goes last: until it exists the archive is not listed as a backup.
+          await remotePut(
+            remote,
+            `${archive}.manifest.json`,
+            await readFile(path.join(backupDir, MANIFEST_NAME)),
+          )
+        } catch (error) {
+          throw error instanceof BackupError
+            ? error
+            : new BackupError(`cannot store the backup in "${name}"`, { cause: error })
+        }
+        return `${entry.root.replace(/\/$/, '')}/${archive}`
+      }
       await mkdirPrivate(entry.root)
       const final = path.join(entry.root, archiveName())
       const partial = path.join(entry.root, `.partial-${randomBytes(6).toString('hex')}`)
@@ -165,7 +227,9 @@ export function createStorageRegistry(options: {
     async fetchLatest(name, into) {
       const { entry, seal: sealOptions } = await get(name)
       const target = path.resolve(into)
-      const latest = (await archives(entry.root)).at(-1)
+      const remote = remoteOf(entry)
+      const latest =
+        remote === undefined ? (await archives(entry.root)).at(-1) : await latestRemote(remote)
       if (latest === undefined) {
         throw new BackupError(`storage location "${name}" holds no backup`, { path: entry.root })
       }
@@ -173,18 +237,27 @@ export function createStorageRegistry(options: {
         throw new BackupError(`${target} is not empty`, { path: target })
       }
       const staging = tempSibling(target, 'fetch')
+      const download = `${staging}.tcbk`
       try {
         await mkdirPrivate(staging)
         await chmod(staging, 0o700)
-        await unpackInto(openSealed(path.join(entry.root, latest), sealOptions), staging)
+        let source = path.join(entry.root, latest)
+        if (remote !== undefined) {
+          await remoteDownload(remote, latest, download)
+          await remoteGet(remote, `${latest}.manifest.json`) // the completion marker must be readable
+          source = download
+        }
+        await unpackInto(openSealed(source, sealOptions), staging)
         await verifyBackupDir(staging)
         if (!(await isEmptyOrAbsent(target))) {
           throw new BackupError(`${target} is not empty`, { path: target })
         }
         await rmdir(target).catch(() => undefined)
         await rename(staging, target)
+        await rm(download, { force: true }).catch(() => undefined)
       } catch (error) {
         await rm(staging, { recursive: true, force: true }).catch(() => undefined)
+        await rm(download, { force: true }).catch(() => undefined)
         throw error instanceof BackupError
           ? error
           : new BackupError(`cannot fetch the backup from "${name}"`, {
@@ -198,6 +271,12 @@ export function createStorageRegistry(options: {
       let probe: string | undefined
       try {
         const { entry, seal: sealOptions } = await get(name)
+        const remote = remoteOf(entry)
+        if (remote !== undefined) {
+          keyOf(sealOptions)
+          await remoteList(remote) // reachable, authorized and well-formed; no probe is left behind
+          return { ok: true, sizeBytes: 0 }
+        }
         await mkdirPrivate(entry.root)
         probe = path.join(entry.root, `.probe-${randomBytes(6).toString('hex')}`)
         const bytes = randomBytes(1024)
