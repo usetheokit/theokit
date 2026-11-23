@@ -1,5 +1,14 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  fstatSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -41,8 +50,14 @@ describe('build-ink-cli', () => {
         entry: join(dir, 'src', 'main.js'),
         outfile: join(dir, 'dist', 'cli.mjs'),
       })
-      expect(statSync(outfile).mode & 0o111).not.toBe(0)
-      expect(readFileSync(outfile, 'utf8').startsWith('#!/usr/bin/env node')).toBe(true)
+      // One descriptor for the mode and the contents: no check-then-read race on the path.
+      const fd = openSync(outfile, 'r')
+      try {
+        expect(fstatSync(fd).mode & 0o111).not.toBe(0)
+        expect(readFileSync(fd, 'utf8').startsWith('#!/usr/bin/env node')).toBe(true)
+      } finally {
+        closeSync(fd)
+      }
       expect(execFileSync(process.execPath, [outfile]).toString().trim()).toBe('hi')
     } finally {
       rmSync(dir, { recursive: true, force: true })

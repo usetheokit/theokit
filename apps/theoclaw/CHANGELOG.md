@@ -11,6 +11,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The TUI feeds `useAgentStream` from the framework's `createControlStreamSource`, replacing its own frame conversion.
+- The transcript sweep passes its generation and held-session rule to `planTranscriptGC` as `isProtected`, asked at planning and again at apply, instead of filtering the plan afterwards; a transcript with no owner is kept (#2746).
 - The `/control` and WebChat turn runs through the framework's `runAgentTurn`, the `worker` of `delegate_all` through `delegationPortFromAgentFactory`, and the stream-event validator is the framework's `isAgentStreamEvent`; the app's copies are gone. A worker's message may carry images, and an SDK run that ends as `cancelled` is still an ok turn (#2734).
 - Telemetry registers its tracer, meter and log providers with `registerTelemetry` from `@theokit/sdk/telemetry-node` (SDK 12.0.0, which exports logs and returns a `log` function); `src/telemetry/otel.ts` builds no trace or metric provider. The settings reader, the masking and the anonymous meter stay. Visible differences: diagnostics now include warnings, and a tracer or meter provider that is already registered is left alone and reported on one line instead of being replaced (#2755).
 - Runs on `@theokit/sdk` 12.0.0. The SDK explains the `<untrusted-tool-output>` tag in the system prompt while `toolResultGuard` delimits, so `untrusted-content.ts` no longer defines the notice and TheoClaw's own sentence is gone from the prompt; the guard stays on through `sendDefaults` (#2744).

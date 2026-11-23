@@ -80,3 +80,36 @@ it('abandons a request that never answers', async () => {
     uploadDirectory(dir, 'https://o.example/x', { timeoutMs: 50 }),
   ).rejects.toBeInstanceOf(BackupError)
 })
+
+it('refuses a payload whose bytes do not match the manifest and removes the directory', async () => {
+  const base = await scratch()
+  const dir = await makeBackup(base)
+  const objects = new Map<string, Uint8Array>()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: URL, init: RequestInit) => {
+      if (init.method === 'PUT') {
+        objects.set(url.pathname, init.body as Uint8Array)
+        return new Response(null, { status: 201 })
+      }
+      const body = objects.get(url.pathname)
+      const tampered = url.pathname.endsWith('a.txt') ? new TextEncoder().encode('HELLO') : body
+      return new Response(tampered ? new Uint8Array(tampered) : null, { status: body ? 200 : 404 })
+    }),
+  )
+  await uploadDirectory(dir, 'https://o.example/snap')
+  const back = join(base, 'back')
+  await expect(downloadDirectory(back, 'https://o.example/snap')).rejects.toThrow(BackupError)
+  expect(existsSync(back)).toBe(false)
+})
+
+it('refuses a malformed manifest before writing it', async () => {
+  const base = await scratch()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('not json', { status: 200 })),
+  )
+  const back = join(base, 'back')
+  await expect(downloadDirectory(back, 'https://o.example/snap')).rejects.toThrow(BackupError)
+  expect(existsSync(back)).toBe(false)
+})

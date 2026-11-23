@@ -16,6 +16,8 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `ToolRegistry` builds its tools from `codingAgentTools` in `@theokit/agents/presets` instead of binding each factory itself (#2741).
+- `sessions gc` leaves identity and legacy-name protection to `planTranscriptGC` (`knownIds`, `isProtected`); `assignOwnIdentities` and `withholdLegacyNamed` are gone (#2746).
 - Pins `@theokit/sdk` 13.0.0 (#2744, #2742).
 - The wiring record now carries each MCP server and skill with the scope it came from (project, personal, operator) and, per capability, why it is off, instead of merging scopes by hand (#2742).
 - Tests: consent adapter and gates now cover initial trust, trust and approval retry after a persistence failure, accumulated refusals, fingerprint-to-spec mapping and gate refusals (hook refuse, trust quit) and prompt/warning/key-hint order (#2798). Mutation check was manual, not a tool: 2 mutations in `use-consent.ts` and 9 in `ConsentGates.tsx` (approve/refuse branches, trust quit, both error toasts, config reload, warning/hint order) were all caught; the framework reducer in `@theokit/tui` was not mutated.

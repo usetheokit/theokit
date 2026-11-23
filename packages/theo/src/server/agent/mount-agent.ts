@@ -227,7 +227,14 @@ function resolveKeyOrError(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[theokit] agent "${identity}" cannot resolve a provider credential: ${message}`)
-    return { failure: jsonError(500, 'INTERNAL', message) }
+    // The resolver's own text stays in the server log: it can carry a stack or environment detail.
+    return {
+      failure: jsonError(
+        500,
+        'INTERNAL',
+        'The agent has no usable provider credential. See the server log for the reason.',
+      ),
+    }
   }
 }
 

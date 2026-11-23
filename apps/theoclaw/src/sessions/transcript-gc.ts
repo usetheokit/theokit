@@ -1,6 +1,11 @@
 import { join } from 'node:path'
 
-import { planTranscriptGC, runTranscriptGC, startInProcessSweeper } from '@theokit/agents/session'
+import {
+  planTranscriptGC,
+  runTranscriptGC,
+  startInProcessSweeper,
+  type GCSession,
+} from '@theokit/agents/session'
 
 import type { Generations } from './generations.js'
 
@@ -52,23 +57,24 @@ export async function collectTranscripts(
   apply: boolean,
 ): Promise<TranscriptSweep> {
   const root = join(deps.workspace, '.theoclaw')
-  // The framework protects by the path it derives from an id, which is not always the file's name,
-  // so the candidates are checked by id here as well, against the daemon's state as it is now.
   const now = deps.now?.() ?? Date.now()
+  // Asked by each transcript's real file, at planning and again when applying, against the daemon's
+  // state as it is then. A transcript with no readable owner cannot be matched to a chat: kept.
+  const isProtected = (session: GCSession): string | undefined =>
+    session.id === undefined
+      ? session.idReadable
+        ? 'transcript is not stored under its own id (a fork or a renamed file); owner unknown'
+        : 'transcript id unreadable'
+      : protection(session.id, deps.generations, new Set(deps.heldIds?.() ?? []))
   const plan = await planTranscriptGC({
     cwd: deps.workspace,
     root,
     keepLast: KEEP_LAST,
     maxAgeDays: retentionDays,
     now,
+    isProtected,
   })
-  // A transcript whose id was not read cannot be matched to a chat: kept rather than removed blind.
-  const held = new Set(deps.heldIds?.() ?? [])
-  const candidates = plan.candidates.filter(
-    (candidate) =>
-      candidate.id !== undefined && protection(candidate.id, deps.generations, held) === undefined,
-  )
-  const result = await runTranscriptGC({ ...plan, candidates }, { apply })
+  const result = await runTranscriptGC(plan, { apply, isProtected })
   return {
     dryRun: result.dryRun,
     removed: result.removed,

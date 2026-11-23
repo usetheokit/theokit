@@ -38,7 +38,13 @@ import {
   WithheldBuiltinToolsCapability,
 } from './agent-capabilities.js'
 import { ToolsCapability } from './capabilities.js'
-import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capability.js'
+import {
+  type Capability,
+  type CompiledAgentOptionsDraft,
+  type OffTool,
+  OffToolsCapability,
+  setOnce,
+} from './capability.js'
 import { CapabilityPreset } from './registry.js'
 
 type McpServers = NonNullable<CompiledAgentOptionsDraft['mcpServers']>
@@ -80,6 +86,21 @@ export interface CodingAgentPresetOptions {
    * arbitrary shell, and trusting the directory is not approving each command.
    */
   readonly hookApproval?: NonNullable<CompiledAgentOptionsDraft['hookApproval']>
+  /**
+   * The root the write tools (`ApplyPatch`, `Edit`) and the shell are scoped to, when it differs from
+   * `cwd` (`danger-full-access`). Relative paths still resolve against `cwd`. Defaults to `cwd`.
+   */
+  readonly writeRoot?: string
+  /** Lets `Read`, `Glob` and `Grep` honour an absolute path outside `cwd`. Defaults to `false`. */
+  readonly allowAbsolute?: boolean
+  /** The `Bash` timeout when a call does not pass one. */
+  readonly defaultTimeoutMs?: number
+  /** A `web_fetch` tool the caller built; registered under approval in every mode. */
+  readonly webFetch?: CustomTool
+  /** A `web_search` tool the caller built (only when a provider is configured); registered under approval. */
+  readonly webSearch?: CustomTool
+  /** A `delegate_to_team` tool the caller built; registered under approval, and only when the mode allows writes. */
+  readonly delegateToTeam?: CustomTool
 }
 
 const DEFAULT_GATES: Readonly<Record<string, HumanInTheLoopOptions>> = {
@@ -88,6 +109,11 @@ const DEFAULT_GATES: Readonly<Record<string, HumanInTheLoopOptions>> = {
   Bash: { question: 'Run this shell command?' },
   interactive_shell: { question: 'Start this interactive session?' },
   write_stdin: { question: 'Send this input to the interactive session?' },
+  web_fetch: { question: 'Fetch this URL?' },
+  web_search: { question: 'Search the web for this?' },
+  delegate_to_team: {
+    question: 'Delegate this task to the team (the worker may edit/run files)?',
+  },
 }
 
 /** Sets the HITL gate map for the registered tools only. */
@@ -100,39 +126,81 @@ class GatesCapability implements Capability {
   }
 }
 
-function toolsFor(options: CodingAgentPresetOptions): CustomTool[] {
+function readOnlyOff(mode: SandboxMode, delegates: boolean): OffTool[] {
+  const reason = `the ${mode} sandbox grants no writes`
+  const names = ['ApplyPatch', 'Edit', 'Bash', 'interactive_shell', 'write_stdin']
+  if (delegates) names.push('delegate_to_team')
+  return names.map((name) => ({ name, reason }))
+}
+
+/** The tools {@link codingAgentPreset} registers, and the ones it leaves off with the reason each is. */
+export interface CodingAgentTools {
+  readonly tools: CustomTool[]
+  readonly off: OffTool[]
+}
+
+/** The tool half of {@link codingAgentPreset}, for a consumer that composes its own agent around the tools. */
+export function codingAgentTools(
+  options: Omit<CodingAgentPresetOptions, 'posture'>,
+): CodingAgentTools {
   const { cwd, sandboxMode } = options
   const sandbox = options.sandbox ?? createSandboxBackend({ mode: sandboxMode, workDir: cwd })
-  const bound = bindToolScope({ projectRoot: cwd, sandbox, mode: sandboxMode })
+  const bound = bindToolScope({
+    projectRoot: cwd,
+    ...(options.writeRoot !== undefined && { writeRoot: options.writeRoot }),
+    sandbox,
+    mode: sandboxMode,
+  })
+  const absolute = options.allowAbsolute === true ? { allowAbsolute: true } : {}
   const tools: CustomTool[] = [
-    withName(bound.bind(createReadFileTool)({ lineNumbers: true }), 'Read'),
-    withName(bound.bind(createListDirTool)(), 'Glob'),
-    withName(bound.bind(createSearchTextTool)({ regex: true }), 'Grep'),
+    withName(bound.bind(createReadFileTool)({ lineNumbers: true, ...absolute }), 'Read'),
+    withName(bound.bind(createListDirTool)(absolute), 'Glob'),
+    withName(bound.bind(createSearchTextTool)({ regex: true, ...absolute }), 'Grep'),
     bound.bind(createGitStatusTool)({ name: 'RepoStatus' }),
     withName(bound.bind(createGitDiffTool)(), 'GitDiff'),
     withName(createCurrentTimeTool(), 'CurrentTime'),
     withName(bound.bind(createViewImageTool)(), 'ViewImage'),
     createUpdatePlanTool(),
   ]
+  for (const extra of [options.webFetch, options.webSearch])
+    if (extra !== undefined) tools.push(extra)
+  const off: OffTool[] = []
   // `writableRootsFor` is the SDK's own answer; `[]` means no writable root, `null` means everything.
   const roots = writableRootsFor(sandboxMode, cwd) as readonly string[] | null | undefined
   if (roots === undefined) {
     throw new ConfigurationError(`codingAgentPreset: unknown sandbox mode "${sandboxMode}"`)
   }
-  if (roots !== null && roots.length === 0) return tools
+  if (roots !== null && roots.length === 0) {
+    return { tools, off: readOnlyOff(sandboxMode, options.delegateToTeam !== undefined) }
+  }
+  // The write tools take the write root as THEIR project root; relative paths resolve against `cwd`.
+  const writeScope =
+    options.writeRoot !== undefined ? { projectRoot: options.writeRoot, baseDir: cwd } : {}
   tools.push(
-    withName(bound.bind(createApplyPatchTool)(), 'ApplyPatch'),
-    withName(bound.bind(createEditFileTool)(), 'Edit'),
+    withName(bound.bind(createApplyPatchTool)(writeScope), 'ApplyPatch'),
+    withName(bound.bind(createEditFileTool)(writeScope), 'Edit'),
     // `sandbox` comes from the bound scope, so the shell cannot be assembled unconfined.
-    withName(bound.bind(createShellTool)(), 'Bash'),
+    withName(
+      bound.bind(createShellTool)(
+        options.defaultTimeoutMs !== undefined
+          ? { defaultTimeoutMs: options.defaultTimeoutMs }
+          : {},
+      ),
+      'Bash',
+    ),
   )
   if (options.interactive !== undefined) {
     tools.push(
       createInteractiveShellTool({ interactive: options.interactive }),
       createWriteStdinTool({ interactive: options.interactive }),
     )
+  } else {
+    for (const name of ['interactive_shell', 'write_stdin']) {
+      off.push({ name, reason: 'no interactive backend was supplied' })
+    }
   }
-  return tools
+  if (options.delegateToTeam !== undefined) tools.push(options.delegateToTeam)
+  return { tools, off }
 }
 
 /**
@@ -149,7 +217,7 @@ function toolsFor(options: CodingAgentPresetOptions): CustomTool[] {
  * ```
  */
 export function codingAgentPreset(options: CodingAgentPresetOptions): CapabilityPreset {
-  const tools = toolsFor(options)
+  const { tools, off } = codingAgentTools(options)
   const names = new Set(tools.map((tool) => tool.name))
 
   const gates = new Map<string, HumanInTheLoopOptions>()
@@ -169,6 +237,7 @@ export function codingAgentPreset(options: CodingAgentPresetOptions): Capability
   const members: Capability[] = [
     new ToolsCapability(tools),
     new GatesCapability(gates),
+    new OffToolsCapability(off),
     new WithheldBuiltinToolsCapability(['shell']),
     // `project` is OMITTED rather than passed with a denying posture: the gate throws on a requested
     // but ungranted root, and an untrusted directory should degrade to user-only, not fail.

@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1620 export(s) across 30 entry point(s).
+1634 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@13.0.0`.
 
@@ -180,6 +180,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `noopReflectionStrategy` | value |
 | `NoResultSubmittedError` | value |
 | `offCapabilities` | value |
+| `OffToolsCapability` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
 | `parseModelId` | value |
@@ -434,6 +435,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `ModelOption` | type |
 | `NamedTool` | type |
 | `OffCapability` | type |
+| `OffTool` | type |
 | `OpenAIChatMessage` | type |
 | `OpenAIChatRequest` | type |
 | `OpenAICompatibleRoutesOptions` | type |
@@ -795,6 +797,7 @@ Measured against `@theokit/sdk@13.0.0`.
 | `attachControlSocket` | value |
 | `ControlConnectionError` | value |
 | `createControlClient` | value |
+| `createControlStreamSource` | value |
 | `createDevicePairing` | value |
 | `createSessionStore` | value |
 | `PairingRefusedError` | value |
@@ -806,6 +809,13 @@ Measured against `@theokit/sdk@13.0.0`.
 | `ControlClientFrame` | type |
 | `ControlServerFrame` | type |
 | `ControlSocketOptions` | type |
+| `ControlStreamClient` | type |
+| `ControlStreamEvent` | type |
+| `ControlStreamFrame` | type |
+| `ControlStreamInbox` | type |
+| `ControlStreamNotice` | type |
+| `ControlStreamOptions` | type |
+| `ControlStreamSource` | type |
 | `DevicePairing` | type |
 | `DevicePairingOptions` | type |
 | `PairingApproval` | type |
@@ -1497,6 +1507,8 @@ Measured against `@theokit/sdk@13.0.0`.
 | `GCCandidate` | type |
 | `GCError` | type |
 | `GCKept` | type |
+| `GCProtectionPredicate` | type |
+| `GCSession` | type |
 | `InProcessSweeper` | type |
 | `Liveness` | type |
 | `LivenessVerdict` | type |
@@ -1633,7 +1645,9 @@ Measured against `@theokit/sdk@13.0.0`.
 | Symbol | Kind |
 |---|---|
 | `codingAgentPreset` | value |
+| `codingAgentTools` | value |
 | `CodingAgentPresetOptions` | type |
+| `CodingAgentTools` | type |
 
 ## `@theokit/agents/evals`
 

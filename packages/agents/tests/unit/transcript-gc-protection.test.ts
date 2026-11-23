@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { transcriptPath } from '../../src/persistence-entry.js'
+import { legacyTranscriptPath, transcriptPath } from '../../src/persistence-entry.js'
 import { runTranscriptGC, planTranscriptGC } from '../../src/session/gc/transcript-gc.js'
 
 let root: string
@@ -159,5 +159,76 @@ describe('transcript GC — injected protection', () => {
 
     // Fail-closed means nothing was deleted, not "stopped halfway".
     expect(existsSync(transcriptPath(root, cwd, 'old-1'))).toBe(true)
+  })
+})
+
+describe('protection by the real file (theokit#2746)', () => {
+  const legacyOf = (id: string): string => legacyTranscriptPath(root, cwd, id)
+
+  function writeAt(path: string, sessionId: string, ageDays: number): string {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, `${JSON.stringify({ type: 'user', sessionId })}\n`, 'utf8')
+    const stamp = new Date(NOW - ageDays * DAY)
+    utimesSync(path, stamp, stamp)
+    return path
+  }
+  const opts = () => ({ cwd, root, keepLast: 1, maxAgeDays: 30, now: NOW })
+
+  it('keeps a legacy-named and a forked transcript of protected ids, without a post-filter', async () => {
+    writeOldSession('newest', 1)
+    const legacy = writeAt(legacyOf('live-a'), 'live-a', 90)
+    const fork = writeAt(join(dirname(legacy), 'fork-file.jsonl'), 'live-a', 90)
+    const plan = await planTranscriptGC({
+      ...opts(),
+      protectedIds: () => new Map([['live-a', 'registered']]),
+      knownIds: () => ['live-a', 'the-fork'],
+    })
+    expect(plan.candidates.map((c) => c.transcript)).toEqual([fork])
+    // the unowned fork carries no identity, so it can never be taken for its source
+    expect(plan.candidates[0]?.id).toBeUndefined()
+    await runTranscriptGC(plan, {
+      apply: true,
+      protectedIds: () => new Map([['live-a', 'registered']]),
+    })
+    expect(existsSync(legacy)).toBe(true)
+    expect(existsSync(fork)).toBe(false)
+  })
+
+  it('names a fork by the known id whose file it is, and asks the predicate about that id', async () => {
+    writeOldSession('newest', 1)
+    const fork = writeAt(transcriptPath(root, cwd, 'the-fork'), 'source', 90)
+    const seen: (string | undefined)[] = []
+    const plan = await planTranscriptGC({
+      ...opts(),
+      knownIds: () => ['source', 'the-fork'],
+      isProtected: (s) => (seen.push(s.id), s.id === 'source' ? 'held' : undefined),
+    })
+    expect(plan.candidates.map((c) => [c.id, c.transcript])).toEqual([['the-fork', fork]])
+    expect(seen).toContain('the-fork')
+  })
+
+  it('a predicate that starts protecting after planning stops the removal; one that throws refuses', async () => {
+    writeOldSession('newest', 1)
+    const old = writeAt(transcriptPath(root, cwd, 'old'), 'old', 90)
+    const plan = await planTranscriptGC(opts())
+    expect(plan.candidates).toHaveLength(1)
+    await runTranscriptGC(plan, { apply: true, isProtected: () => 'became live' })
+    expect(existsSync(old)).toBe(true)
+    await expect(
+      runTranscriptGC(plan, {
+        apply: true,
+        isProtected: () => {
+          throw new Error('boom')
+        },
+      }),
+    ).rejects.toThrow(/protection provider threw/)
+    await expect(
+      planTranscriptGC({
+        ...opts(),
+        isProtected: () => {
+          throw new Error('boom')
+        },
+      }),
+    ).rejects.toThrow(/protection provider threw/)
   })
 })

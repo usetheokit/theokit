@@ -60,9 +60,24 @@ export async function readManifest(
   legacyRoots?: readonly string[],
 ): Promise<BackupManifest> {
   const file = join(from, MANIFEST_NAME)
+  let text: string
+  try {
+    text = await readFile(file, 'utf8')
+  } catch (cause) {
+    throw new BackupError(`cannot read ${file}`, { path: file, cause })
+  }
+  return parseManifest(text, file, legacyRoots)
+}
+
+/** Parse and validate manifest text; `file` only names the source in errors. */
+export function parseManifest(
+  text: string,
+  file: string,
+  legacyRoots?: readonly string[],
+): BackupManifest {
   let value: unknown
   try {
-    value = JSON.parse(await readFile(file, 'utf8'))
+    value = JSON.parse(text)
   } catch (cause) {
     throw new BackupError(`cannot read ${file}`, { path: file, cause })
   }

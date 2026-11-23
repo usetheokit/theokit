@@ -1,21 +1,7 @@
 import { ConfigurationError, Toolset } from '@theokit/agents'
 import type { CustomTool } from '@theokit/agents'
-import { bindToolScope } from '@theokit/agents/tool-scope'
+import { codingAgentTools } from '@theokit/agents/presets'
 import type { SandboxBackend } from '@theokit/agents/sandbox'
-import {
-  createApplyPatchTool,
-  createCurrentTimeTool,
-  createViewImageTool,
-  createEditFileTool,
-  createGitDiffTool,
-  createGitStatusTool,
-  createListDirTool,
-  createReadFileTool,
-  createSearchTextTool,
-  createShellTool,
-  withName,
-} from '@theokit/agents/tools'
-
 
 export interface ToolScope {
   cwd: string
@@ -63,94 +49,30 @@ export const REGISTRY_TOOL_NAMES = [
 
 export type RegistryToolName = (typeof REGISTRY_TOOL_NAMES)[number]
 
-/**
- * The two write tools. For them the project root IS the write root, so they take `scope.writeRoot`
- * explicitly. When the two roots diverge (`danger-full-access`), relative paths resolve against `baseDir`
- * (the project), or `hello.txt` would mean `/hello.txt` (#939).
- */
-function writeToolEntries(
-  bound: ReturnType<typeof bindToolScope>,
-  scope: ToolScope,
-): [string, CustomTool][] {
-  return [
-    [
-      'ApplyPatch',
-      withName(
-        bound.bind(createApplyPatchTool)({ projectRoot: scope.writeRoot, baseDir: scope.cwd }),
-        'ApplyPatch',
-      ),
-    ],
-    [
-      'Edit',
-      withName(
-        bound.bind(createEditFileTool)({ projectRoot: scope.writeRoot, baseDir: scope.cwd }),
-        'Edit',
-      ),
-    ],
-  ]
-}
-
 export class ToolRegistry {
   readonly #toolset: Toolset<CustomTool>
 
   constructor(scope: ToolScope) {
     /**
-     * The scope is BOUND once, and the factories inherit it.
-     *
-     * `projectRoot: scope.cwd` used to be repeated across seven entries and `sandbox` on one. Every
-     * repetition is a place to forget — and forgetting `sandbox` on `createShellTool` produces an
-     * UNCONFINED SHELL with no error and no warning, which is the defect B-006 documented here.
-     *
-     * The two WRITE tools pass `projectRoot: scope.writeRoot` explicitly. Not a detail: for them the
-     * project root IS the write root, and letting the bind apply `cwd` would narrow the write scope
-     * silently whenever the two diverge.
+     * The tools come from the framework's coding preset, scoped once. `workspace-write` is passed
+     * on purpose: this registry always holds the write tools and the shell and the role or mode
+     * selects among them later, while the confinement is `scope.sandbox`, which the preset binds into
+     * every tool, so a mode that grants no writes still cannot write. Reads honour absolute paths, and
+     * the two write tools take `scope.writeRoot` as their root with relative paths resolving against
+     * the project (#939). `UpdatePlan` is the preset's, not this registry's.
      */
-    const bound = bindToolScope({
-      projectRoot: scope.cwd,
-      writeRoot: scope.writeRoot,
+    const { tools } = codingAgentTools({
+      cwd: scope.cwd,
+      sandboxMode: 'workspace-write',
       sandbox: scope.sandbox,
+      writeRoot: scope.writeRoot,
+      allowAbsolute: true,
+      ...(scope.defaultTimeoutMs !== undefined && { defaultTimeoutMs: scope.defaultTimeoutMs }),
     })
-
-    const entries = new Map<string, CustomTool>([
-      [
-        'Read',
-        withName(
-          bound.bind(createReadFileTool)({ lineNumbers: true, allowAbsolute: true }),
-          'Read',
-        ),
-      ],
-      ['Glob', withName(bound.bind(createListDirTool)({ allowAbsolute: true }), 'Glob')],
-      [
-        'Grep',
-        withName(bound.bind(createSearchTextTool)({ regex: true, allowAbsolute: true }), 'Grep'),
-      ],
-      ['RepoStatus', bound.bind(createGitStatusTool)({ name: 'RepoStatus' })],
-      ['GitDiff', withName(bound.bind(createGitDiffTool)(), 'GitDiff')],
-      ['CurrentTime', withName(createCurrentTimeTool(), 'CurrentTime')],
-      // B-082 — the model can look at a diagram or screenshot itself, under the same read root.
-      // The 53-line local version was DELETED when `@theokit/agents@12.1.0` started forwarding this
-      // built-in: the local one threw for the SDK to convert, where the built-in returns typed
-      // `path_traversal` / `not_found` / `unsupported_image_type` / `image_too_large`; it hard-coded
-      // no size ceiling, where the built-in defaults to 5 MB with the reason written down (base64
-      // inflates by 4/3 straight into the model's context); and it applied the SE17 split by hand,
-      // which the factory now does. The upstream note is the argument for deleting rather than
-      // keeping: "an image reader that honours any path is a file exfiltration primitive with a
-      // friendly name" — not code to maintain one copy of per product.
-      ['ViewImage', withName(bound.bind(createViewImageTool)(), 'ViewImage')],
-      ...writeToolEntries(bound, scope),
-      [
-        'Bash',
-        withName(
-          // `sandbox` comes from the bound scope — no path here can forget it.
-          bound.bind(createShellTool)(
-            scope.defaultTimeoutMs !== undefined
-              ? { defaultTimeoutMs: scope.defaultTimeoutMs }
-              : {},
-          ),
-          'Bash',
-        ),
-      ],
-    ])
+    const wanted: ReadonlySet<string> = new Set(REGISTRY_TOOL_NAMES)
+    const entries = new Map<string, CustomTool>(
+      tools.filter((tool) => wanted.has(tool.name)).map((tool) => [tool.name, tool]),
+    )
     for (const tool of entries.values()) Object.freeze(tool)
     for (const [name, tool] of entries) {
       if (tool.name !== name) {

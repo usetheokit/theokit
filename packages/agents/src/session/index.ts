@@ -48,6 +48,8 @@ export {
   type GCCandidate,
   type GCError,
   type GCKept,
+  type GCProtectionPredicate,
+  type GCSession,
   type RunTranscriptGCResult,
   type TranscriptGCOptions,
   type TranscriptGCPlan,

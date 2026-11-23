@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { transcriptPath } from '@theokit/agents/persistence'
+import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
@@ -136,5 +136,27 @@ describe('registry identity of a candidate', () => {
     const { plan } = await run(false, { listRegistry: async () => [{ agentId: 'other' }] })
 
     expect(plan.candidates.find((c) => c.transcript === old)?.id).toBe('stray')
+  })
+})
+
+describe('a registered session not stored at its derived path', () => {
+  it('test_a_registered_fork_file_and_a_legacy_named_file_are_kept_without_a_post_filter', async () => {
+    writeTranscript(fx, 'newest', 1)
+    // A registered fork: its file is its own, but its rows name its SOURCE, not itself.
+    const fork = writeTranscript(fx, 'reg-fork', 90, {
+      content: `${JSON.stringify({ type: 'user', sessionId: 'some-source' })}\n`,
+    })
+    const legacy = legacyTranscriptPath(fx.root, fx.cwd, 'reg-legacy')
+    mkdirSync(join(legacy, '..'), { recursive: true })
+    writeFileSync(legacy, `${JSON.stringify({ type: 'user', sessionId: 'reg-legacy' })}\n`, 'utf8')
+    const old = new Date(NOW - 90 * DAY)
+    utimesSync(legacy, old, old)
+
+    await run(true, {
+      listRegistry: async () => [{ agentId: 'reg-fork' }, { agentId: 'reg-legacy' }],
+    })
+
+    expect(existsSync(fork), 'a registered fork was collected').toBe(true)
+    expect(existsSync(legacy), 'a registered legacy-named transcript was collected').toBe(true)
   })
 })

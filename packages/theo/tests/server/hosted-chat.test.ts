@@ -89,8 +89,8 @@ describe('createHostedChat', () => {
     const res = await post(JSON.stringify({ message: 'hi', id: 'c1' }))
     expect(res.status).toBe(200)
     await res.text()
-    expect(seen[0]?.chatId).toBe(`${hashedSessionScope('bob')}c1`)
-    expect(hashedSessionScope('bob')).not.toBe(hashedSessionScope('amy'))
+    expect(seen[0]?.chatId).toBe(`${await hashedSessionScope('bob')}c1`)
+    expect(await hashedSessionScope('bob')).not.toBe(await hashedSessionScope('amy'))
   })
 
   it('stops the run when the client leaves', async () => {

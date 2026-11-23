@@ -4,19 +4,31 @@
  * TheoClaw adds and where they sit in the turn. Unit tests, no socket and no terminal.
  */
 import { type AgentStreamEvent, agentStreamReducer, initialAgentStreamState } from '@theokit/tui'
+import { createControlStreamSource } from '@theokit/agents/control'
 import { describe, expect, it } from 'vitest'
 
 import { deferred, waitFor } from './fakes.js'
 
 import { type ControlClient, type ControlFrame, nextArrival } from '../src/control-client/control-client.js'
 import {
-  controlStream,
   createTurnInbox,
   nextSessionId,
   type TuiNotice,
 } from '../src/tui/frames.js'
 
 const SESSION = 'owner'
+
+/** One turn through the framework adapter, as the app builds it. */
+function controlStream(
+  client: ControlClient,
+  text: string,
+  session: string,
+  onNotice: (n: TuiNotice) => void,
+  onEnd: () => void,
+  inbox = createTurnInbox(),
+) {
+  return createControlStreamSource(client, session, text, { inbox, onNotice, onEnd })()
+}
 
 /** A turn event frame; the event's shape is the SDK translator's, so the test spells only its fields. */
 function event(fields: Record<string, unknown>): ControlFrame {
