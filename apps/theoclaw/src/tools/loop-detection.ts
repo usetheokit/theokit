@@ -1,3 +1,15 @@
+/**
+ * Why this stays local (#2659, follow-up of #2601). The SDK's doom-loop guard (`SendOptions.doomLoop`,
+ * `DoomLoopThresholds.window` + `windowRepeatLimit`) also counts identical calls inside a sliding window,
+ * but it is not equivalent to this plugin:
+ * - the SDK window is opt-in per send (consecutive-only by default); this plugin is always on once registered;
+ * - the SDK stops the run (`stoppedByDoomLoop`, `terminal: "no_progress"`); this plugin only blocks the one
+ *   call with a message and lets the model try something else;
+ * - blocked calls here are NOT recorded in the window, and the window and limit are per plugin instance;
+ * - the signature here is `JSON.stringify(args)` (key order matters, unserializable args share one key).
+ * SDK issue: NOT FILED YET. No GitHub access was available in the run that wrote this; file it in
+ * usetheokit/theokit-sdk from the list above and replace this line with the issue link.
+ */
 import type { PreToolCallContext } from '@theokit/sdk'
 
 import type { GeneralPlugin } from './general-plugin.js'
