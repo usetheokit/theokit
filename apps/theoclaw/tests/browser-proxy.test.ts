@@ -35,7 +35,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   else if (message.method === 'tools/list') {
     send({ jsonrpc: '2.0', id: message.id, result: { tools: [{ name: 'browser_navigate' }, { name: 'browser_run_code_unsafe' }, { name: 'browser_snapshot' }] } })
   } else if (message.params?.arguments?.link !== undefined) {
-    writeFileSync('page.yml', '- generic [ref=e1]: hello page')
+    if (!message.params.arguments.missing) writeFileSync(message.params.arguments.link.replace(/^\\.\\//, ''), message.params.arguments.content ?? '- generic [ref=e1]: hello page')
     writeFileSync('../theoclaw-outside.yml', 'outside')
     send({ jsonrpc: '2.0', id: message.id, result: { content: [{ type: 'text', text: '### Page\\n- Page URL: x\\n### Snapshot\\n- [Snapshot](' + message.params.arguments.link + ')' }] } })
   } else {
@@ -169,10 +169,17 @@ describe('the browser server wrapper', () => {
   })
 
   it('says on stderr why a snapshot link it cannot read stays a link, so a page the model calls empty can be traced', async () => {
-    const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: { link: './gone.yml' } } }])
+    const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: { link: './gone.yml', missing: true } } }])
     const text = (answers.get(1)?.result as { content: { text: string }[] }).content[0]?.text
     expect(text).toContain('- [Snapshot](./gone.yml)')
     expect(lastStderr).toMatch(/snapshot link \.\/gone\.yml could not be read: .*ENOENT/)
+  })
+
+  it('says on stderr that a snapshot file is empty', async () => {
+    const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: { link: './empty.yml', content: '' } } }])
+    const text = (answers.get(1)?.result as { content: { text: string }[] }).content[0]?.text
+    expect(text).not.toContain('[Snapshot]')
+    expect(lastStderr).toContain('snapshot file ./empty.yml is empty')
   })
 
   it('refuses a JSON-RPC batch, so a tools/call inside it cannot bypass the offered set', async () => {
