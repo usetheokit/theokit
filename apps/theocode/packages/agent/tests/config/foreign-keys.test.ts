@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { FOREIGN_SETTINGS_KEYS } from '../../src/config/foreign-keys.js'
+import { CLAUDE_SETTINGS_KEYS } from '@theokit/agents/config'
 import { translateSettings } from '../../src/config/settings-json.js'
 
 const OURS = [
@@ -46,7 +46,7 @@ describe('Phase 1.1 — keys this product recognises and does not act on', () =>
     // The arm that killed the heuristic. "camelCase is theirs, snake_case is ours" would classify
     // `sandboxMode` as foreign and ignore it silently — the exact defect strictness prevents.
     // An explicit list leaves it in neither group, so it reaches `.strict()` and throws naming itself.
-    expect(FOREIGN_SETTINGS_KEYS.has('sandboxMode')).toBe(false)
+    expect(CLAUDE_SETTINGS_KEYS.has('sandboxMode')).toBe(false)
     const out = read({ sandboxMode: 'read-only' })
     expect(out.ignored).toEqual([])
     expect(out.values).toEqual({ sandboxMode: 'read-only' })
@@ -63,7 +63,7 @@ describe('Phase 1.1 — keys this product recognises and does not act on', () =>
     // Anti-vacuity, and the direction that would be worst: a key of ours on this list is a setting
     // silently ignored before the parser ever sees it, so it would read as accepted and do nothing.
     for (const ours of OURS) {
-      expect(FOREIGN_SETTINGS_KEYS.has(ours), `"${ours}" is ours and is on the foreign list`).toBe(
+      expect(CLAUDE_SETTINGS_KEYS.has(ours), `"${ours}" is ours and is on the foreign list`).toBe(
         false,
       )
     }

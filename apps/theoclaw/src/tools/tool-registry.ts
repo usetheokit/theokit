@@ -31,7 +31,6 @@ import { cloudWorkerPort, codingWorkerPort, codingWorkersAvailable } from './cod
 import { computerTool } from './computer-tool.js'
 import { execApprovalPlugin, type ExecApprovalOptions } from './exec-approval.js'
 import { questionTool, taskTools } from './control-tools.js'
-import { loopDetectionPlugin } from './loop-detection.js'
 import { pathVetoPlugin, toolScopeOf } from './path-veto.js'
 import { provenanceGuardPlugin } from './provenance-guard.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -209,7 +208,7 @@ export function agentToolOptions(
   }
   // The exec gate is installed only with host tools on and exec options given (the composition gives them with a state
   // directory). Without an asker it refuses what no saved approval or reviewer allowed.
-  const plugins = [pathVetoPlugin(settings, scope), provenanceGuardPlugin(), loopDetectionPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
+  const plugins = [pathVetoPlugin(settings, scope), provenanceGuardPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
   const base = { tools, plugins }
   const servers = mcpServersOf(settings)
   return Object.keys(servers).length === 0 ? base : { ...base, mcpServers: servers }
@@ -231,7 +230,7 @@ function mcpServersOf(settings: ToolSettings): Record<string, McpServerConfig> {
  * A scheduled run's agent gets the same (B-396), so it holds no schedule tool either.
  */
 export function workerToolOptions(settings: ToolSettings): AgentToolOptions {
-  return { tools: readOnlyTools(settings), plugins: [pathVetoPlugin(settings), provenanceGuardPlugin(), loopDetectionPlugin()] }
+  return { tools: readOnlyTools(settings), plugins: [pathVetoPlugin(settings), provenanceGuardPlugin()] }
 }
 
 /**
