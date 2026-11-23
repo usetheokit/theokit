@@ -552,7 +552,7 @@ describe('theoclaw restore (FR-009)', () => {
     const profile = join(home, '.theokit', 'profiles', 'restored')
     expect(readdirSync(join(profile, 'workspace', '.theoclaw', 'sessions'))).toHaveLength(3)
     expect(readFileSync(join(profile, 'state', 'pairing.json'), 'utf8')).toContain('paired')
-    expect(existsSync(instanceLockPath(join(profile, 'state')))).toBe(false)
+    expect(existsSync(`${join(profile, 'state')}.instance.lock`)).toBe(false)
   })
 
   it("restore re-homes the session transcripts under the new workspace's own name", async () => {
@@ -640,8 +640,8 @@ describe('theoclaw restore (FR-009)', () => {
     child.stdout!.on('data', (chunk: Buffer) => (output += chunk.toString()))
     await waitFor(() => output.includes('copying'), 30_000, 'the backup to start copying')
 
-    expect(() => claimInstance(NO_PROFILE, { THEOCLAW_STATE_DIR: source.state })).toThrow(
-      `is held by process ${child.pid}`,
+    await expect(claimInstance(NO_PROFILE, { THEOCLAW_STATE_DIR: source.state })).rejects.toThrow(
+      `pid ${child.pid}`,
     )
     writeFileSync(gate, '')
     await waitFor(() => output.includes('done'), 30_000, 'the backup to finish')
