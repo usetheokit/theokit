@@ -65,7 +65,8 @@ export function readHeadlessPrompt(input: {
     prompt = input.readStdin().trim()
   } else if (input.stdin === 'forced') {
     const piped = input.readStdin().trim()
-    prompt = piped !== '' ? piped : arg === '-' ? '' : arg
+    const fallback = arg === '-' ? '' : arg
+    prompt = piped === '' ? fallback : piped
   } else if (input.stdin === 'append') {
     const piped = input.readStdin().trim()
     if (piped !== '') prompt = arg === '' ? piped : `${arg}\n\n<stdin>\n${piped}\n</stdin>`
@@ -156,6 +157,18 @@ function classify(state: Collected, finalText: string): HeadlessOutcome {
   return finalText === '' && !hasTools ? 'empty' : 'ok'
 }
 
+function reportTurn(
+  io: HeadlessIo,
+  json: boolean,
+  outcome: HeadlessOutcome,
+  finalText: string,
+  stopReason: string | undefined,
+): void {
+  if (!json && finalText !== '') safe(io.out, `${finalText}\n`)
+  if (outcome === 'cut') safe(io.err, `turn cut: ${stopReason}\n`)
+  if (outcome === 'empty') safe(io.err, 'the turn produced no text and no tool calls\n')
+}
+
 /**
  * Consume one turn's wire chunks into stdout/stderr output and an exit code. Never rejects: a
  * thrown stream is an `error` outcome. Precedence: error, then cut, then empty, else ok.
@@ -171,9 +184,7 @@ export async function runHeadlessTurn(
   let outcome = classify(state, finalText)
 
   const builtIn = options.format === undefined
-  if (builtIn && options.json !== true && finalText !== '') safe(io.out, `${finalText}\n`)
-  if (builtIn && outcome === 'cut') safe(io.err, `turn cut: ${stopReason}\n`)
-  if (builtIn && outcome === 'empty') safe(io.err, 'the turn produced no text and no tool calls\n')
+  if (builtIn) reportTurn(io, options.json === true, outcome, finalText, stopReason)
 
   try {
     await options.outputLastMessage?.(finalText)
