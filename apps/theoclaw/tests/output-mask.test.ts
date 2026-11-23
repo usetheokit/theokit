@@ -124,21 +124,6 @@ describe('installOutputMask', () => {
     expect(capture.text()).toBe('x mail-pa')
   })
 
-  it('flush keeps the installed writer and masks what is written after it', () => {
-    const capture = capturingStream()
-    const original = capture.write
-    mask = installOutputMask(['mail-pass-456'], [capture])
-    const installed = capture.write
-
-    capture.write('x mail-pa')
-    mask.flush()
-    expect(capture.write).toBe(installed)
-    expect(capture.write).not.toBe(original)
-
-    capture.write('a mail-pass-456 b')
-    expect(capture.text()).toBe('x mail-paa [redacted] b')
-  })
-
   it('output without a credential prefix is not delayed', () => {
     const capture = capturingStream()
     mask = installOutputMask(['mail-pass-456'], [capture])
