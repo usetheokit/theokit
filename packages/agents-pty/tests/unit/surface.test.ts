@@ -15,6 +15,8 @@ describe('@theokit/agents-pty', () => {
     // Values only: a type-only export has no runtime key, and `PtyInteractiveBackendOptions` is one.
     for (const name of [
       'clampYield',
+      'createConfinedPtyBackend',
+      'probeConfinement',
       'MaxSessionsError',
       'PtyInteractiveBackend',
       'YIELD_MAX_MS',

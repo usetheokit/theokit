@@ -6,8 +6,11 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { resolveTrustPosture } from '@theocode/agent/config'
-import { createSessionPtyOwner, MAX_PTY_SESSIONS } from '@theocode/agent/pty'
+import { MAX_PTY_SESSIONS } from '@theocode/agent/pty'
+import type { SessionPtyOwner } from '@theocode/agent/pty'
 import { forkSession } from '@theocode/agent/session'
+import { createPtyOwner } from '@theokit/agents-pty'
+import { interactiveWrapCommand } from '@theokit/agents/sandbox'
 
 import { createChatTransport } from './chat-transport.js'
 import { credential } from './credential-helpers.js'
@@ -20,7 +23,7 @@ import { workingDirectory } from '../working-directory.js'
 
 export interface TuiRoot {
   readonly session: TuiSession
-  readonly ptyOwner: ReturnType<typeof createSessionPtyOwner>
+  readonly ptyOwner: SessionPtyOwner
   readonly transport: ReturnType<typeof createChatTransport>
   readonly sessionPointer: string
   readonly goalPointer: string
@@ -80,9 +83,10 @@ function build(): TuiRoot {
   // consumer, and therefore read as though the TUI honoured an injected posture when it does not.
   const initialPosture = resolveTrustPosture(cwd)
 
-  const ptyOwner = createSessionPtyOwner({
-    initialMode: session.cfg().sandbox_mode,
+  const ptyOwner = createPtyOwner({
+    mode: session.cfg().sandbox_mode,
     maxSessions: MAX_PTY_SESSIONS,
+    wrapFor: (mode) => interactiveWrapCommand({ mode }),
   })
 
   const customCommands = loadCustomCommands({
