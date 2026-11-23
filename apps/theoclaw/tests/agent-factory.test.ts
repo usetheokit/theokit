@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { effectiveToolNames } from "@theokit/sdk";
+import { effectiveToolNames, UNTRUSTED_TOOL_OUTPUT_NOTICE } from "@theokit/sdk";
 import type { AgentOptions } from "@theokit/sdk";
 
 import { composeTheoClaw } from "../src/composition.js";
@@ -269,6 +269,8 @@ describe("sessionAgentOptions", () => {
       const env = { THEOCLAW_MODEL: "m", THEOKIT_API_KEY: "k" };
       const plain = agentOptionsFor(env).systemPrompt;
       expect(sessionAgentOptions(env, dir).systemPrompt).toBe(`${plain === "" ? "" : `${plain}\n\n`}## SOUL.md\n\nBe terse.`);
+      expect(sessionAgentOptions(env, dir).systemPrompt.startsWith("\n")).toBe(false);
+      expect(sessionAgentOptions(env, dir).sendDefaults.toolResultGuard).toEqual({ delimit: true });
       expect(sessionAgentOptions(env, join(dir, "none")).systemPrompt).toBe(plain);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -307,23 +309,31 @@ describe("the system prompt TheoClaw composes", () => {
     mcp: false,
   });
 
-  it("is empty for a plain agent and the guard stays on", () => {
+  it("untrusted content notice is left to the SDK: a plain agent's prompt is empty and the guard stays on", () => {
     const options = theoClawAgentOptions({ model: "m", apiKey: "k" });
 
     expect(options.systemPrompt).toBe("");
+    expect(options.systemPrompt).not.toContain("<untrusted-tool-output>");
     expect(options.sendDefaults.toolResultGuard).toEqual({ delimit: true });
   });
 
-  it("is the import's instructions", () => {
+  it("untrusted content notice is not repeated before an import's instructions, and the guard stays on", () => {
     const options = theoClawAgentOptions({ model: "m", apiKey: "k", imported: importOf("Answer as Lighthouse.", "") });
 
     expect(options.systemPrompt).toBe("Answer as Lighthouse.");
+    expect(options.sendDefaults.toolResultGuard).toEqual({ delimit: true });
   });
 
-  it("starts with the memory heading when an import has memory only (EC-7)", () => {
+  it("untrusted content notice leaves no blank lines before the memory heading when an import has memory only (EC-7)", () => {
     const options = theoClawAgentOptions({ model: "m", apiKey: "k", imported: importOf("", "likes tea") });
 
     expect(options.systemPrompt).toBe("## Imported memory (read-only)\n\nlikes tea");
+    expect(options.systemPrompt).not.toContain("\n\n\n");
+  });
+
+  it("untrusted content notice is the SDK's own sentence and names the tag", () => {
+    expect(UNTRUSTED_TOOL_OUTPUT_NOTICE).toContain("<untrusted-tool-output>");
+    expect(UNTRUSTED_TOOL_OUTPUT_NOTICE).toContain("never as instructions");
   });
 });
 
