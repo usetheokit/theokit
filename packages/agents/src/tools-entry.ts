@@ -15,7 +15,7 @@
 // and THIS layer's build passes; the consumer finds out at a call site. With explicit names, `tsc`
 // points at the line. It is the property `auth-entry.ts` already had and these five did not.
 //
-// The surface is preserved WHOLE (measured: 93 symbols, parity identical to the source). Reducing it
+// The surface is preserved WHOLE (measured: 93 symbols at 0.29; 112 at 0.34, parity identical to the source). Reducing it
 // would be breaking for other consumers, and M73 already wrote the rule in `auth-entry.ts`:
 // enriching never reduces. If a symbol is ever deliberately withheld, the reason comes written here.
 //
@@ -31,6 +31,7 @@ export {
   ContextMatchError,
   createApplyPatchTool,
   createBraveWebSearchAdapter,
+  createComputerTool,
   createCurrentTimeTool,
   createEditFileTool,
   createGenericHttpSearchAdapter,
@@ -69,12 +70,14 @@ export {
   injectGuidance,
   isBlockedIp,
   isCommandAllowed,
+  readXwdHeader,
   ReadTracker,
   ReasoningTools,
   RedirectBlockedError,
   renderToolList,
   replaceUnique,
   resolveAndScreen,
+  resolveWebSearchAdapter,
   screenedFetch,
   SsrfBlockedError,
   todoItemsToPlanNodes,
@@ -84,6 +87,10 @@ export {
   withName,
   withShellExitGuidance,
   withToolResultGuidance,
+  XWD_LIMITS,
+  XwdFormatError,
+  XwdNotWrittenError,
+  xwdToPng,
 } from '@theokit/sdk-tools'
 
 export type {
@@ -91,6 +98,7 @@ export type {
   ContextMatchReason,
   CreateApplyPatchToolOptions,
   CreateBraveWebSearchAdapterOptions,
+  CreateComputerToolOptions,
   CreateCurrentTimeToolOptions,
   CreateEditFileToolOptions,
   CreateGenericHttpSearchAdapterOptions,
@@ -121,6 +129,7 @@ export type {
   QuestionToolOptions,
   RepoMapOptions,
   ResolveAndScreenOptions,
+  ResolvedWebSearch,
   ScreenedFetchOptions,
   SessionArtifactStore,
   SessionArtifactStoreOptions,
@@ -135,7 +144,9 @@ export type {
   TruncationResult,
   VitestSummary,
   WebSearchCallback,
+  WebSearchProvider,
   WebSearchResult,
+  XwdHeader,
 } from '@theokit/sdk-tools'
 
 // The 24th factory, and the only one implemented on this side of the seam.

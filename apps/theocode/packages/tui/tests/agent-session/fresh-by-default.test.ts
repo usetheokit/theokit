@@ -20,7 +20,7 @@ import { drainAll } from '../../src/terminal-io/index.js'
 import { resumeRequested } from '../../src/agent-session/resume-request.js'
 
 const DIR = mkdtempSync(join(tmpdir(), 'fresh-by-default-'))
-const POINTER = join(DIR, '.theokit', 'tui-session')
+const ROOT = join(DIR, 'transcripts')
 
 afterAll(async () => {
   await drainAll()
@@ -49,11 +49,11 @@ describe('createTuiSession — resume is opt-in', () => {
     let read = false
     const s = createTuiSession({
       cwd: '/tmp',
-      sessionPointer: POINTER,
+      pointerRoot: ROOT,
       resume: false,
       loadSession: (_p, fresh) => {
         read = true
-        return fresh()
+        return { sessionId: fresh(), resumed: false }
       },
     })
     expect(read).toBe(false)
@@ -63,16 +63,15 @@ describe('createTuiSession — resume is opt-in', () => {
   it('reads the pointer when resume IS requested', () => {
     const s = createTuiSession({
       cwd: '/tmp',
-      sessionPointer: POINTER,
+      pointerRoot: ROOT,
       resume: true,
-      loadSession: () => 'tui-from-pointer',
+      loadSession: () => ({ sessionId: 'tui-from-pointer', resumed: true }),
     })
     expect(s.session()).toBe('tui-from-pointer')
   })
 
   it('two fresh launches do not share a session id', () => {
-    const mk = () =>
-      createTuiSession({ cwd: '/tmp', sessionPointer: POINTER, resume: false }).session()
+    const mk = () => createTuiSession({ cwd: '/tmp', pointerRoot: ROOT, resume: false }).session()
     expect(mk()).not.toBe(mk())
   })
 })

@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1563 export(s) across 30 entry point(s).
+1581 export(s) across 30 entry point(s).
 
-Measured against `@theokit/sdk@9.0.0`.
+Measured against `@theokit/sdk@11.0.0`.
 
 ## `@theokit/agents`
 
@@ -1191,6 +1191,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `copyJobs` | value |
 | `createApplyPatchTool` | value |
 | `createBraveWebSearchAdapter` | value |
+| `createComputerTool` | value |
 | `createCurrentTimeTool` | value |
 | `createDelegateAllTool` | value |
 | `createDelegateTool` | value |
@@ -1242,11 +1243,13 @@ Measured against `@theokit/sdk@9.0.0`.
 | `JobCopyError` | value |
 | `JobCopyUnsupportedError` | value |
 | `ReadTracker` | value |
+| `readXwdHeader` | value |
 | `ReasoningTools` | value |
 | `RedirectBlockedError` | value |
 | `renderToolList` | value |
 | `replaceUnique` | value |
 | `resolveAndScreen` | value |
+| `resolveWebSearchAdapter` | value |
 | `ScheduleStoreError` | value |
 | `screenedFetch` | value |
 | `SsrfBlockedError` | value |
@@ -1257,10 +1260,15 @@ Measured against `@theokit/sdk@9.0.0`.
 | `withName` | value |
 | `withShellExitGuidance` | value |
 | `withToolResultGuidance` | value |
+| `XWD_LIMITS` | value |
+| `XwdFormatError` | value |
+| `XwdNotWrittenError` | value |
+| `xwdToPng` | value |
 | `CommandPolicy` | type |
 | `ContextMatchReason` | type |
 | `CreateApplyPatchToolOptions` | type |
 | `CreateBraveWebSearchAdapterOptions` | type |
+| `CreateComputerToolOptions` | type |
 | `CreateCurrentTimeToolOptions` | type |
 | `CreateDelegateAllToolOptions` | type |
 | `CreateDelegateToolOptions` | type |
@@ -1300,6 +1308,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `QuestionToolOptions` | type |
 | `RepoMapOptions` | type |
 | `ResolveAndScreenOptions` | type |
+| `ResolvedWebSearch` | type |
 | `RunPort` | type |
 | `RunResult` | type |
 | `ScheduledJob` | type |
@@ -1323,7 +1332,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `TruncationResult` | type |
 | `VitestSummary` | type |
 | `WebSearchCallback` | type |
+| `WebSearchProvider` | type |
 | `WebSearchResult` | type |
+| `XwdHeader` | type |
 
 ## `@theokit/agents/code-mode`
 
@@ -1641,10 +1652,14 @@ Measured against `@theokit/sdk@9.0.0`.
 | `defineCommand` | value |
 | `EmptyPromptError` | value |
 | `exitAfterDrain` | value |
+| `formatGcJson` | value |
+| `formatGcPlan` | value |
+| `parseSessionsGcArgs` | value |
 | `readHeadlessPrompt` | value |
 | `routeCommand` | value |
 | `runHeadlessTurn` | value |
 | `sessionCommands` | value |
+| `sessionsGcCommand` | value |
 | `SHUTDOWN_EXIT_CODES` | value |
 | `CleanupTask` | type |
 | `CommandArgument` | type |
@@ -1658,6 +1673,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `RoutedInput` | type |
 | `RouteFailure` | type |
 | `SessionCommandHandlers` | type |
+| `SessionsGcArgs` | type |
+| `SessionsGcOptions` | type |
+| `SessionsGcOutcome` | type |
 | `Shutdown` | type |
 | `ShutdownDeps` | type |
 | `ShutdownOutcome` | type |
