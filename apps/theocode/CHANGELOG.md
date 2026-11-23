@@ -17,6 +17,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - `theocode doctor` derives the credential state with `credentialState` from `@theokit/agents/doctor`; the local `credentialState` is gone.
+- The directory trust and hook review gates render `WorkspaceTrustPrompt` and `HookReviewPrompt` over `useWorkspaceConsent` from `@theokit/tui`; the consent state and hook-decision modules are gone, and a hook command is shown with control characters escaped (#2724).
+- Each built-in command is declared once with its description and action, and the composer's `/` menu comes from `registry.palette()`; `BUILTIN_COMMANDS` is gone (#2725).
+- The credential source stays the framework's typed `SourceOrigin` from resolution to the TUI footer; `toLocalSource` and the regular expression in `credential-helpers.ts` that rebuilt it from a string are gone.
 - The live config takes its provider-key guard from `@theokit/agents/testing`; `tools/require-provider-key.mjs` and its test are gone (#2760).
 - Tests: the session GC suites again pin pointer protection, DEAD and undetermined projects, transcript age and live-writer rules (plan and apply), foreign files and registry entries (#2829).
 - `orderedPermissionRules` builds its rules with `permissionRulesFromLayers` from `@theokit/agents/config`; the app-local deny-first partition is gone (#2745).

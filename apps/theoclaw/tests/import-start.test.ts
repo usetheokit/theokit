@@ -11,11 +11,9 @@ import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
 import { createAgentFactory, createChannelAgentFactory } from '../src/control-plane/agent-factory.js'
 import type { TurnAgent } from '../src/control-plane/turn.js'
-import { readClaudeCodeSetup } from '../src/migration/claude-code-source.js'
-import { readHermesSetup } from '../src/migration/hermes-source.js'
 import { type ImportedSetup, readImport, writeImport } from '../src/migration/import-store.js'
 import { readImportAtStart } from '../src/migration/import-start.js'
-import { copyFixture } from './migration-fixtures.js'
+import { copyFixture, readClaudeCodeSetup, readHermesSetup } from './migration-fixtures.js'
 
 const ENV = { THEOCLAW_MODEL: 'openrouter/m', OPENROUTER_API_KEY: 'router-key' }
 const now = new Date('2026-10-31T12:00:00Z')
