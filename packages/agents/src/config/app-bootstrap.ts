@@ -162,7 +162,8 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
  */
 function scanDeclarations(raw: string): { names: Set<string>; text: string } {
   const names = new Set<string>()
-  const lines = raw.split(/\r?\n/)
+  // Split on `\n` alone: a `\r` stays on its line, so `text` keeps the file's own line endings.
+  const lines = raw.split('\n')
   const out = [...lines]
   let i = 0
   while (i < lines.length) {
