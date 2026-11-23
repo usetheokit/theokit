@@ -16,7 +16,6 @@ import {
   withName,
 } from '@theokit/agents/tools'
 
-import { anchorRelativeWrites } from './anchor-relative-writes.js'
 
 export interface ToolScope {
   cwd: string
@@ -66,28 +65,26 @@ export type RegistryToolName = (typeof REGISTRY_TOOL_NAMES)[number]
 
 /**
  * The two write tools. For them the project root IS the write root, so they take `scope.writeRoot`
- * explicitly. When the two roots diverge (`danger-full-access`), relative paths are anchored to the
- * project first, or `hello.txt` would mean `/hello.txt` (#939).
+ * explicitly. When the two roots diverge (`danger-full-access`), relative paths resolve against `baseDir`
+ * (the project), or `hello.txt` would mean `/hello.txt` (#939).
  */
 function writeToolEntries(
   bound: ReturnType<typeof bindToolScope>,
   scope: ToolScope,
 ): [string, CustomTool][] {
-  const anchored = (tool: CustomTool, field: 'patch' | 'path'): CustomTool =>
-    scope.writeRoot === scope.cwd ? tool : anchorRelativeWrites(tool, scope.cwd, field)
   return [
     [
       'ApplyPatch',
-      anchored(
-        withName(bound.bind(createApplyPatchTool)({ projectRoot: scope.writeRoot }), 'ApplyPatch'),
-        'patch',
+      withName(
+        bound.bind(createApplyPatchTool)({ projectRoot: scope.writeRoot, baseDir: scope.cwd }),
+        'ApplyPatch',
       ),
     ],
     [
       'Edit',
-      anchored(
-        withName(bound.bind(createEditFileTool)({ projectRoot: scope.writeRoot }), 'Edit'),
-        'path',
+      withName(
+        bound.bind(createEditFileTool)({ projectRoot: scope.writeRoot, baseDir: scope.cwd }),
+        'Edit',
       ),
     ],
   ]
