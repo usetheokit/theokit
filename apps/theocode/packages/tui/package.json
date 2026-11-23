@@ -11,6 +11,7 @@
     "@theocode/agent": "workspace:*",
     "@theocode/shared": "workspace:*",
     "@theokit/agents": "workspace:*",
+    "@theokit/agents-pty": "workspace:*",
     "@theokit/sdk": "9.0.0",
     "@theokit/tui": "^0.83.4",
     "ink": "^7.1.0",
