@@ -46,7 +46,7 @@ export async function importLegacyFacts(
     for (const text of wanted) {
       if (have.has(text)) continue
       have.add(text)
-      await addMemoryFact(directory, config, { text })
+      await addMemoryFact(directory, text, config)
     }
   } catch (error) {
     report(`theoclaw: importing earlier memory facts failed: ${String(error)}`)
