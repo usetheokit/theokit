@@ -1,4 +1,4 @@
-import type { AgentToolEvent } from '@theokit/tui'
+import { toolPresentation, type AgentToolEvent } from '@theokit/tui'
 
 function oneLine(value: string, max = 120): string {
   const flat = value.replace(/\r?\n/g, '⏎')
@@ -74,15 +74,57 @@ function refusedName(
 
 type Header = { name?: string; summary?: string }
 
+/**
+ * Bash, Edit and ApplyPatch take their verb and target from the toolkit's presentation of the tool
+ * they alias. What the toolkit does not do and TheoCode keeps: flatten a multi-line command to one
+ * line (`⏎`), fall back to `file` / `files` when the target is missing, and append the +/- counts
+ * of a patch. The adapter that turns a presentation into the `formatToolHeader` /
+ * `formatToolResult` pair is still missing from `@theokit/tui` (theokit-tui#295), so this reads
+ * `header` from the map directly.
+ */
+const PRESENTATION = toolPresentation(
+  {},
+  { aliases: { Bash: 'shell_exec', Edit: 'edit_file', ApplyPatch: 'apply_patch' } },
+)
+
+function presented(tool: string, input: Record<string, unknown>, active: boolean): string {
+  const entry = PRESENTATION.get(tool)
+  // An installed `@theokit/tui` older than 0.83.4 ignores `aliases`; an empty header would hide that.
+  if (!entry) throw new Error(`@theokit/tui >= 0.83.4 is required: no presentation for ${tool}`)
+  return entry.header(input, active)
+}
+
 const HEADERS_BY_TOOL: ReadonlyMap<
   string,
   (input: Record<string, unknown>, active: boolean) => Header
 > = new Map([
   [
     'Bash',
+    (input, active) => ({
+      name: presented(
+        'Bash',
+        { ...input, command: typeof input.command === 'string' ? oneLine(input.command) : '' },
+        active,
+      ).trim(),
+    }),
+  ],
+  [
+    'Edit',
+    (input, active) => ({
+      name: presented(
+        'Edit',
+        { ...input, path: typeof input.path === 'string' ? input.path : 'file' },
+        active,
+      ).trim(),
+    }),
+  ],
+  [
+    'ApplyPatch',
     (input, active) => {
-      const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
-      return { name: `${active ? 'Running' : 'Ran'} ${cmd}`.trim() }
+      const patch = typeof input.patch === 'string' ? input.patch : ''
+      return {
+        name: `${presented('ApplyPatch', { patch, path: 'files' }, active).trim()}${diffCounts(patch)}`,
+      }
     },
   ],
   [
@@ -102,26 +144,10 @@ const HEADERS_BY_TOOL: ReadonlyMap<
   ],
   ['update_plan', (_input, active) => ({ name: active ? 'Updating plan' : 'Updated plan' })],
   [
-    'Edit',
-    (input, active) => {
-      const path = typeof input.path === 'string' ? input.path : 'file'
-      return { name: `${active ? 'Editing' : 'Edited'} ${path}`.trim() }
-    },
-  ],
-  [
     'ViewImage',
     (input, active) => {
       const path = typeof input.path === 'string' ? input.path : 'image'
       return { name: `${active ? 'Viewing' : 'Viewed'} ${path}`.trim() }
-    },
-  ],
-  [
-    'ApplyPatch',
-    (input, active) => {
-      const patch = typeof input.patch === 'string' ? input.patch : ''
-      return {
-        name: `${active ? 'Editing' : 'Edited'} ${filesFromV4APatch(patch)}${diffCounts(patch)}`.trim(),
-      }
     },
   ],
 ])

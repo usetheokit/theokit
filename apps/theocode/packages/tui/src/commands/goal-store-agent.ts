@@ -1,4 +1,8 @@
-import { readTurnUsage, type UIMessageLike } from '@theokit/tui'
+import {
+  lastAssistantText as frameworkLastAssistantText,
+  readTurnUsage,
+  type UIMessageLike,
+} from '@theokit/tui'
 
 import { noteTurnStart } from '../persistence/fork-session.js'
 
@@ -20,16 +24,16 @@ interface WaitResult {
 }
 
 function lastAssistantText(thread: readonly UIMessageLike[]): string | undefined {
-  for (let i = thread.length - 1; i >= 0; i--) {
-    const m = thread[i]
-    if (m.role !== 'assistant') continue
-    const text = m.parts
+  const events = thread.map((m) => ({
+    id: '',
+    kind: 'message' as const,
+    role: m.role,
+    text: m.parts
       .filter((p) => (p as { type?: string }).type === 'text')
       .map((p) => (p as { text?: string }).text ?? '')
-      .join('')
-    return text
-  }
-  return undefined
+      .join(''),
+  }))
+  return frameworkLastAssistantText(events)
 }
 
 function lastTurnUsage(thread: readonly UIMessageLike[]): { totalTokens: number } | undefined {
