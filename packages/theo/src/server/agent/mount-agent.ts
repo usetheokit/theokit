@@ -231,7 +231,7 @@ function resolveKeyOrError(
     return {
       failure: jsonError(
         500,
-        'PROVIDER_CREDENTIAL_UNAVAILABLE',
+        'INTERNAL',
         'The agent has no usable provider credential. See the server log for the reason.',
       ),
     }

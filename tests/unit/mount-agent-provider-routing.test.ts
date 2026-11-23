@@ -91,7 +91,7 @@ describe('mountAgent resolves the key from the agent it is about to run (theokit
       expect(response.status).toBe(500)
       expect(body).not.toContain('secret-detail')
       expect(body).not.toContain('/srv/app')
-      expect(JSON.parse(body).error.code).toBe('PROVIDER_CREDENTIAL_UNAVAILABLE')
+      expect(JSON.parse(body).error.code).toBe('INTERNAL')
       expect(spy).toHaveBeenCalled()
     } finally {
       spy.mockRestore()
