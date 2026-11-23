@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'ink-testing-library'
 
+import { InkInputProvider } from '@theokit/tui'
 import { HooksGate, TrustGate } from '../../src/components/ConsentGates.js'
 
 const hook = {
@@ -36,5 +37,48 @@ describe('consent gates render the framework prompts', () => {
     )
     expect(lastFrame()).toContain('Do you trust the files in this folder?')
     expect(lastFrame()).toContain('Esc to reject')
+  })
+})
+
+describe('gate decisions', () => {
+  it('toasts and does not close when the hook approval fails', async () => {
+    const setToast = vi.fn()
+    const approveHook = vi.fn().mockRejectedValue(new Error('disk full'))
+    const consent = { approveHook, refuseHook: vi.fn(), pendingHooks: [hook] } as never
+    const { stdin } = render(
+      <InkInputProvider>
+        <HooksGate consent={consent} pendingHooks={[hook]} setToast={setToast} />
+      </InkInputProvider>,
+    )
+    await new Promise((r) => setTimeout(r, 50))
+    stdin.write('\r')
+    await new Promise((r) => setTimeout(r, 50))
+    expect(approveHook).toHaveBeenCalledWith('fp')
+    expect(setToast).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: 'error', message: expect.stringContaining('disk full') }),
+    )
+  })
+
+  it('toasts when trust cannot be persisted', async () => {
+    const setToast = vi.fn()
+    const consent = { trust: vi.fn().mockRejectedValue(new Error('read-only')) } as never
+    const { stdin } = render(
+      <InkInputProvider>
+        <TrustGate
+          consent={consent}
+          SESSION={{} as never}
+          setToast={setToast}
+          setApprovalMode={vi.fn()}
+          setEffort={vi.fn()}
+          exit={vi.fn()}
+        />
+      </InkInputProvider>,
+    )
+    await new Promise((r) => setTimeout(r, 50))
+    stdin.write('\r')
+    await new Promise((r) => setTimeout(r, 50))
+    expect(setToast).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('could not persist trust') }),
+    )
   })
 })

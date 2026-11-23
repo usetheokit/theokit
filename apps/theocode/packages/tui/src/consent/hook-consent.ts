@@ -6,7 +6,6 @@ type ClassifiedHook = ReturnType<ClassifyHooks>[number]
 
 export interface HookConsentDeps {
   cwd: string
-  declined: ReadonlySet<string>
   resolveEffectiveConfig: (opts: { cwd: string }) => { hooks?: unknown }
   parseHooks: ParseHooks
   classifyHooks: ClassifyHooks
@@ -30,7 +29,7 @@ export function computePendingHooks(deps: HookConsentDeps): ClassifiedHook[] {
         // rather than kept as decoration, and with it a failure mode: it could throw, and the catch
         // below turns any throw into "nothing pending", which closes the gate.
         .classifyHooks(specs, { dir: deps.cwd })
-        .filter((h) => h.status !== 'trusted' && !deps.declined.has(h.fingerprint))
+        .filter((h) => h.status !== 'trusted')
     )
   } catch (err) {
     // B-039 — a HookError used to be discarded here, with no diagnostic at all. An empty list means
