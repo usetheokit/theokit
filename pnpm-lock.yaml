@@ -707,6 +707,9 @@ importers:
 
   packages/host:
     dependencies:
+      '@playwright/mcp':
+        specifier: 0.0.83
+        version: 0.0.83
       undici:
         specifier: 7.30.1
         version: 7.30.1

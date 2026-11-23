@@ -26,6 +26,9 @@
       "entry": ["src/bridge/runtime/bun.ts", "src/bridge/runtime/deno.ts"],
       "project": ["src/**/*.{ts,tsx}"]
     },
+    "packages/host": {
+      "ignoreDependencies": ["@playwright/mcp"]
+    },
     "packages/agents": {
       "entry": ["src/theokit-plugin.ts"],
       "project": ["src/**/*.{ts,tsx}"]
