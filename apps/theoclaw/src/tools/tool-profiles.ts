@@ -4,7 +4,6 @@ import { createSandboxBackend } from '@theokit/agents/sandbox'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { buildTools, fileReadTools, readOnlyTools, shellToolFor } from './tool-registry.js'
 import type { AgentToolOptions } from './tool-registry.js'
-import { loopDetectionPlugin } from './loop-detection.js'
 import { pathVetoPlugin } from './path-veto.js'
 import { provenanceGuardPlugin } from './provenance-guard.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -36,7 +35,7 @@ export function readToolProfile(env: Readonly<Record<string, string | undefined>
  * (no state directory), which leaves the shell out rather than run it unasked.
  */
 export function profileToolOptions(profile: ToolProfile, settings: ToolSettings, elevated: () => boolean, shell: boolean): AgentToolOptions {
-  const plugins = [pathVetoPlugin(settings), provenanceGuardPlugin(), loopDetectionPlugin()]
+  const plugins = [pathVetoPlugin(settings), provenanceGuardPlugin()]
   if (profile === 'minimal') return { tools: fileReadTools(settings), plugins }
   if (profile === 'messaging') return { tools: readOnlyTools(settings), plugins }
   const { interactive, ...withoutInteractive } = settings

@@ -147,4 +147,48 @@ describe('readForeignSetup', () => {
       ]),
     )
   })
+
+  it('reads Claude auto memory by git root, requiresBins, a configDir and shadowed servers', () => {
+    const home = mkdtempSync(join(tmpdir(), 'fs-c2-'))
+    const cwd = mkdtempSync(join(tmpdir(), 'fs-p2-'))
+    const configDir = join(home, 'elsewhere')
+    const encoded = cwd.replace(/[^a-zA-Z0-9]/g, '-')
+    write(configDir, `projects/${encoded}/memory/b.md`, 'bee')
+    write(configDir, `projects/${encoded}/memory/MEMORY.md`, 'index')
+    write(
+      configDir,
+      'skills/s/SKILL.md',
+      '---\nname: s\ndescription: d\nmetadata:\n  requires:\n    bins: [git, 3, ""]\n---\nbody\n',
+    )
+    write(
+      home,
+      '.claude.json',
+      JSON.stringify({ mcpServers: { a: { command: 'u' }, b: { command: 'u' } } }),
+    )
+    write(cwd, '.mcp.json', JSON.stringify({ mcpServers: { a: { command: 'p' } } }))
+    const setup = readForeignSetup('claude-code', { home, cwd, configDir })
+    expect(setup.source).toBe(configDir)
+    expect(setup.memories.map((m) => m.text)).toEqual(['index', 'bee'])
+    expect(setup.skills[0].requiresBins).toEqual(['git'])
+    expect(setup.mcpServers).toEqual({ a: { command: 'p' }, b: { command: 'u' } })
+    expect(setup.untranslated).toContainEqual({
+      path: '.claude.json#a',
+      reason: 'shadowed by the project scope',
+    })
+  })
+
+  it('reads Hermes memories, records dropped channels and honours configDir', () => {
+    const home = mkdtempSync(join(tmpdir(), 'fs-h2-'))
+    const configDir = join(home, 'custom')
+    write(configDir, 'memories/USER.md', 'user')
+    write(configDir, 'memories/MEMORY.md', 'mem')
+    write(configDir, 'platforms/x.json', '{}')
+    const setup = readForeignSetup('hermes', { home, configDir })
+    expect(setup.source).toBe(configDir)
+    expect(setup.memories.map((m) => m.path)).toEqual(['memories/MEMORY.md', 'memories/USER.md'])
+    expect(setup.untranslated).toContainEqual({
+      path: 'platforms',
+      reason: 'channels are not imported',
+    })
+  })
 })

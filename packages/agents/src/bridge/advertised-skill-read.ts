@@ -1,5 +1,8 @@
 // #1855 — kept out of sdk-adapter.ts on purpose: that file is already ~990 lines (lint max-lines is 500), and the
 // advertised-mode reader plus its PATH check are self-contained.
+import { accessSync, constants } from 'node:fs'
+import { delimiter, join } from 'node:path'
+
 import type { InlineSkill } from '@theokit/sdk'
 import type { Skill } from '@theokit/sdk/skills'
 
@@ -26,13 +29,29 @@ interface WireRuntime {
 
 /**
  * The SDK's own binary gate, `binaryOnPath` from `@theokit/sdk/skills` (exported since 10.0.0). An older SDK
- * does not export it: the gate then fails closed, so a skill that needs a binary is not served.
+ * does not export it: a local PATH lookup then stands in, so a skill whose binary is present is still served.
  */
+function localBinaryOnPath(bin: string): boolean {
+  const exts = process.platform === 'win32' ? ['', '.exe', '.cmd', '.bat'] : ['']
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (dir === '') continue
+    for (const ext of exts) {
+      try {
+        accessSync(join(dir, bin + ext), constants.X_OK)
+        return true
+      } catch {
+        // not here; keep looking
+      }
+    }
+  }
+  return false
+}
+
 async function binaryGate(): Promise<(bin: string) => boolean> {
   const skills = (await import('@theokit/sdk/skills')) as {
     binaryOnPath?: (bin: string) => boolean
   }
-  return skills.binaryOnPath ?? (() => false)
+  return skills.binaryOnPath ?? localBinaryOnPath
 }
 
 /**
