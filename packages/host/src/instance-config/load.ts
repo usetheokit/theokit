@@ -6,7 +6,7 @@ import type { ResolvedPath } from './path.js'
 
 export function loadInstanceConfig(
   resolved: ResolvedPath,
-  declared: ReadonlySet<string>,
+  declared: ReadonlySet<string> | undefined,
   env: NodeJS.ProcessEnv,
 ): string | undefined {
   let text: string
@@ -29,7 +29,12 @@ export function loadInstanceConfig(
   }
   const parsed = parseEnv(text)
   for (const [key, value] of Object.entries(parsed)) {
-    if (declared.has(key) && env[key] === undefined && value !== undefined) env[key] = value
+    if (
+      (declared === undefined || declared.has(key)) &&
+      env[key] === undefined &&
+      value !== undefined
+    )
+      env[key] = value
   }
   return resolved.path
 }

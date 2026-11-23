@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The configuration file, hot reload, `theoclaw onboard` and `theoclaw security audit` run on `defineInstanceConfig` from `@theokit/host/instance-config`; `config-file.ts` declares TheoClaw's keys once and the other modules keep only its wording and its settings checks (#2596).
 - Model credentials: custom-provider keys now resolve through the framework chain (`resolveAgentCredential`), and the `openai-chatgpt/` route is detected with `isSubscriptionRoute` (#2576).
 
 ### Changed

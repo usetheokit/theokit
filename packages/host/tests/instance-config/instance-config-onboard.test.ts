@@ -165,3 +165,27 @@ describe('generated key', () => {
     expect(generate).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('onboard only', () => {
+  it('collects only the keys named', async () => {
+    const { mkdtempSync, readFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { PassThrough } = await import('node:stream')
+    const d = mkdtempSync(join(tmpdir(), 'ic-'))
+    const c = defineInstanceConfig({ app: 'demo', keys: { DEMO_A: {}, DEMO_B: {} } })
+    const io = {
+      env: { DEMO_CONFIG: join(d, 'c.env') },
+      homeDir: d,
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+    }
+    const out = await c.onboard(io, {
+      interactive: false,
+      answers: { DEMO_A: 'a' },
+      only: ['DEMO_A'],
+    })
+    expect(out.written).toEqual(['DEMO_A'])
+    expect(readFileSync(out.path, 'utf8')).toBe('DEMO_A="a"\n')
+  })
+})
