@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 import { acquireInstanceLock } from '@theokit/sdk/persistence'
@@ -132,4 +132,17 @@ export async function claimInstance(
     throw error
   }
   return lock
+}
+
+/**
+ * Remove the lock file synchronously, for the `exit` event (which allows no await), but only while
+ * the claim still names this process: a file the SDK's takeover gave to another process stays.
+ */
+export function removeOwnLockSync(lockPath: string): void {
+  try {
+    const claim = JSON.parse(readFileSync(lockPath, 'utf8')) as { pid?: unknown }
+    if (claim.pid === process.pid) rmSync(lockPath, { force: true })
+  } catch {
+    // Absent or unreadable: nothing of this process's to remove.
+  }
 }

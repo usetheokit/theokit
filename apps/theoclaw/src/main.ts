@@ -1,7 +1,6 @@
 import './runtime.js'
 import 'reflect-metadata'
 
-import { rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 
 import { Agent } from '@theokit/sdk'
@@ -18,7 +17,7 @@ import { watchConfiguration } from './ops/hot-reload.js'
 import { RESTART_EXIT_CODE, spawnSuccessor, supervised, waitForPredecessor } from './ops/self-restart.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
-import { claimInstance, resolveInstance, type TheoClawInstance } from './instance.js'
+import { claimInstance, removeOwnLockSync, resolveInstance, type TheoClawInstance } from './instance.js'
 import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
 import { applyProxyEnvironment } from './ops/proxy.js'
 import { readTelemetrySettings, registerTelemetry, type RegisteredTelemetry } from './telemetry/otel.js'
@@ -85,7 +84,7 @@ try {
   // while a backup or a restore runs leaves both as they were. Released when the process exits.
   const lock = await claimInstance(instance, process.env)
   // `exit` allows no await: remove the file synchronously. A lock left by a crash is taken over by the next start.
-  if (lock !== undefined) process.once('exit', () => rmSync(lock.path, { force: true }))
+  if (lock !== undefined) process.once('exit', () => removeOwnLockSync(lock.path))
   // After the instance, so a profile's own state directory is the one read (FR-010, FR-011).
   const mcp = requireImportedMcp(process.env)
   const setup = readImportAtStart(process.env, (line) => process.stderr.write(`${line}\n`))

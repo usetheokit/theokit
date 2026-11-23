@@ -29,7 +29,7 @@ import {
 } from '../src/backup/backup.js'
 import { InstanceLockedError } from '@theokit/sdk/persistence'
 
-import { claimInstance, NO_PROFILE, takeInstanceLock } from '../src/instance.js'
+import { claimInstance, NO_PROFILE, removeOwnLockSync, takeInstanceLock } from '../src/instance.js'
 import { waitFor } from './fakes.js'
 
 const APP_DIR = fileURLToPath(new URL('..', import.meta.url))
@@ -189,6 +189,17 @@ async function race(
 }
 
 describe('the instance lock (FR-010)', () => {
+  it('the exit-time removal deletes a lock this process holds and leaves one taken over by another pid', async () => {
+    const stateDir = join(tempDir(), 'state')
+    const lock = await takeInstanceLock(stateDir)
+    removeOwnLockSync(lock.path)
+    expect(existsSync(lock.path)).toBe(false)
+    writeFileSync(lock.path, JSON.stringify({ pid: await deadPid(), nonce: 'b'.repeat(32) }))
+    removeOwnLockSync(lock.path)
+    expect(existsSync(lock.path)).toBe(true)
+    removeOwnLockSync(join(tempDir(), 'absent.lock'))
+  })
+
   it('a second take of a held lock is refused naming the pid', async () => {
     const stateDir = join(tempDir(), 'state')
     const lock = await takeInstanceLock(stateDir)
