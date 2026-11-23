@@ -20859,6 +20859,14 @@
             "dist/doctor.d.ts#SecretPresence": "type SecretPresence = 'present' | 'absent' | 'unreadable';"
           }
         },
+        "CredentialStateOptions": {
+          "tier": "stable",
+          "declaration": "interface CredentialStateOptions {\n    now?: number;\n    fromEnvironment?: () => boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "Diagnosis": {
           "tier": "stable",
           "declaration": "interface Diagnosis {\n    readonly checks: readonly Check[];\n    readonly failed: number;\n    readonly exitCode: number;\n    readonly repairs?: readonly string[];\n}",
@@ -20953,6 +20961,22 @@
           "references": ["dist/doctor.d.ts#CredentialDefect"],
           "internals": {
             "dist/doctor.d.ts#CredentialDefect": "type CredentialDefect = 'edge_whitespace' | 'inner_whitespace' | 'quote_or_backslash' | 'control_character' | 'placeholder' | 'too_short';"
+          }
+        },
+        "credentialState": {
+          "tier": "stable",
+          "declaration": "declare function credentialState(path: string, options?: CredentialStateOptions): CredentialState;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/doctor.d.ts#CredentialState",
+            "dist/doctor.d.ts#CredentialStateOptions",
+            "dist/doctor.d.ts#SecretPresence"
+          ],
+          "internals": {
+            "dist/doctor.d.ts#CredentialState": "type CredentialState = SecretPresence | 'expired';",
+            "dist/doctor.d.ts#CredentialStateOptions": "interface CredentialStateOptions {\n    now?: number;\n    fromEnvironment?: () => boolean;\n}",
+            "dist/doctor.d.ts#SecretPresence": "type SecretPresence = 'present' | 'absent' | 'unreadable';"
           }
         },
         "describeCredentialDefect": {
@@ -23585,6 +23609,14 @@
           "references": [],
           "internals": {}
         },
+        "InProcessSweeper": {
+          "tier": "stable",
+          "declaration": "interface InProcessSweeper {\n    stop(): Promise<void>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "Liveness": {
           "tier": "stable",
           "declaration": "type Liveness = 'alive' | 'dead' | 'undetermined';",
@@ -24120,6 +24152,16 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "startInProcessSweeper": {
+          "tier": "stable",
+          "declaration": "declare function startInProcessSweeper(intervalMs: number, run: () => void | Promise<void>): InProcessSweeper;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/session.d.ts#InProcessSweeper"],
+          "internals": {
+            "dist/session.d.ts#InProcessSweeper": "interface InProcessSweeper {\n    stop(): Promise<void>;\n}"
+          }
         },
         "streamTurnForkingIfBusy": {
           "tier": "stable",
