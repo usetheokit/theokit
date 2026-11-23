@@ -162,7 +162,7 @@ describe('the commands /help lists', () => {
       throw new Error('the model was reached')
     }
     const handler = createReplyHandler({
-      withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => void adapter.calls.push('release') }),
+      withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => undefined }),
       reset: async () => undefined,
       goal: { tokenBudget: 1, judge: () => never() },
       compact: { run: async () => ({ preTokens: 2, postTokens: 1 }), write: () => undefined },
