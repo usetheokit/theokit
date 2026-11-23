@@ -122,4 +122,12 @@ describe('the record bootstrapSurface returns', () => {
   it('ignores lines with no name or no equals sign', async () => {
     expect((await record('=V\nNO_EQUALS\nGOOD=y\n')).rec.loaded).toEqual(['GOOD'])
   })
+
+  it('pins the framework parser: a non-identifier name is loaded (it can never match a credential varName)', async () => {
+    expect((await record('1BAD=x\nGOOD=y\n')).rec.loaded).toEqual(['1BAD', 'GOOD'])
+  })
+
+  it('pins the framework parser: an unterminated quote does not swallow the lines below it', async () => {
+    expect((await record('A="never closed\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
+  })
 })
