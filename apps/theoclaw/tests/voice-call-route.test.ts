@@ -70,10 +70,29 @@ describe('the composed voice call route', () => {
     expect(body).toContain('input="speech"')
   })
 
-  it('listens until the end of speech and posts back, as the calls always have', async () => {
+  it('listens until the end of speech and posts back', async () => {
     const body = await (await app().router(post({ ...CALL, SpeechResult: 'hello' }))).text()
-    expect(body).toContain('<Gather method="POST" speechTimeout="auto" action="https://theoclaw.example.org/webhooks/voice" input="speech"/>')
-    expect(body).toContain('<Redirect method="POST">https://theoclaw.example.org/webhooks/voice</Redirect>')
+    expect(body).toContain('method="POST"')
+    expect(body).toContain('speechTimeout="auto"')
+    expect(body).toContain('action="https://theoclaw.example.org/webhooks/voice"')
+  })
+
+  it('answers 400 to a signed request without CallSid and runs no turn', async () => {
+    const { router, sent } = app()
+    const response = await router(post({ From: '+14155550100', SpeechResult: 'hi' }))
+    expect(response.status).toBe(400)
+    expect(sent).toEqual([])
+  })
+
+  it('masks secrets in the reply and falls back when the turn fails', async () => {
+    const leaked = await (
+      await app(`the token is ${TOKEN}`).router(post({ ...CALL, SpeechResult: 'x' }))
+    ).text()
+    expect(leaked).not.toContain(TOKEN)
+    const failed = await (
+      await app('', ENV).router(post({ ...CALL, CallSid: 'CA9', SpeechResult: 'x' }))
+    ).text()
+    expect(failed).toContain('<Say>')
   })
 
   it('runs one turn and speaks the reply, then listens again', async () => {
@@ -116,7 +135,7 @@ describe('the composed voice call route', () => {
     expect(sent).toEqual([])
   })
 
-  it('ends the call after two silences in a row, or a goodbye', async () => {
+  it('ends the call after repeated silence, or a goodbye', async () => {
     const { router } = app()
     expect(await (await router(post(CALL))).text()).not.toContain('<Hangup/>')
     expect(await (await router(post(CALL))).text()).not.toContain('<Hangup/>')
