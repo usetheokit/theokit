@@ -152,6 +152,28 @@ describe('readGoalSettings and runGoal', () => {
   })
 })
 
+describe('goal routing', () => {
+  it('matches /goal on the whole trimmed text only', async () => {
+    const run = async (text: string) => {
+      const agent = goalAgent({ status: 'completed', finalResponse: 'done' })
+      const h = harness(agent)
+      await h.send(text)
+      return { agent, replies: h.replies }
+    }
+    const goal = await run('/goal fix it')
+    expect(goal.agent.calls.map((c) => c.goal)).toEqual(['fix it'])
+    const bare = await run(' /goal ')
+    expect(bare.agent.calls).toHaveLength(0)
+    expect(bare.replies).toEqual([GOAL_USAGE_REPLY])
+    const longer = await run('/goals x')
+    expect(longer.agent.calls).toHaveLength(0)
+    expect(longer.replies).toEqual(['an ordinary turn'])
+    const inside = await run('please /goal x')
+    expect(inside.agent.calls).toHaveLength(0)
+    expect(inside.replies).toEqual(['an ordinary turn'])
+  })
+})
+
 describe('/goal through the composed app', () => {
   it("runs the session agent's goal loop with the start's budget and replies once on the channel", async () => {
     const agent = goalAgent({ status: 'completed', finalResponse: 'notes tidied' })
