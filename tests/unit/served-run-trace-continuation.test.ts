@@ -45,7 +45,7 @@ vi.mock('@theokit/agents', () => ({
     agents: {},
     model: 'anthropic/claude-sonnet-4-6',
   }),
-  resolveSkillsSettings: () => undefined,
+  resolveEnabledSkills: () => undefined,
   streamAgentUIMessages: () => scriptedRun(),
 }))
 

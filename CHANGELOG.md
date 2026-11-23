@@ -6,10 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added
-
-- `@theokit/agents/control`: `createControlStreamSource` turns a control client's frames into a TUI stream source with session-bound interrupt and steer.
-
 ## [@theokit/agents 17.4.1, create-theokit 3.3.1, @theokit/host 0.3.1, @theokit/presenter 0.18.1, theokit 0.86.1] - 2026-11-23
 
 Released with no entry under `[Unreleased]`. Per-package detail is in each package's

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { GatewayContext, MessageEvent } from '@theokit/gateway'
 
-import { readCompactSettings } from '../src/channels/compact-command.js'
+import { compactOf, readCompactSettings } from '../src/channels/compact-command.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import type { SessionLease } from '../src/sessions/session-agents.js'
@@ -27,16 +27,10 @@ function harness(env: Record<string, string>, run: (id: string, trigger: string)
 }
 
 describe('/compact', () => {
-  it('matches the whole command only', async () => {
-    const calls: string[] = []
-    const h = harness({}, async (id, trigger) => (calls.push(`${id}:${trigger}`), { preTokens: 2, postTokens: 1 }))
-    await h.send('/compact')
-    expect(calls).toHaveLength(1)
-    await h.send('/compact keep the dates')
-    expect(calls).toHaveLength(2)
-    await h.send('/compacted')
-    expect(calls).toHaveLength(2)
-    expect(h.replies.at(-1)).toBe('hi')
+  it('matches the whole command only', () => {
+    expect(compactOf('/compact')).toBe('')
+    expect(compactOf('/compact keep the dates')).toBe('keep the dates')
+    expect(compactOf('/compacted')).toBeUndefined()
   })
 
   it('compacts the session agent and replies with a summary line', async () => {
@@ -71,19 +65,5 @@ describe('/compact', () => {
     await big.send('hello')
     expect(calls).toEqual(['auto'])
     expect(big.logs[0]).toContain('500 -> 20')
-  })
-
-  it('compacts while the session lease is still held, with the lease agent id', async () => {
-    const order: string[] = []
-    const agent = new FakeAgent({ frames: [assistant('hi'), finished()], result: { status: 'finished', usage: { inputTokens: 500 } } }) as never
-    const handler = createReplyHandler({
-      reset: async () => undefined,
-      withAgent: async <R>(_e: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> =>
-        work({ agent, agentId: 'theoclaw-x-g7', release: () => void order.push('release') }),
-      compact: readCompactSettings({ THEOCLAW_COMPACT_AT: '100' }, () => undefined, async (id) => (order.push(`compact ${id}`), { preTokens: 1, postTokens: 1 })),
-    })
-    const event = messageEvent('telegram', 'hello')
-    await handler(event, { event, reply: async () => ({ ok: true, messageId: 'm' }) })
-    expect(order).toEqual(['compact theoclaw-x-g7', 'release'])
   })
 })

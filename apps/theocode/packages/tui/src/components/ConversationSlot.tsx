@@ -11,7 +11,7 @@ import {
 
 import { abandonQuestion, answerQuestion } from '@theocode/agent/ask'
 import { login } from '@theocode/agent/auth'
-import { commandPalette } from '../commands/index.js'
+import { BUILTIN_COMMANDS } from '../commands/index.js'
 import { submittableSecret } from './secret-buffer.js'
 import { PLACEHOLDER } from '../theme/theme.js'
 import { DemoSurface } from './Demos.js'
@@ -93,7 +93,13 @@ function AgentQuestion({
 function composerCommands(
   custom: ReadonlyMap<string, { name: string; description?: string }>,
 ): readonly ChatComposerCommand[] {
-  return commandPalette(custom)
+  return [
+    ...BUILTIN_COMMANDS,
+    ...[...custom.values()].map((c) => ({
+      name: c.name,
+      description: c.description ?? 'custom command',
+    })),
+  ]
 }
 
 export interface ConversationSlotProps {

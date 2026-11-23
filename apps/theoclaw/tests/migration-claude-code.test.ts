@@ -5,7 +5,8 @@ import { dirname, join, relative } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { copyFixture, readClaudeCodeSetup } from './migration-fixtures.js'
+import { readClaudeCodeSetup } from '../src/migration/claude-code-source.js'
+import { copyFixture } from './migration-fixtures.js'
 
 /** Claude Code's project-directory encoding (`session-transcript.ts:52-53` in the SDK). */
 function encode(path: string): string {
@@ -75,7 +76,7 @@ describe('readClaudeCodeSetup', () => {
       ['shared-skill', 'The project-scope copy of the shared skill', 'project/.claude/skills/shared-skill/SKILL.md'],
       ['user-skill', 'A user-scope fixture skill', 'skills/user-skill/SKILL.md'],
     ])
-    expect(setup.untranslated).toEqual([
+    expect(setup.dropped).toEqual([
       { path: '.claude.json#shared', reason: 'shadowed by the project scope' },
       { path: 'skills/shared-skill/SKILL.md', reason: 'shadowed by the project scope' },
     ])
@@ -135,8 +136,8 @@ describe('readClaudeCodeSetup', () => {
 
     expect(setup.mcpServers.db).toEqual({ command: 'npx', args: ['-y', 'fixture-db-server'], env: { DB_TOKEN: 'fixture-secret-db-token' } })
     expect(setup.skills.find((skill) => skill.name === 'user-skill')?.path).toBe('skills/user-skill/SKILL.md')
-    expect(setup.untranslated).toContainEqual({ path: 'project/.mcp.json#db', reason: 'neither command nor url' })
-    expect(setup.untranslated).toContainEqual({ path: 'project/.claude/skills/user-skill/SKILL.md', reason: 'frontmatter lacks name or description' })
+    expect(setup.dropped).toContainEqual({ path: 'project/.mcp.json#db', reason: 'neither command nor url' })
+    expect(setup.dropped).toContainEqual({ path: 'project/.claude/skills/user-skill/SKILL.md', reason: 'frontmatter lacks name or description' })
   })
 
   it('skips a missing instruction file and keeps the order of the others', () => {
@@ -152,7 +153,7 @@ describe('readClaudeCodeSetup', () => {
     const setup = readClaudeCodeSetup({ home, project })
 
     expect(setup.mcpServers).toEqual({})
-    expect(setup.untranslated).toEqual([
+    expect(setup.dropped).toEqual([
       { path: '.claude.json', reason: 'mcpServers is not an object' },
       { path: 'skills/shared-skill/SKILL.md', reason: 'shadowed by the project scope' },
     ])
@@ -161,7 +162,7 @@ describe('readClaudeCodeSetup', () => {
   it('drops a config file whose top level is not a JSON object', () => {
     writeFileSync(join(project, '.mcp.json'), '[]')
 
-    expect(readClaudeCodeSetup({ home, project }).untranslated).toContainEqual({ path: 'project/.mcp.json', reason: 'not a JSON object' })
+    expect(readClaudeCodeSetup({ home, project }).dropped).toContainEqual({ path: 'project/.mcp.json', reason: 'not a JSON object' })
   })
 
   it('reads no memory for a project with no memory directory, and orders one without MEMORY.md by name', () => {
@@ -180,8 +181,8 @@ describe('readClaudeCodeSetup', () => {
 
     const setup = readClaudeCodeSetup({ home, project })
 
-    expect(setup.untranslated).toContainEqual({ path: 'project/CLAUDE.md', reason: 'file over 262144 bytes' })
-    expect(setup.untranslated).toContainEqual({ path: `projects/${encode(project)}/memory/notes.md`, reason: 'file over 262144 bytes' })
+    expect(setup.dropped).toContainEqual({ path: 'project/CLAUDE.md', reason: 'file over 262144 bytes' })
+    expect(setup.dropped).toContainEqual({ path: `projects/${encode(project)}/memory/notes.md`, reason: 'file over 262144 bytes' })
     expect(setup.memories.map((file) => file.path.split('/').pop())).toEqual(['MEMORY.md', 'ARCH.md'])
   })
 
@@ -191,7 +192,7 @@ describe('readClaudeCodeSetup', () => {
 
     const setup = readClaudeCodeSetup({ home, project })
 
-    expect(setup.untranslated.some((entry) => entry.path === 'project/CLAUDE.md')).toBe(false)
+    expect(setup.dropped.some((entry) => entry.path === 'project/CLAUDE.md')).toBe(false)
   })
 
   it('reads a FIFO named CLAUDE.md as absent without blocking', () => {
@@ -200,13 +201,13 @@ describe('readClaudeCodeSetup', () => {
 
     const setup = readClaudeCodeSetup({ home, project })
 
-    expect(setup.untranslated.some((entry) => entry.path === 'project/CLAUDE.md')).toBe(false)
+    expect(setup.dropped.some((entry) => entry.path === 'project/CLAUDE.md')).toBe(false)
   })
 
   it('drops an oversized CLAUDE.md read through the open descriptor', () => {
     writeFileSync(join(project, 'CLAUDE.md'), 'x'.repeat(262_145))
 
-    expect(readClaudeCodeSetup({ home, project }).untranslated).toContainEqual({ path: 'project/CLAUDE.md', reason: 'file over 262144 bytes' })
+    expect(readClaudeCodeSetup({ home, project }).dropped).toContainEqual({ path: 'project/CLAUDE.md', reason: 'file over 262144 bytes' })
   })
 
   it('keys the memory by the project, not by a repository GIT_DIR points at', () => {
@@ -224,7 +225,7 @@ describe('readClaudeCodeSetup', () => {
 
     const setup = readClaudeCodeSetup({ home, project })
 
-    expect(setup.untranslated).toContainEqual({ path: '.claude.json', reason: 'file over 262144 bytes' })
+    expect(setup.dropped).toContainEqual({ path: '.claude.json', reason: 'file over 262144 bytes' })
     expect(Object.keys(setup.mcpServers)).toEqual(['shared'])
   })
 
@@ -233,7 +234,7 @@ describe('readClaudeCodeSetup', () => {
 
     const setup = readClaudeCodeSetup({ home, project })
 
-    expect(setup.untranslated).toContainEqual({ path: 'project/.mcp.json', reason: 'not valid JSON' })
+    expect(setup.dropped).toContainEqual({ path: 'project/.mcp.json', reason: 'not valid JSON' })
     expect(Object.keys(setup.mcpServers).sort()).toEqual(['db', 'search', 'shared'])
   })
 
@@ -245,9 +246,9 @@ describe('readClaudeCodeSetup', () => {
 
     const setup = readClaudeCodeSetup({ home, project })
 
-    expect(setup.untranslated).toContainEqual({ path: 'project/.mcp.json#slow.timeout', reason: 'field not carried' })
-    expect(setup.untranslated).toContainEqual({ path: 'project/.mcp.json#broken', reason: 'env value is not a string, number or boolean' })
-    expect(JSON.stringify(setup.untranslated)).not.toContain('hidden-value')
+    expect(setup.dropped).toContainEqual({ path: 'project/.mcp.json#slow.timeout', reason: 'field not carried' })
+    expect(setup.dropped).toContainEqual({ path: 'project/.mcp.json#broken', reason: 'env value is not a string, number or boolean' })
+    expect(JSON.stringify(setup.dropped)).not.toContain('hidden-value')
     expect(setup.mcpServers.slow).toEqual({ command: 'x' })
   })
 

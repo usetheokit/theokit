@@ -1,9 +1,4 @@
-import {
-  CredentialNotFoundError,
-  isSubscriptionRoute,
-  resolveAgentCredential,
-  type CredentialProviderDescriptor as ProviderDescriptor,
-} from '@theokit/agents/auth'
+import { isSubscriptionRoute, resolveAgentCredential } from '@theokit/agents/auth'
 
 import { parseThinkingLevel } from '../agent/create-agent.js'
 import { customProviderOf, parseCustomProviders } from '../agent/custom-providers.js'
@@ -25,12 +20,6 @@ export interface ControlPlaneSettings {
 
 const KEYLESS_MODEL_KEY = 'local'
 
-/** The default route's keys, in order; any key shape, as before (no `keyPrefix`). */
-const DEFAULT_KEY_PROVIDERS: readonly ProviderDescriptor[] = [
-  { name: 'theokit', envKey: 'THEOKIT_API_KEY', priority: 0, custom: true },
-  { name: 'openrouter', envKey: 'OPENROUTER_API_KEY', priority: 1, custom: true },
-]
-
 function nonBlank(value: string | undefined): string | undefined {
   const trimmed = value?.trim()
   return trimmed === undefined || trimmed === '' ? undefined : trimmed
@@ -41,21 +30,7 @@ function nonBlank(value: string | undefined): string | undefined {
  * unset. The one place the precedence lives, read by the settings and by the agent factory (plan D4).
  */
 export function resolveModelKey(env: BindEnvironment): string | undefined {
-  try {
-    // No `home`/`store`: TheoClaw does not read the credentials file. No `model`: the key never
-    // depends on a prefix. The pin variable is one nobody sets, so a stray THEOKIT_PROVIDER is inert.
-    return resolveAgentCredential({
-      env: {
-        THEOKIT_API_KEY: nonBlank(env.THEOKIT_API_KEY),
-        OPENROUTER_API_KEY: nonBlank(env.OPENROUTER_API_KEY),
-      },
-      providers: DEFAULT_KEY_PROVIDERS,
-      declaredProviderEnvVar: 'THEOCLAW_NO_PROVIDER_PIN',
-    }).apiKey
-  } catch (error) {
-    if (error instanceof CredentialNotFoundError) return undefined
-    throw error
-  }
+  return nonBlank(env.THEOKIT_API_KEY) ?? nonBlank(env.OPENROUTER_API_KEY)
 }
 
 /**

@@ -18,7 +18,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ScreenState } from '../../src/rendering/index.js'
-import { SENTINEL } from '../../src/backtrack/backtrack.js'
+import { SENTINEL } from '../../src/backtrack/backtrack-select.js'
 import { routeKey, type KeyPress } from '../../src/terminal-io/input-router.js'
 import { keyboardState, type KeyboardDeps } from '../../src/terminal-io/use-tui-keyboard.js'
 

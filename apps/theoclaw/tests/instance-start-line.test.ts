@@ -54,7 +54,7 @@ describe('the instance start line', () => {
     const home = mkdtempSync(join(tmpdir(), 'theoclaw-start-line-'))
     homes.push(home)
     const instance = resolveInstance({ THEOCLAW_PROFILE: name }, { homeDir: home })
-    await applyInstance(instance, {})
+    applyInstance(instance, {})
     const profiled = await start(instance)
     expect(profiled.firstLine).toBe(
       `theoclaw-${name}: instance started, profile directory ${home}/.theokit/profiles/${name}`,

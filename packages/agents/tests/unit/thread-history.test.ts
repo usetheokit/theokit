@@ -29,7 +29,7 @@ import { join } from 'node:path'
 import { transcriptPath } from '@theokit/sdk/persistence'
 import { describe, expect, it } from 'vitest'
 
-import { readThreadHistory, readThreadHistoryFile } from '../../src/session/thread-history.js'
+import { readThreadHistory } from '../../src/session/thread-history.js'
 
 function projectRoot(): string {
   return mkdtempSync(join(tmpdir(), 'theo-thread-history-'))
@@ -94,19 +94,5 @@ describe('a transcript that cannot be read is NOT absent', () => {
     // A permission error is not an absence either. Folding it in is how an operator loses a
     // conversation and is told nothing at all.
     expect(history.state).toBe('unreadable')
-  })
-})
-
-describe('readThreadHistoryFile', () => {
-  it('reads by path, strict by default and tolerant on request', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'rthf-'))
-    const file = join(dir, 'any-name.jsonl')
-    writeFileSync(file, '{"a":1}\nnot json\n[2]\n{"b":2}\n')
-    expect(readThreadHistoryFile(file).state).toBe('unreadable')
-    expect(readThreadHistoryFile(file, { skipMalformed: true })).toEqual({
-      state: 'present',
-      messages: [{ a: 1 }, { b: 2 }],
-    })
-    expect(readThreadHistoryFile(join(dir, 'missing.jsonl')).state).toBe('absent')
   })
 })

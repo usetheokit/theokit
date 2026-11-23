@@ -105,58 +105,33 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     // installs, so this assertion was pinning the resolution that made the whole suite green
     // against an SDK the packages could not use.
     //
-    // The devDep now spans the range the packages declare, `>=5.32.0 <14`: dep-check's floor leg
+    // The devDep now spans the range the packages declare, `>=5.32.0 <12`: dep-check's floor leg
     // overrides the tree to 5.32.0 and runs this suite there, and a `^9` devDep refused that floor.
     const root = readPkg('package.json')
     const dev = root.devDependencies as Record<string, string>
-    expect(dev['@theokit/sdk']).toBe('>=5.32.0 <14')
+    expect(dev['@theokit/sdk']).toBe('>=5.32.0 <12')
   })
 
-  it('test_the_four_published_packages_declare_the_sdk_5_to_12_range', () => {
+  it('test_the_four_published_packages_declare_the_sdk_5_to_11_range', () => {
     const floors: Record<string, string> = {
-      'packages/theo/package.json': '>=5.32.0 <14',
-      'packages/host/package.json': '>=5.32.0 <14',
-      'packages/presenter/package.json': '>=5.3.0 <14',
+      'packages/theo/package.json': '>=5.32.0 <12',
+      'packages/host/package.json': '>=5.32.0 <12',
+      'packages/presenter/package.json': '>=5.3.0 <12',
     }
     for (const [manifest, expected] of Object.entries(floors)) {
       const peers = readPkg(manifest).peerDependencies as Record<string, string>
       expect(peers['@theokit/sdk'], manifest).toBe(expected)
     }
     const agents = readPkg('packages/agents/package.json').dependencies as Record<string, string>
-    expect(agents['@theokit/sdk']).toBe('>=5.32.0 <14')
+    expect(agents['@theokit/sdk']).toBe('>=5.32.0 <12')
     const root = readPkg('package.json') as { pnpm: { overrides: Record<string, string> } }
-    // The tree runs on SDK 12 (the matrix legs set 9 and 10); dep-check's floor leg rewrites the override to the declared floor,
+    // The tree runs on SDK 9 (the matrix legs set 10 and 11); dep-check's floor leg rewrites the override to the declared floor,
     // 5.32.0, and runs this same suite there. Any other version is neither end of the range.
     const override = root.pnpm.overrides['@theokit/sdk'] ?? ''
     expect(
-      override === '5.32.0' || /^(9|10|11|12|13)\./.test(override),
-      `the root override installs @theokit/sdk ${override}, none of the 9.x to 13.x tops nor the 5.32.0 floor`,
+      override === '5.32.0' || /^(9|10|11)\./.test(override),
+      `the root override installs @theokit/sdk ${override}, none of the 9.x to 11.x tops nor the 5.32.0 floor`,
     ).toBe(true)
-  })
-
-  it('test_the_apps_pin_sdk_11_or_newer', () => {
-    for (const manifest of ['apps/theocode/package.json', 'apps/theoclaw/package.json']) {
-      const pkg = readPkg(manifest)
-      const deps = {
-        ...(pkg.dependencies as object),
-        ...(pkg.devDependencies as object),
-      } as Record<string, string>
-      const major = Number((deps['@theokit/sdk'] ?? '').split('.')[0])
-      expect(major, `${manifest} pins @theokit/sdk ${deps['@theokit/sdk']}`).toBeGreaterThanOrEqual(
-        11,
-      )
-    }
-  })
-
-  it('test_floor_installs_tolerate_the_version_specific_sdk_patch', () => {
-    // dep-check installs other @theokit/sdk versions; an unused patch must not abort them
-    // (ERR_PNPM_UNUSED_PATCH) while the normal pin keeps its patch.
-    const ws = readFileSync(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')
-    expect(ws).toMatch(/^allowUnusedPatches:\s*true\s*$/m)
-    const patched = (
-      readPkg('package.json').pnpm as { patchedDependencies: Record<string, string> }
-    ).patchedDependencies
-    expect(patched['@theokit/sdk@13.0.0']).toBe('patches/@theokit__sdk@13.0.0.patch')
   })
 
   it('test_isClosed_rejects_the_open_shapes', () => {

@@ -4,39 +4,160 @@
 // (esbuild ESM). ESM is mandatory — a CJS bundle breaks `import.meta.url` (SDK persistence → "path
 // undefined"). The one native runtime dep, node-pty, is EXTERNAL (loaded via createRequire, esbuild does
 // not follow it) and only touched by run/resume's interactive_shell — goal/review never need it.
+import { chmodSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// The esbuild settings (ESM, externals, Ink devtools stub, React pinned to production, createRequire
-// banner) and the reasons for each live in create-theokit, shared with the scaffolded TUI's build:bin.
-import {
-  buildInkCli,
-  inkCliBundleOptions,
-  isReactRuntimeFile,
-  pinReactToProduction,
-} from 'create-theokit/tools/build-ink-cli.mjs'
-
-export { isReactRuntimeFile, pinReactToProduction }
+import { build } from 'esbuild'
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** The esbuild configuration, as a value: TheoCode's entry and output over the shared settings. */
-export function bundleOptions(root = REPO_ROOT) {
-  return inkCliBundleOptions({
-    entry: join(root, 'packages', 'cli', 'src', 'main.ts'),
-    outfile: join(root, 'dist', 'theocode.mjs'),
-  })
+/**
+ * Resolves Ink's optional devtools client to an empty module.
+ *
+ * `react-devtools-core` is a peer Ink declares `optional: true`, and it is not installed here.
+ * Ink guards it correctly at runtime — `reconciler.js` probes with `import.meta.resolve` and only
+ * then `await import('./devtools.js')`. What defeats that guard is bundling: esbuild follows the
+ * dynamic import, pulls `devtools.js` in, and its STATIC `import devtools from
+ * 'react-devtools-core'` is hoisted to the top of the bundle, where Node resolves it on load.
+ *
+ * Marking it external was tried first and is wrong for the same reason: esbuild says plainly that
+ * it "leaves the unresolved path in the bundle", so the binary died on startup with
+ * ERR_MODULE_NOT_FOUND. The comment justifying it claimed the import sat on a branch production
+ * never takes — measured false by running it.
+ *
+ * An empty module is the honest substitute: the probe above it fails either way, so the code that
+ * would touch these exports never runs, and nothing ships a devtools client in a released CLI.
+ */
+const devtoolsStub = {
+  name: 'ink-devtools-stub',
+  setup(build) {
+    build.onResolve({ filter: /^react-devtools-core$/ }, () => ({
+      path: 'react-devtools-core',
+      namespace: 'ink-devtools-stub',
+    }))
+    build.onLoad({ filter: /.*/, namespace: 'ink-devtools-stub' }, () => ({
+      contents: 'export default {}\nexport const connectToDevTools = () => {}\n',
+      loader: 'js',
+    }))
+  },
 }
 
 /**
- * Builds the bundle. Nothing is copied beside it: the SDK imports its provider catalog with
- * `with { type: "json" }`, so a bundler inlines it and there is no file to place (2026-09-28).
+ * #964: React's runtime packages, which pick their development or production build from
+ * `process.env.NODE_ENV` when they load.
+ *
+ * Nothing sets NODE_ENV when a user runs this CLI, so the bundle carried React's DEVELOPMENT build:
+ * a CPU profile of a long streamed reply showed `runWithFiberInDEV`, `logComponentRender` with
+ * `performance.measure`, and a `structuredClone` on every render. Those renders run in microtasks,
+ * so the TUI stopped reading stdin until the reply ended and Esc could not interrupt it.
+ *
+ * A global `define` is the usual fix and the wrong one here: it would also flip theokit's own
+ * NODE_ENV checks, some of which refuse development defaults in production.
+ */
+const REACT_RUNTIME = /[\\/]node_modules[\\/](?:react|react-dom|react-reconciler|scheduler)[\\/]/
+
+export function isReactRuntimeFile(path) {
+  return REACT_RUNTIME.test(path)
+}
+
+export function pinReactToProduction(source) {
+  return source.replaceAll('process.env.NODE_ENV', "'production'")
+}
+
+const reactProduction = {
+  name: 'react-production',
+  setup(build) {
+    build.onLoad({ filter: /\.js$/ }, async (args) => {
+      if (!isReactRuntimeFile(args.path)) return undefined
+      return {
+        contents: pinReactToProduction(await readFile(args.path, 'utf8')),
+        loader: 'js',
+        resolveDir: dirname(args.path),
+      }
+    })
+  },
+}
+
+/**
+ * The esbuild configuration, as a value.
+ *
+ * Separated from the build 2026-09-10. Everything here used to run at module top level, so the
+ * file could not be imported without building — which is why the script that produces the artifact
+ * `package.json:bin` points at shipped with no test. Every option below is a decision this
+ * repository has already paid for once, and each of those failures was SILENT: the bundle built,
+ * exited 0, and misbehaved at runtime. A config that can be read is a config that can be asserted.
+ */
+export function bundleOptions(root = REPO_ROOT) {
+  return {
+    entryPoints: [join(root, 'packages', 'cli', 'src', 'main.ts')],
+    outfile: join(root, 'dist', 'theocode.mjs'),
+    bundle: true,
+    platform: 'node',
+    // ESM is mandatory — a CJS bundle breaks `import.meta.url`, and the SDK resolves its
+    // persistence paths from it (symptom: "path undefined", not a build error).
+    format: 'esm',
+    target: 'node22',
+    // Native / optional deps stay external: node-pty (loaded via createRequire, not bundlable),
+    // better-sqlite3 (optional; the SDK falls back to the built-in node:sqlite), and any raw
+    // `.node` addon.
+    // `proper-lockfile` is here for a DIFFERENT reason than the native ones, and that reason is
+    // worth writing down: it is CJS and calls `require('path')` at load time. Inlined into an ESM
+    // bundle, that `require` becomes esbuild's shim, which throws `Dynamic require of "path" is not
+    // supported` — and the SDK, which loads the package with `await import()` inside a try, falls
+    // into the failure branch and CARRIES ON WITHOUT a cross-process lock. Measured 2026-08-05: the
+    // bundle warned `could not be loaded` while the same turn under `tsx` warned nothing at all. We
+    // run the TUI, exec and ACP over the same sessions directory, so a lock that is silently off is
+    // a race, not a detail.
+    //
+    // `readline/promises` is a Node builtin that the SDK's `dist` imports without the `node:` scheme
+    // (usetheokit/theokit-sdk#960), and esbuild does not resolve that bare name as a builtin, so the
+    // bundle failed to build. Node resolves it at runtime. Remove it once the SDK keeps the scheme.
+    external: ['node-pty', 'better-sqlite3', 'proper-lockfile', '*.node', 'readline/promises'],
+    // Ink's optional devtools client, resolved to an empty module — see `devtoolsStub` above
+    // for why `external` does not work here.
+    plugins: [devtoolsStub, reactProduction],
+    // A shebang makes the artifact directly executable (`./dist/theocode.mjs`); chmod below sets
+    // the exec bit.
+    //
+    // The `createRequire` line below it is what lets a bundled CJS dependency call `require` at load
+    // time. esbuild rewrites such calls to its own `__require` shim, whose body reads
+    // `typeof require !== "undefined" ? require.apply(...) : throw`, so defining `require` here is
+    // the documented way to satisfy it — an ESM module has none otherwise.
+    //
+    // Measured, not anticipated: bundling the TUI pulled in `signal-exit@3.0.7` (a dependency of
+    // Ink), which does `assert = require("assert")` in its module body. The binary built clean and
+    // died on startup with `Dynamic require of "assert" is not supported`. This is the same failure
+    // shape the `proper-lockfile` note above records, and the reason that one is external.
+    banner: {
+      js: [
+        '#!/usr/bin/env node',
+        "import { createRequire as __nodeCreateRequire } from 'node:module'",
+        'const require = __nodeCreateRequire(import.meta.url)',
+      ].join('\n'),
+    },
+    logLevel: 'warning',
+  }
+}
+
+/**
+ * Builds the bundle. Nothing is copied beside it, and that is a change rather than an omission.
+ *
+ * Until 2026-09-28 this copied `provider-catalog.json` out of the SDK's dist, because the SDK read it
+ * via `import.meta.url` — next to the RUNNING file — and without it auto-compaction was silently
+ * disabled in every model mode. The SDK now imports that catalog with `with { type: "json" }`, so a
+ * bundler inlines it: there is no file to place beside anything, and it can no longer be missing.
+ *
+ * It stopped being true LOUDLY. The SDK stopped shipping the file, `copyFileSync` raised ENOENT, and
+ * `pnpm build` at the repository root exited 1 — a dependency's green suite had measured "nothing
+ * reads it there" against its own tree, and this was the reader outside it.
  */
 export async function buildCli(root = REPO_ROOT) {
-  return buildInkCli({
-    entry: join(root, 'packages', 'cli', 'src', 'main.ts'),
-    outfile: join(root, 'dist', 'theocode.mjs'),
-  })
+  const options = bundleOptions(root)
+  await build(options)
+  chmodSync(options.outfile, 0o755)
+  return options.outfile
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

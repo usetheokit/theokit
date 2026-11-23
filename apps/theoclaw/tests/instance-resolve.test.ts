@@ -74,9 +74,7 @@ describe('resolveInstance', () => {
   it('refuses a profile name outside the pattern without printing it', () => {
     for (const name of ['../x', '/abs', 'A', 'a_b', '-a', 'a'.repeat(17)]) {
       const error = refusal({ THEOCLAW_PROFILE: name })
-      expect(error.message).toBe(
-        'THEOCLAW_PROFILE must be 1 to 16 lowercase letters, digits or hyphens, starting with a letter or digit',
-      )
+      expect(error.message).toBe('THEOCLAW_PROFILE must match ^[a-z0-9][a-z0-9-]{0,15}$')
       expect(error.variable).toBe('THEOCLAW_PROFILE')
     }
     expect(resolveInstance({ THEOCLAW_PROFILE: 'a'.repeat(16) }, { homeDir: HOME }).label).toBe(`theoclaw-${'a'.repeat(16)}`)
@@ -100,7 +98,7 @@ describe('resolveInstance', () => {
   })
 
   it('reports the name before a conflict', () => {
-    expect(refusal({ THEOCLAW_PROFILE: '../x', THEOKIT_HOME: '/x' }).message).toContain('must be 1 to 16')
+    expect(refusal({ THEOCLAW_PROFILE: '../x', THEOKIT_HOME: '/x' }).message).toContain('must match')
   })
 
   it('resolves a padded profile name to its trimmed form', () => {

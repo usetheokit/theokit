@@ -72,17 +72,3 @@ describe('M13 — defineAgent({ skills })', () => {
   // at compile time — the compile module stays free of a runtime SDK dependency. See
   // tests/integration/skill-read-autowire.test.ts.
 })
-
-describe('defineAgent({ skills: SkillsSettings })', () => {
-  it('compiles a static settings object to compiled.skills unchanged', () => {
-    const settings = { bundledDirs: ['/s'], skillsDir: '/s', inline: [] }
-    const compiled = compileAgentDefinition(defineAgent({ model: 'm', skills: settings }))
-    expect(compiled.skills).toBe(settings)
-    expect(compiled.skillsResolver).toBeUndefined()
-  })
-
-  it('keeps an array compiling to enabled + inline', () => {
-    const compiled = compileAgentDefinition(defineAgent({ model: 'm', skills: ['a'] }))
-    expect(compiled.skills).toEqual({ enabled: ['a'], autoInject: true })
-  })
-})

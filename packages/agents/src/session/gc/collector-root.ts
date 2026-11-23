@@ -50,89 +50,44 @@ export class CollectorRootNotOwnedError extends TheokitAgentError {
   }
 }
 
-/** Reported as the owner of a marker file the caller's format could not interpret. */
-const UNRECOGNISED_MARKER = '(unrecognised marker)'
-
-/**
- * A marker another app already wrote, under its own file name and schema. The file sits beside
- * `projects/` like the standard one. `ownerOf` receives the parsed JSON and returns the owning app's
- * name, or `undefined` when the content is not a marker it understands (a future version, a foreign
- * schema): that is refused as ambiguous, never read as "unowned".
- */
-export interface CollectorRootMarkerFormat {
-  readonly fileName: string
-  readonly ownerOf: (parsed: unknown) => string | undefined
-}
-
-/** Options for reading or claiming a root that may carry a marker in another format. */
-export interface CollectorRootOptions {
-  /** Consulted when the standard marker is absent. The standard marker wins when both exist. */
-  readonly existingMarker?: CollectorRootMarkerFormat
-}
-
-function markerPathOf(projectsRoot: string, fileName: string = COLLECTOR_ROOT_MARKER): string {
-  return join(dirname(projectsRoot), fileName)
-}
-
-function readMarkerText(path: string): string | undefined {
-  try {
-    return readFileSync(path, 'utf8')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-    throw new CollectorRootError(path, 'read', error)
-  }
+function markerPathOf(projectsRoot: string): string {
+  return join(dirname(projectsRoot), COLLECTOR_ROOT_MARKER)
 }
 
 /**
  * The app that owns the root, or `undefined` when there is no marker or it is malformed (a malformed
- * marker authorises nothing). With `options.existingMarker`, a marker under that file name is read
- * when the standard one is absent; a file there the format does not recognise is reported as owned
- * by the sentinel app `"(unrecognised marker)"`, so it can never match a caller and never be claimed.
+ * marker authorises nothing).
  *
  * @throws {CollectorRootError} when the marker exists but cannot be read.
  */
-export function collectorRootOwner(
-  projectsRoot: string,
-  options: CollectorRootOptions = {},
-): { app: string } | undefined {
-  const text = readMarkerText(markerPathOf(projectsRoot))
-  if (text !== undefined) {
-    try {
-      const parsed = JSON.parse(text) as { app?: unknown; version?: unknown } | null
-      if (parsed !== null && typeof parsed.app === 'string' && parsed.app.length > 0) {
-        return { app: parsed.app }
-      }
-    } catch {
-      // malformed: authorises nothing, so the caller's existing marker (if any) is still consulted
-    }
-  }
-  const format = options.existingMarker
-  if (format === undefined) return undefined
-  const legacy = readMarkerText(markerPathOf(projectsRoot, format.fileName))
-  if (legacy === undefined) return undefined
-  let owner: string | undefined
+export function collectorRootOwner(projectsRoot: string): { app: string } | undefined {
+  const path = markerPathOf(projectsRoot)
+  let text: string
   try {
-    owner = format.ownerOf(JSON.parse(legacy) as unknown)
-  } catch {
-    owner = undefined
+    text = readFileSync(path, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw new CollectorRootError(path, 'read', error)
   }
-  return { app: owner !== undefined && owner.length > 0 ? owner : UNRECOGNISED_MARKER }
+  try {
+    const parsed = JSON.parse(text) as { app?: unknown; version?: unknown } | null
+    if (parsed !== null && typeof parsed.app === 'string' && parsed.app.length > 0) {
+      return { app: parsed.app }
+    }
+  } catch {
+    // malformed: treated as unowned
+  }
+  return undefined
 }
 
 /**
- * Claim the root for `owner`. Idempotent for the same app; never replaces another app's marker. With
- * `options.existingMarker`, a marker already written in that format counts as the owner's claim and
- * is left as it is; nothing new is written beside it.
+ * Claim the root for `owner`. Idempotent for the same app; never replaces another app's marker.
  *
- * @throws {CollectorRootNotOwnedError} when another app already owns the root, or a marker exists that cannot be interpreted.
+ * @throws {CollectorRootNotOwnedError} when another app already owns the root.
  * @throws {CollectorRootError} when the marker cannot be read or written.
  */
-export function claimCollectorRoot(
-  projectsRoot: string,
-  owner: { app: string },
-  options: CollectorRootOptions = {},
-): void {
-  const existing = collectorRootOwner(projectsRoot, options)
+export function claimCollectorRoot(projectsRoot: string, owner: { app: string }): void {
+  const existing = collectorRootOwner(projectsRoot)
   if (existing !== undefined) {
     if (existing.app === owner.app) return
     throw new CollectorRootNotOwnedError(projectsRoot, owner.app, existing.app)

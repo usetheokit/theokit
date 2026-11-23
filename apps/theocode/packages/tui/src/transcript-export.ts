@@ -12,26 +12,50 @@
  * were built from the same wrong assumption. Live validation is what caught it.
  */
 import { AGENT } from '@theocode/shared/agent'
-import {
-  agentEventsToMarkdown,
-  lastAssistantText as frameworkLastAssistantText,
-  type AgentEvent,
-} from '@theokit/tui'
+
+/** The timeline events that carry conversation text. */
+export interface ExportableMessage {
+  readonly kind: 'message'
+  readonly role: string
+  readonly text: string
+}
+
+/**
+ * The timeline is heterogeneous — thinking, tool and explored events sit alongside messages, and
+ * only messages carry a role. Narrowing here lets callers pass the real `AgentEvent[]`.
+ */
+function isExportableMessage(event: unknown): event is ExportableMessage {
+  if (typeof event !== 'object' || event === null) return false
+  const candidate = event as { kind?: unknown; role?: unknown; text?: unknown }
+  return (
+    candidate.kind === 'message' &&
+    typeof candidate.role === 'string' &&
+    typeof candidate.text === 'string'
+  )
+}
+
+const ROLE_HEADINGS: Readonly<Record<string, string>> = {
+  user: 'You',
+  assistant: AGENT.name,
+  system: 'System',
+}
+
+/** The heading for a role, falling back to the role itself rather than dropping an unknown one. */
+function headingFor(role: string): string {
+  return ROLE_HEADINGS[role] ?? role
+}
 
 /**
  * The conversation as Markdown. Empty in, empty out — so the caller can say "nothing to export"
- * rather than write a file with a heading and nothing under it. The framework skips every event
- * that is not a message, so the heterogeneous timeline can be passed as it is.
+ * rather than write a file with a heading and nothing under it.
  */
 export function conversationToMarkdown(events: readonly unknown[]): string {
-  return agentEventsToMarkdown(events as readonly AgentEvent[], {
-    roleHeadings: { assistant: AGENT.name },
-  })
-}
-
-function isAssistantMessage(e: unknown): boolean {
-  const o = e as { kind?: unknown; role?: unknown } | null
-  return o?.kind === 'message' && o.role === 'assistant'
+  const blocks: string[] = []
+  for (const message of events.filter(isExportableMessage)) {
+    if (message.text.length === 0) continue
+    blocks.push(`## ${headingFor(message.role)}\n\n${message.text}`)
+  }
+  return blocks.join('\n\n')
 }
 
 /**
@@ -39,10 +63,11 @@ function isAssistantMessage(e: unknown): boolean {
  * can report "nothing to copy" instead of putting a blank on the clipboard and claiming success.
  */
 export function lastAssistantText(events: readonly unknown[]): string | undefined {
-  // The framework returns the last assistant message even when its text is empty; skip those so
-  // the caller gets the previous real reply (or undefined) rather than a blank to copy.
-  const spoken = events.filter(
-    (e) => !(isAssistantMessage(e) && (e as { text?: unknown }).text === ''),
-  )
-  return frameworkLastAssistantText(spoken as readonly AgentEvent[])
+  const messages = events.filter(isExportableMessage)
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (message === undefined || message.role !== 'assistant') continue
+    if (message.text.length > 0) return message.text
+  }
+  return undefined
 }

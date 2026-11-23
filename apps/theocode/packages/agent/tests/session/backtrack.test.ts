@@ -16,7 +16,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 import { JsonlParseError, transcriptPath } from '@theokit/agents/persistence'
-import { sessionPointerPath } from '@theokit/agents/session'
 import { GOAL_CONTINUATION_MARKER } from '@theokit/sdk'
 import { LiveTranscriptError } from '@theokit/sdk/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -116,8 +115,8 @@ describe('fork before a user turn (framework forkBeforeUserTurn)', () => {
 
   it('refuses a destination the TUI pointer names, before writing anything', async () => {
     writeTranscript('src', [userTurn('first'), userTurn('second')])
-    mkdirSync(dirname(sessionPointerPath(cwd, base)), { recursive: true })
-    writeFileSync(sessionPointerPath(cwd, base), 'tui-live\n')
+    mkdirSync(join(cwd, '.theokit'), { recursive: true })
+    writeFileSync(join(cwd, '.theokit', 'tui-session'), 'tui-live\n')
 
     await expect(
       forkSessionBeforeUserTurn('src', 'tui-live', 1, { cwd, baseDir: base }),

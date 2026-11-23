@@ -1,11 +1,10 @@
-import type { GatewayHook, HookDecision, MessageEvent, PairingStore, PlatformName } from '@theokit/gateway'
+import type { GatewayHook, HookDecision, MessageEvent, PlatformName } from '@theokit/gateway'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createOwnerPolicyHook } from '../src/authorization/owner-policy-hook.js'
+import type { ApprovalResult, PairingStore } from '../src/authorization/pairing-store.js'
 import type { AuthorizationPolicy, DmPolicy } from '../src/authorization/policy.js'
 import { messageEvent } from './fakes.js'
-
-type ApprovalResult = Awaited<ReturnType<PairingStore['approve']>>
 
 // The decisions of the owner policy hook, called directly with in-memory collaborators: no gateway
 // runner, no store on disk, no timer. The runner-level layer is authorization-hook.test.ts.
@@ -340,10 +339,10 @@ describe('owner policy hook: a failure is a silent block', () => {
     expect(lines[0]).not.toContain('stranger')
   })
 
-  it("lets an owner's DM through when isPaired throws: the owner is known before the store is read", async () => {
+  it("blocks an owner's DM silently when isPaired throws, as the store is read before the owner is let through", async () => {
     const { hook, lines } = harness({ pairing: fakeStore({ isPairedThrows: true }) })
-    expect(await decide(hook, messageEvent('telegram', 'hi', OWNER_ID))).toBeUndefined()
-    expect(lines).toHaveLength(0)
+    expect(await decide(hook, messageEvent('telegram', 'hi', OWNER_ID))).toEqual({ block: true })
+    expect(lines).toHaveLength(1)
   })
 
   it("blocks an owner's /approve silently when the store's approve() rejects", async () => {
@@ -371,7 +370,9 @@ describe('owner policy hook: a failure is a silent block', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     try {
       expect(await decide(hook, messageEvent('telegram', 'hi', 'stranger'))).toEqual({ block: true })
-      expect(stderr).toHaveBeenCalledWith('theoclaw-owner-policy: telegram: the hook failed and its log line could not be written\n')
+      expect(stderr).toHaveBeenCalledWith(
+        'theoclaw-owner-policy: telegram: the hook failed and its log line could not be written\n',
+      )
     } finally {
       stderr.mockRestore()
     }

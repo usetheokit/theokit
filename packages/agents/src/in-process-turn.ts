@@ -30,7 +30,7 @@ import {
 } from './bridge/agent-endpoint.js'
 import type { ApprovalPosture } from './bridge/approval-posture.js'
 import type { HitlDecision } from './bridge/hitl-plugin.js'
-import { resolveSkillsSettings } from './skills-resolver.js'
+import { resolveEnabledSkills } from './skills-resolver.js'
 import type { HumanInTheLoopOptions } from './types.js'
 
 /** An inline approval request handed to the caller's `awaitApproval` (the Ink/Tauri prompt). */
@@ -242,11 +242,8 @@ export function streamAgentTurnInProcess(
   // skill list leaves `skillsResolver` undefined and this is a no-op.
   return (async function* () {
     if (compiled.skillsResolver) {
-      const settings = await resolveSkillsSettings(
-        compiled.skillsResolver,
-        compiled.runContext ?? {},
-      )
-      if (settings !== undefined) compiled.skills = settings
+      const enabled = await resolveEnabledSkills(compiled.skillsResolver, compiled.runContext ?? {})
+      if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
     }
     yield* deps.stream(compiled, apiKey, {
       message: input.message,

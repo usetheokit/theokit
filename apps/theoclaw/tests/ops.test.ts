@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
-import { teeOutput } from '@theokit/host'
+import { teeToLogFile } from '../src/ops/log-tee.js'
 import { spawn } from 'node:child_process'
 
 import { isSupervised, RESTART_AFTER_PID_VARIABLE, waitForPredecessor } from '@theokit/host/service'
@@ -222,14 +222,8 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
     const log = join(h.io.homeDir, 'state', 'theoclaw.log')
     const stream = { write: (_chunk: string): boolean => true }
-    const restore = teeOutput({
-      file: log,
-      streams: [stream as unknown as NodeJS.WriteStream],
-      maxBytes: 1024 * 1024,
-      keep: 1,
-    })
+    teeToLogFile({ THEOCLAW_LOG_FILE: log }, [stream])
     stream.write(`started\nkey ${KEY} leaked\n`)
-    restore()
     Object.assign(h.io.env, { THEOCLAW_LOG_FILE: log })
     h.useRunner(() => Promise.reject(new Error('journalctl must not run')))
     expect(await runCli(['logs', '--lines', '5'], h.io)).toBe(0)

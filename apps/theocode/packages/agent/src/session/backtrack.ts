@@ -16,8 +16,8 @@ export interface ForkBeforeResult {
 /**
  * Fork `srcId` into `newId`, keeping everything before the `nth` real user turn (0-based, as the
  * backtrack UI counts). The turn rule, the torn-last-line tolerance and the copy are the framework's
- * `forkBeforeUserTurn`; what stays here is TheoCode's own guard — a destination the
- * framework's `last-session` pointer names is refused first, reading it fail-closed (#1905).
+ * `forkBeforeUserTurn`; what stays here is TheoCode's own guard — the framework does not know the
+ * TUI pointer `<cwd>/.theokit/tui-session`, so a destination it names is refused first (#1905).
  */
 export async function forkSessionBeforeUserTurn(
   srcId: string,

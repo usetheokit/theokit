@@ -239,12 +239,11 @@ describe('the declared SDK range delivers the parity the package advertises', ()
   })
 
   it('reads a bounded range with its floor and its ceiling, both ways', () => {
-    expect(admits('>=5.3.0 <14', '5.32.0')).toBe(true)
-    expect(admits('>=5.3.0 <14', '9.1.0')).toBe(true)
-    expect(admits('>=5.3.0 <14', '12.0.0')).toBe(true)
-    expect(admits('>=5.3.0 <14', '13.0.0')).toBe(true)
-    expect(admits('>=5.3.0 <14', '5.2.9')).toBe(false)
-    expect(admits('>=5.3.0 <14', '14.0.0')).toBe(false)
+    expect(admits('>=5.3.0 <12', '5.32.0')).toBe(true)
+    expect(admits('>=5.3.0 <12', '9.1.0')).toBe(true)
+    expect(admits('>=5.3.0 <12', '11.0.0')).toBe(true)
+    expect(admits('>=5.3.0 <12', '5.2.9')).toBe(false)
+    expect(admits('>=5.3.0 <12', '12.0.0')).toBe(false)
   })
 
   it('declares, in every manifest, a range that admits the version the root override installs', () => {
@@ -328,9 +327,7 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     expect(floors[0]?.major).toBe(5)
     expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '8.0.1')).toBe(true)
     expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '9.0.0')).toBe(true)
-    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '12.0.0')).toBe(true)
-    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '13.0.0')).toBe(true)
-    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '14.0.0')).toBe(false)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '12.0.0')).toBe(false)
     expect(
       floors[0]?.minor,
       `the agents floor admits @theokit/sdk@5.${floors[0]?.minor}.x, where an Anthropic-family ` +

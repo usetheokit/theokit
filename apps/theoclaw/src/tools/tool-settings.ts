@@ -18,13 +18,12 @@ import type { ComputerDeps, ComputerSettings } from './computer-settings.js'
 import { externalToolPaths, resolveExternalTools } from './external-tools.js'
 import type { ExternalTools } from './external-tools.js'
 import { isWithin, resolveRealPath, SymlinkLoopError } from '@theokit/agents/tool-scope'
-import { resolveWebSearchAdapter } from '@theokit/sdk-tools'
-import type { WebSearchCallback, WebSearchProvider } from '@theokit/sdk-tools'
 
 /** Where web search goes, chosen from the keys present at start. */
 export interface SearchSettings {
-  readonly kind: WebSearchProvider | 'off'
-  readonly adapter?: WebSearchCallback
+  readonly kind: 'brave' | 'generic' | 'searxng' | 'tavily' | 'off'
+  readonly url?: string
+  readonly key?: string
 }
 
 /** Everything the tool list is built from, resolved once at start. */
@@ -158,47 +157,47 @@ function nonBlank(value: string | undefined): string | undefined {
 const SEARCH_OFF_LINE = 'tools: web search is off (no THEOCLAW_SEARCH, BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
 const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
 
-/**
- * Web search over the SDK's `resolveWebSearchAdapter`, fed only the variables TheoClaw honours.
- * `THEOCLAW_SEARCH=searxng:<url>` or `tavily` (key in `TAVILY_API_KEY`) wins; else Brave when
- * `BRAVE_API_KEY` is set, else the generic adapter when `THEOKIT_SEARCH_API_URL` and
- * `THEOKIT_SEARCH_API_KEY` both are. A Tavily key alone never turns search on here. A blank value
- * counts as unset.
- */
-export function resolveSearch(env: Env, fetchImpl: typeof fetch): SearchSettings {
-  const chosen = nonBlank(env.THEOCLAW_SEARCH)
-  if (chosen !== undefined && chosen !== 'tavily' && !chosen.startsWith('searxng:')) {
-    throw new TheoClawConfigError(`THEOCLAW_SEARCH must be searxng:<url> or tavily, got ${JSON.stringify(chosen)}`, { variable: 'THEOCLAW_SEARCH' })
+/** `THEOCLAW_SEARCH=searxng:<url>` or `tavily` (key in `TAVILY_API_KEY`); it wins over every other search variable. */
+function readChosenSearch(chosen: string, env: Env): SearchSettings {
+  const bad = (message: string): TheoClawConfigError => new TheoClawConfigError(message, { variable: 'THEOCLAW_SEARCH' })
+  if (chosen === 'tavily') {
+    const key = nonBlank(env.TAVILY_API_KEY)
+    if (key === undefined) throw bad('THEOCLAW_SEARCH=tavily needs TAVILY_API_KEY')
+    return { kind: 'tavily', key }
   }
-  const input: Record<string, string | undefined> = {
-    BRAVE_API_KEY: env.BRAVE_API_KEY,
-    THEOKIT_SEARCH_API_URL: env.THEOKIT_SEARCH_API_URL,
-    THEOKIT_SEARCH_API_KEY: env.THEOKIT_SEARCH_API_KEY,
-    ...(chosen === undefined ? {} : { THEOKIT_SEARCH: chosen, TAVILY_API_KEY: env.TAVILY_API_KEY }),
+  if (chosen.startsWith('searxng:')) {
+    const url = chosen.slice('searxng:'.length).trim()
+    let valid = false
+    try {
+      valid = ['http:', 'https:'].includes(new URL(url).protocol)
+    } catch {
+      valid = false
+    }
+    if (!valid) throw bad('THEOCLAW_SEARCH=searxng:<url> needs an http(s) URL, e.g. searxng:http://localhost:8888')
+    return { kind: 'searxng', url }
   }
-  try {
-    const { adapter, provider } = resolveWebSearchAdapter(input, { fetchImpl })
-    return adapter === undefined || provider === undefined ? { kind: 'off' } : { kind: provider, adapter }
-  } catch (error) {
-    throw searchConfigError(error, env, chosen)
-  }
+  throw bad(`THEOCLAW_SEARCH must be searxng:<url> or tavily, got ${JSON.stringify(chosen)}`)
 }
 
 /**
- * The SDK's `ConfigurationError` as a `TheoClawConfigError` naming the variable to fix. The SDK
- * sets only a `code`, so the variable is worked out from the environment, not from its message;
- * an error of any other code passes through unchanged.
+ * Brave when `BRAVE_API_KEY` is set (it wins over the generic adapter); the generic adapter when
+ * both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` are; one of those two alone is refused
+ * naming the other; neither is off. A blank value counts as unset.
  */
-function searchConfigError(error: unknown, env: Env, chosen: string | undefined): unknown {
-  const code = (error as { code?: unknown } | null)?.code
-  if (code === 'web_search_invalid_url') {
-    return new TheoClawConfigError('THEOCLAW_SEARCH=searxng:<url> needs an http(s) URL, e.g. searxng:http://localhost:8888', { variable: 'THEOCLAW_SEARCH' })
+function readSearch(env: Env): SearchSettings {
+  const chosen = nonBlank(env.THEOCLAW_SEARCH)
+  if (chosen !== undefined) return readChosenSearch(chosen, env)
+  const brave = nonBlank(env.BRAVE_API_KEY)
+  if (brave !== undefined) return { kind: 'brave', key: brave }
+  const url = nonBlank(env.THEOKIT_SEARCH_API_URL)
+  const key = nonBlank(env.THEOKIT_SEARCH_API_KEY)
+  if (url !== undefined && key !== undefined) return { kind: 'generic', url, key }
+  if (url !== undefined || key !== undefined) {
+    const missing = url === undefined ? 'THEOKIT_SEARCH_API_URL' : 'THEOKIT_SEARCH_API_KEY'
+    const present = url === undefined ? 'THEOKIT_SEARCH_API_KEY' : 'THEOKIT_SEARCH_API_URL'
+    throw new TheoClawConfigError(`${present} is set without ${missing}; set both or neither`, { variable: missing })
   }
-  if (code !== 'web_search_missing_variable') return error
-  if (chosen === 'tavily') return new TheoClawConfigError('THEOCLAW_SEARCH=tavily needs TAVILY_API_KEY', { variable: 'TAVILY_API_KEY' })
-  const missing = nonBlank(env.THEOKIT_SEARCH_API_URL) === undefined ? 'THEOKIT_SEARCH_API_URL' : 'THEOKIT_SEARCH_API_KEY'
-  const present = missing === 'THEOKIT_SEARCH_API_URL' ? 'THEOKIT_SEARCH_API_KEY' : 'THEOKIT_SEARCH_API_URL'
-  return new TheoClawConfigError(`${present} is set without ${missing}; set both or neither`, { variable: missing })
+  return { kind: 'off' }
 }
 
 /**
@@ -226,7 +225,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const hostTools = readHostTools(env)
   const sandboxMode = readSandboxMode(env)
   const backend = readSandboxBackend(env)
-  const search = resolveSearch(env, deps.fetchImpl ?? globalThis.fetch)
+  const search = readSearch(env)
   const browser = readBrowser(env, deps.browser)
   const computer = readComputer(env, { hostTools, sandboxMode }, deps.computer)
   const external = resolveExternalTools(env)

@@ -22,8 +22,6 @@ export interface ForeignSkill {
   readonly name: string
   readonly description: string
   readonly body: string
-  /** Binaries from `metadata.requires.bins`; a consumer may offer the skill only while all are on PATH. */
-  readonly requiresBins: readonly string[]
   /** Relative to the source. */
   readonly path: string
 }
@@ -46,8 +44,6 @@ export interface ForeignSetup {
   readonly source: string
   readonly instructions: ForeignTextFile[]
   readonly skills: ForeignSkill[]
-  /** Claude Code's auto memory for the project's git root (needs `cwd`); Hermes's `memories/` files. */
-  readonly memories: ForeignTextFile[]
   readonly mcpServers: Record<string, ForeignMcpServer>
   readonly hooks: ForeignHook[]
   readonly untranslated: UntranslatedEntry[]
@@ -60,6 +56,4 @@ export interface ReadForeignSetupOptions {
   readonly home: string
   /** The project directory; its Claude Code scope (`CLAUDE.md`, `.mcp.json`, skills, settings) is read too. */
   readonly cwd?: string
-  /** The source directory, replacing `<home>/.claude` (claude-code) or `<home>/.hermes` (hermes). */
-  readonly configDir?: string
 }

@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes, type DecipherGCM } from 'node:crypto'
-import { open, readFile } from 'node:fs/promises'
+import { open } from 'node:fs/promises'
 
 import { BackupError } from './errors.js'
 
@@ -120,46 +120,5 @@ export async function* openSealed(path: string, options: SealOptions): AsyncGene
     }
   } finally {
     await handle.close()
-  }
-}
-
-const LEGACY_MAGIC = Buffer.from('TCBK1')
-
-/**
- * The plain bytes of an archive written by an older TheoClaw (`.tcb`): the whole file is read and,
- * when encrypted, authenticated (`TCBK1`, IV, GCM tag, body) before any byte is returned.
- */
-export async function openLegacy(path: string, options: SealOptions): Promise<Buffer> {
-  const key = keyOf(options)
-  const data = await readFile(path).catch((cause: unknown) => {
-    throw new BackupError(`cannot read archive ${path}`, { path, cause })
-  })
-  if (key === undefined) {
-    if (data.subarray(0, LEGACY_MAGIC.length).equals(LEGACY_MAGIC)) {
-      throw new BackupError(`${path} does not match the encryption of its storage location`, {
-        path,
-      })
-    }
-    return data
-  }
-  const body = LEGACY_MAGIC.length + IV_BYTES + TAG_BYTES
-  if (data.length < body || !data.subarray(0, LEGACY_MAGIC.length).equals(LEGACY_MAGIC)) {
-    throw new BackupError(`${path} does not match the encryption of its storage location`, {
-      path,
-    })
-  }
-  try {
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      key,
-      data.subarray(LEGACY_MAGIC.length, LEGACY_MAGIC.length + IV_BYTES),
-    )
-    decipher.setAuthTag(data.subarray(LEGACY_MAGIC.length + IV_BYTES, body))
-    return Buffer.concat([decipher.update(data.subarray(body)), decipher.final()])
-  } catch (cause) {
-    throw new BackupError(`${path} failed authentication: wrong key or damaged archive`, {
-      path,
-      cause,
-    })
   }
 }

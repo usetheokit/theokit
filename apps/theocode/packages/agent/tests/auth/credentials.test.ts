@@ -23,10 +23,10 @@ import {
   credentialHome,
   ensureAuthHome,
   installAuthHome,
-  resolveCredential,
   resolveCredentialForModel,
   resolveFreshCredential,
 } from '../../src/auth/credentials.js'
+
 
 /**
  * The credential store's directory, pinned so a comment and the code cannot drift apart again.
@@ -175,16 +175,8 @@ describe('refreshing an expiring sign-in', () => {
 
     expect(calls, 'the refresh endpoint was never tried').toBeGreaterThan(0)
     expect(got.apiKey).toBe('stored-access')
-    expect(got.source).toEqual({ kind: 'oauth', provider: 'openai' })
     expect(readFileSync(authFilePath(home, env), 'utf8'), 'the stored token was changed').toBe(
       before,
     )
   }, 20_000)
-})
-
-describe('the credential source stays typed', () => {
-  it('test_an_env_key_resolves_to_an_env_origin', () => {
-    const got = resolveCredential({ env: { OPENROUTER_API_KEY: 'sk-or-test' }, home: undefined })
-    expect(got.source).toEqual({ kind: 'env', varName: 'OPENROUTER_API_KEY' })
-  })
 })

@@ -14,7 +14,6 @@ export {
   createJsonlProcessor,
   execExitCode,
   silentEmptyTurnDiagnostic,
-  type ExecFinish,
   type ExecProcessor,
 } from './events.js'
 export { createGoalCancellation } from './goal-cancellation.js'

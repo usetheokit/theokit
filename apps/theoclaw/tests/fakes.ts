@@ -1,7 +1,6 @@
 import { BasePlatformAdapter } from '@theokit/gateway'
 import type { MessageEvent, OutboundMessage, PlatformName, SendResult } from '@theokit/gateway'
-import { FakeAgent } from '@theokit/agents/testing'
-import type { SdkFrame } from '@theokit/agents/testing'
+import type { InteractionUpdate } from '@theokit/sdk'
 
 import type { TurnMessage } from '../src/agent-port.js'
 
@@ -57,9 +56,7 @@ export class FakeAdapter extends BasePlatformAdapter {
 
   async sendMessage(message: OutboundMessage): Promise<SendResult> {
     this.sent.push(message)
-    return this.options.send
-      ? this.options.send(message)
-      : { ok: true, messageId: `sent-${this.sent.length}` }
+    return this.options.send ? this.options.send(message) : { ok: true, messageId: `sent-${this.sent.length}` }
   }
 
   onInbound(handler: (event: MessageEvent) => Promise<void>): () => void {
@@ -78,11 +75,7 @@ export class FakeAdapter extends BasePlatformAdapter {
  * An inbound message as `platform` would produce it. The platform-specific block is a stub: the
  * code under test reads only the base fields.
  */
-export function messageEvent(
-  platform: PlatformName,
-  text: string,
-  senderId = 'user-1',
-): MessageEvent {
+export function messageEvent(platform: PlatformName, text: string, senderId = 'user-1'): MessageEvent {
   return {
     id: `${platform}-message-${senderId}`,
     platform,
@@ -114,24 +107,18 @@ export const TEN_PLATFORMS: readonly PlatformName[] = [
  * the deadline, so a description that shows a screen shows the screen that failed, not the one the
  * wait began on.
  */
-export async function waitFor(
-  condition: () => boolean,
-  timeoutMs: number,
-  what: string | (() => string),
-): Promise<void> {
+export async function waitFor(condition: () => boolean, timeoutMs: number, what: string | (() => string)): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!condition()) {
     if (Date.now() > deadline) {
-      throw new Error(
-        `timed out after ${timeoutMs} ms waiting for ${typeof what === 'function' ? what() : what}`,
-      )
+      throw new Error(`timed out after ${timeoutMs} ms waiting for ${typeof what === 'function' ? what() : what}`)
     }
     await new Promise((resolve) => setImmediate(resolve))
   }
 }
 
-export type { FakeTimelineEvent, FakeTurn, SdkFrame } from '@theokit/agents/testing'
-export { FakeAgent }
+/** A stream frame as `@theokit/sdk` emits it, narrowed to what the presenter reads. */
+export type SdkFrame = { readonly type: string } & Readonly<Record<string, unknown>>
 
 /** The model's thinking: the presenter drops it from a chat reply. */
 export function thinking(text: string): SdkFrame {
@@ -146,6 +133,120 @@ export function assistant(text: string): SdkFrame {
 /** The turn's terminal status frame. */
 export function finished(): SdkFrame {
   return { type: 'status', status: 'FINISHED' }
+}
+
+export interface FakeTurn {
+  /** What the stream yields, fixed or computed from the text sent. */
+  readonly frames: readonly SdkFrame[] | ((text: string) => readonly SdkFrame[])
+  /** Thrown by the stream after its frames. */
+  readonly streamError?: Error
+  /** What `wait()` resolves. Default `{ status: 'finished' }`. */
+  readonly result?: {
+    readonly status: string
+    readonly error?: { readonly code?: string }
+    readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number }
+    readonly cost?: { readonly amountUsd?: number | undefined }
+  }
+  /** The stream waits on this before its first frame; an aborted signal releases it. */
+  readonly before?: Promise<void>
+  /** `send` waits on this before it returns the run (the pending window of EC-1). */
+  readonly sendGate?: Promise<void>
+  /** Text deltas `events()` yields before the frames, which then arrive marked `textAlreadyStreamed`. */
+  readonly deltas?: readonly string[]
+  /** `events()` waits on this after the deltas, before the completed messages. */
+  readonly afterDeltas?: Promise<void>
+  /** `events()` opens one tool call and holds inside it until the signal aborts. */
+  readonly toolHeld?: boolean
+  /** The held tool call's name. Default `read`. */
+  readonly toolName?: string
+  /** A run that was not aborted resolves `wait()` only once this settles (events ended, outcome pending). */
+  readonly waitGate?: Promise<void>
+  /** A cancelled run's `wait()` resolves only once this settles (a run still unwinding). */
+  readonly teardown?: Promise<void>
+}
+
+/** Resolves when `gate` settles or `signal` aborts, whichever is first. */
+function until(gate: Promise<void> | undefined, signal: AbortSignal | undefined): Promise<void> {
+  if (gate === undefined) return Promise.resolve()
+  if (signal === undefined) return gate
+  if (signal.aborted) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    signal.addEventListener('abort', () => resolve(), { once: true })
+    void gate.then(resolve)
+  })
+}
+
+const never = new Promise<void>(() => undefined)
+
+/** A timeline event as `run.events()` yields it. */
+export type FakeTimelineEvent =
+  | { readonly kind: 'delta'; readonly update: InteractionUpdate }
+  | { readonly kind: 'message'; readonly message: SdkFrame; readonly textAlreadyStreamed: boolean }
+
+/**
+ * An agent with no model: it records what it was sent and the signal each send carried. A run
+ * honours its signal as the SDK's does: an abort ends `stream()` and `events()` at the next frame,
+ * releases a held `before`, and makes `wait()` resolve `cancelled`.
+ */
+export class FakeAgent {
+  readonly sent: string[] = []
+  readonly signals: (AbortSignal | undefined)[] = []
+  readonly queueModes: (string | undefined)[] = []
+  cancels = 0
+
+  constructor(private readonly turn: FakeTurn) {}
+
+  async send(text: string, options?: { readonly signal?: AbortSignal; readonly queueMode?: string }) {
+    this.sent.push(text)
+    this.queueModes.push(options?.queueMode)
+    const signal = options?.signal
+    this.signals.push(signal)
+    const turn = this.turn
+    if (turn.sendGate) await turn.sendGate
+    const frames = typeof turn.frames === 'function' ? turn.frames(text) : turn.frames
+    const aborted = (): boolean => signal?.aborted === true
+    const deltas = turn.deltas ?? []
+    return {
+      async *stream(): AsyncGenerator<SdkFrame> {
+        await until(turn.before, signal)
+        for (const frame of frames) {
+          if (aborted()) return
+          yield frame
+        }
+        if (turn.streamError) throw turn.streamError
+      },
+      async *events(): AsyncGenerator<FakeTimelineEvent> {
+        await until(turn.before, signal)
+        if (turn.toolHeld === true) {
+          if (aborted()) return
+          yield { kind: 'delta', update: { type: 'tool-call-started', callId: 'call-1', modelCallId: 'call-1', toolCall: { callId: 'call-1', name: turn.toolName ?? 'read', args: {} } } }
+          await until(never, signal)
+          return
+        }
+        for (const delta of deltas) {
+          if (aborted()) return
+          yield { kind: 'delta', update: { type: 'text-delta', text: delta } }
+        }
+        await until(turn.afterDeltas, signal)
+        for (const frame of frames) {
+          if (aborted()) return
+          yield { kind: 'message', message: frame, textAlreadyStreamed: deltas.length > 0 }
+        }
+        if (turn.streamError) throw turn.streamError
+      },
+      cancel: async () => {
+        this.cancels += 1
+      },
+      wait: async () => {
+        if (!aborted()) {
+          if (turn.waitGate) await turn.waitGate
+          return turn.result ?? { status: 'finished' }
+        }
+        if (turn.teardown) await turn.teardown
+        return { status: 'cancelled' }
+      },
+    }
+  }
 }
 
 /** A fake agent that counts its disposals, as the session store disposes through `Symbol.asyncDispose`. */

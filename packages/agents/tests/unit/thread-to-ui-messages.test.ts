@@ -57,24 +57,3 @@ describe('threadToUIMessages', () => {
     expect(out[0]?.parts[0]).toMatchObject({ state: 'output-error', errorText: 'boom' })
   })
 })
-
-describe('threadToUIMessages mergeAssistant', () => {
-  it('keeps each assistant row separate when asked', () => {
-    const row = (t: string) => ({
-      type: 'assistant',
-      message: { role: 'assistant', content: [{ type: 'text', text: t }] },
-    })
-    expect(threadToUIMessages([row('a'), row('b')])).toHaveLength(1)
-    expect(threadToUIMessages([row('a'), row('b')], { mergeAssistant: false })).toHaveLength(2)
-  })
-})
-
-describe('threadToUIMessages role', () => {
-  it('takes the role from the row type when the message has none', () => {
-    const rows = [
-      { type: 'user', message: { content: 'q' } },
-      { type: 'assistant', message: { content: 'a' } },
-    ]
-    expect(threadToUIMessages(rows).map((m) => m.role)).toEqual(['user', 'assistant'])
-  })
-})

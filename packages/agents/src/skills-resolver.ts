@@ -7,7 +7,7 @@
  * run-context). Discovery + injection stay in the SDK; this only CHOOSES the enabled set per call.
  */
 
-import type { InlineSkill, SkillsSettings } from '@theokit/sdk'
+import type { InlineSkill } from '@theokit/sdk'
 
 /** The request context handed to a skills resolver (the M7 run-context — opaque per-request data). */
 export type SkillsRequestContext = Record<string, unknown>
@@ -18,16 +18,11 @@ export type SkillsRequestContext = Record<string, unknown>
  *   objects from `createSkill` (code-defined skills → `skills.inline`, injected into the `<skills>`
  *   block). A mixed list is split at compile time.
  * - a function — resolved per request from the {@link SkillsRequestContext} (sync or async). The
- *   resolver returns filesystem skill NAMES, or a whole `SkillsSettings` object (`bundledDirs`,
- *   `skillsDir`, `inline`, …) which is handed to the SDK as is.
- * - a `SkillsSettings` object — passed to the SDK unchanged.
+ *   resolver returns filesystem skill NAMES (inline skills are static — declared on the agent).
  */
 export type SkillsSelection =
   | readonly (string | InlineSkill)[]
-  | SkillsSettings
-  | ((
-      ctx: SkillsRequestContext,
-    ) => readonly string[] | SkillsSettings | Promise<readonly string[] | SkillsSettings>)
+  | ((ctx: SkillsRequestContext) => readonly string[] | Promise<readonly string[]>)
 
 /**
  * Resolve the enabled skill names for a request. Returns `undefined` when no selection is given (the
@@ -41,31 +36,9 @@ export async function resolveEnabledSkills(
 ): Promise<string[] | undefined> {
   if (selection === undefined) return undefined
   if (typeof selection !== 'function') {
-    if (!Array.isArray(selection)) return (selection as SkillsSettings).enabled
-    return (selection as readonly unknown[]).filter((s): s is string => typeof s === 'string')
+    return selection.filter((s): s is string => typeof s === 'string')
   }
   const resolved: unknown = await selection(ctx)
-  return validateNames(resolved)
-}
-
-/**
- * Resolve a function-valued selection to the SDK `SkillsSettings` for a request: a returned name list
- * becomes `{ enabled, autoInject: true }`, a returned settings object is passed through untouched.
- * `undefined` when the selection is not a function.
- */
-export async function resolveSkillsSettings(
-  selection: SkillsSelection | undefined,
-  ctx: SkillsRequestContext,
-): Promise<SkillsSettings | undefined> {
-  if (typeof selection !== 'function') return undefined
-  const resolved: unknown = await selection(ctx)
-  if (resolved !== null && typeof resolved === 'object' && !Array.isArray(resolved)) {
-    return resolved
-  }
-  return { enabled: validateNames(resolved), autoInject: true }
-}
-
-function validateNames(resolved: unknown): string[] {
   if (!Array.isArray(resolved)) {
     throw new Error('[@theokit/agents] skills resolver must return an array of skill names')
   }

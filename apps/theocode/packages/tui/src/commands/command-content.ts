@@ -53,7 +53,7 @@ export function agentsMdRow(
    * the outcome depends on whether the checkout the suite happens to run in has an `AGENTS.md`, and
    * both branches would be unassertable on half the machines.
    */
-  onDiskChain: (cwd: string) => readonly string[] = () => [],
+  onDiskChain: (cwd: string) => readonly string[] = agentsMdChain,
   /**
    * The operator's own files, injectable for the same reason as the chain above: with the ambient
    * home the outcome depends on whether the machine running the suite happens to have one.
@@ -65,7 +65,8 @@ export function agentsMdRow(
 
   if (wired === undefined) {
     const onDisk = onDiskChain(workingDirectory())
-    const project = onDisk.length === 0 ? '' : `${relative(onDisk)}  (on disk — not loaded yet)`
+    const project =
+      onDisk.length === 0 ? '' : `${relative(onDisk)}  (on disk — not loaded yet)`
     return joinParts(project, userNote)
   }
   const entity = wired.agentsMd
@@ -267,7 +268,7 @@ export function initAgents(
   lastSentMessage.current = AGENTS_MD_REQUEST
 }
 
-export async function statusPanel(
+export function statusPanel(
   SESSION: SessionTheInterpreterUses,
   approvalMode: ApprovalMode,
   currentSessionId: () => string,
@@ -278,10 +279,8 @@ export async function statusPanel(
    * the disagreement is the bug worth catching.
    */
   wired?: WiredCapabilities,
-): Promise<ContentPanel> {
+): ContentPanel {
   const c = SESSION.cfg()
-  // Before the first turn there is no record, so the row reads what is on disk; the walk is async.
-  const onDisk = wired === undefined ? await agentsMdChain(workingDirectory()) : []
   const rows: readonly (readonly [string, string])[] = [
     ['model', SESSION.sessionModel() ?? c.modelLabel],
     ['effort', SESSION.effort()],
@@ -295,7 +294,7 @@ export async function statusPanel(
     // product reported it nowhere, and the case that matters is the silent one: an untrusted
     // directory drops the file, so the agent runs WITHOUT the rules the repository wrote for it
     // and nothing on screen says so.
-    ['agents.md', agentsMdRow(wired, () => onDisk)],
+    ['agents.md', agentsMdRow(wired)],
     // #91 — beside `agents.md` because it answers the other half of one question: are the
     // instructions this repository wrote actually in the prompt? That row covers the file being
     // dropped by the trust gate; this one covers the rules block being cut by the ceiling. Both

@@ -4,10 +4,11 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 
-import { type ForeignSetup, readForeignSetup } from '@theokit/agents/foreign-setup'
-
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { applyInstance, resolveInstance } from './instance.js'
+import { readClaudeCodeSetup } from './migration/claude-code-source.js'
+import type { ForeignSetup } from './migration/foreign-setup.js'
+import { readHermesSetup } from './migration/hermes-source.js'
 import { plannedImportFiles, writeImport } from './migration/import-store.js'
 
 /**
@@ -73,15 +74,12 @@ function requireStateDir(env: NodeJS.ProcessEnv): string {
 }
 
 function readSetup(args: ImportArgs, userHome: string): ForeignSetup {
-  if (args.from === 'hermes') {
-    const configDir = requireDirectory(args.source ?? join(userHome, '.hermes'), '--source')
-    return readForeignSetup('hermes', { home: userHome, configDir })
-  }
+  if (args.from === 'hermes') return readHermesSetup({ root: requireDirectory(args.source ?? join(userHome, '.hermes'), '--source') })
   const home = requireDirectory(args.home ?? userHome, '--home')
-  return readForeignSetup('claude-code', {
+  return readClaudeCodeSetup({
     configDir: requireDirectory(args.source ?? join(home, '.claude'), '--source'),
     home,
-    ...(args.project === undefined ? {} : { cwd: requireDirectory(args.project, '--project') }),
+    ...(args.project === undefined ? {} : { project: requireDirectory(args.project, '--project') }),
   })
 }
 
@@ -91,7 +89,7 @@ function summary(setup: ForeignSetup, notes: readonly string[]): string[] {
     `imported ${setup.kind}: ${setup.memories.length} memory files`,
     `imported ${setup.kind}: ${setup.skills.length} skills`,
     `imported ${setup.kind}: ${Object.keys(setup.mcpServers).length} MCP servers`,
-    ...setup.untranslated.map((entry) => `dropped ${entry.path}: ${entry.reason}`),
+    ...setup.dropped.map((entry) => `dropped ${entry.path}: ${entry.reason}`),
     ...notes.map((note) => `note: ${note}`),
   ]
 }
@@ -100,7 +98,7 @@ try {
   // Parsed first, so a mistyped flag creates no profile directory.
   const args = parseImportArgs(process.argv.slice(2))
   const instance = resolveInstance(process.env, { homeDir: homedir() })
-  await applyInstance(instance, process.env)
+  applyInstance(instance, process.env)
   const stateDir = requireStateDir(process.env)
   const setup = readSetup(args, homedir())
   if (args.dryRun) {

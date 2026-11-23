@@ -1,4 +1,3 @@
-import { handleSttRequest, handleTtsRequest } from '@theokit/plugin-voice'
 import type { GatewayHandler, MessageEvent } from '@theokit/gateway'
 
 export interface VoiceReplies {
@@ -6,7 +5,6 @@ export interface VoiceReplies {
   speak(event: MessageEvent, text: string): Promise<void>
 }
 
-const TIMEOUT_MS = 60_000
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024
 export const VOICE_FAILED = 'I could not process that voice note. Please send text instead.'
 
@@ -88,8 +86,8 @@ export function configuredVoiceReplies(
   const token = env.THEOCLAW_TELEGRAM_TOKEN?.trim()
   if (!key || !token) return undefined
   const telegram = `https://api.telegram.org/bot${token}`
-  const call = (url: string | URL, init?: RequestInit): Promise<Response> => request(url, {
-    ...init, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS),
+  const call = (url: string, init?: RequestInit): Promise<Response> => request(url, {
+    ...init, redirect: 'error', signal: AbortSignal.timeout(60_000),
   })
   const json = async (response: Response): Promise<Record<string, unknown>> => {
     if (!response.ok) throw new Error('voice request failed')
@@ -107,27 +105,27 @@ export function configuredVoiceReplies(
           !/^[\w/-]+\.\w+$/.test(file.file_path) || file.file_path.includes('..') ||
           (typeof file.file_size === 'number' && file.file_size > MAX_AUDIO_BYTES)) throw new Error('invalid voice file')
       const audio = await bytes(await call(`https://api.telegram.org/file/bot${token}/${file.file_path}`))
-      const result = await json(await handleSttRequest(
-        { audio: { buffer: audio, mimeType: 'audio/ogg', filename: 'voice.ogg' } },
-        { provider: 'openai', apiKey: key, model: 'gpt-4o-mini-transcribe', endpoint: '/' },
-        { fetchImpl: call, timeoutMs: TIMEOUT_MS },
-      ))
-      if (typeof result.transcript !== 'string') throw new Error('invalid transcription')
-      return result.transcript
+      const body = new FormData()
+      body.set('file', new Blob([audio], { type: 'audio/ogg' }), 'voice.ogg')
+      body.set('model', 'gpt-4o-mini-transcribe')
+      const result = await json(await call('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST', headers: { authorization: `Bearer ${key}` }, body,
+      }))
+      if (typeof result.text !== 'string') throw new Error('invalid transcription')
+      return result.text
     },
     async speak(event, text) {
       if (text.length > 4096) throw new Error('answer too long for speech')
-      const audio = await bytes(await handleTtsRequest(
-        { text, voice: 'alloy' },
-        { provider: 'openai', apiKey: key, model: 'gpt-4o-mini-tts', voice: 'alloy', endpoint: '/' },
-        { fetchImpl: call, timeoutMs: TIMEOUT_MS },
-      ))
+      const audio = await bytes(await call('https://api.openai.com/v1/audio/speech', {
+        method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: 'alloy', input: text, response_format: 'opus' }),
+      }))
       const body = new FormData()
       body.set('chat_id', event.channel.id)
       if (event.channel.topicId !== undefined) body.set('message_thread_id', event.channel.topicId)
       body.set('reply_parameters', JSON.stringify({ message_id: event.platform === 'telegram' ? event.telegram.messageId : event.id }))
       body.set('caption', 'AI-generated voice')
-      body.set('voice', new Blob([audio], { type: 'audio/mpeg' }), 'reply.mp3')
+      body.set('voice', new Blob([audio], { type: 'audio/ogg' }), 'reply.ogg')
       const result = await json(await call(`${telegram}/sendVoice`, { method: 'POST', body }))
       if (result.ok !== true) throw new Error('voice delivery failed')
     },

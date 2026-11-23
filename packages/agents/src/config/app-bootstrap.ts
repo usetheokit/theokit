@@ -137,10 +137,7 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
       const refused: string[] = []
       loadProjectEnv(ctx.env, () => {
         if (!existsSync(file)) return
-        const raw = readFileSync(file, 'utf8')
-        const { names: declared, text } = scanDeclarations(raw)
-        for (const [key, value] of Object.entries(parseEnv(text))) {
-          if (!declared.has(key)) continue
+        for (const [key, value] of Object.entries(parseEnv(readFileSync(file, 'utf8')))) {
           if (protectedKeys.has(key)) {
             refused.push(key)
           } else if (ctx.env[key] === undefined) {
@@ -152,56 +149,6 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
       ctx.projectEnv = { file, loaded, refused }
     },
   }
-}
-
-/**
- * Names declared by `raw`, stricter than `parseEnv`: only identifiers count, and scanning stops at a
- * quoted value that never closes (everything after it is that value's text, not declarations).
- * `text` is `raw` with each declaration line's leading space and `export` prefix removed, so the
- * parser sees the same declarations whatever its Node version does with `export  NAME=`.
- */
-function scanDeclarations(raw: string): { names: Set<string>; text: string } {
-  const names = new Set<string>()
-  // Split on `\n` alone: a `\r` stays on its line, so `text` keeps the file's own line endings.
-  const lines = raw.split('\n')
-  // Only declarations and the lines of their values reach the parser; every other line is blank.
-  // Node 22.12's parseEnv drops every declaration after a line with no `=`, so a comment-free file
-  // with one such line loaded nothing there while a later Node loaded the rest.
-  const out = lines.map(() => '')
-  let i = 0
-  while (i < lines.length) {
-    const at = i
-    const decl = splitDeclaration(lines[i].trim())
-    i++
-    if (decl === undefined) continue
-    out[at] = `${decl.name}=${lines[at].slice(lines[at].indexOf('=') + 1)}`
-    const closed = valueEnd(decl.value, lines, i)
-    const end = closed ?? lines.length
-    for (let k = i; k < end; k++) out[k] = lines[k]
-    if (closed === undefined) return { names, text: out.join('\n') }
-    i = end
-    if (/^[A-Za-z_]\w*$/.test(decl.name)) names.add(decl.name)
-  }
-  return { names, text: out.join('\n') }
-}
-
-function splitDeclaration(line: string): { name: string; value: string } | undefined {
-  if (line === '' || line.startsWith('#')) return undefined
-  const eq = line.indexOf('=')
-  if (eq <= 0) return undefined
-  const name = line
-    .slice(0, eq)
-    .replace(/^export\s+/, '')
-    .trim()
-  return { name, value: line.slice(eq + 1).trimStart() }
-}
-
-/** The index of the line after the value, or `undefined` when a quoted value never closes. */
-function valueEnd(value: string, lines: readonly string[], next: number): number | undefined {
-  const q = value[0]
-  if ((q !== '"' && q !== "'" && q !== '`') || value.slice(1).includes(q)) return next
-  const close = lines.findIndex((l, idx) => idx >= next && l.includes(q))
-  return close === -1 ? undefined : close + 1
 }
 
 /** `projectEnvStepWith()` with no extra protected keys. */

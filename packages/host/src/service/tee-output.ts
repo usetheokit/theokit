@@ -75,12 +75,7 @@ export function teeOutput(options: TeeOutputOptions): () => void {
     const original = stream.write as (...a: unknown[]) => boolean
     stream.write = function (this: unknown, chunk: unknown, ...rest: unknown[]): boolean {
       try {
-        const encoding = Buffer.isEncoding(rest[0] as string) ? (rest[0] as BufferEncoding) : 'utf8'
-        append(
-          typeof chunk === 'string'
-            ? Buffer.from(chunk, encoding)
-            : Buffer.from(chunk as Uint8Array),
-        )
+        append(typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk as Uint8Array))
       } catch {
         // A full disk must not stop the process from writing to its real stream.
       }

@@ -1,5 +1,6 @@
 /**
- * Servers are read by `loadMcpServersFile` from `@theokit/agents/bridge` (#2599). What it does not cover stays here: the `acpAgents` key, refusing a TheoClaw server name,
+ * Servers are read by `loadMcpServersFile` from `@theokit/agents/bridge` (#2599; its gaps, usetheokit/theokit#2657,
+ * are closed). What it still does not cover stays here: the `acpAgents` key, refusing a TheoClaw server name,
  * an http(s)-only `url`, and the shape of an OAuth `auth` entry (`oauth` required, no `CLIENT_SECRET`).
  */
 import { readFileSync } from 'node:fs'

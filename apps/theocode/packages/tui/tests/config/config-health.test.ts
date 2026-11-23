@@ -77,15 +77,14 @@ describe('a config that cannot be read', () => {
     const dir = mkdtempSync(join(tmpdir(), 'config-health-'))
     const session = createTuiSession({
       cwd: '/nonexistent',
-      pointerRoot: join(dir, 'transcripts'),
+      sessionPointer: join(dir, '.theokit', 'tui-session'),
       // Throws for the PROJECT directory and resolves for any other, which is the real shape: the
       // fallback reads a directory with no settings file in it. A stub that threw unconditionally
       // would assert that the fallback itself must survive an unreadable user config — a different
       // claim, and one this does not make: if every layer is unreadable there is no configuration to
       // run on, and the error belongs to the operator.
       loadConfig: (o?: { cwd?: string }) => {
-        if (o?.cwd === '/nonexistent')
-          throw new Error('malformed JSON at /p/.theokit/settings.json')
+        if (o?.cwd === '/nonexistent') throw new Error('malformed JSON at /p/.theokit/settings.json')
         return realResolve({ cwd: o?.cwd ?? tmpdir(), ...(o ?? {}) })
       },
     })

@@ -150,8 +150,7 @@ export async function buildChatAgent(overrides: {
   // given — so two reads that disagreed would crash the user's terminal at construction.
   const searchConfigured = webSearchConfigured()
   const rules = bothRuleRoots(cwd, operatorHome)
-  const projectDoc = await projectDocument(posture, cwd, rules, operatorHome)
-  const baseCtx = { cfg, modelId, posture, providerPlugins, registry, overrides, cwd, rules, operatorHome, projectDoc, instructionFiles: await agentsMdChain(cwd) }
+  const baseCtx = { cfg, modelId, posture, providerPlugins, registry, overrides, cwd, rules, operatorHome }
   const { agent: base, cuts: aggregateCuts } = baseAgent({ ...baseCtx, searchConfigured })
 
   const withWrites = withWriteTools(base, {
@@ -185,7 +184,7 @@ export async function buildChatAgent(overrides: {
     searchConfigured,
   })
 
-  const onCompiled = publishWiringAndListen(overrides?.onWired, { posture, cwd, cfg, mcp, operatorSkills: disk.operatorSkills, rules, aggregateCuts, agentsMdFiles: baseCtx.instructionFiles })
+  const onCompiled = publishWiringAndListen(overrides?.onWired, { posture, cwd, cfg, mcp, operatorSkills: disk.operatorSkills, rules, aggregateCuts })
 
   // M70 — the two registrations that depend on the surface PROFILE, applied here because the builder
   // is a fluent chain with no `.tools([...])`: there is no way to skip a link in the middle of it.
@@ -269,7 +268,7 @@ function resolveInteractiveBackend(
  * model reads last. Same order the config layers already resolve in, and the same one the README
  * states for them.
  */
-async function projectDocument(
+function projectDocument(
   posture: TrustPosture,
   cwd: string,
   /** #91 — read by the caller, so the prompt and the `/status` row come from ONE load. */
@@ -283,11 +282,11 @@ async function projectDocument(
    * have shown four.
    */
   home: string,
-): Promise<ProjectDocParts> {
+): ProjectDocParts {
   const userAgentsMd = loadUserAgentsMd(home)
   const userRules = rules.user.text
   if (!posture.allows.agentsMd) return { userAgentsMd, userRules, projectAgentsMd: '', projectRules: '' }
-  return { userAgentsMd, userRules, projectAgentsMd: await loadAgentsMd(cwd), projectRules: rules.project.text }
+  return { userAgentsMd, userRules, projectAgentsMd: loadAgentsMd(cwd), projectRules: rules.project.text }
 }
 
 function resolveProviderPlugins(
@@ -631,9 +630,6 @@ function baseAgent(ctx: {
   searchConfigured: boolean
   /** #91 — the single rules load, so the prompt and `/status` cannot disagree. */
   rules: { project: RulesLoad; user: RulesLoad }
-  /** The project document and the files it came from, loaded once by the caller. */
-  projectDoc: ProjectDocParts
-  instructionFiles: readonly string[]
   /** B-167 — the operator root this build resolved, so no site below reaches for `homedir()` again. */
   operatorHome: string
   overrides?: {
@@ -654,14 +650,14 @@ function baseAgent(ctx: {
     // `keep-coding-instructions: true`. `overrides.baseInstructions` still wins over both: it
     // is a caller passing an explicit persona, which is a stronger statement than a file.
     overrides?.baseInstructions ?? baseInstructionsFor(cfg.output_style, { project: ctx.cwd }),
-    ctx.projectDoc,
+    projectDocument(ctx.posture, ctx.cwd, ctx.rules, ctx.operatorHome),
     overrides?.appendInstructions ?? '',
     { maxChars: MAX_AGGREGATE, warn: (m: string) => process.stderr.write(`${m}\n`) },
     // The header names the files the document was actually read from. It used to say "from
     // AGENTS.md" unconditionally while the loader accepts THEO.md, AGENTS.md and CLAUDE.md, so a
     // project holding only one of the others was told about a file it does not have — and the
     // agent, asked where a rule came from, answered with a path nobody could open.
-    ctx.instructionFiles.map((f) => basename(f)),
+    agentsMdChain(ctx.cwd).map((f) => basename(f)),
   )
 
   const agent =

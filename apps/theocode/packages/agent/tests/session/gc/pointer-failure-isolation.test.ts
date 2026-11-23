@@ -17,7 +17,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { planSessionGCAllProjects } from './legacy-plan.js'
+import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
 
 const NOW = Date.UTC(2026, 8, 3)
 const DAY = 86_400_000
@@ -63,7 +63,7 @@ describe('a failing pointer read is isolated to its project', () => {
     expect(
       plan.candidates.map((c) => c.target),
       'a permissions problem in one project stopped collection in another',
-    ).toEqual(['/s/projects/healthy/old.jsonl'])
+    ).toEqual(['/s/healthy/old.jsonl'])
   })
 
   it('test_the_broken_project_is_skipped_rather_than_collected', async () => {
@@ -71,7 +71,7 @@ describe('a failing pointer read is isolated to its project', () => {
     // it would be the outcome `readPointerId` refuses to allow.
     const plan = await planWith((cwd) => (cwd === '/cwd/broken' ? eacces() : undefined))
 
-    expect(plan.candidates.map((c) => c.target)).not.toContain('/s/projects/broken/old.jsonl')
+    expect(plan.candidates.map((c) => c.target)).not.toContain('/s/broken/old.jsonl')
   })
 
   it('test_the_reason_is_reported_rather_than_silently_skipped', async () => {
@@ -91,10 +91,9 @@ describe('a failing pointer read is isolated to its project', () => {
   it('test_a_failing_pointer_read_is_not_reported_as_a_registry_problem', async () => {
     const plan = await planWith((cwd) => (cwd === '/cwd/broken' ? eacces() : undefined))
 
-    expect(
-      plan.errors.join(' '),
-      'the pointer failed and the message blamed the registry',
-    ).toContain('pointer')
+    expect(plan.errors.join(' '), 'the pointer failed and the message blamed the registry').toContain(
+      'pointer',
+    )
   })
 
   it('test_a_failing_registry_read_still_names_the_registry', async () => {

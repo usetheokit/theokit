@@ -15,7 +15,6 @@ import { encodeProjectDir, legacyTranscriptPath, transcriptPath } from '@theokit
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { GCFloorError, planProjectsGC, type ProjectsGCFs } from '../../src/session/index.js'
-import { sessionPointerPath } from '../../src/session/session-pointer.js'
 import type { LivenessVerdict } from '../../src/session/liveness-oracle.js'
 
 const DAY = 86_400_000
@@ -348,58 +347,6 @@ describe('planProjectsGC protection edge cases', () => {
     expect(undeclared.candidates.map((c) => c.target)).not.toContain(active)
     expect(undeclared.candidates).toEqual([])
     expect(undeclared.kept.some((k) => k.reason.includes('candidateCwdsComplete'))).toBe(true)
-  })
-
-  it('cwdCoverage "transcripts" plans a live project without a declared cwd list', async () => {
-    transcript('new', 1)
-    const old = transcript('old', 300)
-    const registered = transcript('registered', 300)
-    const result = await plan({
-      candidateCwds: undefined,
-      candidateCwdsComplete: undefined,
-      cwdCoverage: 'transcripts',
-      listRegistry: () => Promise.resolve([{ id: 'registered' }]),
-    })
-    expect(result.candidates.map((c) => c.target)).toEqual([old])
-    expect(result.candidates.map((c) => c.target)).not.toContain(registered)
-  })
-
-  it('cwdCoverage "transcripts" still keeps a project whole when a header names no cwd of it', async () => {
-    transcript('new', 1)
-    transcript('old', 300)
-    writeFileSync(join(projects, NAME, 'stray.jsonl'), '{"cwd":"/elsewhere"}\n')
-    const result = await plan({
-      candidateCwds: undefined,
-      candidateCwdsComplete: undefined,
-      cwdCoverage: 'transcripts',
-    })
-    expect(result.candidates).toEqual([])
-    expect(result.kept.some((k) => k.reason.includes('project kept whole'))).toBe(true)
-  })
-
-  it('deadProjects "keep-last" protects only the newest transcripts and reads no pointer or registry', async () => {
-    transcript('new', 1)
-    const pinned = transcript('pinned', 300)
-    const old = transcript('old', 300)
-    writeFileSync(sessionPointerPath(CWD, root), 'pinned\n')
-    const dead = () => new Map([[NAME, { liveness: 'dead' as const, reason: 'gone', cwd: CWD }]])
-    const listRegistry = () => Promise.reject(new Error('must not be read'))
-    const result = await plan({
-      classify: dead,
-      candidateCwds: undefined,
-      candidateCwdsComplete: undefined,
-      deadProjects: 'keep-last',
-      listRegistry,
-    })
-    expect(result.errors).toEqual([])
-    expect(result.candidates.map((c) => c.target).sort((a, b) => a.localeCompare(b))).toEqual(
-      [old, pinned].sort((a, b) => a.localeCompare(b)),
-    )
-    const inspected = await plan({
-      classify: dead,
-      listRegistry: () => Promise.resolve([]),
-    })
-    expect(inspected.candidates.map((c) => c.target)).toEqual([old])
   })
 
   it('a dead verdict does not hide a live cwd known only to its registry', async () => {

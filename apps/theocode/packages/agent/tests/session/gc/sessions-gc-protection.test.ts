@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
-import { GCFloorError, sessionPointerPath } from '@theokit/agents/session'
+import { GCFloorError } from '@theokit/agents/session'
 import { acquireSessionWriter } from '@theokit/sdk/persistence'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -22,6 +22,7 @@ import {
   planAndRunCurrentProjectGC,
   sessionsCommand,
 } from '../../../../cli/src/commands/sessions.js'
+import { pointerPath } from '../../../src/session/gc/pointer.js'
 
 const DAY = 86_400_000
 const NOW = new Date('2026-08-13T12:00:00Z').getTime()
@@ -64,8 +65,8 @@ function writeTranscript(
 }
 
 function writePointer(fx: Fixture, sessionId: string): void {
-  mkdirSync(join(sessionPointerPath(fx.cwd, fx.root), '..'), { recursive: true })
-  writeFileSync(sessionPointerPath(fx.cwd, fx.root), `${sessionId}\n`)
+  mkdirSync(join(pointerPath(fx.cwd), '..'), { recursive: true })
+  writeFileSync(pointerPath(fx.cwd), `${sessionId}\n`)
 }
 
 const fx = withFixture()
@@ -107,7 +108,7 @@ describe('sessions gc never touches a live session', () => {
     const old = writeTranscript(fx, 'old', 90)
     writeTranscript(fx, 'newest', 40)
     // The pointer path is a directory: reading it fails with EISDIR, not ENOENT.
-    mkdirSync(sessionPointerPath(fx.cwd, fx.root), { recursive: true })
+    mkdirSync(`${fx.cwd}/.theokit/tui-session`, { recursive: true })
 
     await expect(run(true)).rejects.toThrow(/refus/i)
     expect(existsSync(old)).toBe(true)
@@ -290,7 +291,7 @@ describe('theocode sessions gc, through sessionsCommand', () => {
   it('test_an_unreadable_pointer_exits_one_and_deletes_nothing', async () => {
     writeTranscript(fx, 'newest', 1)
     const old = writeTranscript(fx, 'old', 90)
-    mkdirSync(sessionPointerPath(fx.cwd, fx.root), { recursive: true })
+    mkdirSync(`${fx.cwd}/.theokit/tui-session`, { recursive: true })
 
     expect(await gc({ apply: true })).toBe(1)
     expect(existsSync(old)).toBe(true)

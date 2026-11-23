@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { Generations } from '../src/sessions/generations.js'
-import { collectTranscripts, startTranscriptSweeper } from '../src/sessions/transcript-gc.js'
+import { collectTranscripts } from '../src/sessions/transcript-gc.js'
 import { sessionsCommand } from '../src/sessions/sessions-command.js'
 import { scratchDir } from './support/cli-harness.js'
 import { Writable } from 'node:stream'
@@ -114,95 +114,5 @@ describe('theoclaw sessions gc', () => {
     expect(await sessionsCommand(['gc'], io)).toBe(0)
     expect(existsSync(paths['theoclaw-x-g0']!)).toBe(false)
     expect(existsSync(paths['theoclaw-x-g1']!)).toBe(true)
-  })
-
-  function capture(workspace: string): {
-    io: Parameters<typeof sessionsCommand>[1]
-    out: () => string
-    err: () => string
-  } {
-    let out = ''
-    let err = ''
-    const sink = (add: (s: string) => void): Writable =>
-      new Writable({ write: (chunk, _e, done) => (add(String(chunk)), done()) })
-    return {
-      io: {
-        env: { THEOCLAW_WORKSPACE: workspace },
-        homeDir: workspace,
-        stdout: sink((s) => (out += s)),
-        stderr: sink((s) => (err += s)),
-      },
-      out: () => out,
-      err: () => err,
-    }
-  }
-
-  it('prints only one JSON line on stdout with --json and honours --days and generations', async () => {
-    const { workspace, paths } = setup(FILES)
-    writeFileSync(
-      join(workspace, '.theoclaw', 'sessions.json'),
-      JSON.stringify({ version: 1, generations: { a: 1, b: 2, c: 1, d: 0 } }),
-    )
-    const cap = capture(workspace)
-    expect(await sessionsCommand(['gc', '--dry-run', '--json', '--days', '55'], cap.io)).toBe(0)
-    const lines = cap.out().trim().split('\n')
-    expect(lines).toHaveLength(1)
-    const report = JSON.parse(lines[0]!) as { dryRun: boolean; removed: string[] }
-    expect(report.dryRun).toBe(true)
-    // 60d and 70d old and retired; the 50d one is inside the 55-day window; d is still current.
-    expect([...report.removed].sort()).toEqual(['theoclaw-b-g0', 'theoclaw-c-g0'])
-    expect(cap.err()).toBe('')
-    for (const path of Object.values(paths)) expect(existsSync(path)).toBe(true)
-  })
-
-  it('rejects --keep-last and says why a flag was refused', async () => {
-    const { workspace } = setup(FILES)
-    const cap = capture(workspace)
-    await expect(sessionsCommand(['gc', '--keep-last', '5'], cap.io)).rejects.toThrow(
-      /--keep-last is not supported/,
-    )
-    await expect(sessionsCommand(['gc', '--days', '0'], cap.io)).rejects.toThrow(
-      /--days requires a positive integer/,
-    )
-  })
-})
-
-describe('collectTranscripts protection by the real file (#2746)', () => {
-  it('keeps a legacy-named, a forked and a held transcript, and collects the retired one', async () => {
-    const { workspace, paths } = setup({ ...FILES, 'newest-g0': 1 })
-    const dir = join(paths['theoclaw-c-g0']!, '..')
-    const forkFile = join(dir, 'a-fork.jsonl') // rows name its source, file name is not the id's
-    writeFileSync(
-      forkFile,
-      `${JSON.stringify({ type: 'user', sessionId: 'theoclaw-b-g1', message: { content: [] } })}\n`,
-    )
-    const old = new Date(Date.now() - 90 * DAY)
-    utimesSync(forkFile, old, old)
-    const result = await collectTranscripts(
-      { workspace, generations: await generations(), heldIds: () => ['theoclaw-b-g1'] },
-      30,
-      true,
-    )
-    expect(existsSync(forkFile)).toBe(true) // no owner: kept
-    expect(existsSync(paths['theoclaw-b-g1']!)).toBe(true) // held
-    expect(existsSync(paths['theoclaw-c-g0']!)).toBe(false) // retired, nobody holds it
-    expect(result.removed).toContain('theoclaw-c-g0')
-  })
-})
-
-
-describe('startTranscriptSweeper', () => {
-  it('collects once at start and reports through write', async () => {
-    const { workspace, paths } = setup({ ...FILES, 'theoclaw-d-g0': 90 })
-    const lines: string[] = []
-    const sweeper = startTranscriptSweeper({
-      workspace,
-      generations: await generations(),
-      retentionDays: 30,
-      write: (line) => lines.push(line),
-    })
-    await sweeper.stop()
-    expect(existsSync(paths['theoclaw-b-g0']!)).toBe(false)
-    expect(lines.join('\n')).toContain('old chat transcripts')
   })
 })

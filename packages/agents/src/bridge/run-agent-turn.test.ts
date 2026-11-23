@@ -68,24 +68,10 @@ describe('runAgentTurn', () => {
     }
   })
 
-  it('a run that waits as cancelled is a cancelled outcome, not a failure', async () => {
+  it('a run that waits as cancelled is a cancelled turn, not a success', async () => {
     const { agent } = fakeAgent({ status: 'cancelled' })
     const outcome = await runAgentTurn({ agent, message: 'hi', runId: 'r', emit: () => {} })
-    expect(outcome).toEqual({ ok: true, cancelled: true })
-  })
-
-  it('takes a message with images and an agent that only sends', async () => {
-    const seen: unknown[] = []
-    const agent = {
-      send: async (message: unknown) => {
-        seen.push(message)
-        return { wait: async () => ({ status: 'finished' }) }
-      },
-    }
-    const message = { text: 'look', images: [{ data: 'AAAA', mimeType: 'image/png' }] }
-    const outcome = await runAgentTurn({ agent, message, runId: 'r', emit: () => {} })
-    expect(outcome).toEqual({ ok: true })
-    expect(seen).toEqual([message])
+    expect(outcome).toMatchObject({ ok: false, code: 'turn_cancelled' })
   })
 
   it('an aborted signal cancels the run and the iterator without waiting on a hung cancel', async () => {
@@ -218,79 +204,5 @@ describe('completeFromTurn', () => {
       }),
     )
     expect(response?.status).toBe(502)
-  })
-})
-
-describe('runAgentTurn: secrets', () => {
-  const SECRET = 'sk-live-0123456789'
-  const run = async (
-    options: FakeOptions,
-    extra: { signal?: AbortSignal } = {},
-  ): Promise<AgentStreamEvent[]> => {
-    const events: AgentStreamEvent[] = []
-    const { agent } = fakeAgent(options)
-    await runAgentTurn({
-      agent,
-      message: 'hi',
-      runId: 'r',
-      secrets: [SECRET],
-      emit: (e) => {
-        events.push(e)
-      },
-      ...extra,
-    })
-    return events
-  }
-
-  it('masks a secret split across two text_delta events and flushes the safe tail', async () => {
-    const events = await run({ deltas: ['key is sk-live-0123', '456789 and sk-li'] })
-    const text = events.map((e) => (e.type === 'text_delta' ? e.content : '')).join('')
-    expect(JSON.stringify(events)).not.toContain(SECRET)
-    expect(text).toBe('key is [redacted] and sk-li')
-  })
-
-  it('masks a secret in a tool result and keeps the order', async () => {
-    const events = await run({
-      deltas: ['before sk-live-01'],
-      messages: [
-        {
-          type: 'tool_call',
-          call_id: 'c1',
-          name: 'shell',
-          status: 'completed',
-          result: `token ${SECRET}`,
-        },
-      ],
-    })
-    expect(JSON.stringify(events)).not.toContain(SECRET)
-    const types = events.map((e) => e.type)
-    expect(types.indexOf('text_delta')).toBeLessThan(types.indexOf('tool_result'))
-    const result = events.find((e) => e.type === 'tool_result')
-    expect(result && 'output' in result && result.output).toContain('[redacted]')
-  })
-
-  it('releases nothing held when the turn is aborted', async () => {
-    const controller = new AbortController()
-    const events: AgentStreamEvent[] = []
-    const { agent } = fakeAgent({
-      deltas: ['sk-live-01'],
-      stream: () =>
-        (async function* () {
-          controller.abort()
-          yield { type: 'assistant', message: { content: [{ type: 'text', text: 'x' }] } }
-        })(),
-    })
-    const outcome = await runAgentTurn({
-      agent,
-      message: 'hi',
-      runId: 'r',
-      secrets: [SECRET],
-      signal: controller.signal,
-      emit: (e) => {
-        events.push(e)
-      },
-    })
-    expect(outcome.ok).toBe(false)
-    expect(events).toEqual([])
   })
 })

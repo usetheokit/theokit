@@ -31,16 +31,6 @@ const frameOf = (node: Parameters<typeof render>[0]): string => {
   return frame
 }
 
-describe('the overlay rows', () => {
-  it('test_rows_are_numbered_and_multiline_previews_collapse_to_one_line', () => {
-    const frame = frameOf(
-      <BacktrackOverlay previews={['first\n  line two', 'second']} selected={0} count={2} />,
-    )
-    expect(frame).toContain('1. first line two')
-    expect(frame).toContain('2. second')
-  })
-})
-
 describe('B-004 — the backtrack overlay windows through the library, and still reads the same', () => {
   it('test_the_selection_sits_mid_window_not_at_the_bottom', () => {
     const frame = frameOf(

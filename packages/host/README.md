@@ -142,7 +142,6 @@ await backup({
 await restore({ from: '/srv/backups/2026-11-19', roots })
 ```
 
-- Restoring to a different project path: pass `transform: rehomeTranscripts({ root: 'state', projectsDir: '.app/projects', from: oldPath, to: newPath })` so the SDK's `projects/<encoded path>/` transcripts move under the new path's name and sessions resume there. Name the root and the `projects` directory your app uses.
 - Each root is copied to `<out>/<name>`; `manifest.json` (path, sha256, size per file) is written last, atomically. Directories are 0700 and files 0600.
 - A symbolic link in a root makes `backup` reject with a `BackupError` naming it. A failed backup removes its output.
 - A root that is itself a symbolic link is rejected too. Backups are portable between POSIX systems; a file name holding a backslash (legal on POSIX only) cannot be restored on Windows, where `restore` refuses it.
@@ -159,7 +158,7 @@ Keep backups in named places, optionally encrypted at rest with AES-256-GCM.
 import { createStorageRegistry } from '@theokit/host/backup'
 
 const storage = createStorageRegistry({ file: '/srv/app/config/storage.json', defaultRoot: '/srv/app/backups' })
-await storage.init('offsite', { root: '/mnt/shared/backups', encrypted: true }) // names: [A-Za-z0-9][A-Za-z0-9_-]{0,63}
+await storage.init('offsite', { root: '/mnt/shared/backups', encrypted: true }) // names: [a-z0-9][a-z0-9_-]{0,63}
 const archive = await storage.store('offsite', '/srv/backups/2026-11-19') // verifies the manifest first
 await storage.fetchLatest('offsite', '/srv/restore-from') // into must be absent or empty; then `restore`
 await storage.test('offsite') // writes, reads back, decrypts and removes a probe
@@ -170,9 +169,6 @@ await storage.test('offsite') // writes, reads back, decrypts and removes a prob
 - An archive is one file (`backup-<time>-<id>.tcbk`, 0600): `TCBK`, a version byte, a mode byte, then a length-prefixed stream of directories and files, read and written through streams so memory does not grow with the backup. A wrong key, a changed byte or a foreign file rejects with `BackupError`.
 - `fetchLatest` unpacks into a private staging directory beside `into`, checks the manifest, then renames it into place; on any failure nothing is left behind. Entries that are absolute, hold `..` or a backslash, or are repeated are refused.
 - `test` reports `sizeBytes` (the archives held) and `freeBytes` when the file system tells.
-- **Earlier TheoClaw data.** A registry written as a flat `{ "<name>": { root, encrypted, key } }` (hex key) is read as is and rewritten in the current format at the next `init`. `fetchLatest` and `test` also read local `backup-<time>.tcb` archives (base64 JSON, `TCBK1` encryption), and pick the newest archive across both formats; `store` always writes `.tcbk`.
-- **Timeout.** A remote request is abandoned after 60 s of silence (`createStorageRegistry({ ..., timeoutMs })`), body included.
-- **Manifest-last directory transfer.** `uploadDirectory(dir, url, { token, timeoutMs })` and `downloadDirectory(dir, url, ...)` move a backup directory file by file to an HTTPS object directory, the manifest last, with no listing endpoint (`If-None-Match: *`, redirects refused, each request bounded by `timeoutMs`, default 60 s).
 - **HTTPS location.** `init('cloud', { root: 'https://host/dir', encrypted, token })` stores archives on a server instead of a directory (`createStorageRegistry({ ..., ca })` adds trusted PEM authorities for a private server). `token` is sent as `Authorization: Bearer` and kept in the registry file only; `list` and errors omit it. The server holds objects at `<url>/<name>`: `PUT` with `If-None-Match: *` (answer 412 for an existing name), `GET`, and `GET <url>/` returning `{"names": [...]}`. `store` uploads `backup-….tcbk` first and `backup-….tcbk.manifest.json` (the manifest) last; only an archive with that marker is a backup, so an interrupted upload is never fetched. `test` checks the listing only (`sizeBytes` is 0).
 - Registry updates are not locked across processes.
 
@@ -214,10 +210,6 @@ if (!check.ok) console.error(check.reason, check.message) // 'connect_refused' |
 
 - `applyOutboundProxy` installs an undici `ProxyAgent` as the **process-wide** global dispatcher when the variable is set, so every `fetch` in the process goes through the proxy. With it unset or blank nothing is installed (`installed: false`).
 - `validateProxy` sends a CONNECT for `target` (`host:port`) to an `http:` or `https:` proxy and returns `{ ok: true, statusCode }` or a typed failure. `timeoutMs` defaults to 5000. Credentials in the URL are sent as basic auth and never appear in messages.
-
-## `teeOutput`
-
-`teeOutput({ file, maxBytes, keep, streams? })` mirrors this process's stdout and stderr (or `streams`) into a 0600 file that never grows past `maxBytes`, keeping `keep` rotated files (`file.1` newest). It returns an uninstall function that restores the streams. It throws if the file cannot be opened.
 
 ## `announceService` (`@theokit/host/discovery`)
 

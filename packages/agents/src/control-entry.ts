@@ -31,16 +31,6 @@ export {
   type ControlClient,
 } from './control/control-client.js'
 export {
-  createControlStreamSource,
-  type ControlStreamClient,
-  type ControlStreamEvent,
-  type ControlStreamFrame,
-  type ControlStreamInbox,
-  type ControlStreamNotice,
-  type ControlStreamOptions,
-  type ControlStreamSource,
-} from './control/control-stream.js'
-export {
   PairingRefusedError,
   redeemPairing,
   type RedeemedPairing,

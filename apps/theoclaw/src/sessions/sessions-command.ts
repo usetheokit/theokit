@@ -13,7 +13,6 @@ import {
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
-import { parseSessionsGcArgs, sessionsGcCommand } from '@theokit/agents/commands'
 import { listSessions } from '@theokit/agents/session'
 
 import { UsageError } from '../cli-args.js'
@@ -46,14 +45,17 @@ interface Message {
 
 const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [--json] | gc [--dry-run] [--days <n>]'
 
-/** The user and assistant turns of a session, read by the framework; entries with no text are dropped. */
-function readMessages(session: ChatSession): Message[] {
-  const stored = readFullHistory({ transcript: session.transcript })
-  // The CLI shows only what was said, not tool calls and results.
+/** The user and assistant turns of a session, read by the SDK; entries with no text are dropped. */
+async function readMessages(session: ChatSession): Promise<Message[]> {
+  const stored = await readFullHistory({
+    cwd: session.workspace,
+    transcript: session.transcript,
+  })
+  // The reader's `text` also renders tool calls and results; the CLI shows only what was said.
   return stored
     .map((entry) => ({
       role: entry.role,
-      text: entry.parts.map((part) => (part.type === 'text' ? part.text : '')).join(''),
+      text: (entry.parts ?? []).map((part) => (part.type === 'text' ? part.text : '')).join(''),
     }))
     .filter((entry) => entry.text !== '')
 }
@@ -179,7 +181,7 @@ async function shareCommand(
   try {
     writeFileSync(
       fd,
-      `${JSON.stringify({ id: session.id, messages: readMessages(session) })}\n`,
+      `${JSON.stringify({ id: session.id, messages: await readMessages(session) })}\n`,
     )
     fchmodSync(fd, 0o444)
   } finally {
@@ -200,7 +202,7 @@ export async function resumeCommand(args: readonly string[], io: SessionsIo): Pr
     return 1
   }
   io.stdout.write(`resuming session ${last.id}\n`)
-  for (const message of readMessages(last))
+  for (const message of await readMessages(last))
     io.stdout.write(`${message.role}: ${message.text}\n`)
   return 0
 }
@@ -211,53 +213,31 @@ export async function resumeCommand(args: readonly string[], io: SessionsIo): Pr
  * holds, which the daemon's own sweep protects, but such a transcript is being written and so is not old.
  */
 async function gcCommand(args: readonly string[], io: SessionsIo): Promise<number> {
-  // TheoClaw applies by default (`--dry-run` previews); `--days` is the retention in days.
-  const parsed = parseSessionsGcArgs(args, { apply: true })
-  if (!parsed.ok) throw new UsageError(`${USAGE_TEXT} (${parsed.message})`)
-  // The retention is the age alone: the newest transcript always survives, so a keep bound has no meaning here.
-  if (parsed.keepLast !== undefined)
-    throw new UsageError(`${USAGE_TEXT} (--keep-last is not supported)`)
+  const dryRun = args.includes('--dry-run')
+  const rest = args.filter((arg) => arg !== '--dry-run')
+  const at = rest.indexOf('--days')
+  const daysText = at >= 0 ? rest[at + 1] : undefined
+  const left = rest.filter((_, index) => at < 0 || (index !== at && index !== at + 1))
+  if (
+    left.length > 0 ||
+    (at >= 0 && (daysText === undefined || !/^\d+$/.test(daysText) || Number(daysText) < 1))
+  )
+    throw new UsageError(USAGE_TEXT)
   const env: NodeJS.ProcessEnv = { ...io.env }
   const workspace = chatWorkspace(env, io)
-  const days = parsed.maxAgeDays ?? readRetentionDays(env)
-  const generations = Generations.load(sessionsFile(workspace))
-  let errors: readonly string[] = []
-  const outcome = await sessionsGcCommand({
-    cwd: workspace,
-    apply: parsed.apply,
-    json: parsed.json,
-    maxAgeDays: days,
-    human: (_plan, result) => {
-      const verb = result.dryRun ? 'would remove' : 'removed'
-      return [
-        ...result.removed.map((id) => `${verb} ${id}`),
-        ...result.orphaned.map((path) => `${verb} ${path} (id unreadable)`),
-        `${verb} ${result.removed.length + result.orphaned.length} transcripts older than ${days} days`,
-      ]
-    },
-    run: async ({ apply }) => {
-      const swept = await collectTranscripts({ workspace, generations }, days, apply)
-      errors = swept.errors
-      return {
-        plan: { cwd: workspace, root: join(workspace, '.theoclaw'), candidates: [], kept: [] },
-        result: {
-          dryRun: swept.dryRun,
-          removed: [...swept.removed],
-          orphaned: [...swept.orphaned],
-          errors: swept.errors.map((text) => {
-            const at = text.indexOf(': ')
-            return at < 0
-              ? { id: undefined, message: text }
-              : { id: text.slice(0, at), message: text.slice(at + 2) }
-          }),
-        },
-      }
-    },
-  })
-  for (const line of outcome.lines) io.stdout.write(`${line}\n`)
-  // Errors stay on stderr, so stdout is only the report (or the one JSON line).
-  for (const error of errors) io.stderr.write(`theoclaw: ${error}\n`)
-  return outcome.failed > 0 ? 1 : 0
+  const days = daysText === undefined ? readRetentionDays(env) : Number(daysText)
+  const result = await collectTranscripts(
+    { workspace, generations: Generations.load(sessionsFile(workspace)) },
+    days,
+    !dryRun,
+  )
+  const verb = dryRun ? 'would remove' : 'removed'
+  for (const id of result.removed) io.stdout.write(`${verb} ${id}\n`)
+  for (const path of result.orphaned) io.stdout.write(`${verb} ${path} (id unreadable)\n`)
+  for (const error of result.errors) io.stderr.write(`theoclaw: ${error}\n`)
+  const total = result.removed.length + result.orphaned.length
+  io.stdout.write(`${verb} ${total} transcripts older than ${days} days\n`)
+  return result.errors.length > 0 ? 1 : 0
 }
 
 export async function sessionsCommand(args: readonly string[], io: SessionsIo): Promise<number> {
@@ -282,7 +262,7 @@ export async function sessionsCommand(args: readonly string[], io: SessionsIo): 
   if (verb === 'list') {
     for (const entry of sessions) {
       io.stdout.write(
-        `${entry.id}\t${(readMessages(entry)).length} messages\t${entry.modifiedAt.toISOString()}\n`,
+        `${entry.id}\t${(await readMessages(entry)).length} messages\t${entry.modifiedAt.toISOString()}\n`,
       )
     }
     return 0
@@ -290,7 +270,7 @@ export async function sessionsCommand(args: readonly string[], io: SessionsIo): 
   const wanted = operands[0]!
   const session = pickSession(sessions, wanted, io)
   if (session === undefined) return 1
-  const messages = readMessages(session)
+  const messages = await readMessages(session)
   if (verb === 'show') {
     io.stdout.write(
       `id: ${session.id}\nmessages: ${messages.length}\nupdated: ${session.modifiedAt.toISOString()}\n`,

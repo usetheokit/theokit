@@ -12,7 +12,7 @@
     "@theocode/shared": "link:../shared",
     "@theokit/agents": "17.0.0",
     "@theokit/agents-pty": "0.2.1",
-    "@theokit/sdk": "13.0.0",
+    "@theokit/sdk": "9.0.0",
     "@theokit/tui": "^0.83.4",
     "ink": "^7.1.0",
     "lowlight": "^3.0.0",

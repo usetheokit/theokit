@@ -3,11 +3,14 @@ import { createACPTool } from 'theokit/server/agent'
 import type { ToolScope } from '@theokit/agents/tool-scope'
 import { createExtractDocumentTool } from '@theokit/sdk-tools/extract-document'
 import { createGithubLinkPreviewTool } from '@theokit/sdk-tools/github-link-preview'
+import { createSearxngWebSearchAdapter, createTavilyWebSearchAdapter } from '@theokit/sdk-tools/web-search-adapters'
 import { createReadPdfTool } from '@theokit/sdk-tools/read-pdf'
 import { createScreenshotLogbookTool } from '@theokit/sdk-tools/screenshot-logbook'
 import {
   createApplyPatchTool,
+  createBraveWebSearchAdapter,
   createEditFileTool,
+  createGenericHttpSearchAdapter,
   createGitDiffTool,
   createInteractiveShellTool,
   createListDirTool,
@@ -31,6 +34,7 @@ import { cloudWorkerPort, codingWorkerPort, codingWorkersAvailable } from './cod
 import { computerTool } from './computer-tool.js'
 import { execApprovalPlugin, type ExecApprovalOptions } from './exec-approval.js'
 import { questionTool, taskTools } from './control-tools.js'
+import { loopDetectionPlugin } from './loop-detection.js'
 import { pathVetoPlugin, toolScopeOf } from './path-veto.js'
 import { provenanceGuardPlugin } from './provenance-guard.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -69,8 +73,14 @@ function acpTools(settings: ToolSettings, permission: AcpPermissionOptions): Cus
 
 /** `web_search` over the adapter the settings chose, or none when search is off. */
 function webSearchTool(settings: ToolSettings): CustomTool | undefined {
-  const { adapter } = settings.search
-  return adapter === undefined ? undefined : createWebSearchTool({ search: adapter })
+  const { kind, url, key } = settings.search
+  if (kind === 'brave') return createWebSearchTool({ search: createBraveWebSearchAdapter({ apiKey: key, fetchImpl: settings.fetchImpl }) })
+  if (kind === 'searxng') return createWebSearchTool({ search: createSearxngWebSearchAdapter({ baseUrl: url, fetchImpl: settings.fetchImpl }) })
+  if (kind === 'tavily') return createWebSearchTool({ search: createTavilyWebSearchAdapter({ apiKey: key, fetchImpl: settings.fetchImpl }) })
+  if (kind === 'generic') {
+    return createWebSearchTool({ search: createGenericHttpSearchAdapter({ apiKey: key, endpoint: url, fetchImpl: settings.fetchImpl }) })
+  }
+  return undefined
 }
 
 /** `web_fetch` on the settings' fetch and DNS lookup, its SSRF screen kept (B-398 FR-003). */
@@ -208,7 +218,7 @@ export function agentToolOptions(
   }
   // The exec gate is installed only with host tools on and exec options given (the composition gives them with a state
   // directory). Without an asker it refuses what no saved approval or reviewer allowed.
-  const plugins = [pathVetoPlugin(settings, scope), provenanceGuardPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
+  const plugins = [pathVetoPlugin(settings, scope), provenanceGuardPlugin(), loopDetectionPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
   const base = { tools, plugins }
   const servers = mcpServersOf(settings)
   return Object.keys(servers).length === 0 ? base : { ...base, mcpServers: servers }
@@ -230,7 +240,7 @@ function mcpServersOf(settings: ToolSettings): Record<string, McpServerConfig> {
  * A scheduled run's agent gets the same (B-396), so it holds no schedule tool either.
  */
 export function workerToolOptions(settings: ToolSettings): AgentToolOptions {
-  return { tools: readOnlyTools(settings), plugins: [pathVetoPlugin(settings), provenanceGuardPlugin()] }
+  return { tools: readOnlyTools(settings), plugins: [pathVetoPlugin(settings), provenanceGuardPlugin(), loopDetectionPlugin()] }
 }
 
 /**

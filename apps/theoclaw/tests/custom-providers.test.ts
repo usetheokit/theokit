@@ -31,16 +31,3 @@ describe('THEOCLAW_PROVIDERS', () => {
     expect(() => requireModel({ ...env, PARTICLE_API_KEY: '' })).toThrow(/PARTICLE_API_KEY/)
   })
 })
-
-describe('the default model key', () => {
-  it('prefers THEOKIT_API_KEY, falls back to OPENROUTER_API_KEY, treats blank as unset', () => {
-    const base = { THEOCLAW_MODEL: 'some/model' }
-    expect(requireModel({ ...base, THEOKIT_API_KEY: 'a', OPENROUTER_API_KEY: 'b' }).modelKey).toBe('a')
-    expect(requireModel({ ...base, THEOKIT_API_KEY: '  ', OPENROUTER_API_KEY: 'b' }).modelKey).toBe('b')
-    expect(() => requireModel({ ...base, THEOKIT_API_KEY: ' ' })).toThrow(/THEOKIT_API_KEY/)
-  })
-
-  it('ignores a stray THEOKIT_PROVIDER pin', () => {
-    expect(requireModel({ THEOCLAW_MODEL: 'm/x', THEOKIT_PROVIDER: 'anthropic', OPENROUTER_API_KEY: 'b' }).modelKey).toBe('b')
-  })
-})

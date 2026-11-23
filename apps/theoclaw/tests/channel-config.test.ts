@@ -48,14 +48,6 @@ describe('resolvePlatforms', () => {
     expect(resolved.secrets).toEqual([])
   })
 
-  it('reads only the Telegram token: the published descriptor\'s other settings stay unread', () => {
-    const resolved = resolvePlatforms({
-      THEOCLAW_TELEGRAM_TOKEN: 'telegram-token-value', THEOCLAW_TELEGRAM_ALLOWED_USERS: '9',
-      THEOCLAW_TELEGRAM_API_BASE: 'https://elsewhere.example',
-    })
-    expect(resolved.configured).toEqual([{ platform: 'telegram', settings: { token: 'telegram-token-value' } }])
-  })
-
   it('passes a value on trimmed', () => {
     const resolved = resolvePlatforms({ THEOCLAW_TELEGRAM_TOKEN: ' telegram-token-value\n' })
 

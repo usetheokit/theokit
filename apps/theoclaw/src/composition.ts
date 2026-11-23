@@ -4,13 +4,14 @@ import { mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { redactSecrets } from '@theokit/gateway'
-import { createFilePairingStore, createWebhookHandler } from '@theokit/gateway'
-import type { BuiltChannel, ChannelDescriptor, PairingStore, PlatformName } from '@theokit/gateway'
+import { createWebhookHandler } from '@theokit/gateway'
+import type { BuiltChannel, ChannelDescriptor, PlatformName } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, CustomTool, Plugin, SDKAgent } from '@theokit/sdk'
 
 import { createContainer } from './agent-container.js'
 import { TheoClawConfigError } from './control-plane/errors.js'
+import { createPairingStore, type PairingStore } from './authorization/pairing-store.js'
 import {
   type AuthorizationPolicy,
   isAuthenticatedSender,
@@ -18,8 +19,8 @@ import {
   parseAuthorizationPolicy,
 } from './authorization/policy.js'
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
-import { maskSecrets } from '@theokit/gateway'
-import { startChannelLoop } from './channels/channel-loop.js'
+import { createBroadcastGroups } from './channels/broadcast-groups.js'
+import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import type { RetryPolicy } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
@@ -263,7 +264,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
   // The store exists only with a state directory; the hook runs without one under the other policies.
-  const pairing = options.pairing ?? pairingStoreFor(policy)
+  const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
   const usage = createUsageHook({ keyOf: chat.keyOf })
   const model = options.env.THEOCLAW_MODEL
   const ackReaction = readAckReaction(options.env)
@@ -313,7 +314,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       // `loop` is read per message, after it exists: a member whose platform has not started is
       // reported as not delivered.
       broadcast: {
-        groups: policy.broadcastGroups,
+        groups: createBroadcastGroups(policy.broadcastGroups),
         adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
         write: maskedWrite,
       },
@@ -433,16 +434,11 @@ function execApprovalFor(given: TheoClawOptions['execApproval'], stateDir: strin
 }
 
 /** The store of `policy.stateDir`, or none without one. Throws on a state file it cannot read. */
-export function pairingStoreFor(policy: AuthorizationPolicy): PairingStore | undefined {
-  if (policy.stateDir === undefined) return undefined
-  const path = join(policy.stateDir, 'pairing.json')
-  try {
-    // Created at start, so a missing directory is not discovered at the first approval.
-    mkdirSync(policy.stateDir, { recursive: true, mode: 0o700 })
-    return createFilePairingStore({ dir: policy.stateDir })
-  } catch (error) {
-    throw new TheoClawConfigError(`${path} cannot be used as the pairing file: ${describeError(error)}; fix or remove it`, { variable: 'THEOCLAW_STATE_DIR' })
-  }
+function pairingStoreFor(
+  policy: AuthorizationPolicy,
+  write: (line: string) => void,
+): PairingStore | undefined {
+  return policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write })
 }
 
 /**
@@ -594,9 +590,8 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
   }
   const stderr = logged(options.stderr ?? lineWriter(streams[streams.length - 1]))
   // Loaded before the start line, the mask and the shutdown: an unreadable pairing file leaves nothing behind.
-  // A bad platform setting throws here, before the pairing file is read or anything is installed.
-  resolvePlatforms(options.env)
-  const pairing = pairingStoreFor(policy)
+  const secrets = resolvePlatforms(options.env).secrets
+  const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
   const instance = announceInstance(options.instance, stderr, options.importedLine)
   const mask = installOutputMask(secretValues, streams)

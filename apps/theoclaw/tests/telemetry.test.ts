@@ -117,19 +117,6 @@ describe("registered telemetry (FR-006, NFR-004)", () => {
     expect(names).toContain("theokit_llm_call_duration_ms");
   });
 
-  it("leaves a provider another caller registered alone and reports it", async () => {
-    const lines: string[] = [];
-    const first = keep(await registerTelemetry(readTelemetrySettings(ON), { write: () => undefined, spanExporter: new InMemorySpanExporter(), metricExporter: new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE), logExporter: new InMemoryLogRecordExporter() }));
-    const second = await registerTelemetry(readTelemetrySettings(ON), { write: (line) => void lines.push(line) });
-    await second.shutdown();
-
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^theoclaw: telemetry export failed: .*already registered/);
-    // The first registration still works after the second one shut down.
-    expect(() => first.log("still here")).not.toThrow();
-    await expect(first.flush()).resolves.toBeUndefined();
-  });
-
   // The turn keeps its 1000 ms regression budget below; the test also awaits exporter shutdown,
   // whose own timeout is 5000 ms, so the harness deadline must allow that cleanup to finish.
   it("an unreachable endpoint does not fail the turn", async () => {

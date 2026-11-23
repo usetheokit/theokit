@@ -16,8 +16,8 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { CODEX_NAMES, codexNameAnswer } from '../../src/commands/codex-names.js'
-import { BUILTIN_COMMAND_NAMES, commandPalette, routeCommand } from '../../src/commands/registry.js'
+import { CODEX_NAMES, CODEX_NAME_COMMANDS, codexNameAnswer } from '../../src/commands/codex-names.js'
+import { BUILTIN_COMMAND_NAMES, routeCommand } from '../../src/commands/registry.js'
 
 describe('a Codex name is answered, not refused', () => {
   it('test_every_mapped_name_routes_instead_of_erroring', () => {
@@ -51,7 +51,7 @@ describe('a Codex name is answered, not refused', () => {
   })
 
   it('test_the_menu_offers_only_the_names_that_point_at_a_real_feature', () => {
-    const listed = new Set(commandPalette(new Map()).map((c) => c.name))
+    const listed = new Set(CODEX_NAME_COMMANDS.map((c) => c.name))
 
     expect(listed.has('memories'), 'a name with a real equivalent is hidden from the menu').toBe(
       true,
@@ -103,7 +103,7 @@ describe("this build's own verbs are not shadowed", () => {
     // Anti-drift: implementing one of these for real must not leave the pointer behind. The
     // ordering makes a stale pointer harmless, and this makes it visible.
     const ownVerbs = new Set(
-      [...BUILTIN_COMMAND_NAMES].filter((n) => !(CODEX_NAMES.get(n)?.listed ?? false)),
+      [...BUILTIN_COMMAND_NAMES].filter((n) => !CODEX_NAME_COMMANDS.some((c) => c.name === n)),
     )
     const shadowed = [...CODEX_NAMES.keys()].filter((n) => ownVerbs.has(n))
 

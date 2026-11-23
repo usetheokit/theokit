@@ -77,8 +77,4 @@ jobs:
       # exports it (#977, PR #976). A floor break belongs to the pull request that adds it.
       run-install-check: ${{ github.base_ref == 'main' || inputs.full == true }}
       run-floor-check: ${{ github.base_ref == 'main' || github.base_ref == 'develop' || inputs.full == true }}
-      # The floors are a claim about the packages under `packages/*`, the only ones dep-check reads
-      # ranges from. `build` also compiles `apps/theoclaw`, which pins `@theokit/sdk` exactly and uses
-      # APIs the shared floor lacks, so the leg failed on the application instead of on a range (#2768).
-      build-command: pnpm build:packages
       run-impact-check: ${{ github.base_ref == 'main' || inputs.full == true }}

@@ -17,8 +17,6 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { sessionPointerPath } from '@theokit/agents/session'
-
 import { fireAndForget } from '../../src/persistence/fire-and-forget.js'
 import { persistSessionId } from '../../src/persistence/session-store.js'
 
@@ -72,10 +70,10 @@ describe('B-031 — no exported persist function can reject', () => {
     // directory does NOT work here — `atomicWriteText` creates it, which a first version of this
     // test did not know and which made its premise false.
     writeFileSync(join(dir, 'blocker'), 'not a directory')
-    const unwritable = join(dir, 'blocker')
+    const unwritable = join(dir, 'blocker', 'pointer')
 
     await expect(
-      persistSessionId('/tmp/proj', 'tui-1', (m) => reports.push(m), unwritable),
+      persistSessionId(unwritable, 'tui-1', (m) => reports.push(m)),
       'a failed pointer write rejected, and a bare `void` caller would crash the TUI',
     ).resolves.toBeUndefined()
 
@@ -89,11 +87,11 @@ describe('B-031 — no exported persist function can reject', () => {
     // Anti-vacuity floor: reporting on every write would satisfy the assertion above.
     const reports: string[] = []
     const dir = mkdtempSync(join(tmpdir(), 'theocode-persist-'))
-    const file = sessionPointerPath('/tmp/proj', dir)
+    const file = join(dir, 'pointer')
 
-    await persistSessionId('/tmp/proj', 'tui-42', (m) => reports.push(m), dir)
+    await persistSessionId(file, 'tui-42', (m) => reports.push(m))
 
-    expect(readFileSync(file, 'utf8')).toBe('tui-42\n')
+    expect(readFileSync(file, 'utf8')).toBe('tui-42')
     expect(reports).toEqual([])
     rmSync(dir, { recursive: true, force: true })
   })

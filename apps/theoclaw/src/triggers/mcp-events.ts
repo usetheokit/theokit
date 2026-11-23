@@ -3,7 +3,7 @@ import { createMcpEventSubscriber } from '@theokit/sdk/mcp-events'
 import type { McpEventDelivery, McpEventSubscriber } from '@theokit/sdk/mcp-events'
 
 import type { TurnAgent } from '../agent-port.js'
-import { maskSecrets } from '@theokit/gateway'
+import { maskSecrets } from '../channels/channel-loop.js'
 import { deliverText, frameUntrusted, runAgentText } from '@theokit/gateway-agent'
 import { describeError } from '../control-plane/errors.js'
 import type { McpEventsSettings } from './mcp-events-settings.js'

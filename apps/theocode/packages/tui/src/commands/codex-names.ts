@@ -1,3 +1,5 @@
+import type { ChatComposerCommand } from '@theokit/tui'
+
 /**
  * The Codex slash commands this product does not implement — answered instead of refused.
  *
@@ -68,8 +70,7 @@ export const CODEX_NAMES: ReadonlyMap<string, CodexName> = new Map([
     // exactly where a user would notice.
     'recap',
     {
-      answer:
-        'no on-demand recap — /compact summarises to reclaim context, which is a different reason',
+      answer: 'no on-demand recap — /compact summarises to reclaim context, which is a different reason',
       listed: true,
     },
   ],
@@ -78,8 +79,7 @@ export const CODEX_NAMES: ReadonlyMap<string, CodexName> = new Map([
     // leaves the checkout alone; nothing here creates a git worktree.
     'worktree',
     {
-      answer:
-        'no git-worktree session — /fork branches this session, and leaves the checkout where it is',
+      answer: 'no git-worktree session — /fork branches this session, and leaves the checkout where it is',
       listed: true,
     },
   ],
@@ -181,6 +181,11 @@ export const CODEX_NAMES: ReadonlyMap<string, CodexName> = new Map([
     },
   ],
 ])
+
+/** The subset the `/` menu offers, in the shape the composer takes. */
+export const CODEX_NAME_COMMANDS: readonly ChatComposerCommand[] = [...CODEX_NAMES.entries()]
+  .filter(([, v]) => v.listed)
+  .map(([name, v]) => ({ name, description: v.answer }))
 
 /**
  * What `/name` says when it is a Codex name this build does not implement.

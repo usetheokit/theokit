@@ -99,7 +99,7 @@ describe('the settings row', () => {
       ],
     }).find((c) => c.name === 'settings')
 
-    expect(check?.detail).toContain('permissions not supported')
+    expect(check?.detail).toContain('permission entries not honoured')
     expect(check?.detail).not.toMatch(/no permission rule .* is in force/i)
   })
 

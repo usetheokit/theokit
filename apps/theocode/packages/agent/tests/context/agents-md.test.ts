@@ -33,29 +33,29 @@ afterEach(() => {
   rmSync(join(root, '..'), { recursive: true, force: true })
 })
 
-describe('B-042 — an import cannot escape the project root', async () => {
-  it('test_an_import_inside_the_project_is_expanded', async () => {
+describe('B-042 — an import cannot escape the project root', () => {
+  it('test_an_import_inside_the_project_is_expanded', () => {
     // Anti-vacuity floor: refusing every import would satisfy the assertions below.
     writeFileSync(join(root, 'shared.md'), 'SHARED GUIDANCE')
     writeFileSync(join(root, 'AGENTS.md'), 'see @shared.md')
 
-    expect(await loadAgentsMd(root, vi.fn())).toContain('SHARED GUIDANCE')
+    expect(loadAgentsMd(root, vi.fn())).toContain('SHARED GUIDANCE')
   })
 
-  it('test_a_relative_escape_is_refused', async () => {
+  it('test_a_relative_escape_is_refused', () => {
     writeFileSync(join(root, 'AGENTS.md'), 'see @../outside/secret.md')
 
-    expect(await loadAgentsMd(root, vi.fn())).not.toContain('THE SECRET CONTENT')
+    expect(loadAgentsMd(root, vi.fn())).not.toContain('THE SECRET CONTENT')
   })
 
-  it('test_a_symlink_out_of_the_project_is_refused', async () => {
+  it('test_a_symlink_out_of_the_project_is_refused', () => {
     // The path RESOLVES inside the project; only the link target is outside. `resolve()` does not
     // follow symlinks, so the containment check saw an inside path and let the read follow it out.
     symlinkSync(join(outside, 'secret.md'), join(root, 'looks-local.md'))
     writeFileSync(join(root, 'AGENTS.md'), 'see @looks-local.md')
 
     expect(
-      await loadAgentsMd(root, vi.fn()),
+      loadAgentsMd(root, vi.fn()),
       'a symlink inside the project pulled a file from outside it into the system prompt',
     ).not.toContain('THE SECRET CONTENT')
   })

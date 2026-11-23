@@ -817,8 +817,8 @@ it is dead after a reload too.
 
 **The primitives that would close this exist and have zero callers.** The session barrel exports
 identifier load/persist helpers (`packages/agents/src/session/index.ts:1`) whose only production
-consumer anywhere is the transcript garbage collector, which reads the pointer file through
-`sessionPointerPath` (`packages/agents/src/session/gc/projects-gc.ts:366`). This is the pattern Wave 0.5 was created for:
+consumer anywhere is the transcript garbage collector
+(`packages/theo/src/cli/commands/sessions-gc.ts:89`). This is the pattern Wave 0.5 was created for:
 built, tested, never connected.
 
 **So J4's blocker is small and specific** — an injectable thread id plus a way to read history back

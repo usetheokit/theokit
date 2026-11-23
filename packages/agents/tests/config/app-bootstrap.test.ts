@@ -1,7 +1,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseEnv } from 'node:util'
 
 import { SOVEREIGN_ENV_KEYS } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -129,96 +128,6 @@ describe('app bootstrap', () => {
     await defineAppBootstrap([projectEnvStep]).run(ctx(env, dir))
     expect(env.APP_VALUE).toBe('1')
     expect(env[sovereign]).toBeUndefined()
-  })
-
-  describe('project .env declarations', () => {
-    async function load(text: string, env: NodeJS.ProcessEnv = {}, protectedKeys: string[] = []) {
-      const dir = mkdtempSync(join(tmpdir(), 'bootstrap-'))
-      dirs.push(dir)
-      writeFileSync(join(dir, '.env'), text)
-      const c = ctx(env, dir)
-      await defineAppBootstrap([projectEnvStepWith({ protectedKeys })]).run(c)
-      return { env, record: c.projectEnv! }
-    }
-
-    it('loads mixed-case identifiers, with leading space and an export prefix', async () => {
-      const { record } = await load('  Mixed_Case1=a\n  export  Other_2=b\n_x=c\n')
-      expect([...record.loaded].sort((a, b) => a.localeCompare(b))).toEqual([
-        '_x',
-        'Mixed_Case1',
-        'Other_2',
-      ])
-    })
-
-    it('loads a declaration below a line with no equals sign or no name, whatever the Node', async () => {
-      // On Node 22.12, the floor in .nvmrc, util.parseEnv drops every declaration after a line with
-      // no `=`: handing it the raw file loaded nothing here, while Node 22.23 loaded GOOD.
-      const { env, record } = await load('# a comment\n\n=NO_NAME\nNO_EQUALS_SIGN\nGOOD=y\n')
-      expect([...record.loaded]).toEqual(['GOOD'])
-      expect(env.GOOD).toBe('y')
-    })
-
-    it('reads a CRLF multiline quoted value as Node reads it, and export with several spaces', async () => {
-      const { env, record } = await load('export   A="one\r\ntwo"\r\nB=2\r\n')
-      // Node's own parser folds CRLF in a quoted value to LF; the scan must not change that either way.
-      expect(env.A).toBe(parseEnv('A="one\r\ntwo"').A)
-      expect([...record.loaded].sort((a, b) => a.localeCompare(b))).toEqual(['A', 'B'])
-    })
-
-    it('ignores names that are not identifiers', async () => {
-      const { env, record } = await load('BAD-NAME=x\n1BAD=y\nBAD.DOT=z\nGOOD=1\n')
-      expect(record.loaded).toEqual(['GOOD'])
-      expect(env['BAD-NAME']).toBeUndefined()
-      expect(env['1BAD']).toBeUndefined()
-      expect(env['BAD.DOT']).toBeUndefined()
-    })
-
-    it('skips comments and reads CRLF files', async () => {
-      const { record } = await load('# C=3\r\nA=1\r\nB=2\r\n')
-      expect([...record.loaded].sort((a, b) => a.localeCompare(b))).toEqual(['A', 'B'])
-    })
-
-    it('does not read a declaration from inside a multiline quoted value', async () => {
-      const { env, record } = await load('A="first\nINSIDE=no\nlast"\nB=2\n')
-      expect([...record.loaded].sort((a, b) => a.localeCompare(b))).toEqual(['A', 'B'])
-      expect(env.INSIDE).toBeUndefined()
-    })
-
-    it('resumes after a value closed by a lone quote line', async () => {
-      const { record } = await load('A="first\nmiddle\n"\nB=2\n')
-      expect([...record.loaded].sort((a, b) => a.localeCompare(b))).toEqual(['A', 'B'])
-    })
-
-    it('resumes after a backtick multiline value', async () => {
-      const { record } = await load('A=`first\nINSIDE=no\nlast`\nB=2\n')
-      expect(record.loaded).not.toContain('INSIDE')
-      expect(record.loaded).toContain('B')
-    })
-
-    it('reads the declaration after a value that opens and closes on one line', async () => {
-      const { record } = await load('A="one line"\nB=2\n')
-      expect([...record.loaded].sort((a, b) => a.localeCompare(b))).toEqual(['A', 'B'])
-    })
-
-    it('stops at an unterminated quote: later lines are not declarations', async () => {
-      const { env, record } = await load('GOOD=1\nOPEN="never closed\nHIDDEN=5\n')
-      expect(record.loaded).toEqual(['GOOD'])
-      expect(env.OPEN).toBeUndefined()
-      expect(env.HIDDEN).toBeUndefined()
-    })
-
-    it('keeps a shell value and does not report it loaded', async () => {
-      const { env, record } = await load('A=file\nB=file\n', { A: 'shell' })
-      expect(env.A).toBe('shell')
-      expect(record.loaded).toEqual(['B'])
-    })
-
-    it('reports a protected key refused while still scanning strictly', async () => {
-      const { env, record } = await load('P=1\nBAD-NAME=x\nOK=2\n', {}, ['P'])
-      expect(record.refused).toEqual(['P'])
-      expect(record.loaded).toEqual(['OK'])
-      expect(env.P).toBeUndefined()
-    })
   })
 
   it('projectEnvStepWith leaves a protected key unset and reports it refused', async () => {

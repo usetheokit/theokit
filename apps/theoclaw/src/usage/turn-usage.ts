@@ -1,4 +1,4 @@
-import { formatUsd, usageFromRun } from '@theokit/agents/usage'
+import { usageFromRun } from '@theokit/agents/usage'
 
 import type { TurnRun } from '../agent-port.js'
 
@@ -17,6 +17,8 @@ export type UsageSurface = 'channel' | 'control' | 'webchat'
 /** A conversation's footer, as `/usage` sets it; `off` adds none. */
 export type UsageFooterMode = 'tokens' | 'cost' | 'full'
 
+const SIGNIFICANT_DIGITS = 6
+
 type RunResult = Pick<Awaited<ReturnType<TurnRun['wait']>>, 'usage' | 'cost'>
 
 /**
@@ -30,8 +32,21 @@ export function usageOf(result: RunResult, model: string): TurnUsage {
   return priced ? { ...base, costUsd } : { ...base, costUnpriced: true }
 }
 
+/**
+ * Six significant digits with trailing zeros trimmed, so a cost below a millionth prints its
+ * digits instead of reading as 0 (EC-4). `toFixed` takes at most 100 decimals and prints an
+ * exponent from 1e21 up; no run costs less than 1e-100 or more than 1e21 USD.
+ */
+function formatAmount(amount: number): string {
+  const rounded = Number(amount.toPrecision(SIGNIFICANT_DIGITS))
+  if (rounded === 0) return '0'
+  const decimals = SIGNIFICANT_DIGITS - 1 - Math.floor(Math.log10(Math.abs(rounded)))
+  const fixed = rounded.toFixed(Math.min(Math.max(decimals, 0), 100))
+  return fixed.includes('.') ? fixed.replace(/0+$/, '').replace(/\.$/, '') : fixed
+}
+
 function costText(usage: TurnUsage, unpriced: string): string {
-  return usage.costUsd === undefined ? unpriced : `$${formatUsd(usage.costUsd)}`
+  return usage.costUsd === undefined ? unpriced : `$${formatAmount(usage.costUsd)}`
 }
 
 /** The one process line a finished turn writes (FR-004); it carries counts and a model id only. */

@@ -123,9 +123,13 @@ describe('THEOCLAW_MEMORY_BACKEND', () => {
         { text: 'done' },
       ]
       const first = await agentWith(memory, [review])
-      // The SDK agent itself, without TheoClaw's recording wrapper: the SDK mirrors the reviewer's fact.
-      await (await first.agent.send('hello')).wait()
-      await first.agent.dispose()
+      const recorded = memory.record(
+        first.agent as unknown as Parameters<typeof memory.record>[0],
+        'tui',
+        'k',
+      )
+      await (await recorded.send('hello')).wait()
+      await (recorded as unknown as { dispose(): Promise<void> }).dispose()
       await first.stub.close()
       expect(written).toEqual([
         { content: 'The owner keeps a heron called Quillon-7731', userId: 'owner' },

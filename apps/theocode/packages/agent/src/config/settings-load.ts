@@ -8,17 +8,25 @@
 import { dirname } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
+import { join, sep } from 'node:path'
 import process from 'node:process'
 
 import { CONFIG_SCHEMA_KEYS, ConfigError } from './config-contract.js'
 import { DEFAULT_HOME_DIR, LEGACY_HOME_DIR, homeStateDir } from './home-dir.js'
 import { readManagedSettingsTranslated } from './managed-settings.js'
 import { translateSettings } from './settings-json.js'
-import { settingsCandidates } from '@theokit/agents/config'
-import type {
-  PermissionRule,
-  SettingsCandidate as FrameworkCandidate,
-} from '@theokit/agents/config'
+import type { PermissionRule } from '@theokit/agents/config'
+
+/**
+ * The foreign root, read by name and not by guess. Both roots are consulted for every file layer and
+ * THIS PRODUCT'S OWN ROOT WINS — the same rule `config.toml` discovery already records below, for
+ * the same reason: an operator who moves their file must see the move take effect, and the opposite
+ * silence is the worse of the two.
+ */
+const FOREIGN_ROOT = '.claude'
+
+const SETTINGS_FILE = 'settings.json'
+const LOCAL_SETTINGS_FILE = 'settings.local.json'
 
 /**
  * Read one `settings.json`, translate the foreign dialect out of it, and hand back what the schema
@@ -100,53 +108,45 @@ export interface SettingsCandidate {
   readonly hooksDelivery: 'ours' | 'refuse' | 'sdk' | 'inert'
 }
 
-export function layerCandidates(opts: {
+const ours = (path: string): SettingsCandidate => ({
+  path,
+  foreignRoot: false,
+  hooksDelivery: 'ours',
+})
+
+export function settingsCandidates(opts: {
   projectDir: string
   userDir: string
   env: Record<string, string | undefined>
 }): { user: SettingsCandidate[]; project: SettingsCandidate[]; projectLocal: SettingsCandidate[] } {
-  // THEOKIT_HOME may be absolute, so the state dir is its own base with an empty own root.
-  const home = settingsCandidates({
-    cwd: opts.projectDir,
-    home: homeStateDir(opts.env, opts.userDir),
-    ownRoot: '',
-    foreignRoot: false,
-  }).user
-  const user = settingsCandidates({
-    cwd: opts.projectDir,
-    home: opts.userDir,
-    ownRoot: LEGACY_HOME_DIR,
-  }).user
-  const project = settingsCandidates({
-    cwd: opts.projectDir,
-    home: opts.userDir,
-    ownRoot: [DEFAULT_HOME_DIR, LEGACY_HOME_DIR],
-  }).project
-  // The legacy root has no project-local file.
-  const projectLocal = settingsCandidates({
-    cwd: opts.projectDir,
-    home: opts.userDir,
-    ownRoot: DEFAULT_HOME_DIR,
-  }).projectLocal
+  const ourHome = homeStateDir(opts.env, opts.userDir)
   // The SDK reads hooks from the PROJECT's `.theokit/` (its filebase) and `.claude/` (its compat
   // adapter) — never from the user's home. See `SettingsCandidate`.
-  const sdk = (c: FrameworkCandidate, ownDelivery: 'ours' | 'refuse'): SettingsCandidate => ({
-    ...c,
-    hooksDelivery: c.foreignRoot ? 'sdk' : ownDelivery,
+  const sdkReadsProject = (path: string): SettingsCandidate => ({
+    path,
+    foreignRoot: path.includes(`${sep}${FOREIGN_ROOT}${sep}`),
+    hooksDelivery: path.includes(`${sep}${FOREIGN_ROOT}${sep}`) ? 'sdk' : 'refuse',
   })
   return {
     user: [
-      ...home.map((c) => ({ ...c, hooksDelivery: 'ours' as const })),
-      { ...user[0]!, hooksDelivery: 'ours' },
+      ours(join(ourHome, SETTINGS_FILE)),
+      ours(join(opts.userDir, LEGACY_HOME_DIR, SETTINGS_FILE)),
       // Foreign vocabulary, but nothing runs its hooks: `loadHookConfig` never sees the user level.
-      { ...user[1]!, hooksDelivery: 'inert' },
+      {
+        path: join(opts.userDir, FOREIGN_ROOT, SETTINGS_FILE),
+        foreignRoot: true,
+        hooksDelivery: 'inert',
+      },
     ],
     project: [
-      sdk(project[0]!, 'refuse'),
-      { ...project[1]!, hooksDelivery: 'ours' },
-      sdk(project[2]!, 'refuse'),
+      sdkReadsProject(join(opts.projectDir, DEFAULT_HOME_DIR, SETTINGS_FILE)),
+      ours(join(opts.projectDir, LEGACY_HOME_DIR, SETTINGS_FILE)),
+      sdkReadsProject(join(opts.projectDir, FOREIGN_ROOT, SETTINGS_FILE)),
     ],
-    projectLocal: projectLocal.map((c) => sdk(c, 'refuse')),
+    projectLocal: [
+      sdkReadsProject(join(opts.projectDir, DEFAULT_HOME_DIR, LOCAL_SETTINGS_FILE)),
+      sdkReadsProject(join(opts.projectDir, FOREIGN_ROOT, LOCAL_SETTINGS_FILE)),
+    ],
   }
 }
 
@@ -244,7 +244,7 @@ export function settingsReport(opts: {
   managedPaths?: readonly string[]
 }): SettingsFileReport[] {
   const env = opts.env ?? process.env
-  const candidates = layerCandidates({
+  const candidates = settingsCandidates({
     projectDir: opts.projectDir ?? process.cwd(),
     userDir: opts.userDir ?? homedir(),
     env,

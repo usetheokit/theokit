@@ -5,11 +5,12 @@ export {
   legacyRootHint,
   forkSession,
   listSessions,
-  readPointerId,
   renameSession,
 } from './session-ops.js'
 
 export { forkSessionBeforeUserTurn } from './backtrack.js'
+
+export { gcProtectedIds } from './gc/pointer.js'
 
 export { listAgents, CursorNotDrainedError } from './agent-list.js'
 

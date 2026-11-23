@@ -21,7 +21,7 @@ import { join } from 'node:path'
 
 import { afterAll, describe, expect, it, vi } from 'vitest'
 
-import { agentsMdChain, loadAgentsMd } from '../../src/context/agents-md.js'
+import { loadAgentsMd } from '../../src/context/agents-md.js'
 
 const roots: string[] = []
 afterAll(() => {
@@ -38,50 +38,40 @@ function project(files: Record<string, string>): string {
 
 const load = (root: string) => loadAgentsMd(root, vi.fn())
 
-describe('the instruction file chain', async () => {
-  it.each(['THEO.md', 'AGENTS.md', 'CLAUDE.md'])(
-    'test_%s_is_read_when_it_is_the_only_one',
-    async (name) => {
-      expect(await load(project({ [name]: `steering from ${name}` }))).toContain(
-        `steering from ${name}`,
-      )
-    },
-  )
+describe('the instruction file chain', () => {
+  it.each(['THEO.md', 'AGENTS.md', 'CLAUDE.md'])('test_%s_is_read_when_it_is_the_only_one', (name) => {
+    expect(load(project({ [name]: `steering from ${name}` }))).toContain(`steering from ${name}`)
+  })
 
-  it('test_THEO_wins_over_both_others', async () => {
+  it('test_THEO_wins_over_both_others', () => {
     const root = project({
       'THEO.md': 'FROM THEO',
       'AGENTS.md': 'FROM AGENTS',
       'CLAUDE.md': 'FROM CLAUDE',
     })
 
-    const out = await load(root)
+    const out = load(root)
 
     expect(out).toContain('FROM THEO')
-    expect(
-      out,
-      'AGENTS.md was read while THEO.md exists — this is additive, not first-wins',
-    ).not.toContain('FROM AGENTS')
+    expect(out, 'AGENTS.md was read while THEO.md exists — this is additive, not first-wins').not.toContain('FROM AGENTS')
     expect(out).not.toContain('FROM CLAUDE')
   })
 
-  it('test_AGENTS_wins_over_CLAUDE_when_there_is_no_THEO', async () => {
-    const out = await load(project({ 'AGENTS.md': 'FROM AGENTS', 'CLAUDE.md': 'FROM CLAUDE' }))
+  it('test_AGENTS_wins_over_CLAUDE_when_there_is_no_THEO', () => {
+    const out = load(project({ 'AGENTS.md': 'FROM AGENTS', 'CLAUDE.md': 'FROM CLAUDE' }))
 
     expect(out).toContain('FROM AGENTS')
     expect(out).not.toContain('FROM CLAUDE')
   })
 
-  it('test_a_claude_code_repository_is_read_with_no_migration', async () => {
+  it('test_a_claude_code_repository_is_read_with_no_migration', () => {
     // The case that motivated this: someone arrives from Claude Code with only a CLAUDE.md.
-    expect(await load(project({ 'CLAUDE.md': 'FROM CLAUDE' }))).toContain('FROM CLAUDE')
+    expect(load(project({ 'CLAUDE.md': 'FROM CLAUDE' }))).toContain('FROM CLAUDE')
   })
 
-  it('test_the_local_companion_runs_its_own_chain', async () => {
+  it('test_the_local_companion_runs_its_own_chain', () => {
     // Adding a THEO.md must not orphan an AGENTS.local.md the operator wrote.
-    const out = await load(
-      project({ 'THEO.md': 'FROM THEO', 'AGENTS.local.md': 'FROM AGENTS LOCAL' }),
-    )
+    const out = load(project({ 'THEO.md': 'FROM THEO', 'AGENTS.local.md': 'FROM AGENTS LOCAL' }))
 
     expect(out).toContain('FROM THEO')
     expect(out, 'a local file the operator wrote was dropped by an unrelated addition').toContain(
@@ -89,8 +79,8 @@ describe('the instruction file chain', async () => {
     )
   })
 
-  it('test_the_local_chain_is_also_first_wins', async () => {
-    const out = await load(
+  it('test_the_local_chain_is_also_first_wins', () => {
+    const out = load(
       project({ 'THEO.local.md': 'FROM THEO LOCAL', 'CLAUDE.local.md': 'FROM CLAUDE LOCAL' }),
     )
 
@@ -98,33 +88,10 @@ describe('the instruction file chain', async () => {
     expect(out).not.toContain('FROM CLAUDE LOCAL')
   })
 
-  it('test_a_directory_with_none_of_them_contributes_nothing', async () => {
+  it('test_a_directory_with_none_of_them_contributes_nothing', () => {
     // Anti-vacuity: a loader that returned every file it found would satisfy the assertions above.
-    expect(await load(project({ 'README.md': 'NOT AN INSTRUCTION FILE' }))).not.toContain(
+    expect(load(project({ 'README.md': 'NOT AN INSTRUCTION FILE' }))).not.toContain(
       'NOT AN INSTRUCTION FILE',
     )
-  })
-
-  it('test_base_and_local_interleave_per_level_root_first', async () => {
-    const root = project({ 'AGENTS.md': 'ROOT BASE', 'AGENTS.local.md': 'ROOT LOCAL' })
-    const sub = join(root, 'pkg')
-    mkdirSync(sub)
-    writeFileSync(join(sub, 'AGENTS.md'), 'SUB BASE')
-    writeFileSync(join(sub, 'AGENTS.local.md'), 'SUB LOCAL')
-
-    const out = await load(sub)
-
-    expect(out.split('\n\n--- project-doc ---\n\n')).toEqual([
-      'ROOT BASE',
-      'ROOT LOCAL',
-      'SUB BASE',
-      'SUB LOCAL',
-    ])
-    expect((await agentsMdChain(sub)).map((p) => p.slice(root.length + 1))).toEqual([
-      'AGENTS.md',
-      'AGENTS.local.md',
-      join('pkg', 'AGENTS.md'),
-      join('pkg', 'AGENTS.local.md'),
-    ])
   })
 })

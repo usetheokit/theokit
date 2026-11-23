@@ -1,18 +1,12 @@
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 
-import { describeSource } from '@theocode/agent/auth'
+import { describeSource, dotenvNames } from '@theocode/agent/auth'
 import { resolveCredential, type ResolvedCredential } from '@theocode/agent/auth'
-import type { ProjectEnvRecord } from '@theokit/agents/config'
+import { workingDirectory } from '../working-directory.js'
 
-let projectEnv: ProjectEnvRecord | undefined
-
-/** Hands over what the startup `.env` step loaded; call it once, after `bootstrapSurface`. */
-export const recordProjectEnv = (record: ProjectEnvRecord | undefined): void => {
-  projectEnv = record
-}
-
-const dotenvKeys = (): ReadonlySet<string> => new Set(projectEnv?.loaded)
-const dotenvPath = (): string => projectEnv?.file ?? '.env'
+const DOTENV_PATH = join(workingDirectory(), '.env')
+const DOTENV_KEYS = dotenvNames(DOTENV_PATH)
 
 export const credential = (): ResolvedCredential | { error: Error } => {
   try {
@@ -30,6 +24,12 @@ export const credentialError = (): string | undefined => {
 export const credentialSource = (): string => {
   const c = credential()
   if ('error' in c) return 'none'
-  const label = describeSource(c.source, dotenvKeys(), dotenvPath())
+  if (c.kind === 'oauth') {
+    return describeSource({ kind: 'oauth', provider: c.provider }, DOTENV_KEYS, DOTENV_PATH)
+  }
+  const isEnvVar = /^[A-Z][A-Z0-9_]*$/.test(c.source)
+  const label = isEnvVar
+    ? describeSource({ kind: 'env', varName: c.source }, DOTENV_KEYS, DOTENV_PATH)
+    : describeSource({ kind: 'file', path: c.source }, DOTENV_KEYS, DOTENV_PATH)
   return c.inferred ? `${label} (provider inferred)` : label
 }

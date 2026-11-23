@@ -3,11 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  scheduleSessionSweep,
-  startInProcessSweeper,
-  sweepDecision,
-} from '../../src/session/index.js'
+import { scheduleSessionSweep, sweepDecision } from '../../src/session/index.js'
 
 const now = new Date('2026-01-10T00:00:00Z')
 
@@ -176,35 +172,5 @@ describe('scheduleSessionSweep', () => {
     })
     expect(child.unref).toHaveBeenCalled()
     expect(child.stdout.unref).toHaveBeenCalled()
-  })
-})
-
-describe('startInProcessSweeper', () => {
-  it('runs at once, repeats, skips overlapping ticks and stop waits', async () => {
-    vi.useFakeTimers()
-    try {
-      let release!: () => void
-      let calls = 0
-      const sweeper = startInProcessSweeper(100, () => {
-        calls++
-        if (calls === 2) return new Promise<void>((r) => (release = r))
-        if (calls === 1) throw new Error('boom')
-      })
-      expect(calls).toBe(1)
-      await vi.advanceTimersByTimeAsync(100)
-      expect(calls).toBe(2)
-      await vi.advanceTimersByTimeAsync(300)
-      expect(calls).toBe(2)
-      let stopped = false
-      const stop = sweeper.stop().then(() => (stopped = true))
-      await vi.advanceTimersByTimeAsync(0)
-      expect(stopped).toBe(false)
-      release()
-      await stop
-      await vi.advanceTimersByTimeAsync(500)
-      expect(calls).toBe(2)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

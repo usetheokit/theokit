@@ -66,11 +66,6 @@ function idOf(row: Row, message: Row, index: number): string {
   return `row-${String(index)}`
 }
 
-export interface ThreadToUIMessagesOptions {
-  /** Merge assistant rows into one message when only tool results separate them. Defaults to `true`. */
-  readonly mergeAssistant?: boolean
-}
-
 /**
  * Convert raw transcript rows (what `readThreadHistory` returns) into the UI messages the web and
  * terminal kits render, in the order given.
@@ -80,27 +75,22 @@ export interface ThreadToUIMessagesOptions {
  *   A call with no result stays `input-available`.
  * - A user row that only carries tool results is not a message: it settles parts of the assistant
  *   message before it. Assistant rows separated only by such rows merge into ONE assistant message.
- * - With `mergeAssistant: false`, each assistant row stays its own message.
  * - Rows without a message (compaction boundaries, other system records) are skipped. The rows are
  *   taken as given: no branch is selected and nothing compacted is recovered.
  */
-export function threadToUIMessages(
-  rows: readonly Record<string, unknown>[],
-  options: ThreadToUIMessagesOptions = {},
-): UIMessage[] {
-  const merge = options.mergeAssistant !== false
+export function threadToUIMessages(rows: readonly Record<string, unknown>[]): UIMessage[] {
   const messages: UIMessage[] = []
   const tools = new Map<string, MutablePart>()
 
   for (const row of rows) {
     const message = row.message
     if (!isRecord(message) || (row.type !== 'user' && row.type !== 'assistant')) continue
-    const role = (message.role ?? row.type) === 'assistant' ? 'assistant' : 'user'
+    const role = message.role === 'assistant' ? 'assistant' : 'user'
     const parts = blocksOf(message.content).flatMap((b) => blockToPart(b, tools) ?? [])
     if (parts.length === 0) continue
 
     const last = messages.at(-1)
-    if (merge && role === 'assistant' && last?.role === 'assistant') last.parts.push(...parts)
+    if (role === 'assistant' && last?.role === 'assistant') last.parts.push(...parts)
     else messages.push({ id: idOf(row, message, messages.length), role, parts })
   }
   return messages
