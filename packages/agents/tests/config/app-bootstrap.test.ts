@@ -8,15 +8,21 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertBootstrapped,
   BootstrapNotRunError,
+  type BootstrapContext,
   BootstrapStepError,
   defineAppBootstrap,
   projectEnvStep,
+  projectEnvStepWith,
   SdkHomeConflictError,
   sdkHomeStep,
   secretRefsStep,
 } from '../../src/config-entry.js'
 
-const ctx = (env: NodeJS.ProcessEnv = {}, cwd = '/tmp') => ({ env, cwd, home: '/home/x' })
+const ctx = (env: NodeJS.ProcessEnv = {}, cwd = '/tmp'): BootstrapContext => ({
+  env,
+  cwd,
+  home: '/home/x',
+})
 
 describe('app bootstrap', () => {
   const dirs: string[] = []
@@ -122,6 +128,30 @@ describe('app bootstrap', () => {
     await defineAppBootstrap([projectEnvStep]).run(ctx(env, dir))
     expect(env.APP_VALUE).toBe('1')
     expect(env[sovereign]).toBeUndefined()
+  })
+
+  it('projectEnvStepWith leaves a protected key unset and reports it refused', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-'))
+    dirs.push(dir)
+    writeFileSync(join(dir, '.env'), 'APP_KEY=x\nOTHER=2\nALREADY=file\n')
+    const env: NodeJS.ProcessEnv = { ALREADY: 'shell' }
+    const c = ctx(env, dir)
+    await defineAppBootstrap([projectEnvStepWith({ protectedKeys: ['APP_KEY'] })]).run(c)
+    expect(env.APP_KEY).toBeUndefined()
+    expect(env.ALREADY).toBe('shell')
+    expect(c.projectEnv).toEqual({
+      file: join(dir, '.env'),
+      loaded: ['OTHER'],
+      refused: ['APP_KEY'],
+    })
+  })
+
+  it('records an empty result when there is no .env', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-'))
+    dirs.push(dir)
+    const c = ctx({}, dir)
+    await defineAppBootstrap([projectEnvStep]).run(c)
+    expect(c.projectEnv).toEqual({ file: join(dir, '.env'), loaded: [], refused: [] })
   })
 })
 
