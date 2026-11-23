@@ -24311,6 +24311,14 @@
     },
     "./tools": {
       "names": {
+        "BaseDirOutsideProjectRootError": {
+          "tier": "stable",
+          "declaration": "declare class BaseDirOutsideProjectRootError extends Error {\n    readonly baseDir: string;\n    readonly projectRoot: string;\n    constructor(tool: string, baseDir: string, projectRoot: string);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "CatastrophicCommandError": {
           "tier": "stable",
           "declaration": "declare class CatastrophicCommandError extends ConfigurationError {\n    readonly name = \"CatastrophicCommandError\";\n    constructor(reason: string);\n}",
@@ -24354,6 +24362,14 @@
         "CreateBraveWebSearchAdapterOptions": {
           "tier": "stable",
           "declaration": "interface CreateBraveWebSearchAdapterOptions {\n    apiKey?: string;\n    fetchImpl?: FetchLike$1;\n    endpoint?: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "CreateComputerToolOptions": {
+          "tier": "stable",
+          "declaration": "interface CreateComputerToolOptions {\n    display: string;\n    framebuffer: string;\n    xdotool?: string;\n    describe(png: Buffer, info: {\n        width: number;\n        height: number;\n        question?: string;\n        signal: AbortSignal;\n    }): Promise<string>;\n    describeTimeoutMs?: number;\n    run?: (file: string, argv: readonly string[], env: Record<string, string>, signal?: AbortSignal) => Promise<string>;\n    readFile?: (path: string) => Buffer;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -24601,6 +24617,14 @@
           "references": [],
           "internals": {}
         },
+        "CreateImageGenerateToolOptions": {
+          "tier": "stable",
+          "declaration": "interface CreateImageGenerateToolOptions {\n    generate: ImageGenerateCallback;\n    projectRoot: string;\n    outputDir?: string;\n    name?: string;\n    description?: string;\n    maxPromptChars?: number;\n    maxImageBytes?: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "CreateInteractiveShellToolOptions": {
           "tier": "stable",
           "declaration": "interface CreateInteractiveShellToolOptions {\n    name?: string;\n    description?: string;\n    interactive: InteractiveProvider<unknown>;\n}",
@@ -24741,9 +24765,25 @@
           "references": [],
           "internals": {}
         },
+        "DEFAULT_MAX_GENERATED_IMAGE_BYTES": {
+          "tier": "stable",
+          "declaration": "DEFAULT_MAX_GENERATED_IMAGE_BYTES: number",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "DEFAULT_MAX_IMAGE_BYTES": {
           "tier": "stable",
           "declaration": "DEFAULT_MAX_IMAGE_BYTES: number",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "DEFAULT_MAX_PROMPT_CHARS": {
+          "tier": "stable",
+          "declaration": "DEFAULT_MAX_PROMPT_CHARS = 4096",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -24886,6 +24926,30 @@
           "references": [],
           "internals": {}
         },
+        "GeneratedImageData": {
+          "tier": "stable",
+          "declaration": "interface GeneratedImageData {\n    image: Uint8Array;\n    mimeType: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ImageGenerateCallback": {
+          "tier": "stable",
+          "declaration": "type ImageGenerateCallback = (prompt: string) => Promise<GeneratedImageData>;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ImageGenerateResult": {
+          "tier": "stable",
+          "declaration": "type ImageGenerateResult = {\n    ok: true;\n    path: string;\n    mime_type: string;\n    bytes: number;\n} | ImageGenerateFailure;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "JobCopyError": {
           "tier": "stable",
           "declaration": "declare class JobCopyError extends TheokitAgentError {\n    readonly name = \"JobCopyError\";\n    readonly existing: number;\n    constructor(existing: number);\n}",
@@ -24996,6 +25060,14 @@
         "ResolveAndScreenOptions": {
           "tier": "stable",
           "declaration": "interface ResolveAndScreenOptions {\n    lookup?: LookupFn;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ResolvedWebSearch": {
+          "tier": "stable",
+          "declaration": "interface ResolvedWebSearch {\n    adapter?: WebSearchCallback;\n    provider?: WebSearchProvider;\n    secrets: string[];\n    offReason?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -25217,10 +25289,50 @@
           "references": [],
           "internals": {}
         },
+        "WebSearchProvider": {
+          "tier": "stable",
+          "declaration": "type WebSearchProvider = \"brave\" | \"searxng\" | \"tavily\" | \"generic\";",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "WebSearchResult": {
           "tier": "stable",
           "declaration": "interface WebSearchResult {\n    title: string;\n    url: string;\n    snippet: string;\n}",
           "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "XWD_LIMITS": {
+          "tier": "stable",
+          "declaration": "XWD_LIMITS: {\n    maxHeaderBytes: number;\n    maxSide: number;\n    maxPixels: number;\n    maxColors: number;\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "XwdFormatError": {
+          "tier": "stable",
+          "declaration": "declare class XwdFormatError extends Error {\n    readonly path: string;\n    readonly field: string;\n    readonly value: number;\n    constructor(path: string, field: string, value: number, detail?: string);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "XwdHeader": {
+          "tier": "stable",
+          "declaration": "interface XwdHeader {\n    width: number;\n    height: number;\n    bitsPerPixel: number;\n    bytesPerLine: number;\n    dataOffset: number;\n    lsbFirst: boolean;\n    masks: readonly [\n        number,\n        number,\n        number\n    ];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "XwdNotWrittenError": {
+          "tier": "stable",
+          "declaration": "declare class XwdNotWrittenError extends XwdFormatError {\n}",
+          "runtime": true,
           "deprecatedSince": null,
           "references": [],
           "internals": {}
@@ -25352,6 +25464,14 @@
         "createBraveWebSearchAdapter": {
           "tier": "stable",
           "declaration": "declare function createBraveWebSearchAdapter(opts?: CreateBraveWebSearchAdapterOptions): WebSearchCallback;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "createComputerTool": {
+          "tier": "stable",
+          "declaration": "declare function createComputerTool(options: CreateComputerToolOptions): CustomTool;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -25598,6 +25718,14 @@
         "createGlobTool": {
           "tier": "stable",
           "declaration": "declare function createGlobTool(opts: CreateGlobToolOptions): CustomTool;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "createImageGenerateTool": {
+          "tier": "stable",
+          "declaration": "declare function createImageGenerateTool(opts: CreateImageGenerateToolOptions): CustomTool;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -25929,6 +26057,14 @@
           "references": [],
           "internals": {}
         },
+        "readXwdHeader": {
+          "tier": "stable",
+          "declaration": "declare function readXwdHeader(bytes: Uint8Array, path: string): XwdHeader;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "renderToolList": {
           "tier": "stable",
           "declaration": "declare function renderToolList(tools: CustomTool[], options?: {\n    mode?: ToolListMode;\n}): string;",
@@ -25948,6 +26084,14 @@
         "resolveAndScreen": {
           "tier": "stable",
           "declaration": "declare function resolveAndScreen(rawHost: string, options?: ResolveAndScreenOptions): Promise<string[]>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "resolveWebSearchAdapter": {
+          "tier": "stable",
+          "declaration": "declare function resolveWebSearchAdapter(env: Env, options?: {\n    fetchImpl?: typeof fetch;\n}): ResolvedWebSearch;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -26012,6 +26156,14 @@
         "withToolResultGuidance": {
           "tier": "stable",
           "declaration": "declare function withToolResultGuidance(tool: CustomTool, guidance: ToolGuidanceMap): CustomTool;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "xwdToPng": {
+          "tier": "stable",
+          "declaration": "declare function xwdToPng(bytes: Uint8Array, path: string): {\n    png: Buffer;\n    width: number;\n    height: number;\n};",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],

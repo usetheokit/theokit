@@ -212,6 +212,10 @@ if (!check.ok) console.error(check.reason, check.message) // 'connect_refused' |
 - `applyOutboundProxy` installs an undici `ProxyAgent` as the **process-wide** global dispatcher when the variable is set, so every `fetch` in the process goes through the proxy. With it unset or blank nothing is installed (`installed: false`).
 - `validateProxy` sends a CONNECT for `target` (`host:port`) to an `http:` or `https:` proxy and returns `{ ok: true, statusCode }` or a typed failure. `timeoutMs` defaults to 5000. Credentials in the URL are sent as basic auth and never appear in messages.
 
+## `teeOutput`
+
+`teeOutput({ file, maxBytes, keep, streams? })` mirrors this process's stdout and stderr (or `streams`) into a 0600 file that never grows past `maxBytes`, keeping `keep` rotated files (`file.1` newest). It returns an uninstall function that restores the streams. It throws if the file cannot be opened.
+
 ## `announceService` (`@theokit/host/discovery`)
 
 Announces a running service on the local network (DNS-SD) through a publisher you inject; the package has no multicast dependency.

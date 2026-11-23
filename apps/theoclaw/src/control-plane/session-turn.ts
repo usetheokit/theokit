@@ -6,7 +6,7 @@ import {
 } from '@theokit/agents/bridge'
 
 import { toSdkMessage, toSdkTimelineEvent, type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
-import { maskSecrets } from '../channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { createEventMask } from './event-mask.js'
 import { describeStreamedError, outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
 
