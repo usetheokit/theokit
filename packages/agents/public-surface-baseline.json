@@ -11778,6 +11778,16 @@
             "dist/auth.d.ts#ProviderDescriptor": "interface ProviderDescriptor {\n    readonly name: string;\n    readonly envKey: string;\n    readonly priority: number;\n    readonly modelPrefix?: string;\n    readonly keyPrefix?: string;\n    readonly custom?: boolean;\n}"
           }
         },
+        "customProviderPlugin": {
+          "tier": "stable",
+          "declaration": "declare function customProviderPlugin(config: CustomProviderConfig): Plugin;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/auth.d.ts#CustomProviderConfig"],
+          "internals": {
+            "dist/auth.d.ts#CustomProviderConfig": "interface CustomProviderConfig {\n    readonly name: string;\n    readonly baseUrl: string;\n    readonly keyEnv: string;\n}"
+          }
+        },
         "deviceLogin": {
           "tier": "stable",
           "declaration": "export declare function deviceLogin(config: DeviceOAuthConfig, deps: DeviceDeps, hooks: {\n    onPrompt: (p: {\n        userCode: string;\n        verificationUri: string;\n        expiresIn: number;\n    }) => void;\n}): Promise<OAuthTokens>;",

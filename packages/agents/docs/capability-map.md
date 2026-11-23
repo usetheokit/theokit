@@ -973,6 +973,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `credentialHome` | value |
 | `CredentialNotFoundError` | value |
 | `credentialSources` | value |
+| `customProviderPlugin` | value |
 | `DeclaredProviderError` | value |
 | `DEFAULT_PROVIDERS` | value |
 | `deviceLogin` | value |
