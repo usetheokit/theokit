@@ -101,13 +101,15 @@ export { transcriptRootHint } from './transcript-root-hint.js'
  */
 export {
   readThreadHistory,
+  readThreadHistoryFile,
+  type ReadThreadHistoryFileOptions,
   type ReadThreadHistoryOptions,
   type ThreadHistory,
   type ThreadHistoryState,
 } from './thread-history.js'
 
 // #2578 — rows to UI messages and UI messages to an exported transcript.
-export { threadToUIMessages } from './thread-to-ui-messages.js'
+export { threadToUIMessages, type ThreadToUIMessagesOptions } from './thread-to-ui-messages.js'
 export {
   transcriptToText,
   type TranscriptFormat,

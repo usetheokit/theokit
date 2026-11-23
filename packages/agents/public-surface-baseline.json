@@ -23745,6 +23745,14 @@
           "references": [],
           "internals": {}
         },
+        "ReadThreadHistoryFileOptions": {
+          "tier": "stable",
+          "declaration": "interface ReadThreadHistoryFileOptions {\n    readonly skipMalformed?: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "ReadThreadHistoryOptions": {
           "tier": "stable",
           "declaration": "interface ReadThreadHistoryOptions {\n    readonly cwd: string;\n    readonly root?: string;\n}",
@@ -23866,6 +23874,14 @@
         "ThreadHistoryState": {
           "tier": "stable",
           "declaration": "type ThreadHistoryState = 'present' | 'absent' | 'unreadable';",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ThreadToUIMessagesOptions": {
+          "tier": "stable",
+          "declaration": "interface ThreadToUIMessagesOptions {\n    readonly mergeAssistant?: boolean;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -24137,6 +24153,22 @@
             "dist/session.d.ts#ThreadHistoryState": "type ThreadHistoryState = 'present' | 'absent' | 'unreadable';"
           }
         },
+        "readThreadHistoryFile": {
+          "tier": "stable",
+          "declaration": "declare function readThreadHistoryFile(path: string, options?: ReadThreadHistoryFileOptions): ThreadHistory;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/session.d.ts#ReadThreadHistoryFileOptions",
+            "dist/session.d.ts#ThreadHistory",
+            "dist/session.d.ts#ThreadHistoryState"
+          ],
+          "internals": {
+            "dist/session.d.ts#ReadThreadHistoryFileOptions": "interface ReadThreadHistoryFileOptions {\n    readonly skipMalformed?: boolean;\n}",
+            "dist/session.d.ts#ThreadHistory": "interface ThreadHistory {\n    readonly state: ThreadHistoryState;\n    readonly messages: readonly Record<string, unknown>[];\n    readonly reason?: string;\n}",
+            "dist/session.d.ts#ThreadHistoryState": "type ThreadHistoryState = 'present' | 'absent' | 'unreadable';"
+          }
+        },
         "recordProjectDir": {
           "tier": "stable",
           "declaration": "declare function recordProjectDir(cwd: string, root?: string): void;",
@@ -24257,11 +24289,13 @@
         },
         "threadToUIMessages": {
           "tier": "stable",
-          "declaration": "declare function threadToUIMessages(rows: readonly Record<string, unknown>[]): WireMessage[];",
+          "declaration": "declare function threadToUIMessages(rows: readonly Record<string, unknown>[], options?: ThreadToUIMessagesOptions): WireMessage[];",
           "runtime": true,
           "deprecatedSince": null,
-          "references": [],
-          "internals": {}
+          "references": ["dist/session.d.ts#ThreadToUIMessagesOptions"],
+          "internals": {
+            "dist/session.d.ts#ThreadToUIMessagesOptions": "interface ThreadToUIMessagesOptions {\n    readonly mergeAssistant?: boolean;\n}"
+          }
         },
         "transcriptOf": {
           "tier": "stable",
