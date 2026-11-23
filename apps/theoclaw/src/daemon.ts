@@ -1,4 +1,4 @@
-import { serviceBackend, type ServiceBackend, type ServiceSpec } from '@theokit/host/service'
+import { serviceBackend, type ServiceBackend, type ServiceSpec, UnsupportedPlatformError } from '@theokit/host/service'
 
 import { describeError } from './control-plane/errors.js'
 import { type DaemonIo, checkInstallable, logPath, resolveTarget } from './daemon-common.js'
@@ -15,15 +15,11 @@ import type { Runner } from './run-command.js'
 export { type DaemonIo } from './daemon-common.js'
 
 function backendFor(io: DaemonIo, runner: Runner): ServiceBackend | undefined {
+  const logFile = logPath(resolveTarget(io).label, io.homeDir)
   try {
-    return serviceBackend(io.platform, {
-      runner,
-      homeDir: io.homeDir,
-      env: io.env,
-      ...(io.uid === undefined ? {} : { uid: io.uid }),
-      logFile: logPath(resolveTarget(io).label, io.homeDir),
-    })
-  } catch {
+    return serviceBackend(io.platform, { runner, homeDir: io.homeDir, env: io.env, ...(io.uid === undefined ? {} : { uid: io.uid }), logFile })
+  } catch (error) {
+    if (!(error instanceof UnsupportedPlatformError)) throw error
     io.stderr.write(`theoclaw daemon: ${io.platform} is not supported; only Linux (systemd), macOS (launchd) and Windows (Task Scheduler) are\n`)
     return undefined
   }

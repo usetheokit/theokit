@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { systemdUnit } from '@theokit/host/service'
 import { describe, expect, it } from 'vitest'
 
 import { daemonInstall, daemonRestart, daemonStatus, daemonUninstall, definitionPath } from '../src/daemon.js'
@@ -122,7 +123,18 @@ describe('theoclaw daemon', () => {
     expect(refused.stderr()).toContain('Unit not found')
   })
 
-  it('a profiled unit names its profile and the entry as arguments', async () => {
+  it('a profiled unit names its profile and a path with a space is quoted', () => {
+    const unit = systemdUnit({ label: 'theoclaw-a', description: 'TheoClaw (theoclaw-a)', command: '/opt/my node/node', args: ['/srv/x/main.js'], env: { THEOCLAW_CONFIG: '/c/a b.env', THEOCLAW_PROFILE: 'a' }, workingDirectory: '/w' })
+    expect(unit).toContain('ExecStart="/opt/my node/node" /srv/x/main.js')
+    expect(unit).toContain('Environment="THEOCLAW_CONFIG=/c/a b.env"')
+    expect(unit).toContain('Environment=THEOCLAW_PROFILE=a')
+    expect(unit).toContain('Description=TheoClaw (theoclaw-a)')
+    // ExecStart= expands $VAR and %specifiers, so a literal one is doubled there.
+    const dollar = systemdUnit({ label: 'theoclaw', command: '/n/$HOME/node', args: ['/e/100%/main.js'], workingDirectory: '/w' })
+    expect(dollar).toContain('ExecStart=/n/$$HOME/node /e/100%%/main.js')
+  })
+
+  it('the installed unit passes the entry as an argument and names the profile in the environment', async () => {
     const h = harness({ env: { THEOCLAW_PROFILE: 'a' } })
     expect(await daemonInstall({ ...h.io, nodePath: '/opt/my node/node' }, h.runner)).toBe(0)
     const unit = readFileSync(unitPath('theoclaw-a', h.home), 'utf8')

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { systemdUnit } from '@theokit/host/service'
 import { describe, expect, it } from 'vitest'
 
 import { daemonInstall, definitionPath } from '../src/daemon.js'
@@ -50,5 +51,19 @@ describe('theoclaw daemon unit file', () => {
     expect(await daemonInstall(h.io, h.runner)).toBe(0)
     const unit = readFileSync(unitPath('theoclaw-a', h.home), 'utf8')
     expect(unit).toMatch(new RegExp(`^WorkingDirectory=${join(h.home, '.theokit', 'profiles', 'a', 'workspace')}$`, 'm'))
+  })
+
+  it('Environment and WorkingDirectory keep a literal $ and WorkingDirectory is never quoted', () => {
+    const unit = systemdUnit({ label: 'theoclaw', command: '/n', args: ['/e'], env: { THEOCLAW_CONFIG: '/c/$x b.env' }, workingDirectory: '/home/a b/100%' })
+    // systemd.exec(5): Environment= expands no variable and WorkingDirectory= removes no quotes.
+    expect(unit).toContain('Environment="THEOCLAW_CONFIG=/c/$x b.env"')
+    expect(unit).toMatch(/^WorkingDirectory=\/home\/a b\/100%%$/m)
+  })
+
+  it('a value holding a line break is refused, since it would end the directive', () => {
+    const base = { label: 'theoclaw', command: '/n', args: ['/e'], env: { THEOCLAW_CONFIG: '/c' }, workingDirectory: '/w' }
+    for (const bad of [{ command: '/n\nExecStartPre=/x' }, { env: { THEOCLAW_CONFIG: '/c\r.env' } }, { workingDirectory: '/w\n' }]) {
+      expect(() => systemdUnit({ ...base, ...bad })).toThrow(/line break/)
+    }
   })
 })
