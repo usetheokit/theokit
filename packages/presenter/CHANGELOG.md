@@ -1,5 +1,13 @@
 # @theokit/presenter
 
+## 0.18.2
+
+### Patch Changes
+
+- 0c21fb4: The declared `@theokit/sdk` range now admits 12.x, which adds log export to `registerTelemetry`.
+- e600f00: Widen the declared `@theokit/sdk` range to `<14`, so SDK 12 and 13 are admitted (#2861).
+- 3cf41ee: The `@theokit/sdk` peer range is widened to `<13`, so `@theokit/sdk@12.0.0` is supported. The capability map is measured against it, and TheoClaw flushes its output mask through the `flush` of the `wrapStreams` handle that 12.0.0 adds.
+
 ## 0.18.1
 
 ### Patch Changes

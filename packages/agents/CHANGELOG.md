@@ -1,5 +1,62 @@
 # @theokit/agents
 
+## 17.5.0
+
+### Minor Changes
+
+- 4240677: `settingsCandidates` accepts several own roots in order, `readSettingsFile` takes `throwOnMalformed` and treats a non-object `permissions` as absent, and `readManagedSettings` reads `managed-settings.json` from the platform paths (`MANAGED_SETTINGS_PATHS`) for a caller-supplied key set.
+- 14c8455: `runAgentTurn` and `delegationPortFromAgentFactory` accept a message with image parts (`AgentTurnMessage`), and an agent that has only `send` (`AgentTurnAgent`, `DelegationFactoryAgent`); the factory port disposes through `dispose()` or `Symbol.asyncDispose`. A run the SDK reports as cancelled now ends as `{ ok: true, cancelled: true }` instead of a `turn_cancelled` failure.
+- ceea125: `planProjectsGC` takes `cwdCoverage: 'transcripts'` (plan a live project from the cwds its transcript headers record, without a declared cwd list), `deadProjects: 'keep-last'` (a dead project gets retention alone). `claimCollectorRoot`, `collectorRootOwner` and `runProjectsGC` accept an `existingMarker` format so a marker written under another file name and schema counts as the owner's claim.
+- 8dc87ef: `runAgentTurn` takes `secrets`: every string in an emitted event is masked, and text that could still grow into a secret is held back and released as an extra `text_delta` before the next other event or when the turn ends. `createAgentEventMask` is exported from `@theokit/agents/bridge` for callers that run their own turn.
+- a39c1b8: `codingAgentPreset` accepts `writeRoot`, `allowAbsolute`, `defaultTimeoutMs`, and caller-built `webFetch`, `webSearch` and `delegateToTeam` tools (gated by default), and `codingAgentTools` exposes its tool half. A capability can report tools that are available but off with a reason (`OffToolsCapability`, `AgentShape.offTools`), and `Toolset.from(tools, profiles)` narrows by a named profile with `narrow(name)`.
+- 9634360: `@theokit/agents/control` adds `createControlStreamSource(client, session, message, options)`: it turns a control client's frames for one turn into a source for a TUI's `useAgentStream`, with session-bound `interrupt()` and `steer(message)`.
+- a4e3120: `@theokit/agents/testing` exports `FakeAgent`, a scripted agent with no model: it records what it was sent, yields scripted frames and deltas, holds on gates, and honours an abort signal.
+- a8a868b: `readForeignSetup` now returns `memories` (Claude Code auto memory by git root, Hermes `memories/`), `requiresBins` on each skill, a `configDir` option for either source, and lists shadowed user MCP servers and dropped Hermes channels in `untranslated`.
+- 6cf27f7: `readThreadHistoryFile(path, { skipMalformed })` reads a transcript by its path and can skip lines that are not JSON objects; `threadToUIMessages` takes `mergeAssistant: false` to keep each assistant record as its own message, and now takes a message's role from the row `type` when the message has no `role` (before, such a row was always a user message).
+- a5df6cd: `@theokit/agents/commands` exports `sessionsGcCommand`, `parseSessionsGcArgs`, `formatGcPlan` and `formatGcJson`: the `sessions gc` command with a dry-run default, `--apply`, age and keep bounds, and a JSON or human report. `theokit agent sessions gc` now uses it.
+- 049512b: `@theokit/agents/auth` exports `customProviderPlugin`, which turns a `CustomProviderConfig` into an SDK provider plugin.
+- f95f007: `planTranscriptGC` names each transcript by its real file (the current or the legacy name of a known id, `knownIds`), so a fork is no longer named as its source. Protection also covers the legacy file name, and `isProtected` accepts a predicate, asked at planning and again at apply, as well as the `protectedIds` list.
+
+  Without `knownIds`, a transcript is named only by the id inside it when its file is named for that id (current or legacy name). A fork whose rows name its source, found under another file name, now has `id: undefined` instead of its source's id: a dry run lists it under `orphaned`, and removal skips the registry rather than removing the source's entry.
+
+### Patch Changes
+
+- 174ffe1: Refresh the generated `docs/capability-map.md`; no change to the public API.
+- aee048d: Regenerate `docs/capability-map.md` after merging `workspace` (#2716).
+- 3da4848: Regenerate `docs/capability-map.md` after merging workspace.
+- a27c849: Regenerate `docs/capability-map.md`, which had drifted from the built exports.
+- 4b6d720: Regenerate `docs/capability-map.md` against `@theokit/sdk` 12.0.0 (#2744).
+- 6b96f5b: Regenerate `docs/capability-map.md` after merging workspace.
+- 0c21fb4: The declared `@theokit/sdk` range now admits 12.x, which adds log export to `registerTelemetry`.
+- e600f00: Widen the declared `@theokit/sdk` range to `<14`, so SDK 12 and 13 are admitted (#2861).
+- 62fccae: Refresh the generated capability map and public-surface baseline so they match the build (#2876).
+- b219263: `AgentBuilder` gains `sendDefaults`, `modelFallback`, `sessionDir` and `thinking` methods, and `skills` accepts an SDK `SkillsSettings` object (or a resolver returning one). The adapter forwards all of them to `Agent.create`.
+- eb5ac75: Regenerate `docs/capability-map.md` so it matches the current public surface.
+- f38afcb: `@theokit/agents/doctor` exports `credentialState`, which derives present, absent, unreadable or expired from a credential file and an optional environment check.
+- e446a52: `createApprovalGate` takes `recordUngoverned`, `persistAlways` and `refusal`; the defaults keep today's behaviour.
+- 60fc3f6: The bridge's turn runner and delegation port share one error describer and one streamed-error describer instead of keeping private copies.
+- f28828e: Regenerate `docs/capability-map.md` after the workspace merge; no code change.
+- 2a43faa: `projectEnvStep` loads `export  NAME=value` declarations with more than one space after `export` on every supported Node version, and the generated `docs/capability-map.md` is regenerated.
+- ec8af29: The project `.env` step loads every declaration on Node 22.12 too. It hands `util.parseEnv` only the declarations and the lines of their values, so a line with no `=` or no name no longer makes that Node's parser drop every declaration below it.
+- ea092d6: The creation-cache integration test releases the second shared handle before its scratch directory is removed.
+- 3d82459: The comment in `createPermissionsPlugin` states the engine's evaluation order: the first matching rule wins, so callers order rules deny-first with `permissionRulesFromLayers`.
+- 4cc5b0e: `protectedTranscriptPaths` names the `last-session` pointer's transcript by the file that exists on disk (current or legacy naming), and by both candidates only when neither exists.
+- 638e3aa: Regenerate `docs/capability-map.md` so it matches the package again.
+- 71e1ff0: `hashedSessionScope` from `theokit/server/http` hashes with Web Crypto and returns a promise, and `createHostedChat` awaits a `sessionScope` that returns one, so `theokit/server` no longer imports `node:crypto`.
+- 1077038: Regenerate the capability map against `@theokit/sdk` 11, the version the workspace now resolves.
+- 299d837: The capability map is measured against `@theokit/sdk@11.0.0`.
+- 3cf41ee: The `@theokit/sdk` peer range is widened to `<13`, so `@theokit/sdk@12.0.0` is supported. The capability map is measured against it, and TheoClaw flushes its output mask through the `flush` of the `wrapStreams` handle that 12.0.0 adds.
+- 0a85dfa: Raise the `@theokit/sdk-tools` dependency to `^0.34.0` and re-export its new tools surface (`createComputerTool`, `resolveWebSearchAdapter`, the XWD helpers, `createImageGenerateTool`).
+- 999c6cc: The `@theokit/sdk-tools` range rises to `^0.32.0`, so the write tools forwarded by `@theokit/agents/tools` accept `baseDir`.
+- 3d21f1d: `@theokit/agents/session` exports `startInProcessSweeper(intervalMs, run)`, an in-process interval sweeper that returns a stop handle.
+- eac2131: `skill_read` in `'advertised'` mode takes its binary gate from `@theokit/sdk/skills` (`binaryOnPath`, exported since SDK 10.0.0) instead of a private copy. With an older SDK that lacks it, a skill that needs a binary is not served.
+- 6d9bc5a: `skill_read` in advertised mode checks a skill's required binaries on PATH itself when the installed SDK does not export `binaryOnPath`, instead of hiding every skill that needs one.
+- 894aa62: `projectEnvStep` loads only `.env` declarations whose name is an identifier, and stops at a quoted value that never closes instead of reading the declarations after it.
+- Updated dependencies [0c21fb4]
+- Updated dependencies [e600f00]
+- Updated dependencies [3cf41ee]
+  - @theokit/presenter@0.18.2
+
 ## 17.4.1
 
 ### Patch Changes
