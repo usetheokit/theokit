@@ -15,7 +15,7 @@ import { signalChannel } from '@theokit/gateway-signal'
 import { slackChannel } from '@theokit/gateway-slack'
 import { smsChannel } from '@theokit/gateway-sms'
 import { teamsChannel } from '@theokit/gateway-teams'
-import { TelegramAdapter } from '@theokit/gateway-telegram'
+import { telegramChannel } from '@theokit/gateway-telegram'
 import { tlonUrbitChannel } from '@theokit/gateway-tlon-urbit'
 import { wechatChannel } from '@theokit/gateway-wechat'
 import { wecomChannel } from '@theokit/gateway-wecom'
@@ -25,20 +25,6 @@ import { yuanbaoChannel } from '@theokit/gateway-yuanbao'
 import { zaloChannel } from '@theokit/gateway-zalo'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
-
-/**
- * Telegram's descriptor, kept here: `@theokit/gateway-telegram` ships its own from 0.6.0, but every
- * release from then on reads a voice note's audio before the owner and group hooks run, and
- * TheoClaw downloads it only after them (`voice/voice-replies.ts`). Telegram stays on 0.4.0 until
- * the adapter can defer that read.
- */
-const telegramChannel: ChannelDescriptor<TelegramAdapter> = {
-  platform: 'telegram',
-  transport: 'socket',
-  senderIdentity: 'authenticated',
-  config: [{ key: 'token', required: true, secret: true, env: 'TELEGRAM_TOKEN', description: 'The bot token from BotFather.' }],
-  create: (config) => new TelegramAdapter({ token: String(config.token) }),
-}
 
 /** Every channel descriptor's `env` names are read behind this prefix: `TELEGRAM_TOKEN` is `THEOCLAW_TELEGRAM_TOKEN`. */
 const PREFIX = 'THEOCLAW_'

@@ -1,4 +1,4 @@
-import { GatewayRunner, redactSecrets } from '@theokit/gateway'
+import { GatewayRunner, maskSecrets, redactSecrets } from '@theokit/gateway'
 import type { BasePlatformAdapter, GatewayHandler, GatewayHook, PlatformName } from '@theokit/gateway'
 
 /** One platform the loop may start: building the adapter can throw, and only fails that platform. */
@@ -44,15 +44,6 @@ export interface ChannelLoop {
 }
 
 const DEFAULT_START_TIMEOUT_MS = 30_000
-const MASK = '[redacted]'
-
-/** Replace every occurrence of every value with `[redacted]`, longest first, so a value containing another is masked whole. */
-export function maskSecrets(text: string, secrets: readonly string[]): string {
-  return [...secrets]
-    .filter((secret) => secret.length > 0)
-    .sort((a, b) => b.length - a.length)
-    .reduce((masked, secret) => masked.split(secret).join(MASK), text)
-}
 
 /**
  * Start one `GatewayRunner` over every adapter that builds. The runner isolates the platforms
@@ -70,42 +61,18 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
   // The configured values are masked BEFORE `redactSecrets`: it shortens some shapes to a head and
   // a tail, after which the whole value is no longer there to find, and the fragments would stay.
   const describeError = (error: unknown): string =>
-    redactSecrets(maskSecrets(error instanceof Error ? error.message : String(error), options.secrets))
+    redactSecrets(
+      maskSecrets(error instanceof Error ? error.message : String(error), options.secrets),
+    )
   const fail = (platform: PlatformName, line: string): void => {
     if (!failed.includes(platform)) failed.push(platform)
     options.write(line)
   }
 
-  /**
-   * Two things the runner does not do that TheoClaw's channels rely on. An adapter that answers
-   * `false` (a socket that cannot open, a Slack call that failed) is retried like one that throws,
-   * since the runner treats `false` as final and a daemon that starts offline would never recover.
-   * And a connect the runner has given up on, which fails later, is written once, masked: the
-   * runner drops that rejection.
-   */
-  const watchConnect = (adapter: BasePlatformAdapter): BasePlatformAdapter => {
-    const connect = adapter.connect.bind(adapter)
-    adapter.connect = async () => {
-      let abandoned = false
-      const timer = setTimeout(() => (abandoned = true), timeoutMs)
-      timer.unref()
-      try {
-        if (await connect()) return true
-      } catch (error) {
-        if (abandoned) options.write(`${adapter.platform}: abandoned start failed: ${describeError(error)}`)
-        throw error
-      } finally {
-        clearTimeout(timer)
-      }
-      throw new Error(`adapter "${adapter.platform}" connect returned false`)
-    }
-    return adapter
-  }
-
   const adapters: BasePlatformAdapter[] = []
   for (const { platform, build } of options.platforms) {
     try {
-      adapters.push(watchConnect(build()))
+      adapters.push(build())
     } catch (error) {
       fail(platform, `${platform}: start failed: ${describeError(error)}`)
     }
@@ -121,7 +88,7 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
     secrets: options.secrets,
     ...(options.retry === undefined
       ? {}
-      : { reconnect: { initialDelayMs: options.retry.initialDelayMs, maxDelayMs: options.retry.maxDelayMs, maxAttempts: options.retry.maxAttempts } }),
+      : { reconnect: { initialDelayMs: options.retry.initialDelayMs, maxDelayMs: options.retry.maxDelayMs, maxAttempts: options.retry.maxAttempts, retryFalse: true } }),
     onAdapterState: (platform, state, reason) => {
       if (stopping) return
       if (state === 'connected') {
@@ -149,7 +116,8 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
   const ready = runner.start().then(
     () => undefined,
     (error: unknown) => {
-      for (const adapter of adapters) fail(adapter.platform, `${adapter.platform}: start failed: ${describeError(error)}`)
+      for (const adapter of adapters)
+        fail(adapter.platform, `${adapter.platform}: start failed: ${describeError(error)}`)
     },
   )
 
@@ -161,7 +129,9 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
       stopping = true
       // A stopped platform is no longer started: a route that looks it up answers 503 (D7).
       started.clear()
-      await runner.stop().catch((error: unknown) => options.write(`stop failed: ${describeError(error)}`))
+      await runner
+        .stop()
+        .catch((error: unknown) => options.write(`stop failed: ${describeError(error)}`))
     },
   }
 }

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { TurnAgent } from '../../src/agent-port.js'
 import { createOwnerPolicyHook } from '../../src/authorization/owner-policy-hook.js'
-import { createPairingStore } from '../../src/authorization/pairing-store.js'
+import { createFilePairingStore } from '@theokit/gateway'
 import { parseAuthorizationPolicy } from '../../src/authorization/policy.js'
 import { createGroupActivationHook } from '../../src/channels/group-activation-hook.js'
 import { createReplyHandler } from '../../src/channels/reply-handler.js'
@@ -55,7 +55,7 @@ interface LiveOptions {
 async function liveApp({ env, platforms, hooks = [] }: LiveOptions) {
   requireModelSettings()
   const policy = parseAuthorizationPolicy(env)
-  const pairing = policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir })
+  const pairing = policy.stateDir === undefined ? undefined : createFilePairingStore({ dir: policy.stateDir })
   const real = createChannelAgentFactory(process.env, (options) => Agent.create(options))
   const prompts: string[] = []
   let completedTurns = 0

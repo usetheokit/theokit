@@ -25,9 +25,16 @@ export function pruneToolResultRounds(env: NodeJS.ProcessEnv = process.env): num
 export interface UntrustedContentSendOptions {
   readonly toolResultGuard: { readonly delimit: true }
   readonly pruneToolResults: { readonly olderThanRounds: number }
+  /** The SDK's window guard: the call that would be the 4th identical one within the last 20 is blocked with a tool result. */
+  readonly doomLoop: { readonly window: number; readonly windowRepeatLimit: number }
 }
+
+/** How many times the same call may start within the window before the next one is blocked. */
+export const LOOP_REPEAT_LIMIT = 3
+/** The most recent calls the SDK window remembers. */
+export const LOOP_WINDOW = 20
 
 /** The agent's `sendDefaults`, so every send's tool results reach the model framed. */
 export function untrustedContentSendOptions(): UntrustedContentSendOptions {
-  return { toolResultGuard: { delimit: true }, pruneToolResults: { olderThanRounds: pruneToolResultRounds() } }
+  return { toolResultGuard: { delimit: true }, pruneToolResults: { olderThanRounds: pruneToolResultRounds() }, doomLoop: { window: LOOP_WINDOW, windowRepeatLimit: LOOP_REPEAT_LIMIT } }
 }

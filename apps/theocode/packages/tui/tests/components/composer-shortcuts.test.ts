@@ -45,7 +45,7 @@ describe('B-028 — the help lists what this build wires', () => {
     // The declaration is a claim about ConversationSlot's <ChatComposer/> props. Measured there:
     //
     //   onHelpToggle={() => setShowHelp(...)}          -> help: true
-    //   commands={composerCommands(customCommands)}    -> commands: true (always spreads BUILTIN_COMMANDS)
+    //   commands={composerCommands(customCommands)}    -> commands: true (always comes from the registry palette)
     //   no onShellCommand                              -> shell absent (ADR 0001)
     //   no fileSearch                                  -> mentions TRUE, not absent
     //
