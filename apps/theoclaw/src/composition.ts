@@ -18,8 +18,8 @@ import {
   parseAuthorizationPolicy,
 } from './authorization/policy.js'
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
-import { createBroadcastGroups } from './channels/broadcast-groups.js'
-import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
+import { startChannelLoop } from './channels/channel-loop.js'
 import type { RetryPolicy } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
@@ -313,7 +313,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       // `loop` is read per message, after it exists: a member whose platform has not started is
       // reported as not delivered.
       broadcast: {
-        groups: createBroadcastGroups(policy.broadcastGroups),
+        groups: policy.broadcastGroups,
         adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
         write: maskedWrite,
       },

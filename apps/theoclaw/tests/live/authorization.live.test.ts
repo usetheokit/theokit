@@ -11,7 +11,6 @@ import type { TurnAgent } from '../../src/agent-port.js'
 import { createOwnerPolicyHook } from '../../src/authorization/owner-policy-hook.js'
 import { createFilePairingStore } from '@theokit/gateway'
 import { parseAuthorizationPolicy } from '../../src/authorization/policy.js'
-import { createBroadcastGroups } from '../../src/channels/broadcast-groups.js'
 import { createGroupActivationHook } from '../../src/channels/group-activation-hook.js'
 import { createReplyHandler } from '../../src/channels/reply-handler.js'
 import { createContainer } from '../../src/composition.js'
@@ -94,7 +93,7 @@ async function liveApp({ env, platforms, hooks = [] }: LiveOptions) {
     // One agent per message, as before sessions: these checks are about who reaches the agent.
     withAgent: (_event, work) => agents.withAgent((agent) => work({ agent, release: () => undefined })),
     broadcast: {
-      groups: createBroadcastGroups(policy.broadcastGroups),
+      groups: policy.broadcastGroups,
       adapterFor: (platform) => adapters.get(platform as PlatformName),
       write: (line) => void process.stderr.write(`${line}\n`),
     },
