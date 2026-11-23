@@ -80,23 +80,13 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
    * Two things the runner does not do that TheoClaw's channels rely on. An adapter that answers
    * `false` (a socket that cannot open, a Slack call that failed) is retried like one that throws,
    * since the runner treats `false` as final and a daemon that starts offline would never recover.
-   * And a connect the runner has given up on, which fails later, is written once, masked: the
-   * runner drops that rejection.
+   * A connect the runner has given up on, which fails later, is reported by the runner itself as a
+   * `failed` state (masked below), so it is written once and not here as well.
    */
   const watchConnect = (adapter: BasePlatformAdapter): BasePlatformAdapter => {
     const connect = adapter.connect.bind(adapter)
     adapter.connect = async () => {
-      let abandoned = false
-      const timer = setTimeout(() => (abandoned = true), timeoutMs)
-      timer.unref()
-      try {
-        if (await connect()) return true
-      } catch (error) {
-        if (abandoned) options.write(`${adapter.platform}: abandoned start failed: ${describeError(error)}`)
-        throw error
-      } finally {
-        clearTimeout(timer)
-      }
+      if (await connect()) return true
       throw new Error(`adapter "${adapter.platform}" connect returned false`)
     }
     return adapter

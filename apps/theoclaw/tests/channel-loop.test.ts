@@ -203,7 +203,7 @@ describe('startChannelLoop', () => {
     await waitFor(() => lines.length === 2, 1000, 'the abandoned failure to be written')
     expect(lines).toEqual([
       'matrix: start timed out after 50 ms',
-      'matrix: abandoned start failed: sync failed for [redacted]',
+      'matrix: start failed: sync failed for [redacted]',
     ])
   })
 
