@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1551 export(s) across 30 entry point(s).
+1554 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@9.0.0`.
 
@@ -1080,6 +1080,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `loadInstructionWalk` | value |
 | `loadOutputStyle` | value |
 | `loadSettings` | value |
+| `MANAGED_SETTINGS_PATHS` | value |
 | `mcpServerAdmitted` | value |
 | `MEMORY_BYTE_CAP` | value |
 | `MEMORY_LINE_CAP` | value |
@@ -1090,6 +1091,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `permissionRulesFromSettings` | value |
 | `projectEnvStep` | value |
 | `projectEnvStepWith` | value |
+| `readManagedSettings` | value |
 | `readSettingsFile` | value |
 | `resolveAgentMemory` | value |
 | `resolveFileMentions` | value |
@@ -1155,6 +1157,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `ProjectEnvRecord` | type |
 | `ProjectEnvStepOptions` | type |
 | `ProvenancePerKey` | type |
+| `ReadManagedSettingsOptions` | type |
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
 | `ResolvedFileMentions` | type |

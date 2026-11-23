@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - `/theme` with `NO_COLOR` set no longer claims a colour switch the provider would not draw: it refuses, says why, and persists nothing (#2731).
+- Settings reading uses the framework: `settingsCandidates` builds the own and legacy roots (`layerCandidates` keeps the per-path hook delivery), and the managed-settings paths come from `MANAGED_SETTINGS_PATHS` (#2713).
 - The write tools take `baseDir` from `@theokit/agents` (sdk-tools 0.32) instead of TheoCode rewriting relative paths itself; `anchor-relative-writes.ts` is gone.
 - The session PTY owner is `createPtyOwner` from `@theokit/agents-pty`; `createSessionPtyOwner` is gone (#2577).
 - Framework helpers (#2605): the `update_goal` tool and judge come from `createGoalSignal`, one per goal run; `resolveMentions` delegates to `resolveFileMentions`; agent shapes go through `declareAgentShape` and `shapeToolsAsCustomTools`; the session PTY owner wraps `createPtyOwner`. `turnErrorText` keeps its own text, with the gap named in `turn-error.ts`.
