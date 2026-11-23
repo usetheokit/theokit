@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1561 export(s) across 30 entry point(s).
+1587 export(s) across 30 entry point(s).
 
-Measured against `@theokit/sdk@9.0.0`.
+Measured against `@theokit/sdk@11.0.0`.
 
 ## `@theokit/agents`
 
@@ -1187,6 +1187,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | Symbol | Kind |
 |---|---|
 | `agentRunPort` | value |
+| `BaseDirOutsideProjectRootError` | value |
 | `buildEnvContext` | value |
 | `buildRepoMap` | value |
 | `CatastrophicCommandError` | value |
@@ -1196,6 +1197,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `copyJobs` | value |
 | `createApplyPatchTool` | value |
 | `createBraveWebSearchAdapter` | value |
+| `createComputerTool` | value |
 | `createCurrentTimeTool` | value |
 | `createDelegateAllTool` | value |
 | `createDelegateTool` | value |
@@ -1204,6 +1206,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `createGitDiffTool` | value |
 | `createGitStatusTool` | value |
 | `createGlobTool` | value |
+| `createImageGenerateTool` | value |
 | `createInteractiveShellTool` | value |
 | `createJobStore` | value |
 | `createListDirTool` | value |
@@ -1228,7 +1231,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `createWriteFileTool` | value |
 | `createWriteStdinTool` | value |
 | `DEFAULT_MAX_AUDIO_BYTES` | value |
+| `DEFAULT_MAX_GENERATED_IMAGE_BYTES` | value |
 | `DEFAULT_MAX_IMAGE_BYTES` | value |
+| `DEFAULT_MAX_PROMPT_CHARS` | value |
 | `DEFAULT_MAX_TEXT_CHARS` | value |
 | `DEFAULT_TOOL_GUIDANCE` | value |
 | `DelegateToolConfigError` | value |
@@ -1244,11 +1249,13 @@ Measured against `@theokit/sdk@9.0.0`.
 | `JobCopyError` | value |
 | `JobCopyUnsupportedError` | value |
 | `ReadTracker` | value |
+| `readXwdHeader` | value |
 | `ReasoningTools` | value |
 | `RedirectBlockedError` | value |
 | `renderToolList` | value |
 | `replaceUnique` | value |
 | `resolveAndScreen` | value |
+| `resolveWebSearchAdapter` | value |
 | `ScheduleStoreError` | value |
 | `screenedFetch` | value |
 | `SsrfBlockedError` | value |
@@ -1259,10 +1266,15 @@ Measured against `@theokit/sdk@9.0.0`.
 | `withName` | value |
 | `withShellExitGuidance` | value |
 | `withToolResultGuidance` | value |
+| `XWD_LIMITS` | value |
+| `XwdFormatError` | value |
+| `XwdNotWrittenError` | value |
+| `xwdToPng` | value |
 | `CommandPolicy` | type |
 | `ContextMatchReason` | type |
 | `CreateApplyPatchToolOptions` | type |
 | `CreateBraveWebSearchAdapterOptions` | type |
+| `CreateComputerToolOptions` | type |
 | `CreateCurrentTimeToolOptions` | type |
 | `CreateDelegateAllToolOptions` | type |
 | `CreateDelegateToolOptions` | type |
@@ -1271,6 +1283,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `CreateGitDiffToolOptions` | type |
 | `CreateGitStatusToolOptions` | type |
 | `CreateGlobToolOptions` | type |
+| `CreateImageGenerateToolOptions` | type |
 | `CreateInteractiveShellToolOptions` | type |
 | `CreateListDirToolOptions` | type |
 | `CreateReadFileToolOptions` | type |
@@ -1289,6 +1302,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `DeliveryResult` | type |
 | `EnvContextOptions` | type |
 | `FireOutcome` | type |
+| `GeneratedImageData` | type |
+| `ImageGenerateCallback` | type |
+| `ImageGenerateResult` | type |
 | `JobStore` | type |
 | `PlanModeTool` | type |
 | `PlanModeToolOptions` | type |
@@ -1298,6 +1314,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `QuestionToolOptions` | type |
 | `RepoMapOptions` | type |
 | `ResolveAndScreenOptions` | type |
+| `ResolvedWebSearch` | type |
 | `RunPort` | type |
 | `RunResult` | type |
 | `ScheduledJob` | type |
@@ -1321,7 +1338,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `TruncationResult` | type |
 | `VitestSummary` | type |
 | `WebSearchCallback` | type |
+| `WebSearchProvider` | type |
 | `WebSearchResult` | type |
+| `XwdHeader` | type |
 
 ## `@theokit/agents/code-mode`
 
@@ -1639,10 +1658,14 @@ Measured against `@theokit/sdk@9.0.0`.
 | `defineCommand` | value |
 | `EmptyPromptError` | value |
 | `exitAfterDrain` | value |
+| `formatGcJson` | value |
+| `formatGcPlan` | value |
+| `parseSessionsGcArgs` | value |
 | `readHeadlessPrompt` | value |
 | `routeCommand` | value |
 | `runHeadlessTurn` | value |
 | `sessionCommands` | value |
+| `sessionsGcCommand` | value |
 | `SHUTDOWN_EXIT_CODES` | value |
 | `CleanupTask` | type |
 | `CommandArgument` | type |
@@ -1656,6 +1679,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `RoutedInput` | type |
 | `RouteFailure` | type |
 | `SessionCommandHandlers` | type |
+| `SessionsGcArgs` | type |
+| `SessionsGcOptions` | type |
+| `SessionsGcOutcome` | type |
 | `Shutdown` | type |
 | `ShutdownDeps` | type |
 | `ShutdownOutcome` | type |

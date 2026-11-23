@@ -1,4 +1,4 @@
-import { maskSecrets } from '../channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { Security } from '@theokit/sdk'
 import type { AgentStreamEvent } from '@theokit/agents/bridge'
 
