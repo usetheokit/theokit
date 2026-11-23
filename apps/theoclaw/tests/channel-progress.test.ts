@@ -54,7 +54,8 @@ describe('display tiers in the reply path', () => {
 
   it('an override turns Telegram progress on, and reasoning display on', async () => {
     const sent = await turn('telegram', { platforms: { telegram: { tool_progress: 'new', show_reasoning: true } } })
-    expect(sent).toEqual(['hmm', 'read {"path":"/a"}', 'Done.'])
+    // One progress line per event: a reasoning line held back until the next event shares its message (theokit-gateways#712).
+    expect(sent).toEqual(['hmm\nread {"path":"/a"}', 'Done.'])
   })
 
   it('never sends reasoning by default, even where progress is on', async () => {

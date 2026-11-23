@@ -107,7 +107,10 @@ describe('createTriggerRoute', () => {
     const h = harness(undefined, { ...TRIGGER, instructions: 'Summarise the build.' })
     await h.handle(delivery('{}'))
     await waitFor(() => h.agents.length === 1, 5000, 'the run')
-    expect(h.agents[0]?.sent[0]).toBe('Summarise the build.\n\nThe following was delivered by trigger ci:\n\n{}')
+    const prompt = h.agents[0]?.sent[0] ?? ''
+    expect(prompt.startsWith('Summarise the build.\n\nThe following was delivered by trigger ci:\n\n')).toBe(true)
+    // The body is framed as untrusted data by the package.
+    expect(prompt).toContain('<payload>\n{}\n</payload>')
   })
 
   it('answers 200 and starts no run for a repeated delivery id', async () => {
@@ -145,7 +148,7 @@ describe('createTriggerRoute', () => {
     const h = harness(() => new FakeAgent({ frames: [finished()], result: { status: 'error', error: { code: 'MODEL_DOWN' } } }))
     await h.handle(delivery('{}'))
     await waitFor(() => h.lines.length === 1, 5000, 'the failure line')
-    expect(h.lines[0]).toBe('trigger ci: run failed (MODEL_DOWN)')
+    expect(h.lines[0]).toBe('trigger ci: run failed (unknown)')
     expect(h.adapter.sent).toHaveLength(0)
   })
 
@@ -157,7 +160,7 @@ describe('createTriggerRoute', () => {
     })
     await h.handle(delivery('{}'))
     await waitFor(() => h.lines.length === 1, 5000, 'the failure line')
-    expect(h.lines[0]).toBe('trigger ci: run failed (socket hang up)')
+    expect(h.lines[0]).toBe('trigger ci: run failed (unexpected_error)')
   })
 
   it('writes one masked line naming the code when the platform refuses the reply, with no retry', async () => {
@@ -168,7 +171,7 @@ describe('createTriggerRoute', () => {
     })
     await adapterRefusal.handle(delivery('{}'))
     await waitFor(() => adapterRefusal.lines.length === 1, 5000, 'the refusal line')
-    expect(adapterRefusal.lines[0]).toBe('trigger ci: the reply was not delivered (CHAT_NOT_FOUND)')
+    expect(adapterRefusal.lines[0]).toBe('trigger ci: reply not delivered (unknown)')
     expect(adapterRefusal.adapter.sent).toHaveLength(1)
   })
 })
@@ -210,7 +213,7 @@ describe('a reply adapter whose sendMessage throws', () => {
     })
     expect((await route.handle(delivery('{}'))).status).toBe(202)
     await waitFor(() => lines.length === 1, 5000, 'the delivery failure line')
-    expect(lines[0]).toBe('trigger ci: the reply was not delivered (TypeError)')
+    expect(lines[0]).toBe('trigger ci: reply not delivered (TypeError)')
     expect(lines[0]).not.toContain('chat 42')
     expect(calls).toBe(1)
   })

@@ -11,7 +11,6 @@ import {
   NEW_CONVERSATION_REPLY,
   RESET_FAILED_REPLY,
   NO_ANSWER_REPLY,
-  ReplyDeliveryError,
   createReplyHandler,
 } from '../src/channels/reply-handler.js'
 import type { TurnAgent } from '../src/channels/reply-handler.js'
@@ -130,7 +129,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('discord', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
+    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBeInstanceOf(AgentTurnError)
 
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
   })
@@ -147,15 +146,15 @@ describe('createReplyHandler', () => {
     expect(release).toHaveBeenCalledTimes(1)
   })
 
-  it('sends the partial text once and rethrows when the agent fails after text', async () => {
+  it('sends the error sentence once, not the partial text, when the agent fails after text', async () => {
     const failure = new Error('stream cut')
     const agent = new FakeAgent({ frames: [assistant('Half an ans')], streamError: failure })
     const event = messageEvent('slack', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
+    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBeInstanceOf(AgentTurnError)
 
-    expect(replies.map((reply) => reply.text)).toEqual(['Half an ans'])
+    expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
   })
 
   it('replies once with the fallback for a reasoning-only turn', async () => {
@@ -200,7 +199,7 @@ describe('createReplyHandler', () => {
 
     await expect(
       createReplyHandler({ reset: noReset, withAgent: () => Promise.reject(failure) })(event, ctx),
-    ).rejects.toBe(failure)
+    ).rejects.toBeInstanceOf(AgentTurnError)
 
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
   })
@@ -215,8 +214,8 @@ describe('createReplyHandler', () => {
 
     const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
-    await expect(turn).rejects.toBeInstanceOf(ReplyDeliveryError)
-    await expect(turn).rejects.toThrow(/telegram.*rate_limited/)
+    await expect(turn).rejects.toBeInstanceOf(AgentTurnError)
+    await expect(turn).rejects.toThrow(/telegram.*reply_refused/)
   })
 
   it("replies in the platform's rendering", async () => {
@@ -275,11 +274,11 @@ describe('createReplyHandler', () => {
 
     const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
-    await expect(turn).rejects.toBeInstanceOf(ReplyDeliveryError)
-    await expect(turn).rejects.toHaveProperty('cause', failure)
+    // The package handler's error reply is best effort: the turn's own failure is what is thrown.
+    await expect(turn).rejects.toBeInstanceOf(AgentTurnError)
   })
 
-  it('a reply that throws after a failed turn reports both errors', async () => {
+  it('a reply that throws after a failed turn still throws the turn failure', async () => {
     const failure = new Error('provider unreachable')
     const unreachable = new Error('connection reset')
     const agent = new FakeAgent({ frames: [], streamError: failure })
@@ -293,8 +292,7 @@ describe('createReplyHandler', () => {
 
     const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
-    await expect(turn).rejects.toBeInstanceOf(AggregateError)
-    await expect(turn).rejects.toHaveProperty('errors', [failure, unreachable])
+    await expect(turn).rejects.toBeInstanceOf(AgentTurnError)
   })
 
   it('a refused reply after the factory failed keeps the factory error as its cause', async () => {
@@ -304,8 +302,7 @@ describe('createReplyHandler', () => {
 
     const turn = createReplyHandler({ reset: noReset, withAgent: () => Promise.reject(failure) })(event, ctx)
 
-    await expect(turn).rejects.toBeInstanceOf(ReplyDeliveryError)
-    await expect(turn).rejects.toHaveProperty('cause', failure)
+    await expect(turn).rejects.toBeInstanceOf(AgentTurnError)
   })
 
   it('an error status in the stream fails the turn even when the run reports finished', async () => {
@@ -387,7 +384,7 @@ describe('createReplyHandler in a GatewayRunner', () => {
     return errors
   }
 
-  it('a sendMessage refused by the platform reaches on_error as ReplyDeliveryError', async () => {
+  it('a sendMessage refused by the platform reaches on_error as AgentTurnError', async () => {
     const adapter = new FakeAdapter('telegram', {
       send: async () => ({ ok: false, error: { code: 'rate_limited', message: 'slow down' } }),
     })
@@ -396,20 +393,20 @@ describe('createReplyHandler in a GatewayRunner', () => {
     const errors = await runOne(adapter, createReplyHandler({ reset: noReset, withAgent: withOne(agent) }), 'hello')
 
     expect(errors).toHaveLength(1)
-    expect(errors[0]).toBeInstanceOf(ReplyDeliveryError)
-    expect(errors[0]?.message).toBe('telegram: reply was not delivered (rate_limited)')
+    expect(errors[0]).toBeInstanceOf(AgentTurnError)
+    expect(errors[0]?.message).toBe('agent turn failed on telegram: reply_refused')
     expect(adapter.sent.map((message) => message.text)).toEqual(['hi'])
   })
 
-  it('a turn that rejects mid-stream sends its partial text and reaches on_error', async () => {
+  it('a turn that rejects mid-stream sends the error sentence and reaches on_error', async () => {
     const failure = new Error('model provider dropped the stream')
     const adapter = new FakeAdapter('telegram')
     const agent = new FakeAgent({ frames: [assistant('Half an ans')], streamError: failure })
 
     const errors = await runOne(adapter, createReplyHandler({ reset: noReset, withAgent: withOne(agent) }), 'hello')
 
-    expect(errors).toEqual([failure])
-    expect(adapter.sent.map((message) => message.text)).toEqual(['Half an ans'])
+    expect(errors[0]).toBeInstanceOf(AgentTurnError)
+    expect(adapter.sent.map((message) => message.text)).toEqual([ERROR_SENTENCE])
   })
 })
 
@@ -472,7 +469,7 @@ describe("the /control request boundary tears its agent down", () => {
     const event = messageEvent('telegram', 'hello')
     const { ctx } = fakeContext(event)
 
-    await expect(handlerOver(agent)(event, ctx)).rejects.toBe(failure)
+    await expect(handlerOver(agent)(event, ctx)).rejects.toBeInstanceOf(AgentTurnError)
 
     expect(agent.teardowns).toBe(1)
   })
