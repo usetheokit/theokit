@@ -7,7 +7,7 @@ import type { GatewayHook, MessageEvent } from '@theokit/gateway'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createOwnerPolicyHook } from '../src/authorization/owner-policy-hook.js'
-import { createPairingStore } from '../src/authorization/pairing-store.js'
+import { createFilePairingStore } from '@theokit/gateway'
 import { parseAuthorizationPolicy } from '../src/authorization/policy.js'
 import { FakeAdapter, messageEvent, waitFor } from './fakes.js'
 
@@ -64,7 +64,7 @@ function instance(owner: string, dmPolicy: string) {
   const runner = new GatewayRunner({
     adapters: [adapter],
     handler: async (_event, ctx) => void (await ctx.reply('an answer')),
-    hooks: [counting, createOwnerPolicyHook({ policy, pairing: createPairingStore({ dir }) })],
+    hooks: [counting, createOwnerPolicyHook({ policy, pairing: createFilePairingStore({ dir }) })],
   })
   runners.push(runner)
   return {

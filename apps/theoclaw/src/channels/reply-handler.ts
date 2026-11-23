@@ -1,20 +1,20 @@
 import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@theokit/gateway'
+import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
 import type { ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
-import { maskSecrets } from './channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { type BroadcastOptions, createMaskedBroadcast } from './broadcast-groups.js'
 import { type DisplayConfig, resolveDisplay } from './display-config.js'
 import { createProgressGate } from './progress.js'
-import { compactIfNeeded } from './compact-command.js'
 import { AgentTurnError, createAgentHandler } from '@theokit/gateway-agent'
 import type { AgentLease, BroadcastGroups, RunningTurn } from '@theokit/gateway-agent'
-import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-command.js'
+import { type GoalSettings, GOAL_USAGE_REPLY, runGoal } from './goal-command.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 import { formatUsageFooter, formatUsageLine, usageOf } from '../usage/turn-usage.js'
 import type { UsageMode } from './usage-hook.js'
 import { THINKING_LEVELS, type ThinkingLevel } from '../agent/create-agent.js'
-import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
+import { type CompactSettings, compactIfNeeded, runCompact } from './compact-command.js'
 import { AdvisorHistory, reviewQuietly, steerNote, type AdvisorSettings } from './advisor.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
@@ -25,16 +25,6 @@ export const NEW_CONVERSATION_REPLY = 'Started a new conversation.'
 
 /** The one line a `/new` or `/reset` that could not be saved answers with. */
 export const RESET_FAILED_REPLY = 'I could not start a new conversation; this one goes on.'
-
-/**
- * Matched on the whole trimmed text, here rather than through the runner's command registry, whose
- * word-boundary match would also reset on `/new chat` (FR-008); and the reset needs the session,
- * which this handler already holds.
- */
-const RESET_COMMANDS: ReadonlySet<string> = new Set(['/new', '/reset'])
-
-/** `/steer <text>`: redirect the turn already running; the text after the command is what is injected. */
-const STEER_COMMAND = /^\/steer(?:\s+([\s\S]*))?$/i
 
 export const STEER_USAGE_REPLY = 'Usage: /steer <text> (redirects the turn that is running)'
 export const STEER_IDLE_REPLY = 'Nothing is running to steer; send your message as usual.'
@@ -51,11 +41,9 @@ function trackTurn(agent: object, turn: object): () => void {
   return () => void turns.delete(turn)
 }
 
-const THINK_COMMAND = /^\/think(?:\s+(\S+))?$/i
-
-function answerThink(think: (event: MessageEvent, level: ThinkingLevel) => void, event: MessageEvent, arg: string | undefined): string {
-  const level = arg?.toLowerCase()
-  if (level === undefined || !(THINKING_LEVELS as readonly string[]).includes(level)) return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
+function answerThink(think: (event: MessageEvent, level: ThinkingLevel) => void, event: MessageEvent, arg: string): string {
+  const level = arg.toLowerCase()
+  if ( !(THINKING_LEVELS as readonly string[]).includes(level)) return `Usage: /think ${THINKING_LEVELS.join('|')} (only these four levels)`
   think(event, level as ThinkingLevel)
   return `Thinking level set to ${level}.`
 }
@@ -339,6 +327,88 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
   if (outcome.error !== undefined) throw outcome.error
 }
 
+/** What a channel command acts on: the message and the reply path it arrived on. */
+interface ChannelCommandContext {
+  readonly event: MessageEvent
+  readonly ctx: GatewayContext
+}
+
+/** `/think` and `/steer` have always been matched without regard to case; the router's match is exact. */
+function normalised(text: string): string {
+  return text
+    .replace(/^\/(steer|think)(?=\s|$)/i, (_all, name: string) => `/${name.toLowerCase()}`)
+    .replace(/^(\/\w+)\s/, '$1 ')
+}
+
+/**
+ * The commands this handler answers itself, in one registry. `/new` and `/reset` are `exact`, so
+ * `/new chat` is no command and goes to the model (FR-008); `/think`, `/compact` and `/goal` exist
+ * only when their option does, and without it they are ordinary messages.
+ */
+function channelCommands(options: ReplyHandlerOptions) {
+  const say = async ({ ctx }: ChannelCommandContext, text: string): Promise<void> =>
+    send(ctx, { text, format: 'plain' }, { failed: false, answer: text })
+  const { think, compact, goal } = options
+  return createCommandRegistry<ChannelCommandContext>([
+    defineCommand<ChannelCommandContext>({
+      name: 'new',
+      aliases: ['reset'],
+      description: 'start a new conversation',
+      exact: true,
+      // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
+      // A reset that could not be saved moved nothing; the person is told, and the runner too.
+      run: async (_arg, c) => {
+        try {
+          await options.reset(c.event)
+        } catch (error) {
+          await send(c.ctx, { text: RESET_FAILED_REPLY, format: 'plain' }, { failed: true, error })
+          throw error
+        }
+        await say(c, NEW_CONVERSATION_REPLY)
+      },
+    }),
+    defineCommand<ChannelCommandContext>({
+      name: 'steer',
+      description: 'redirect the turn that is running',
+      run: async (arg, c) =>
+        say(c, arg === '' ? STEER_USAGE_REPLY : await answerSteer(options, c.event, arg)),
+    }),
+    ...(think === undefined
+      ? []
+      : [
+          defineCommand<ChannelCommandContext>({
+            name: 'think',
+            description: 'the thinking level',
+            run: (arg, c) => say(c, answerThink(think, c.event, arg)),
+          }),
+        ]),
+    ...(compact === undefined
+      ? []
+      : [
+          defineCommand<ChannelCommandContext>({
+            name: 'compact',
+            description: 'summarize the conversation so far',
+            run: async (_arg, c) =>
+              say(
+                c,
+                await options.withAgent(c.event, (lease) =>
+                  runCompact(compact, lease.agentId).finally(() => lease.release()),
+                ),
+              ),
+          }),
+        ]),
+    ...(goal === undefined
+      ? []
+      : [
+          defineCommand<ChannelCommandContext>({
+            name: 'goal',
+            description: 'work on a goal',
+            run: (arg, c) => answerGoal(goal, options, c.event, c.ctx, arg),
+          }),
+        ]),
+  ])
+}
+
 /**
  * The handler every runner uses: one agent turn per message with text, on the agent of the
  * message's session. In a broadcast group's member channel the turn carries the group's thread,
@@ -347,45 +417,13 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
  * disposed here: it is the session's, owned by `SessionAgents`.
  */
 export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler {
+  const registry = channelCommands(options)
   const broadcast = options.broadcast === undefined ? undefined : createMaskedBroadcast({ secrets: options.secrets ?? [], ...options.broadcast })
   return async (event, ctx) => {
     const text = event.text.trim()
     if (text === '') return
-    if (RESET_COMMANDS.has(text)) {
-      // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
-      // A reset that could not be saved moved nothing; the person is told, and the runner too.
-      try {
-        await options.reset(event)
-      } catch (error) {
-        await send(ctx, { text: RESET_FAILED_REPLY, format: 'plain' }, { failed: true, error })
-        throw error
-      }
-      await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
-      return
-    }
-    const steer = STEER_COMMAND.exec(text)
-    if (steer !== null) {
-      const note = (steer[1] ?? '').trim()
-      const reply = note === '' ? STEER_USAGE_REPLY : await answerSteer(options, event, note)
-      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
-      return
-    }
-    const think = options.think === undefined ? null : THINK_COMMAND.exec(text)
-    if (options.think !== undefined && think !== null) {
-      const reply = answerThink(options.think, event, think[1])
-      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
-      return
-    }
-    if (options.compact !== undefined && compactOf(text) !== undefined) {
-      const reply = await options.withAgent(event, (lease) => runCompact(options.compact as CompactSettings, lease.agentId).finally(() => lease.release()))
-      await send(ctx, { text: reply, format: 'plain' }, { failed: false, answer: reply })
-      return
-    }
-    const goal = options.goal === undefined ? undefined : goalOf(text)
-    if (options.goal !== undefined && goal !== undefined) {
-      await answerGoal(options.goal, options, event, ctx, goal)
-      return
-    }
+    const routed = await registry.dispatch(normalised(text), { event, ctx })
+    if (routed.kind === 'command') return
     await answerTurn(options, broadcast, event, ctx)
   }
 }
