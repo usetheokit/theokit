@@ -123,6 +123,17 @@ describe('a rejected tool call is not reported as one that ran', () => {
     ).toBe('Rejected ls')
   })
 
+  it('test_a_rejection_keeps_its_header_whatever_the_output_became', () => {
+    for (const output of ['rejected — nothing ran', 'nothing ran: x', '']) {
+      const event = {
+        ...(denied('Bash', { command: 'echo parity-final' }) as object),
+        output,
+      } as never
+      expect(formatToolHeader(event)?.name).toBe('Rejected echo parity-final')
+      expect(formatToolHeader(event)?.summary).toContain('nothing ran')
+    }
+  })
+
   it('test_a_call_that_actually_ran_is_untouched', () => {
     // Anti-vacuity: treating every `failed` as a rejection would relabel real command failures,
     // which is the opposite mistake and just as misleading.
