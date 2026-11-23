@@ -99,7 +99,8 @@ function restartCommand(io: UpdateIo, label: string): { command: string; args: s
 
 async function rebuild(io: UpdateIo, runner: Runner, dist: string, label: string, unitInstalled: boolean): Promise<void> {
   const install = await runner(join(dirname(dist), 'install.sh'), [])
-  io.stdout.write(install.stdout)
+  // The build's last line may lack a newline; `updated` must still start a line of its own.
+  io.stdout.write(install.stdout === '' || install.stdout.endsWith('\n') ? install.stdout : `${install.stdout}\n`)
   if (install.code !== 0) throw new StepFailed(`install.sh failed (exit ${install.code}): ${install.stderr.trim()}`)
   if (!unitInstalled) return
   const { command, args } = restartCommand(io, label)

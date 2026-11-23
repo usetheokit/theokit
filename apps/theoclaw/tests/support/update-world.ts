@@ -64,7 +64,7 @@ export interface Harness {
   readonly stderr: () => string
 }
 
-export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExit?: number[]; restartExit?: number[]; platform?: NodeJS.Platform; uid?: number } = {}): Harness {
+export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExit?: number[]; installStdout?: string; restartExit?: number[]; platform?: NodeJS.Platform; uid?: number } = {}): Harness {
   let installs = 0
   const restarts: string[] = []
   const installExit = [...(options.installExit ?? [])]
@@ -73,7 +73,7 @@ export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExi
   const step = (queue: number[], onSuccess: () => void, what: string): RunResult => {
     const code = queue.shift() ?? 0
     if (code === 0) onSuccess()
-    return { code, stdout: '', stderr: code === 0 ? '' : `${what} failed` }
+    return { code, stdout: what === 'install' ? (options.installStdout ?? '') : '', stderr: code === 0 ? '' : `${what} failed` }
   }
   const runner: Runner = async (command, args) => {
     if (command === 'git') return runCommand(command, args)

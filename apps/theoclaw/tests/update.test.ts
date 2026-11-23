@@ -37,6 +37,16 @@ describe('theoclaw update', () => {
     expect(dirty.installs()).toBe(0)
   })
 
+  it('the updated line starts its own line when the install output ends without a newline', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    const c1 = commit(w.upstream, 'a', '1\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+    const h = harness(w, { installStdout: 'Scope: 8 of 15 workspace projects\nDone in 3s' })
+    expect(await update({}, h.io, h.runner)).toBe(0)
+    expect(h.stdout()).toMatch(new RegExp(`^updated ${w.c0} -> ${c1}`, 'm'))
+  })
+
   it('an up-to-date checkout prints already up to date', async () => {
     const w = world()
     installedAt(w, w.c0)
