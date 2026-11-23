@@ -964,6 +964,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `CredentialNotFoundError` | value |
 | `credentialSources` | value |
 | `customProviderPlugin` | value |
+| `customProviderPlugin` | value |
 | `DeclaredProviderError` | value |
 | `DEFAULT_PROVIDERS` | value |
 | `deviceLogin` | value |

@@ -2,7 +2,7 @@ import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent,
 import type { ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
-import { maskSecrets } from './channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { type BroadcastOptions, createMaskedBroadcast } from './broadcast-groups.js'
 import { type DisplayConfig, resolveDisplay } from './display-config.js'
 import { createProgressGate } from './progress.js'
