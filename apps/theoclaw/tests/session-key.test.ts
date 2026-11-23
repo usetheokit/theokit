@@ -1,4 +1,3 @@
-import { scopedStrategy } from '@theokit/gateway'
 import type { MessageEvent, PlatformName } from '@theokit/gateway'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -134,24 +133,33 @@ describe('createSessionRouter', () => {
   })
 })
 
-describe('parity with the gateway scopedStrategy (why the keys stay in TheoClaw)', () => {
-  const peerLinks = new Map([['telegram:u1', 'ann']])
-  const mine = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) => sessionKeyFor(event(shape), { dmScope, peerLinks })
-  const gateway = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) => scopedStrategy({ dmScope, peerLinks })(event(shape))
+describe('stored keys stay reachable through the gateway scopedStrategy', () => {
+  const links = new Map([
+    ['google_chat:u-1', 'ann'],
+    ['tlon_urbit:~zod', 'ann'],
+  ])
+  const scopes = (platform: PlatformName, sender: string) => {
+    const at = (dmScope: SessionKeySettings['dmScope'], accountLabel?: string) =>
+      sessionKeyFor(event({ platform, sender }), { dmScope, peerLinks: links, ...(accountLabel === undefined ? {} : { accountLabel }) })
+    return at
+  }
 
-  it('agrees where a key has no scope-specific form, escaping `-` and `_` the same way', () => {
-    for (const shape of [{ sender: 'a-b_c' }, { type: 'group' as const, channel: 'g-1_x' }, { type: 'thread' as const, topicId: 't-1' }]) {
-      expect(gateway('per-channel-peer', shape), JSON.stringify(shape)).toBe(mine('per-channel-peer', shape))
-    }
+  it('keeps the raw platform segment for google_chat and tlon_urbit', () => {
+    const chat = scopes('google_chat' as PlatformName, 'u-1')
+    expect(chat('per-channel-peer')).toBe('google_chat-dm-u_d1')
+    expect(chat('per-account-channel-peer', 'w')).toBe('google_chat-dm-w-u_d1')
+    expect(chat('per-account-channel-peer', '')).toBe('google_chat-dm--u_d1')
+    expect(chat('per-peer')).toBe('peer-ann')
+    expect(chat('main')).toBe('main')
+    const tlon = scopes('tlon_urbit' as PlatformName, '~zod')
+    expect(tlon('per-channel-peer')).toBe('tlon_urbit-dm-~zod')
+    expect(tlon('per-peer')).toBe('peer-ann')
+    expect(sessionKeyFor(event({ platform: 'tlon_urbit' as PlatformName, type: 'group', channel: 'g-1' }), DEFAULT)).toBe('tlon_urbit-grp-g_d1')
+    expect(sessionKeyFor(event({ platform: 'tlon_urbit' as PlatformName, type: 'thread', channel: 'g', topicId: 't' }), DEFAULT)).toBe('tlon_urbit-tpc-g-t')
   })
 
-  it('differs for `main`, so adopting it would orphan the history stored under `main`', () => {
-    expect(mine('main')).toBe('main')
-    expect(gateway('main')).not.toBe('main')
-  })
-
-  it('differs for a linked peer, so adopting it would orphan the history stored under `peer-<name>`', () => {
-    expect(mine('per-peer')).toBe('peer-ann')
-    expect(gateway('per-peer')).not.toBe('peer-ann')
+  it('keeps an empty account label as an empty segment', () => {
+    const settings: SessionKeySettings = { dmScope: 'per-account-channel-peer', peerLinks: new Map() }
+    expect(sessionKeyFor(event({ sender: 'u1' }), settings)).toBe('telegram-dm--u1')
   })
 })

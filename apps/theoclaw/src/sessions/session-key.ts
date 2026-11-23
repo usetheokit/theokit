@@ -1,4 +1,4 @@
-import { SessionRouter } from '@theokit/gateway'
+import { SessionRouter, scopedStrategy } from '@theokit/gateway'
 import type { MessageEvent } from '@theokit/gateway'
 
 /** How a direct message is keyed (`THEOCLAW_DM_SCOPE`); groups and threads ignore it. */
@@ -24,21 +24,22 @@ function segment(id: string): string {
   return id.replace(/[_-]/g, (character) => (character === '_' ? '__' : '_d'))
 }
 
-function dmKey(event: MessageEvent, settings: SessionKeySettings): string {
-  const sender = segment(event.sender.id)
-  switch (settings.dmScope) {
-    case 'main':
-      return 'main'
-    case 'per-peer': {
-      const name = settings.peerLinks.get(`${event.platform}:${event.sender.id}`)
-      return name === undefined ? `${event.platform}-dm-${sender}` : `peer-${segment(name)}`
-    }
-    case 'per-channel-peer':
-      return `${event.platform}-dm-${sender}`
-    case 'per-account-channel-peer':
-      // `dm` stays the second segment, so no label makes a direct message's key a thread's or a group's.
-      return `${event.platform}-dm-${segment(settings.accountLabel ?? '')}-${sender}`
-  }
+/** `scopedStrategy` rejects an empty account label; this stands in for it and is swapped back out. */
+const EMPTY_LABEL = 'x'
+
+/**
+ * The gateway's `scopedStrategy` builds every key. TheoClaw keeps two things stored sessions depend
+ * on: the `main` and `peer-<name>` DM keys (`keys`), and the platform segment written raw, so
+ * `google_chat` and `tlon_urbit` keep the key the app always wrote (the gateway would escape them).
+ */
+function strategyFor(settings: SessionKeySettings): ReturnType<typeof scopedStrategy> {
+  const empty = settings.accountLabel === undefined || settings.accountLabel === ''
+  return scopedStrategy({
+    dmScope: settings.dmScope,
+    peerLinks: settings.peerLinks,
+    ...(settings.dmScope === 'per-account-channel-peer' ? { accountLabel: empty ? EMPTY_LABEL : settings.accountLabel } : {}),
+    keys: { main: 'main', peer: (name) => `peer-${segment(name)}` },
+  })
 }
 
 /**
@@ -47,12 +48,15 @@ function dmKey(event: MessageEvent, settings: SessionKeySettings): string {
  * it reads no environment, clock or file.
  */
 export function sessionKeyFor(event: MessageEvent, settings: SessionKeySettings): string {
-  const { channel, platform } = event
-  if (channel.type === 'dm') return dmKey(event, settings)
-  if (channel.type === 'thread' && channel.topicId !== undefined) {
-    return `${platform}-tpc-${segment(channel.id)}-${segment(channel.topicId)}`
+  const key = strategyFor(settings)(event)
+  const { platform } = event
+  const escaped = segment(platform)
+  if (!key.startsWith(`${escaped}-`)) return key
+  let rest = key.slice(escaped.length)
+  if (settings.dmScope === 'per-account-channel-peer' && event.channel.type === 'dm' && (settings.accountLabel ?? '') === '') {
+    rest = rest.replace(`-dm-${EMPTY_LABEL}-`, '-dm--')
   }
-  return `${platform}-grp-${segment(channel.id)}`
+  return `${platform}${rest}`
 }
 
 /** The gateway's router over `sessionKeyFor`; the app reads keys only through it. */
