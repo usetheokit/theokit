@@ -13,7 +13,7 @@
  *   `roots` capability is stripped from `initialize`); the directory is removed when it exits;
  * - the server answers every action with a `- [Snapshot](<file>)` link to a file in that directory,
  *   which no tool of the agent can open; a `tools/call` answer gets the file's content in its place
- *   (a path that leaves the directory is left as it was);
+ *   (one that cannot be read, is empty or leaves the directory becomes a line saying so, and stderr names it);
  * - `PLAYWRIGHT_MCP_*` variables are dropped, so the environment cannot widen the server's config.
  *
  * Exits with the server's status, 1 when it ended on a signal (SIGTERM, SIGINT and SIGHUP are
@@ -114,23 +114,26 @@ function fromClient(message) {
 
 const SNAPSHOT_LINK = /^[ \t]*- \[Snapshot\]\(([^)\n]+)\)[ \t]*$/gm
 
-/** The content of `link` when it names a file inside the output directory, else `undefined`. */
+/**
+ * What replaces the snapshot link `link` in a tool answer: the file's content when it names a file
+ * inside the output directory, else a line that says why there is none. A link left as it was is a
+ * path no tool of the agent can open, and an empty replacement reads as an empty page, so the model
+ * would report a page it never saw; the reason goes to stderr as well, for the run's log.
+ */
 function snapshotContent(link) {
+  const unavailable = (reason) => {
+    process.stderr.write(`browser-proxy: snapshot ${link} ${reason}\n`)
+    return `[The page snapshot could not be read (${reason}). Call browser_snapshot again.]`
+  }
   try {
     const root = realpathSync(workDir)
     const path = realpathSync(resolve(root, link))
     const rel = relative(root, path)
-    if (rel === '' || rel.startsWith('..') || resolve(rel) === rel) {
-      process.stderr.write(`browser-proxy: snapshot link ${link} is outside the output directory; left as it was\n`)
-      return undefined
-    }
+    if (rel === '' || rel.startsWith('..') || resolve(rel) === rel) return unavailable('is outside the output directory')
     const content = readFileSync(path, 'utf8').trimEnd()
-    if (content === '') process.stderr.write(`browser-proxy: snapshot file ${link} is empty\n`)
-    return content
+    return content === '' ? unavailable('is empty') : content
   } catch (error) {
-    // The model then reads a link no tool of its own can open, so the run's log must say why.
-    process.stderr.write(`browser-proxy: snapshot link ${link} could not be read: ${error.message}\n`)
-    return undefined
+    return unavailable(`could not be read: ${error.message}`)
   }
 }
 
@@ -139,7 +142,7 @@ function inlineSnapshots(message) {
   if (!Array.isArray(content)) return message
   const inlined = content.map((part) =>
     part?.type === 'text' && typeof part.text === 'string'
-      ? { ...part, text: part.text.replace(SNAPSHOT_LINK, (line, link) => snapshotContent(link) ?? line) }
+      ? { ...part, text: part.text.replace(SNAPSHOT_LINK, (_line, link) => snapshotContent(link)) }
       : part,
   )
   return { ...message, result: { ...message.result, content: inlined } }

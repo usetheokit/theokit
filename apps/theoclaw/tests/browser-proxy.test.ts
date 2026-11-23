@@ -163,23 +163,25 @@ describe('the browser server wrapper', () => {
     cleanups.push(() => rmSync(join(tmpdir(), 'theoclaw-outside.yml'), { force: true }))
     const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: { link: '../theoclaw-outside.yml' } } }])
     const text = (answers.get(1)?.result as { content: { text: string }[] }).content[0]?.text
-    expect(text).toContain('- [Snapshot](../theoclaw-outside.yml)')
     expect(text).not.toContain('outside\n')
-    expect(lastStderr).toContain('snapshot link ../theoclaw-outside.yml is outside the output directory')
+    expect(text).toContain('could not be read (is outside the output directory)')
+    expect(lastStderr).toContain('snapshot ../theoclaw-outside.yml is outside the output directory')
   })
 
-  it('says on stderr why a snapshot link it cannot read stays a link, so a page the model calls empty can be traced', async () => {
+  it('tells the model why a snapshot it cannot read is missing, instead of leaving a dead link', async () => {
     const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: { link: './gone.yml', missing: true } } }])
     const text = (answers.get(1)?.result as { content: { text: string }[] }).content[0]?.text
-    expect(text).toContain('- [Snapshot](./gone.yml)')
-    expect(lastStderr).toMatch(/snapshot link \.\/gone\.yml could not be read: .*ENOENT/)
+    expect(text).not.toContain('- [Snapshot](./gone.yml)')
+    expect(text).toContain('The page snapshot could not be read (could not be read: ENOENT')
+    expect(lastStderr).toMatch(/snapshot \.\/gone\.yml could not be read: .*ENOENT/)
   })
 
-  it('says on stderr that a snapshot file is empty', async () => {
+  it('tells the model that a snapshot file is empty, instead of an answer with no page in it', async () => {
     const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: { link: './empty.yml', content: '' } } }])
     const text = (answers.get(1)?.result as { content: { text: string }[] }).content[0]?.text
     expect(text).not.toContain('[Snapshot]')
-    expect(lastStderr).toContain('snapshot file ./empty.yml is empty')
+    expect(text).toContain('The page snapshot could not be read (is empty)')
+    expect(lastStderr).toContain('snapshot ./empty.yml is empty')
   })
 
   it('refuses a JSON-RPC batch, so a tools/call inside it cannot bypass the offered set', async () => {
