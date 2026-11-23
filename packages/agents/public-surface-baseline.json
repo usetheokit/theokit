@@ -20320,12 +20320,12 @@
           "deprecatedSince": null,
           "references": ["dist/control.d.ts#ControlStreamFrame"],
           "internals": {
-            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n}"
+            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n    readonly variant?: 'warning' | 'error';\n    readonly text?: string;\n}"
           }
         },
         "ControlStreamEvent": {
           "tier": "stable",
-          "declaration": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n}",
+          "declaration": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n    variant?: 'warning' | 'error';\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -20333,7 +20333,7 @@
         },
         "ControlStreamFrame": {
           "tier": "stable",
-          "declaration": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n}",
+          "declaration": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n    readonly variant?: 'warning' | 'error';\n    readonly text?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -20346,7 +20346,7 @@
           "deprecatedSince": null,
           "references": ["dist/control.d.ts#ControlStreamEvent"],
           "internals": {
-            "dist/control.d.ts#ControlStreamEvent": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n}"
+            "dist/control.d.ts#ControlStreamEvent": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n    variant?: 'warning' | 'error';\n}"
           }
         },
         "ControlStreamSourceOptions": {
@@ -20356,7 +20356,7 @@
           "deprecatedSince": null,
           "references": ["dist/control.d.ts#ControlStreamFrame"],
           "internals": {
-            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n}"
+            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n    readonly variant?: 'warning' | 'error';\n    readonly text?: string;\n}"
           }
         },
         "DevicePairing": {
@@ -20761,8 +20761,8 @@
             "dist/control.d.ts#ControlStreamFrame"
           ],
           "internals": {
-            "dist/control.d.ts#ControlStreamEvent": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n}",
-            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n}"
+            "dist/control.d.ts#ControlStreamEvent": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n    variant?: 'warning' | 'error';\n}",
+            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n    readonly variant?: 'warning' | 'error';\n    readonly text?: string;\n}"
           }
         },
         "createControlStreamSource": {
@@ -20779,8 +20779,8 @@
           ],
           "internals": {
             "dist/control.d.ts#ControlStreamClient": "interface ControlStreamClient<F extends ControlStreamFrame = ControlStreamFrame> {\n    chat(message: string, session: string): AsyncIterable<F>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n}",
-            "dist/control.d.ts#ControlStreamEvent": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n}",
-            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n}",
+            "dist/control.d.ts#ControlStreamEvent": "interface ControlStreamEvent {\n    type: string;\n    text?: string;\n    message?: string;\n    call_id?: string;\n    name?: string;\n    status?: string;\n    error?: string;\n    variant?: 'warning' | 'error';\n}",
+            "dist/control.d.ts#ControlStreamFrame": "interface ControlStreamFrame {\n    readonly type: string;\n    readonly event?: {\n        readonly type: string;\n        readonly [key: string]: unknown;\n    };\n    readonly code?: string;\n    readonly variant?: 'warning' | 'error';\n    readonly text?: string;\n}",
             "dist/control.d.ts#ControlStreamSource": "interface ControlStreamSource {\n    (): AsyncGenerator<ControlStreamEvent>;\n    interrupt(): void;\n    steer(message: string): void;\n}",
             "dist/control.d.ts#ControlStreamSourceOptions": "interface ControlStreamSourceOptions<F extends ControlStreamFrame = ControlStreamFrame> {\n    frames?: (frames: AsyncIterable<F>) => AsyncIterable<ControlStreamFrame>;\n}"
           }
