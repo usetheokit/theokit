@@ -1,11 +1,15 @@
 /**
  * Managed git worktrees for delegated tasks (OC-83, B-395): each task runs in its own worktree on
- * its own branch, so concurrent tasks never share a working tree. The disposable remote machine
+ * its own branch, so concurrent tasks never share a working tree. Acquire and release are the framework's
+ * `worktreeProvider`; only `remove(id)` for a kept task is git here, as the provider has no remove by id.
+ * The provider also copies the `.worktreeinclude` files into each worktree. The disposable remote machine
  * half of OC-83 is not built here.
  */
 import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+
+import { worktreeProvider } from '@theokit/agents/bridge'
 
 const run = promisify(execFile)
 
@@ -35,22 +39,19 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
 export function createWorktreeRunner(options: WorktreeRunnerOptions) {
   const git = (...args: string[]) => run('git', ['-C', options.repo, ...args])
+  const provider = worktreeProvider(options.repo, options.root)
   return {
     /** Run the task inside a fresh worktree and remove the worktree and branch afterwards, even on failure. */
     async run<T>(task: DelegatedTask<T>): Promise<T> {
-      if (!SAFE_ID.test(task.id) || task.id.includes('..')) throw new Error(`unsafe task id: ${task.id}`)
-      const worktree: TaskWorktree = { path: join(options.root, task.id), branch: `task/${task.id}` }
-      await git('worktree', 'add', '-b', worktree.branch, worktree.path)
+      const workspace = await provider.acquire(task.id)
+      const worktree: TaskWorktree = { path: workspace.path, branch: workspace.branch ?? `task/${task.id}` }
       let succeeded = false
       try {
         const result = await task.work(worktree)
         succeeded = true
         return result
       } finally {
-        if (!(succeeded && task.keep === true)) {
-          await git('worktree', 'remove', '--force', worktree.path)
-          await git('branch', '-D', worktree.branch)
-        }
+        await workspace.release({ keep: succeeded && task.keep === true })
       }
     },
     /** Clean up a kept task: remove its worktree and, unless `keepBranch`, its branch. */

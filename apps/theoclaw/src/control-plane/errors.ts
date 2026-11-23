@@ -13,8 +13,8 @@ export function describeError(error: unknown): string {
 export class TheoClawConfigError extends Error {
   readonly variable: string | undefined
 
-  // The message-only call is for a refusal no single variable names (the output mask installed
-  // twice on one stream, `src/channels/output-mask.ts`).
+  // The message-only call is for a refusal no single variable names (a mask installed
+  // twice on one stream).
   constructor(message: string, options: { readonly variable?: string } = {}) {
     super(message)
     this.name = 'TheoClawConfigError'

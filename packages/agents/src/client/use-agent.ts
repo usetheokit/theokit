@@ -1,7 +1,12 @@
 import type { WireMessage as UIMessage } from '@theokit/presenter/wire'
 import { useMemo, useRef, useSyncExternalStore } from 'react'
 
-import { AgentClient, type PendingApproval, type UseAgentStatus } from './agent-client.js'
+import {
+  AgentClient,
+  type PendingApproval,
+  type TurnSettled,
+  type UseAgentStatus,
+} from './agent-client.js'
 import { type AgentHandle, isAgentHandle } from './agent-handle.js'
 import { HttpTransport } from './http-transport.js'
 import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
@@ -33,6 +38,11 @@ export interface UseAgentReturn<TInput = unknown, TToolNames extends string = st
   error: Error | undefined
   /** Send a request; opens a new stream. Typed to the agent's `input` schema. */
   send: (input: TInput) => void
+  /**
+   * Same as `send`, and resolves with how the turn settled once its stream ends — no polling. Never
+   * rejects; a superseded or aborted turn resolves `'aborted'`. Pass the hook result to `asGoalLoopAgent`.
+   */
+  sendAndWait: (input: TInput) => Promise<TurnSettled>
   /** Abort an in-flight stream. */
   abort: () => void
   /** Clear messages + error, back to idle. */
@@ -85,6 +95,11 @@ export interface UseAgentOptions {
    * send/reconnect, so a rotating token/tenant is never stale.
    */
   context?: RequestContext | (() => RequestContext | undefined)
+  /**
+   * Committed history to start from, e.g. `threadToUIMessages(rows)` of a resumed session. Read once
+   * when the binding's store is created; later changes do not replace live history.
+   */
+  initialThread?: readonly UIMessage[]
 }
 
 /**
@@ -126,6 +141,7 @@ export function useAgent<TInput = unknown>(
           const ctx = optionsRef.current.context
           return typeof ctx === 'function' ? ctx() : ctx
         },
+        { initialThread: optionsRef.current.initialThread },
       ),
     // bindingIdentity captures api/binding; options resolve live via optionsRef (rebuild would drop messages).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,6 +157,7 @@ export function useAgent<TInput = unknown>(
     error: state.error,
     pendingApprovals: state.pendingApprovals,
     send: client.send,
+    sendAndWait: client.sendAndWait,
     abort: client.abort,
     reset: client.reset,
     approve: client.approve,

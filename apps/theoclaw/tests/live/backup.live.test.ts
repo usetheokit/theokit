@@ -108,7 +108,7 @@ describe.skipIf(!LIVE || SKIP_REASON !== undefined)('backup and restore against 
     }
 
     const restored = profile(false)
-    restoreInstance(restored.env, backupDir, { homeDir: tmpdir() })
+    await restoreInstance(restored.env, backupDir, { homeDir: tmpdir() })
     const recalled = await chat(restored, SENDERS.map(() => RECALL))
     for (const [index, reply] of recalled.replies.entries()) expect(reply, recalled.log).toContain(words[index])
   })

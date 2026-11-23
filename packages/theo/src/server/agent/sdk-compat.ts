@@ -10,7 +10,7 @@
  */
 
 /** The single source of truth for the supported SDK range. Mirrors the `package.json` peer floor. */
-export const SUPPORTED_SDK_RANGE = '^5.32.0'
+export const SUPPORTED_SDK_RANGE = '>=5.32.0 <10'
 
 // Bounded semver: three `\d+` tuples + an optional `-tag.N` prerelease. No nested quantifiers →
 // no catastrophic backtracking; the security/detect-unsafe-regex heuristic false-positives here.
@@ -44,7 +44,21 @@ export function satisfiesSdkRange(version: string, range: string): boolean {
     .some((clause) => satisfiesSingleCaret(version, clause))
 }
 
+/** `>=X.Y.Z <A.B.C`: a stable version at or above the floor and strictly below the ceiling. */
+function satisfiesBounded(version: string, range: string): boolean {
+  const parts = range.split(/\s+/)
+  const floor = parts[0]?.startsWith('>=') ? parseSemver(parts[0].slice(2)) : null
+  const ceilingText = parts[1]?.startsWith('<') ? parts[1].slice(1) : ''
+  const ceiling = parseSemver(/^\d+$/.test(ceilingText) ? `${ceilingText}.0.0` : ceilingText)
+  const ver = parseSemver(version)
+  if (parts.length !== 2 || !floor || !ceiling || !ver || ver.tag !== undefined) return false
+  const n = (s: Semver): number[] => [Number(s.major), Number(s.minor), Number(s.patch)]
+  const cmp = (a: number[], b: number[]): number => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
+  return cmp(n(ver), n(floor)) >= 0 && cmp(n(ver), n(ceiling)) < 0
+}
+
 function satisfiesSingleCaret(version: string, range: string): boolean {
+  if (range.startsWith('>=')) return satisfiesBounded(version, range)
   if (!range.startsWith('^')) return false
   const pin = parseSemver(range.slice(1))
   const ver = parseSemver(version)

@@ -3,7 +3,7 @@ import { createA2AJsonRpcHandler } from '@theokit/agents/a2a'
 
 import type { TurnAgent } from '../agent-port.js'
 import { maskSecrets } from '../channels/channel-loop.js'
-import { bearerCheck } from '../control-plane/bearer.js'
+import { bearerCheck } from '@theokit/http/guards'
 import { describeError } from '../control-plane/errors.js'
 import { MAX_MESSAGE_BYTES } from '../control-plane/limits.js'
 import { runWorker } from '../tools/code-mode-tools.js'

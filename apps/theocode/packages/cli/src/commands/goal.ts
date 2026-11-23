@@ -13,7 +13,7 @@ import type { runGoal } from '@theocode/agent/goal'
 type EffectiveConfig = ReturnType<typeof resolveEffectiveConfig>
 type TrustPosture = ReturnType<typeof resolveTrustPosture>
 type GoalResult = Awaited<ReturnType<typeof runGoal>>
-type GoalUpdateSignal = { status?: 'complete' | 'blocked' }
+type GoalSignal = ReturnType<typeof import('@theokit/agents').createGoalSignal>
 
 interface GoalAgentContext {
   /** B-015 — the directory this goal run resolved; the same one `cfg` and `posture` were built from. */
@@ -22,7 +22,7 @@ interface GoalAgentContext {
   readonly posture: TrustPosture
   readonly routedModel: string
   readonly oracle: EffectiveConfig['goal_oracle']
-  readonly updateGoalSignal: GoalUpdateSignal
+  readonly updateGoalSignal: GoalSignal
   readonly env: Record<string, string | undefined>
 }
 
@@ -39,7 +39,6 @@ async function buildGoalAgent({
   const { buildChatAgent } = await import('@theocode/agent/chat')
   const { headlessApprovalPosture } = await import('@theocode/agent/config')
   const { resolveSandboxPosture } = await import('@theokit/agents/sandbox')
-  const { createUpdateGoalTool } = await import('@theocode/agent/goal')
   const { resolveCredentialForModel } = await import('@theocode/agent/auth')
   return toAgentFactory(
     await buildChatAgent({
@@ -48,7 +47,7 @@ async function buildGoalAgent({
       posture,
       model: routedModel,
       surface: 'headless',
-      ...(oracle === 'update_goal' ? { extraTools: [createUpdateGoalTool(updateGoalSignal)] } : {}),
+      ...(oracle === 'update_goal' ? { extraTools: [updateGoalSignal.tool] } : {}),
       ...(oracle === 'update_goal'
         ? {
             appendInstructions:
@@ -105,9 +104,10 @@ export async function resolveGoalContext(args: ExecGoal, seams: GoalContextSeams
 }
 
 export async function goalCommand(args: ExecGoal, shutdown: Shutdown): Promise<void> {
-  const { GOAL_DEFAULTS, runGoal, makeSignalJudge } = await import('@theocode/agent/goal')
+  const { GOAL_DEFAULTS, runGoal } = await import('@theocode/agent/goal')
   const { cwd, env, posture, cfg, oracle, routedModel, cred } = await resolveGoalContext(args)
-  const updateGoalSignal: GoalUpdateSignal = {}
+  const { createGoalSignal } = await import('@theokit/agents')
+  const updateGoalSignal = createGoalSignal()
   try {
     const goalAgent = await buildGoalAgent({
       cwd,
@@ -134,7 +134,7 @@ export async function goalCommand(args: ExecGoal, shutdown: Shutdown): Promise<v
           if (!args.json) process.stderr.write(`${l}\n`)
         },
         ...(oracle === 'update_goal'
-          ? { depsOverride: { judge: makeSignalJudge(updateGoalSignal) } }
+          ? { depsOverride: { judge: updateGoalSignal.judge } }
           : {}),
         ...(args.json
           ? {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { DevicePairing } from '../src/control-plane/device-pairing.js'
+import type { DevicePairing } from '@theokit/agents/control'
 import { rpcRoute } from '../src/control-plane/rpc-route.js'
 
 const TOKEN = 't'.repeat(32)

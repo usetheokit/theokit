@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 /**
  * M107 T2.1 — `loadMcpJson`: the layer reads the `.mcp.json` project convention.
  *
@@ -11,10 +12,11 @@
  * make the primitive stop being an exact substitute, which is the only cheap proof of equivalence
  * the milestone has.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -258,7 +260,66 @@ describe('loadMcpServersFile', () => {
 
   it('refuses unknown keys and http auth', () => {
     expect(() => load({ s: { command: 'npx', extra: 1 } })).toThrow(/mcpServers\.s\.extra/)
-    expect(() => load({ s: { url: 'https://x.test/mcp', auth: {} } })).toThrow(/auth/)
+    expect(() =>
+      load({ s: { url: 'https://x.test/mcp', auth: {} } }, { sdkVersion: '8.9.0' }),
+    ).toThrow(/ignores "auth"/)
+  })
+
+  it('loads a remote entry with auth when the installed SDK supports it', () => {
+    const auth = { oauth: { clientId: 'c' } }
+    expect(
+      load({ s: { url: 'https://x.test/mcp', auth } }, { sdkVersion: '9.0.0' }).s,
+    ).toMatchObject({ auth })
+  })
+
+  it('decides auth from the installed SDK when no version is given', () => {
+    // The suite also runs at the bottom of the declared SDK range, where `auth` is not supported, so the default
+    // is compared with an explicit run on the installed version instead of assumed to accept.
+    const installed = (
+      createRequire(import.meta.url)('@theokit/sdk/package.json') as { version: string }
+    ).version
+    const doc = { s: { url: 'https://x.test/mcp', auth: { oauth: { clientId: 'c' } } } }
+    const outcome = (opts?: { sdkVersion: string }): string => {
+      try {
+        return JSON.stringify(load(doc, opts).s)
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    expect(outcome()).toEqual(outcome({ sdkVersion: installed }))
+  })
+
+  it('reads through an injected readFile, and an absent file names the path', () => {
+    const doc = JSON.stringify({ mcpServers: { s: { command: 'npx' } } })
+    const out = loadMcpServersFile('/virtual/m.json', { readFile: () => doc })
+    expect(out.s).toBeDefined()
+    expect(() =>
+      loadMcpServersFile('/virtual/none.json', {
+        readFile: () => {
+          throw new Error('ENOENT')
+        },
+      }),
+    ).toThrow(/\/virtual\/none\.json/)
+  })
+
+  it('takes mcpServers from a document with other keys, still refusing unknown entry keys', () => {
+    const read = (d: unknown) => () => JSON.stringify(d)
+    const ok = { mcpServers: { s: { command: 'npx' } }, acpAgents: [{ name: 'x' }] }
+    expect(loadMcpServersFile('/v.json', { readFile: read(ok) }).s).toBeDefined()
+    const bad = { mcpServers: { s: { command: 'npx', extra: 1 } }, acpAgents: [] }
+    expect(() => loadMcpServersFile('/v.json', { readFile: read(bad) })).toThrow(/extra/)
+  })
+
+  it("loads TheoClaw's external-tools example document unchanged", () => {
+    const readme = readFileSync(
+      fileURLToPath(new URL('../../../../apps/theoclaw/README.md', import.meta.url)),
+      'utf8',
+    )
+    const start = readme.indexOf('"mcpServers"', readme.indexOf('THEOCLAW_EXTERNAL_TOOLS'))
+    const open = readme.lastIndexOf('{', start)
+    const end = readme.indexOf('\n```', open)
+    const out = loadMcpServersFile('/v.json', { readFile: () => readme.slice(open, end) })
+    expect(Object.keys(out).sort((a, b) => a.localeCompare(b))).toEqual(['docs', 'files'])
   })
 
   it('an invalid JSON file error does not contain text from the file', () => {
@@ -386,10 +447,10 @@ describe('loadMcpServersFile', () => {
     expect(() => load({ s: { command: 'npx', envPolicy: 'all' } }, { policy })).toThrow(/envPolicy/)
   })
 
-  it('refuses an unknown root key', () => {
+  it('ignores an unknown root key (a misspelt mcpServers loads nothing)', () => {
     const path = join(dir, 'root.json')
     writeFileSync(path, JSON.stringify({ mcpServer: { s: { command: 'npx' } } }))
-    expect(() => loadMcpServersFile(path)).toThrow(/mcpServer: unknown key/)
+    expect(loadMcpServersFile(path)).toEqual({})
   })
 
   it('accepts type stdio and refuses another type on a command entry', () => {

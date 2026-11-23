@@ -309,13 +309,13 @@ describe('wireScheduler', () => {
     expect(lines[0]).toBe('scheduler: 0 jobs, heartbeat off')
   })
 
-  it('sends the run with the untrusted content options, so its tool results reach the model framed (OC-88)', async () => {
+  it('sends the run with its abort signal and no per-send untrusted content options, which the agent sendDefaults carries (OC-88)', async () => {
     connect(new FakeAdapter('telegram'))
     const agent = new AnsweringAgent('ok')
     const { scheduler } = await start(agent)
     await scheduler.add(job())
     await scheduler.fire('job-1')
-    expect(agent.options[0]).toMatchObject({ toolResultGuard: { delimit: true } })
+    expect(agent.options[0]).not.toHaveProperty('toolResultGuard')
     expect(agent.signals[0]).toBeInstanceOf(AbortSignal)
   })
 

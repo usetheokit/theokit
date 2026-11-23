@@ -54,7 +54,6 @@ describe('theoclaw skills search', () => {
     for (const [status, body] of [
       [500, '{}'],
       [200, 'nope'],
-      [200, '{"skills":[{"name":1}]}'],
     ] as const) {
       const base = await registry(status, body)
       const r = await run(['skills', 'search', 'summarize'], base)
@@ -62,6 +61,13 @@ describe('theoclaw skills search', () => {
       expect(r.err.trim().split('\n')).toHaveLength(1)
       server?.close()
     }
+  })
+  it('drops a malformed entry instead of failing', async () => {
+    const base = await registry(200, '{"skills":[{"name":1}]}')
+    expect(await run(['skills', 'search', 'summarize'], base)).toMatchObject({
+      code: 0,
+      out: 'no skills found\n',
+    })
   })
   it('lists the verb in --help', async () => {
     expect((await run(['--help'])).out).toContain('skills search')

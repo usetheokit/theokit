@@ -3,6 +3,9 @@
  * capabilities, ignored settings, and leftover files. The status rules live here so they do not
  * drift between apps; the wording that names the app (the remedy) is the caller's.
  */
+import { readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+
 import type { Check, SecretPresence } from './diagnose.js'
 
 /** A credential's state: what {@link SecretPresence} reports, plus an expired one. */
@@ -78,4 +81,47 @@ function leftovers(name: string, paths: readonly string[], hint?: string): Check
   return [{ name, status: 'warn', detail: `${paths.join(', ')} no longer read${tail}` }]
 }
 
-export const checks = { credential, capability, settingsReport, leftovers }
+function skillNamesIn(root: string): string[] {
+  let entries: string[]
+  try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- the roots are the caller's own skills directories; reading them is the check.
+    entries = readdirSync(root)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error
+  }
+  return entries.filter((entry) => {
+    try {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- the roots are the caller's own skills directories; reading them is the check.
+      return statSync(join(root, entry, 'SKILL.md')).isFile()
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+      throw error
+    }
+  })
+}
+
+/**
+ * Compare the skills a config declares with the ones on disk. `roots` are skills directories; a
+ * skill is a subdirectory holding a `SKILL.md`. A missing root is ordinary; other read errors throw.
+ * Which roots count as foreign or bundled stays the caller's.
+ */
+function skillsInventory(options: {
+  declared: readonly string[]
+  roots: readonly string[]
+}): Check {
+  const name = 'skills'
+  const onDisk = new Set(options.roots.flatMap(skillNamesIn))
+  const declared = new Set(options.declared)
+  const undeclared = [...onDisk].filter((n) => !declared.has(n)).sort((a, b) => a.localeCompare(b))
+  const missing = [...declared].filter((n) => !onDisk.has(n)).sort((a, b) => a.localeCompare(b))
+  if (undeclared.length === 0 && missing.length === 0) {
+    return { name, status: 'ok', detail: `${String(declared.size)} declared, all on disk` }
+  }
+  const parts: string[] = []
+  if (undeclared.length > 0) parts.push(`on disk, not declared: ${undeclared.join(', ')}`)
+  if (missing.length > 0) parts.push(`declared, not on disk: ${missing.join(', ')}`)
+  return { name, status: 'warn', detail: parts.join('; ') }
+}
+
+export const checks = { credential, capability, settingsReport, leftovers, skillsInventory }

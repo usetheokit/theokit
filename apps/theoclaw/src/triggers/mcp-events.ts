@@ -4,8 +4,7 @@ import type { McpEventDelivery, McpEventSubscriber } from '@theokit/sdk/mcp-even
 
 import type { TurnAgent } from '../agent-port.js'
 import { maskSecrets } from '../channels/channel-loop.js'
-import { deliverText, runAgentText } from '@theokit/gateway-agent'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import { deliverText, frameUntrusted, runAgentText } from '@theokit/gateway-agent'
 import { describeError } from '../control-plane/errors.js'
 import type { McpEventsSettings } from './mcp-events-settings.js'
 
@@ -36,8 +35,8 @@ export interface McpEvents {
 }
 
 function promptOf(settings: McpEventsSettings, server: string, event: Record<string, unknown>): string {
-  const body = JSON.stringify(event).slice(0, MAX_EVENT_CHARS).replaceAll('</mcp-event>', '<\\/mcp-event>')
-  return [settings.instructions, FRAMING, `<mcp-event server="${server}">\n${body}\n</mcp-event>`]
+  const body = JSON.stringify(event).slice(0, MAX_EVENT_CHARS)
+  return [settings.instructions, FRAMING, frameUntrusted('mcp-event', body, { server })]
     .filter((part): part is string => part !== undefined)
     .join('\n\n')
 }
@@ -62,7 +61,7 @@ export async function startMcpEvents(options: McpEventsOptions): Promise<McpEven
 
   const handle = async (server: string, delivery: McpEventDelivery): Promise<void> => {
     await post(`event received from ${server}`)
-    const outcome = await options.withAgent((agent) => runAgentText(agent, promptOf(settings, server, delivery.event), { sendOptions: { ...untrustedContentSendOptions() } }))
+    const outcome = await options.withAgent((agent) => runAgentText(agent, promptOf(settings, server, delivery.event)))
     if (!outcome.ok) {
       write(`mcp events: ${server}: run failed (${outcome.failure})`)
       return

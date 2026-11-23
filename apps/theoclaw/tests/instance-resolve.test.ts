@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { getProfilesRoot } from '@theokit/sdk/internal/persistence'
+import { getProfilesRoot } from '@theokit/sdk/persistence'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { TheoClawConfigError } from '../src/control-plane/errors.js'

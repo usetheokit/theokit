@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1482 export(s) across 27 entry point(s).
+1551 export(s) across 30 entry point(s).
 
-Measured against `@theokit/sdk@5.32.0`.
+Measured against `@theokit/sdk@9.0.0`.
 
 ## `@theokit/agents`
 
@@ -38,6 +38,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `applyPosture` | value |
 | `applySecurityFloor` | value |
 | `APPROVAL_MODES` | value |
+| `approvalPostureFor` | value |
 | `assertNoSymlinkEscape` | value |
 | `assistantText` | value |
 | `auditEnvReachability` | value |
@@ -52,6 +53,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `CapabilityPreset` | value |
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
+| `CircuitBreaker` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
 | `compileAgentDefinition` | value |
@@ -117,6 +119,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
 | `GenerateObjectError` | value |
+| `GenerationFileError` | value |
 | `getModelInfo` | value |
 | `GoalRunner` | value |
 | `GuardrailError` | value |
@@ -180,6 +183,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `parseModelId` | value |
 | `piiDetector` | value |
 | `Plugin` | value |
+| `PluginManifestError` | value |
 | `PluginsCapability` | value |
 | `PreCompactionHandlerError` | value |
 | `prepareWorkspace` | value |
@@ -214,6 +218,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `runWithApiErrorHandling` | value |
 | `safePathJoin` | value |
 | `Semaphore` | value |
+| `SessionPoolClosedError` | value |
 | `SessionStoreCapability` | value |
 | `setDiagnosticsSink` | value |
 | `setOnce` | value |
@@ -254,6 +259,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
+| `TrustRecordError` | value |
 | `UngatedCapabilityError` | value |
 | `unicodeNormalizer` | value |
 | `UnknownAgentError` | value |
@@ -307,6 +313,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `ApiErrorPolicy` | type |
 | `ApprovalMode` | type |
 | `ApprovalOptions` | type |
+| `ApprovalPolicy` | type |
 | `ApprovalPosture` | type |
 | `ApprovalRequest` | type |
 | `ApprovalRequiredEvent` | type |
@@ -322,6 +329,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `CatalogModel` | type |
 | `CatalogModelCost` | type |
 | `CheckpointSavedEvent` | type |
+| `CircuitBreakerOptions` | type |
 | `CompactionCallOptions` | type |
 | `CompactionStrategyConfig` | type |
 | `CompatSurface` | type |
@@ -480,6 +488,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `StreamEvent` | type |
 | `StreamFromEmitterOptions` | type |
 | `StructuredOutputErrorCode` | type |
+| `SubagentAgentDefinition` | type |
 | `SubagentDefinition` | type |
 | `SubAgentSpec` | type |
 | `Summarize` | type |
@@ -526,6 +535,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `agentsPlugin` | value |
 | `applyPosture` | value |
 | `APPROVAL_MODES` | value |
+| `approvalPostureFor` | value |
 | `BodyTooLargeError` | value |
 | `BudgetExceededError` | value |
 | `buildModelSelection` | value |
@@ -642,6 +652,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `ApiErrorDecision` | type |
 | `ApiErrorPolicy` | type |
 | `ApprovalMode` | type |
+| `ApprovalPolicy` | type |
 | `ApprovalPosture` | type |
 | `ApprovalRequiredEvent` | type |
 | `ArtifactChunkEvent` | type |
@@ -717,6 +728,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `StateUpdateEvent` | type |
 | `StreamEvent` | type |
 | `StreamFromEmitterOptions` | type |
+| `SubagentAgentDefinition` | type |
 | `SubAgentSpec` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
@@ -733,6 +745,24 @@ Measured against `@theokit/sdk@5.32.0`.
 | `WorkspaceProvider` | type |
 | `WorkspaceRecipe` | type |
 
+## `@theokit/agents/mcp-relay`
+
+| Symbol | Kind |
+|---|---|
+| `answerRelayJob` | value |
+| `createMcpRelayServer` | value |
+| `MCP_PATH` | value |
+| `POLL_PATH` | value |
+| `RESPOND_PATH` | value |
+| `startMcpRelayConnector` | value |
+| `Grant` | type |
+| `GrantStore` | type |
+| `McpRelayConnector` | type |
+| `McpRelayConnectorOptions` | type |
+| `McpRelayServerOptions` | type |
+| `RelayJob` | type |
+| `RelayTool` | type |
+
 ## `@theokit/agents/control`
 
 | Symbol | Kind |
@@ -742,7 +772,9 @@ Measured against `@theokit/sdk@5.32.0`.
 | `createControlClient` | value |
 | `createDevicePairing` | value |
 | `createSessionStore` | value |
+| `PairingRefusedError` | value |
 | `pairRoute` | value |
+| `redeemPairing` | value |
 | `Server` | value |
 | `AgentTurnUsage` | type |
 | `ControlClient` | type |
@@ -753,9 +785,14 @@ Measured against `@theokit/sdk@5.32.0`.
 | `DevicePairingOptions` | type |
 | `PairingApproval` | type |
 | `PairingRequestResult` | type |
+| `RedeemedPairing` | type |
+| `RedeemPairingOptions` | type |
 | `SessionOutcome` | type |
 | `SessionStore` | type |
 | `SessionStoreOptions` | type |
+| `SocketOutcome` | type |
+| `SocketSessions` | type |
+| `SocketVerdict` | type |
 
 ## `@theokit/agents/testing`
 
@@ -932,10 +969,13 @@ Measured against `@theokit/sdk@5.32.0`.
 | `ensureFreshCredential` | value |
 | `extractAccountId` | value |
 | `grantGate` | value |
+| `isSubscriptionRoute` | value |
 | `loginWithApiKey` | value |
 | `loginWithDevice` | value |
 | `logout` | value |
+| `modelForCredential` | value |
 | `openaiDeviceLogin` | value |
+| `parseModelRef` | value |
 | `PermissionStore` | value |
 | `persistOAuthTokens` | value |
 | `PlanOnlyRefusalError` | value |
@@ -954,6 +994,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `resolveOperatorApiKey` | value |
 | `resolveSecretRefs` | value |
 | `SecretReferenceError` | value |
+| `SUBSCRIPTION_PREFIX` | value |
 | `writeCredential` | value |
 | `AgentCredentialInput` | type |
 | `ApprovalAnswer` | type |
@@ -968,6 +1009,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `CredentialResolution` | type |
 | `CredentialSourcesInput` | type |
 | `CredentialStoreConfig` | type |
+| `CustomProviderConfig` | type |
 | `DeviceAuthProvider` | type |
 | `DeviceCodeGrant` | type |
 | `DeviceDeps` | type |
@@ -976,6 +1018,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `Grant` | type |
 | `GrantGateContext` | type |
 | `GrantOptions` | type |
+| `ModelRef` | type |
 | `NotGoverned` | type |
 | `OAuthProviderConfig` | type |
 | `OAuthTokens` | type |
@@ -1034,6 +1077,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `LAYERS_ARE_POSITIONED` | value |
 | `loadCustomCommands` | value |
 | `loadInstructionTree` | value |
+| `loadInstructionWalk` | value |
 | `loadOutputStyle` | value |
 | `loadSettings` | value |
 | `mcpServerAdmitted` | value |
@@ -1042,13 +1086,18 @@ Measured against `@theokit/sdk@5.32.0`.
 | `OperatorRootUnreadableError` | value |
 | `OutputStyleError` | value |
 | `parseDottedOverrides` | value |
+| `permissionRulesFromLayers` | value |
 | `permissionRulesFromSettings` | value |
 | `projectEnvStep` | value |
+| `projectEnvStepWith` | value |
 | `readSettingsFile` | value |
 | `resolveAgentMemory` | value |
 | `resolveFileMentions` | value |
 | `resolveOperatorRoots` | value |
 | `resolveOutputStyle` | value |
+| `SdkHomeConflictError` | value |
+| `sdkHomeStep` | value |
+| `secretRefsStep` | value |
 | `SETTINGS_LAYERS` | value |
 | `settingsCandidates` | value |
 | `settingsLayerChain` | value |
@@ -1086,10 +1135,12 @@ Measured against `@theokit/sdk@5.32.0`.
 | `LayerValues` | type |
 | `LoadCustomCommandsInput` | type |
 | `LoadInstructionTreeInput` | type |
+| `LoadInstructionWalkInput` | type |
 | `LoadOutputStyleInput` | type |
 | `LoadSettingsInput` | type |
 | `LoadSettingsResult` | type |
 | `OperatorDefinition` | type |
+| `OperatorInstruction` | type |
 | `OperatorOrigin` | type |
 | `OperatorPolicy` | type |
 | `OperatorRootsOptions` | type |
@@ -1101,10 +1152,13 @@ Measured against `@theokit/sdk@5.32.0`.
 | `PermissionsBlock` | type |
 | `PermissionTranslation` | type |
 | `PrecedenceReport` | type |
+| `ProjectEnvRecord` | type |
+| `ProjectEnvStepOptions` | type |
 | `ProvenancePerKey` | type |
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
 | `ResolvedFileMentions` | type |
+| `SdkHomeStepOptions` | type |
 | `SecurityFloorSpec` | type |
 | `Settings` | type |
 | `SettingsCandidate` | type |
@@ -1265,6 +1319,7 @@ Measured against `@theokit/sdk@5.32.0`.
 |---|---|
 | `CodeModeInvalidArgumentsError` | value |
 | `CodeModePermissionDeniedError` | value |
+| `CodeModeResultTooLongError` | value |
 | `createCodeMode` | value |
 | `CodeModeApi` | type |
 | `CodeModeCallOptions` | type |
@@ -1345,6 +1400,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `CollectorRootError` | value |
 | `CollectorRootNotOwnedError` | value |
 | `collectorRootOwner` | value |
+| `createSessionGenerations` | value |
 | `deleteSession` | value |
 | `forkBeforeUserTurn` | value |
 | `ForkedSessionBusyError` | value |
@@ -1372,8 +1428,10 @@ Measured against `@theokit/sdk@5.32.0`.
 | `SessionRegistryRemoverError` | value |
 | `streamTurnForkingIfBusy` | value |
 | `sweepDecision` | value |
+| `threadToUIMessages` | value |
 | `transcriptOf` | value |
 | `transcriptRootHint` | value |
+| `transcriptToText` | value |
 | `ClassifyProjectsOptions` | type |
 | `DeleteSessionOptions` | type |
 | `DeleteSessionResult` | type |
@@ -1396,13 +1454,16 @@ Measured against `@theokit/sdk@5.32.0`.
 | `RunProjectsGCResult` | type |
 | `RunTranscriptGCResult` | type |
 | `ScheduleSessionSweepOptions` | type |
+| `SessionGenerations` | type |
 | `SessionSummary` | type |
 | `SweepDecision` | type |
 | `SweepScheduleResult` | type |
 | `ThreadHistory` | type |
 | `ThreadHistoryState` | type |
+| `TranscriptFormat` | type |
 | `TranscriptGCOptions` | type |
 | `TranscriptGCPlan` | type |
+| `TranscriptToTextOptions` | type |
 | `UserTurnPreview` | type |
 
 ## `@theokit/agents/hooks`
@@ -1507,6 +1568,13 @@ Measured against `@theokit/sdk@5.32.0`.
 | `TurnFailure` | type |
 | `TurnFailureHints` | type |
 
+## `@theokit/agents/presets`
+
+| Symbol | Kind |
+|---|---|
+| `codingAgentPreset` | value |
+| `CodingAgentPresetOptions` | type |
+
 ## `@theokit/agents/evals`
 
 | Symbol | Kind |
@@ -1564,6 +1632,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `readHeadlessPrompt` | value |
 | `routeCommand` | value |
 | `runHeadlessTurn` | value |
+| `sessionCommands` | value |
 | `SHUTDOWN_EXIT_CODES` | value |
 | `CleanupTask` | type |
 | `CommandArgument` | type |
@@ -1576,6 +1645,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `HeadlessTurnResult` | type |
 | `RoutedInput` | type |
 | `RouteFailure` | type |
+| `SessionCommandHandlers` | type |
 | `Shutdown` | type |
 | `ShutdownDeps` | type |
 | `ShutdownOutcome` | type |
@@ -1631,3 +1701,17 @@ Measured against `@theokit/sdk@5.32.0`.
 | `YIELD_MAX_MS` | value |
 | `YIELD_MIN_MS` | value |
 | `PtyInteractiveBackendOptions` | type |
+
+## `@theokit/agents/foreign-setup`
+
+| Symbol | Kind |
+|---|---|
+| `readForeignSetup` | value |
+| `ForeignHook` | type |
+| `ForeignMcpServer` | type |
+| `ForeignSetup` | type |
+| `ForeignSetupKind` | type |
+| `ForeignSkill` | type |
+| `ForeignTextFile` | type |
+| `ReadForeignSetupOptions` | type |
+| `UntranslatedEntry` | type |

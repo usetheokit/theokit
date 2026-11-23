@@ -1,6 +1,7 @@
 import { isAbsolute, win32 } from 'node:path'
 
 import { ServiceDefinitionError } from './errors.js'
+import type { LogsOptions } from './logs.js'
 import type { Runner } from './runner.js'
 
 export interface ServiceSpec {
@@ -24,6 +25,8 @@ export interface ServiceBackend {
   uninstall(label: string): Promise<void>
   status(label: string): Promise<ServiceState>
   restart(label: string): Promise<void>
+  /** The last `lines` lines: the user journal on systemd, the log file on launchd and Task Scheduler. */
+  logs(label: string, options?: LogsOptions): Promise<string>
 }
 
 export interface ServiceBackendOptions {
@@ -31,7 +34,10 @@ export interface ServiceBackendOptions {
   readonly homeDir?: string
   readonly env?: NodeJS.ProcessEnv
   readonly uid?: number
-  /** launchd: the file stdout and stderr go to; defaults to ~/Library/Logs/<label>.log. */
+  /**
+   * launchd: the file stdout and stderr go to; defaults to ~/Library/Logs/<label>.log.
+   * Task Scheduler: the file the app writes with teeOutput; required by logs().
+   */
   readonly logFile?: string
 }
 

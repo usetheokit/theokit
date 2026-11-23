@@ -3,9 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { unitPath } from '../../src/daemon.js'
 import { type RunResult, runCommand, type Runner } from '../../src/run-command.js'
-import { plistPath } from '../../src/daemon-launchd.js'
+import { definitionPath } from '../../src/daemon.js'
 import { type UpdateIo } from '../../src/update.js'
 
 const scratch: string[] = []
@@ -115,13 +114,13 @@ export function snapshot(w: World): { branch: string; head: string; status: stri
 }
 
 export function installUnit(w: World, label: string): void {
-  const path = unitPath(label, w.home)
+  const path = definitionPath('linux', label, w.home)
   mkdirSync(join(path, '..'), { recursive: true })
   writeFileSync(path, '[Unit]\n')
 }
 
 export function installLaunchAgent(w: World, label: string): void {
-  const path = plistPath(label, w.home)
+  const path = definitionPath('darwin', label, w.home)
   mkdirSync(join(path, '..'), { recursive: true })
   writeFileSync(path, '<plist/>\n')
 }

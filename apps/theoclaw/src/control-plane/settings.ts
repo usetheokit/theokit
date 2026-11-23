@@ -1,7 +1,9 @@
-import { parseThinkingLevel } from '../agent/failover.js'
-import { customProviderOf } from '../agent/custom-providers.js'
+import { isSubscriptionRoute, resolveAgentCredential } from '@theokit/agents/auth'
+
+import { parseThinkingLevel } from '../agent/create-agent.js'
+import { customProviderOf, parseCustomProviders } from '../agent/custom-providers.js'
 import { readBearerToken } from './bearer.js'
-import { type BindEnvironment, parsePort, resolveBindAddress } from './bind.js'
+import { type BindEnvironment, parsePort, resolveControlHost } from './bind.js'
 import { TheoClawConfigError } from './errors.js'
 
 /** Everything the control plane reads from its environment, read once at start. */
@@ -16,7 +18,6 @@ export interface ControlPlaneSettings {
   readonly webchatToken: string | undefined
 }
 
-const SUBSCRIPTION_PREFIX = 'openai-chatgpt/'
 const KEYLESS_MODEL_KEY = 'local'
 
 function nonBlank(value: string | undefined): string | undefined {
@@ -49,17 +50,22 @@ export function requireModel(env: BindEnvironment): {
   // A model on a registered custom provider (THEOCLAW_PROVIDERS) runs on that provider's own key.
   const custom = customProviderOf(env, model)
   if (custom !== undefined) {
-    const customKey = nonBlank(env[custom.keyEnv])
-    if (customKey === undefined) {
+    if (nonBlank(env[custom.keyEnv]) === undefined) {
       throw new TheoClawConfigError(`set ${custom.keyEnv} to the ${custom.name} provider key`, {
         variable: custom.keyEnv,
       })
     }
-    return { model, modelKey: customKey }
+    // The framework chain: the custom provider's own variable, for a model carrying its prefix.
+    const { apiKey } = resolveAgentCredential({
+      env,
+      model,
+      customProviders: parseCustomProviders(env),
+    })
+    return { model, modelKey: apiKey }
   }
   // The ChatGPT subscription route authenticates with the stored login, so it needs no API key. 'local'
   // is the SDK's keyless sentinel: it builds the agent and never reaches a provider as a credential.
-  if (model.startsWith(SUBSCRIPTION_PREFIX))
+  if (isSubscriptionRoute(model))
     return { model, modelKey: resolveModelKey(env) ?? KEYLESS_MODEL_KEY }
   const modelKey = resolveModelKey(env)
   if (modelKey === undefined) {
@@ -87,5 +93,5 @@ export function readControlPlaneSettings(env: BindEnvironment): ControlPlaneSett
   const port = parsePort(env.THEOCLAW_PORT)
   const controlToken = readBearerToken(env, 'THEOCLAW_CONTROL_TOKEN')
   const webchatToken = readBearerToken(env, 'THEOCLAW_WEBCHAT_TOKEN')
-  return { host: resolveBindAddress(env), port, model, modelKey, controlToken, webchatToken }
+  return { host: resolveControlHost(env), port, model, modelKey, controlToken, webchatToken }
 }

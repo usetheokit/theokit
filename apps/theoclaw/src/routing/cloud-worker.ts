@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
-import { detectRecipe, runRecipe, type RecipeExec } from './environment-recipe.js'
+import { prepareEnvironment, type RecipeExec } from './environment-recipe.js'
 
 const run = promisify(execFile)
 
@@ -73,11 +73,10 @@ export function createCloudRunner(options: { repo: string; provider: CloudMachin
       try {
         const original = (await git(machine.path, 'rev-parse', 'HEAD')).stdout.trim()
         // THEOCLAW_CLOUD_ENV_RECIPE=off skips recipes (devcontainer, setup script, lockfile install).
-        const recipe = process.env.THEOCLAW_CLOUD_ENV_RECIPE === 'off' ? undefined : await detectRecipe(machine.path)
+        const recipe = process.env.THEOCLAW_CLOUD_ENV_RECIPE === 'off' ? undefined : await prepareEnvironment(machine.path, options.exec)
         // What the recipe leaves behind is the baseline; only the agent's changes go on the branch.
         let baseline = original
         if (recipe) {
-          await runRecipe(recipe, machine.path, options.exec)
           await git(machine.path, 'add', '-A')
           await git(machine.path, 'commit', '-q', '--allow-empty', '-m', `theoclaw environment ${id}`)
           baseline = (await git(machine.path, 'rev-parse', 'HEAD')).stdout.trim()

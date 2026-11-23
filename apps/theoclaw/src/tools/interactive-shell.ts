@@ -1,124 +1,29 @@
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { PtyInteractiveBackend } from '@theokit/agents-pty'
-import { InteractiveBackend } from '@theokit/agents/interactive'
-import type { StartInteractiveOptions, StartInteractiveResult, WriteStdinOptions, WriteStdinResult } from '@theokit/agents/interactive'
-import { allowlistedEnv, interactiveWrapCommand } from '@theokit/agents/sandbox'
-import type { BwrapDetection } from '@theokit/agents/sandbox'
+import type { InteractiveBackend } from '@theokit/agents/interactive'
+import { createConfinedPtyBackend, probeConfinement } from '@theokit/sdk-pty'
+import type { ConfinedPtyBackendOptions } from '@theokit/sdk-pty'
 
 import type { ToolSettings } from './tool-settings.js'
 
-function quote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
-/** The shell inherits the framework allowlist, minus the temp and XDG directories: they point outside the tool root. */
-export function shellEnv(env: Readonly<Record<string, string | undefined>>): Record<string, string> {
-  const kept: Record<string, string> = {}
-  for (const [name, value] of Object.entries(allowlistedEnv(env))) {
-    if (name === 'TMPDIR' || name.startsWith('XDG_')) continue
-    kept[name] = value
-  }
-  return kept
-}
-
-/** `env -i` with the kept variables and `HOME` in the tool root, then the command in `sh -c`. */
-function scrubbed(command: string, toolRoot: string, env: Readonly<Record<string, string | undefined>>): string {
-  const kept = Object.entries({ ...shellEnv(env), HOME: toolRoot }).map(([name, value]) => `${name}=${quote(value)}`)
-  return `/usr/bin/env -i ${kept.join(' ')} /bin/sh -c ${quote(command)}`
-}
-
-/**
- * A PTY backend whose every session starts in the tool root, with a scrubbed environment, inside the
- * session's sandbox: `interactiveWrapCommand` of the settings' mode (bubblewrap on Linux). The PTY
- * would otherwise start in the process directory and hand the shell the whole environment.
- */
-class ConfinedInteractiveBackend extends InteractiveBackend {
-  private readonly inner: PtyInteractiveBackend
-
-  constructor(
-    private readonly toolRoot: string,
-    settings: Pick<ToolSettings, 'mode'>,
-    detect: (() => BwrapDetection) | undefined,
-    warn: ((message: string) => void) | undefined,
-    env: Readonly<Record<string, string | undefined>>,
-  ) {
-    super()
-    const wrap = interactiveWrapCommand({
-      mode: settings.mode,
-      ...(detect === undefined ? {} : { detect }),
-      ...(warn === undefined ? {} : { warn }),
-    })
-    this.inner = new PtyInteractiveBackend({
-      maxSessions: 4,
-      wrapCommand: (command, cwd) => wrap(scrubbed(command, toolRoot, env), cwd),
-    })
-  }
-
-  startInteractive(command: string, opts?: StartInteractiveOptions): Promise<StartInteractiveResult> {
-    return this.inner.startInteractive(command, { ...opts, cwd: this.toolRoot })
-  }
-
-  writeStdin(sessionId: string, chars: string, opts?: WriteStdinOptions): Promise<WriteStdinResult> {
-    return this.inner.writeStdin(sessionId, chars, opts)
-  }
-
-  kill(sessionId: string): void {
-    this.inner.kill(sessionId)
-  }
-}
-
 export interface InteractiveDeps {
-  readonly detect?: () => BwrapDetection
   readonly warn?: (message: string) => void
   /** The environment the shell's kept variables come from. Default: the process's. */
   readonly processEnv?: Readonly<Record<string, string | undefined>>
+  /** Test seam: the backend that actually spawns. */
+  readonly createInner?: ConfinedPtyBackendOptions['createInner']
 }
 
-/** A confined backend for these settings. Not yet probed: see `probeInteractiveShell`. */
+/** A confined backend for these settings: fixed root, scrubbed environment, the session's sandbox. Not yet probed. */
 export function createConfinedInteractive(settings: ToolSettings, deps: InteractiveDeps = {}): InteractiveBackend {
-  return new ConfinedInteractiveBackend(settings.toolRoot, settings, deps.detect, deps.warn, deps.processEnv ?? process.env)
-}
-
-/** Until `condition` holds, the session has exited, or the time is up; whether the condition holds. */
-async function waitForSession(backend: InteractiveBackend, sessionId: string, condition: () => boolean, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (condition()) return true
-    const { alive } = await backend.writeStdin(sessionId, '', { yieldMs: 250 })
-    if (!alive) break
-  }
-  return condition()
-}
-
-/**
- * True when a session started through `backend` can write inside `<workspace>/files` and cannot
- * write beside it, in the workspace. Runs a real session; false on any failure (no `node-pty`, no
- * bubblewrap, a sandbox that confines too little or too much).
- */
-export async function probeInteractiveShell(settings: ToolSettings, backend: InteractiveBackend): Promise<boolean> {
-  const id = randomBytes(6).toString('hex')
-  const inside = join(settings.toolRoot, `.probe-in-${id}`)
-  const outside = join(settings.workspace, `.probe-out-${id}`)
-  let session: string | undefined
-  try {
-    mkdirSync(settings.toolRoot, { recursive: true })
-    const started = await backend.startInteractive(`sh -c 'touch ${quote(inside)}; touch ${quote(outside)}; sleep 1'`, { yieldMs: 250 })
-    session = started.sessionId
-    const wrote = await waitForSession(backend, started.sessionId, () => existsSync(inside), 3000)
-    if (!wrote) return false
-    // Give the second `touch` the time it would need had the sandbox allowed it.
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    return wrote && !existsSync(outside)
-  } catch {
-    return false
-  } finally {
-    if (session !== undefined) backend.kill(session)
-    rmSync(inside, { force: true })
-    rmSync(outside, { force: true })
-  }
+  return createConfinedPtyBackend({
+    root: settings.toolRoot,
+    mode: settings.mode,
+    sourceEnv: deps.processEnv ?? process.env,
+    ...(deps.createInner === undefined ? {} : { createInner: deps.createInner }),
+  })
 }
 
 /**
@@ -132,7 +37,14 @@ export async function withInteractiveShell(settings: ToolSettings, deps: Interac
   if (!settings.sandboxEnforced) return off('sandbox not enforced')
   if (settings.backend === 'docker') return off('THEOCLAW_SANDBOX_BACKEND=docker has no interactive shell')
   const interactive = createConfinedInteractive(settings, deps)
-  if (!(await probeInteractiveShell(settings, interactive))) {
+  mkdirSync(settings.toolRoot, { recursive: true })
+  const id = randomBytes(6).toString('hex')
+  const proof = await probeConfinement(interactive, {
+    inside: join(settings.toolRoot, `.probe-in-${id}`),
+    outside: join(settings.workspace, `.probe-out-${id}`),
+  })
+  if (!proof.confined) {
+    deps.warn?.(`tools: interactive_shell probe failed: ${proof.reason}${proof.detail === undefined ? '' : ` (${proof.detail})`}`)
     return off('no confined session could be proven on this host: needs node-pty and THEOCLAW_SANDBOX=workspace-write')
   }
   return { ...settings, interactive }

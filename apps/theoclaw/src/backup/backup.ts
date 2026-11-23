@@ -1,31 +1,29 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import {
   chmodSync,
-  copyFileSync,
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   realpathSync,
-  renameSync,
-  rmdirSync,
   rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { execFileSync } from 'node:child_process'
-import { openSync, readSync, closeSync } from 'node:fs'
-
+import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
+import { backup as hostBackup, BackupError, restore as hostRestore } from '@theokit/host/backup'
 import { encodeProjectDir } from '@theokit/sdk/persistence'
 
 import { assertSupportedRuntime } from '../runtime.js'
 
 import { loadConfiguration } from '../config-file.js'
 import { resolveInstance } from '../instance.js'
-import { takeInstanceLock } from './instance-lock.js'
+import { takeInstanceLock } from '../instance.js'
 
 /** A backup or a restore that was refused: the reason and the path, never a file's content. */
 export class BackupRefusal extends Error {
@@ -56,10 +54,8 @@ export interface BackupOptions {
   readonly homeDir: string
   /** Snapshot SQLite while the instance keeps running. Other files are copied individually. */
   readonly live?: boolean
-  /** Called after each file is copied; a test seam to pause a copy or fail it midway. */
+  /** Called per file (after its copy in a backup, as it is planned in a restore); a test seam to pause or fail midway. */
   readonly onFileCopied?: (path: string) => void
-  /** How a staged target is renamed into place; a test seam to fail the second rename. */
-  readonly rename?: (from: string, to: string) => void
 }
 
 type Root = 'state' | 'workspace'
@@ -107,12 +103,6 @@ function mkdirPrivate(path: string): void {
   chmodSync(path, 0o700)
 }
 
-function copyPrivate(from: string, to: string): void {
-  mkdirPrivate(dirname(to))
-  copyFileSync(from, to)
-  chmodSync(to, 0o600)
-}
-
 function sha256Of(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
@@ -133,57 +123,20 @@ function isEmptyOrAbsent(path: string): boolean {
   return !existsSync(path) || (statSync(path).isDirectory() && readdirSync(path).length === 0)
 }
 
-/** Every regular file under `dir`, relative to it; a symbolic link is refused naming it. */
-function listFiles(dir: string, skip: (name: string) => boolean, prefix = ''): string[] {
-  const files: string[] = []
-  for (const name of readdirSync(dir).sort()) {
-    if (prefix === '' && skip(name)) continue
-    const path = join(dir, name)
-    const entry = lstatSync(path)
-    if (entry.isSymbolicLink()) throw new BackupRefusal(`${path} is a symbolic link; a backup follows none`, path)
-    if (entry.isDirectory()) files.push(...listFiles(path, skip, join(prefix, name)))
-    else if (entry.isFile()) files.push(join(prefix, name))
-  }
-  return files
-}
-
 function requireSource(path: string, variable: string): void {
   if (!existsSync(path) || !statSync(path).isDirectory()) throw new BackupRefusal(`${variable} ${path} is not a directory`, path)
 }
 
-/** Detect SQLite by its header, including databases without a conventional extension. */
-function isSQLite(path: string): boolean {
-  const fd = openSync(path, 'r')
-  try {
-    const header = Buffer.alloc(16)
-    return readSync(fd, header, 0, 16, 0) === 16 && header.toString() === 'SQLite format 3\0'
-  } finally { closeSync(fd) }
-}
-
-function snapshotSQLite(from: string, to: string): void {
-  mkdirPrivate(dirname(to))
-  // node:sqlite's backup API is asynchronous. Run it in a child to preserve this API's
-  // synchronous copy/cleanup contract, including callers holding the instance lock.
-  // Unlike VACUUM, the backup API copies database pages without rebuilding rowids.
-  execFileSync(process.execPath, ['--input-type=module', '-e', `
-    import { DatabaseSync, backup } from 'node:sqlite';
-    const db = new DatabaseSync(process.argv[1], { readOnly: true });
-    try {
-      db.exec('PRAGMA busy_timeout = 5000');
-      await backup(db, process.argv[2]);
-    } finally { db.close(); }
-  `, from, to], { timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] })
-  chmodSync(to, 0o600)
-}
-
 /**
  * Copy an instance's state directory and workspace to `<dir>/state` and `<dir>/workspace`
- * with a sha256 manifest. SQLite databases use consistent snapshots without their sidecars.
- * Unless live is requested, takes the instance lock and refuses a running instance.
- * Refuses nonempty targets, targets inside either source, and symbolic links. Directories are written 0700 and files 0600 (NFR-003); the migration import is
- * left out (NFR-002). A copy that fails removes what it wrote.
+ * with a sha256 manifest, through `@theokit/host/backup`. SQLite databases use consistent snapshots
+ * without their sidecars. Unless live is requested, takes the instance lock and refuses a running
+ * instance. Refuses nonempty targets, targets inside either source, and symbolic links. Directories
+ * are written 0700 and files 0600 (NFR-003); the migration import is left out (NFR-002). A copy that
+ * fails removes what it wrote. The manifest also records the workspace path, so a restore can
+ * re-home session transcripts.
  */
-export function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Manifest {
+export async function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Promise<Manifest> {
   assertSupportedRuntime()
   const targets = resolveTargets(env, options.homeDir)
   requireSource(targets.state, 'THEOCLAW_STATE_DIR')
@@ -195,34 +148,33 @@ export function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: Bac
     if (within(real, source)) throw new BackupRefusal(`the backup directory ${target} is inside ${targets[root]}, which it copies`, target)
   }
   if (!isEmptyOrAbsent(target)) throw new BackupRefusal(`the backup directory ${target} is not empty`, target)
-  const lock = options.live ? undefined : takeInstanceLock(targets.state)
-  const created = !existsSync(target)
+  const lock = options.live ? undefined : await takeInstanceLock(targets.state)
   try {
-    mkdirPrivate(target)
-    const files: ManifestEntry[] = []
-    for (const root of ROOTS) {
-      mkdirPrivate(join(target, root))
-      const sourceFiles = listFiles(targets[root], root === 'state' ? excludedFromState : () => false)
-      const databases = new Set(sourceFiles.filter((file) => isSQLite(join(targets[root], file))))
-      for (const file of sourceFiles) {
-        if (['-wal', '-shm', '-journal'].some((suffix) => file.endsWith(suffix) && databases.has(file.slice(0, -suffix.length)))) continue
-        const to = join(target, root, file)
-        if (databases.has(file)) snapshotSQLite(join(targets[root], file), to)
-        else copyPrivate(join(targets[root], file), to)
-        files.push({ path: `${root}/${file.split(sep).join('/')}`, sha256: sha256Of(to), size: statSync(to).size })
-        options.onFileCopied?.(to)
-      }
-    }
-    const manifest: Manifest = { version: 1, files, workspace: targets.workspace }
-    writeFileSync(join(target, MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
+    const written = await refusing(() =>
+      hostBackup({
+        roots: { state: targets.state, workspace: targets.workspace },
+        out: target,
+        exclude: (root, path) => root === 'state' && !path.includes('/') && excludedFromState(path),
+        ...(options.onFileCopied === undefined ? {} : { onFileCopied: (path: string) => options.onFileCopied?.(join(target, path)) }),
+      }),
+    )
+    const manifest: Manifest = { version: 1, files: written.files, workspace: targets.workspace }
+    // The host manifest plus the workspace; `roots` stays so the package reads the backup directly.
+    writeFileSync(join(target, MANIFEST), `${JSON.stringify({ ...manifest, roots: [...ROOTS] }, null, 2)}\n`, { mode: 0o600 })
     chmodSync(join(target, MANIFEST), 0o600)
     return manifest
-  } catch (error) {
-    if (created) rmSync(target, { recursive: true, force: true })
-    else for (const name of [...ROOTS, MANIFEST]) rmSync(join(target, name), { recursive: true, force: true })
-    throw error
   } finally {
-    lock?.release()
+    await lock?.release()
+  }
+}
+
+/** Run a package call, turning its `BackupError` into the refusal the CLI reports. */
+async function refusing<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work()
+  } catch (error) {
+    if (error instanceof BackupError) throw new BackupRefusal(error.message, error.path)
+    throw error
   }
 }
 
@@ -273,8 +225,8 @@ interface Restorable {
  */
 function rehomed(path: string, from: string | undefined, to: string): string {
   if (from === undefined) return path
-  const prefix = join('.theoclaw', 'projects', encodeProjectDir(from)) + sep
-  return path.startsWith(prefix) ? join('.theoclaw', 'projects', encodeProjectDir(to), path.slice(prefix.length)) : path
+  const prefix = `.theoclaw/projects/${encodeProjectDir(from)}/`
+  return path.startsWith(prefix) ? `.theoclaw/projects/${encodeProjectDir(to)}/${path.slice(prefix.length)}` : path
 }
 
 /**
@@ -303,94 +255,67 @@ function mismatch(entry: ManifestEntry): BackupRefusal {
   return new BackupRefusal(`${entry.path} does not match its sha256 in the manifest; nothing was restored`, entry.path)
 }
 
-/** How a target was before the restore, so a failed rename can put it back. */
-interface Before {
-  readonly existed: boolean
-  readonly mode: number
-}
-
-function recordTarget(path: string): Before {
+function assertEmptyOrAbsent(path: string): void {
   if (!isEmptyOrAbsent(path)) throw new BackupRefusal(`${path} is not empty; a restore writes only into an empty or absent target`, path)
-  return existsSync(path) ? { existed: true, mode: statSync(path).mode & 0o777 } : { existed: false, mode: 0o700 }
-}
-
-/** Put a staged copy in place of an absent or empty target. */
-function place(staging: string, target: string, rename: (from: string, to: string) => void): void {
-  // Empty, as `recordTarget` checked under the lock: `rmdirSync` refuses anything else.
-  if (existsSync(target)) rmdirSync(target)
-  rename(staging, target)
-}
-
-function putBack(target: string, before: Before): void {
-  if (before.existed && !existsSync(target)) {
-    mkdirSync(target, { recursive: true })
-    chmodSync(target, before.mode)
-  }
-}
-
-/** A staging directory beside `target`, created fresh: one that already exists is never reused. */
-function createStaging(target: string): string {
-  mkdirSync(dirname(target), { recursive: true, mode: 0o700 })
-  const staging = `${target}.restore-${randomBytes(8).toString('hex')}`
-  mkdirSync(staging, { mode: 0o700 })
-  chmodSync(staging, 0o700)
-  return staging
-}
-
-/** Copy every file into its staging root, and check the copy's own bytes against the manifest. */
-function stage(files: readonly Restorable[], staging: Record<Root, string>, targets: Targets, manifest: Manifest, options: BackupOptions): void {
-  for (const file of files) {
-    const path = file.root === 'workspace' ? rehomed(file.path, manifest.workspace, targets.workspace) : file.path
-    const to = join(staging[file.root], path)
-    copyPrivate(file.from, to)
-    if (sha256Of(to) !== file.entry.sha256) throw mismatch(file.entry)
-    options.onFileCopied?.(to)
-  }
-}
-
-/** Both staged roots into place; if the second rename fails, the first target is put back. */
-function placeBoth(staging: Record<Root, string>, targets: Targets, before: Record<Root, Before>, rename: (from: string, to: string) => void): void {
-  place(staging.state, targets.state, rename)
-  try {
-    place(staging.workspace, targets.workspace, rename)
-  } catch (error) {
-    try {
-      renameSync(targets.state, staging.state)
-      putBack(targets.state, before.state)
-      putBack(targets.workspace, before.workspace)
-    } catch (rollback) {
-      throw new AggregateError([error, rollback], `the restore failed and ${targets.state} could not be put back`)
-    }
-    throw error
-  }
 }
 
 /**
- * Restore a backup into an empty profile (FR-009): read the manifest, refuse an entry that leaves
- * its root (EC-3) and any file whose sha256 differs, before anything is written; take the instance
- * lock; refuse a non-empty target; copy each root into a fresh staging directory beside its target,
- * checking each copy's bytes again, and rename it into place only once every file landed (EC-1). If
- * the second rename fails, the first target is put back as it was, so neither target changed.
+ * The directory the package restores from: the backup itself, or, for a backup written before the
+ * package (a manifest without `roots`), a temporary copy whose manifest names them, so the user's
+ * backup is never altered.
  */
-export function restoreInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Manifest {
+function packageSource(source: string, manifest: Manifest): { readonly from: string; readonly cleanup: () => void } {
+  const raw = JSON.parse(readFileSync(join(source, MANIFEST), 'utf8')) as { roots?: unknown }
+  if (Array.isArray(raw.roots)) return { from: source, cleanup: () => undefined }
+  const copy = mkdtempSync(join(tmpdir(), 'theoclaw-restore-'))
+  const from = join(copy, 'backup')
+  const cleanup = (): void => rmSync(copy, { recursive: true, force: true })
+  try {
+    cpSync(source, from, { recursive: true })
+    writeFileSync(join(from, MANIFEST), JSON.stringify({ version: 1, files: manifest.files, roots: [...ROOTS] }), { mode: 0o600 })
+  } catch (error) {
+    cleanup()
+    throw error
+  }
+  return { from, cleanup }
+}
+
+/**
+ * Restore a backup into an empty profile (FR-009) through `@theokit/host/backup`: read the manifest,
+ * refuse an entry that leaves its root (EC-3) and any file whose sha256 differs, before anything is
+ * written; take the instance lock; refuse a non-empty target; the package stages each root beside its
+ * target and renames it into place only once every file landed (EC-1), putting the first back if the
+ * second fails. Session transcripts are re-homed under the target workspace's name.
+ * `onFileCopied` is called once per file as the restore plans it, before anything is written.
+ */
+export async function restoreInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Promise<Manifest> {
   const targets = resolveTargets(env, options.homeDir)
   const source = resolve(dir)
   const manifest = readManifest(source)
-  const files = verifyBackup(source, manifest)
-  const lock = takeInstanceLock(targets.state)
-  const staging: Partial<Record<Root, string>> = {}
+  verifyBackup(source, manifest)
+  const lock = await takeInstanceLock(targets.state)
+  let adapted: ReturnType<typeof packageSource> | undefined
   try {
-    const before = { state: recordTarget(targets.state), workspace: recordTarget(targets.workspace) }
-    for (const root of ROOTS) staging[root] = createStaging(targets[root])
-    const created = staging as Record<Root, string>
-    stage(files, created, targets, manifest, options)
-    placeBoth(created, targets, before, options.rename ?? renameSync)
+    assertEmptyOrAbsent(targets.state)
+    assertEmptyOrAbsent(targets.workspace)
+    adapted = packageSource(source, manifest)
+    const from = adapted.from
+    await refusing(() =>
+      hostRestore({
+        from,
+        roots: { state: targets.state, workspace: targets.workspace },
+        transform: (path, root) => {
+          options.onFileCopied?.(join(targets[root as Root], path))
+          return root === 'workspace' ? rehomed(path, manifest.workspace, targets.workspace) : path
+        },
+      }),
+    )
     chmodSync(targets.state, 0o700)
     chmodSync(targets.workspace, 0o700)
     return manifest
   } finally {
-    for (const root of ROOTS) if (staging[root] !== undefined) rmSync(staging[root], { recursive: true, force: true })
-    lock.release()
+    adapted?.cleanup()
+    await lock.release()
   }
 }
 

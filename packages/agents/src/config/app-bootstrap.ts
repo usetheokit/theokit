@@ -2,14 +2,34 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseEnv } from 'node:util'
 
-import { loadProjectEnv } from '@theokit/sdk'
+import { loadProjectEnv, SOVEREIGN_ENV_KEYS } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
+import { resolveProfile } from '@theokit/sdk/persistence'
+
+import { resolveSecretRefs } from '../auth/secret-refs.js'
 
 /** What every step receives: the environment to mutate, the working directory and the app's home. */
 export interface BootstrapContext {
   readonly env: NodeJS.ProcessEnv
   readonly cwd: string
   readonly home: string
+  /** Set by the project-env step: where it read from, what it took and what it refused. Never holds values. */
+  projectEnv?: ProjectEnvRecord
+}
+
+/** What the project-env step did with `<cwd>/.env`. Key names only. */
+export interface ProjectEnvRecord {
+  /** The file the step looked for, whether or not it exists. */
+  readonly file: string
+  /** Keys the step assigned from the file, in file order. */
+  readonly loaded: readonly string[]
+  /** Protected or SDK-sovereign keys present in the file, left unset by the step. */
+  readonly refused: readonly string[]
+}
+
+export interface ProjectEnvStepOptions {
+  /** Keys the project `.env` must never set. Added to the SDK's sovereign keys. */
+  readonly protectedKeys?: readonly string[]
 }
 
 export interface BootstrapStep {
@@ -103,18 +123,96 @@ export function assertBootstrapped(bootstrap: AppBootstrap, caller: string): voi
 }
 
 /**
- * Loads `<cwd>/.env` into `ctx.env` without overwriting set variables, then restores the SDK's
- * sovereign keys (`SOVEREIGN_ENV_KEYS`) through `loadProjectEnv`. A missing file is not an error.
+ * Loads `<cwd>/.env` into `ctx.env` without overwriting set variables, never setting a key in
+ * `protectedKeys` or the SDK's sovereign keys (`SOVEREIGN_ENV_KEYS`), which are reported as refused.
+ * Records the outcome on `ctx.projectEnv`. A missing file is not an error.
  */
-export const projectEnvStep: BootstrapStep = {
-  name: 'project-env',
-  run(ctx) {
-    loadProjectEnv(ctx.env, () => {
+export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): BootstrapStep {
+  const protectedKeys = new Set<string>([...SOVEREIGN_ENV_KEYS, ...(options.protectedKeys ?? [])])
+  return {
+    name: 'project-env',
+    run(ctx) {
       const file = join(ctx.cwd, '.env')
-      if (!existsSync(file)) return
-      for (const [key, value] of Object.entries(parseEnv(readFileSync(file, 'utf8')))) {
-        ctx.env[key] ??= value
-      }
+      const loaded: string[] = []
+      const refused: string[] = []
+      loadProjectEnv(ctx.env, () => {
+        if (!existsSync(file)) return
+        for (const [key, value] of Object.entries(parseEnv(readFileSync(file, 'utf8')))) {
+          if (protectedKeys.has(key)) {
+            refused.push(key)
+          } else if (ctx.env[key] === undefined) {
+            ctx.env[key] = value
+            loaded.push(key)
+          }
+        }
+      })
+      ctx.projectEnv = { file, loaded, refused }
+    },
+  }
+}
+
+/** `projectEnvStepWith()` with no extra protected keys. */
+export const projectEnvStep: BootstrapStep = projectEnvStepWith()
+
+const SDK_HOME_VARIABLES = ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME'] as const
+
+/** `sdkHomeStep` with `onConflict: 'refuse'` found an SDK home variable already set. Names it, never its value. */
+export class SdkHomeConflictError extends TheokitAgentError {
+  override readonly name = 'SdkHomeConflictError'
+  readonly variable: string
+
+  constructor(variable: string) {
+    super(`[@theokit/agents] ${variable} is already set; sdkHomeStep refuses to override it`, {
+      code: 'sdk_home_conflict',
+      isRetryable: false,
     })
-  },
+    this.variable = variable
+  }
+}
+
+export type SdkHomeStepOptions = ({ readonly dirName: string } | { readonly profile: string }) & {
+  /** A variable already set in `ctx.env` (even empty): `'refuse'` fails, `'env-wins'` keeps it. Default `'env-wins'`. */
+  readonly onConflict?: 'refuse' | 'env-wins'
+}
+
+/**
+ * Points `THEOKIT_HOME` and `THEOKIT_AUTH_HOME` at one directory: `<ctx.home>/<dirName>`, or the
+ * SDK profile directory `<ctx.home>/.theokit/profiles/<profile>`. Both variables are checked before
+ * either is written. Creates no directories.
+ */
+export function sdkHomeStep(options: SdkHomeStepOptions): BootstrapStep {
+  const policy = options.onConflict ?? 'env-wins'
+  return {
+    name: 'sdk-home',
+    run(ctx) {
+      const dir =
+        'profile' in options
+          ? resolveProfile(options.profile, {
+              profilesRoot: join(ctx.home, '.theokit', 'profiles'),
+            }).directory
+          : join(ctx.home, options.dirName)
+      if (policy === 'refuse') {
+        for (const variable of SDK_HOME_VARIABLES) {
+          if (ctx.env[variable] !== undefined) throw new SdkHomeConflictError(variable)
+        }
+      }
+      for (const variable of SDK_HOME_VARIABLES) ctx.env[variable] ??= dir
+    },
+  }
+}
+
+/**
+ * Replaces every `ctx.env` value that is a secret reference with the value read from its store
+ * (the built-in stores of `resolveSecretRefs`). `ctx.env` changes only after every reference resolved.
+ */
+export function secretRefsStep(): BootstrapStep {
+  return {
+    name: 'secret-refs',
+    async run(ctx) {
+      const { env } = await resolveSecretRefs(ctx.env)
+      for (const [key, value] of Object.entries(env)) {
+        if (value !== undefined && ctx.env[key] !== value) ctx.env[key] = value
+      }
+    },
+  }
 }
