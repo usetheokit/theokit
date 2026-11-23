@@ -61,7 +61,9 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
   // The configured values are masked BEFORE `redactSecrets`: it shortens some shapes to a head and
   // a tail, after which the whole value is no longer there to find, and the fragments would stay.
   const describeError = (error: unknown): string =>
-    redactSecrets(maskSecrets(error instanceof Error ? error.message : String(error), options.secrets))
+    redactSecrets(
+      maskSecrets(error instanceof Error ? error.message : String(error), options.secrets),
+    )
   const fail = (platform: PlatformName, line: string): void => {
     if (!failed.includes(platform)) failed.push(platform)
     options.write(line)
@@ -114,7 +116,8 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
   const ready = runner.start().then(
     () => undefined,
     (error: unknown) => {
-      for (const adapter of adapters) fail(adapter.platform, `${adapter.platform}: start failed: ${describeError(error)}`)
+      for (const adapter of adapters)
+        fail(adapter.platform, `${adapter.platform}: start failed: ${describeError(error)}`)
     },
   )
 
@@ -126,7 +129,9 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
       stopping = true
       // A stopped platform is no longer started: a route that looks it up answers 503 (D7).
       started.clear()
-      await runner.stop().catch((error: unknown) => options.write(`stop failed: ${describeError(error)}`))
+      await runner
+        .stop()
+        .catch((error: unknown) => options.write(`stop failed: ${describeError(error)}`))
     },
   }
 }

@@ -6,7 +6,6 @@ import { maskSecrets } from '@theokit/gateway'
 import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import { describeError } from './errors.js'
-import { createEventMask } from './event-mask.js'
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
@@ -95,11 +94,7 @@ function tapped(agent: TurnAgent, onResult: (result: RunResult) => void): AgentT
   }
 }
 
-async function runWith(
-  agent: TurnAgent,
-  options: TurnOptions,
-  flush: () => void,
-): Promise<TurnOutcome> {
+async function runWith(agent: TurnAgent, options: TurnOptions): Promise<TurnOutcome> {
   let result: RunResult | undefined
   const outcome = await runAgentTurn({
     agent: tapped(agent, (settled) => {
@@ -108,14 +103,11 @@ async function runWith(
     message: options.message,
     runId: options.runId,
     emit: options.emit,
+    ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   })
-  // A cancelled turn emits nothing more: what the mask still holds is dropped, never sent.
-  if (!outcome.ok) {
-    if (outcome.code !== 'turn_cancelled') flush()
-    return outcome
-  }
-  flush()
+  // `runAgentTurn` masks and flushes: a cancelled turn emits nothing more.
+  if (!outcome.ok) return outcome
   // An SDK run that ended as `cancelled` is not a failure here, as it never was.
   return options.model === undefined ? { ok: true } : { ok: true, usage: usageOf(result ?? {}, options.model) }
 }
@@ -135,13 +127,12 @@ export async function runTheoClawTurn(options: TurnOptions): Promise<TurnOutcome
     return { ok: false, code: 'turn_cancelled', reason: 'the turn was cancelled before it started' }
   }
   const secrets = options.secrets ?? []
-  const mask = createEventMask(secrets, options.emit)
   // The model id reaches a frame and a log line; a configured value inside it is masked there too.
   const model = options.model === undefined ? {} : { model: maskSecrets(options.model, secrets) }
   let outcome: TurnOutcome
   try {
     outcome = await options.withAgent((agent) =>
-      runWith(agent, { ...options, ...model, emit: mask.emit }, mask.flush),
+      runWith(agent, { ...options, ...model, secrets }),
     )
   } catch (error) {
     outcome = failed(describeError(error))

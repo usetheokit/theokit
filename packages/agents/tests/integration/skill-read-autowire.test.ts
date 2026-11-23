@@ -14,7 +14,7 @@
 import 'reflect-metadata'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 
 import type * as SdkModule from '@theokit/sdk'
 import { z } from 'zod'
@@ -270,6 +270,29 @@ describe('read advertised — skill_read serves what the <skills> block lists', 
     expect(await read('hidden')).toContain('not found')
     expect(await read('needs-bin')).toContain('not found')
     expect(await read('shown')).toContain('SHOWN BODY')
+  })
+
+  it('read advertised serves a skill whose required binary is on PATH', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'adv-'))
+    const bin = mkdtempSync(join(tmpdir(), 'adv-bin-'))
+    writeFileSync(join(bin, 'adv-present-bin'), '#!/bin/sh\n', { mode: 0o755 })
+    writeSkill(
+      join(cwd, '.theokit', 'skills'),
+      'needs-present',
+      'PRESENT BODY',
+      'requires-bins: adv-present-bin\n',
+    )
+    const original = process.env.PATH
+    process.env.PATH = `${bin}${delimiter}${original ?? ''}`
+    try {
+      await run(
+        { model: 'm', skills: ['needs-present'], skillsRead: 'advertised', ...project },
+        cwd,
+      )
+      expect(await read('needs-present')).toContain('PRESENT BODY')
+    } finally {
+      process.env.PATH = original
+    }
   })
 
   it('read advertised keeps a skill hidden when its SKILL.md is edited after the SDK built its snapshot', async () => {
