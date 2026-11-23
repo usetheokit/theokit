@@ -78,7 +78,7 @@ async function serve(handler: (request: Request) => Promise<Response>): Promise<
   return `http://127.0.0.1:${server.address().port}`
 }
 
-async function shutdownHarness(
+function shutdownHarness(
   stopAll: () => Promise<void> = async () => undefined,
   close: () => Promise<void> = async () => undefined,
 ) {
@@ -87,7 +87,7 @@ async function shutdownHarness(
   const closeServer = vi.fn(close)
   const stop = vi.fn(stopAll)
   const lines: string[] = []
-  await installShutdown({ signals, stopAll: stop, closeServer, exit, write: (line) => lines.push(line) })
+  installShutdown({ signals, stopAll: stop, closeServer, exit, write: (line) => lines.push(line) })
   return { signals, exit, closeServer, stopAll: stop, lines }
 }
 
@@ -115,7 +115,7 @@ describe('the process entry', () => {
   })
 
   it('stops every started runner on SIGTERM', async () => {
-    const harness = await shutdownHarness()
+    const harness = shutdownHarness()
 
     harness.signals.emit('SIGTERM')
 
@@ -127,7 +127,7 @@ describe('the process entry', () => {
 
   it('drains the runners before it closes the control plane, and a runner failure is written', async () => {
     const order: string[] = []
-    const harness = await shutdownHarness(
+    const harness = shutdownHarness(
       async () => {
         order.push('runners')
         throw new Error('drain failed')
@@ -168,7 +168,7 @@ describe('the process entry', () => {
 
   it('a second signal during shutdown is ignored', async () => {
     const gate = deferred<void>()
-    const harness = await shutdownHarness(() => gate.promise)
+    const harness = shutdownHarness(() => gate.promise)
 
     harness.signals.emit('SIGTERM')
     harness.signals.emit('SIGTERM')
@@ -176,11 +176,11 @@ describe('the process entry', () => {
 
     await waitFor(() => harness.exit.mock.calls.length === 1, 1000, 'exit after SIGTERM')
     expect(harness.stopAll).toHaveBeenCalledTimes(1)
-    expect(harness.lines).toEqual(['theoclaw: signal ignored, already stopping'])
+    expect(harness.lines).toEqual(['theoclaw: SIGTERM ignored, already stopping'])
   })
 
   it('a runner that fails to stop still closes the server and exits 1', async () => {
-    const harness = await shutdownHarness(async () => {
+    const harness = shutdownHarness(async () => {
       throw new Error('drain failed')
     })
 
@@ -305,7 +305,7 @@ describe('the process entry', () => {
   })
 
   it('a server that fails to close still exits 1', async () => {
-    const harness = await shutdownHarness(undefined, async () => {
+    const harness = shutdownHarness(undefined, async () => {
       throw new Error('server not running')
     })
 
@@ -316,9 +316,9 @@ describe('the process entry', () => {
     expect(harness.lines).toEqual(['theoclaw: closing the control plane failed: server not running'])
   })
 
-  it('removing the shutdown listeners leaves the signal source as it was', async () => {
+  it('removing the shutdown listeners leaves the signal source as it was', () => {
     const signals = new EventEmitter()
-    const remove = await installShutdown({
+    const remove = installShutdown({
       signals,
       stopAll: async () => undefined,
       closeServer: async () => undefined,
@@ -403,7 +403,7 @@ describe('the process entry', () => {
         telegram: { chatId: 1, messageId: 1, raw: null },
       })
       await waitFor(() => handled === 1, 1000, 'the turn to start')
-      const harness = await shutdownHarness(() => loop.stopAll())
+      const harness = shutdownHarness(() => loop.stopAll())
 
       harness.signals.emit('SIGTERM')
       await waitFor(() => harness.stopAll.mock.calls.length === 1, 1000, 'stopAll to start')

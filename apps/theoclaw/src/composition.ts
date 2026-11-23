@@ -622,7 +622,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
     // After the sessions: their browser servers are gone before the browser they were attached to.
     await shared.browser?.close()
   }
-  const removeShutdown = await installShutdown({
+  const removeShutdown = installShutdown({
     signals: options.signals,
     stopAll: teardown,
     closeServer: async () => {
