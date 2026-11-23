@@ -25,7 +25,7 @@ import { basename } from 'node:path'
 import { transcriptPath, transcriptRoot } from '@theokit/agents/persistence'
 import { describe, expect, it } from 'vitest'
 
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 
 const DAY = 86_400_000
 const NOW = 1_000 * DAY

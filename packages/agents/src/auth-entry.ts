@@ -159,6 +159,7 @@ export {
   resolveAgentCredential,
   resolveCredential,
 } from './auth/resolve-credential.js'
+export { customProviderPlugin } from './auth/custom-provider.js'
 export type { AgentCredentialInput, CustomProviderConfig } from './auth/resolve-credential.js'
 export type { CredentialSourcesInput } from './auth/resolve-credential.js'
 
