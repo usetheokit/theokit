@@ -135,7 +135,12 @@ it('restores to a new project path and resumes the session there', async () => {
   await restore({
     from: out,
     roots: { state: target },
-    transform: rehomeTranscripts({ root: 'state', projectsDir: '.app/projects', from: oldCwd, to: newCwd }),
+    transform: rehomeTranscripts({
+      root: 'state',
+      projectsDir: '.app/projects',
+      from: oldCwd,
+      to: newCwd,
+    }),
   })
   expect(await readFile(join(target, rel(newCwd)), 'utf8')).toBe(record)
   await expect(stat(join(target, rel(oldCwd)))).rejects.toThrow()
