@@ -26,21 +26,13 @@
  */
 import type { SettingsFileReport } from '../config/settings-load.js'
 import { refusalNotice } from '../hooks/foreign-hook-gate.js'
-import { checks, type Check } from '@theokit/agents/doctor'
+import { checks, type Check, type CredentialState } from '@theokit/agents/doctor'
 
 /**
- * What is known about the stored credential. Presence only — never the value, not even truncated,
- * because this output is pasted into issues.
- *
- * `expired` is a distinct state, not a flavour of `present`. An OAuth credential that parsed but
- * whose `expires` had passed made this report `✓ credential: present` — measured 2026-08-25 against
- * a token ten days past expiry. A diagnostic whose job is to answer "is this ready to run?" said
- * yes about the one thing that was going to fail first.
- *
- * The docstring on `collectChecks` has claimed since it was written that the tests can "drive an
- * expired credential". They could not: the state did not exist.
+ * What is known about the stored credential — the framework's type, re-exported for the CLI.
+ * Presence only, never the value: this output is pasted into issues.
  */
-export type CredentialState = 'present' | 'absent' | 'unreadable' | 'expired'
+export type { CredentialState }
 
 export { diagnose, renderDiagnosis } from '@theokit/agents/doctor'
 
@@ -215,30 +207,9 @@ function skillsOnDiskCheck(found: SkillsOnDiskFindings | undefined): Check[] {
 }
 
 /**
- * The credential left in a directory this product does not read (#72), or no row when there is none.
- *
- * Extracted from `collectChecks` rather than suppressed when the length gate fired on it: every
- * other row in this module is already a named function, so the inline form was the outlier, and
- * lifting it makes the file more consistent instead of less.
- */
-function strayCredentialCheck(strays: readonly string[] | undefined): Check[] {
-  const found = strays ?? []
-  if (found.length === 0) return []
-  return [
-    {
-      name: 'credential-strays',
-      // A warning, never a failure: nothing is broken. It is a leftover to remove, and exiting
-      // non-zero over one would report a working install as broken.
-      status: 'warn',
-      detail: `not read by this product — remove if you no longer need it: ${found.join(', ')}`,
-    },
-  ]
-}
-
-/**
  * The hook files the framework loads directly, which this product refuses to let it spawn.
  *
- * Lands beside `settingsCheck` because it is the same question with a different file: a hook in a
+ * Lands beside the settings row because it is the same question with a different file: a hook in a
  * project `.claude/settings.json` already reaches the operator through `droppedHooks`, and
  * `.theokit/hooks.json` reached them through nothing. Inventing a second surface for one question
  * is how two answers start to disagree.
@@ -256,44 +227,6 @@ function foreignHookCheck(
       // design, so nothing is broken; exiting non-zero would report a working install as broken.
       status: 'warn' as const,
       detail: refusals.map((r) => refusalNotice(r)).join(' | '),
-    },
-  ]
-}
-
-/**
- * What this file's permission rules do: `permissions` is translated and enforced (#736), so it is
- * not in `ignored`. The only thing left to report is the entries whose syntax did not translate,
- * because an entry that never became a rule is in force nowhere.
- */
-function permissionNotice(r: SettingsFileReport): string {
-  return r.unsupportedPermissions.length > 0
-    ? `permission entries not honoured: ${r.unsupportedPermissions.join('; ')}`
-    : ''
-}
-
-function settingsCheck(reports: readonly SettingsFileReport[] = []): Check[] {
-  const said = reports
-    .map((r) => {
-      const parts = [
-        r.ignored.length > 0 ? `not implemented here: ${r.ignored.join(', ')}` : '',
-        r.unrecognised.length > 0 ? `unrecognised: ${r.unrecognised.join(', ')}` : '',
-        r.droppedHooks.length > 0 ? `hooks not translated: ${r.droppedHooks.join('; ')}` : '',
-        // `permissions` is translated and enforced, so it is not in `ignored`. This line names only
-        // the entries that did not translate: an entry listed here never became a rule.
-        permissionNotice(r),
-      ].filter((p) => p !== '')
-      return parts.length > 0 ? `${r.path} — ${parts.join('; ')}` : ''
-    })
-    .filter((line) => line !== '')
-  // Appended only when there is something to say: a row that permanently reads "none" is noise, and
-  // noise is what makes a diagnostic stop being read.
-  if (said.length === 0) return []
-  return [
-    {
-      name: 'settings',
-      // A warning, never a failure. Nothing is broken by a key this product chose not to implement.
-      status: 'warn' as const,
-      detail: said.join(' | '),
     },
   ]
 }
@@ -396,7 +329,7 @@ export function collectChecks(input: {
     // `settings.json` is Claude Code's filename, so a real one carries their settings. Tolerating
     // them is what lets the product start; naming them is what stops the tolerance from teaching an
     // operator that a key is read when it is not.
-    ...settingsCheck(input.settingsIgnored),
+    ...checks.settingsReport(input.settingsIgnored ?? []),
     ...foreignSurfacesCheck(input.foreignSurfaces),
     // #130 — the hooks the framework would spawn without this product's approval, and therefore does
     // not spawn at all. Answered from disk at diagnosis rather than at the spawn: the spawn-time
@@ -408,6 +341,10 @@ export function collectChecks(input: {
     ...outputStyleCheck(input.outputStyle),
     // Appended only when there is something to say. A row that permanently reads "none" is noise in
     // a nine-row diagnostic, and noise is what makes a diagnostic stop being read.
-    ...strayCredentialCheck(input.strayCredentials),
+    ...checks.leftovers(
+      'credential-strays',
+      input.strayCredentials ?? [],
+      'remove if you no longer need it',
+    ),
   ]
 }
