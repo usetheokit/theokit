@@ -192,6 +192,23 @@ await host.start() // a failure stops the started services in reverse, then reje
 
 Use `createAppHost` for a supervised service (systemd, a container), where a clean stop exits 0. For a terminal session (Ctrl-C, exit code 130) keep using `createShutdown` from `@theokit/agents/commands`. `@theokit/host` does not import `@theokit/agents`.
 
+## `announceService` (`@theokit/host/discovery`)
+
+Announces a running service on the local network (DNS-SD) through a publisher you inject; the package has no multicast dependency.
+
+```ts
+import { announceService } from '@theokit/host/discovery'
+
+const announcement = announceService({ type: 'myagent', name: 'My agent', port: 8080, txt: { path: '/api' }, host, publisher })
+// announcement.announced is false (reason 'loopback') when host is loopback
+await announcement.stop()
+```
+
+- `publisher` is `{ publish({ name, type, port, txt }), unpublishAll(): Promise<void>, destroy(): Promise<void> }`, for example a wrapper over `bonjour-service`. You create it, so a loopback `host` avoids using it but not building it.
+- A loopback `host` (`localhost`, `::1`, `127.0.0.0/8`) announces nothing; the result has `announced: false` and `reason: 'loopback'`.
+- `name` is trimmed to 63 UTF-8 bytes (RFC 6763) on a character boundary; the result's `name` is what was published.
+- `stop()` calls `unpublishAll` then `destroy`, each waited for at most one second, so it resolves within about two seconds even if the publisher never answers. It is idempotent and never rejects.
+
 ## License
 
 Apache-2.0
