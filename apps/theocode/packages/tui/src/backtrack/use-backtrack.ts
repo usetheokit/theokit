@@ -1,7 +1,7 @@
+import { backtrackReducer, CLOSED_BACKTRACK, type BacktrackState } from '@theokit/tui'
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react'
 
 import { confirmBacktrack as confirmBacktrackCmd, primeBacktrack } from './backtrack.js'
-import { armLadder, CLOSED_LADDER, selectTurn, type LadderState } from './backtrack-ladder.js'
 
 export type BacktrackDeps = Pick<
   Parameters<typeof confirmBacktrackCmd>[1],
@@ -26,44 +26,43 @@ export interface BacktrackLadder {
 function requestBacktrackWindow(
   currentSessionId: BacktrackDeps['currentSessionId'],
   setToast: BacktrackDeps['setToast'],
-  apply: (ladder: LadderState) => void,
+  apply: (previews: readonly string[]) => void,
 ): void {
   let previewWindow: readonly string[] = []
-  let turnCount = 0
   void primeBacktrack({
     currentSessionId,
     setRewindPreviews: (p) => {
       previewWindow = typeof p === 'function' ? p([...previewWindow]) : p
     },
-    setRewindCount: (n) => {
-      turnCount = typeof n === 'function' ? n(turnCount) : n
-    },
+    setRewindCount: () => undefined,
     setRewindNth: () => undefined,
     setRewindPrimed: (v) => {
-      if (v) apply(armLadder(previewWindow, turnCount))
+      if (v) apply(previewWindow)
     },
     setToast,
   })
 }
 
 export function useBacktrack(deps: BacktrackDeps): BacktrackLadder {
-  const [ladder, setLadder] = useState<LadderState>(CLOSED_LADDER)
+  const [ladder, setLadder] = useState<BacktrackState>(CLOSED_BACKTRACK)
   const [rotating, setRotating] = useState(false)
   const [composerSeed, setComposerSeedState] = useState('')
 
   const { setToast, currentSessionId } = deps
 
   const reset = useCallback((): void => {
-    setLadder(CLOSED_LADDER)
+    setLadder((current) => backtrackReducer(current, { type: 'reset' }))
   }, [])
 
   const prime = useCallback((): void => {
-    requestBacktrackWindow(currentSessionId, setToast, setLadder)
+    requestBacktrackWindow(currentSessionId, setToast, (previews) => {
+      setLadder((current) => backtrackReducer(current, { type: 'prime', previews }))
+    })
   }, [currentSessionId, setToast])
 
   const advance = useCallback(
     (next: number, turnCount: number): void => {
-      setLadder((current) => selectTurn(current, next))
+      setLadder((current) => backtrackReducer(current, { type: 'older' }))
       setToast({
         message: `Backtrack: message ${String(next + 1)}/${String(turnCount)} — Enter to edit, Esc for older`,
         variant: 'info',
@@ -74,7 +73,7 @@ export function useBacktrack(deps: BacktrackDeps): BacktrackLadder {
 
   const confirm = useCallback((): void => {
     void confirmBacktrackCmd(
-      { rewindNth: ladder.nth },
+      { rewindNth: ladder.selected },
       {
         ...deps,
         setComposerSeed: setComposerSeedState,
@@ -82,13 +81,13 @@ export function useBacktrack(deps: BacktrackDeps): BacktrackLadder {
         setRotating,
       },
     )
-  }, [ladder.nth, deps, reset])
+  }, [ladder.selected, deps, reset])
 
   return {
     armed: ladder.armed,
     rotating,
-    nth: ladder.nth,
-    total: ladder.total,
+    nth: ladder.selected,
+    total: ladder.previews.length,
     previews: ladder.previews,
     composerSeed,
     setSeed: setComposerSeedState,
