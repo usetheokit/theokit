@@ -32,7 +32,7 @@ describe('resolveConfig — accumulating keys', () => {
     })
 
     expect(
-      cfg.hooks.map((h) => h.command),
+      cfg.hooks.map((h) => (h as { command: string }).command),
       'a repository silently removed the hooks the user declared globally',
     ).toEqual(['user-hook', 'project-hook'])
   })
