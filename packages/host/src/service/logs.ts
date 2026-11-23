@@ -5,7 +5,7 @@ export interface LogsOptions {
   readonly lines?: number
 }
 
-export const DEFAULT_LOG_LINES = 200
+const DEFAULT_LOG_LINES = 200
 
 export function logLines(options: LogsOptions | undefined): number {
   const lines = options?.lines ?? DEFAULT_LOG_LINES
