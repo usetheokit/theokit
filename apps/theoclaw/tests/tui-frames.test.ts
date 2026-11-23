@@ -1,6 +1,15 @@
 /**
  * B-376 — the TUI's frame helpers (`src/tui/frames.ts`). The stream adapter is covered in tui-stream.test.ts
  * and the rendered turn in tui-app.test.tsx.
+ *
+ * The local reducer these tests once covered (applyFrame, startTurn, addNotice, failTurn) is gone with the
+ * move to the framework's `agentStreamReducer`. Where its cases live now:
+ * - delta joining, a new message after a tool card, running/success/failed cards, a result with an unknown
+ *   call id, done, an error frame, an error event inside the turn, and frames that draw nothing: the
+ *   "controlStream" describes in tui-stream.test.ts;
+ * - an interrupted turn: tui-stream.test.ts (tool cancelled, "Interrupted by user") and tui-app.test.tsx;
+ * - the owner's message (a separate item, never merged into a reply) and the running flag: tui-app.test.tsx;
+ * - addNotice and failTurn: notices from the app and a failed connection, in tui-stream.test.ts.
  */
 import { describe, expect, it } from "vitest";
 
