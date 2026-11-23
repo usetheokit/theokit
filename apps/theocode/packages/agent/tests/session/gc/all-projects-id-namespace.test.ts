@@ -96,7 +96,10 @@ describe('the all-projects sweep speaks one id namespace', () => {
         { name: fileOf(LIVE_ID), mtimeMs: NOW - 90 * DAY },
       ],
     })
-    expect(p.candidates, 'the fixture must produce a candidate, or this case proves nothing').toHaveLength(1)
+    expect(
+      p.candidates,
+      'the fixture must produce a candidate, or this case proves nothing',
+    ).toHaveLength(1)
 
     const { opts, calls } = applySpy(LIVE_ID)
     const result = await runSessionGCAllProjects(p, opts)
@@ -123,7 +126,10 @@ describe('the all-projects sweep speaks one id namespace', () => {
     })
     expect(p.candidates, 'the archived transcript must be the one candidate').toHaveLength(1)
     expect(p.candidates[0]?.id).toBe(nameOf(OLD_ID))
-    expect(p.candidates[0]?.inRegistry, 'a registered transcript must be recognised as registered').toBe(true)
+    expect(
+      p.candidates[0]?.inRegistry,
+      'a registered transcript must be recognised as registered',
+    ).toBe(true)
 
     const { opts, calls } = applySpy()
     await runSessionGCAllProjects(p, opts)
@@ -155,5 +161,56 @@ describe('the all-projects sweep speaks one id namespace', () => {
       p.candidates.filter((c) => c.kind === 'registry'),
       'an entry with no date was aged to 1970 and collected',
     ).toEqual([])
+  })
+})
+
+describe('pointer and registry protections hold across plan and apply', () => {
+  it('test_the_pointer_session_transcript_is_not_planned_at_all', async () => {
+    const p = await plan({
+      pointer: OLD_ID,
+      onDisk: [
+        { name: fileOf(LIVE_ID), mtimeMs: NOW },
+        { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
+      ],
+    })
+
+    expect(p.candidates).toEqual([])
+  })
+
+  it('test_an_unarchived_registry_entry_protects_its_stale_transcript', async () => {
+    const p = await plan({
+      registry: [{ agentId: OLD_ID, lastModified: NOW - 90 * DAY }],
+      onDisk: [
+        { name: fileOf(LIVE_ID), mtimeMs: NOW },
+        { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
+      ],
+    })
+
+    expect(p.candidates).toEqual([])
+  })
+
+  it('test_an_unregistered_stale_transcript_is_unlinked_by_path_not_deleted_by_id', async () => {
+    const p = await plan({
+      onDisk: [
+        { name: fileOf(LIVE_ID), mtimeMs: NOW },
+        { name: fileOf(OLD_ID), mtimeMs: NOW - 90 * DAY },
+      ],
+    })
+    expect(p.candidates).toHaveLength(1)
+    expect(p.candidates[0]?.inRegistry).toBeFalsy()
+
+    const { opts, calls } = applySpy()
+    await runSessionGCAllProjects(p, opts)
+
+    expect(calls).toEqual([`unlink ${p.candidates[0]?.target}`])
+  })
+
+  it('test_a_stale_registry_entry_with_no_transcript_is_a_registry_candidate', async () => {
+    const p = await plan({
+      registry: [{ agentId: OLD_ID, lastModified: NOW - 90 * DAY }],
+      onDisk: [{ name: fileOf(LIVE_ID), mtimeMs: NOW }],
+    })
+
+    expect(p.candidates.filter((c) => c.kind === 'registry').map((c) => c.id)).toEqual([OLD_ID])
   })
 })

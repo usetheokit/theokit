@@ -316,6 +316,7 @@ export {
   type AgentTurnOutcome,
   type RunAgentTurnOptions,
 } from './run-agent-turn.js'
+export { createAgentEventMask, type AgentEventMask } from './event-mask.js'
 export { streamFromEmitter, type StreamFromEmitterOptions } from './stream-from-emitter.js'
 export {
   createResultCapture,

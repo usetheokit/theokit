@@ -1,10 +1,5 @@
-import { GatewayRunner, redactSecrets } from '@theokit/gateway'
-import type {
-  BasePlatformAdapter,
-  GatewayHandler,
-  GatewayHook,
-  PlatformName,
-} from '@theokit/gateway'
+import { GatewayRunner, maskSecrets, redactSecrets } from '@theokit/gateway'
+import type { BasePlatformAdapter, GatewayHandler, GatewayHook, PlatformName } from '@theokit/gateway'
 
 /** One platform the loop may start: building the adapter can throw, and only fails that platform. */
 export interface PlatformBuild {
@@ -49,15 +44,6 @@ export interface ChannelLoop {
 }
 
 const DEFAULT_START_TIMEOUT_MS = 30_000
-const MASK = '[redacted]'
-
-/** Replace every occurrence of every value with `[redacted]`, longest first, so a value containing another is masked whole. */
-export function maskSecrets(text: string, secrets: readonly string[]): string {
-  return [...secrets]
-    .filter((secret) => secret.length > 0)
-    .sort((a, b) => b.length - a.length)
-    .reduce((masked, secret) => masked.split(secret).join(MASK), text)
-}
 
 /**
  * Start one `GatewayRunner` over every adapter that builds. The runner isolates the platforms
@@ -83,26 +69,10 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
     options.write(line)
   }
 
-  /**
-   * One thing the runner does not do that TheoClaw's channels rely on: an adapter that answers
-   * `false` (a socket that cannot open, a Slack call that failed) is retried like one that throws,
-   * since the runner treats `false` as final and a daemon that starts offline would never recover.
-   * A connect the runner has given up on, which fails later, is reported by the runner itself as a
-   * `failed` state, so it is written once, masked, by `onAdapterState`.
-   */
-  const watchConnect = (adapter: BasePlatformAdapter): BasePlatformAdapter => {
-    const connect = adapter.connect.bind(adapter)
-    adapter.connect = async () => {
-      if (await connect()) return true
-      throw new Error(`adapter "${adapter.platform}" connect returned false`)
-    }
-    return adapter
-  }
-
   const adapters: BasePlatformAdapter[] = []
   for (const { platform, build } of options.platforms) {
     try {
-      adapters.push(watchConnect(build()))
+      adapters.push(build())
     } catch (error) {
       fail(platform, `${platform}: start failed: ${describeError(error)}`)
     }
@@ -118,13 +88,7 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
     secrets: options.secrets,
     ...(options.retry === undefined
       ? {}
-      : {
-          reconnect: {
-            initialDelayMs: options.retry.initialDelayMs,
-            maxDelayMs: options.retry.maxDelayMs,
-            maxAttempts: options.retry.maxAttempts,
-          },
-        }),
+      : { reconnect: { initialDelayMs: options.retry.initialDelayMs, maxDelayMs: options.retry.maxDelayMs, maxAttempts: options.retry.maxAttempts, retryFalse: true } }),
     onAdapterState: (platform, state, reason) => {
       if (stopping) return
       if (state === 'connected') {

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { GatewayHandler, PlatformName } from '@theokit/gateway'
 
-import { maskSecrets, startChannelLoop } from '../src/channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
+import { startChannelLoop } from '../src/channels/channel-loop.js'
 import type { ChannelLoop, PlatformBuild } from '../src/channels/channel-loop.js'
 import { FakeAdapter, TEN_PLATFORMS, deferred, messageEvent, waitFor } from './fakes.js'
 
@@ -205,7 +206,7 @@ describe('startChannelLoop', () => {
     expect(harness.loop.started.size).toBe(0)
   })
 
-  it('an abandoned start that later fails is written once, masked', async () => {
+  it('an abandoned start that later fails is reported as failed, masked', async () => {
     const held = deferred<boolean>()
     const lines: string[] = []
     const loop = startChannelLoop({
