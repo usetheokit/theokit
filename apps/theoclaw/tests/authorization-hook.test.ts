@@ -200,6 +200,7 @@ describe('createOwnerPolicyHook', () => {
     expect(app.replies()).toEqual([])
     expect(app.handled).toHaveLength(0)
     expect(app.lines).toHaveLength(1)
+    expect(app.lines[0]).toContain('telegram')
     expect(app.lines[0]).toContain('the store broke')
     expect(app.lines[0]).not.toContain('stranger')
   })

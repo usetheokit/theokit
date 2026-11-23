@@ -1,5 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+
 import { createAccessPolicyHook, redactSecrets } from '@theokit/gateway'
-import type { GatewayHook, HookDecision, MessageEvent, PairingStore } from '@theokit/gateway'
+import type { GatewayHook, HookDecision, MessageEvent, PairingStore, PreInboundContext } from '@theokit/gateway'
 
 import { isAuthenticatedSender, isPolicyOwner } from './policy.js'
 import type { AuthorizationPolicy } from './policy.js'
@@ -15,6 +17,9 @@ const PAIRED = 'Paired.'
 const INVALID_CODE = 'That code is not valid or has expired.'
 const NOT_SAVED = 'The pairing could not be saved.'
 const PAIRING_OFF = 'Pairing is off: set THEOCLAW_STATE_DIR to keep pairings.'
+
+/** What the gateway hook puts before the reason of a failure it caught. */
+const GATEWAY_FAILURE_PREFIX = 'access-policy: hook failed: '
 
 const SILENT: HookDecision = { block: true }
 
@@ -43,14 +48,44 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
   const authenticated = (keys: ReadonlySet<string>): Set<string> =>
     new Set([...keys].filter((key) => isAuthenticatedSender(key.slice(0, Math.max(key.indexOf(':'), 0)))))
 
-  const gateway = createAccessPolicyHook({
+  // The gateway records a refusal before it asks the store for a code, so a failed issue() would
+  // silence the sender for the hour. Counting failures lets the hook start over without that memory.
+  let issueFailures = 0
+  const issuing: PairingStore | undefined =
+    pairing === undefined
+      ? undefined
+      : {
+          issue: (platform, senderId) => {
+            try {
+              return pairing.issue(platform, senderId)
+            } catch (error) {
+              issueFailures += 1
+              throw error
+            }
+          },
+          approve: (code) => pairing.approve(code),
+          isPaired: (platform, senderId) => pairing.isPaired(platform, senderId),
+        }
+  // The platform of the event being decided, so a log line names it as the app's own hook did.
+  const platformOfEvent = new AsyncLocalStorage<string>()
+  // A log sink that throws must not turn the silent block into the runner's chat reply.
+  const log = (line: string): void => {
+    const platform = platformOfEvent.getStore() ?? 'unknown'
+    try {
+      ;(options.write ?? ((text: string) => void process.stderr.write(`${text}\n`)))(`${HOOK_NAME}: ${platform}: ${line.replace(GATEWAY_FAILURE_PREFIX, '')}`)
+    } catch {
+      process.stderr.write(`${HOOK_NAME}: ${platform}: the hook failed and its log line could not be written\n`)
+    }
+  }
+
+  const build = (): GatewayHook => createAccessPolicyHook({
     owners: authenticated(policy.owners),
     allowed: authenticated(policy.allowed),
     // Without a store `pairing` cannot issue codes: the refusal text answers instead.
     dm: policy.dmPolicy === 'pairing' && pairing === undefined ? 'allowlist' : policy.dmPolicy,
     groups: 'silent',
     isAuthenticated: isAuthenticatedSender,
-    ...(pairing === undefined ? {} : { pairing }),
+    ...(issuing === undefined ? {} : { pairing: issuing }),
     refusalText: policy.refusalText,
     messages: {
       pairingCode: (code) => `Pairing code: ${code}. Ask the owner to send /approve ${code} in a direct message.`,
@@ -60,37 +95,40 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
       pairingOff: PAIRING_OFF,
     },
     ...(options.clock === undefined ? {} : { clock: options.clock }),
-    ...(options.write === undefined ? {} : { write: options.write }),
+    write: log,
     passThrough: (event) => {
       // The owner's group `/approve` is not a pairing: it goes on, as every other owner message does.
       if (owns(event)) return !isDm(event)
       return policy.dmPolicy === 'open' && isDm(event)
     },
   })
+  let gateway = build()
+  const decideByGateway = async (context: PreInboundContext): Promise<HookDecision | void> => {
+    const failures = issueFailures
+    const decision = await gateway.pre_inbound?.(context)
+    if (issueFailures !== failures) gateway = build()
+    return decision
+  }
+
+  const decide = async (context: PreInboundContext): Promise<HookDecision | void> => {
+    const { event } = context
+    try {
+      const text = event.text.trim()
+      if (owns(event) && isDm(event) && APPROVE_COMMAND.test(text) && !(options.execPending?.(event) === true && EXEC_ANSWER.test(text))) {
+        if (pairing === undefined) return { block: true, message: PAIRING_OFF }
+        // The gateway lets a bare `/approve` through to the agent; here it is a pairing command without its code.
+        if (!APPROVE_WITH_CODE.test(text)) return { block: true, message: INVALID_CODE }
+      }
+      return await decideByGateway(context)
+    } catch (error) {
+      // Never thrown on: the runner would answer "hook failed" into the chat, a group included (EC-1).
+      log(redactSecrets(error instanceof Error ? `${error.name}: ${error.message}` : String(error)))
+      return SILENT
+    }
+  }
 
   return {
     name: HOOK_NAME,
-    async pre_inbound(context) {
-      const { event } = context
-      try {
-        const text = event.text.trim()
-        if (owns(event) && isDm(event) && APPROVE_COMMAND.test(text) && !(options.execPending?.(event) === true && EXEC_ANSWER.test(text))) {
-          if (pairing === undefined) return { block: true, message: PAIRING_OFF }
-          // The gateway lets a bare `/approve` through to the agent; here it is a pairing command without its code.
-          if (!APPROVE_WITH_CODE.test(text)) return { block: true, message: INVALID_CODE }
-          return await gateway.pre_inbound?.(context)
-        }
-        return await gateway.pre_inbound?.(context)
-      } catch (error) {
-        // Never thrown on: the runner would answer "hook failed" into the chat, a group included (EC-1).
-        const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-        try {
-          ;(options.write ?? ((line: string) => void process.stderr.write(`${line}\n`)))(`${HOOK_NAME}: ${event.platform}: ${redactSecrets(reason)}`)
-        } catch {
-          process.stderr.write(`${HOOK_NAME}: ${event.platform}: the hook failed and its log line could not be written\n`)
-        }
-        return SILENT
-      }
-    },
+    pre_inbound: (context) => platformOfEvent.run(context.event.platform, () => decide(context)),
   }
 }

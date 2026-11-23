@@ -1,5 +1,5 @@
 import type { GatewayHook, HookDecision, MessageEvent, PairingStore, PlatformName } from '@theokit/gateway'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createOwnerPolicyHook } from '../src/authorization/owner-policy-hook.js'
 import type { AuthorizationPolicy, DmPolicy } from '../src/authorization/policy.js'
@@ -322,18 +322,20 @@ describe('owner policy hook: a failure is a silent block', () => {
     expect(lines[0]).toContain('no code space left')
   })
 
-  it('silences a sender whose code issue() failed to issue for the hour: the gateway records the refusal first', async () => {
+  it('does not silence a sender whose code issue() failed to issue', async () => {
     const store = fakeStore({ issue: new Error('no code space left') })
     const { hook } = harness({ pairing: store })
     await decide(hook, messageEvent('telegram', 'hi', 'stranger'))
     await decide(hook, messageEvent('telegram', 'again', 'stranger'))
-    expect(store.calls.filter((call) => call.startsWith('issue:'))).toHaveLength(1)
+    // A recorded refusal would have answered the second DM without asking the store for a code.
+    expect(store.calls.filter((call) => call.startsWith('issue:'))).toHaveLength(2)
   })
 
-  it('blocks silently with one log line when isPaired throws', async () => {
+  it('blocks silently with one log line naming the platform when isPaired throws', async () => {
     const { hook, lines } = harness({ pairing: fakeStore({ isPairedThrows: true }) })
     expect(await decide(hook, messageEvent('telegram', 'hi', 'stranger'))).toEqual({ block: true })
     expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('telegram')
     expect(lines[0]).toContain('the store broke')
     expect(lines[0]).not.toContain('stranger')
   })
@@ -359,13 +361,19 @@ describe('owner policy hook: a failure is a silent block', () => {
     expect(lines[0]).not.toContain(token)
   })
 
-  it('blocks silently when write throws', async () => {
+  it('blocks silently and writes the stderr fallback line when write throws', async () => {
     const { hook } = harness({
       pairing: fakeStore({ isPairedThrows: true }),
       write: () => {
         throw new Error('the log sink is gone')
       },
     })
-    expect(await decide(hook, messageEvent('telegram', 'hi', 'stranger'))).toEqual({ block: true })
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      expect(await decide(hook, messageEvent('telegram', 'hi', 'stranger'))).toEqual({ block: true })
+      expect(stderr).toHaveBeenCalledWith('theoclaw-owner-policy: telegram: the hook failed and its log line could not be written\n')
+    } finally {
+      stderr.mockRestore()
+    }
   })
 })

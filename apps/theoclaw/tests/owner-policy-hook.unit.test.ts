@@ -121,7 +121,7 @@ describe('createOwnerPolicyHook (no I/O)', () => {
     const store: PairingStore = { issue: () => { throw new Error('disk full') }, approve: async () => ({ ok: false, reason: 'write_failed' }), isPaired: () => false }
     const { run } = build('pairing', store, { t: 0 }, (l) => void lines.push(l))
     expect(await run(event('hi'))).toEqual({ block: true })
-    expect(lines).toEqual(['access-policy: hook failed: Error: disk full'])
+    expect(lines).toEqual(['theoclaw-owner-policy: telegram: Error: disk full'])
   })
 
   it('does not admit a paired sender on an unauthenticated platform, and admits one in a group', async () => {

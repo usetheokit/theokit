@@ -594,6 +594,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
   }
   const stderr = logged(options.stderr ?? lineWriter(streams[streams.length - 1]))
   // Loaded before the start line, the mask and the shutdown: an unreadable pairing file leaves nothing behind.
+  // A bad platform setting throws here, before the pairing file is read or anything is installed.
   resolvePlatforms(options.env)
   const pairing = pairingStoreFor(policy)
   // First, once every setting is checked: the line holds a label and a directory, never a secret.

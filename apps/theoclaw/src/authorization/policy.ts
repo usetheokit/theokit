@@ -1,6 +1,9 @@
 import { senderKey } from '@theokit/gateway'
 import type { PlatformName } from '@theokit/gateway'
 
+/** The key an owner or a sender is compared by; the gateway's, which folds e-mail addresses to lower case (EC-4). */
+export { senderKey }
+
 import type { SupportedPlatform } from '../channels/platforms.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 
