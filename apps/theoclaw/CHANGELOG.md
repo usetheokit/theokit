@@ -12,6 +12,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - Runs on `@theokit/sdk` 12.0.0. The SDK explains the `<untrusted-tool-output>` tag in the system prompt while `toolResultGuard` delimits, so `untrusted-content.ts` no longer defines the notice and TheoClaw's own sentence is gone from the prompt; the guard stays on through `sendDefaults` (#2744).
+- The output mask flushes through the `flush` of the handle `Security.createMask().wrapStreams` returns (`@theokit/sdk` 12.0.0) instead of unwrapping and wrapping the streams again (#2758).
 - Named storage locations and the offsite transfer now come from `@theokit/host/backup` (`createStorageRegistry`, `uploadDirectory`, `downloadDirectory`); `src/backup/storage.ts` is gone. The host reads the existing flat `storage.json` and `.tcb` archives (encrypted or not), so nothing needs converting; new backups are written as `.tcbk` and the registry is rewritten in the host format at the next `storage init`. Observable differences: `storage list` prints `name`, `root`, `encrypted` and `state` (no free space), and a stalled HTTPS request ends after 60 s (#2751).
 
 - `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
