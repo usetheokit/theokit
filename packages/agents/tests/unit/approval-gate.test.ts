@@ -232,7 +232,13 @@ describe('createApprovalGate options', () => {
     const append = vi.fn(async () => undefined)
     const ledger = { append } as unknown as ApprovalLedger
     const key = (c: any) => (c.name === 'shell_exec' ? keyFor(scope)(c) : undefined)
-    const quiet = createApprovalGate({ store, key, ledger, recordUngoverned: false, ask: async () => 'once' })
+    const quiet = createApprovalGate({
+      store,
+      key,
+      ledger,
+      recordUngoverned: false,
+      ask: async () => 'once',
+    })
     await quiet.decide({ ...ctx('x'), name: 'read_file' })
     expect(append).not.toHaveBeenCalled()
     await quiet.decide(ctx('x'))

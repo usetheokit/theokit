@@ -158,7 +158,10 @@ export function createApprovalGate(options: ApprovalGateOptions): {
     } catch (error) {
       decision = { allowed: false, reason: `the decision failed: ${message(error)}`, by: 'none' }
     }
-    if (options.ledger !== undefined && (query !== undefined || options.recordUngoverned !== false)) {
+    if (
+      options.ledger !== undefined &&
+      (query !== undefined || options.recordUngoverned !== false)
+    ) {
       try {
         await options.ledger.append({
           at: new Date().toISOString(),
@@ -185,7 +188,12 @@ export function createApprovalGate(options: ApprovalGateOptions): {
     register(ctx: { on(hook: string, handler: (c: PreToolCallContext) => unknown): void }) {
       ctx.on('pre_tool_call', async (c: PreToolCallContext) => {
         const d = await decide(c)
-        return d.allowed ? undefined : { block: true, message: options.refusal?.(c.name, d.reason) ?? `"${c.name}" refused: ${d.reason}` }
+        return d.allowed
+          ? undefined
+          : {
+              block: true,
+              message: options.refusal?.(c.name, d.reason) ?? `"${c.name}" refused: ${d.reason}`,
+            }
       })
     },
   } as unknown as Plugin
