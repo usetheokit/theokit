@@ -4,7 +4,7 @@
  * `AgentOptions.sendDefaults` accepts only `toolResultGuard`, `pruneToolResults` and
  * `perToolTimeoutMs`. Using the SDK guard would put `doomLoop` back on every send site, the thing
  * `sendDefaults` removed for the untrusted-content options. This plugin counts per agent, once.
- * SDK request: let `sendDefaults` carry `doomLoop`, filed as usetheokit/theokit-sdk#1502. Delete this
+ * SDK request: let `sendDefaults` carry `doomLoop`. Not yet filed: no authenticated issue writer was available (scope decision of #2601, tracked in #2659). Delete this
  * module when it ships.
  */
 import type { PreToolCallContext } from '@theokit/sdk'
@@ -49,7 +49,10 @@ export function loopDetectionPlugin(options: LoopDetectionOptions = {}): General
         const key = signature(call.name, call.args)
         const repeats = recent.filter((entry) => entry === key).length
         if (repeats >= limit) {
-          return { block: true, message: `theoclaw: loop detected: ${call.name} was called with the same arguments ${repeats} times already; stopping the repeat, try something different` }
+          return {
+            block: true,
+            message: `theoclaw: loop detected: ${call.name} was called with the same arguments ${repeats} times already; stopping the repeat, try something different`,
+          }
         }
         recent.push(key)
         if (recent.length > window) recent.shift()
