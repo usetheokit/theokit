@@ -125,13 +125,24 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     const agents = readPkg('packages/agents/package.json').dependencies as Record<string, string>
     expect(agents['@theokit/sdk']).toBe('>=5.32.0 <12')
     const root = readPkg('package.json') as { pnpm: { overrides: Record<string, string> } }
-    // The tree runs on SDK 9 (the matrix legs set 10 and 11); dep-check's floor leg rewrites the override to the declared floor,
+    // The tree runs on SDK 11 (the matrix legs set 9 and 10); dep-check's floor leg rewrites the override to the declared floor,
     // 5.32.0, and runs this same suite there. Any other version is neither end of the range.
     const override = root.pnpm.overrides['@theokit/sdk'] ?? ''
     expect(
       override === '5.32.0' || /^(9|10|11)\./.test(override),
       `the root override installs @theokit/sdk ${override}, none of the 9.x to 11.x tops nor the 5.32.0 floor`,
     ).toBe(true)
+  })
+
+  it('test_the_apps_pin_sdk_11_or_newer', () => {
+    for (const manifest of ['apps/theocode/package.json', 'apps/theoclaw/package.json']) {
+      const pkg = readPkg(manifest)
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies } as Record<string, string>
+      const major = Number((deps['@theokit/sdk'] ?? '').split('.')[0])
+      expect(major, `${manifest} pins @theokit/sdk ${deps['@theokit/sdk']}`).toBeGreaterThanOrEqual(
+        11,
+      )
+    }
   })
 
   it('test_isClosed_rejects_the_open_shapes', () => {

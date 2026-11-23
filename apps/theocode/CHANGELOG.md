@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
 - The session PTY owner is `createPtyOwner` from `@theokit/agents-pty`; `createSessionPtyOwner` is gone (#2577).
 - Framework helpers (#2605): the `update_goal` tool and judge come from `createGoalSignal`, one per goal run; `resolveMentions` delegates to `resolveFileMentions`; agent shapes go through `declareAgentShape` and `shapeToolsAsCustomTools`; the session PTY owner wraps `createPtyOwner`. `turnErrorText` keeps its own text, with the gap named in `turn-error.ts`.
 - `@theokit/tui` is `^0.83.4`: the approval ledger is the toolkit's `createApprovalLedger` (immutable, pruned on backtrack), the clipboard copy is the toolkit's `copyToClipboard` with this app's `/export` guidance on top, and the terminal title is `sanitizeTitle` and `pushTerminalTitle`; `consent/pending-approvals.ts`, `consent/approvals.ts` and the three `clipboard-*` helpers are deleted (#2607).
