@@ -25,6 +25,8 @@ export default defineConfig({
     bridge: 'src/bridge-entry.ts',
     // Named sessions with interrupt and steer over `runAgentTurn`; an app-facing control surface.
     control: 'src/control-entry.ts',
+    // A reverse relay: a hosted MCP client reaches this agent's tools without an open port.
+    'mcp-relay': 'src/mcp-relay-entry.ts',
     testing: 'src/testing/index.ts',
     // M58 — pass-through subpaths mirroring the SDK's own split.
     sandbox: 'src/sandbox-entry.ts',

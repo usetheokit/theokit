@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1538 export(s) across 29 entry point(s).
+1547 export(s) across 29 entry point(s).
 
 Measured against `@theokit/sdk@9.0.0`.
 
@@ -54,6 +54,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
 | `CircuitBreaker` | value |
+| `codingAgentPreset` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
 | `compileAgentDefinition` | value |
@@ -330,6 +331,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `CatalogModelCost` | type |
 | `CheckpointSavedEvent` | type |
 | `CircuitBreakerOptions` | type |
+| `CodingAgentPresetOptions` | type |
 | `CompactionCallOptions` | type |
 | `CompactionStrategyConfig` | type |
 | `CompatSurface` | type |
@@ -488,7 +490,6 @@ Measured against `@theokit/sdk@9.0.0`.
 | `StreamEvent` | type |
 | `StreamFromEmitterOptions` | type |
 | `StructuredOutputErrorCode` | type |
-| `SubagentAgentDefinition` | type |
 | `SubagentDefinition` | type |
 | `SubAgentSpec` | type |
 | `Summarize` | type |
@@ -728,7 +729,6 @@ Measured against `@theokit/sdk@9.0.0`.
 | `StateUpdateEvent` | type |
 | `StreamEvent` | type |
 | `StreamFromEmitterOptions` | type |
-| `SubagentAgentDefinition` | type |
 | `SubAgentSpec` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
@@ -744,6 +744,22 @@ Measured against `@theokit/sdk@9.0.0`.
 | `ToolWalkResult` | type |
 | `WorkspaceProvider` | type |
 | `WorkspaceRecipe` | type |
+
+## `@theokit/agents/mcp-relay`
+
+| Symbol | Kind |
+|---|---|
+| `answerRelayJob` | value |
+| `createMcpRelayServer` | value |
+| `MCP_PATH` | value |
+| `POLL_PATH` | value |
+| `RESPOND_PATH` | value |
+| `startMcpRelayConnector` | value |
+| `McpRelayConnector` | type |
+| `McpRelayConnectorOptions` | type |
+| `McpRelayServerOptions` | type |
+| `RelayJob` | type |
+| `RelayTool` | type |
 
 ## `@theokit/agents/control`
 
@@ -1549,13 +1565,6 @@ Measured against `@theokit/sdk@9.0.0`.
 | `KnownAgentRunErrorCode` | type |
 | `TurnFailure` | type |
 | `TurnFailureHints` | type |
-
-## `@theokit/agents/presets`
-
-| Symbol | Kind |
-|---|---|
-| `codingAgentPreset` | value |
-| `CodingAgentPresetOptions` | type |
 
 ## `@theokit/agents/evals`
 

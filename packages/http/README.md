@@ -252,7 +252,7 @@ const Roles = createDecorator<string[]>()
 | `./app` | App-level composition |
 | `./runtime/node` | The Node runtime adapter |
 | `./action-encryption`, `./server-inserted-html`, `./css-resource` | Opt-in capabilities kept off the main bundle |
-| `./guards` | Bearer token and loopback bind guards (see below) |
+| `./guards` | Bearer token and loopback bind guards, and `createGrantStore` (see below) |
 
 ## Guards: bearer token and loopback bind
 
@@ -373,3 +373,17 @@ who do not.
 ## Licence
 
 Apache-2.0 — see `LICENSE`.
+
+## Scoped, revocable credentials
+
+`createGrantStore(file)` keeps named credentials in a file as SHA-256 hashes (mode 0600), never in clear.
+
+```ts
+import { createGrantStore } from '@theokit/http/guards'
+
+const grants = createGrantStore('/var/lib/app/grants.json')
+const { credential } = await grants.create('alice', ['read_file']) // shown once
+await grants.authenticate(credential) // the grant, with its scopes
+await grants.revoke('alice')
+await grants.authenticate(credential) // undefined
+```
