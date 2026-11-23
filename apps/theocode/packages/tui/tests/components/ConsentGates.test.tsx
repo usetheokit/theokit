@@ -81,4 +81,95 @@ describe('gate decisions', () => {
       expect.objectContaining({ message: expect.stringContaining('could not persist trust') }),
     )
   })
+
+  it('approves the hook on Enter without a toast', async () => {
+    const setToast = vi.fn()
+    const approveHook = vi.fn().mockResolvedValue(undefined)
+    const consent = { approveHook, refuseHook: vi.fn(), pendingHooks: [hook] } as never
+    const { stdin } = render(
+      <InkInputProvider>
+        <HooksGate consent={consent} pendingHooks={[hook]} setToast={setToast} />
+      </InkInputProvider>,
+    )
+    await new Promise((r) => setTimeout(r, 50))
+    stdin.write('\r')
+    await new Promise((r) => setTimeout(r, 50))
+    expect(approveHook).toHaveBeenCalledWith('fp')
+    expect(setToast).not.toHaveBeenCalled()
+  })
+
+  it('persists trust on Enter, reloads the config and applies it without a toast', async () => {
+    const setToast = vi.fn()
+    const setApprovalMode = vi.fn()
+    const setEffort = vi.fn()
+    const trust = vi.fn().mockResolvedValue(undefined)
+    const SESSION = {
+      reloadConfig: vi.fn(),
+      cfg: () => ({ approvalMode: 'auto-edit' }),
+      effort: () => 'high',
+    }
+    const { stdin } = render(
+      <InkInputProvider>
+        <TrustGate
+          consent={{ trust } as never}
+          SESSION={SESSION as never}
+          setToast={setToast}
+          setApprovalMode={setApprovalMode}
+          setEffort={setEffort}
+          exit={vi.fn()}
+        />
+      </InkInputProvider>,
+    )
+    await new Promise((r) => setTimeout(r, 50))
+    stdin.write('\r')
+    await new Promise((r) => setTimeout(r, 50))
+    expect(trust).toHaveBeenCalledTimes(1)
+    expect(SESSION.reloadConfig).toHaveBeenCalledTimes(1)
+    expect(setApprovalMode).toHaveBeenCalledWith('auto-edit')
+    expect(setEffort).toHaveBeenCalledWith('high')
+    expect(setToast).not.toHaveBeenCalled()
+  })
+
+  it('toasts when trust is granted but the settings cannot be reloaded', async () => {
+    const setToast = vi.fn()
+    const SESSION = {
+      reloadConfig: () => {
+        throw new Error('bad json')
+      },
+      cfg: () => ({ approvalMode: 'suggest' }),
+      effort: () => 'low',
+    }
+    const { stdin } = render(
+      <InkInputProvider>
+        <TrustGate
+          consent={{ trust: vi.fn().mockResolvedValue(undefined) } as never}
+          SESSION={SESSION as never}
+          setToast={setToast}
+          setApprovalMode={vi.fn()}
+          setEffort={vi.fn()}
+          exit={vi.fn()}
+        />
+      </InkInputProvider>,
+    )
+    await new Promise((r) => setTimeout(r, 50))
+    stdin.write('\r')
+    await new Promise((r) => setTimeout(r, 50))
+    expect(setToast).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: 'error', message: expect.stringContaining('bad json') }),
+    )
+  })
+
+  it('shows the warning before the key hint for a hook prompt', () => {
+    const { lastFrame } = render(
+      <HooksGate
+        consent={{ pendingHooks: [hook] } as never}
+        pendingHooks={[hook]}
+        setToast={vi.fn()}
+      />,
+    )
+    const frame = lastFrame() ?? ''
+    expect(frame.indexOf('Approve only what you recognise')).toBeLessThan(
+      frame.indexOf('Esc to reject'),
+    )
+  })
 })
