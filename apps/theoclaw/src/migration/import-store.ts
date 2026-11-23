@@ -7,7 +7,7 @@ import { type InlineSkill, type McpServerConfig, Skill } from '@theokit/sdk'
 import { stringify as stringifyYaml } from 'yaml'
 
 import { describeError, TheoClawConfigError } from '../control-plane/errors.js'
-import { binaryOnPath } from '../skills/registry.js'
+import { binaryOnPath } from '@theokit/sdk/skills'
 
 /** The MCP servers of an import, as `loadMcpJson` returns them (the shape of `@theokit/agents`'s `McpServersMap`). */
 export type ImportedMcpServers = Record<string, McpServerConfig>
