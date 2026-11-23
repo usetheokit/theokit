@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1580 export(s) across 30 entry point(s).
+1584 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@11.0.0`.
 
@@ -74,6 +74,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `costAmountUsd` | value |
 | `CostBudgetExceededError` | value |
 | `costGuard` | value |
+| `createAgentEventMask` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
 | `createDraft` | value |
@@ -289,6 +290,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `AgentCard` | type |
 | `AgentConfig` | type |
 | `AgentDefinition` | type |
+| `AgentEventMask` | type |
 | `AgentExecutionContext` | type |
 | `AgentManifest` | type |
 | `AgentManifestEntry` | type |
@@ -548,6 +550,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `compileTools` | value |
 | `completeFromTurn` | value |
 | `ContextualTool` | value |
+| `createAgentEventMask` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
 | `createOpenAICompatibleRoutes` | value |
@@ -634,6 +637,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `WRITE_SCOPED_TOOLS` | value |
 | `AfterToolCallContext` | type |
 | `AgentDefinition` | type |
+| `AgentEventMask` | type |
 | `AgentExecutionContext` | type |
 | `AgentManifest` | type |
 | `AgentManifestEntry` | type |

@@ -5,8 +5,6 @@ import { TheoClawConfigError, describeError } from '../control-plane/errors.js'
 /** The variable that compacts a session after a turn whose prompt reached this many tokens (OC-53). */
 export const COMPACT_AT_VARIABLE = 'THEOCLAW_COMPACT_AT'
 
-const COMPACT_COMMAND = /^\/compact(?:\s+([\s\S]*))?$/
-
 /** The line `/compact` answers with when the session has no transcript to compact. */
 export const COMPACT_FAILED_REPLY = 'I could not compact this conversation; it goes on unchanged.'
 
@@ -33,15 +31,6 @@ export function readCompactSettings(
     throw new TheoClawConfigError(`${COMPACT_AT_VARIABLE} must be a positive whole number of tokens`, { variable: COMPACT_AT_VARIABLE })
   }
   return { run: run ?? ((agentId, trigger) => Agent.compact(agentId, { trigger })), ...(raw === '' ? {} : { at }), write }
-}
-
-/**
- * The instructions of a `/compact` message, matched on the whole trimmed text: `''` for a bare
- * one, undefined for anything else. The SDK's summarizer takes no instructions, so they are accepted and unused.
- */
-export function compactOf(text: string): string | undefined {
-  const match = COMPACT_COMMAND.exec(text.trim())
-  return match === null ? undefined : (match[1] ?? '').trim()
 }
 
 /** Compact the session's transcript and say so in one line; a failure is a line, never a thrown error. */
