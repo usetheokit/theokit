@@ -23,7 +23,7 @@ import { assertSupportedRuntime } from '../runtime.js'
 
 import { loadConfiguration } from '../config-file.js'
 import { resolveInstance } from '../instance.js'
-import { takeInstanceLock } from './instance-lock.js'
+import { takeInstanceLock } from '../instance.js'
 
 /** A backup or a restore that was refused: the reason and the path, never a file's content. */
 export class BackupRefusal extends Error {
@@ -148,7 +148,7 @@ export async function backupInstance(env: NodeJS.ProcessEnv, dir: string, option
     if (within(real, source)) throw new BackupRefusal(`the backup directory ${target} is inside ${targets[root]}, which it copies`, target)
   }
   if (!isEmptyOrAbsent(target)) throw new BackupRefusal(`the backup directory ${target} is not empty`, target)
-  const lock = options.live ? undefined : takeInstanceLock(targets.state)
+  const lock = options.live ? undefined : await takeInstanceLock(targets.state)
   try {
     const written = await refusing(() =>
       hostBackup({
@@ -164,7 +164,7 @@ export async function backupInstance(env: NodeJS.ProcessEnv, dir: string, option
     chmodSync(join(target, MANIFEST), 0o600)
     return manifest
   } finally {
-    lock?.release()
+    await lock?.release()
   }
 }
 
@@ -293,7 +293,7 @@ export async function restoreInstance(env: NodeJS.ProcessEnv, dir: string, optio
   const source = resolve(dir)
   const manifest = readManifest(source)
   verifyBackup(source, manifest)
-  const lock = takeInstanceLock(targets.state)
+  const lock = await takeInstanceLock(targets.state)
   let adapted: ReturnType<typeof packageSource> | undefined
   try {
     assertEmptyOrAbsent(targets.state)
@@ -315,7 +315,7 @@ export async function restoreInstance(env: NodeJS.ProcessEnv, dir: string, optio
     return manifest
   } finally {
     adapted?.cleanup()
-    lock.release()
+    await lock.release()
   }
 }
 

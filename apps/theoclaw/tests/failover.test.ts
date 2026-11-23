@@ -1,63 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { TurnAgent, TurnRun } from '../src/agent-port.js'
+import type { TurnAgent } from '../src/agent-port.js'
 import { createAgentFactory, type CreateAgent } from '../src/control-plane/agent-factory.js'
-import { parseFallbackModel, parseThinkingLevel, withFailover } from '../src/agent/failover.js'
-
-function run(messages: string[], status: string): TurnRun {
-  return {
-    async *stream() {
-      for (const type of messages) yield { type }
-    },
-    wait: async () => ({ status }),
-    cancel: async () => {},
-  }
-}
-
-async function drain(turn: TurnRun): Promise<string[]> {
-  const seen: string[] = []
-  for await (const item of turn.stream()) seen.push(item.type)
-  return seen
-}
-
-describe('failover between providers (OC-47)', () => {
-  it('a primary whose send throws falls over to the secondary in the same turn', async () => {
-    const primary: TurnAgent = { send: () => Promise.reject(new Error('provider down')) }
-    const secondary: TurnAgent = { send: async () => run(['assistant'], 'finished') }
-    const turn = await withFailover(primary, async () => secondary).send('hi')
-    expect(await drain(turn)).toEqual(['assistant'])
-    expect((await turn.wait()).status).toBe('finished')
-  })
-
-  it('a primary run that fails with no output falls over, and the secondary result is the turn', async () => {
-    const sent: unknown[] = []
-    const primary: TurnAgent = { send: async () => run([], 'failed') }
-    const secondary: TurnAgent = {
-      send: async (message) => (sent.push(message), run(['assistant'], 'finished')),
-    }
-    const turn = await withFailover(primary, async () => secondary).send('hello')
-    expect(await drain(turn)).toEqual(['assistant'])
-    expect(sent).toEqual(['hello'])
-    expect((await turn.wait()).status).toBe('finished')
-  })
-
-  it('a primary that streams run_started then an error falls over to the secondary', async () => {
-    const primary: TurnAgent = { send: async () => run(['run_started', 'error'], 'failed') }
-    const secondary: TurnAgent = { send: async () => run(['run_started', 'assistant'], 'finished') }
-    const turn = await withFailover(primary, async () => secondary).send('hi')
-    expect(await drain(turn)).toEqual(['run_started', 'assistant'])
-    expect((await turn.wait()).status).toBe('finished')
-  })
-
-  it('a primary that already streamed stays the turn and the secondary is never built', async () => {
-    let built = false
-    const primary: TurnAgent = { send: async () => run(['assistant'], 'failed') }
-    const turn = await withFailover(primary, async () => ((built = true), primary)).send('x')
-    expect(await drain(turn)).toEqual(['assistant'])
-    expect(built).toBe(false)
-    expect((await turn.wait()).status).toBe('failed')
-  })
-})
+import { parseFallbackModel, parseThinkingLevel } from '../src/agent/create-agent.js'
 
 describe('provider settings', () => {
   it('reads the thinking level and the fallback model', () => {
@@ -69,36 +14,26 @@ describe('provider settings', () => {
   })
 })
 
-describe('failover wiring', () => {
-  it('builds the secondary lazily with the fallback model and passes the thinking level', async () => {
-    const built: Array<{ model: string; thinking?: string }> = []
+describe('model fallback wiring (OC-47)', () => {
+  const primary: TurnAgent = { send: async () => ({ stream: async function* () {}, wait: async () => ({ status: 'finished' }), cancel: async () => {} }) }
+
+  it('hands the fallback model to the SDK as modelFallback, with the thinking level, on one agent', async () => {
+    const built: Array<{ model: string; thinking?: string; modelFallback?: unknown }> = []
     const create: CreateAgent = async (options) => {
-      built.push({
-        model: options.model,
-        ...(options.thinking === undefined ? {} : { thinking: options.thinking }),
-      })
-      return options.model === 'a'
-        ? { send: () => Promise.reject(new Error('down')) }
-        : { send: async () => run(['assistant'], 'finished') }
+      built.push({ model: options.model, ...(options.thinking === undefined ? {} : { thinking: options.thinking }), modelFallback: options.modelFallback })
+      return primary
     }
-    const env = {
-      THEOCLAW_MODEL: 'a',
-      THEOCLAW_MODEL_FALLBACK: 'b',
-      THEOCLAW_THINKING: 'high',
-      OPENROUTER_API_KEY: 'k',
-    }
+    const env = { THEOCLAW_MODEL: 'a', THEOCLAW_MODEL_FALLBACK: 'b', THEOCLAW_THINKING: 'high', OPENROUTER_API_KEY: 'k' }
     const agent = await createAgentFactory(env, create)()
-    expect(built).toEqual([{ model: 'a', thinking: 'high' }])
-    expect(await drain(await agent.send('hi'))).toEqual(['assistant'])
-    expect(built.map((entry) => entry.model)).toEqual(['a', 'b'])
+    expect(agent).toBe(primary)
+    expect(built).toEqual([{ model: 'a', thinking: 'high', modelFallback: { models: ['b'] } }])
   })
 
-  it('with no fallback the primary agent is returned as is', async () => {
-    const primary: TurnAgent = { send: async () => run([], 'finished') }
-    const agent = await createAgentFactory(
-      { THEOCLAW_MODEL: 'a', OPENROUTER_API_KEY: 'k' },
-      async () => primary,
-    )()
-    expect(agent).toBe(primary)
+  it('sets no modelFallback without a fallback, or when it names the primary', async () => {
+    const seen: unknown[] = []
+    const create: CreateAgent = async (options) => (seen.push(options.modelFallback), primary)
+    await createAgentFactory({ THEOCLAW_MODEL: 'a', OPENROUTER_API_KEY: 'k' }, create)()
+    await createAgentFactory({ THEOCLAW_MODEL: 'a', THEOCLAW_MODEL_FALLBACK: 'a', OPENROUTER_API_KEY: 'k' }, create)()
+    expect(seen).toEqual([undefined, undefined])
   })
 })

@@ -3,7 +3,6 @@ import type { BasePlatformAdapter, GatewayHook, PlatformName } from '@theokit/ga
 import type { TurnAgent } from '../agent-port.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { deliverText, frameUntrusted, runAgentText } from '@theokit/gateway-agent'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from '../control-plane/errors.js'
 import type { EmailTriggerSettings } from './trigger-settings.js'
 
@@ -48,7 +47,7 @@ export function createEmailTrigger(options: EmailTriggerOptions): EmailTrigger {
   const pending = new Set<Promise<void>>()
 
   const run = async (sender: string, body: string): Promise<void> => {
-    const outcome = await withAgent((agent) => runAgentText(agent, promptOf(settings, sender, body), { sendOptions: { ...untrustedContentSendOptions() } }))
+    const outcome = await withAgent((agent) => runAgentText(agent, promptOf(settings, sender, body)))
     if (!outcome.ok) {
       write(`email trigger: run failed (${outcome.failure})`)
       return

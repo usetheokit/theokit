@@ -3,7 +3,6 @@ import { fromSdkMessage } from '@theokit/presenter'
 import type { ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from './channel-loop.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import { type DisplayConfig, resolveDisplay } from './display-config.js'
@@ -15,7 +14,7 @@ import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-com
 import type { SessionLease } from '../sessions/session-agents.js'
 import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import type { UsageMode } from './usage-hook.js'
-import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
+import { THINKING_LEVELS, type ThinkingLevel } from '../agent/create-agent.js'
 import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
 import { AdvisorHistory, reviewQuietly, steerNote, type AdvisorSettings } from './advisor.js'
 
@@ -182,7 +181,7 @@ function watchTurn(settings: AdvisorSettings, history: AdvisorHistory, key: stri
         }
         if (!running) return
         try {
-          await agent.send(steerNote(advice), { ...untrustedContentSendOptions(), queueMode: 'steer' })
+          await agent.send(steerNote(advice), { queueMode: 'steer' })
           settings.write(`advisor: steered session ${key}: ${advice}`)
         } catch {
           settings.write(`advisor: could not steer session ${key}`)
@@ -222,7 +221,7 @@ interface TurnRecord {
 function observed(agent: TurnAgent, record: TurnRecord, options: ReplyHandlerOptions, event: MessageEvent, advisor: AdvisorWatch | undefined): TurnAgent {
   return {
     send: async (prompt, sendOptions) => {
-      const run = await agent.send(prompt, { ...untrustedContentSendOptions(), ...sendOptions })
+      const run = await agent.send(prompt, sendOptions)
       advisor?.start(agent, typeof prompt === 'string' ? prompt : prompt.text)
       let waiting: ReturnType<TurnRun['wait']> | undefined
       const wait = (): ReturnType<TurnRun['wait']> => {
@@ -309,7 +308,6 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
     noAnswerText: NO_ANSWER_REPLY,
     errorText: ERROR_REPLY,
     secrets,
-    sendOptions: { ...untrustedContentSendOptions() },
     progress: (output) => {
       const lines = gate.lines(output)
       return lines.length === 0 ? undefined : lines.join('\n')
@@ -334,7 +332,7 @@ async function answerSteer(options: ReplyHandlerOptions, event: MessageEvent, no
   return options.withAgent(event, async (lease) => {
     try {
       if ((runningTurns.get(lease.agent) ?? 0) === 0) return STEER_IDLE_REPLY
-      await lease.agent.send(note, { ...untrustedContentSendOptions(), queueMode: 'steer' })
+      await lease.agent.send(note, { queueMode: 'steer' })
       return STEERED_REPLY
     } finally {
       lease.release()

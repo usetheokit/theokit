@@ -35,7 +35,7 @@ import {
 } from './backup/storage.js'
 import { portState, StatePortRefusal } from './state-port.js'
 import type { DatabaseDeps } from './scheduler/postgres-job-store.js'
-import { InstanceLockedError } from './backup/instance-lock.js'
+import { InstanceLockedError } from '@theokit/sdk/persistence'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonRestart, daemonStatus, daemonUninstall } from './daemon.js'
 import { runCommand, type Runner } from './run-command.js'

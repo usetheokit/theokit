@@ -4,7 +4,6 @@ import type { AgentOptions, CustomTool, MemorySettings } from '@theokit/sdk'
 import { readFacts } from '@theokit/sdk/internal/memory-store'
 
 import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import type { MemoryBackend } from './backend.js'
 import { MemoryStore, OWNER_SCOPE, type StoredTurn } from './memory-store.js'
 import { sessionSearchTool } from './memory-tools.js'
@@ -178,10 +177,7 @@ export function createMemory(
         get(target, property) {
           if (property === 'send') {
             return async (message: TurnMessage, options?: Parameters<TurnAgent['send']>[1]) => {
-              const run = await target.send(message, {
-                ...options,
-                ...untrustedContentSendOptions(),
-              })
+              const run = await target.send(message, options)
               let afterRun = (): void => undefined
               if (mirrorsReviews) {
                 try {

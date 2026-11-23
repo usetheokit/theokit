@@ -1,5 +1,5 @@
 import { maskSecrets } from '../channels/channel-loop.js'
-import { createStreamMask } from '../channels/stream-mask.js'
+import { Security } from '@theokit/sdk'
 import type { AgentStreamEvent } from '@theokit/agents/bridge'
 
 import type { TurnEvent } from './turn.js'
@@ -119,7 +119,7 @@ function maskEvent(event: AgentStreamEvent, secrets: readonly string[]): AgentSt
  * every string in it masked. A value split across a tool event is two releases, each masked alone.
  */
 export function createEventMask(secrets: readonly string[], emit: (event: TurnEvent) => void): EventMask {
-  const stream = createStreamMask(secrets)
+  const stream = Security.createMask(secrets, { minLength: 1 }).stream()
   const flush = (): void => {
     const held = stream.flush()
     if (held !== '') emit({ type: 'text_delta', content: held })

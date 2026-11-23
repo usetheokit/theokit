@@ -17,10 +17,9 @@ import { teeToLogFile } from './ops/log-tee.js'
 import { watchConfiguration } from './ops/hot-reload.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
-import { resolveInstance, type TheoClawInstance } from './instance.js'
+import { claimInstance, removeOwnLockSync, resolveInstance, type TheoClawInstance } from './instance.js'
 import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
 import { applyProxyEnvironment } from './ops/proxy.js'
-import { claimInstance } from './backup/instance-lock.js'
 import { readTelemetrySettings, registerTelemetry, type RegisteredTelemetry } from './telemetry/otel.js'
 
 /**
@@ -87,8 +86,9 @@ try {
   instance = resolveInstance(process.env, { homeDir: homedir() })
   // The instance lock before `applyInstance` creates the targets (B-400 FR-010): a start refused
   // while a backup or a restore runs leaves both as they were. Released when the process exits.
-  const release = claimInstance(instance, process.env)
-  if (release !== undefined) process.once('exit', release)
+  const lock = await claimInstance(instance, process.env)
+  // `exit` allows no await: remove the file synchronously. A lock left by a crash is taken over by the next start.
+  if (lock !== undefined) process.once('exit', () => removeOwnLockSync(lock.path))
   // After the instance, so a profile's own state directory is the one read (FR-010, FR-011).
   const mcp = requireImportedMcp(process.env)
   const setup = readImportAtStart(process.env, (line) => process.stderr.write(`${line}\n`))
