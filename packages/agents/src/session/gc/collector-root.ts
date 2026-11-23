@@ -50,6 +50,9 @@ export class CollectorRootNotOwnedError extends TheokitAgentError {
   }
 }
 
+/** Reported as the owner of a marker file the caller's format could not interpret. */
+const UNRECOGNISED_MARKER = '(unrecognised marker)'
+
 /**
  * A marker another app already wrote, under its own file name and schema. The file sits beside
  * `projects/` like the standard one. `ownerOf` receives the parsed JSON and returns the owning app's
@@ -116,9 +119,6 @@ export function collectorRootOwner(
   }
   return { app: owner !== undefined && owner.length > 0 ? owner : UNRECOGNISED_MARKER }
 }
-
-/** Reported as the owner of a marker file the caller's format could not interpret. */
-export const UNRECOGNISED_MARKER = '(unrecognised marker)'
 
 /**
  * Claim the root for `owner`. Idempotent for the same app; never replaces another app's marker. With
