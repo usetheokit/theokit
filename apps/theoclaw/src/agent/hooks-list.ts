@@ -6,7 +6,8 @@ import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { resolveInstance } from '../instance.js'
-import { hookFingerprint, parseApprovedHooks } from './hook-approval.js'
+import { hookFingerprint } from '@theokit/agents/hooks'
+import { hookIdentity, parseApprovedHooks } from './hook-approval.js'
 
 /**
  * `theoclaw hooks list` (OC-87): one line per command hook in `<workspace>/.theokit/settings.json`,
@@ -51,11 +52,14 @@ export function hooksCommand(args: readonly string[], io: HooksIo): number {
       if (!Array.isArray(groups)) continue
       for (const group of groups as unknown[]) {
         const entries = isRecord(group) ? group.hooks : undefined
+        const matcher = isRecord(group) && typeof group.matcher === 'string' ? group.matcher : undefined
         if (!Array.isArray(entries)) continue
         for (const entry of entries as unknown[]) {
           if (!isRecord(entry) || entry.type !== 'command' || typeof entry.command !== 'string') continue
           const timeoutMs = typeof entry.timeout === 'number' && entry.timeout > 0 ? Math.round(entry.timeout * 1000) : DEFAULT_TIMEOUT_MS
-          const fingerprint = hookFingerprint({ sourceEvent: event, command: entry.command, timeoutMs })
+          const fingerprint = hookFingerprint(
+            hookIdentity({ sourceEvent: event, command: entry.command, timeoutMs, ...(matcher === undefined ? {} : { matcher }) }),
+          )
           lines.push(`${event}\t${fingerprint}\t${approved.has(fingerprint) ? 'approved' : 'not approved'}\n`)
         }
       }
