@@ -7,13 +7,32 @@ import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type * as Bridge from '@theokit/agents/bridge'
-import type { StreamEvent } from '@theokit/agents/bridge'
+/** One event of a run's stream: what `@theokit/agents/bridge` calls a `StreamEvent`, declared here so this file's types do not pull the agents declarations into theokit's. */
+export interface HostedChatEvent {
+  readonly type: string
+  readonly [key: string]: unknown
+}
 
+/** The part of `@theokit/agents/bridge` this file uses, declared here so no agents type reaches theokit's declarations. */
+interface Bridge {
+  readonly readCappedBody: (request: Request, maxBytes: number) => Promise<Uint8Array<ArrayBuffer>>
+  readonly BodyTooLargeError: abstract new (...args: never[]) => Error
+  readonly generateAgentRoutes: (options: {
+    readonly walkResult: { readonly route: string }
+    readonly createRun: (message: string, sessionId: string) => AsyncIterable<HostedChatEvent>
+  }) => readonly {
+    readonly method: string
+    readonly path: string
+    readonly handler: (request: Request) => Promise<Response>
+  }[]
+}
 /** Loaded on first use: the server barrel re-exports this file, and most servers never host a chat. */
-const loadBridge = (): Promise<typeof Bridge> => import('@theokit/agents/bridge')
+const BRIDGE_SPECIFIER = '@theokit/agents/bridge'
+const loadBridge = (): Promise<Bridge> =>
+  // A variable specifier on purpose: a literal one makes the declaration build load the agents declarations for this entry, which runs it out of memory.
+  import(/* @vite-ignore */ BRIDGE_SPECIFIER) as Promise<Bridge>
 /** Set once `createHostedChat` has loaded it, so a request awaits nothing extra before its body read. */
-let bridgeLoaded: typeof Bridge | undefined
+let bridgeLoaded: Bridge | undefined
 
 /** The longest chat id a hosted chat accepts. */
 const HOSTED_CHAT_MAX_ID_LENGTH = 128
@@ -32,7 +51,7 @@ export interface HostedChatOptions {
     message: string,
     chatId: string,
     signal: AbortSignal,
-  ) => AsyncIterable<StreamEvent>
+  ) => AsyncIterable<HostedChatEvent>
   /**
    * The gate of a chat post, run before the body is read: a `Response` refuses it (return the 401 or
    * 403 yourself), an access lets it in. Decide only from what you can trust; never from a header a
