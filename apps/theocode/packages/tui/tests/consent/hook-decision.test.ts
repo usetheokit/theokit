@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   approveHook: vi.fn(),
   level: 'untrusted',
   hooks: [] as Array<Record<string, unknown>>,
+  approved: new Set<string>(),
 }))
 
 vi.mock('@theocode/agent/config', () => ({
@@ -20,7 +21,7 @@ vi.mock('@theocode/agent/config', () => ({
 }))
 vi.mock('@theocode/agent/hooks', () => ({
   parseHooks: () => [],
-  classifyHooks: () => m.hooks,
+  classifyHooks: () => m.hooks.filter((h) => !m.approved.has(h.fingerprint as string)),
   approveHook: m.approveHook,
 }))
 
@@ -41,7 +42,10 @@ function mount(): { get: () => Consent } {
 
 beforeEach(() => {
   m.trustDir.mockReset().mockResolvedValue(undefined)
-  m.approveHook.mockReset().mockResolvedValue(undefined)
+  m.approved.clear()
+  m.approveHook.mockReset().mockImplementation(async (_cwd: string, sp: unknown) => {
+    for (const h of m.hooks) if (h.spec === sp) m.approved.add(h.fingerprint as string)
+  })
   m.level = 'untrusted'
   m.hooks = [classified]
 })
@@ -75,5 +79,62 @@ describe('hook decisions through the framework consent adapter', () => {
     act(() => c.get().refuseHook('fp1'))
     expect(m.approveHook).not.toHaveBeenCalled()
     expect(c.get().pendingHooks).toEqual([])
+  })
+
+  it('drops an approved hook from the pending list', async () => {
+    const c = mount()
+    await act(() => c.get().approveHook('fp1'))
+    expect(c.get().pendingHooks).toEqual([])
+  })
+
+  it('approves the spec of the matching fingerprint among several', async () => {
+    const other = {
+      spec: { event: 'PostToolUse', command: 'ls' },
+      fingerprint: 'fp2',
+      status: 'new',
+    }
+    m.hooks = [classified, other]
+    const c = mount()
+    await act(() => c.get().approveHook('fp2'))
+    expect(m.approveHook).toHaveBeenCalledTimes(1)
+    expect(m.approveHook).toHaveBeenCalledWith('/proj', other.spec)
+  })
+
+  it('refusing one hook leaves the others pending, and refusals accumulate', () => {
+    const other = {
+      spec: { event: 'PostToolUse', command: 'ls' },
+      fingerprint: 'fp2',
+      status: 'new',
+    }
+    m.hooks = [classified, other]
+    const c = mount()
+    act(() => c.get().refuseHook('fp1'))
+    expect(c.get().pendingHooks.map((h) => h.fingerprint)).toEqual(['fp2'])
+    act(() => c.get().refuseHook('fp2'))
+    expect(c.get().pendingHooks).toEqual([])
+    expect(m.approveHook).not.toHaveBeenCalled()
+  })
+
+  it('allows approval to be retried after a persistence failure', async () => {
+    m.approveHook.mockRejectedValueOnce(new Error('disk full'))
+    const c = mount()
+    await act(async () => {
+      await expect(c.get().approveHook('fp1')).rejects.toThrow('disk full')
+    })
+    await act(() => c.get().approveHook('fp1'))
+    expect(m.approveHook).toHaveBeenCalledTimes(2)
+    expect(c.get().pendingHooks).toEqual([])
+  })
+
+  it('maps a modified hook with its previous command', () => {
+    m.hooks = [{ ...classified, status: 'modified', previousCommand: 'echo old' }]
+    const c = mount()
+    expect(c.get().pendingHooks[0]).toMatchObject({
+      fingerprint: 'fp1',
+      event: 'PreToolUse',
+      command: 'echo hi',
+      status: 'modified',
+      previousCommand: 'echo old',
+    })
   })
 })

@@ -46,17 +46,14 @@ interface Message {
 
 const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [--json] | gc [--dry-run] [--days <n>]'
 
-/** The user and assistant turns of a session, read by the SDK; entries with no text are dropped. */
-async function readMessages(session: ChatSession): Promise<Message[]> {
-  const stored = await readFullHistory({
-    cwd: session.workspace,
-    transcript: session.transcript,
-  })
-  // The reader's `text` also renders tool calls and results; the CLI shows only what was said.
+/** The user and assistant turns of a session, read by the framework; entries with no text are dropped. */
+function readMessages(session: ChatSession): Message[] {
+  const stored = readFullHistory({ transcript: session.transcript })
+  // The CLI shows only what was said, not tool calls and results.
   return stored
     .map((entry) => ({
       role: entry.role,
-      text: (entry.parts ?? []).map((part) => (part.type === 'text' ? part.text : '')).join(''),
+      text: entry.parts.map((part) => (part.type === 'text' ? part.text : '')).join(''),
     }))
     .filter((entry) => entry.text !== '')
 }
@@ -182,7 +179,7 @@ async function shareCommand(
   try {
     writeFileSync(
       fd,
-      `${JSON.stringify({ id: session.id, messages: await readMessages(session) })}\n`,
+      `${JSON.stringify({ id: session.id, messages: readMessages(session) })}\n`,
     )
     fchmodSync(fd, 0o444)
   } finally {
@@ -203,7 +200,7 @@ export async function resumeCommand(args: readonly string[], io: SessionsIo): Pr
     return 1
   }
   io.stdout.write(`resuming session ${last.id}\n`)
-  for (const message of await readMessages(last))
+  for (const message of readMessages(last))
     io.stdout.write(`${message.role}: ${message.text}\n`)
   return 0
 }
@@ -285,7 +282,7 @@ export async function sessionsCommand(args: readonly string[], io: SessionsIo): 
   if (verb === 'list') {
     for (const entry of sessions) {
       io.stdout.write(
-        `${entry.id}\t${(await readMessages(entry)).length} messages\t${entry.modifiedAt.toISOString()}\n`,
+        `${entry.id}\t${(readMessages(entry)).length} messages\t${entry.modifiedAt.toISOString()}\n`,
       )
     }
     return 0
@@ -293,7 +290,7 @@ export async function sessionsCommand(args: readonly string[], io: SessionsIo): 
   const wanted = operands[0]!
   const session = pickSession(sessions, wanted, io)
   if (session === undefined) return 1
-  const messages = await readMessages(session)
+  const messages = readMessages(session)
   if (verb === 'show') {
     io.stdout.write(
       `id: ${session.id}\nmessages: ${messages.length}\nupdated: ${session.modifiedAt.toISOString()}\n`,

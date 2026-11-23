@@ -83,7 +83,7 @@ describe('THEOCLAW_COMPUTER', () => {
     const png = framebuffer(Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(200)]))
     const error = refusal(() => readComputer(onEnv({ THEOCLAW_COMPUTER_FRAMEBUFFER: png }), POSTURE, FOUND))
     expect(error.message).toContain(png)
-    expect(error.message).toContain('pixmap_format')
+    expect(error.message).toContain('header_size')
   })
 
   it('refuses a framebuffer path that is a directory or is missing', () => {
