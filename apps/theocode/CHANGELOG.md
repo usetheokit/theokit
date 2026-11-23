@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `ToolRegistry` builds its tools from `codingAgentTools` in `@theokit/agents/presets` instead of binding each factory itself (#2741).
 - `run` passes `format` to `runHeadlessTurn` and uses its result (final text, usage, stop reason) instead of tapping a muted turn; `readPrompt`, `finalMessage`, `toContentChunk` and the failed-call set are gone in favour of `readHeadlessPrompt`, `finalMessageOf`, `contentChunkFromEvent` and the fold's `isError` (#2723).
 - Settings reading uses the framework: `settingsCandidates` builds the own and legacy roots (`layerCandidates` keeps the per-path hook delivery), and the managed-settings paths come from `MANAGED_SETTINGS_PATHS` (#2713).
 - The write tools take `baseDir` from `@theokit/agents` (sdk-tools 0.32) instead of TheoCode rewriting relative paths itself; `anchor-relative-writes.ts` is gone.

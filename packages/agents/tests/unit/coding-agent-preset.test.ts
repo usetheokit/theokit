@@ -1,7 +1,7 @@
 import { resolveTrustPosture } from '@theokit/sdk'
 import { describe, expect, it } from 'vitest'
 
-import { applyCapabilities } from '../../src/capability/index.js'
+import { declareAgentShape, applyCapabilities } from '../../src/capability/index.js'
 import { codingAgentPreset } from '../../src/presets-entry.js'
 import { ConfigurationError } from '../../src/errors.js'
 
@@ -92,5 +92,63 @@ describe('codingAgentPreset', () => {
     expect(d.skills?.enabled).toEqual(['review'])
     expect(d.settingSources).toEqual(['user', 'project'])
     expect(await d.hookApproval?.approve?.({} as never)).toBe(false)
+  })
+
+  const extra = (name: string) => ({ name }) as never
+
+  it('registers caller web and delegation tools with default gates', () => {
+    const d = applyCapabilities([
+      codingAgentPreset({
+        ...base,
+        sandboxMode: 'workspace-write',
+        webFetch: extra('web_fetch'),
+        webSearch: extra('web_search'),
+        delegateToTeam: extra('delegate_to_team'),
+      }),
+    ])
+    expect(names(d)).toEqual(
+      expect.arrayContaining(['web_fetch', 'web_search', 'delegate_to_team']),
+    )
+    expect(d.hitl?.has('web_fetch')).toBe(true)
+    expect(d.hitl?.has('delegate_to_team')).toBe(true)
+  })
+
+  it('read-only keeps web tools but drops delegation, and says why', () => {
+    const shape = declareAgentShape('a', [
+      codingAgentPreset({
+        ...base,
+        sandboxMode: 'read-only',
+        webFetch: extra('web_fetch'),
+        delegateToTeam: extra('delegate_to_team'),
+      }),
+    ])
+    const n = shape.tools.map((t) => t.name)
+    expect(n).toContain('web_fetch')
+    expect(n).not.toContain('delegate_to_team')
+    expect(shape.offTools?.find((o) => o.name === 'delegate_to_team')?.reason).toMatch(/no writes/)
+    expect(shape.offTools?.map((o) => o.name)).toContain('Bash')
+  })
+
+  it('reports interactive tools as off without a backend', () => {
+    const shape = declareAgentShape('a', [
+      codingAgentPreset({ ...base, sandboxMode: 'workspace-write' }),
+    ])
+    expect(shape.offTools).toEqual([
+      { name: 'interactive_shell', reason: expect.stringMatching(/interactive backend/) },
+      { name: 'write_stdin', reason: expect.stringMatching(/interactive backend/) },
+    ])
+  })
+
+  it('accepts writeRoot, allowAbsolute and defaultTimeoutMs', () => {
+    const d = applyCapabilities([
+      codingAgentPreset({
+        ...base,
+        sandboxMode: 'danger-full-access',
+        writeRoot: '/',
+        allowAbsolute: true,
+        defaultTimeoutMs: 5000,
+      }),
+    ])
+    expect(names(d)).toEqual(expect.arrayContaining(['Read', 'ApplyPatch', 'Edit', 'Bash']))
   })
 })
