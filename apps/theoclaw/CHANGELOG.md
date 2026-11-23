@@ -27,6 +27,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 - Exec approval installs the framework's `gate.plugin` and the ACP permission prompt uses the gate's own timeout, with no timer of its own. A shell call with no command is now refused as `theoclaw: exec refused: the decision failed: the command is missing`.
 
+- The turn event mask moved into `@theokit/agents/bridge` as `createAgentEventMask`, and `runAgentTurn` takes the same masking as `secrets`; `control-plane/event-mask.ts` is gone (#2735).
 - `theoclaw skills publish` now reads `THEOCLAW_SKILLS_REGISTRY` and `THEOCLAW_SKILLS_TOKEN` from the instance configuration file too, as `skills search` and `skills install` do; before, it read the process environment only (#2764).
 
 - A fact the post-turn reviewer saves now reaches the configured memory mirror through the SDK itself, and the legacy-facts import writes through the SDK's `addMemoryFact`; the app no longer mirrors by hand and imports nothing from `@theokit/sdk/internal/`. The SDK 11.0.0 does not mirror the reviewer's fact, so the repository carries a pnpm patch (`patches/@theokit__sdk@11.0.0.patch`) until an SDK release does (#2743).
