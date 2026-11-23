@@ -6,11 +6,9 @@ import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
-import { readClaudeCodeSetup } from '../src/migration/claude-code-source.js'
-import type { ForeignSetup } from '../src/migration/foreign-setup.js'
-import { readHermesSetup } from '../src/migration/hermes-source.js'
+import type { ForeignSetup } from '@theokit/agents/foreign-setup'
 import { readImport, writeImport } from '../src/migration/import-store.js'
-import { copyFixture } from './migration-fixtures.js'
+import { copyFixture, readClaudeCodeSetup, readHermesSetup } from './migration-fixtures.js'
 
 const now = new Date('2026-10-31T12:00:00Z')
 
@@ -22,7 +20,8 @@ function setupWith(overrides: Partial<ForeignSetup>): ForeignSetup {
     mcpServers: { good: { command: 'npx', args: ['good-server'] } },
     skills: [{ name: 'greet', description: 'Greets', body: 'Say hello.\n', requiresBins: [], path: 'skills/greet/SKILL.md' }],
     memories: [{ path: 'MEMORY.md', text: 'The owner likes tea.' }],
-    dropped: [],
+    hooks: [],
+    untranslated: [],
     ...overrides,
   }
 }
@@ -109,7 +108,7 @@ describe('the import store', () => {
   })
 
   it('a url entry with an unknown transport type refuses the import naming the server (D5)', () => {
-    const socket = setupWith({ mcpServers: { socket: { type: 'websocket', url: 'https://h/mcp' } } })
+    const socket = setupWith({ mcpServers: { socket: { type: 'websocket', url: 'https://h/mcp' } } as unknown as ForeignSetup['mcpServers'] })
 
     expect(refusal(() => writeImport(stateDir, socket, { now })).message).toContain('"socket"')
   })
