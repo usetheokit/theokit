@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 /**
  * M107 T2.1 — `loadMcpJson`: the layer reads the `.mcp.json` project convention.
  *
@@ -269,7 +270,23 @@ describe('loadMcpServersFile', () => {
     expect(
       load({ s: { url: 'https://x.test/mcp', auth } }, { sdkVersion: '9.0.0' }).s,
     ).toMatchObject({ auth })
-    expect(load({ s: { url: 'https://x.test/mcp', auth } }).s).toMatchObject({ auth })
+  })
+
+  it('decides auth from the installed SDK when no version is given', () => {
+    // The suite also runs at the bottom of the declared SDK range, where `auth` is not supported, so the default
+    // is compared with an explicit run on the installed version instead of assumed to accept.
+    const installed = (
+      createRequire(import.meta.url)('@theokit/sdk/package.json') as { version: string }
+    ).version
+    const doc = { s: { url: 'https://x.test/mcp', auth: { oauth: { clientId: 'c' } } } }
+    const outcome = (opts?: { sdkVersion: string }): string => {
+      try {
+        return JSON.stringify(load(doc, opts).s)
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    expect(outcome()).toEqual(outcome({ sdkVersion: installed }))
   })
 
   it('reads through an injected readFile, and an absent file names the path', () => {
