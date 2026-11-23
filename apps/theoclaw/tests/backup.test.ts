@@ -27,7 +27,7 @@ import {
   type Manifest,
   restoreInstance,
 } from '../src/backup/backup.js'
-import { acquireInstanceLock, InstanceLockedError } from '@theokit/sdk/persistence'
+import { InstanceLockedError } from '@theokit/sdk/persistence'
 
 import { claimInstance, NO_PROFILE, takeInstanceLock } from '../src/instance.js'
 import { waitFor } from './fakes.js'
@@ -60,7 +60,11 @@ async function deadPid(): Promise<number> {
 
 /** A lock left by a process that is gone, as a crash leaves it. */
 async function staleLock(stateDir: string): Promise<void> {
-  writeFileSync(`${resolve(stateDir)}.instance.lock`, JSON.stringify({ pid: await deadPid(), nonce: 'a'.repeat(32) }), { mode: 0o600 })
+  writeFileSync(
+    `${resolve(stateDir)}.instance.lock`,
+    JSON.stringify({ pid: await deadPid(), nonce: 'a'.repeat(32) }),
+    { mode: 0o600 },
+  )
 }
 
 interface LockChild {
@@ -268,7 +272,9 @@ describe('the instance lock (FR-010)', () => {
       (stateDir, answers, racers) => {
         const winners = racers.filter((_, index) => answers[index] === 'took')
         expect(winners).toHaveLength(1)
-        expect(JSON.parse(readFileSync(`${stateDir}.instance.lock`, 'utf8')).pid).toBe(winners[0]!.pid)
+        expect(JSON.parse(readFileSync(`${stateDir}.instance.lock`, 'utf8')).pid).toBe(
+          winners[0]!.pid,
+        )
       },
     )
   }, 180_000)
@@ -386,7 +392,9 @@ describe('theoclaw backup (FR-008)', () => {
     const { symlinkSync } = await import('node:fs')
     symlinkSync('/etc/hostname', join(source.workspace, 'link'))
     const dir = join(tempDir(), 'backup')
-    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(/link is a symbolic link/)
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(
+      /link is a symbolic link/,
+    )
     expect(existsSync(dir)).toBe(false)
   })
 
@@ -395,9 +403,7 @@ describe('theoclaw backup (FR-008)', () => {
     const holder = lockChild(source.state)
     expect(await holder.answer).toBe('took')
     const dir = join(tempDir(), 'backup')
-    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(
-      `pid ${holder.pid}`,
-    )
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(`pid ${holder.pid}`)
     expect(existsSync(dir)).toBe(false)
     await holder.end()
   })
@@ -575,7 +581,9 @@ describe('theoclaw restore (FR-009)', () => {
     renameSync(join(dir, 'workspace'), join(elsewhere, 'workspace'))
     symlinkSync(join(elsewhere, 'workspace'), join(dir, 'workspace'))
     const target = instance()
-    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(/is a symbolic link/)
+    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(
+      /is a symbolic link/,
+    )
     expect(existsSync(target.state)).toBe(false)
   })
 
@@ -583,7 +591,9 @@ describe('theoclaw restore (FR-009)', () => {
     const source = populated()
     const env = { ...source.env, THEOCLAW_WORKSPACE: join(source.state, 'workspace') }
     await expect(backupInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(/overlap/)
-    await expect(restoreInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(/overlap/)
+    await expect(restoreInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(
+      /overlap/,
+    )
   })
 
   it('restore refuses while instance.lock names a live process', async () => {
