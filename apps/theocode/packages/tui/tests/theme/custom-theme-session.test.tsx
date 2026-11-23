@@ -47,7 +47,10 @@ afterEach(() => {
 describe('a custom theme reaches the provider', () => {
   it('test_the_custom_value_is_what_a_child_reads', () => {
     const loaded = loadCustomTheme('midnight', home)
-    expect(loaded, 'the fixture theme did not load — the assertion below would be vacuous').not.toBeNull()
+    expect(
+      loaded,
+      'the fixture theme did not load — the assertion below would be vacuous',
+    ).not.toBeNull()
 
     const frame = render(
       <ThemedSurface>

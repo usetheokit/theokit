@@ -49,24 +49,6 @@ const initialTheme = (): TheoThemeProp => THEMES[THEME_RESOLUTION.base]
 const controller = createThemeController(initialTheme())
 
 /**
- * The face the provider sees. It forwards to the controller and only counts subscriptions, so
- * `themeSubscriberCountForTest` can observe the unsubscribe without mutating the shared controller.
- */
-let subscribers = 0
-const surface = {
-  get: controller.get,
-  set: controller.set,
-  subscribe(listener: () => void): () => void {
-    subscribers += 1
-    const off = controller.subscribe(listener)
-    return () => {
-      subscribers -= 1
-      off()
-    }
-  },
-}
-
-/**
  * What `/theme` selected, for `/status` and for `/theme`'s own report: a base name, or
  * `custom:<slug>`. `undefined` while the environment still decides.
  *
@@ -104,7 +86,7 @@ export function setSessionTheme(prop: TheoThemeProp, label?: string): void {
 
 /** The provider, driven by the controller, so a switch reaches `useTheoTheme()` in a child. */
 export function ThemedSurface({ children }: { children: ReactNode }): ReactElement {
-  return <TheoTUIProvider controller={surface}>{children}</TheoTUIProvider>
+  return <TheoTUIProvider controller={controller}>{children}</TheoTUIProvider>
 }
 
 /** Test-only: drop the override so each test starts from the environment's answer. */
@@ -113,7 +95,7 @@ export function resetSessionThemeForTest(): void {
   sessionLabelValue = undefined
 }
 
-/** Test-only: how many frames are listening (the unsubscribe is otherwise unobservable). */
-export function themeSubscriberCountForTest(): number {
-  return subscribers
+/** Test-only: the shared controller, so a test can spy on `subscribe` to see the unsubscribe. */
+export function themeControllerForTest(): typeof controller {
+  return controller
 }
