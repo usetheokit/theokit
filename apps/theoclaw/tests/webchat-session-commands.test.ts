@@ -6,7 +6,8 @@ import { webchatTurnFor } from '../src/webchat/session-commands.js'
 function collect() {
   const events: TurnEvent[] = []
   const emit = (event: TurnEvent): void => void events.push(event)
-  const text = (): string => events.map((e) => (e.type === 'text_delta' ? String(e.content) : '')).join('')
+  const text = (): string =>
+    events.map((e) => (e.type === 'text_delta' ? String(e.content) : '')).join('')
   return { emit, text, events }
 }
 
@@ -18,7 +19,16 @@ function build(runner: TurnRunner) {
     model: 'm-1',
     runnerFor: () => runner,
     withChatAgent: async (_event, work) =>
-      work({ agent: { send: async (note: string, o: { queueMode?: unknown }) => (sent.push({ note, queueMode: o.queueMode }), {}) }, agentId: 'a-1', release: () => undefined } as never),
+      work({
+        agent: {
+          send: async (note: string, o: { queueMode?: unknown }) => (
+            sent.push({ note, queueMode: o.queueMode }),
+            {}
+          ),
+        },
+        agentId: 'a-1',
+        release: () => undefined,
+      } as never),
     think,
     compact: { run: compactRun, write: () => undefined },
   })
@@ -65,7 +75,9 @@ describe('WebChat slash commands', () => {
     const runner: TurnRunner = (_m, _e, signal) =>
       new Promise((resolve) => {
         started()
-        signal?.addEventListener('abort', () => resolve({ ok: false, code: 'turn_cancelled', reason: 'stopped' }))
+        signal?.addEventListener('abort', () =>
+          resolve({ ok: false, code: 'turn_cancelled', reason: 'stopped' }),
+        )
       })
     const { turnFor, sent } = build(runner)
     const run = turnFor('c1')
@@ -86,5 +98,17 @@ describe('WebChat slash commands', () => {
     await run('/stop', stop.emit)
     expect(stop.text()).toBe('Stopped 1 running turn.')
     expect(await turn).toMatchObject({ ok: false, code: 'turn_cancelled' })
+  })
+
+  it('refuses /model <id> without switching and leaves /stop with an argument to the model', async () => {
+    const runner = vi.fn<TurnRunner>(async () => ({ ok: true }))
+    const { turnFor } = build(runner)
+    const run = turnFor('c1')
+    const a = collect()
+    await run('/model other-model', a.emit)
+    expect(a.text()).toContain('not supported')
+    expect(runner).not.toHaveBeenCalled()
+    await run('/stop now', collect().emit)
+    expect(runner).toHaveBeenCalledTimes(1)
   })
 })

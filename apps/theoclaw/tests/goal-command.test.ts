@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { GatewayContext, MessageEvent } from '@theokit/gateway'
 
 import type { TurnAgent } from '../src/agent-port.js'
-import { GOAL_USAGE_REPLY, goalOf, readGoalSettings, runGoal } from '../src/channels/goal-command.js'
+import { GOAL_USAGE_REPLY, readGoalSettings, runGoal } from '../src/channels/goal-command.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { composeTheoClaw } from '../src/composition.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
@@ -23,9 +23,13 @@ interface GoalCall {
 }
 
 /** A fake agent whose goal loop yields one event and returns `result`, recording each call. */
-function goalAgent(result: { status: string; finalResponse?: string } | Error): TurnAgent & { readonly calls: GoalCall[] } {
+function goalAgent(
+  result: { status: string; finalResponse?: string } | Error,
+): TurnAgent & { readonly calls: GoalCall[] } {
   const calls: GoalCall[] = []
-  const agent = new FakeAgent({ frames: [assistant('an ordinary turn'), finished()] }) as unknown as TurnAgent
+  const agent = new FakeAgent({
+    frames: [assistant('an ordinary turn'), finished()],
+  }) as unknown as TurnAgent
   return Object.assign(agent, {
     calls,
     runUntil: async function* (goal: string, options: Record<string, unknown>) {
@@ -42,7 +46,10 @@ function harness(agent: TurnAgent, env: Record<string, string> = ENV, secrets?: 
   let leases = 0
   const handler = createReplyHandler({
     reset: async () => undefined,
-    withAgent: async <R>(_event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> => {
+    withAgent: async <R>(
+      _event: MessageEvent,
+      work: (lease: SessionLease) => R | Promise<R>,
+    ): Promise<R> => {
       leases += 1
       return work({ agent, agentId: 'a-1', release: () => undefined })
     },
@@ -73,7 +80,11 @@ describe('/goal in a chat', () => {
   })
 
   it('masks a configured value in the goal reply (B-398 FR-006)', async () => {
-    const h = harness(goalAgent({ status: 'completed', finalResponse: 'the token is router-key' }), ENV, ['router-key'])
+    const h = harness(
+      goalAgent({ status: 'completed', finalResponse: 'the token is router-key' }),
+      ENV,
+      ['router-key'],
+    )
     await h.send('/goal leak it')
     expect(h.replies).toHaveLength(1)
     expect(h.replies[0]).not.toContain('router-key')
@@ -123,7 +134,11 @@ describe('readGoalSettings and runGoal', () => {
   it('passes tokenBudget from THEOCLAW_GOAL_TOKEN_BUDGET, and agentModel = THEOCLAW_MODEL', async () => {
     const agent = goalAgent({ status: 'completed', finalResponse: 'ok' })
     await runGoal(agent, 'x', readGoalSettings({ ...ENV, THEOCLAW_GOAL_TOKEN_BUDGET: '500' }))
-    expect(agent.calls[0]?.options).toMatchObject({ tokenBudget: 500, agentModel: 'openrouter/chat-model', judgeApiKey: 'router-key' })
+    expect(agent.calls[0]?.options).toMatchObject({
+      tokenBudget: 500,
+      agentModel: 'openrouter/chat-model',
+      judgeApiKey: 'router-key',
+    })
   })
 
   it('passes a tokenBudget of 20000 when THEOCLAW_GOAL_TOKEN_BUDGET is unset', async () => {
@@ -149,15 +164,6 @@ describe('readGoalSettings and runGoal', () => {
     const outcome = await runGoal(goalAgent({ status: 'blocked' }), 'x', readGoalSettings(ENV))
     expect(outcome.reply).toMatch(/^blocked: /)
     expect(outcome.reply.length).toBeGreaterThan('blocked: '.length)
-  })
-})
-
-describe('goalOf', () => {
-  it('matches /goal on the whole trimmed text only', () => {
-    expect(goalOf('/goal fix it')).toBe('fix it')
-    expect(goalOf(' /goal ')).toBe('')
-    expect(goalOf('/goals x')).toBeUndefined()
-    expect(goalOf('please /goal x')).toBeUndefined()
   })
 })
 

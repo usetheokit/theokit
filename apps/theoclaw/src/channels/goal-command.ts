@@ -14,8 +14,6 @@ export const GOAL_USAGE_REPLY = 'Usage: /goal <what you want done>'
 /** The text after the status when the goal loop gave no final answer. */
 const NO_FINAL_ANSWER = 'the goal ended with no final answer.'
 
-const GOAL_COMMAND = /^\/goal(?:\s+([\s\S]*))?$/
-
 /**
  * What every `/goal` runs with. The budget is read and checked at start; the model and its key
  * are resolved when a goal runs, as the chat agent's own are, so a start with no model still
@@ -37,7 +35,10 @@ export function readGoalSettings(env: Readonly<Record<string, string | undefined
   const raw = (env[GOAL_BUDGET_VARIABLE] ?? '').trim()
   const tokenBudget = raw === '' ? DEFAULT_TOKEN_BUDGET : Number(raw)
   if (raw !== '' && (!/^\d+$/.test(raw) || tokenBudget <= 0)) {
-    throw new TheoClawConfigError(`${GOAL_BUDGET_VARIABLE} must be a positive whole number of tokens`, { variable: GOAL_BUDGET_VARIABLE })
+    throw new TheoClawConfigError(
+      `${GOAL_BUDGET_VARIABLE} must be a positive whole number of tokens`,
+      { variable: GOAL_BUDGET_VARIABLE },
+    )
   }
   return {
     tokenBudget,
@@ -48,17 +49,12 @@ export function readGoalSettings(env: Readonly<Record<string, string | undefined
   }
 }
 
-/**
- * The goal of a `/goal` message, matched on the whole trimmed text: `''` for a bare `/goal`, the
- * text after it otherwise, and undefined for anything else (`/goals x` is an ordinary message).
- */
-export function goalOf(text: string): string | undefined {
-  const match = GOAL_COMMAND.exec(text.trim())
-  return match === null ? undefined : (match[1] ?? '').trim()
-}
-
 /** Run `goal` on the session's agent to its end and say how it ended, as `<status>: <final text>`. */
-export async function runGoal(agent: TurnAgent, goal: string, settings: GoalSettings): Promise<GoalOutcome> {
+export async function runGoal(
+  agent: TurnAgent,
+  goal: string,
+  settings: GoalSettings,
+): Promise<GoalOutcome> {
   if (agent.runUntil === undefined) return { reply: 'failed: this agent cannot run a goal.' }
   try {
     const loop = agent.runUntil(goal, { tokenBudget: settings.tokenBudget, ...settings.judge() })
