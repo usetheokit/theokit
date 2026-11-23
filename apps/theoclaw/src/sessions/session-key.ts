@@ -26,6 +26,8 @@ function segment(id: string): string {
 
 /** `scopedStrategy` rejects an empty account label; this stands in for it and is swapped back out. */
 const EMPTY_LABEL = 'x'
+const MAIN_KEY = 'main'
+const PEER_PREFIX = 'peer-'
 
 /**
  * The gateway's `scopedStrategy` builds every key. TheoClaw keeps two things stored sessions depend
@@ -38,7 +40,7 @@ function strategyFor(settings: SessionKeySettings): ReturnType<typeof scopedStra
     dmScope: settings.dmScope,
     peerLinks: settings.peerLinks,
     ...(settings.dmScope === 'per-account-channel-peer' ? { accountLabel: empty ? EMPTY_LABEL : settings.accountLabel } : {}),
-    keys: { main: 'main', peer: (name) => `peer-${segment(name)}` },
+    keys: { main: MAIN_KEY, peer: (name) => `${PEER_PREFIX}${segment(name)}` },
   })
 }
 
@@ -49,14 +51,17 @@ function strategyFor(settings: SessionKeySettings): ReturnType<typeof scopedStra
  */
 export function sessionKeyFor(event: MessageEvent, settings: SessionKeySettings): string {
   const key = strategyFor(settings)(event)
-  const { platform } = event
-  const escaped = segment(platform)
-  if (!key.startsWith(`${escaped}-`)) return key
-  let rest = key.slice(escaped.length)
+  if (key === MAIN_KEY || key.startsWith(PEER_PREFIX)) return key
+  // The gateway escapes the platform segment like any other; it is written raw here.
+  const lead = `${segment(event.platform)}-`
+  if (!key.startsWith(lead)) throw new Error(`unexpected session key layout from the gateway: ${key}`)
+  let rest = key.slice(lead.length)
   if (settings.dmScope === 'per-account-channel-peer' && event.channel.type === 'dm' && (settings.accountLabel ?? '') === '') {
-    rest = rest.replace(`-dm-${EMPTY_LABEL}-`, '-dm--')
+    const labelled = `dm-${EMPTY_LABEL}-`
+    if (!rest.startsWith(labelled)) throw new Error(`unexpected session key layout from the gateway: ${key}`)
+    rest = `dm--${rest.slice(labelled.length)}`
   }
-  return `${platform}${rest}`
+  return `${event.platform}-${rest}`
 }
 
 /** The gateway's router over `sessionKeyFor`; the app reads keys only through it. */

@@ -1,3 +1,4 @@
+import { scopedStrategy } from '@theokit/gateway'
 import type { MessageEvent, PlatformName } from '@theokit/gateway'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -161,5 +162,32 @@ describe('stored keys stay reachable through the gateway scopedStrategy', () => 
   it('keeps an empty account label as an empty segment', () => {
     const settings: SessionKeySettings = { dmScope: 'per-account-channel-peer', peerLinks: new Map() }
     expect(sessionKeyFor(event({ sender: 'u1' }), settings)).toBe('telegram-dm--u1')
+  })
+})
+
+describe('parity with the gateway scopedStrategy (why the keys stay in TheoClaw)', () => {
+  const peerLinks = new Map([['telegram:u1', 'ann']])
+  const mine = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) => sessionKeyFor(event(shape), { dmScope, peerLinks })
+  const gateway = (dmScope: SessionKeySettings['dmScope'], shape: EventShape = {}) => scopedStrategy({ dmScope, peerLinks })(event(shape))
+
+  it('agrees where a key has no scope-specific form, escaping `-` and `_` the same way', () => {
+    for (const shape of [{ sender: 'a-b_c' }, { type: 'group' as const, channel: 'g-1_x' }, { type: 'thread' as const, topicId: 't-1' }]) {
+      expect(gateway('per-channel-peer', shape), JSON.stringify(shape)).toBe(mine('per-channel-peer', shape))
+    }
+  })
+
+  it('differs for `main` without `keys`, so the app passes it to keep the history stored under `main`', () => {
+    expect(mine('main')).toBe('main')
+    expect(gateway('main')).not.toBe('main')
+  })
+
+  it('differs for a linked peer without `keys`, so the app passes it to keep the history stored under `peer-<name>`', () => {
+    expect(mine('per-peer')).toBe('peer-ann')
+    expect(gateway('per-peer')).not.toBe('peer-ann')
+  })
+
+  it('differs for a platform with `_` without a restore, so the app writes it raw', () => {
+    const chat = event({ platform: 'google_chat' as PlatformName })
+    expect(scopedStrategy({ dmScope: 'per-channel-peer' })(chat)).not.toBe(sessionKeyFor(chat, DEFAULT))
   })
 })
