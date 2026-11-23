@@ -380,7 +380,7 @@ describe('controlStream: notices from the app', () => {
     ])
   })
 
-  it('an interrupted frame that arrived before a notice posted in the same tick keeps the interruption first, the notice below the turn', async () => {
+  it('an interrupted frame that arrived before a notice posted in the same tick puts the interruption first and the notice below the turn', async () => {
     const gate = deferred<void>()
     let arrivedAt = 0
     const client = {

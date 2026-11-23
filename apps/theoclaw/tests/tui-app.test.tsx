@@ -125,6 +125,21 @@ describe("theoclaw-tui (T4.2)", () => {
     await tui.until((f) => f.includes("Interrupted by user"), "the turn shown interrupted");
   });
 
+  it("a sent message is drawn above the reply and the turn shows as running until it ends", async () => {
+    const hold = deferred<void>();
+    const instance = await startInstance(() => ({ frames: [assistant("Hello"), finished()], deltas: ["Hel"], afterDeltas: hold.promise }));
+    const tui = await renderTui(instance);
+    await tui.type("my question", ENTER);
+    await tui.until((f) => f.includes("Hel"), "the first delta");
+    const lines = tui.screen().split("\n");
+    expect(lines.findIndex((l) => l.includes("my question"))).toBeGreaterThanOrEqual(0);
+    expect(lines.findIndex((l) => l.includes("my question"))).toBeLessThan(lines.findIndex((l) => l.includes("Hel")));
+    expect(tui.screen()).toContain("esc to interrupt");
+    hold.resolve();
+    await waitFor(() => !tui.screen().includes("esc to interrupt"), 3000, "the turn to end");
+    expect(tui.screen()).toContain("my question");
+  });
+
   it("Esc while a tool runs shows the tool as cancelled, not running", async () => {
     const instance = await startInstance(() => ({ frames: [], toolHeld: true, toolName: "lookup_ledger" }));
     const tui = await renderTui(instance);
