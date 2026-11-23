@@ -45,6 +45,23 @@ afterAll(() => {
   for (const dir of workDirs) rmSync(dir, { recursive: true, force: true })
 })
 
+type EvalResult = Awaited<ReturnType<typeof runAgentEvals>>
+
+function isMeasured(result: EvalResult): boolean {
+  return result.cases.every((c) => c.error === undefined && c.output.length > 0)
+}
+
+function logCases(result: EvalResult): void {
+  for (const c of result.cases) {
+    console.log(
+      `[live] case ${c.index}: input=${JSON.stringify(c.input)} ` +
+        `output=${JSON.stringify(redactThenCut(c.output, 200))} ` +
+        `meanScore=${c.meanScore} verdict=${c.verdict}` +
+        (c.error === undefined ? '' : ` error=${redactThenCut(c.error, 200)}`),
+    )
+  }
+}
+
 describe.skipIf(!HAS_KEY)('LIVE — runAgentEvals against a real provider', () => {
   it('reports one pass and one fail for a case built to pass and a case built to fail', async () => {
     console.log(`[live] provider key present: ${PRESENT_KEYS.join(', ')}`)
@@ -61,31 +78,37 @@ describe.skipIf(!HAS_KEY)('LIVE — runAgentEvals against a real provider', () =
       .system('Whatever you are asked, reply with exactly one word: KIWI.')
       .build()
 
-    const result = await runAgentEvals({
-      agent,
-      apiKey: apiKey(),
-      // The agent declares no tools, so no approval request can arise; refusing is the safe reading.
-      approvals: { kind: 'auto-reject', reason: 'live eval proof: the agent has no tools' },
-      cases: [
-        { input: 'What is your word?', expected: 'KIWI' },
-        { input: 'What is your word?', expected: 'ZEPPELIN' },
-      ],
-      scorers: [Scorers.containsExpected()],
-      overrides: { cwd },
-    })
+    // A provider call can come back empty or fail in transit; that is not what this test measures.
+    // A run with an unmeasured case (error or empty output) is repeated, up to three runs in all,
+    // and the verdict assertions below apply to the last run unchanged.
+    const runOnce = () =>
+      runAgentEvals({
+        agent,
+        apiKey: apiKey(),
+        // The agent declares no tools, so no approval request can arise; refusing is the safe reading.
+        approvals: { kind: 'auto-reject', reason: 'live eval proof: the agent has no tools' },
+        cases: [
+          { input: 'What is your word?', expected: 'KIWI' },
+          { input: 'What is your word?', expected: 'ZEPPELIN' },
+        ],
+        scorers: [Scorers.containsExpected()],
+        overrides: { cwd },
+      })
 
-    for (const c of result.cases) {
-      console.log(
-        `[live] case ${c.index}: input=${JSON.stringify(c.input)} ` +
-          `output=${JSON.stringify(redactThenCut(c.output, 200))} ` +
-          `meanScore=${c.meanScore} verdict=${c.verdict}` +
-          (c.error === undefined ? '' : ` error=${redactThenCut(c.error, 200)}`),
-      )
+    let result = await runOnce()
+    for (let attempt = 2; attempt <= 3 && !isMeasured(result); attempt += 1) {
+      console.log(`[live] attempt ${attempt - 1} had an unmeasured case, running again`)
+      logCases(result)
+      result = await runOnce()
     }
+
+    logCases(result)
     console.log(`[live] counts: ${JSON.stringify(result.counts)}`)
 
-    expect(result.cases.every((c) => c.error === undefined)).toBe(true)
-    expect(result.cases.every((c) => c.output.length > 0)).toBe(true)
+    expect(
+      result.cases.map((c) => (c.error === undefined ? undefined : redactThenCut(c.error, 200))),
+    ).toEqual([undefined, undefined])
+    expect(result.cases.map((c) => c.output.length > 0)).toEqual([true, true])
     expect(result.cases.map((c) => c.verdict)).toEqual(['pass', 'fail'])
     expect(result.counts).toEqual({ pass: 1, fail: 1, error: 0 })
   }, 120_000)
