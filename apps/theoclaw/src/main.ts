@@ -11,16 +11,36 @@ import { restartSelf, waitForPredecessor } from '@theokit/host/service'
 import { startTheoClaw } from './composition.js'
 import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
-import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
+import {
+  type CreateAgent,
+  createAgentFactory,
+  createChannelAgentFactory,
+} from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
 import { teeToLogFile } from './ops/log-tee.js'
 import { watchConfiguration } from './ops/hot-reload.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
-import { claimInstance, removeOwnLockSync, resolveInstance, type TheoClawInstance } from './instance.js'
-import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
+import {
+  claimInstance,
+  removeOwnLockSync,
+  resolveInstance,
+  type TheoClawInstance,
+} from './instance.js'
+import {
+  importedMcpPaths,
+  importedMcpSecrets,
+  importedSetupLine,
+  readImportAtStart,
+  requireImportedMcp,
+} from './migration/import-start.js'
+import { exitAfterFlush } from './exit-after-flush.js'
 import { applyProxyEnvironment } from './ops/proxy.js'
-import { readTelemetrySettings, registerTelemetry, type RegisteredTelemetry } from './telemetry/otel.js'
+import {
+  readTelemetrySettings,
+  registerTelemetry,
+  type RegisteredTelemetry,
+} from './telemetry/otel.js'
 
 /**
  * The process entry: the real environment, signals, exit and output streams, and the `/control`
@@ -78,7 +98,10 @@ try {
             if (outcome.kind === 'exit') restartCode = outcome.code
             process.kill(process.pid, 'SIGTERM')
           },
-          () => process.stderr.write('config: cannot restart; the change needs a restart by the owner\n'),
+          () =>
+            process.stderr.write(
+              'config: cannot restart; the change needs a restart by the owner\n',
+            ),
         )
       },
     })
@@ -94,7 +117,9 @@ try {
   const setup = readImportAtStart(process.env, (line) => process.stderr.write(`${line}\n`))
   imported = setup === undefined ? undefined : { setup, mcp }
   // Before any agent exists, so every agent records through the providers (B-400 FR-006).
-  telemetry = await registerTelemetry(readTelemetrySettings(process.env), { write: (line) => process.stderr.write(`${line}\n`) })
+  telemetry = await registerTelemetry(readTelemetrySettings(process.env), {
+    write: (line) => process.stderr.write(`${line}\n`),
+  })
 } catch (error) {
   fail(error)
 }
@@ -103,7 +128,10 @@ process.title = instance.label
 
 const workspace = instance.workspace
 const createSdkAgent = (options: TheoClawAgentOptions): Promise<SDKAgent> =>
-  Agent.create({ ...options, local: { ...options.local, ...(workspace === undefined ? {} : { cwd: workspace }) } })
+  Agent.create({
+    ...options,
+    local: { ...options.local, ...(workspace === undefined ? {} : { cwd: workspace }) },
+  })
 const create: CreateAgent = createSdkAgent
 
 // Secret references become their values in the process environment, so the agent factories that read it
@@ -120,7 +148,9 @@ startTheoClaw({
   agentFactory: createAgentFactory(process.env, create, imported, { custodian: true }),
   importFreeAgentFactory: createAgentFactory(process.env, create),
   importedPaths: importedMcpPaths(imported),
-  ...(imported === undefined ? {} : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),
+  ...(imported === undefined
+    ? {}
+    : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),
   // WebChat's agents: created like the /control ones, from the chat path's options (no tool, B-382).
   createChatAgent: create,
   // The `digest` tool's draft agents (B-387): the chat path's factory, so no tool, no shell, memory off.
@@ -132,7 +162,8 @@ startTheoClaw({
   signals: process,
   // What is pending is exported first, for at most the bound, so a down collector cannot hold the exit.
   exit: (code) =>
-    void Promise.race([telemetry.shutdown(), new Promise((resolve) => setTimeout(resolve, TELEMETRY_SHUTDOWN_MS).unref())]).finally(() =>
-      process.exit(restartCode ?? code),
-    ),
+    void Promise.race([
+      telemetry.shutdown(),
+      new Promise((resolve) => setTimeout(resolve, TELEMETRY_SHUTDOWN_MS).unref()),
+    ]).finally(() => exitAfterFlush(restartCode ?? code)),
 }).catch(fail)
