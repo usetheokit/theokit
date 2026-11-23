@@ -1,14 +1,17 @@
 /**
- * Why this stays local (#2659, follow-up of #2601). The SDK's doom-loop guard (`SendOptions.doomLoop`,
- * `DoomLoopThresholds.window` + `windowRepeatLimit`) also counts identical calls inside a sliding window,
- * but it is not equivalent to this plugin:
- * - the SDK window is opt-in per send (consecutive-only by default); this plugin is always on once registered;
- * - the SDK stops the run (`stoppedByDoomLoop`, `terminal: "no_progress"`); this plugin only blocks the one
- *   call with a message and lets the model try something else;
- * - blocked calls here are NOT recorded in the window, and the window and limit are per plugin instance;
- * - the signature here is `JSON.stringify(args)` (key order matters, unserializable args share one key).
- * SDK issue: NOT FILED YET. No GitHub access was available in the run that wrote this; file it in
- * usetheokit/theokit-sdk from the list above and replace this line with the issue link.
+ * Why this stays local (#2659, follow-up of #2601). The SDK's window guard (`SendOptions.doomLoop` with
+ * `window` + `windowRepeatLimit`, `DoomLoopTracker.checkWindow`) also blocks the Nth identical call inside a
+ * sliding window, but it is not equivalent (checked against @theokit/sdk 9.0.0 source):
+ * - the SDK window is opt-in per send and both options must be set together; this plugin is a registered plugin
+ *   with its own defaults (limit 3, window 20);
+ * - the SDK records EVERY attempt, blocked ones too, so a blocked call keeps the signature in the window; here
+ *   a blocked call is not recorded;
+ * - the SDK signature uses canonical (sorted-key) JSON, so `{a,b}` and `{b,a}` match; here it is plain
+ *   `JSON.stringify(args)`, so key order matters;
+ * - unserializable input: the SDK shares one `unserializable` key per tool name, as here (`name:unserializable`);
+ * - the SDK's separate consecutive guard stops the run (`stoppedByDoomLoop`); this plugin never stops the run.
+ * SDK issue: NOT FILED YET. The run that wrote this had no GitHub access; file it in usetheokit/theokit-sdk
+ * from the list above and replace this line with the issue link.
  */
 import type { PreToolCallContext } from '@theokit/sdk'
 
