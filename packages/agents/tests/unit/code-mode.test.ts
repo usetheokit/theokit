@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   CodeModePermissionDeniedError,
+  CodeModeResultTooLongError,
   createCodeMode,
   type CodeModeApi,
   type Sandbox,
@@ -223,5 +224,42 @@ describe('createCodeMode on @theokit/agents/code-mode', () => {
         'read_file ran',
       )
     })
+  })
+})
+
+describe('createCodeMode language, allowedTools and maxResultChars', () => {
+  const base = { sandbox: toySandbox(), onPermissionRequest: () => ({ granted: true }) }
+
+  it('names JavaScript in the tool description and the instructions', () => {
+    const { tool, instructions } = createCodeMode({ ...base, tools: [spyTool('read_file')] })
+    expect(tool.description).toContain('JavaScript')
+    expect(instructions).toContain('JavaScript')
+  })
+
+  it('throws a typed error stating the limit and the size', async () => {
+    const { tool } = createCodeMode({ ...base, tools: [spyTool('read_file')], maxResultChars: 5 })
+    const error: unknown = await tool.handler({ code: 'abcdef' }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(CodeModeResultTooLongError)
+    expect((error as Error).message).toMatch(/16 characters.*limit of 5/)
+  })
+
+  it('accepts a result exactly at the limit', async () => {
+    const { tool } = createCodeMode({ ...base, tools: [spyTool('read_file')], maxResultChars: 16 })
+    await expect(tool.handler({ code: 'abcdef' })).resolves.toBe('{"ran":"abcdef"}')
+  })
+
+  it('refuses a tool outside allowedTools before it runs', async () => {
+    const read = spyTool('read_file')
+    const write = spyTool('write_file')
+    const { tool, instructions } = createCodeMode({
+      ...base,
+      tools: [read, write],
+      allowedTools: ['read_file'],
+    })
+    expect(instructions).not.toContain('write_file')
+    await expect(tool.handler({ code: 'call:write_file:{"path":"a"}' })).rejects.toThrow(
+      /not defined/,
+    )
+    expect(write.handler).not.toHaveBeenCalled()
   })
 })
