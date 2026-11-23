@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import process from 'node:process'
 import { Agent } from '@theokit/agents'
-import { exitAfterDrain } from '@theokit/agents/commands'
+import { exitAfterDrain, sessionsGcCommand } from '@theokit/agents/commands'
 import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
 import {
   planTranscriptGC,
@@ -162,20 +162,26 @@ async function listIncludingArchived(
 }
 
 /**
- * `sessions gc` for one project: the framework's planner with TheoCode's protection added — the TUI
- * pointer, and every non-archived registry session. Throws what
+ * `sessions gc` for one project: the framework's planner with TheoCode's protection added — the pointer
+ * read fail-closed, and every non-archived registry session. Throws what
  * the framework throws (`GCFloorError`, `GCProtectionUnavailableError`); the caller prints it.
  */
 export async function planAndRunCurrentProjectGC(
   opts: CurrentProjectGCOptions,
 ): Promise<{ plan: TranscriptGCPlan; result: RunTranscriptGCResult }> {
-  const { gcProtectedIds } = await import('@theocode/agent/session')
+  const { readPointerId } = await import('@theocode/agent/session')
   const { cwd } = opts
   const everyone = await (opts.listRegistry ?? listIncludingArchived)(cwd)
-  const protectedIds = gcProtectedIds(
-    cwd,
-    everyone.filter((a) => a.archived !== true).map((a) => a.agentId),
-  )
+  const registeredIds = everyone.filter((a) => a.archived !== true).map((a) => a.agentId)
+  // The framework protects its `last-session` pointer itself but reads an unreadable one as absent.
+  // This provider reads it fail-closed: a throw becomes `GCProtectionUnavailableError` and refuses.
+  const protectedIds = (): ReadonlyMap<string, string> => {
+    const out = new Map<string, string>()
+    for (const id of registeredIds) out.set(id, 'registered session')
+    const pointer = readPointerId(cwd, ...(opts.root !== undefined ? ([opts.root] as const) : []))
+    if (pointer !== undefined) out.set(pointer, 'live-session pointer')
+    return out
+  }
   const planned = await planTranscriptGC({
     cwd,
     keepLast: opts.keepLast ?? 10,
@@ -207,28 +213,26 @@ export async function planAndRunCurrentProjectGC(
 }
 
 async function gcForCurrentProject(args: ExecSessions): Promise<void> {
-  let outcome: Awaited<ReturnType<typeof planAndRunCurrentProjectGC>>
+  let outcome: Awaited<ReturnType<typeof sessionsGcCommand>>
   try {
-    outcome = await planAndRunCurrentProjectGC({
+    outcome = await sessionsGcCommand({
       cwd: process.cwd(),
       apply: args.apply,
+      json: args.json,
       ...(args.keepLast !== undefined ? { keepLast: args.keepLast } : {}),
       ...(args.maxAgeDays !== undefined ? { maxAgeDays: args.maxAgeDays } : {}),
+      human: humanReport,
+      run: (resolved) => planAndRunCurrentProjectGC(resolved),
     })
   } catch (err) {
     process.stderr.write(`[sessions gc] ${err instanceof Error ? err.message : String(err)}\n`)
     exitAfterDrain(1)
     return
   }
-  const { plan, result } = outcome
-  if (args.json) {
-    process.stdout.write(
-      `${JSON.stringify({ type: 'sessions.gc', dryRun: result.dryRun, removed: [...result.removed, ...result.orphaned], kept: plan.kept.length, keptReasons: plan.kept, errors: result.errors.map((e) => `${e.id ?? 'unnamed transcript'}: ${e.message}`) })}\n`,
-    )
-  } else {
-    for (const l of humanReport(plan, result)) process.stderr.write(`${l}\n`)
-  }
-  exitAfterDrain(result.errors.length > 0 ? 1 : 0)
+  // The JSON report is a machine line on stdout; the human one goes to stderr.
+  const out = args.json ? process.stdout : process.stderr
+  for (const l of outcome.lines) out.write(`${l}\n`)
+  exitAfterDrain(outcome.failed > 0 ? 1 : 0)
 }
 
 /**

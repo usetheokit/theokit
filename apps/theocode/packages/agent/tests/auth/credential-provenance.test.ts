@@ -1,40 +1,58 @@
 /**
- * Credential provenance: WHERE the credential the session runs under came from, rendered in the footer.
- * The failure mode is a WRONG label: telling someone their key came from `.env` when the shell
- * supplied it. The label says `(.env)` only for a key the bootstrap's project-env step loaded.
+ * Credential provenance: the footer says `(.env)` if and only if the bootstrap's project-env step
+ * loaded the variable from the `.env`, and `(shell)` otherwise. The names the step loads come from
+ * the framework scanner, so these cases drive it through `bootstrapSurface`, the way the footer's
+ * record is produced.
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { describeSource } from '../../src/auth/credential-provenance.js'
-import { bootstrapSurface } from '../../src/bootstrap/bootstrap-surface.js'
+import { bootstrapSurface } from '../../src/bootstrap/index.js'
 
-const dirs: string[] = []
-afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
-})
+let dir: string
+let envPath: string
 
-/** Write a `.env` and return the names the bootstrap's project-env step loaded from it (the framework parser). */
-async function namesIn(contents: string | undefined): Promise<string[]> {
-  const cwd = mkdtempSync(join(tmpdir(), 'theocode-provenance-'))
-  dirs.push(cwd)
-  if (contents !== undefined) writeFileSync(join(cwd, '.env'), contents)
-  const ctx = await bootstrapSurface({ env: {}, cwd, home: cwd, onWarn: () => {} })
-  return [...(ctx.projectEnv?.loaded ?? [])].sort()
+/** The names the bootstrap loaded from the `.env` in `cwd`, sorted. */
+async function namesInDir(cwd: string): Promise<string[]> {
+  const record = await bootstrapSurface({ env: {}, cwd, home: cwd, onWarn: () => {} })
+  return [...(record?.loaded ?? [])].sort((x, y) => x.localeCompare(y))
 }
 
-describe('the names a .env file declares, as the bootstrap loads them', () => {
+/** Write a `.env` and return the names the bootstrap loads from it. */
+async function namesIn(contents: string): Promise<string[]> {
+  writeFileSync(envPath, contents)
+  return namesInDir(dir)
+}
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'theocode-provenance-'))
+  envPath = join(dir, '.env')
+})
+
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
+
+describe('the names a .env file declares', () => {
   it('test_dotenv_names_does_not_harvest_a_name_from_inside_a_multiline_value', async () => {
-    expect(
-      await namesIn('NOTE="first line\nANTHROPIC_API_KEY=not-a-declaration\nlast line"\n'),
-    ).toEqual(['NOTE'])
+    // Anti-vacuity floor, and the case that would actually mislead someone: a line that LOOKS like
+    // an assignment but sits inside a quoted value is not a declaration. Harvesting it makes the
+    // footer report `ANTHROPIC_API_KEY (.env)` for a key the shell supplied, and the user edits a
+    // file that is not the source. A reader that scanned every line for `=` — the obvious
+    // implementation — passes every other assertion in this file and fails this one.
+    const names = await namesIn('NOTE="first line\nANTHROPIC_API_KEY=not-a-declaration\nlast line"\n')
+
+    expect(names, 'a name inside a quoted value was read as a declaration').toEqual(['NOTE'])
   })
 
   it('test_dotenv_names_is_empty_when_the_file_does_not_exist', async () => {
-    expect(await namesIn(undefined)).toEqual([])
+    // The common case — most projects have no `.env` — and it must be "nothing declared here",
+    // never a throw: this runs at module load in `credential-helpers.ts`.
+    expect(await namesInDir(join(dir, 'absent'))).toEqual([])
   })
 
   it('test_dotenv_names_collects_plain_assignments', async () => {
@@ -45,24 +63,23 @@ describe('the names a .env file declares, as the bootstrap loads them', () => {
   })
 
   it('test_dotenv_names_strips_the_export_prefix_and_surrounding_space', async () => {
+    // `export FOO=bar` is how a `.env` meant to be `source`d is written, and the name is `FOO`.
     expect(await namesIn('export A=1\n  export  B =2\n')).toEqual(['A', 'B'])
   })
 
   it('test_dotenv_names_ignores_comments_blank_lines_and_lines_with_no_name', async () => {
-    expect(await namesIn('# a comment\n\n=VALUE_WITH_NO_NAME\nNO_EQUALS_SIGN\nGOOD=y\n')).toEqual([
-      'GOOD',
-    ])
+    expect(await namesIn('# a comment\n\n=VALUE_WITH_NO_NAME\nNO_EQUALS_SIGN\nGOOD=y\n')).toEqual(['GOOD'])
   })
 
-  it('test_dotenv_names_accepts_a_name_that_is_not_an_identifier', async () => {
-    // Framework parser (looser than the old one): `1BAD` is loaded; no credential varName can match it.
-    // Stricter name checking is follow-up #2812.
-    const names = await namesIn('1BAD=x\nGOOD=y\n')
-    expect(names).toEqual(['1BAD', 'GOOD'])
-    expect(names, 'a valid name after an odd one was lost').toContain('GOOD')
+  it('test_dotenv_names_rejects_a_name_that_is_not_an_identifier', async () => {
+    // `1BAD` cannot be an environment variable, so a credential can never arrive through it;
+    // accepting it would put a name in the set that no `varName` will ever match.
+    expect(await namesIn('1BAD=x\nGOOD=y\n')).toEqual(['GOOD'])
   })
 
   it('test_dotenv_names_reads_the_declaration_after_a_quoted_value_closed_on_its_own_line', async () => {
+    // A quote that opens and closes on one line is not multiline, and the next line is a normal
+    // declaration. Treating it as multiline would swallow everything below it.
     expect(await namesIn('A="one line"\nB=2\n')).toEqual(['A', 'B'])
   })
 
@@ -72,21 +89,36 @@ describe('the names a .env file declares, as the bootstrap loads them', () => {
   })
 
   it('test_dotenv_names_reads_a_crlf_file', async () => {
+    // `.env` files authored on Windows, and the reason the split is `/\r?\n/`.
     expect(await namesIn('A=1\r\nB=2\r\n')).toEqual(['A', 'B'])
   })
 
-  it('test_dotenv_names_does_not_let_an_unterminated_quote_swallow_the_lines_below', async () => {
-    // Framework parser (looser than the old one, which stopped at A): B is still loaded.
-    const names = await namesIn('A="never closed\nB=2\n')
-    expect(names).toEqual(['A', 'B'])
-    expect(names, 'the line below an unterminated quote was swallowed').toContain('B')
+  it('test_dotenv_names_stops_at_an_unterminated_quote', async () => {
+    // Nothing closes the value, so every following line belongs to it. Guessing otherwise would
+    // invent declarations out of a malformed file.
+    // The bootstrap loads neither the unterminated declaration nor anything after it: the old scanner
+    // listed `A` although no value was ever set, which could label a shell variable `(.env)`.
+    expect(await namesIn('A="never closed\nB=2\n')).toEqual([])
+    expect(await namesIn('G=1\nA="never closed\nB=2\n')).toEqual(['G'])
   })
 
   it('test_dotenv_names_keeps_the_declarations_after_a_value_closed_by_a_lone_quote', async () => {
+    // `closesQuote` served two questions with one implementation, and only one of them wanted the
+    // leading quote stripped. On the line that OPENS a value, stripping is what tells `"one line"`
+    // (closed) from `"still` (open). On a CONTINUATION line it is wrong: a line that is just `"`
+    // has its only quote removed and reads as "still open", so the scan swallowed the rest of the
+    // file — every declaration below a value closed in the conventional style was lost, and the
+    // footer reported `(shell)` for a variable the `.env` declares.
+    //
+    // Two questions, two predicates. This case was pinned as `loses` on 2026-09-10 by the change
+    // that covered this file, and fixed the same day.
     expect(await namesIn('A="first\nmiddle\n"\nB=2\n')).toEqual(['A', 'B'])
   })
 
   it('test_a_value_that_opens_and_closes_on_one_line_does_not_swallow_the_next', async () => {
+    // Anti-vacuity, and the arm that keeps the strip where it belongs: dropping it from the OPENING
+    // line would make `"one line"` read as unterminated and eat `B` — the same data loss, entering
+    // from the other side.
     expect(await namesIn('A="one line"\nB=2\n')).toEqual(['A', 'B'])
   })
 })
@@ -98,11 +130,7 @@ describe('the label a credential source is given', () => {
     // Anti-vacuity floor for this half: a labeller hard-wired to `(.env)` — or one that ignored the
     // declared set — passes the `.env` assertion below and fails this one. It is also the direction
     // that wastes the user's time, sending them to edit a file that is not the source.
-    const label = describeSource(
-      { kind: 'env', varName: 'ANTHROPIC_API_KEY' },
-      new Set(),
-      dotenvPath,
-    )
+    const label = describeSource({ kind: 'env', varName: 'ANTHROPIC_API_KEY' }, new Set(), dotenvPath)
 
     expect(label, 'a shell variable was attributed to the .env file').toBe(
       'ANTHROPIC_API_KEY (shell)',

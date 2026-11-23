@@ -2,6 +2,7 @@ import {
   defineAppBootstrap,
   projectEnvStepWith,
   type BootstrapContext,
+  type ProjectEnvRecord,
 } from '@theokit/agents/config'
 
 import { installAuthHome } from '../auth/index.js'
@@ -18,7 +19,7 @@ export interface BootstrapSurfaceOptions {
 
 /**
  * Keys a project `.env` may never set, on top of the SDK's sovereign keys (which the framework's
- * `projectEnvStepWith` already protects).
+ * `projectEnvStep` already restores).
  */
 export const THEOCODE_PROTECTED_ENV_KEYS: readonly string[] = [
   'THEOCODE_TRUST_ALL_DIRS',
@@ -33,12 +34,11 @@ export const THEOCODE_PROTECTED_ENV_KEYS: readonly string[] = [
  *
  * Call it after the working directory is chosen and BEFORE anything resolves an SDK path: the home
  * decides which directory the transcripts, the trust store and the collector use, and a later call
- * would move the root out from under whatever already read it. Await it: each call builds its own
+ * would move the root out from under whatever already read it. Returns what the `.env` step loaded
+ * and refused (key names only), the basis for labelling where a credential came from. Await it: each call builds its own
  * framework bootstrap, so one call per entry runs every step exactly once.
- *
- * Returns the context the steps ran on; `projectEnv` names the keys `.env` loaded and refused.
  */
-export async function bootstrapSurface(opts: BootstrapSurfaceOptions): Promise<BootstrapContext> {
+export async function bootstrapSurface(opts: BootstrapSurfaceOptions): Promise<ProjectEnvRecord | undefined> {
   const { env, cwd, home } = opts
   const onWarn = opts.onWarn ?? ((m: string) => process.stderr.write(`${m}\n`))
   const ctx: BootstrapContext = { env, cwd, home }
@@ -56,5 +56,5 @@ export async function bootstrapSurface(opts: BootstrapSurfaceOptions): Promise<B
     // Hooks need CLAUDE_PROJECT_DIR — see `claude-project-dir.ts`.
     { name: 'claude-project-dir', run: () => installClaudeProjectDir(env, cwd) },
   ]).run(ctx)
-  return ctx
+  return ctx.projectEnv
 }

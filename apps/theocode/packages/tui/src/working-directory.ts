@@ -33,7 +33,7 @@
  *     trust for whatever `workingDirectory()` says at the moment of the click
  *     (`ConsentGates.tsx`) — the wrong directory, durably.
  *   - `main.tsx` bakes the stderr log path at import, and `credential-helpers.ts` labels credentials from the
- *     bootstrap record of the original directory's `.env`.
+ *     `.env` record of that one bootstrap.
  *
  * Making it safe therefore means rebuilding the composition root — which discards the live session,
  * transport and background shells — or threading a getter through each of the sites above AND

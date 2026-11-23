@@ -1,45 +1,49 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { bootstrapSurface } from '@theocode/agent/bootstrap'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { ResolvedCredential } from '@theocode/agent/auth'
 
-import {
-  credentialSource,
-  setProjectEnvRecord,
-} from '../../src/agent-session/credential-helpers.js'
+let next: ResolvedCredential | Error
 
-const dirs: string[] = []
-beforeEach(() => {
-  vi.stubEnv('ANTHROPIC_API_KEY', 'placeholder')
-  vi.stubEnv('OPENAI_API_KEY', 'placeholder')
-  delete process.env.ANTHROPIC_API_KEY
-  delete process.env.OPENAI_API_KEY
-})
-afterEach(() => {
-  setProjectEnvRecord(undefined)
-  vi.unstubAllEnvs()
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
-})
+vi.mock('@theocode/agent/auth', async (orig) => ({
+  ...(await orig<typeof import('@theocode/agent/auth')>()),
+  resolveCredential: () => {
+    if (next instanceof Error) throw next
+    return next
+  },
+}))
 
-async function boot(dotenv: string): Promise<string> {
-  const dir = mkdtempSync(join(tmpdir(), 'cred-src-'))
-  dirs.push(dir)
-  writeFileSync(join(dir, '.env'), dotenv)
-  const ctx = await bootstrapSurface({ env: process.env, cwd: dir, home: dir, onWarn: () => {} })
-  setProjectEnvRecord(ctx.projectEnv)
-  return dir
-}
+import { credentialSource, recordProjectEnv } from '../../src/agent-session/credential-helpers.js'
 
-it('labels a key set in both the shell and .env as the shell', async () => {
-  vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-from-shell')
-  await boot('ANTHROPIC_API_KEY=sk-ant-from-file\n')
-  expect(process.env.ANTHROPIC_API_KEY).toBe('sk-ant-from-shell')
-  expect(credentialSource()).toContain('ANTHROPIC_API_KEY (shell)')
-})
+const base = { apiKey: 'k', provider: 'openai', inferred: false } as const
 
-it('labels a key the .env actually loaded with the .env path', async () => {
-  const dir = await boot('ANTHROPIC_API_KEY=sk-ant-from-file\n')
-  expect(credentialSource()).toContain(`ANTHROPIC_API_KEY (${join(dir, '.env')})`)
+describe('credentialSource formats the typed origin', () => {
+  beforeEach(() => {
+    next = new Error('x')
+    recordProjectEnv(undefined)
+  })
+
+  it('names the .env file when the bootstrap loaded the variable from it', () => {
+    next = { ...base, kind: 'api', source: { kind: 'env', varName: 'OPENAI_API_KEY' } }
+    recordProjectEnv({ file: '/proj/.env', loaded: ['OPENAI_API_KEY'], refused: [] })
+    expect(credentialSource()).toBe('OPENAI_API_KEY (/proj/.env)')
+  })
+
+  it('labels an env origin from the shell', () => {
+    next = { ...base, kind: 'api', source: { kind: 'env', varName: 'OPENAI_API_KEY' } }
+    expect(credentialSource()).toBe('OPENAI_API_KEY (shell)')
+  })
+
+  it('keeps a file path that looks like a variable name a file', () => {
+    next = { ...base, kind: 'api', source: { kind: 'file', path: 'AUTH' } }
+    expect(credentialSource()).toBe('AUTH')
+  })
+
+  it('labels an oauth origin and marks an inferred provider', () => {
+    next = { ...base, kind: 'oauth', inferred: true, source: { kind: 'oauth', provider: 'openai' } }
+    expect(credentialSource()).toBe('oauth (openai) (provider inferred)')
+  })
+
+  it('says none when resolution fails', () => {
+    expect(credentialSource()).toBe('none')
+  })
 })

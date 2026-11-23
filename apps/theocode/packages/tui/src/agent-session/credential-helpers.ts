@@ -4,17 +4,14 @@ import { describeSource } from '@theocode/agent/auth'
 import { resolveCredential, type ResolvedCredential } from '@theocode/agent/auth'
 import type { ProjectEnvRecord } from '@theokit/agents/config'
 
-// Only the TUI sets this; the CLI and ACP surfaces show no credential label, so they never read it.
 let projectEnv: ProjectEnvRecord | undefined
-let loaded: ReadonlySet<string> = new Set()
 
-/** Called once after bootstrap; an absent record means no key was loaded from `.env`. */
-export const setProjectEnvRecord = (record: ProjectEnvRecord | undefined): void => {
+/** Hands over what the startup `.env` step loaded; call it once, after `bootstrapSurface`. */
+export const recordProjectEnv = (record: ProjectEnvRecord | undefined): void => {
   projectEnv = record
-  loaded = new Set(record?.loaded ?? [])
 }
 
-const loadedKeys = (): ReadonlySet<string> => loaded
+const dotenvKeys = (): ReadonlySet<string> => new Set(projectEnv?.loaded)
 const dotenvPath = (): string => projectEnv?.file ?? '.env'
 
 export const credential = (): ResolvedCredential | { error: Error } => {
@@ -33,12 +30,6 @@ export const credentialError = (): string | undefined => {
 export const credentialSource = (): string => {
   const c = credential()
   if ('error' in c) return 'none'
-  if (c.kind === 'oauth') {
-    return describeSource({ kind: 'oauth', provider: c.provider }, loadedKeys(), dotenvPath())
-  }
-  const isEnvVar = /^[A-Z][A-Z0-9_]*$/.test(c.source)
-  const label = isEnvVar
-    ? describeSource({ kind: 'env', varName: c.source }, loadedKeys(), dotenvPath())
-    : describeSource({ kind: 'file', path: c.source }, loadedKeys(), dotenvPath())
+  const label = describeSource(c.source, dotenvKeys(), dotenvPath())
   return c.inferred ? `${label} (provider inferred)` : label
 }

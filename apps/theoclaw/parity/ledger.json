@@ -590,7 +590,7 @@
   {
     "id": "OC-80",
     "status": "out",
-    "reason": "Narrowed scope: only repeat detection is built (src/tools/loop-detection.ts, a fourth identical tool call within the last 20 is blocked with a stated reason, tests/loop-detection.test.ts, offline). Argument-churn and no-progress detection are not built, and no real-model end-to-end check was run because model credentials are unavailable in this sandbox.",
+    "reason": "Narrowed scope: only repeat detection is built (the SDK window guard in sendDefaults.doomLoop, a fourth identical tool call within the last 20 is blocked with a stated reason; the SDK also counts blocked calls, and its consecutive guard stops a run after 5 identical calls, tests/loop-detection.test.ts, offline). Argument-churn and no-progress detection are the SDK's own consecutive guards, not tuned here, and no real-model end-to-end check was run because model credentials are unavailable in this sandbox.",
     "declared_by": "human/issue-1216-requester",
     "declared_on": "2026-11-07",
     "declared_at": "Issue #1216: permits out with a written reason in place of a real-model check"
@@ -757,12 +757,12 @@
   {
     "id": "OC-103",
     "status": "open",
-    "note": "not shipped, no live check run: audio transcription: src/media/understanding.ts transcribeAudio against an OpenAI-compatible endpoint, and Telegram voice notes via src/voice/voice-replies.ts; whisper-cli, Deepgram and realtime WS are not built (offline tests only, tests/media-understanding.test.ts); the real-model check (recorded audio with known text transcribed word for word, image of a known object described naming it) has not been run"
+    "note": "not shipped, no live check run: Telegram voice notes via src/voice/voice-replies.ts; audio transcription is not built (the pinned gateway-telegram adapter does not produce event.audio), nor are whisper-cli, Deepgram or realtime WS; the real-model check (recorded audio with known text transcribed word for word, image of a known object described naming it) has not been run"
   },
   {
     "id": "OC-104",
     "status": "open",
-    "note": "not shipped, no live check run: image description and audio transcript folded into turn text by withMediaContext; video, PDF and link understanding are not built, and it is not yet wired into the channel handler (offline tests only, tests/media-understanding.test.ts); the real-model check (recorded audio with known text transcribed word for word, image of a known object described naming it) has not been run"
+    "note": "not shipped, no live check run: image description, audio transcript, video, PDF and link understanding are not built (the media-understanding module was removed as unwired, #2763); the real-model check (recorded audio with known text transcribed word for word, image of a known object described naming it) has not been run"
   },
   {
     "id": "OC-105",

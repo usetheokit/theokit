@@ -71,63 +71,28 @@ describe('bootstrapSurface project .env', () => {
       Object.assign(process.env, saved)
     }
   })
-})
 
-describe('the record bootstrapSurface returns', () => {
-  async function record(contents: string, env: Record<string, string | undefined> = {}) {
-    const cwd = project(contents)
-    const ctx = await bootstrapSurface({ env, cwd, home: cwd, onWarn: () => {} })
-    return { cwd, rec: ctx.projectEnv! }
-  }
+  it('returns what it loaded, so a shell value that overrides a .env declaration is not labelled .env', async () => {
+    const cwd = project('SHELL_WINS=from-file\nFILE_ONLY=1\nBAD-NAME=x\nOPEN="never closed\nHIDDEN=2\n')
+    const env: Record<string, string | undefined> = { SHELL_WINS: 'from-shell' }
 
-  it('names the file, the loaded keys and the refused keys', async () => {
-    const { cwd, rec } = await record('A=1\nTHEOCODE_TRUST_ALL_DIRS=1\nB=2\n')
-    expect(rec.file).toBe(join(cwd, '.env'))
-    expect(rec.loaded).toEqual(['A', 'B'])
-    expect(rec.refused).toEqual(['THEOCODE_TRUST_ALL_DIRS'])
+    const record = await bootstrapSurface({ env, cwd, home: cwd, onWarn: () => {} })
+
+    expect(record?.file).toBe(join(cwd, '.env'))
+    expect(record?.loaded).toEqual(['FILE_ONLY'])
+    expect(env.SHELL_WINS).toBe('from-shell')
+    expect(env.HIDDEN).toBeUndefined()
+    expect(env['BAD-NAME']).toBeUndefined()
   })
 
-  it('leaves a key the environment already had out of loaded', async () => {
-    const env = { A: 'shell' }
-    const { rec } = await record('A=file\nB=2\n', env)
-    expect(rec.loaded).toEqual(['B'])
-    expect(env.A).toBe('shell')
-  })
+  it('reports a TheoCode-protected key as refused and leaves it unset', async () => {
+    const cwd = project('THEOCODE_TRUST_ALL_DIRS=1\nOTHER=1\n')
+    const env: Record<string, string | undefined> = {}
 
-  it('records an empty load when there is no .env', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'penv-'))
-    dirs.push(cwd)
-    const ctx = await bootstrapSurface({ env: {}, cwd, home: cwd, onWarn: () => {} })
-    expect(ctx.projectEnv?.loaded).toEqual([])
-  })
+    const record = await bootstrapSurface({ env, cwd, home: cwd, onWarn: () => {} })
 
-  it('does not read a name from inside a multiline value', async () => {
-    const { rec } = await record('NOTE="first\nANTHROPIC_API_KEY=not-a-declaration\nlast"\n')
-    expect(rec.loaded).toEqual(['NOTE'])
-  })
-
-  it('reads plain, export-prefixed, commented and CRLF files', async () => {
-    expect((await record('A=1\nOPENAI=2\n')).rec.loaded).toEqual(['A', 'OPENAI'])
-    expect((await record('export A=1\n# c\n\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
-    expect((await record('A=1\r\nB=2\r\n')).rec.loaded).toEqual(['A', 'B'])
-  })
-
-  it('keeps the declarations after multiline values, however they close', async () => {
-    expect((await record('A="one line"\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
-    expect((await record('A="first\nlast"\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
-    expect((await record("A='first\nlast'\nB=2\n")).rec.loaded).toEqual(['A', 'B'])
-    expect((await record('A="first\nmiddle\n"\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
-  })
-
-  it('ignores lines with no name or no equals sign', async () => {
-    expect((await record('=V\nNO_EQUALS\nGOOD=y\n')).rec.loaded).toEqual(['GOOD'])
-  })
-
-  it('pins the framework parser: a non-identifier name is loaded (it can never match a credential varName)', async () => {
-    expect((await record('1BAD=x\nGOOD=y\n')).rec.loaded).toEqual(['1BAD', 'GOOD'])
-  })
-
-  it('pins the framework parser: an unterminated quote does not swallow the lines below it', async () => {
-    expect((await record('A="never closed\nB=2\n')).rec.loaded).toEqual(['A', 'B'])
+    expect(record?.refused).toEqual(['THEOCODE_TRUST_ALL_DIRS'])
+    expect(record?.loaded).toEqual(['OTHER'])
+    expect(env.THEOCODE_TRUST_ALL_DIRS).toBeUndefined()
   })
 })

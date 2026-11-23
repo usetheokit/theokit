@@ -35,6 +35,7 @@
 import { approvalModeFor } from '../config/sandbox-policy.js'
 import type { ApprovalPolicy } from '../config/config.js'
 import { createPermissionsPlugin } from '@theokit/agents'
+import { permissionRulesFromLayers } from '@theokit/agents/config'
 import type { PermissionRule } from '@theokit/sdk'
 import type { PermissionsPluginOptions } from '@theokit/agents'
 import { settingsReport } from '../config/settings-load.js'
@@ -213,17 +214,13 @@ export function orderedPermissionRules(
   operatorHome: string,
   managedPaths?: readonly string[],
 ): readonly PermissionRule[] {
-  const rules = settingsReport({
-    projectDir: cwd,
-    userDir: operatorHome,
-    ...(managedPaths === undefined ? {} : { managedPaths }),
-  }).flatMap(
-    (r) => r.permissionRules,
+  return permissionRulesFromLayers(
+    settingsReport({
+      projectDir: cwd,
+      userDir: operatorHome,
+      ...(managedPaths === undefined ? {} : { managedPaths }),
+    }),
   )
-  // A stable partition, not a sort: within each action the layer order is the one the settings files
-  // declared, and reordering rules that agree on the verdict would change which SPECIFIER matched
-  // without changing the decision — a difference nobody wrote down and nobody could predict.
-  return [...rules.filter((r) => r.action === 'deny'), ...rules.filter((r) => r.action !== 'deny')]
 }
 
 
