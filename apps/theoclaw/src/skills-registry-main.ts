@@ -1,7 +1,7 @@
-import { createServer } from 'node:http'
 import { join } from 'node:path'
 
-import { createSkillsRegistryHandler } from './skills/registry-server.js'
+import { createNodeServer } from '@theokit/http/runtime/node'
+import { createSkillsRegistryHandler } from '@theokit/skills-registry'
 
 /**
  * The reference skill registry entry (OC-72): `node dist/skills-registry-main.js`. Needs
@@ -19,6 +19,12 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
   process.stderr.write('THEOCLAW_SKILLS_REGISTRY_PORT is not a valid port\n')
   process.exit(1)
 }
-createServer(createSkillsRegistryHandler({ dir, token })).listen(port, '127.0.0.1', () => {
-  process.stderr.write(`skills registry listening on 127.0.0.1:${port}\n`)
-})
+createNodeServer(createSkillsRegistryHandler({ dir, token }))
+  .listen(port, '127.0.0.1')
+  .then(
+    () => process.stderr.write(`skills registry listening on 127.0.0.1:${port}\n`),
+    (error: unknown) => {
+      process.stderr.write(`skills registry cannot start: ${String(error)}\n`)
+      process.exit(1)
+    },
+  )

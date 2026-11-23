@@ -1,24 +1,23 @@
 import { createHash } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
-import { createServer, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createSkillsRegistryHandler } from '../src/skills/registry-server.js'
+import { createNodeServer, type NodeServer } from '@theokit/http/runtime/node'
+import { createSkillsRegistryHandler } from '@theokit/skills-registry'
 
-const servers: Server[] = []
+const servers: NodeServer[] = []
 afterEach(() => {
-  for (const s of servers.splice(0)) s.close()
+  for (const s of servers.splice(0)) void s.close()
 })
 
 async function start(dir: string): Promise<string> {
-  const server = createServer(createSkillsRegistryHandler({ dir, token: 'secret' }))
+  const server = createNodeServer(createSkillsRegistryHandler({ dir, token: 'secret' }))
   servers.push(server)
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
-  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const { port } = await server.listen(0, '127.0.0.1')
+  return `http://127.0.0.1:${port}`
 }
 
 function pkg(
@@ -131,6 +130,6 @@ describe('skills registry server', () => {
         )
       ).status,
     ).toBe(400)
-    expect((await put(base, 'summarize', '1.0.0', 'x'.repeat(1024 * 1024 + 1))).status).toBe(400)
+    expect((await put(base, 'summarize', '1.0.0', 'x'.repeat(1024 * 1024 + 1))).status).toBe(413)
   })
 })
