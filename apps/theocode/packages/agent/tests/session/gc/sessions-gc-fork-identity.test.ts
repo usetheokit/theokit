@@ -142,9 +142,9 @@ describe('registry identity of a candidate', () => {
 describe('a registered session not stored at its derived path', () => {
   it('test_a_registered_fork_file_and_a_legacy_named_file_are_kept_without_a_post_filter', async () => {
     writeTranscript(fx, 'newest', 1)
-    // A fork file: named by a hash, its content id is the registered session.
-    const fork = writeTranscript(fx, 'hash-name', 90, {
-      content: `${JSON.stringify({ type: 'user', sessionId: 'reg-fork' })}\n`,
+    // A registered fork: its file is its own, but its rows name its SOURCE, not itself.
+    const fork = writeTranscript(fx, 'reg-fork', 90, {
+      content: `${JSON.stringify({ type: 'user', sessionId: 'some-source' })}\n`,
     })
     const legacy = legacyTranscriptPath(fx.root, fx.cwd, 'reg-legacy')
     mkdirSync(join(legacy, '..'), { recursive: true })
