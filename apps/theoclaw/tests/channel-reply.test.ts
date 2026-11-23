@@ -202,14 +202,14 @@ describe('createReplyHandler', () => {
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
   })
 
-  it('a cancelled run is not a failure', async () => {
+  it('a cancelled run is a failed turn since @theokit/gateway-agent 0.4: one error reply, then the error', async () => {
     const agent = new FakeAgent({ frames: [], result: { status: 'cancelled' } })
     const event = messageEvent('email', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
+    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBeInstanceOf(AgentTurnError)
 
-    expect(replies.map((reply) => reply.text)).toEqual([NO_ANSWER_REPLY])
+    expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
   })
 
   it('an agent factory that rejects still replies once', async () => {

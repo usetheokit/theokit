@@ -1,5 +1,10 @@
 export { backup, type BackupLock, type BackupOptions } from './backup.js'
-export { restore, type RestoreOptions } from './restore.js'
+export {
+  rehomeTranscripts,
+  restore,
+  type RehomeTranscriptsOptions,
+  type RestoreOptions,
+} from './restore.js'
 export { BackupError } from './errors.js'
 export type { BackupManifest, ManifestEntry } from './manifest.js'
 export type { BackupRoots } from './paths.js'
