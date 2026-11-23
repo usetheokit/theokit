@@ -1,0 +1,281 @@
+diff --git a/dist/chunk-PBCEVWPL.js b/dist/chunk-PBCEVWPL.js
+--- a/dist/chunk-PBCEVWPL.js
++++ b/dist/chunk-PBCEVWPL.js
+@@ -2269,7 +2269,7 @@
+ Assistant: ${turn.reply}
+ </turn>`;
+ }
+-async function createSaveMemoryTool(workspaceCwd, memory) {
++async function createSaveMemoryTool(workspaceCwd, memory, mirror) {
+   const { z: z5 } = await import('zod');
+   return Tool.create({
+     name: "save_memory",
+@@ -2283,7 +2283,7 @@
+           `fact is ${text.length} characters; the limit is ${MAX_REVIEW_FACT_CHARS}. Shorten it.`
+         );
+       }
+-      await appendMemoryFact(workspaceCwd, memory, { text });
++      await appendMemoryFact(workspaceCwd, memory, { text }, mirror);
+       return "saved";
+     }
+   });
+@@ -2307,8 +2307,8 @@
+   };
+ }
+ async function reviewOnce(job) {
+-  const { deps, review, memory, n, turn, signal } = job;
+-  const tool = await createSaveMemoryTool(deps.workspaceCwd, memory);
++  const { deps, review, memory, mirror, n, turn, signal } = job;
++  const tool = await createSaveMemoryTool(deps.workspaceCwd, memory, mirror);
+   const reviewer = await deps.create(reviewerOptions(deps, review, n, tool));
+   try {
+     const run = await reviewer.send(reviewPrompt(turn), { signal });
+@@ -2322,7 +2322,7 @@
+     await reviewer.dispose();
+   }
+ }
+-function createTurnReviewQueue(deps, review, memory) {
++function createTurnReviewQueue(deps, review, memory, mirror) {
+   const abort = new AbortController();
+   let tail = Promise.resolve();
+   let pending = 0;
+@@ -2330,7 +2330,7 @@
+   let dropping = false;
+   async function runJob(n, turn) {
+     try {
+-      if (!dropping) await reviewOnce({ deps, review, memory, n, turn, signal: abort.signal });
++      if (!dropping) await reviewOnce({ deps, review, memory, mirror, n, turn, signal: abort.signal });
+     } catch (cause) {
+       const message = cause instanceof Error ? cause.message : String(cause);
+       diagFailure(`[theokit-sdk] memory review failed for agent ${deps.agentId}: ${message}`);
+@@ -2366,7 +2366,7 @@
+     }
+   };
+ }
+-function createAgentTurnReviews(agentId, workspaceCwd, options, agentMemory) {
++function createAgentTurnReviews(agentId, workspaceCwd, options, agentMemory, mirror) {
+   const memory = options.memory;
+   if (memory?.enabled !== true || memory.review === void 0) return void 0;
+   const create = async (reviewerOptions2) => {
+@@ -2376,7 +2376,8 @@
+   const queue = createTurnReviewQueue(
+     { agentId, workspaceCwd, options, create },
+     memory.review,
+-    memory
++    memory,
++    mirror
+   );
+   if (agentMemory !== void 0) agentMemory.reviewsIdle = () => queue.idle();
+   return queue;
+@@ -10835,7 +10836,8 @@
+       this.agentId,
+       this.workspaceCwd,
+       options,
+-      this.memory
++      this.memory,
++      this.memoryMirror
+     );
+     registerLocalAgent({
+       agentId: this.agentId,
+@@ -12285,6 +12287,6 @@
+   return { cwd, model, store: new FsSessionStore2({ baseDir, cwd }) };
+ }
+ 
+-export { Agent, AgentBuilder, BUILTIN_TOOL_NAMES, DEFAULT_AGENTIC_MODEL_ID, MEMORY_EMBEDDING_ADAPTERS, PluginFrontmatterSchema, PluginManager, Tool, ToolError, UsageAccumulator, checkToolName, computeCost, generateCronId, getPricingEntry, isBuiltinToolName, jsonGenerations, managedSettingsPathFor, memoryGenerations, readManagedSettings, readManagedSettingsDocument, readWorkspaceTrustRecordStrict, resolveSessionDir, resolveWorkspacePluginFolders, splitFrontmatter, workspaceTrustRecordPath };
++export { Agent, appendMemoryFact, AgentBuilder, BUILTIN_TOOL_NAMES, DEFAULT_AGENTIC_MODEL_ID, MEMORY_EMBEDDING_ADAPTERS, PluginFrontmatterSchema, PluginManager, Tool, ToolError, UsageAccumulator, checkToolName, computeCost, generateCronId, getPricingEntry, isBuiltinToolName, jsonGenerations, managedSettingsPathFor, memoryGenerations, readManagedSettings, readManagedSettingsDocument, readWorkspaceTrustRecordStrict, resolveSessionDir, resolveWorkspacePluginFolders, splitFrontmatter, workspaceTrustRecordPath };
+ //# sourceMappingURL=chunk-PBCEVWPL.js.map
+ //# sourceMappingURL=chunk-PBCEVWPL.js.map
+\ No newline at end of file
+diff --git a/dist/chunk-4JBBTDOB.cjs b/dist/chunk-4JBBTDOB.cjs
+--- a/dist/chunk-4JBBTDOB.cjs
++++ b/dist/chunk-4JBBTDOB.cjs
+@@ -2272,7 +2272,7 @@
+ Assistant: ${turn.reply}
+ </turn>`;
+ }
+-async function createSaveMemoryTool(workspaceCwd, memory) {
++async function createSaveMemoryTool(workspaceCwd, memory, mirror) {
+   const { z: z5 } = await import('zod');
+   return Tool.create({
+     name: "save_memory",
+@@ -2286,7 +2286,7 @@
+           `fact is ${text.length} characters; the limit is ${MAX_REVIEW_FACT_CHARS}. Shorten it.`
+         );
+       }
+-      await appendMemoryFact(workspaceCwd, memory, { text });
++      await appendMemoryFact(workspaceCwd, memory, { text }, mirror);
+       return "saved";
+     }
+   });
+@@ -2310,8 +2310,8 @@
+   };
+ }
+ async function reviewOnce(job) {
+-  const { deps, review, memory, n, turn, signal } = job;
+-  const tool = await createSaveMemoryTool(deps.workspaceCwd, memory);
++  const { deps, review, memory, mirror, n, turn, signal } = job;
++  const tool = await createSaveMemoryTool(deps.workspaceCwd, memory, mirror);
+   const reviewer = await deps.create(reviewerOptions(deps, review, n, tool));
+   try {
+     const run = await reviewer.send(reviewPrompt(turn), { signal });
+@@ -2325,7 +2325,7 @@
+     await reviewer.dispose();
+   }
+ }
+-function createTurnReviewQueue(deps, review, memory) {
++function createTurnReviewQueue(deps, review, memory, mirror) {
+   const abort = new AbortController();
+   let tail = Promise.resolve();
+   let pending = 0;
+@@ -2333,7 +2333,7 @@
+   let dropping = false;
+   async function runJob(n, turn) {
+     try {
+-      if (!dropping) await reviewOnce({ deps, review, memory, n, turn, signal: abort.signal });
++      if (!dropping) await reviewOnce({ deps, review, memory, mirror, n, turn, signal: abort.signal });
+     } catch (cause) {
+       const message = cause instanceof Error ? cause.message : String(cause);
+       chunkVPWGGPZ6_cjs.diagFailure(`[theokit-sdk] memory review failed for agent ${deps.agentId}: ${message}`);
+@@ -2369,7 +2369,7 @@
+     }
+   };
+ }
+-function createAgentTurnReviews(agentId, workspaceCwd, options, agentMemory) {
++function createAgentTurnReviews(agentId, workspaceCwd, options, agentMemory, mirror) {
+   const memory = options.memory;
+   if (memory?.enabled !== true || memory.review === void 0) return void 0;
+   const create = async (reviewerOptions2) => {
+@@ -2379,7 +2379,8 @@
+   const queue = createTurnReviewQueue(
+     { agentId, workspaceCwd, options, create },
+     memory.review,
+-    memory
++    memory,
++    mirror
+   );
+   if (agentMemory !== void 0) agentMemory.reviewsIdle = () => queue.idle();
+   return queue;
+@@ -10838,7 +10839,8 @@
+       this.agentId,
+       this.workspaceCwd,
+       options,
+-      this.memory
++      this.memory,
++      this.memoryMirror
+     );
+     registerLocalAgent({
+       agentId: this.agentId,
+@@ -12289,6 +12291,7 @@
+ }
+ 
+ exports.Agent = Agent;
++exports.appendMemoryFact = appendMemoryFact;
+ exports.AgentBuilder = AgentBuilder;
+ exports.BUILTIN_TOOL_NAMES = BUILTIN_TOOL_NAMES;
+ exports.DEFAULT_AGENTIC_MODEL_ID = DEFAULT_AGENTIC_MODEL_ID;
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -11,7 +11,7 @@
+ import './chunk-PJGJTTXV.js';
+ import './chunk-HY66GLM6.js';
+ export { Cron } from './chunk-XYMDLNXE.js';
+-import { MEMORY_EMBEDDING_ADAPTERS, resolveWorkspacePluginFolders, resolveSessionDir, PluginManager, DEFAULT_AGENTIC_MODEL_ID, Agent, splitFrontmatter, PluginFrontmatterSchema, workspaceTrustRecordPath, readWorkspaceTrustRecordStrict } from './chunk-PBCEVWPL.js';
++import { appendMemoryFact, MEMORY_EMBEDDING_ADAPTERS, resolveWorkspacePluginFolders, resolveSessionDir, PluginManager, DEFAULT_AGENTIC_MODEL_ID, Agent, splitFrontmatter, PluginFrontmatterSchema, workspaceTrustRecordPath, readWorkspaceTrustRecordStrict } from './chunk-PBCEVWPL.js';
+ export { Agent, AgentBuilder, BUILTIN_TOOL_NAMES, Tool, ToolError, UsageAccumulator, checkToolName, computeCost, getPricingEntry, isBuiltinToolName, jsonGenerations, managedSettingsPathFor, memoryGenerations, readManagedSettings, readManagedSettingsDocument } from './chunk-PBCEVWPL.js';
+ import './chunk-ZRUOYECA.js';
+ import './chunk-S4237QHR.js';
+@@ -1475,6 +1475,10 @@
+ }
+ 
+ // src/memory-facts.ts
++// Patched in (theokit#2743): the public way to write one fact into a memory partition.
++function addMemoryFact(cwd, settings, fact) {
++  return appendMemoryFact(cwd, settings, fact);
++}
+ function listMemoryFacts(cwd, settings) {
+   return load().then((m) => m.listFactEntries(cwd, settings));
+ }
+@@ -3161,6 +3165,6 @@
+   return manifest;
+ }
+ 
+-export { AgentFactory, Budget, DecisionChecksumError, EventBus, JobQueue, LayerOrderError, LiveSessionError, Memory, NoopMemoryProvider, PermissionEngine, PermissionPlugin, Plugin, Provider, RetentionPolicyError, SOVEREIGN_ENV_KEYS, Skill, SkillReadTool, Squad, Task, Theokit, TokenLimiter, UngatedCapabilityError, UnicodeNormalizer, applyMode, applySecurityFloor, auditEnvReachability, chargeAndCheckThresholds, createCounterBudgetTracker, createTokenLimiter, createUnicodeNormalizer, decide, decideApproval, describeAction, describeCredential, effectiveToolNames, evaluateBlastRadius, extractRawId, foldLayers, generateImage, guardSessionDestruction, guardTools, installWorkspacePlugin, isInside, listMemoryFacts, listWorkspacePlugins, loadProjectEnv, migrateSqliteToLance2 as migrateSqliteToLance, mkMemoryId, normalizeSchema, parsePermissionRules, parsePluginManifest, permissionFloorReason, planReaping, preflightCheck, readSessionHistory, readSessionMessages2 as readSessionMessages, recordWiring, removeMemoryFact, resolveTrustPosture, runGoalLoop, runPreToolCall, scopedConversationId, sessionScopePrefix, toShareGptTrajectory, trustWorkspacePlugin, untrustWorkspacePlugin, verifyLayerOrdering, withBlastRadius };
++export { addMemoryFact, AgentFactory, Budget, DecisionChecksumError, EventBus, JobQueue, LayerOrderError, LiveSessionError, Memory, NoopMemoryProvider, PermissionEngine, PermissionPlugin, Plugin, Provider, RetentionPolicyError, SOVEREIGN_ENV_KEYS, Skill, SkillReadTool, Squad, Task, Theokit, TokenLimiter, UngatedCapabilityError, UnicodeNormalizer, applyMode, applySecurityFloor, auditEnvReachability, chargeAndCheckThresholds, createCounterBudgetTracker, createTokenLimiter, createUnicodeNormalizer, decide, decideApproval, describeAction, describeCredential, effectiveToolNames, evaluateBlastRadius, extractRawId, foldLayers, generateImage, guardSessionDestruction, guardTools, installWorkspacePlugin, isInside, listMemoryFacts, listWorkspacePlugins, loadProjectEnv, migrateSqliteToLance2 as migrateSqliteToLance, mkMemoryId, normalizeSchema, parsePermissionRules, parsePluginManifest, permissionFloorReason, planReaping, preflightCheck, readSessionHistory, readSessionMessages2 as readSessionMessages, recordWiring, removeMemoryFact, resolveTrustPosture, runGoalLoop, runPreToolCall, scopedConversationId, sessionScopePrefix, toShareGptTrajectory, trustWorkspacePlugin, untrustWorkspacePlugin, verifyLayerOrdering, withBlastRadius };
+ //# sourceMappingURL=index.js.map
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/dist/index.cjs b/dist/index.cjs
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -1468,6 +1468,10 @@
+ }
+ 
+ // src/memory-facts.ts
++// Patched in (theokit#2743): the public way to write one fact into a memory partition.
++function addMemoryFact(cwd, settings, fact) {
++  return chunk4JBBTDOB_cjs.appendMemoryFact(cwd, settings, fact);
++}
+ function listMemoryFacts(cwd, settings) {
+   return load().then((m) => m.listFactEntries(cwd, settings));
+ }
+@@ -3453,6 +3457,7 @@
+ exports.guardTools = guardTools;
+ exports.installWorkspacePlugin = installWorkspacePlugin;
+ exports.isInside = isInside;
++exports.addMemoryFact = addMemoryFact;
+ exports.listMemoryFacts = listMemoryFacts;
+ exports.listWorkspacePlugins = listWorkspacePlugins;
+ exports.loadProjectEnv = loadProjectEnv;
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -3103,6 +3103,16 @@
+  */
+ declare function listMemoryFacts(cwd: string, settings?: Partial<MemorySettings>): Promise<StoredMemoryFact[]>;
+ /**
++ * Write one fact into the built-in store of `settings` (its `enabled`, `directory` and `userId` pick the partition),
++ * redacting secrets. Writes the local store only; it does not mirror.
++ *
++ * @public
++ */
++declare function addMemoryFact(cwd: string, settings: MemorySettings, fact: {
++    text: string;
++    kind?: string;
++}): Promise<void>;
++/**
+  * Remove one memory by `id`: the per-memory file and its `MEMORY.md` index line, or one legacy
+  * bullet inside `## Facts`. Serialized with the SDK's own writes and written atomically. Resolves
+  * `true` when removed and `false` when no entry has that id. Rejects with
+@@ -5109,4 +5119,4 @@
+     replace?: boolean;
+ }): Promise<PluginManifest>;
+ 
+-export { Agent, AgentBuilder, type AgentBuilderDeps, AgentDefinition, type AgentDescription, AgentFactory, type AgentFactoryConfig, AgentLease, type AgentLike, AgentOperationOptions, AgentOptions, type AgentPromptResult, type AgentRegistryOptions, type ApprovalDecision, type ApprovalInput, type ApprovalMode, type ApprovalOutcome, type ApprovalReason, BUILTIN_TOOL_NAMES, type BatchItem, type BatchOptions, type BatchProgress, type BatchResult, type BlastRadiusDecision, type BlastRadiusInput, type BlastRadiusOutcome, type BlastRadiusReason, Budget, BudgetHandle, BudgetOptions, BudgetReservation, BudgetSnapshot, type BudgetTracker, BuiltinToolName, CloudOptions, CompatSource, ContextSettings, type CounterBudgetTrackerOptions, type CredentialInput, type CredentialReport, type CustomTool, type DecideOptions, type Decision, DecisionChecksumError, type DecisionSession, type DecisionTokens, type DeclaredAction, type DeclaredLayer, type DeepPartial, type DefineProviderOptions, type DefineToolSpec, type DiagnosticsSink, type DreamingSweepOptions, type DreamingSweepResult, type EffectiveToolCatalog, type EnvOptOut, type EnvReachabilityAudit, type EnvReachabilityInput, ErrorMetadata, EventBus, type EvictReason, type ExactValueMask, GOAL_CONTINUATION_MARKER, type GenerateImageOptions, GenerateObjectError, type GenerateObjectOptions, type GenerateObjectResult, type GeneratedImage, type GenerationStore, GetAgentOptions, GetRunOptions, GoalEvent, type GoalLoopAgent, GoalOptions, GoalResult, type GuardToolsContext, type HookApprovalGate, type HookApprovalRequest, InlineSkill, JobQueue, type JobQueueOptions, JudgeCredentialError, type JudgeResult, type KeepReason, type KeptArtifact, LayerOrderError, type LayerValues, ListAgentsOptions, ListResult, ListRunsOptions, type LiveAgentRegistry, LiveSessionError, type LiveSessionReason, type LoadProjectEnvOptions, LocalOptions, type ManagedSettings, type ManagedSettingsDocument, McpServerConfig, Memory, MemoryId, type MemoryProvider, type MemorySettings, type MigrateOptions, type MigrateResult, type ModelListItem, type ModelParameterDefinition, ModelSelection, type ModelVariant, NoopMemoryProvider, type NormalizedJsonSchema, type OTelSpan, type PermissionAction, PermissionEngine, type PermissionEngineOptions, type PermissionFloorContext, type PermissionGate, type PermissionGateContext, type PermissionGateDecision, PermissionMode, PermissionPlugin, type PermissionPluginOptions, type PermissionRule, type PermissionRuleSet, Plugin, type PluginManifest, PluginsSettings, PreToolCallContext, PreToolCallDecision, type Processor, type ProjectEnvReport, type ProjectHook, Provider, type ProviderProfile, ProviderRoutingSettings, type ReadManagedSettingsDocumentOptions, type ReadSessionMessagesOptions, type ReapPlan, type ReapPlanInput, type ReapableArtifact, type RetentionPolicy, RetentionPolicyError, Run, RunEventSink$1 as RunEventSink, type RunLike, RunResult, RunStatus, type SDKAgent, SDKAgentInfo, SDKMessage, type SDKModel, SDKProvider, type SDKRepository, type SDKUser, SDKUserMessage, SOVEREIGN_ENV_KEYS, Security, type SecurityFloorInput, SendOptions, type SessionHistory, type SessionMessage, type SessionMessagePart, type SessionPool, type SessionPoolOptions, type SessionScope, type ShareGptMessage, type ShareGptTrajectory, SkillReadTool, SkillsSettings, type SovereignEnvKey, Squad, type SquadOptions, type SquadRun, type SquadRunOptions, type StoredMemoryFact, StreamObjectError, type StreamObjectEvent, type StreamObjectOptions, SystemPromptResolver, TASK_RESERVED_PREFIXES, Task, type TaskCancelResult, type TaskConfigureOptions, type TaskEvent, type TaskFilter, type TaskHandle, type TaskKind, type TaskState, type TaskStoreOptions, type TaskSubmitOptions, type TaskWorkContext, type TaskWorkFn, type TelemetryHandle, Theokit, TheokitAgentError, type TheokitRequestOptions, TokenLimiter, type TokenLimiterOptions, Tool, ToolError, type ToolNameProblem, type ToolResultContentBlock, type TrustLevel, type TrustPosture, type TrustPostureInput, type TrustSource, UngatedCapabilityError, UnicodeNormalizer, type UnicodeNormalizerOptions, type UnresolvedToolSource, UsageAccumulator, type WiredEntity, type WiringRecordInput, type WithBlastRadius, type WorkspacePluginListing, applyMode, applySecurityFloor, auditEnvReachability, chargeAndCheckThresholds, checkToolName, computeCost, createCounterBudgetTracker, createTokenLimiter, createUnicodeNormalizer, decide, decideApproval, describeAction, describeCredential, diag, diagFailure, effectiveToolNames, emitRunEvent, estimateTokens, evaluateBlastRadius, extractRawId, fingerprintHookGate, foldLayers, generateImage, getPricingEntry, guardSessionDestruction, guardTools, hookFingerprint, inferApiMode, installWorkspacePlugin, isBuiltinToolName, isInside, isValidTaskId, jsonGenerations, listMemoryFacts, listProjectHooks, listWorkspacePlugins, loadProjectEnv, managedSettingsPathFor, memoryGenerations, migrateSqliteToLance, mkMemoryId, normalizeSchema, normalizeUsage, parsePermissionRules, parsePluginManifest, permissionFloorReason, planReaping, preflightCheck, readManagedSettings, readManagedSettingsDocument, readSessionHistory, readSessionMessages, recordWiring, removeMemoryFact, resolveTrustPosture, runGoalLoop, runPreToolCall, scopedConversationId, sessionScopePrefix, setDiagnosticsSink, toShareGptTrajectory, trustWorkspacePlugin, untrustWorkspacePlugin, verifyLayerOrdering, withBlastRadius };
++export { addMemoryFact, Agent, AgentBuilder, type AgentBuilderDeps, AgentDefinition, type AgentDescription, AgentFactory, type AgentFactoryConfig, AgentLease, type AgentLike, AgentOperationOptions, AgentOptions, type AgentPromptResult, type AgentRegistryOptions, type ApprovalDecision, type ApprovalInput, type ApprovalMode, type ApprovalOutcome, type ApprovalReason, BUILTIN_TOOL_NAMES, type BatchItem, type BatchOptions, type BatchProgress, type BatchResult, type BlastRadiusDecision, type BlastRadiusInput, type BlastRadiusOutcome, type BlastRadiusReason, Budget, BudgetHandle, BudgetOptions, BudgetReservation, BudgetSnapshot, type BudgetTracker, BuiltinToolName, CloudOptions, CompatSource, ContextSettings, type CounterBudgetTrackerOptions, type CredentialInput, type CredentialReport, type CustomTool, type DecideOptions, type Decision, DecisionChecksumError, type DecisionSession, type DecisionTokens, type DeclaredAction, type DeclaredLayer, type DeepPartial, type DefineProviderOptions, type DefineToolSpec, type DiagnosticsSink, type DreamingSweepOptions, type DreamingSweepResult, type EffectiveToolCatalog, type EnvOptOut, type EnvReachabilityAudit, type EnvReachabilityInput, ErrorMetadata, EventBus, type EvictReason, type ExactValueMask, GOAL_CONTINUATION_MARKER, type GenerateImageOptions, GenerateObjectError, type GenerateObjectOptions, type GenerateObjectResult, type GeneratedImage, type GenerationStore, GetAgentOptions, GetRunOptions, GoalEvent, type GoalLoopAgent, GoalOptions, GoalResult, type GuardToolsContext, type HookApprovalGate, type HookApprovalRequest, InlineSkill, JobQueue, type JobQueueOptions, JudgeCredentialError, type JudgeResult, type KeepReason, type KeptArtifact, LayerOrderError, type LayerValues, ListAgentsOptions, ListResult, ListRunsOptions, type LiveAgentRegistry, LiveSessionError, type LiveSessionReason, type LoadProjectEnvOptions, LocalOptions, type ManagedSettings, type ManagedSettingsDocument, McpServerConfig, Memory, MemoryId, type MemoryProvider, type MemorySettings, type MigrateOptions, type MigrateResult, type ModelListItem, type ModelParameterDefinition, ModelSelection, type ModelVariant, NoopMemoryProvider, type NormalizedJsonSchema, type OTelSpan, type PermissionAction, PermissionEngine, type PermissionEngineOptions, type PermissionFloorContext, type PermissionGate, type PermissionGateContext, type PermissionGateDecision, PermissionMode, PermissionPlugin, type PermissionPluginOptions, type PermissionRule, type PermissionRuleSet, Plugin, type PluginManifest, PluginsSettings, PreToolCallContext, PreToolCallDecision, type Processor, type ProjectEnvReport, type ProjectHook, Provider, type ProviderProfile, ProviderRoutingSettings, type ReadManagedSettingsDocumentOptions, type ReadSessionMessagesOptions, type ReapPlan, type ReapPlanInput, type ReapableArtifact, type RetentionPolicy, RetentionPolicyError, Run, RunEventSink$1 as RunEventSink, type RunLike, RunResult, RunStatus, type SDKAgent, SDKAgentInfo, SDKMessage, type SDKModel, SDKProvider, type SDKRepository, type SDKUser, SDKUserMessage, SOVEREIGN_ENV_KEYS, Security, type SecurityFloorInput, SendOptions, type SessionHistory, type SessionMessage, type SessionMessagePart, type SessionPool, type SessionPoolOptions, type SessionScope, type ShareGptMessage, type ShareGptTrajectory, SkillReadTool, SkillsSettings, type SovereignEnvKey, Squad, type SquadOptions, type SquadRun, type SquadRunOptions, type StoredMemoryFact, StreamObjectError, type StreamObjectEvent, type StreamObjectOptions, SystemPromptResolver, TASK_RESERVED_PREFIXES, Task, type TaskCancelResult, type TaskConfigureOptions, type TaskEvent, type TaskFilter, type TaskHandle, type TaskKind, type TaskState, type TaskStoreOptions, type TaskSubmitOptions, type TaskWorkContext, type TaskWorkFn, type TelemetryHandle, Theokit, TheokitAgentError, type TheokitRequestOptions, TokenLimiter, type TokenLimiterOptions, Tool, ToolError, type ToolNameProblem, type ToolResultContentBlock, type TrustLevel, type TrustPosture, type TrustPostureInput, type TrustSource, UngatedCapabilityError, UnicodeNormalizer, type UnicodeNormalizerOptions, type UnresolvedToolSource, UsageAccumulator, type WiredEntity, type WiringRecordInput, type WithBlastRadius, type WorkspacePluginListing, applyMode, applySecurityFloor, auditEnvReachability, chargeAndCheckThresholds, checkToolName, computeCost, createCounterBudgetTracker, createTokenLimiter, createUnicodeNormalizer, decide, decideApproval, describeAction, describeCredential, diag, diagFailure, effectiveToolNames, emitRunEvent, estimateTokens, evaluateBlastRadius, extractRawId, fingerprintHookGate, foldLayers, generateImage, getPricingEntry, guardSessionDestruction, guardTools, hookFingerprint, inferApiMode, installWorkspacePlugin, isBuiltinToolName, isInside, isValidTaskId, jsonGenerations, listMemoryFacts, listProjectHooks, listWorkspacePlugins, loadProjectEnv, managedSettingsPathFor, memoryGenerations, migrateSqliteToLance, mkMemoryId, normalizeSchema, normalizeUsage, parsePermissionRules, parsePluginManifest, permissionFloorReason, planReaping, preflightCheck, readManagedSettings, readManagedSettingsDocument, readSessionHistory, readSessionMessages, recordWiring, removeMemoryFact, resolveTrustPosture, runGoalLoop, runPreToolCall, scopedConversationId, sessionScopePrefix, setDiagnosticsSink, toShareGptTrajectory, trustWorkspacePlugin, untrustWorkspacePlugin, verifyLayerOrdering, withBlastRadius };
+diff --git a/dist/index.d.cts b/dist/index.d.cts
+--- a/dist/index.d.cts
++++ b/dist/index.d.cts
+@@ -3103,6 +3103,16 @@
+  */
+ declare function listMemoryFacts(cwd: string, settings?: Partial<MemorySettings>): Promise<StoredMemoryFact[]>;
+ /**
++ * Write one fact into the built-in store of `settings` (its `enabled`, `directory` and `userId` pick the partition),
++ * redacting secrets. Writes the local store only; it does not mirror.
++ *
++ * @public
++ */
++declare function addMemoryFact(cwd: string, settings: MemorySettings, fact: {
++    text: string;
++    kind?: string;
++}): Promise<void>;
++/**
+  * Remove one memory by `id`: the per-memory file and its `MEMORY.md` index line, or one legacy
+  * bullet inside `## Facts`. Serialized with the SDK's own writes and written atomically. Resolves
+  * `true` when removed and `false` when no entry has that id. Rejects with
+@@ -5109,4 +5119,4 @@
+     replace?: boolean;
+ }): Promise<PluginManifest>;
+ 
+-export { Agent, AgentBuilder, type AgentBuilderDeps, AgentDefinition, type AgentDescription, AgentFactory, type AgentFactoryConfig, AgentLease, type AgentLike, AgentOperationOptions, AgentOptions, type AgentPromptResult, type AgentRegistryOptions, type ApprovalDecision, type ApprovalInput, type ApprovalMode, type ApprovalOutcome, type ApprovalReason, BUILTIN_TOOL_NAMES, type BatchItem, type BatchOptions, type BatchProgress, type BatchResult, type BlastRadiusDecision, type BlastRadiusInput, type BlastRadiusOutcome, type BlastRadiusReason, Budget, BudgetHandle, BudgetOptions, BudgetReservation, BudgetSnapshot, type BudgetTracker, BuiltinToolName, CloudOptions, CompatSource, ContextSettings, type CounterBudgetTrackerOptions, type CredentialInput, type CredentialReport, type CustomTool, type DecideOptions, type Decision, DecisionChecksumError, type DecisionSession, type DecisionTokens, type DeclaredAction, type DeclaredLayer, type DeepPartial, type DefineProviderOptions, type DefineToolSpec, type DiagnosticsSink, type DreamingSweepOptions, type DreamingSweepResult, type EffectiveToolCatalog, type EnvOptOut, type EnvReachabilityAudit, type EnvReachabilityInput, ErrorMetadata, EventBus, type EvictReason, type ExactValueMask, GOAL_CONTINUATION_MARKER, type GenerateImageOptions, GenerateObjectError, type GenerateObjectOptions, type GenerateObjectResult, type GeneratedImage, type GenerationStore, GetAgentOptions, GetRunOptions, GoalEvent, type GoalLoopAgent, GoalOptions, GoalResult, type GuardToolsContext, type HookApprovalGate, type HookApprovalRequest, InlineSkill, JobQueue, type JobQueueOptions, JudgeCredentialError, type JudgeResult, type KeepReason, type KeptArtifact, LayerOrderError, type LayerValues, ListAgentsOptions, ListResult, ListRunsOptions, type LiveAgentRegistry, LiveSessionError, type LiveSessionReason, type LoadProjectEnvOptions, LocalOptions, type ManagedSettings, type ManagedSettingsDocument, McpServerConfig, Memory, MemoryId, type MemoryProvider, type MemorySettings, type MigrateOptions, type MigrateResult, type ModelListItem, type ModelParameterDefinition, ModelSelection, type ModelVariant, NoopMemoryProvider, type NormalizedJsonSchema, type OTelSpan, type PermissionAction, PermissionEngine, type PermissionEngineOptions, type PermissionFloorContext, type PermissionGate, type PermissionGateContext, type PermissionGateDecision, PermissionMode, PermissionPlugin, type PermissionPluginOptions, type PermissionRule, type PermissionRuleSet, Plugin, type PluginManifest, PluginsSettings, PreToolCallContext, PreToolCallDecision, type Processor, type ProjectEnvReport, type ProjectHook, Provider, type ProviderProfile, ProviderRoutingSettings, type ReadManagedSettingsDocumentOptions, type ReadSessionMessagesOptions, type ReapPlan, type ReapPlanInput, type ReapableArtifact, type RetentionPolicy, RetentionPolicyError, Run, RunEventSink$1 as RunEventSink, type RunLike, RunResult, RunStatus, type SDKAgent, SDKAgentInfo, SDKMessage, type SDKModel, SDKProvider, type SDKRepository, type SDKUser, SDKUserMessage, SOVEREIGN_ENV_KEYS, Security, type SecurityFloorInput, SendOptions, type SessionHistory, type SessionMessage, type SessionMessagePart, type SessionPool, type SessionPoolOptions, type SessionScope, type ShareGptMessage, type ShareGptTrajectory, SkillReadTool, SkillsSettings, type SovereignEnvKey, Squad, type SquadOptions, type SquadRun, type SquadRunOptions, type StoredMemoryFact, StreamObjectError, type StreamObjectEvent, type StreamObjectOptions, SystemPromptResolver, TASK_RESERVED_PREFIXES, Task, type TaskCancelResult, type TaskConfigureOptions, type TaskEvent, type TaskFilter, type TaskHandle, type TaskKind, type TaskState, type TaskStoreOptions, type TaskSubmitOptions, type TaskWorkContext, type TaskWorkFn, type TelemetryHandle, Theokit, TheokitAgentError, type TheokitRequestOptions, TokenLimiter, type TokenLimiterOptions, Tool, ToolError, type ToolNameProblem, type ToolResultContentBlock, type TrustLevel, type TrustPosture, type TrustPostureInput, type TrustSource, UngatedCapabilityError, UnicodeNormalizer, type UnicodeNormalizerOptions, type UnresolvedToolSource, UsageAccumulator, type WiredEntity, type WiringRecordInput, type WithBlastRadius, type WorkspacePluginListing, applyMode, applySecurityFloor, auditEnvReachability, chargeAndCheckThresholds, checkToolName, computeCost, createCounterBudgetTracker, createTokenLimiter, createUnicodeNormalizer, decide, decideApproval, describeAction, describeCredential, diag, diagFailure, effectiveToolNames, emitRunEvent, estimateTokens, evaluateBlastRadius, extractRawId, fingerprintHookGate, foldLayers, generateImage, getPricingEntry, guardSessionDestruction, guardTools, hookFingerprint, inferApiMode, installWorkspacePlugin, isBuiltinToolName, isInside, isValidTaskId, jsonGenerations, listMemoryFacts, listProjectHooks, listWorkspacePlugins, loadProjectEnv, managedSettingsPathFor, memoryGenerations, migrateSqliteToLance, mkMemoryId, normalizeSchema, normalizeUsage, parsePermissionRules, parsePluginManifest, permissionFloorReason, planReaping, preflightCheck, readManagedSettings, readManagedSettingsDocument, readSessionHistory, readSessionMessages, recordWiring, removeMemoryFact, resolveTrustPosture, runGoalLoop, runPreToolCall, scopedConversationId, sessionScopePrefix, setDiagnosticsSink, toShareGptTrajectory, trustWorkspacePlugin, untrustWorkspacePlugin, verifyLayerOrdering, withBlastRadius };
++export { addMemoryFact, Agent, AgentBuilder, type AgentBuilderDeps, AgentDefinition, type AgentDescription, AgentFactory, type AgentFactoryConfig, AgentLease, type AgentLike, AgentOperationOptions, AgentOptions, type AgentPromptResult, type AgentRegistryOptions, type ApprovalDecision, type ApprovalInput, type ApprovalMode, type ApprovalOutcome, type ApprovalReason, BUILTIN_TOOL_NAMES, type BatchItem, type BatchOptions, type BatchProgress, type BatchResult, type BlastRadiusDecision, type BlastRadiusInput, type BlastRadiusOutcome, type BlastRadiusReason, Budget, BudgetHandle, BudgetOptions, BudgetReservation, BudgetSnapshot, type BudgetTracker, BuiltinToolName, CloudOptions, CompatSource, ContextSettings, type CounterBudgetTrackerOptions, type CredentialInput, type CredentialReport, type CustomTool, type DecideOptions, type Decision, DecisionChecksumError, type DecisionSession, type DecisionTokens, type DeclaredAction, type DeclaredLayer, type DeepPartial, type DefineProviderOptions, type DefineToolSpec, type DiagnosticsSink, type DreamingSweepOptions, type DreamingSweepResult, type EffectiveToolCatalog, type EnvOptOut, type EnvReachabilityAudit, type EnvReachabilityInput, ErrorMetadata, EventBus, type EvictReason, type ExactValueMask, GOAL_CONTINUATION_MARKER, type GenerateImageOptions, GenerateObjectError, type GenerateObjectOptions, type GenerateObjectResult, type GeneratedImage, type GenerationStore, GetAgentOptions, GetRunOptions, GoalEvent, type GoalLoopAgent, GoalOptions, GoalResult, type GuardToolsContext, type HookApprovalGate, type HookApprovalRequest, InlineSkill, JobQueue, type JobQueueOptions, JudgeCredentialError, type JudgeResult, type KeepReason, type KeptArtifact, LayerOrderError, type LayerValues, ListAgentsOptions, ListResult, ListRunsOptions, type LiveAgentRegistry, LiveSessionError, type LiveSessionReason, type LoadProjectEnvOptions, LocalOptions, type ManagedSettings, type ManagedSettingsDocument, McpServerConfig, Memory, MemoryId, type MemoryProvider, type MemorySettings, type MigrateOptions, type MigrateResult, type ModelListItem, type ModelParameterDefinition, ModelSelection, type ModelVariant, NoopMemoryProvider, type NormalizedJsonSchema, type OTelSpan, type PermissionAction, PermissionEngine, type PermissionEngineOptions, type PermissionFloorContext, type PermissionGate, type PermissionGateContext, type PermissionGateDecision, PermissionMode, PermissionPlugin, type PermissionPluginOptions, type PermissionRule, type PermissionRuleSet, Plugin, type PluginManifest, PluginsSettings, PreToolCallContext, PreToolCallDecision, type Processor, type ProjectEnvReport, type ProjectHook, Provider, type ProviderProfile, ProviderRoutingSettings, type ReadManagedSettingsDocumentOptions, type ReadSessionMessagesOptions, type ReapPlan, type ReapPlanInput, type ReapableArtifact, type RetentionPolicy, RetentionPolicyError, Run, RunEventSink$1 as RunEventSink, type RunLike, RunResult, RunStatus, type SDKAgent, SDKAgentInfo, SDKMessage, type SDKModel, SDKProvider, type SDKRepository, type SDKUser, SDKUserMessage, SOVEREIGN_ENV_KEYS, Security, type SecurityFloorInput, SendOptions, type SessionHistory, type SessionMessage, type SessionMessagePart, type SessionPool, type SessionPoolOptions, type SessionScope, type ShareGptMessage, type ShareGptTrajectory, SkillReadTool, SkillsSettings, type SovereignEnvKey, Squad, type SquadOptions, type SquadRun, type SquadRunOptions, type StoredMemoryFact, StreamObjectError, type StreamObjectEvent, type StreamObjectOptions, SystemPromptResolver, TASK_RESERVED_PREFIXES, Task, type TaskCancelResult, type TaskConfigureOptions, type TaskEvent, type TaskFilter, type TaskHandle, type TaskKind, type TaskState, type TaskStoreOptions, type TaskSubmitOptions, type TaskWorkContext, type TaskWorkFn, type TelemetryHandle, Theokit, TheokitAgentError, type TheokitRequestOptions, TokenLimiter, type TokenLimiterOptions, Tool, ToolError, type ToolNameProblem, type ToolResultContentBlock, type TrustLevel, type TrustPosture, type TrustPostureInput, type TrustSource, UngatedCapabilityError, UnicodeNormalizer, type UnicodeNormalizerOptions, type UnresolvedToolSource, UsageAccumulator, type WiredEntity, type WiringRecordInput, type WithBlastRadius, type WorkspacePluginListing, applyMode, applySecurityFloor, auditEnvReachability, chargeAndCheckThresholds, checkToolName, computeCost, createCounterBudgetTracker, createTokenLimiter, createUnicodeNormalizer, decide, decideApproval, describeAction, describeCredential, diag, diagFailure, effectiveToolNames, emitRunEvent, estimateTokens, evaluateBlastRadius, extractRawId, fingerprintHookGate, foldLayers, generateImage, getPricingEntry, guardSessionDestruction, guardTools, hookFingerprint, inferApiMode, installWorkspacePlugin, isBuiltinToolName, isInside, isValidTaskId, jsonGenerations, listMemoryFacts, listProjectHooks, listWorkspacePlugins, loadProjectEnv, managedSettingsPathFor, memoryGenerations, migrateSqliteToLance, mkMemoryId, normalizeSchema, normalizeUsage, parsePermissionRules, parsePluginManifest, permissionFloorReason, planReaping, preflightCheck, readManagedSettings, readManagedSettingsDocument, readSessionHistory, readSessionMessages, recordWiring, removeMemoryFact, resolveTrustPosture, runGoalLoop, runPreToolCall, scopedConversationId, sessionScopePrefix, setDiagnosticsSink, toShareGptTrajectory, trustWorkspacePlugin, untrustWorkspacePlugin, verifyLayerOrdering, withBlastRadius };

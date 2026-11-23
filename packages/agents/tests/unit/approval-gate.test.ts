@@ -225,3 +225,47 @@ describe('createApprovalGate', () => {
     expect(lines[1]?.reason).toMatch(/bad key/)
   })
 })
+
+describe('createApprovalGate options', () => {
+  it('recordUngoverned: false leaves no receipt for an ungoverned call', async () => {
+    const { store, scope } = fixture()
+    const append = vi.fn(async () => undefined)
+    const ledger = { append } as unknown as ApprovalLedger
+    const key = (c: any) => (c.name === 'shell_exec' ? keyFor(scope)(c) : undefined)
+    const quiet = createApprovalGate({
+      store,
+      key,
+      ledger,
+      recordUngoverned: false,
+      ask: async () => 'once',
+    })
+    await quiet.decide({ ...ctx('x'), name: 'read_file' })
+    expect(append).not.toHaveBeenCalled()
+    await quiet.decide(ctx('x'))
+    expect(append).toHaveBeenCalledTimes(1)
+    const loud = createApprovalGate({ store, key, ledger })
+    await loud.decide({ ...ctx('x'), name: 'read_file' })
+    expect(append).toHaveBeenCalledTimes(2)
+  })
+
+  it('persistAlways: false allows once and saves nothing', async () => {
+    const { store, scope } = fixture()
+    const ask = vi.fn(async () => 'always' as const)
+    const gate = createApprovalGate({ store, key: keyFor(scope), ask, persistAlways: false })
+    expect((await gate.decide(ctx('make'))).allowed).toBe(true)
+    expect((await gate.decide(ctx('make'))).allowed).toBe(true)
+    expect(ask).toHaveBeenCalledTimes(2)
+    expect(store.isGranted({ tool: 'shell_exec', scope, command: 'make' })).toBe(false)
+  })
+
+  it('refusal words the plugin block', async () => {
+    const { store, scope } = fixture()
+    const gate = createApprovalGate({ store, key: keyFor(scope), refusal: (n, r) => `${n}: ${r}!` })
+    let handler: any
+    ;(gate.plugin as any).register({ on: (_h: string, fn: unknown) => (handler = fn) })
+    expect(await handler(ctx('make'))).toEqual({
+      block: true,
+      message: 'shell_exec: nobody can approve it!',
+    })
+  })
+})

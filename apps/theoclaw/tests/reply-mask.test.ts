@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import type { BasePlatformAdapter, GatewayContext, MessageEvent, PlatformName } from '@theokit/gateway'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
-import { createBroadcastGroups } from '../src/channels/broadcast-groups.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import type { TurnAgent } from '../src/channels/reply-handler.js'
 import { startTheoClaw } from '../src/composition.js'
@@ -104,7 +103,7 @@ describe('the chat reply mask', () => {
       ['telegram', telegram],
       ['discord', discord],
     ])
-    const groups = createBroadcastGroups([
+    const groups = [
       {
         name: 'home',
         members: [
@@ -112,7 +111,7 @@ describe('the chat reply mask', () => {
           { platform: 'discord', channelId: 'dc-channel' },
         ],
       },
-    ])
+    ]
     const prompts: string[] = []
     const handler = createReplyHandler({
       reset: async () => undefined,
