@@ -3,7 +3,7 @@ import type { Writable } from 'node:stream'
 
 import { redactSecrets } from '@theokit/gateway'
 
-import { maskSecrets } from '../channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
 import { loadConfiguration } from '../config-file.js'
 import { UsageError } from '../cli-args.js'
 import { logPath } from '../daemon-common.js'

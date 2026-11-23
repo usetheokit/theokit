@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { GatewayHandler, PlatformName } from '@theokit/gateway'
 
-import { maskSecrets, startChannelLoop } from '../src/channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
+import { startChannelLoop } from '../src/channels/channel-loop.js'
 import type { ChannelLoop, PlatformBuild } from '../src/channels/channel-loop.js'
 import { FakeAdapter, TEN_PLATFORMS, deferred, messageEvent, waitFor } from './fakes.js'
 
@@ -19,7 +20,8 @@ function startTen(
   options: { handler?: GatewayHandler; startTimeoutMs?: number } = {},
 ): Harness {
   const adapters = new Map<PlatformName, FakeAdapter>()
-  for (const platform of TEN_PLATFORMS) adapters.set(platform, overrides[platform] ?? new FakeAdapter(platform))
+  for (const platform of TEN_PLATFORMS)
+    adapters.set(platform, overrides[platform] ?? new FakeAdapter(platform))
   const lines: string[] = []
   const handled: string[] = []
   const handler: GatewayHandler =
@@ -42,12 +44,16 @@ function startTen(
 }
 
 function disconnectsOf(harness: Harness, except: PlatformName): number[] {
-  return [...harness.adapters].filter(([platform]) => platform !== except).map(([, adapter]) => adapter.disconnects)
+  return [...harness.adapters]
+    .filter(([platform]) => platform !== except)
+    .map(([, adapter]) => adapter.disconnects)
 }
 
 describe('startChannelLoop', () => {
   it("starts the other runners when one adapter's connect returns false", async () => {
-    const harness = startTen({ discord: new FakeAdapter('discord', { connect: async () => false }) })
+    const harness = startTen({
+      discord: new FakeAdapter('discord', { connect: async () => false }),
+    })
 
     await harness.loop.ready
 
@@ -57,10 +63,14 @@ describe('startChannelLoop', () => {
   })
 
   it('a started runner replies while another failed', async () => {
-    const harness = startTen({ discord: new FakeAdapter('discord', { connect: async () => false }) })
+    const harness = startTen({
+      discord: new FakeAdapter('discord', { connect: async () => false }),
+    })
     await harness.loop.ready
 
-    const outcome = await harness.adapters.get('telegram')?.deliver(messageEvent('telegram', 'hello'))
+    const outcome = await harness.adapters
+      .get('telegram')
+      ?.deliver(messageEvent('telegram', 'hello'))
     await waitFor(() => harness.handled.length === 1, 1000, 'the telegram handler to run')
 
     expect(outcome).toBe('ok')
@@ -87,7 +97,9 @@ describe('startChannelLoop', () => {
 
     expect(loop.started.size).toBe(9)
     expect(loop.failed).toEqual(['sms'])
-    expect(lines.filter((l) => !l.endsWith(": connected"))).toEqual(['sms: start failed: SMSAdapter: signing secret missing'])
+    expect(lines.filter((l) => !l.endsWith(': connected'))).toEqual([
+      'sms: start failed: SMSAdapter: signing secret missing',
+    ])
   })
 
   it('stop all stops every started runner', async () => {
@@ -96,7 +108,9 @@ describe('startChannelLoop', () => {
 
     await harness.loop.stopAll()
 
-    expect([...harness.adapters.values()].map((adapter) => adapter.disconnects)).toEqual(Array(10).fill(1))
+    expect([...harness.adapters.values()].map((adapter) => adapter.disconnects)).toEqual(
+      Array(10).fill(1),
+    )
   })
 
   it('a connect that never settles holds back only its platform', async () => {
@@ -149,7 +163,9 @@ describe('startChannelLoop', () => {
     await harness.loop.ready
 
     expect(harness.loop.failed).toEqual(['matrix'])
-    expect(harness.lines.filter((l) => !l.endsWith(": connected"))).toEqual(['matrix: start timed out after 50 ms'])
+    expect(harness.lines.filter((l) => !l.endsWith(': connected'))).toEqual([
+      'matrix: start timed out after 50 ms',
+    ])
   })
 
   it('an abandoned start that later connects is stopped', async () => {
@@ -160,7 +176,11 @@ describe('startChannelLoop', () => {
 
     held.resolve(true)
 
-    await waitFor(() => matrix.disconnects === 1, 1000, 'the abandoned matrix adapter to be stopped')
+    await waitFor(
+      () => matrix.disconnects === 1,
+      1000,
+      'the abandoned matrix adapter to be stopped',
+    )
     expect(harness.loop.started.has('matrix')).toBe(false)
   })
 
@@ -186,11 +206,16 @@ describe('startChannelLoop', () => {
     expect(harness.loop.started.size).toBe(0)
   })
 
-  it('an abandoned start that later fails is written once, masked', async () => {
+  it('an abandoned start that later fails is reported as failed, masked', async () => {
     const held = deferred<boolean>()
     const lines: string[] = []
     const loop = startChannelLoop({
-      platforms: [{ platform: 'matrix', build: () => new FakeAdapter('matrix', { connect: () => held.promise }) }],
+      platforms: [
+        {
+          platform: 'matrix',
+          build: () => new FakeAdapter('matrix', { connect: () => held.promise }),
+        },
+      ],
       handler: async () => undefined,
       secrets: ['matrix-secret-value'],
       write: (line) => lines.push(line),
@@ -203,14 +228,16 @@ describe('startChannelLoop', () => {
     await waitFor(() => lines.length === 2, 1000, 'the abandoned failure to be written')
     expect(lines).toEqual([
       'matrix: start timed out after 50 ms',
-      'matrix: abandoned start failed: sync failed for [redacted]',
+      'matrix: start failed: sync failed for [redacted]',
     ])
   })
 
   describe('concurrency', () => {
     it('a failing connect that settles last disconnects none of the nine', async () => {
       const gate = deferred<boolean>()
-      const harness = startTen({ discord: new FakeAdapter('discord', { connect: () => gate.promise }) })
+      const harness = startTen({
+        discord: new FakeAdapter('discord', { connect: () => gate.promise }),
+      })
       await waitFor(() => harness.loop.started.size === 9, 1000, 'nine platforms to start')
 
       gate.resolve(false)
@@ -227,7 +254,9 @@ describe('startChannelLoop', () => {
       const telegram = harness.adapters.get('telegram') as FakeAdapter
 
       const outcomes = await Promise.all(
-        [1, 2, 3, 4, 5].map((n) => telegram.deliver(messageEvent('telegram', `message ${n}`, `user-${n}`))),
+        [1, 2, 3, 4, 5].map((n) =>
+          telegram.deliver(messageEvent('telegram', `message ${n}`, `user-${n}`)),
+        ),
       )
 
       expect(outcomes).toEqual(['ok', 'ok', 'ok', 'ok', 'ok'])

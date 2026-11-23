@@ -16,6 +16,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
+import { runSessionGCAllProjects } from '../../../src/session/gc/all-sessions-apply.js'
 import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
 
 const DAY = 86_400_000
@@ -81,5 +82,69 @@ describe('#1911 — only the SDK’s own temp files are collectable', () => {
 
     expect(plan.candidates.some((c) => c.target.endsWith(sdkTmp))).toBe(true)
     expect(plan.candidates.some((c) => c.target.endsWith('notes.tmp'))).toBe(false)
+  })
+})
+
+describe('transcript collection rules', () => {
+  it('test_a_transcript_inside_the_age_window_is_kept_and_one_past_it_is_collected', async () => {
+    const plan = await planSessionGCAllProjects(
+      options({
+        listProject: () => [
+          { name: 'sess-fresh.jsonl', isDirectory: false, mtimeMs: NOW - 29 * DAY },
+          { name: 'sess-stale.jsonl', isDirectory: false, mtimeMs: NOW - 31 * DAY },
+        ],
+      }),
+    )
+
+    expect(plan.candidates.map((c) => c.target.split('/').pop())).toEqual(['sess-stale.jsonl'])
+  })
+
+  it('test_only_the_transcript_with_a_live_writer_is_spared', async () => {
+    const plan = await planSessionGCAllProjects(
+      options({
+        listProject: () => [
+          { name: 'sess-live.jsonl', isDirectory: false, mtimeMs: NOW - 60 * DAY },
+          { name: 'sess-dead.jsonl', isDirectory: false, mtimeMs: NOW - 61 * DAY },
+        ],
+        hasLiveWriter: (p: string) => p.endsWith('sess-live.jsonl'),
+      }),
+    )
+
+    expect(plan.candidates.map((c) => c.target.split('/').pop())).toEqual(['sess-dead.jsonl'])
+  })
+
+  it('test_a_foreign_file_and_a_foreign_directory_are_never_candidates', async () => {
+    const old = NOW - 60 * DAY
+    const plan = await planSessionGCAllProjects(
+      options({
+        listProject: () => [
+          { name: 'README.md', isDirectory: false, mtimeMs: old },
+          { name: 'notes.txt', isDirectory: false, mtimeMs: old },
+          { name: 'scratch', isDirectory: true, mtimeMs: old },
+        ],
+      }),
+    )
+
+    expect(plan.candidates).toEqual([])
+    expect(plan.kept).toContain('proj')
+  })
+
+  it('test_a_writer_that_appears_between_plan_and_apply_stops_the_unlink', async () => {
+    const plan = await planSessionGCAllProjects(options())
+    expect(plan.candidates).toHaveLength(1)
+
+    const unlink = vi.fn(async () => undefined)
+    const result = await runSessionGCAllProjects(plan, {
+      apply: true,
+      unlink,
+      rmdir: async () => undefined,
+      deleteAgent: async () => undefined,
+      readPointer: () => undefined,
+      hasLiveWriter: () => true,
+    })
+
+    expect(unlink).not.toHaveBeenCalled()
+    expect(result.removed).toEqual([])
+    expect(result.errors.join(' ')).toMatch(/live writer/)
   })
 })
