@@ -1,4 +1,5 @@
 import { getTuiRoot } from './agent-session/index.js'
+import { setProjectEnvRecord } from './agent-session/credential-helpers.js'
 import { TUI_MAX_FPS } from './rendering/index.js'
 import { drainAll, installStderrGuard, installTerminalTitle } from './terminal-io/index.js'
 import { homedir } from 'node:os'
@@ -27,12 +28,13 @@ setWorkingDirectory(process.cwd())
 // AFTER the working directory is set and BEFORE anything resolves an SDK path: this decides which
 // directory the transcripts, the trust store and the collector all use, and it needs the cwd the
 // operator selected rather than the one the process started in.
-await bootstrapSurface({
+const bootstrapped = await bootstrapSurface({
   env: process.env,
   cwd: workingDirectory(),
   home: homedir(),
   onWarn: (m) => process.stderr.write(`${m}\n`),
 })
+setProjectEnvRecord(bootstrapped.projectEnv)
 
 installStderrGuard(join(workingDirectory(), '.theokit', 'tui-stderr.log'))
 
