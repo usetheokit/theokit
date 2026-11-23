@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createDevicePairing } from '../src/control-plane/device-pairing.js'
+import { openDevicePairing as createDevicePairing } from '../src/control-plane/control-wiring.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 
 const DEVICE_TOKEN = 'device-token-that-is-long-enough-0001'
@@ -29,7 +29,7 @@ describe('device pairing', () => {
     const pairing = createDevicePairing({ dir })
     expect(pairing.accepts(bearer(DEVICE_TOKEN))).toBe(false)
 
-    const code = pairing.issueSetupCode()
+    const code = pairing.issueCode()
     const requested = pairing.request(code, 'laptop', DEVICE_TOKEN)
     if (!requested.ok) throw new Error(`request refused: ${requested.reason}`)
     // Asking is not approval: the token is still refused.
@@ -48,7 +48,7 @@ describe('device pairing', () => {
 
   it('a setup code works once', () => {
     const pairing = createDevicePairing({ dir: stateDir() })
-    const code = pairing.issueSetupCode()
+    const code = pairing.issueCode()
     expect(pairing.request(code, 'one', DEVICE_TOKEN).ok).toBe(true)
     expect(pairing.request(code, 'two', OTHER_TOKEN)).toEqual({ ok: false, reason: 'unknown_or_expired' })
   })
@@ -56,15 +56,15 @@ describe('device pairing', () => {
   it('a setup code expires after ten minutes', () => {
     let now = 1_000
     const pairing = createDevicePairing({ dir: stateDir(), clock: () => now })
-    const code = pairing.issueSetupCode()
+    const code = pairing.issueCode()
     now += 10 * 60_000
     expect(pairing.request(code, 'late', DEVICE_TOKEN)).toEqual({ ok: false, reason: 'unknown_or_expired' })
   })
 
   it('refuses a short token and an unnamed device without spending the code', () => {
     const pairing = createDevicePairing({ dir: stateDir() })
-    const code = pairing.issueSetupCode()
-    expect(pairing.request(code, 'laptop', 'short')).toEqual({ ok: false, reason: 'bad_token' })
+    const code = pairing.issueCode()
+    expect(pairing.request(code, 'laptop', 'short')).toEqual({ ok: false, reason: 'bad_credential' })
     expect(pairing.request(code, '  ', DEVICE_TOKEN)).toEqual({ ok: false, reason: 'bad_name' })
     expect(pairing.request(code, 'laptop', DEVICE_TOKEN).ok).toBe(true)
   })
@@ -76,31 +76,31 @@ describe('device pairing', () => {
 
   it('revoking a device ends its access', async () => {
     const pairing = createDevicePairing({ dir: stateDir() })
-    const requested = pairing.request(pairing.issueSetupCode(), 'laptop', DEVICE_TOKEN)
+    const requested = pairing.request(pairing.issueCode(), 'laptop', DEVICE_TOKEN)
     if (!requested.ok) throw new Error('request refused')
     await pairing.approve(requested.id)
-    expect(await pairing.revoke(requested.id)).toBe(true)
+    expect(await pairing.revokeDevice(requested.id)).toBe(true)
     expect(pairing.accepts(bearer(DEVICE_TOKEN))).toBe(false)
   })
   it('refuses a device name over 64 characters', () => {
     const pairing = createDevicePairing({ dir: stateDir() })
-    expect(pairing.request(pairing.issueSetupCode(), 'n'.repeat(65), DEVICE_TOKEN)).toEqual({ ok: false, reason: 'bad_name' })
+    expect(pairing.request(pairing.issueCode(), 'n'.repeat(65), DEVICE_TOKEN)).toEqual({ ok: false, reason: 'bad_name' })
   })
 
   it('refuses a token padded with whitespace', () => {
     const pairing = createDevicePairing({ dir: stateDir() })
-    expect(pairing.request(pairing.issueSetupCode(), 'laptop', `${DEVICE_TOKEN} `)).toEqual({ ok: false, reason: 'bad_token' })
+    expect(pairing.request(pairing.issueCode(), 'laptop', `${DEVICE_TOKEN} `)).toEqual({ ok: false, reason: 'bad_credential' })
   })
 
   it('refuses a low-entropy token such as one repeated character', () => {
     const pairing = createDevicePairing({ dir: stateDir() })
-    expect(pairing.request(pairing.issueSetupCode(), 'laptop', 'a'.repeat(40))).toEqual({ ok: false, reason: 'bad_token' })
+    expect(pairing.request(pairing.issueCode(), 'laptop', 'a'.repeat(40))).toEqual({ ok: false, reason: 'bad_credential' })
   })
 
   it('writes devices.json readable by its owner only', async () => {
     const dir = stateDir()
     const pairing = createDevicePairing({ dir })
-    const requested = pairing.request(pairing.issueSetupCode(), 'laptop', DEVICE_TOKEN)
+    const requested = pairing.request(pairing.issueCode(), 'laptop', DEVICE_TOKEN)
     if (!requested.ok) throw new Error('request refused')
     await pairing.approve(requested.id)
     expect(statSync(join(dir, 'devices.json')).mode & 0o777).toBe(0o600)
@@ -111,7 +111,7 @@ describe('device pairing', () => {
     const lines: string[] = []
     const pairing = createDevicePairing({ dir, write: (line) => lines.push(line) })
     mkdirSync(join(dir, 'devices.json'))
-    const requested = pairing.request(pairing.issueSetupCode(), 'laptop', DEVICE_TOKEN)
+    const requested = pairing.request(pairing.issueCode(), 'laptop', DEVICE_TOKEN)
     if (!requested.ok) throw new Error('request refused')
     expect(await pairing.approve(requested.id)).toEqual({ ok: false, reason: 'write_failed' })
     expect(pairing.accepts(bearer(DEVICE_TOKEN))).toBe(false)
@@ -141,8 +141,8 @@ describe('device pairing', () => {
   it('keeps both devices when two are approved at once', async () => {
     const dir = stateDir()
     const pairing = createDevicePairing({ dir })
-    const first = pairing.request(pairing.issueSetupCode(), 'one', DEVICE_TOKEN)
-    const second = pairing.request(pairing.issueSetupCode(), 'two', OTHER_TOKEN)
+    const first = pairing.request(pairing.issueCode(), 'one', DEVICE_TOKEN)
+    const second = pairing.request(pairing.issueCode(), 'two', OTHER_TOKEN)
     if (!first.ok || !second.ok) throw new Error('request refused')
     await Promise.all([pairing.approve(first.id), pairing.approve(second.id)])
     const restarted = createDevicePairing({ dir })
@@ -152,7 +152,7 @@ describe('device pairing', () => {
 
   it('names the approved device a presented token belongs to', async () => {
     const pairing = createDevicePairing({ dir: stateDir() })
-    const requested = pairing.request(pairing.issueSetupCode(), 'laptop', DEVICE_TOKEN)
+    const requested = pairing.request(pairing.issueCode(), 'laptop', DEVICE_TOKEN)
     if (!requested.ok) throw new Error('request refused')
     expect(pairing.deviceIdFor(bearer(DEVICE_TOKEN))).toBeUndefined()
     await pairing.approve(requested.id)
@@ -163,13 +163,13 @@ describe('device pairing', () => {
   it('expires and caps the requests waiting for approval', () => {
     let now = 1_000
     const pairing = createDevicePairing({ dir: stateDir(), clock: () => now })
-    const code = pairing.issueSetupCode()
+    const code = pairing.issueCode()
     pairing.request(code, 'old', DEVICE_TOKEN)
     now += 10 * 60_000
     expect(pairing.pending()).toEqual([])
     for (let index = 0; index < 20; index += 1) {
-      pairing.request(pairing.issueSetupCode(), `d${index}`, `device-token-that-is-long-enough-${String(index).padStart(4, '0')}`)
+      pairing.request(pairing.issueCode(), `d${index}`, `device-token-that-is-long-enough-${String(index).padStart(4, '0')}`)
     }
-    expect(pairing.request(pairing.issueSetupCode(), 'extra', OTHER_TOKEN)).toEqual({ ok: false, reason: 'too_many_pending' })
+    expect(pairing.request(pairing.issueCode(), 'extra', OTHER_TOKEN)).toEqual({ ok: false, reason: 'too_many_pending' })
   })
 })

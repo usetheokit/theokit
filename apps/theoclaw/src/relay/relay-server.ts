@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
-import { bearerCheck } from '../control-plane/bearer.js'
+import { bearerCheck } from '@theokit/http/guards'
 import type { Envelope } from './relay-crypto.js'
 
 /**

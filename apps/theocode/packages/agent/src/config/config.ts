@@ -1,6 +1,6 @@
 import { CONFIG_SCHEMA_KEYS, ConfigError, type SchemaKey } from './config-contract.js'
 import { auditEnvReachability } from '@theokit/agents'
-import { envKnob, envLayerFrom, type EnvKnob } from '@theokit/agents/config'
+import { defineLayeredConfig, envKnob, envLayerFrom, type EnvKnob } from '@theokit/agents/config'
 import { homedir } from 'node:os'
 import process from 'node:process'
 import { join } from 'node:path'
@@ -21,10 +21,9 @@ import {
   ENV_SESSION_GC_MAX_AGE_DAYS,
   ENV_SHELL_TIMEOUT_MS,
 } from './env-knobs.js'
-import { LAYERS, foldLayers, type Layer } from './layers.js'
 import { firstSettings, refuseStrandedToml, settingsCandidates } from './settings-load.js'
 import type { TrustPosture } from './trust-posture.js'
-import { applySecurityFloor } from './security-floor.js'
+import { SECURITY_FLOORS } from './security-floor.js'
 import { readManagedSettingsTranslated, translateManaged } from './managed-settings.js'
 
 /**
@@ -324,28 +323,6 @@ export function toConfigError(err: unknown, where: string): ConfigError {
   return new ConfigError(`${where}: ${err instanceof Error ? err.message : String(err)}`)
 }
 
-/**
- * Copy every schema key the layer defined, driven by `CONFIG_SCHEMA_KEYS` rather than by a line per
- * key.
- *
- * The previous shape was ten `if (raw.x !== undefined) out.x = raw.x` statements, and it carried a
- * silent failure mode: add a key to the schema, forget the line, and the key parses, validates, then
- * never reaches the resolved config — settable in `config.toml` and inert at runtime, with nothing
- * raised anywhere. That is the same drift `keysWithoutEnvPath` exists to catch on the environment
- * side, and it deserved a mechanism rather than vigilance.
- *
- * `shell-timeout.test.ts` pins it from the other direction: every key in the schema must survive
- * this copy, and the sample set must cover the whole schema.
- */
-function pickScalars(raw: RawScalars): Partial<AgentConfig> {
-  const out: Partial<AgentConfig> = {}
-  for (const key of CONFIG_SCHEMA_KEYS) {
-    const value = raw[key]
-    if (value !== undefined) Object.assign(out, { [key]: value })
-  }
-  return out
-}
-
 export interface ConfigLayers {
   user?: unknown
   project?: unknown
@@ -362,12 +339,9 @@ export interface ConfigLayers {
 
 const ACCUMULATING_KEYS = ['hooks'] as const
 
-/** Keys whose resolution goes through `applySecurityFloor` instead of plain last-wins. */
-const SECURITY_FLOOR_KEYS = ['sandbox_mode', 'approval_policy'] as const
-
 function chosenProfile(layers: readonly z.infer<typeof configSchema>[]): {
   name: string | undefined
-  values: RawScalars
+  table: Partial<Record<string, RawScalars>>
 } {
   let name: string | undefined
   let profiles: Partial<Record<string, RawScalars>> = {}
@@ -380,12 +354,12 @@ function chosenProfile(layers: readonly z.infer<typeof configSchema>[]): {
     // belongs at the level of its entries.
     if (layer.profiles !== undefined) profiles = { ...profiles, ...layer.profiles }
   }
-  if (name === undefined) return { name, values: {} }
+  if (name === undefined) return { name, table: profiles }
   const chosen = profiles[name]
   if (chosen === undefined) {
     throw new ConfigError(`settings.json: unknown profile "${name}" [profile]`)
   }
-  return { name, values: chosen }
+  return { name, table: profiles }
 }
 
 /** The environment layer: only the keys `ENV_BY_KEY` declares a knob for, coerced and validated. */
@@ -399,6 +373,15 @@ function envLayer(env: Record<string, string | undefined>): RawScalars {
 }
 
 export { CONFIG_SCHEMA_KEYS, ConfigError, type SchemaKey }
+
+const layered = defineLayeredConfig({
+  schema: configSchema,
+  defaults: DEFAULTS as Partial<z.infer<typeof configSchema>>,
+  env: ENV_BY_KEY as Readonly<Record<string, EnvKnob>>,
+  accumulate: ACCUMULATING_KEYS,
+  floors: SECURITY_FLOORS,
+  profiles: { selectKey: 'profile', tableKey: 'profiles' },
+})
 
 export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
   const fromFile = (raw: unknown, where: string): z.infer<typeof configSchema> => {
@@ -424,53 +407,27 @@ export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
     'managed-settings.json',
   )
 
-  const { name: selectedProfile, values: profile } = chosenProfile([
-    user,
-    project,
-    projectLocal,
-    cli,
-  ])
+  // Validated here, with this product's error type and wording; the helper re-validates the same
+  // values it is handed, which cannot fail.
+  envLayer(layers.env ?? {})
 
-  const envParsed = envLayer(layers.env ?? {})
+  // The helper merges fields WITHIN a same-named profile and ignores tables in the cli layer; this
+  // product replaces the whole profile and lets `-c` define one. So the profile table is settled
+  // here and handed over as the user layer's, and the other layers carry no table.
+  const { name: selectedProfile, table } = chosenProfile([user, project, projectLocal, cli])
+  const noTable = ({ profiles: _p, ...rest }: z.infer<typeof configSchema>) => rest
+  const { profile: _managedProfile, ...managedScalars } = noTable(managed)
 
-  const perLayer: Record<Layer, Partial<AgentConfig>> = {
-    defaults: { ...DEFAULTS, skills: [...DEFAULTS.skills], hooks: [...DEFAULTS.hooks] },
-    user: pickScalars(user),
-    project: pickScalars(project),
-    project_local: pickScalars(projectLocal),
-    profile: pickScalars(profile),
-    env: pickScalars(envParsed),
-    cli: pickScalars(cli),
-    managed: pickScalars(managed),
-  }
-  const folded = foldLayers(
-    LAYERS.map((c) => ({
-      layer: c.layer,
-      values: perLayer[c.layer] as Readonly<Record<string, unknown>>,
-    })),
-    ACCUMULATING_KEYS,
-  )
-
-  // B-006 — `sandbox_mode` and `approval_policy` do not follow plain last-wins. `project` and `env`
-  // outrank the user's own file, so a cloned repository (or an inherited environment) could widen
-  // the sandbox or switch approvals off and the user's global setting simply lost. Same argument
-  // ACCUMULATING_KEYS records for `hooks`, applied to the two keys that decide confinement.
-  for (const key of SECURITY_FLOOR_KEYS) {
-    const resolved = applySecurityFloor(key, {
-      defaults: perLayer.defaults[key] as string | undefined,
-      user: perLayer.user[key] as string | undefined,
-      project: perLayer.project[key] as string | undefined,
-      project_local: perLayer.project_local[key] as string | undefined,
-      profile: perLayer.profile[key] as string | undefined,
-      env: perLayer.env[key] as string | undefined,
-      cli: perLayer.cli[key] as string | undefined,
-      // #1907 — without this the floor answered from the other layers and overwrote the managed value.
-      managed: perLayer.managed[key] as string | undefined,
-    })
-    if (resolved !== undefined) folded[key] = resolved
-  }
-
-  return { ...(folded as unknown as AgentConfig), profile: selectedProfile }
+  const result = layered.resolve({
+    user: { ...noTable(user), profiles: table },
+    project: noTable(project),
+    projectLocal: noTable(projectLocal),
+    env: layers.env ?? {},
+    cli: noTable(cli),
+    managed: managedScalars,
+  })
+  const { profile: _profile, profiles: _profiles, ...values } = result.values
+  return { ...(values as AgentConfig), profile: selectedProfile }
 }
 
 /** The three file layers, read from disk, with the trust gate applied to the two project-scoped ones. */

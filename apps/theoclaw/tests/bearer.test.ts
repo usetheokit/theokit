@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { bearerCheck, MIN_BEARER_TOKEN_LENGTH, readBearerToken } from "../src/control-plane/bearer.js";
+import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from "@theokit/http/guards";
+import { readBearerToken } from "../src/control-plane/bearer.js";
 import { TheoClawConfigError } from "../src/control-plane/errors.js";
 import { readControlPlaneSettings } from "../src/control-plane/settings.js";
 
