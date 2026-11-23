@@ -1,9 +1,11 @@
 import type { Writable } from 'node:stream'
 
+import { createJsonlLedger } from '@theokit/agents/auth'
+
 import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
 import { resolveInstance } from '../instance.js'
-import { readActivityLedger } from '../tools/exec-approval.js'
+import { commandOfReceipt } from '../tools/exec-approval.js'
 
 /**
  * `theoclaw audit [--run <id>]`: the decision receipts of the exec gate, one line each: when, the
@@ -18,7 +20,7 @@ export interface AuditIo {
 
 const USAGE_TEXT = 'theoclaw audit: expected [--run <id>]'
 
-export function auditCommand(args: readonly string[], io: AuditIo): number {
+export async function auditCommand(args: readonly string[], io: AuditIo): Promise<number> {
   let run: string | undefined
   if (args.length === 2 && args[0] === '--run' && !args[1]!.startsWith('-')) run = args[1]
   else if (args.length > 0) throw new UsageError(USAGE_TEXT)
@@ -29,14 +31,14 @@ export function auditCommand(args: readonly string[], io: AuditIo): number {
     io.stderr.write('theoclaw: THEOCLAW_STATE_DIR must be set to the directory TheoClaw keeps its activity ledger in\n')
     return 1
   }
-  const records = readActivityLedger(stateDir).filter((entry) => run === undefined || entry.runId.startsWith(run))
+  const records = (await createJsonlLedger(stateDir).read()).filter((entry) => run === undefined || entry.runId.startsWith(run))
   if (records.length === 0) {
     io.stderr.write(`theoclaw: no activity recorded${run === undefined ? '' : ` for run ${run}`}\n`)
     return 1
   }
   for (const entry of records) {
     const verdict = entry.allowed ? 'approved' : 'refused'
-    io.stdout.write(`${entry.at} run=${entry.runId} ${entry.tool} ${verdict} by ${entry.decidedBy} (${entry.reason}): ${JSON.stringify(entry.command)}\n`)
+    io.stdout.write(`${entry.at} run=${entry.runId} ${entry.tool} ${verdict} by ${entry.decidedBy} (${entry.reason}): ${JSON.stringify(commandOfReceipt(entry))}\n`)
   }
   return 0
 }

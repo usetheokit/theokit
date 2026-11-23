@@ -226,3 +226,32 @@ describe('installDiagnosticSink — the seam ships with its only use', () => {
     expect(() => installDiagnosticSink({ envVar: '', env: {} })).toThrow(/envVar/)
   })
 })
+
+describe('diagnose with fix', () => {
+  it('runs fix only for failing checks and reports the returned lines', async () => {
+    const calls: string[] = []
+    const mk = (name: string, status: Check['status'], line?: string): Check => ({
+      name,
+      status,
+      detail: '',
+      fix: () => {
+        calls.push(name)
+        return Promise.resolve(line)
+      },
+    })
+    const diagnosis = await diagnose(
+      [mk('a', 'ok', 'x'), mk('b', 'warn', 'y'), mk('c', 'fail', 'chmod c'), mk('d', 'fail')],
+      { fix: true },
+    )
+    expect(calls).toEqual(['c', 'd'])
+    expect(diagnosis.repairs).toEqual(['chmod c'])
+    expect(renderDiagnosis(diagnosis)).toContain('fixed: chmod c')
+  })
+
+  it('reports a check without fix as before', async () => {
+    const diagnosis = await diagnose([{ name: 'n', status: 'fail', detail: 'd' }], { fix: true })
+    expect(diagnosis.failed).toBe(1)
+    expect(diagnosis.repairs).toEqual([])
+    expect(diagnose([{ name: 'n', status: 'fail', detail: 'd' }]).repairs).toBeUndefined()
+  })
+})

@@ -93,7 +93,12 @@ export { withTypedStream } from './handle-wrappers.js'
  * describes, which is the same "type crossed, enforcement did not" shape the invention gate exists
  * to catch (T4.1). Exported here as a VALUE, not just a type.
  */
-export { applyPosture, type ApprovalPosture } from './approval-posture.js'
+export {
+  applyPosture,
+  approvalPostureFor,
+  type ApprovalPolicy,
+  type ApprovalPosture,
+} from './approval-posture.js'
 
 /**
  * T2.1 — the auto-approve decision, callable by a SURFACE.

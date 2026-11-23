@@ -232,3 +232,52 @@ function posturePlugins(
       return []
   }
 }
+
+/** The approval policy words a CLI agent accepts. */
+export type ApprovalPolicy = 'untrusted' | 'on-request' | 'never'
+
+/**
+ * Map a policy word and the sandbox's own report to a posture.
+ *
+ * - `never`: nothing is asked. It runs only when the sandbox is enforced or `danger-full-access` was
+ *   chosen on purpose; otherwise it is `auto-reject`, never a silent approval.
+ * - `untrusted` and `on-request`: a human decides when `interactive` is given, else `auto-reject`.
+ *
+ * `interactive` is the surface's `emit` and `awaitApproval` callbacks, not a boolean: the
+ * `interactive` posture cannot exist without them. Absent means headless.
+ *
+ * Which tools reach the gate is the caller's: a posture decides what happens to a gated tool, so a
+ * tool no permission rule matched must be gated for `untrusted` to ask about it.
+ */
+export function approvalPostureFor(
+  policy: ApprovalPolicy,
+  sandboxPosture: SandboxPosture,
+  opts: {
+    readonly interactive?: {
+      readonly emit: (event: ApprovalRequiredEvent) => void
+      readonly awaitApproval: (
+        approvalId: string,
+        opts: HumanInTheLoopOptions,
+        toolName: string,
+      ) => Promise<boolean | HitlDecision>
+    }
+  } = {},
+): ApprovalPosture {
+  if (policy === 'never') {
+    if (shouldAutoApprove('full-auto', '*', sandboxPosture)) {
+      return {
+        kind: 'auto-approve',
+        confinedBy: sandboxPosture,
+        reason: 'approval policy "never"',
+      }
+    }
+    return {
+      kind: 'auto-reject',
+      reason: `approval policy "never" and the sandbox is not enforced: ${sandboxPosture.detail}`,
+    }
+  }
+  if (opts.interactive === undefined) {
+    return { kind: 'auto-reject', reason: `approval policy "${policy}" with no human to ask` }
+  }
+  return { kind: 'interactive', ...opts.interactive }
+}
