@@ -231,3 +231,27 @@ await announcement.stop()
 ## License
 
 Apache-2.0
+
+## Browser (`@theokit/host/browser`)
+
+`browserMcpServer(options)` returns a stdio MCP server config for a Playwright MCP browser an agent can drive (`browser_navigate`, `browser_snapshot`, ...). The server runs behind a filtering proxy:
+
+- `browser_run_code_unsafe` (it runs model-written JavaScript in the server process) is **always** left out of `tools/list` and refused on `tools/call`; `deny: ['tool', ...]` adds more tools.
+- The server's working directory and `--output-dir` are `outputDir`, an absolute directory you own (its contents stay after exit). Without it, a fresh temporary directory is used and removed on exit. The `roots` capability and `PLAYWRIGHT_MCP_*` variables are stripped so neither widens the file root.
+- Page snapshots are inlined into tool results; JSON-RPC batches are refused; calls run one at a time.
+
+```ts
+import { browserMcpServer, createSharedBrowser } from '@theokit/host/browser'
+
+// A fresh headless Chromium per session.
+const isolated = browserMcpServer({ mode: 'isolated', outputDir: '/var/app/browser-out' })
+
+// One persistent Chromium shared by many sessions; each session works in a tab of its own.
+const shared = createSharedBrowser('/var/app/browser-profile')
+const cdpEndpoint = await shared.start()
+const attached = browserMcpServer({ mode: 'shared', cdpEndpoint })
+// ... when the app stops:
+await shared.close()
+```
+
+It needs a Chromium headless shell (`npx playwright-core install chromium-headless-shell`). This is Playwright's output-directory control plus a proxy, not an operating-system sandbox: tools such as `browser_evaluate` still run page-side JavaScript and the browser reaches the network.

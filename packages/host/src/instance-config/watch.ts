@@ -8,8 +8,11 @@ import type { InstanceKey } from './index.js'
 export interface WatchOptions {
   /** Default 250. */
   readonly debounceMs?: number
-  /** Throw to refuse the candidate environment. */
-  readonly validate?: (candidate: Readonly<NodeJS.ProcessEnv>) => void
+  /** Throw to refuse: `candidate` is the running environment with the hot changes, `successor` also holds the changed start-only keys. */
+  readonly validate?: (
+    candidate: Readonly<NodeJS.ProcessEnv>,
+    successor: Readonly<NodeJS.ProcessEnv>,
+  ) => void
   readonly onEvent: (event: ReloadEvent) => void
 }
 

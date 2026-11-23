@@ -33,10 +33,10 @@ export const MORE_PERMISSIVE = {
 export type SecurityKey = keyof typeof MORE_PERMISSIVE
 
 /** Layers that may only tighten the user's choice. */
-export const CANNOT_LOOSEN = ['project', 'project_local', 'profile', 'env'] as const
+const CANNOT_LOOSEN = ['project', 'project_local', 'profile', 'env'] as const
 
 /** The layer that wins outright in both directions — the operator's explicit flag. */
-export const OPERATOR_OVERRIDE = 'cli'
+const OPERATOR_OVERRIDE = 'cli'
 
 /** The same vocabulary as the `floors` declaration `defineLayeredConfig` takes. */
 export const SECURITY_FLOORS = {

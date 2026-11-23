@@ -1,63 +1,88 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { parseEnv } from 'node:util'
+import { randomBytes } from 'node:crypto'
 
-import { replaceFileAtomic } from '@theokit/sdk/persistence'
+import { InstanceConfigError, defineInstanceConfig } from '@theokit/host/instance-config'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
 import { serializedPerFile } from './serial-queue.js'
 
 /**
- * Where TheoClaw's configuration lives and how it reaches the environment (B-374, plan D2). The
- * file holds `KEY="value"` lines; the process entry loads it before anything reads a setting, so
- * every way of starting TheoClaw (the launcher, the user unit, the image) reads the same file.
+ * TheoClaw's configuration file (B-374, plan D2), declared once with `defineInstanceConfig`: the
+ * path, the load into the environment, the write, the reload, onboarding and the audit all run on
+ * the package. The file holds `KEY="value"` lines; the process entry loads it before anything reads
+ * a setting. `undeclared: 'keep'` because peer tokens and provider credentials are named per use.
  */
 
-type Env = Readonly<Record<string, string | undefined>>
+/** The settings read per agent: a change to one applies to the next session or turn without a restart. */
+export const HOT_KEYS = ['THEOCLAW_MODEL', 'THEOCLAW_MODEL_FALLBACK', 'THEOCLAW_THINKING', 'THEOKIT_API_KEY', 'OPENROUTER_API_KEY'] as const
 
-function nonBlank(value: string | undefined): string | undefined {
-  const trimmed = value?.trim()
-  return trimmed === undefined || trimmed === '' ? undefined : trimmed
+export const theoclawConfig = defineInstanceConfig({
+  app: 'theoclaw',
+  undeclared: 'keep',
+  keys: {
+    THEOCLAW_MODEL: { hot: true },
+    THEOCLAW_MODEL_FALLBACK: { hot: true },
+    THEOCLAW_THINKING: { hot: true },
+    THEOKIT_API_KEY: { hot: true, secret: true },
+    OPENROUTER_API_KEY: { hot: true, secret: true },
+    THEOCLAW_PORT: {},
+    THEOCLAW_OWNERS: {},
+    THEOCLAW_WORKSPACE: {},
+    THEOCLAW_STATE_DIR: {},
+    THEOCLAW_CONTROL_TOKEN: { secret: true, generate: () => randomBytes(24).toString('hex') },
+  },
+})
+
+/** TheoClaw's wording for what the package refuses; no message carries a value from the file. */
+export function asConfigError(error: unknown, path?: string): unknown {
+  if (!(error instanceof InstanceConfigError)) return error
+  const code = (error.cause as NodeJS.ErrnoException | undefined)?.code ?? 'unknown error'
+  switch (error.code) {
+    case 'instance_config_missing':
+      return new TheoClawConfigError(`THEOCLAW_CONFIG: ${path ?? ''} does not exist`, { variable: 'THEOCLAW_CONFIG' })
+    case 'instance_config_unreadable':
+      return new TheoClawConfigError(`cannot read ${path ?? ''}: ${code}`, { variable: 'THEOCLAW_CONFIG' })
+    case 'instance_config_exists':
+      return new TheoClawConfigError(`${path ?? ''} exists; pass --force to replace it`, { variable: 'THEOCLAW_CONFIG' })
+    default:
+      return new TheoClawConfigError(error.message, error.variable === undefined ? {} : { variable: error.variable })
+  }
 }
 
-/**
- * `THEOCLAW_CONFIG` when set, else `<XDG_CONFIG_HOME or ~/.config>/theoclaw/theoclaw.env`, or
- * `theoclaw-<profile>.env` with `THEOCLAW_PROFILE`. The profile is read raw: `resolveInstance`
- * validates it next and refuses a bad name before anything else uses it.
- */
-export function configurationPath(env: Env, homeDir: string): string {
-  const explicit = nonBlank(env.THEOCLAW_CONFIG)
-  if (explicit !== undefined) return explicit
-  const base = nonBlank(env.XDG_CONFIG_HOME) ?? join(homeDir, '.config')
-  const profile = nonBlank(env.THEOCLAW_PROFILE)
-  return join(base, 'theoclaw', profile === undefined ? 'theoclaw.env' : `theoclaw-${profile}.env`)
+/** A value of only spaces counts as unset, and the others are read trimmed, as the file has always been located. */
+function trimmed(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const view = { ...env }
+  for (const name of ['THEOCLAW_CONFIG', 'XDG_CONFIG_HOME', 'THEOCLAW_PROFILE']) {
+    const value = env[name]?.trim()
+    if (value === undefined || value === '') delete view[name]
+    else view[name] = value
+  }
+  return view
+}
+
+/** `THEOCLAW_CONFIG` when set, else `<XDG_CONFIG_HOME or ~/.config>/theoclaw/theoclaw.env`, or `theoclaw-<profile>.env`. */
+export function configurationPath(env: NodeJS.ProcessEnv, homeDir: string): string {
+  try {
+    return theoclawConfig.path(trimmed(env), homeDir)
+  } catch (error) {
+    throw asConfigError(error)
+  }
 }
 
 /**
  * Copy into `env` every key of the configuration file that `env` does not already hold, so a
  * variable set by the caller always wins. Returns the path read, or `undefined` when the default
  * file does not exist. A missing file that `THEOCLAW_CONFIG` names, or a file that cannot be read,
- * throws `TheoClawConfigError` naming the path; no message carries a value from the file.
+ * throws `TheoClawConfigError` naming the path.
  */
 export function loadConfiguration(env: NodeJS.ProcessEnv, homeDir: string): string | undefined {
-  const path = configurationPath(env, homeDir)
-  if (!existsSync(path)) {
-    if (nonBlank(env.THEOCLAW_CONFIG) !== undefined) {
-      throw new TheoClawConfigError(`THEOCLAW_CONFIG: ${path} does not exist`, { variable: 'THEOCLAW_CONFIG' })
-    }
-    return undefined
+  for (const name of ['THEOCLAW_CONFIG', 'XDG_CONFIG_HOME', 'THEOCLAW_PROFILE']) {
+    if (env[name] !== undefined && env[name].trim() === '') delete env[name]
   }
-  let text: string
   try {
-    text = readFileSync(path, 'utf8')
+    return theoclawConfig.load(env, homeDir)
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code ?? 'unknown error'
-    throw new TheoClawConfigError(`cannot read ${path}: ${code}`, { variable: 'THEOCLAW_CONFIG' })
+    throw asConfigError(error, configurationPath(env, homeDir))
   }
-  for (const [key, value] of Object.entries(parseEnv(text))) {
-    if (env[key] === undefined) env[key] = value
-  }
-  return path
 }
 
 /** What `util.parseEnv` cannot read back inside double quotes, since it unescapes nothing. */
@@ -81,38 +106,18 @@ export function assertWritable(entries: Readonly<Record<string, string>>): void 
 }
 
 /**
- * Write `entries` as `KEY="value"` lines at mode 0600 in a directory at mode 0700: a temporary
- * file in the same directory, synced, then renamed over `path`, so a reader never sees half a
- * file. An existing file is refused without `force`, before the temporary file exists.
+ * Write `entries` as `KEY="value"` lines at mode 0600 (a temporary file, then a link or rename, so a
+ * reader never sees half a file). An existing file is refused without `force`.
  */
-/**
- * `ownsDirectory`: the directory is TheoClaw's own (the default `<config>/theoclaw`), so it is
- * narrowed to 0700 even when it already exists. Otherwise only a directory this call creates is.
- */
-export async function writeConfiguration(
-  path: string,
-  entries: Readonly<Record<string, string>>,
-  options: { readonly force: boolean; readonly ownsDirectory?: boolean },
-): Promise<void> {
-  // The write is asynchronous, so two calls in one process are queued per path: the second one
-  // checks for the file only after the first has finished, and is refused without `force`.
-  await serializedPerFile(path, () => writeNow(path, entries, options))
-}
-
-async function writeNow(
-  path: string,
-  entries: Readonly<Record<string, string>>,
-  options: { readonly force: boolean; readonly ownsDirectory?: boolean },
-): Promise<void> {
+export async function writeConfiguration(path: string, entries: Readonly<Record<string, string>>, options: { readonly force: boolean }): Promise<void> {
   assertWritable(entries)
-  if (existsSync(path) && !options.force) {
-    throw new TheoClawConfigError(`${path} exists; pass --force to replace it`, { variable: 'THEOCLAW_CONFIG' })
-  }
-  const directory = dirname(path)
-  // THEOCLAW_CONFIG may name a file in the home directory or in a mounted /data, whose mode is the
-  // owner's and not ours to change: only TheoClaw's own directory, or one created here, is narrowed.
-  const created = mkdirSync(directory, { recursive: true, mode: 0o700 }) !== undefined
-  if (created || options.ownsDirectory === true) chmodSync(directory, 0o700)
-  const text = Object.entries(entries).map(([key, value]) => `${key}="${value}"\n`).join('')
-  await replaceFileAtomic(path, text, { mode: 0o600 })
+  // Two calls in one process are queued per path, so the second checks for the file only after the first
+  // has finished and is the one refused without `force`.
+  await serializedPerFile(path, async () => {
+    try {
+      await theoclawConfig.write(path, entries, options)
+    } catch (error) {
+      throw asConfigError(error, path)
+    }
+  })
 }

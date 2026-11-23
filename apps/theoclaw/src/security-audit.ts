@@ -1,8 +1,7 @@
-import { chmodSync, existsSync, statSync } from 'node:fs'
-import { basename, dirname } from 'node:path'
+import { dirname } from 'node:path'
 import type { Writable } from 'node:stream'
 
-import { configurationPath, loadConfiguration } from './config-file.js'
+import { configurationPath, loadConfiguration, theoclawConfig } from './config-file.js'
 import { isLoopback } from './control-plane/bind.js'
 import { UsageError } from './cli-args.js'
 
@@ -21,30 +20,15 @@ export interface Finding {
 }
 
 const MIN_TOKEN_LENGTH = 32
-const OWN_DIRECTORY = 'theoclaw'
-
-function modeOf(path: string): number {
-  return statSync(path).mode & 0o777
-}
-
-/** Whether `path` is TheoClaw's own directory (the default `<config>/theoclaw`), the only one `--fix` narrows. */
-function ownsDirectory(directory: string): boolean {
-  return basename(directory) === OWN_DIRECTORY
-}
 
 type Env = Readonly<Record<string, string | undefined>>
 
 function fileFindings(path: string): Finding[] {
-  if (!existsSync(path)) return []
-  const findings: Finding[] = []
-  if ((modeOf(path) & 0o077) !== 0) {
-    findings.push({ id: 'SA-001', fixable: true, message: `${path} is readable beyond its owner (mode ${modeOf(path).toString(8)}); it holds the model key and tokens, and should be 600` })
-  }
-  const directory = dirname(path)
-  if (ownsDirectory(directory) && (modeOf(directory) & 0o077) !== 0) {
-    findings.push({ id: 'SA-002', fixable: true, message: `${directory} is open beyond its owner (mode ${modeOf(directory).toString(8)}); it should be 700` })
-  }
-  return findings
+  return theoclawConfig.audit(path).map((found) =>
+    found.id === 'file-mode'
+      ? { id: 'SA-001', fixable: true, message: `${path} is readable beyond its owner (mode ${found.mode.toString(8)}); it holds the model key and tokens, and should be 600` }
+      : { id: 'SA-002', fixable: true, message: `${found.path} is open beyond its owner (mode ${found.mode.toString(8)}); it should be 700` },
+  )
 }
 
 function settingFindings(env: Env): Finding[] {
@@ -82,15 +66,13 @@ export function auditConfiguration(env: Env, homeDir: string): Finding[] {
 
 /** Applies each fixable finding and returns the ids it fixed; the path is the file the findings were read from. */
 export function fixFindings(findings: readonly Finding[], path: string): string[] {
-  const fixed: string[] = []
-  for (const finding of findings) {
-    if (!finding.fixable) continue
-    if (finding.id === 'SA-001') chmodSync(path, 0o600)
-    else if (finding.id === 'SA-002') chmodSync(dirname(path), 0o700)
-    else continue
-    fixed.push(finding.id)
-  }
-  return fixed
+  const byId = { 'SA-001': { id: 'file-mode', path }, 'SA-002': { id: 'directory-mode', path: dirname(path) } } as const
+  const wanted = findings.flatMap((finding) => {
+    const target = finding.fixable ? byId[finding.id as keyof typeof byId] : undefined
+    return target === undefined ? [] : [{ ...target, mode: 0, fixable: true as const }]
+  })
+  const fixed = theoclawConfig.fix(wanted)
+  return findings.filter((finding) => fixed.some((done) => done.id === byId[finding.id as keyof typeof byId]?.id)).map((finding) => finding.id)
 }
 
 /** The `security` subcommand: exit 0 when nothing is left to report, 3 when findings remain. */

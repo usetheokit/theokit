@@ -70,6 +70,8 @@ interface Inside {
   readonly via: string
   /** Set when only one supported major has this. See `installedSdkMajor`. */
   readonly sinceMajor?: number
+  /** Set when the SDK stopped publishing this subpath after that major. See `installedSdkMajor`. */
+  readonly untilMajor?: number
 }
 
 /** A subpath deliberately out, with the reason — which is mandatory. */
@@ -78,6 +80,8 @@ interface Fora {
   readonly reason: string
   /** Set when only one supported major publishes this subpath. See `installedSdkMajor`. */
   readonly sinceMajor?: number
+  /** Set when the SDK stopped publishing this subpath after that major. See `installedSdkMajor`. */
+  readonly untilMajor?: number
 }
 
 type Decision = Inside | Fora
@@ -94,6 +98,10 @@ function installedSdkMajor(): number {
   const { version } = require_('@theokit/sdk/package.json') as { version: string }
   return Number(version.split('.')[0])
 }
+
+/** Why a symbol of SDK 8 stays out of the layer while the floor is below it. */
+const SINCE_8 =
+  'Added by `@theokit/sdk` 8, absent at the 5.32 floor: re-exporting it fails the DTS build there. Revisit when the floor moves to 8.'
 
 const DECISIONS: Record<string, Decision> = {
   // ── Arrived with `@theokit/sdk@5.x`. Each needed a verdict, and the reason each is `out` is
@@ -216,6 +224,7 @@ const DECISIONS: Record<string, Decision> = {
   },
   './auth': { verdict: 'in', via: '../../src/auth-entry.js', coverage: 'sample', symbols: [] },
   './sandbox': {
+    gaps: { startEgressProxy: SINCE_8 },
     verdict: 'in',
     via: '../../src/sandbox-entry.js',
     // M90 — this was `'sample'` with an EMPTY list, which is no sample at all. This file's own
@@ -227,6 +236,10 @@ const DECISIONS: Record<string, Decision> = {
   },
   './persistence': {
     gaps: {
+      atomicWriteJsonSync: SINCE_8,
+      ensureSecureDir: SINCE_8,
+      InsecureDirectoryError: SINCE_8,
+      listProjects: SINCE_8,
       LiveTranscriptError:
         'the 5.x name for `LiveSessionError`, and absent from the 4.x half of the range this ' +
         'package supports — re-exporting it unconditionally fails the DTS build against 4.52.1 ' +
@@ -333,12 +346,30 @@ const DECISIONS: Record<string, Decision> = {
       'consumer to redact by hand, which is where a path gets forgotten.',
   },
   './internal/persistence': {
+    untilMajor: 5,
     verdict: 'out',
-    reason: "Marked `internal/` by the SDK itself — re-exporting contradicts the source's intent.",
+    reason:
+      'Marked `internal/` by the SDK itself, and removed in SDK 6 (theokit-sdk#1356); it exists only at the 5.32 floor.',
   },
   './internal/security': {
     verdict: 'out',
-    reason: 'Idem `internal/persistence`.',
+    reason: "Marked `internal/` by the SDK itself — re-exporting contradicts the source's intent.",
+  },
+  './testing': {
+    sinceMajor: 8,
+    verdict: 'out',
+    reason: 'Added by SDK 8. Test doubles for SDK consumers; no consumer here asked for them.',
+  },
+  './telemetry-node': {
+    sinceMajor: 8,
+    verdict: 'out',
+    reason: 'Added by SDK 8. Node telemetry wiring the SDK owns; no consumer here asked for it.',
+  },
+  './mcp': {
+    sinceMajor: 8,
+    verdict: 'out',
+    reason:
+      "Added by SDK 8. MCP is wired through the layer's own tools surface; no consumer asked.",
   },
   './client': {
     verdict: 'out',
@@ -427,8 +458,11 @@ describe('M78 T2.1 — subpath coverage policy', () => {
     const installedMajor = installedSdkMajor()
     const orphans = Object.keys(DECISIONS).filter((s) => {
       if (SUBPATHS_DO_SDK.includes(s)) return false
-      const since = DECISIONS[s].sinceMajor
-      return since === undefined || installedMajor >= since
+      const { sinceMajor, untilMajor } = DECISIONS[s]
+      return (
+        (sinceMajor === undefined || installedMajor >= sinceMajor) &&
+        (untilMajor === undefined || installedMajor <= untilMajor)
+      )
     })
     expect(
       orphans,
