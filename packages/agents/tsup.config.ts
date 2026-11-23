@@ -23,6 +23,8 @@ export default defineConfig({
     bridge: 'src/bridge-entry.ts',
     // Named sessions with interrupt and steer over `runAgentTurn`; an app-facing control surface.
     control: 'src/control-entry.ts',
+    // A reverse relay: a hosted MCP client reaches this agent's tools without an open port.
+    'mcp-relay': 'src/mcp-relay-entry.ts',
     testing: 'src/testing/index.ts',
     // M58 — pass-through subpaths mirroring the SDK's own split.
     sandbox: 'src/sandbox-entry.ts',
@@ -47,6 +49,8 @@ export default defineConfig({
     session: 'src/session/index.ts',
     // M75 — the hook engine as a subpath: reachable by anyone who wants it, paid for only by them.
     hooks: 'src/hooks/index.ts',
+    // Another agent's setup read as data; filesystem and YAML code kept off the root bundle.
+    'foreign-setup': 'src/foreign-setup-entry.ts',
   },
   format: ['esm'],
   dts: true,
@@ -73,6 +77,7 @@ export default defineConfig({
     '@theokit/sdk-tools',
     'quickjs-emscripten-core',
     'ws',
+    'yaml',
     'zod',
   ],
 })

@@ -8,6 +8,7 @@ const NAMES = [
   'MIN_BEARER_TOKEN_LENGTH',
   'bearerCheck',
   'bearerGuard',
+  'createGrantStore',
   'isLoopback',
   'parsePort',
   'readBearerToken',
