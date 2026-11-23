@@ -11,7 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- `tools/loop-detection.ts` documents why it stays local next to the SDK doom-loop window guard (opt-in, stops the run, canonical keys vs. an always-on per-call block); the theokit-sdk issue is still to be filed (#2659).
+- `tools/loop-detection.ts` documents why it stays local next to the SDK doom-loop window guard (opt-in, stops the run, canonical keys vs. an always-on per-call block); the differences are filed as usetheokit/theokit-sdk#1502 (#2659).
 - `theoclaw skills install`, `search` and `publish` and the skills registry server run on `@theokit/skills-registry` 0.1.0 (`downloadSkill`, `installSkill`, `searchSkills`, `buildSkillPackage`, `publishSkill`, `createSkillsRegistryHandler`); the app keeps only the command wording and its skills directory. Visible differences: search drops malformed entries instead of failing, the server answers 413 over 1 MiB, publish accepts only https or loopback http registries, and package, version and path checks are the package's. Registry directories written by the old server may need to be republished (#2591).
 - The configuration file, hot reload, `theoclaw onboard` and `theoclaw security audit` run on `defineInstanceConfig` from `@theokit/host/instance-config`; `config-file.ts` declares TheoClaw's keys once and the other modules keep only its wording and its settings checks (#2596).
 - `@theokit/tui` is pinned at 0.83.4 (was 0.80.0) (#2607).

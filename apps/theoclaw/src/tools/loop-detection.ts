@@ -10,8 +10,7 @@
  *   `JSON.stringify(args)`, so key order matters;
  * - unserializable input: the SDK shares one `unserializable` key per tool name, as here (`name:unserializable`);
  * - the SDK's separate consecutive guard stops the run (`stoppedByDoomLoop`); this plugin never stops the run.
- * SDK issue: NOT FILED YET. The run that wrote this had no GitHub access; file it in usetheokit/theokit-sdk
- * from the list above and replace this line with the issue link.
+ * SDK issue: https://github.com/usetheokit/theokit-sdk/issues/1502 (sendDefaults cannot carry doomLoop).
  */
 import type { PreToolCallContext } from '@theokit/sdk'
 
