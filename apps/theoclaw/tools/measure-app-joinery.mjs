@@ -116,7 +116,7 @@ function typesEntry(target) {
 }
 
 function declarationFor(file) {
-  const candidates = [file, file.replace(/\.(c|m)?js$/, (_m, k) => `.d.${k ?? ""}ts`)]
+  const candidates = [file, file.replace(/\.([cm]?)js$/, '.d.$1ts')]
   return candidates.find((c) => /\.d\.[cm]?ts$/.test(c) && existsSync(c))
 }
 
@@ -128,27 +128,36 @@ function packageDir(root, name) {
   }
 }
 
+function readDeps(root) {
+  const pkgPath = join(root, 'package.json')
+  if (!existsSync(pkgPath)) return []
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+  return Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).filter((n) => n.startsWith('@theokit/'))
+}
+
+/** `{ module, file }` for each code subpath of a dependency's export map. */
+function entriesOf(root, dep) {
+  const dir = packageDir(root, dep)
+  if (dir === undefined) throw new Error(`joinery: cannot resolve ${dep}; install and build before measuring`)
+  const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+  const map = manifest.exports ?? { '.': manifest.types ?? manifest.main }
+  const found = []
+  for (const [sub, target] of Object.entries(typeof map === 'string' ? { '.': map } : map)) {
+    if (!sub.startsWith('.') || sub.includes('*') || sub.endsWith('package.json')) continue
+    const rel = typesEntry(target)
+    if (rel !== undefined && !/\.[cm]?[jt]sx?$/.test(rel)) continue
+    const file = rel === undefined ? undefined : declarationFor(resolve(dir, rel))
+    if (file === undefined) throw new Error(`joinery: no declaration file for ${dep}${sub.slice(1)}; build the package first`)
+    found.push({ module: dep + sub.slice(1), file })
+  }
+  return found
+}
+
 /** Names exported by every subpath of every `@theokit/*` dependency of the app at `root`. */
 export function frameworkExports(root = APP_ROOT) {
-  const pkgPath = join(root, 'package.json')
-  if (!existsSync(pkgPath)) return new Map()
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-  const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).filter((n) => n.startsWith('@theokit/'))
-  const entries = []
-  for (const dep of deps) {
-    const dir = packageDir(root, dep)
-    if (dir === undefined) throw new Error(`joinery: cannot resolve ${dep}; install and build before measuring`)
-    const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-    const map = manifest.exports ?? { '.': manifest.types ?? manifest.main }
-    for (const [sub, target] of Object.entries(typeof map === 'string' ? { '.': map } : map)) {
-      if (!sub.startsWith('.') || sub.includes('*') || sub.endsWith('package.json')) continue
-      const rel = typesEntry(target)
-      if (rel !== undefined && !/\.[cm]?[jt]sx?$/.test(rel)) continue
-      const file = rel === undefined ? undefined : declarationFor(resolve(dir, rel))
-      if (file === undefined) throw new Error(`joinery: no declaration file for ${dep}${sub.slice(1)}; build the package first`)
-      entries.push({ module: dep + sub.slice(1), file })
-    }
-  }
+  const deps = readDeps(root)
+  if (deps.length === 0) return new Map()
+  const entries = deps.flatMap((dep) => entriesOf(root, dep))
   const program = ts.createProgram(entries.map((e) => e.file), {
     allowJs: false,
     skipLibCheck: true,
@@ -170,7 +179,7 @@ export function frameworkExports(root = APP_ROOT) {
       names.set(exported.name, list)
     }
   }
-  if (deps.length > 0 && names.size === 0) throw new Error('joinery: read no framework export')
+  if (names.size === 0) throw new Error('joinery: read no framework export')
   return names
 }
 
