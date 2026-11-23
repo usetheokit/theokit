@@ -5,6 +5,8 @@ import type { KnownAgentRunErrorCode } from '@theokit/sdk/errors'
 export interface TurnFailure {
   /** `'unknown'` when nothing typed matched. */
   code: KnownAgentRunErrorCode
+  /** The code string as given, before coercion; absent when no code string was found. */
+  rawCode?: string
   /** From `isTransientError` and typed status fields only, never from message digits. */
   transient: boolean
   /** Never empty: `'the turn failed with no message'` when blank. */
@@ -76,13 +78,15 @@ function field(value: unknown, key: string): unknown {
     : undefined
 }
 
-function typedCode(node: unknown): KnownAgentRunErrorCode {
+function typedCode(node: unknown): { code: KnownAgentRunErrorCode; rawCode?: string } {
+  let rawCode: string | undefined
   for (const raw of [field(field(node, 'metadata'), 'code'), field(node, 'code')]) {
-    if (typeof raw !== 'string') continue
+    if (typeof raw !== 'string' || raw === '') continue
     const code = coerceToKnownAgentRunErrorCode(raw)
-    if (code !== 'unknown') return code
+    if (code !== 'unknown') return { code, rawCode: raw }
+    rawCode ??= raw
   }
-  return 'unknown'
+  return { code: 'unknown', rawCode }
 }
 
 function nodeMessage(node: unknown): string {
@@ -93,12 +97,17 @@ function nodeMessage(node: unknown): string {
 /** Turns any thrown value, with its cause chain, into a category and a retry verdict. */
 export function classifyTurnFailure(err: unknown): TurnFailure {
   let code: KnownAgentRunErrorCode = 'unknown'
+  let rawCode: string | undefined
   let transient = false
   const seen = new Set<unknown>()
   let node: unknown = err
   for (let depth = 0; depth <= MAX_CAUSE_DEPTH && node != null && !seen.has(node); depth++) {
     seen.add(node)
-    if (code === 'unknown') code = typedCode(node)
+    if (code === 'unknown') {
+      const typed = typedCode(node)
+      code = typed.code
+      if (typed.code !== 'unknown' || rawCode === undefined) rawCode = typed.rawCode ?? rawCode
+    }
     if (!transient) {
       const status = field(field(node, 'metadata'), 'statusCode')
       transient =
@@ -106,20 +115,36 @@ export function classifyTurnFailure(err: unknown): TurnFailure {
     }
     node = field(node, 'cause')
   }
-  return { code, transient, message: nodeMessage(err) || BLANK_MESSAGE }
+  const message = nodeMessage(err) || BLANK_MESSAGE
+  return rawCode === undefined
+    ? { code, transient, message }
+    : { code, rawCode, transient, message }
 }
 
-/** `"<message> [<code>]: <hint>"`, then `"after N attempts"` only when `attempts > 1`. */
+/**
+ * `"<message> [<code>]: <hint>"`, then `"after N attempts"` only when `attempts > 1`, then `suffix`.
+ * An unknown code prints its `rawCode`. `probe` returns a hint that wins over the per-code hint.
+ */
 export function describeTurnFailure(
   failure: TurnFailure,
-  opts: { attempts?: number; hints?: TurnFailureHints } = {},
+  opts: {
+    attempts?: number
+    hints?: TurnFailureHints
+    probe?: (failure: TurnFailure) => string | undefined
+    suffix?: string
+  } = {},
 ): string {
   const hints = opts.hints ?? {}
   let text = failure.message || BLANK_MESSAGE
   const hint =
-    hints[failure.code] ?? DEFAULT_TURN_FAILURE_HINTS[failure.code] ?? messageHint(text, hints)
-  if (failure.code !== 'unknown') text += ` [${failure.code}]`
+    opts.probe?.(failure) ??
+    hints[failure.code] ??
+    DEFAULT_TURN_FAILURE_HINTS[failure.code] ??
+    messageHint(text, hints)
+  const shown = failure.code !== 'unknown' ? failure.code : failure.rawCode
+  if (shown) text += ` [${shown}]`
   if (hint) text += `: ${hint}`
   if (opts.attempts !== undefined && opts.attempts > 1) text += ` after ${opts.attempts} attempts`
+  if (opts.suffix) text += ` ${opts.suffix}`
   return text
 }
