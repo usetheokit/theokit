@@ -19,7 +19,7 @@ export class GoalTurnFailedError extends TheokitAgentError {
 }
 
 /** Adapt a client to the SDK `GoalLoopAgent` contract; `wait()` rejects with `GoalTurnFailedError` on 'error' or 'aborted'. */
-export function asGoalLoopAgent(client: AgentClient<string>): GoalLoopAgent {
+export function asGoalLoopAgent(client: Pick<AgentClient<string>, 'sendAndWait'>): GoalLoopAgent {
   return {
     send(prompt: string) {
       const settled: Promise<TurnSettled> = client.sendAndWait(prompt)
