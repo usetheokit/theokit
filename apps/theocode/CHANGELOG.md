@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `orderedPermissionRules` builds its rules with `permissionRulesFromLayers` from `@theokit/agents/config`; the app-local deny-first partition is gone (#2745).
 - `foreign-keys.ts` is gone: the settings keys recognised from a `.claude` file are `CLAUDE_SETTINGS_KEYS` from `@theokit/agents/config` (#2712).
 - The doctor's `settings` and `credential-strays` rows come from `checks.settingsReport` and `checks.leftovers` in `@theokit/agents/doctor`; their wording changes (`not implemented` for `not implemented here`, `permissions not supported` for `permission entries not honoured`, `path (…)` for `path — …`, `, ` separators, and `… no longer read; remove if you no longer need it` for the stray row).
 - `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
