@@ -33,7 +33,7 @@ npm run build:bin                # dist/{{name}}.mjs, executable
 
 `build:bin` is optional: `dev` and `start` run from source and `build` stays `tsc --noEmit`. The bundle is
 ESM for Node 22+. `node-pty`, `better-sqlite3` and `proper-lockfile` stay external, so install them beside
-the file if you ship it. Options live in `scripts/build-bin.mjs`, each commented with the failure it prevents.
+the file if you ship it. `scripts/build-bin.mjs` only names the entry and output; the esbuild options live in `create-theokit/tools/build-ink-cli.mjs` (a dev dependency), each commented with the failure it prevents.
 
 ## Architecture (System Design)
 
