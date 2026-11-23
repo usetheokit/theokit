@@ -19,12 +19,15 @@ describe('FakeAgent', () => {
   it('marks frames as already streamed after deltas', async () => {
     const run = await new FakeAgent({ frames: [text('a')], deltas: ['a'] }).send('x')
     const kinds: string[] = []
-    for await (const e of run.events()) kinds.push(e.kind === 'message' ? `m:${e.textAlreadyStreamed}` : e.kind)
+    for await (const e of run.events())
+      kinds.push(e.kind === 'message' ? `m:${e.textAlreadyStreamed}` : e.kind)
     expect(kinds).toEqual(['delta', 'm:true'])
   })
 
   it('throws the stream error after its frames', async () => {
-    const run = await new FakeAgent({ frames: [text('a')], streamError: new Error('boom') }).send('x')
+    const run = await new FakeAgent({ frames: [text('a')], streamError: new Error('boom') }).send(
+      'x',
+    )
     const seen: unknown[] = []
     await expect(
       (async () => {

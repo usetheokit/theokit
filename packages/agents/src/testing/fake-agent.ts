@@ -39,7 +39,13 @@ function until(gate: Promise<void> | undefined, signal: AbortSignal | undefined)
   if (signal === undefined) return gate
   if (signal.aborted) return Promise.resolve()
   return new Promise<void>((resolve) => {
-    signal.addEventListener('abort', () => resolve(), { once: true })
+    signal.addEventListener(
+      'abort',
+      () => {
+        resolve()
+      },
+      { once: true },
+    )
     void gate.then(resolve)
   })
 }
@@ -64,7 +70,10 @@ export class FakeAgent {
 
   constructor(private readonly turn: FakeTurn) {}
 
-  async send(text: string, options?: { readonly signal?: AbortSignal; readonly queueMode?: string }) {
+  async send(
+    text: string,
+    options?: { readonly signal?: AbortSignal; readonly queueMode?: string },
+  ) {
     this.sent.push(text)
     this.queueModes.push(options?.queueMode)
     const signal = options?.signal
@@ -87,7 +96,15 @@ export class FakeAgent {
         await until(turn.before, signal)
         if (turn.toolHeld === true) {
           if (aborted()) return
-          yield { kind: 'delta', update: { type: 'tool-call-started', callId: 'call-1', modelCallId: 'call-1', toolCall: { callId: 'call-1', name: turn.toolName ?? 'read', args: {} } } }
+          yield {
+            kind: 'delta',
+            update: {
+              type: 'tool-call-started',
+              callId: 'call-1',
+              modelCallId: 'call-1',
+              toolCall: { callId: 'call-1', name: turn.toolName ?? 'read', args: {} },
+            },
+          }
           await until(never, signal)
           return
         }
@@ -116,4 +133,3 @@ export class FakeAgent {
     }
   }
 }
-
