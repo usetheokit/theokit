@@ -10,6 +10,7 @@ import { createMcpRelayServer, startMcpRelayConnector } from '../../src/mcp-rela
 
 const tools = [{ name: 'read_file' }, { name: 'write_file' }]
 const dispatch = async (visible: readonly { name: string }[], body: unknown): Promise<unknown> => {
+  if (Array.isArray(body)) return Promise.all(body.map((b) => dispatch(visible, b)))
   const req = body as { id: number; method: string; params?: { name: string } }
   if (req.method === 'tools/list') return { jsonrpc: '2.0', id: req.id, result: { tools: visible } }
   const ok = visible.some((t) => t.name === req.params?.name)
@@ -45,7 +46,7 @@ async function setup() {
       headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
     })
-  return { grants, call }
+  return { grants, call, server }
 }
 
 describe('mcp relay', () => {
@@ -78,5 +79,46 @@ describe('mcp relay', () => {
     expect((await call('wrong', { id: 1 })).status).toBe(401)
     await grants.revoke('bob')
     expect((await call(credential, { id: 1 })).status).toBe(401)
+  })
+
+  it('answers a batch with only the allowed tools, and 202 for a notification-only batch', async () => {
+    const { grants, call } = await setup()
+    const { credential } = await grants.create('carol', ['read_file'])
+    const note = await call(credential, [{ jsonrpc: '2.0', method: 'notifications/x' }])
+    expect(note.status).toBe(202)
+    const batch = await call(credential, [
+      { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'write_file' } },
+    ])
+    const out = (await batch.json()) as Array<{ result?: { tools: unknown[] }; error?: unknown }>
+    expect(out[0]?.result?.tools).toEqual([{ name: 'read_file' }])
+    expect(out[1]?.error).toBeDefined()
+  })
+
+  it('answers 503 once the queue is full', async () => {
+    const grants = createGrantStore(join(mkdtempSync(join(tmpdir(), 'relay-')), 'g.json'))
+    const server = createMcpRelayServer({
+      instanceToken: 'i'.repeat(32),
+      grants,
+      maxQueued: 1,
+      timeoutMs: 300,
+    })
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+    cleanups.push(async () => {
+      server.closeAllConnections()
+      await new Promise((r) => server.close(r))
+    })
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`
+    const { credential } = await grants.create('d', ['read_file'])
+    const send = () =>
+      fetch(url, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${credential}` },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      })
+    const first = send()
+    await new Promise((r) => setTimeout(r, 50))
+    expect((await send()).status).toBe(503)
+    expect((await first).status).toBe(504)
   })
 })

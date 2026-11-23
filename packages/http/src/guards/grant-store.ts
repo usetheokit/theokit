@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 
 import { GuardConfigError } from './errors.js'
@@ -38,8 +38,44 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+const LOCK_STALE_MS = 10_000
+const LOCK_WAIT_MS = 15_000
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** Holds an exclusive lock file (`wx`), so another process on the same file waits its turn. */
+async function withFileLock<T>(path: string, task: () => Promise<T>): Promise<T> {
+  const lock = `${path}.lock`
+  await mkdir(dirname(path), { recursive: true })
+  const deadline = Date.now() + LOCK_WAIT_MS
+  for (;;) {
+    try {
+      await writeFile(lock, String(process.pid), { flag: 'wx', mode: 0o600 })
+      break
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      // A holder that died leaves the lock behind; one older than the stale window is taken over.
+      const age = await stat(lock).then(
+        (st) => Date.now() - st.mtimeMs,
+        () => 0,
+      )
+      if (age > LOCK_STALE_MS) await rm(lock, { force: true })
+      else if (Date.now() > deadline)
+        throw new GuardConfigError(`grant file ${path} is locked`, path)
+      // eslint-disable-next-line sonarjs/pseudo-random -- retry jitter, not security
+      else await sleep(10 + Math.random() * 20)
+    }
+  }
+  try {
+    return await task()
+  } finally {
+    await rm(lock, { force: true })
+  }
+}
+
+/** One mutation at a time: in this process by queue, across processes by lock file. */
 function serialized<T>(key: string, task: () => Promise<T>): Promise<T> {
-  const run = (tails.get(key) ?? Promise.resolve()).then(task)
+  const run = (tails.get(key) ?? Promise.resolve()).then(() => withFileLock(key, task))
   const tail = run.then(
     () => undefined,
     () => undefined,
@@ -49,6 +85,20 @@ function serialized<T>(key: string, task: () => Promise<T>): Promise<T> {
     if (tails.get(key) === tail) tails.delete(key)
   })
   return run
+}
+
+function isStoredGrant(value: unknown): value is StoredGrant {
+  if (typeof value !== 'object' || value === null) return false
+  const g = value as Record<string, unknown>
+  return (
+    typeof g.id === 'string' &&
+    typeof g.name === 'string' &&
+    typeof g.hash === 'string' &&
+    typeof g.createdAt === 'string' &&
+    (g.revokedAt === undefined || typeof g.revokedAt === 'string') &&
+    Array.isArray(g.scopes) &&
+    g.scopes.every((x) => typeof x === 'string')
+  )
 }
 
 function strip({ hash: _hash, ...grant }: StoredGrant): Grant {
@@ -75,7 +125,10 @@ export function createGrantStore(file: string): GrantStore {
     if (!Array.isArray(parsed.grants)) {
       throw new GuardConfigError(`grant file ${path} is malformed`, path)
     }
-    return parsed.grants as StoredGrant[]
+    if (!parsed.grants.every(isStoredGrant)) {
+      throw new GuardConfigError(`grant file ${path} is malformed`, path)
+    }
+    return parsed.grants
   }
 
   async function write(grants: readonly StoredGrant[]): Promise<void> {
@@ -86,7 +139,7 @@ export function createGrantStore(file: string): GrantStore {
   }
 
   return {
-    create: (name, scopes) => {
+    create: async (name, scopes) => {
       if (!NAME.test(name)) {
         throw new GuardConfigError(
           `invalid grant name "${name}": use letters, digits, - and _`,

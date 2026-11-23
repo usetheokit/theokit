@@ -22,6 +22,8 @@ export interface McpRelayServerOptions {
   readonly pollMs?: number
   /** Largest accepted request body. Default 256 KiB. */
   readonly maxBodyBytes?: number
+  /** Most requests held waiting for the connector; beyond it the relay answers 503. Default 64. */
+  readonly maxQueued?: number
 }
 
 export const MCP_PATH = '/mcp'
@@ -51,6 +53,7 @@ export function createMcpRelayServer(options: McpRelayServerOptions): http.Serve
   const timeoutMs = options.timeoutMs ?? 30_000
   const pollMs = options.pollMs ?? 25_000
   const maxBody = options.maxBodyBytes ?? 256 * 1024
+  const maxQueue = options.maxQueued ?? 64
   const authorizeInstance = bearerCheck(options.instanceToken)
   const queue: RelayJob[] = []
   const waiting = new Map<string, (response: unknown) => void>()
@@ -95,9 +98,17 @@ export function createMcpRelayServer(options: McpRelayServerOptions): http.Serve
       return
     }
     const job: RelayJob = { id: randomUUID(), client: grant.name, scopes: grant.scopes, body }
+    if (queue.length >= maxQueue) {
+      send(res, 503, undefined, { 'retry-after': '5' })
+      return
+    }
     queue.push(job)
     for (const poller of [...pollers]) poller()
-    if (!Array.isArray(body) && !('id' in body)) {
+    const items: unknown[] = Array.isArray(body) ? body : [body]
+    if (
+      items.length > 0 &&
+      items.every((i) => typeof i === 'object' && i !== null && !('id' in i))
+    ) {
       send(res, 202)
       return
     }

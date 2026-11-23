@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -40,6 +40,22 @@ describe('createGrantStore', () => {
       'c',
     ])
     await expect(store.create('a', ['x'])).rejects.toThrow(/exists/)
-    expect(() => store.create('bad name', [])).toThrow(/invalid/)
+    await expect(store.create('bad name', [])).rejects.toThrow(/invalid/)
+  })
+
+  it('keeps every create when separate stores race on one file', async () => {
+    const path = file()
+    await Promise.all(
+      Array.from({ length: 12 }, (_, i) => createGrantStore(path).create(`n${i}`, ['x'])),
+    )
+    expect(await createGrantStore(path).list()).toHaveLength(12)
+  })
+
+  it('fails closed on a corrupt entry with a typed error', async () => {
+    const path = file()
+    const store = createGrantStore(path)
+    await store.create('a', ['x'])
+    writeFileSync(path, JSON.stringify({ grants: [{ name: 1 }] }))
+    await expect(store.authenticate('x')).rejects.toThrow(/malformed/)
   })
 })
