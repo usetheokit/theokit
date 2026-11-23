@@ -44,7 +44,7 @@ export class PtyOwnerConfigError extends Error {
   }
 }
 
-function quote(value: string): string {
+export function quote(value: string): string {
   return "'" + value.replaceAll("'", "'\\''") + "'"
 }
 
@@ -106,13 +106,15 @@ export function createPtyOwner<M extends string>(options: PtyOwnerOptions<M>): P
   const pinned = options.cwd
   const newBackend = (): OwnedPtyBackend => {
     const backend = createBackend({
-      wrapCommand: (command, cwd) =>
-        wrapFor(currentMode)(
+      wrapCommand: (command, cwd) => {
+        const run =
           envOption === undefined || envOption === 'inherit'
             ? command
-            : scrubbed(command, envOption.keep, envOption.home),
-          cwd,
-        ),
+            : scrubbed(command, envOption.keep, envOption.home)
+        const wrapped = wrapFor(currentMode)(run, cwd)
+        // The backend runs the ORIGINAL command when the wrap is null, so a scrub must survive that.
+        return wrapped ?? (run === command ? null : run)
+      },
       maxSessions,
     })
     return pinned === undefined ? backend : pinCwd(backend, pinned)

@@ -111,6 +111,37 @@ describe('createPtyOwner', () => {
     owner.shutdown()
   })
 
+  it('keeps the scrub when the wrap returns null (no sandbox)', () => {
+    const built: PtyInteractiveBackendOptions[] = []
+    createPtyOwner<Mode>({
+      mode: 'danger-full-access',
+      maxSessions: 1,
+      env: { keep: ['PATH'], home: '/h' },
+      wrapFor: () => () => null,
+      createBackend: (o) => {
+        built.push(o)
+        return { killAll: () => undefined } as unknown as OwnedPtyBackend
+      },
+    })
+    expect(built[0]?.wrapCommand?.('env', '/w')).toMatch(
+      /^\/usr\/bin\/env -i PATH=.* HOME='\/h' \/bin\/sh -c 'env'$/,
+    )
+  })
+
+  it('without env, a null wrap stays null', () => {
+    const built: PtyInteractiveBackendOptions[] = []
+    createPtyOwner<Mode>({
+      mode: 'read-only',
+      maxSessions: 1,
+      wrapFor: () => () => null,
+      createBackend: (o) => {
+        built.push(o)
+        return { killAll: () => undefined } as unknown as OwnedPtyBackend
+      },
+    })
+    expect(built[0]?.wrapCommand?.('env', '/w')).toBeNull()
+  })
+
   it('a pinned cwd overrides the caller cwd', async () => {
     const calls: Array<string | undefined> = []
     const owner = createPtyOwner<Mode>({

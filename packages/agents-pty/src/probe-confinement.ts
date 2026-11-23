@@ -2,13 +2,10 @@ import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
+import { quote } from './pty-owner.js'
 import type { OwnedPtyBackend } from './pty-owner.js'
 
 type ProbeBackend = Pick<OwnedPtyBackend, 'startInteractive' | 'writeStdin' | 'kill'>
-
-function quote(value: string): string {
-  return "'" + value.replaceAll("'", "'\\''") + "'"
-}
 
 /**
  * True when a real session started through `backend` writes inside `root` and is refused a write
