@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- Framework helpers (#2605): the `update_goal` tool and judge come from `createGoalSignal`, one per goal run; `resolveMentions` delegates to `resolveFileMentions`; agent shapes go through `declareAgentShape` and `shapeToolsAsCustomTools`; the session PTY owner wraps `createPtyOwner`. `turnErrorText` keeps its own text, with the gap named in `turn-error.ts`.
 - Model routing: `routeToCredential` and the subscription-route check use the shared `modelForCredential` / `isSubscriptionRoute` helpers from `@theokit/agents/auth` (#2576).
 
 ### Changed

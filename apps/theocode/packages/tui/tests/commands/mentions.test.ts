@@ -52,3 +52,11 @@ describe('resolveMentions', () => {
     expect(r.skipped).toEqual([])
   })
 })
+
+describe('resolveMentions — an unreadable file is skipped, not thrown', () => {
+  it('skips a mention that names a directory', () => {
+    const r = resolveMentions('see @src', project())
+    expect(r.attached).toEqual([])
+    expect(r.skipped).toHaveLength(1)
+  })
+})
