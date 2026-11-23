@@ -37,6 +37,7 @@ describe('the fake run honours the turn signal (T2.1)', () => {
 // T2.2 — the control session store
 // ---------------------------------------------------------------------------------------------
 
+import type { SessionOutcome } from '@theokit/agents/control'
 import { afterEach, vi } from 'vitest'
 
 import { createContainer } from '../src/composition.js'
@@ -46,7 +47,6 @@ import {
   createControlSessions,
   MAX_CONTROL_SESSIONS,
   REDIRECT_NOTE,
-  type SessionOutcome,
 } from '../src/control-plane/control-sessions.js'
 import { createTurnRunner, type TurnAgent, type TurnEvent } from '../src/control-plane/turn.js'
 import { type Deferred, DisposableFake, type FakeTurn, waitFor } from './fakes.js'
@@ -186,7 +186,7 @@ describe('the control session store (T2.2)', () => {
     expect(f.agents[0]!.sent.at(-1)).toBe('later')
   })
 
-  it('a turn sent just before the old socket\'s close arrives runs once that close cancels the old turn', async () => {
+  it("a turn sent just before the old socket's close arrives runs once that close cancels the old turn", async () => {
     const hold = deferred<void>()
     const f = storeOf(() => ({ frames: [assistant('ok'), finished()], before: hold.promise }))
     const [first, second] = [owner(), owner()]

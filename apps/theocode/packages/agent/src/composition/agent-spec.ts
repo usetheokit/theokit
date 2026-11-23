@@ -43,7 +43,8 @@ import {
   CapabilityPreset,
   ModelCapability,
   ToolsCapability,
-  applyCapabilities,
+  declareAgentShape,
+  shapeToolsAsCustomTools,
 } from '@theokit/agents'
 import type { Capability, CustomTool } from '@theokit/agents'
 
@@ -94,13 +95,15 @@ export function declareAgent(
     new ModelCapability(ctx.model, ctx.reasoning_effort),
     ...members,
   ])
-  const draft = applyCapabilities([preset])
+  // The framework composes and freezes the shape; this keeps the app-facing value, whose model and
+  // effort are always known (they come from `ctx`), and converts the tools with the framework adapter.
+  const shape = declareAgentShape(name, [preset])
   return {
     name,
-    tools: draft.tools as unknown as readonly CustomTool[],
+    tools: shapeToolsAsCustomTools(shape),
     model: ctx.model,
     reasoningEffort: ctx.reasoning_effort,
-    provenance: draft.provenance,
+    provenance: shape.provenance,
   }
 }
 

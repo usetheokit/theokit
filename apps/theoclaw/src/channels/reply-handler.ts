@@ -1,26 +1,22 @@
-import { channelRendering } from '@theokit/gateway'
 import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@theokit/gateway'
-import { ChatPresenter, fromSdkMessage } from '@theokit/presenter'
-import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
+import { fromSdkMessage } from '@theokit/presenter'
+import type { ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from './channel-loop.js'
-import { createStreamMask } from './stream-mask.js'
-import type { StreamMask } from './stream-mask.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import { type DisplayConfig, resolveDisplay } from './display-config.js'
-import { createProgressGate, type ProgressGate } from './progress.js'
+import { createProgressGate } from './progress.js'
 import { compactIfNeeded } from './compact-command.js'
-import { deliverText } from '@theokit/gateway-agent'
+import { AgentTurnError, createAgentHandler, deliverText } from '@theokit/gateway-agent'
+import type { AgentLease } from '@theokit/gateway-agent'
 import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-command.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import type { UsageMode } from './usage-hook.js'
-import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
+import { THINKING_LEVELS, type ThinkingLevel } from '../agent/create-agent.js'
 import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
 import { AdvisorHistory, reviewQuietly, steerNote, type AdvisorSettings } from './advisor.js'
-import { ackInbound, showTyping, type TypingOptions } from './typing.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
@@ -103,8 +99,11 @@ export interface ReplyHandlerOptions {
   readonly usage?: ReplyUsageOptions
   /** `/compact` and the `THEOCLAW_COMPACT_AT` threshold (OC-53); without it, `/compact` is an ordinary message. */
   readonly compact?: CompactSettings
-  /** A typing indicator shown while a turn or goal runs (OC-106); without it, none. */
-  readonly typing?: TypingOptions
+  /**
+   * `THEOCLAW_ACK_REACTION`: the emoji that reacts to an inbound message when its turn starts, and
+   * the started adapters that send it. Typing while a turn runs is the runner's, not this handler's.
+   */
+  readonly ack?: { readonly emoji: string; readonly adapters: () => readonly BasePlatformAdapter[] }
   /** `THEOCLAW_ADVISOR=on` (OC-118): a reviewer that steers the running turn; without it, none. */
   readonly advisor?: AdvisorSettings
 }
@@ -118,16 +117,7 @@ export interface ReplyUsageOptions {
   readonly write: (line: string) => void
 }
 
-/** A turn whose run resolved with `status: "error"`, which the SDK reports without rejecting. */
-export class AgentTurnError extends Error {
-  constructor(
-    readonly platform: string,
-    readonly code: string | undefined,
-  ) {
-    super(`${platform}: agent turn failed (${code ?? 'no error code'})`)
-    this.name = 'AgentTurnError'
-  }
-}
+export { AgentTurnError }
 
 /** A reply the platform refused. Carries the code, never the message text. */
 export class ReplyDeliveryError extends Error {
@@ -141,23 +131,8 @@ export class ReplyDeliveryError extends Error {
   }
 }
 
-const AGENT_ERROR: AgentOutputEvent = { type: 'error', message: 'agent turn failed', code: 'AGENT_ERROR' }
-const FINISH: AgentOutputEvent = { type: 'finish', reason: 'end_turn' }
-
-/**
- * A presenter in the platform's own rendering: `channelRendering` pairs the dialect rewrite with
- * the format the adapter is told, where `toDialect` alone would leave the presenter's default
- * `markdown` on platforms that show it raw. Decided in ADR 0031, which amends the plan's D12.
- */
-function presenterFor(event: MessageEvent): ChatPresenter {
-  return new ChatPresenter({ channel: event.channel, ...channelRendering(event.platform) })
-}
-
-/** Present one synthetic `finish` (D8) and return the single reply the turn sends. */
-function finishTurn(presenter: ChatPresenter): Pick<ChatMessage, 'text' | 'format'> {
-  const [message] = presenter.present(FINISH)
-  return message ?? { text: NO_ANSWER_REPLY, format: 'plain' }
-}
+/** The one line a turn that failed answers with. */
+const ERROR_REPLY = 'Something went wrong on my side and I could not finish that.'
 
 /**
  * Send the turn's one reply. When the turn already failed, a reply that also fails keeps the turn's
@@ -182,6 +157,10 @@ async function send(
   if (!result.ok) throw new ReplyDeliveryError(ctx.event.platform, result.error?.code ?? 'unknown', cause)
 }
 
+type TurnOutcome =
+  | { readonly failed: false; readonly answer: string }
+  | { readonly failed: true; readonly error: unknown }
+
 /** The advisor's review of one running turn: its advice steers the turn while it runs, never after. */
 interface AdvisorWatch {
   start(agent: TurnAgent, prompt: string): void
@@ -202,7 +181,7 @@ function watchTurn(settings: AdvisorSettings, history: AdvisorHistory, key: stri
         }
         if (!running) return
         try {
-          await agent.send(steerNote(advice), { ...untrustedContentSendOptions(), queueMode: 'steer' })
+          await agent.send(steerNote(advice), { queueMode: 'steer' })
           settings.write(`advisor: steered session ${key}: ${advice}`)
         } catch {
           settings.write(`advisor: could not steer session ${key}`)
@@ -218,95 +197,6 @@ function watchTurn(settings: AdvisorSettings, history: AdvisorHistory, key: stri
   }
 }
 
-type TurnOutcome =
-  | { readonly failed: false; readonly answer: string; readonly result?: Awaited<ReturnType<TurnRun['wait']>> }
-  | { readonly failed: true; readonly error: unknown }
-
-/**
- * What a turn's stream left behind: its plain answer and the error code it streamed, if any; and
- * the mask its text crosses before the presenter renders it.
- */
-interface StreamedTurn {
-  answer: string
-  error: string | undefined
-  readonly mask: StreamMask
-  /** Progress lines the display settings allow, waiting to be sent. */
-  readonly progress: string[]
-  readonly gate: ProgressGate
-}
-
-/**
- * Present one frame's events. The spread gives the frame an anonymous type, which the presenter's
- * index signature accepts. A streamed `finish` is dropped: it would emit and reset the presenter
- * before the one synthetic finish the reply is taken from (D8). Text is masked before the presenter
- * renders it: a platform's dialect rewrites marker pairs (`**`, `~~`, `_`), so a value holding one
- * no longer matches once rendered (LCR #78). The mask holds back an end that could still grow into
- * a value split across frames.
- */
-function presentFrame(frame: { readonly type: string }, presenter: ChatPresenter, streamed: StreamedTurn): void {
-  for (const output of fromSdkMessage({ ...frame })) {
-    if (output.type === 'error') streamed.error = output.code
-    streamed.progress.push(...streamed.gate.lines(output))
-    if (output.type === 'text') {
-      // The answer before any platform rendering, for a broadcast group's thread and its other members.
-      streamed.answer += output.text
-      const released = streamed.mask.push(output.text)
-      if (released !== '') presenter.present({ ...output, text: released })
-    } else if (output.type !== 'finish') presenter.present(output)
-  }
-}
-
-/** Present whatever text the mask still holds, masked, once the stream ends or fails. */
-function flushMask(presenter: ChatPresenter, streamed: StreamedTurn): void {
-  const rest = streamed.mask.flush()
-  if (rest !== '') presenter.present({ type: 'text', text: rest })
-}
-
-/** Stream the agent's answer into the presenter; a failure is returned, not thrown. */
-async function streamTurn(
-  agent: TurnAgent,
-  event: MessageEvent,
-  prompt: string,
-  presenter: ChatPresenter,
-  secrets: readonly string[],
-  gate: ProgressGate,
-  sendProgress: (line: string) => Promise<void>,
-  advisor?: AdvisorWatch,
-): Promise<TurnOutcome> {
-  // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
-  const streamed: StreamedTurn = { answer: '', error: undefined, mask: createStreamMask(secrets), progress: [], gate }
-  try {
-    const run = await agent.send(prompt, untrustedContentSendOptions())
-    advisor?.start(agent, prompt)
-    try {
-      for await (const frame of run.stream()) {
-        presentFrame(frame, presenter, streamed)
-        for (const line of streamed.progress.splice(0)) await sendProgress(line)
-      }
-      for (const line of streamed.gate.flush()) await sendProgress(line)
-    } finally {
-      advisor?.stop()
-      flushMask(presenter, streamed)
-    }
-    const result = await run.wait()
-    if (result.status !== 'error' && streamed.error === undefined) {
-      advisor?.record(streamed.answer)
-      return { failed: false, answer: streamed.answer === '' ? NO_ANSWER_REPLY : streamed.answer, result }
-    }
-    presenter.present(AGENT_ERROR)
-    return { failed: true, error: new AgentTurnError(event.platform, result.error?.code ?? streamed.error) }
-  } catch (error) {
-    presenter.present(AGENT_ERROR)
-    return { failed: true, error }
-  }
-}
-
-/**
- * One agent turn on `prompt`, and exactly one reply to the origin (FR-004, D8). A failed turn still
- * replies, then rethrows so the runner fires `on_error`. Resolves the answer of a turn that succeeded.
- * The agent is the session's, owned by `SessionAgents`; the lease is released once the turn has
- * replied, failed or not.
- */
 const advisorHistories = new WeakMap<AdvisorSettings, AdvisorHistory>()
 
 function advisorHistoryOf(settings: AdvisorSettings): AdvisorHistory {
@@ -315,50 +205,126 @@ function advisorHistoryOf(settings: AdvisorSettings): AdvisorHistory {
   return found
 }
 
+/** What one turn left behind, read after the package handler has replied. */
+interface TurnRecord {
+  answer: string
+  streamFailed: boolean
+  result?: Awaited<ReturnType<TurnRun['wait']>>
+}
+
+/**
+ * The session agent as the package handler sees it. The stream passes through untouched; the
+ * wrapper only notes the answer and the result (for usage, compaction, advisor and a broadcast
+ * group's fan-out), and ends the stream with the `/usage` footer, which the handler masks and
+ * replies with like any other text.
+ */
+function observed(agent: TurnAgent, record: TurnRecord, options: ReplyHandlerOptions, event: MessageEvent, advisor: AdvisorWatch | undefined): TurnAgent {
+  return {
+    send: async (prompt, sendOptions) => {
+      const run = await agent.send(prompt, sendOptions)
+      advisor?.start(agent, typeof prompt === 'string' ? prompt : prompt.text)
+      let waiting: ReturnType<TurnRun['wait']> | undefined
+      const wait = (): ReturnType<TurnRun['wait']> => {
+        waiting ??= run.wait().then((result) => {
+          record.result = result
+          return result
+        })
+        return waiting
+      }
+      return {
+        ...run,
+        wait,
+        stream: async function* () {
+          try {
+            for await (const frame of run.stream()) {
+              for (const output of fromSdkMessage({ ...frame })) {
+                if (output.type === 'text') record.answer += output.text
+                else if (output.type === 'error') record.streamFailed = true
+              }
+              yield frame
+            }
+          } finally {
+            advisor?.stop()
+          }
+          const usage = options.usage
+          if (usage === undefined || record.streamFailed) return
+          const result = await wait()
+          if (result.status === 'error') return
+          const turn: TurnUsage = usageOf(result, usage.model)
+          usage.write(formatUsageLine('channel', turn))
+          const mode = usage.modeFor(event)
+          if (mode !== 'off') yield assistantText(`\n\n${formatUsageFooter(mode, turn)}`)
+        },
+      }
+    },
+  }
+}
+
+function assistantText(text: string): { readonly type: string; readonly message: unknown } {
+  return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } }
+}
+
+/**
+ * One agent turn on `prompt`, and exactly one reply to the origin (FR-004, D8), by the package's
+ * `createAgentHandler`. A failed turn still replies, then throws so the runner fires `on_error`.
+ * Resolves the answer of a turn that succeeded. The agent is the session's, owned by
+ * `SessionAgents`: the request boundary of `withAgent` stays open until the handler releases the
+ * lease, after the reply.
+ */
 async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
-  const presenter = presenterFor(event)
   const secrets = options.secrets ?? []
   const gate = createProgressGate(resolveDisplay(event.platform, options.display), options.incognito === true)
-  // Best effort: a progress line that cannot be sent never fails the turn.
-  const sendProgress = async (line: string): Promise<void> => {
-    try {
-      await ctx.reply(maskSecrets(line, secrets), { format: 'plain' })
-    } catch {
-      // the turn's own reply reports delivery problems
-    }
-  }
-  let started = false
-  try {
-    return await options.withAgent(event, async (lease) => {
-      started = true
-      turnStarted(lease.agent)
-      const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
-      ackInbound(options.typing, event.platform, event.channel.id, event.id)
-      try {
-        const advisor = options.advisor === undefined ? undefined : watchTurn(options.advisor, advisorHistoryOf(options.advisor), lease.agentId ?? event.channel.id)
-        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress, advisor)
-        // Masked before rendering (in the stream) and again after it, so a value is caught in the
-        // model's text and in the platform's own format; the answer a broadcast group records and
-        // fans out is masked before any member renders it.
-        const reply = withFooter(finishTurn(presenter), options.usage, event, outcome)
-        await send(ctx, { ...reply, text: maskSecrets(reply.text, secrets) }, outcome)
-        if (outcome.failed) throw outcome.error
-        if (options.compact !== undefined && lease.agentId !== undefined) await compactIfNeeded(options.compact, lease.agentId, outcome.result)
-        return maskSecrets(outcome.answer, secrets)
-      } finally {
-        await stopTyping()
-        turnEnded(lease.agent)
-        lease.release()
-      }
+  const record: TurnRecord = { answer: '', streamFailed: false }
+  let boundary: Promise<void> = Promise.resolve()
+  const agentFor = (forEvent: MessageEvent): Promise<AgentLease> =>
+    new Promise<AgentLease>((resolve, reject) => {
+      boundary = options.withAgent(forEvent, (lease) =>
+        new Promise<void>((released) => {
+          turnStarted(lease.agent)
+          const advisor = options.advisor === undefined ? undefined : watchTurn(options.advisor, advisorHistoryOf(options.advisor), lease.agentId ?? event.channel.id)
+          resolve({
+            agent: observed(lease.agent, record, options, event, advisor),
+            release: async () => {
+              try {
+                const result = record.result
+                if (result !== undefined && result.status !== 'error' && !record.streamFailed) {
+                  advisor?.record(record.answer)
+                  if (options.compact !== undefined && lease.agentId !== undefined) await compactIfNeeded(options.compact, lease.agentId, result)
+                }
+              } finally {
+                turnEnded(lease.agent)
+                lease.release()
+                released()
+              }
+            },
+          })
+        }),
+      )
+      boundary.catch(reject)
     })
+  const handler = createAgentHandler({
+    agentFor,
+    prompt: () => prompt,
+    noAnswerText: NO_ANSWER_REPLY,
+    errorText: ERROR_REPLY,
+    secrets,
+    progress: (output) => {
+      const lines = gate.lines(output)
+      return lines.length === 0 ? undefined : lines.join('\n')
+    },
+    ...(options.ack === undefined ? {} : { ackEmoji: options.ack.emoji, adapters: [...options.ack.adapters()] }),
+  })
+  let failure: { readonly error: unknown } | undefined
+  try {
+    await handler(event, ctx)
   } catch (error) {
-    // After the callback ran, the turn already replied; this is the boundary's own failure.
-    if (started) throw error
-    // The session's agent could not be resolved before the turn began: the person still gets one reply.
-    presenter.present(AGENT_ERROR)
-    await send(ctx, finishTurn(presenter), { failed: true, error })
-    throw error
+    failure = { error }
   }
+  // The boundary's own failure (a disposal that threw) surfaces when the turn itself did not fail.
+  const disposal = await boundary.then(() => undefined, (error: unknown) => ({ error }))
+  const thrown = failure ?? disposal
+  if (thrown !== undefined) throw thrown.error
+  return maskSecrets(record.answer === '' ? NO_ANSWER_REPLY : record.answer, secrets)
 }
 
 /** Inject `note` into the session's running turn; with none running, nothing is sent and the person is told. */
@@ -366,30 +332,12 @@ async function answerSteer(options: ReplyHandlerOptions, event: MessageEvent, no
   return options.withAgent(event, async (lease) => {
     try {
       if ((runningTurns.get(lease.agent) ?? 0) === 0) return STEER_IDLE_REPLY
-      await lease.agent.send(note, { ...untrustedContentSendOptions(), queueMode: 'steer' })
+      await lease.agent.send(note, { queueMode: 'steer' })
       return STEERED_REPLY
     } finally {
       lease.release()
     }
   })
-}
-
-/**
- * The reply with the footer the conversation's `/usage` mode asks for, read now, as the reply is
- * sent (EC-7); a finished turn also writes its usage line. Only the sender's reply carries it: a
- * broadcast group's other members get the answer alone.
- */
-function withFooter(
-  reply: Pick<ChatMessage, 'text' | 'format'>,
-  usage: ReplyUsageOptions | undefined,
-  event: MessageEvent,
-  outcome: TurnOutcome,
-): Pick<ChatMessage, 'text' | 'format'> {
-  if (usage === undefined || outcome.failed || outcome.result === undefined) return reply
-  const record: TurnUsage = usageOf(outcome.result, usage.model)
-  usage.write(formatUsageLine('channel', record))
-  const mode = usage.modeFor(event)
-  return mode === 'off' ? reply : { ...reply, text: `${reply.text}\n\n${formatUsageFooter(mode, record)}` }
 }
 
 /** Why one member could not be reached; a code or an error name, never the message or an id. */
@@ -422,13 +370,11 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
     return
   }
   const outcome = await options.withAgent(event, async (lease) => {
-    const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
     turnStarted(lease.agent)
     try {
       return await runGoal(lease.agent, goal, settings)
     } finally {
       turnEnded(lease.agent)
-      await stopTyping()
       lease.release()
     }
   })

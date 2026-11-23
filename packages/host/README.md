@@ -45,9 +45,13 @@ config.fix(config.audit(config.path(process.env, homedir())))
 
 `MY_AGENT_PROFILE=work` selects `my-agent-work.env`. A missing file named by `MY_AGENT_CONFIG` throws `InstanceConfigError`; a missing default file makes `load` return `undefined`. `write` creates the file 0600 and a directory it creates 0700, replaces atomically, refuses an existing file without `force`, refuses undeclared keys and values with `"`, `\` or a line break, and runs each key's `parse` first. Errors name keys and paths, never values. `audit` reports a file or app-owned directory open beyond its owner; `fix` applies `chmod` and returns the findings it fixed.
 
+### `entryArgs` and `applyEntryArgs`
+
+A Task Scheduler task carries no environment. Put `config.entryArgs()` (`--config <resolved path>`, plus `--profile <name>` when set; optional `env` and `homeDir`) in `ServiceSpec.args`, and call `config.applyEntryArgs(process.argv.slice(2), process.env)` before `load`. It sets the path and profile variables, accepts nothing else, and throws `InstanceConfigError` on an unknown, valueless or repeated flag, leaving `env` unchanged.
+
 ### `onboard`
 
-First-run setup. Each declared key takes its value from `answers`, then from the environment variable named in `secretFromEnv` (an unset variable throws `InstanceConfigError` naming it), then from a prompt; a `secret: true` key is read with echo off. Values are checked with each key's `parse` and `validate` before anything is written; without `force` an existing file is refused by `write` itself. Interactive use without a TTY throws `onboarding needs a terminal; pass the answers instead`.
+First-run setup. Each declared key takes its value from `answers`, then from the environment variable named in `secretFromEnv` (an unset variable throws `InstanceConfigError` naming it), then from a prompt; a `secret: true` key is read with echo off. Values are checked with each key's `parse` and `validate` before anything is written; without `force` an existing file is refused by `write` itself. A key with `generate: () => string` always takes its value from `generate()`: it is never prompted for, and `answers` and `secretFromEnv` do not override it. Interactive use without a TTY throws `onboarding needs a terminal; pass the answers instead`.
 
 ```ts
 // my-agent onboard [--yes] [--model m] [--api-key-env NAME] [--force]
@@ -143,6 +147,7 @@ await restore({ from: '/srv/backups/2026-11-19', roots })
 - A root that is itself a symbolic link is rejected too. Backups are portable between POSIX systems; a file name holding a backslash (legal on POSIX only) cannot be restored on Windows, where `restore` refuses it.
 - SQLite files (found by header) are snapshotted with the `node:sqlite` backup API, without their `-wal`, `-shm` and `-journal` files.
 - `restore` checks every file against the manifest before writing, refuses manifest paths that leave their root, stages each root beside its target, checks the bytes again, then renames into place. An existing target is kept aside and put back if a later root fails to place.
+- `restore({ ..., transform })` maps each archived path (relative to its root, `/`-separated, with the root name as the second argument) to the path written below that root's target, e.g. to re-key a directory that encodes an absolute path. A result that is empty, absolute, holds `..` or a backslash, or that two files share, rejects before anything is written.
 - The lock protects cooperating writers only; the renames of several roots are not crash-atomic.
 
 ### Storage locations
@@ -164,6 +169,7 @@ await storage.test('offsite') // writes, reads back, decrypts and removes a prob
 - An archive is one file (`backup-<time>-<id>.tcbk`, 0600): `TCBK`, a version byte, a mode byte, then a length-prefixed stream of directories and files, read and written through streams so memory does not grow with the backup. A wrong key, a changed byte or a foreign file rejects with `BackupError`.
 - `fetchLatest` unpacks into a private staging directory beside `into`, checks the manifest, then renames it into place; on any failure nothing is left behind. Entries that are absolute, hold `..` or a backslash, or are repeated are refused.
 - `test` reports `sizeBytes` (the archives held) and `freeBytes` when the file system tells.
+- **HTTPS location.** `init('cloud', { root: 'https://host/dir', encrypted, token })` stores archives on a server instead of a directory (`createStorageRegistry({ ..., ca })` adds trusted PEM authorities for a private server). `token` is sent as `Authorization: Bearer` and kept in the registry file only; `list` and errors omit it. The server holds objects at `<url>/<name>`: `PUT` with `If-None-Match: *` (answer 412 for an existing name), `GET`, and `GET <url>/` returning `{"names": [...]}`. `store` uploads `backup-….tcbk` first and `backup-….tcbk.manifest.json` (the manifest) last; only an archive with that marker is a backup, so an interrupted upload is never fetched. `test` checks the listing only (`sizeBytes` is 0).
 - Registry updates are not locked across processes.
 
 ## `createAppHost` (`@theokit/host/app-host`)
@@ -192,6 +198,60 @@ await host.start() // a failure stops the started services in reverse, then reje
 
 Use `createAppHost` for a supervised service (systemd, a container), where a clean stop exits 0. For a terminal session (Ctrl-C, exit code 130) keep using `createShutdown` from `@theokit/agents/commands`. `@theokit/host` does not import `@theokit/agents`.
 
+## `applyOutboundProxy` and `validateProxy`
+
+```ts
+import { applyOutboundProxy, validateProxy } from '@theokit/host'
+
+const { installed } = applyOutboundProxy(process.env, { variable: 'APP_PROXY' })
+const check = await validateProxy(process.env.APP_PROXY!, { target: 'api.openai.com:443', timeoutMs: 5000 })
+if (!check.ok) console.error(check.reason, check.message) // 'connect_refused' | 'timeout' | 'connection_error' | 'invalid_proxy_url'
+```
+
+- `applyOutboundProxy` installs an undici `ProxyAgent` as the **process-wide** global dispatcher when the variable is set, so every `fetch` in the process goes through the proxy. With it unset or blank nothing is installed (`installed: false`).
+- `validateProxy` sends a CONNECT for `target` (`host:port`) to an `http:` or `https:` proxy and returns `{ ok: true, statusCode }` or a typed failure. `timeoutMs` defaults to 5000. Credentials in the URL are sent as basic auth and never appear in messages.
+
+## `announceService` (`@theokit/host/discovery`)
+
+Announces a running service on the local network (DNS-SD) through a publisher you inject; the package has no multicast dependency.
+
+```ts
+import { announceService } from '@theokit/host/discovery'
+
+const announcement = announceService({ type: 'myagent', name: 'My agent', port: 8080, txt: { path: '/api' }, host, publisher })
+// announcement.announced is false (reason 'loopback') when host is loopback
+await announcement.stop()
+```
+
+- `publisher` is `{ publish({ name, type, port, txt }), unpublishAll(): Promise<void>, destroy(): Promise<void> }`, for example a wrapper over `bonjour-service`. You create it, so a loopback `host` avoids using it but not building it.
+- A loopback `host` (`localhost`, `::1`, `127.0.0.0/8`) announces nothing; the result has `announced: false` and `reason: 'loopback'`.
+- `name` is trimmed to 63 UTF-8 bytes (RFC 6763) on a character boundary; the result's `name` is what was published.
+- `stop()` calls `unpublishAll` then `destroy`, each waited for at most one second, so it resolves within about two seconds even if the publisher never answers. It is idempotent and never rejects.
+
 ## License
 
 Apache-2.0
+
+## Browser (`@theokit/host/browser`)
+
+`browserMcpServer(options)` returns a stdio MCP server config for a Playwright MCP browser an agent can drive (`browser_navigate`, `browser_snapshot`, ...). The server runs behind a filtering proxy:
+
+- `browser_run_code_unsafe` (it runs model-written JavaScript in the server process) is **always** left out of `tools/list` and refused on `tools/call`; `deny: ['tool', ...]` adds more tools.
+- The server's working directory and `--output-dir` are `outputDir`, an absolute directory you own (its contents stay after exit). Without it, a fresh temporary directory is used and removed on exit. The `roots` capability and `PLAYWRIGHT_MCP_*` variables are stripped so neither widens the file root.
+- Page snapshots are inlined into tool results; JSON-RPC batches are refused; calls run one at a time.
+
+```ts
+import { browserMcpServer, createSharedBrowser } from '@theokit/host/browser'
+
+// A fresh headless Chromium per session.
+const isolated = browserMcpServer({ mode: 'isolated', outputDir: '/var/app/browser-out' })
+
+// One persistent Chromium shared by many sessions; each session works in a tab of its own.
+const shared = createSharedBrowser('/var/app/browser-profile')
+const cdpEndpoint = await shared.start()
+const attached = browserMcpServer({ mode: 'shared', cdpEndpoint })
+// ... when the app stops:
+await shared.close()
+```
+
+It needs a Chromium headless shell (`npx playwright-core install chromium-headless-shell`). This is Playwright's output-directory control plus a proxy, not an operating-system sandbox: tools such as `browser_evaluate` still run page-side JavaScript and the browser reaches the network.

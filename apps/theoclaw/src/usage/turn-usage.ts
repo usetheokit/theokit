@@ -1,3 +1,5 @@
+import { usageFromRun } from '@theokit/agents/usage'
+
 import type { TurnRun } from '../agent-port.js'
 
 /** What one finished turn cost: exactly one of `costUsd` and `costUnpriced` is present (FR-002). */
@@ -19,19 +21,15 @@ const SIGNIFICANT_DIGITS = 6
 
 type RunResult = Pick<Awaited<ReturnType<TurnRun['wait']>>, 'usage' | 'cost'>
 
-/** A count the SDK omitted, or reported as something other than a finite number, is 0. */
-function count(value: number | undefined): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0
-}
-
 /**
- * The usage record of one finished run (plan D1). A finite amount, 0 included, is a price; an
- * absent, `null`, `NaN` or infinite one is unpriced, which must never read as a free run.
+ * The usage record of one finished run (plan D1), from the framework's `usageFromRun`: a finite
+ * amount, 0 included, is a price; an absent, `null`, `NaN` or infinite one is unpriced, which must
+ * never read as a free run.
  */
 export function usageOf(result: RunResult, model: string): TurnUsage {
-  const amount: unknown = result.cost?.amountUsd
-  const tokens = { inputTokens: count(result.usage?.inputTokens), outputTokens: count(result.usage?.outputTokens), model }
-  return typeof amount === 'number' && Number.isFinite(amount) ? { ...tokens, costUsd: amount } : { ...tokens, costUnpriced: true }
+  const { tokens, costUsd, priced } = usageFromRun(result, { model })
+  const base = { inputTokens: tokens.input, outputTokens: tokens.output, model }
+  return priced ? { ...base, costUsd } : { ...base, costUnpriced: true }
 }
 
 /**

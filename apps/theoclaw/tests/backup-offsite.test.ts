@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { backupInstance, downloadBackup, restoreInstance, uploadBackup } from '../src/backup/backup.js'
-import { takeInstanceLock } from '../src/backup/instance-lock.js'
+import { takeInstanceLock } from '../src/instance.js'
 
 const roots: string[] = []
 afterEach(() => { vi.unstubAllGlobals(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -15,7 +15,7 @@ it('snapshots committed WAL sessions while running, uploads offsite and restores
   const state = join(root, 'state'), workspace = join(root, 'workspace')
   mkdirSync(state); mkdirSync(workspace)
   const db = new DatabaseSync(join(state, 'sessions'))
-  const lock = takeInstanceLock(state)
+  const lock = await takeInstanceLock(state)
   try {
     db.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE sessions (word TEXT); INSERT INTO sessions VALUES ('remember-me')")
     const objects = new Map<string, Uint8Array>()
@@ -31,7 +31,7 @@ it('snapshots committed WAL sessions while running, uploads offsite and restores
     const env = { THEOCLAW_STATE_DIR: state, THEOCLAW_WORKSPACE: workspace, XDG_CONFIG_HOME: join(root, 'config') }
     const backup = join(root, 'backup')
     db.exec("BEGIN; INSERT INTO sessions VALUES ('uncommitted')")
-    const manifest = backupInstance(env, backup, { homeDir: root, live: true })
+    const manifest = await backupInstance(env, backup, { homeDir: root, live: true })
     db.exec('ROLLBACK')
     expect(manifest.files.map((file) => file.path)).toEqual(['state/sessions'])
     await uploadBackup(backup, 'https://backup.example/snapshot', 'test-token')
@@ -39,20 +39,20 @@ it('snapshots committed WAL sessions while running, uploads offsite and restores
     rmSync(backup, { recursive: true })
     await downloadBackup(backup, 'https://backup.example/snapshot', 'test-token')
     const restored = join(root, 'restored')
-    restoreInstance({ ...env, THEOCLAW_STATE_DIR: restored, THEOCLAW_WORKSPACE: join(root, 'new-workspace') }, backup, { homeDir: root })
+    await restoreInstance({ ...env, THEOCLAW_STATE_DIR: restored, THEOCLAW_WORKSPACE: join(root, 'new-workspace') }, backup, { homeDir: root })
     const check = new DatabaseSync(join(restored, 'sessions'))
     try {
       expect(check.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' })
       expect(check.prepare('SELECT word FROM sessions').all()).toEqual([{ word: 'remember-me' }])
     } finally { check.close() }
-  } finally { db.close(); lock.release() }
+  } finally { db.close(); await lock.release() }
 })
 
 it('does not publish a completion manifest after an upload failure', async () => {
   const root = scratch(), state = join(root, 'state'), workspace = join(root, 'workspace')
   mkdirSync(state); mkdirSync(workspace); writeFileSync(join(state, 'session'), 'history')
   const backup = join(root, 'backup')
-  backupInstance({ THEOCLAW_STATE_DIR: state, THEOCLAW_WORKSPACE: workspace }, backup, { homeDir: root })
+  await backupInstance({ THEOCLAW_STATE_DIR: state, THEOCLAW_WORKSPACE: workspace }, backup, { homeDir: root })
   const fetcher = vi.fn(async () => new Response(null, { status: 503 }))
   vi.stubGlobal('fetch', fetcher)
   await expect(uploadBackup(backup, 'https://backup.example/new')).rejects.toThrow('503')
@@ -100,7 +100,7 @@ it('refuses insecure targets before sending any credentials', async () => {
   expect(existsSync(dir)).toBe(false)
 })
 
-it.each([false, true])('preserves deleted-row gaps and references to surviving rowids (live=%s)', (live) => {
+it.each([false, true])('preserves deleted-row gaps and references to surviving rowids (live=%s)', async (live) => {
   const root = scratch(), state = join(root, 'state'), workspace = join(root, 'workspace')
   mkdirSync(state); mkdirSync(workspace)
   const db = new DatabaseSync(join(state, 'sessions'))
@@ -113,18 +113,18 @@ it.each([false, true])('preserves deleted-row gaps and references to surviving r
     INSERT INTO session_references VALUES (2);
     DELETE FROM sessions WHERE rowid = 1;
   `)
-  const lock = live ? takeInstanceLock(state) : undefined
+  const lock = live ? await takeInstanceLock(state) : undefined
   if (!live) db.close()
   try {
     const env = { THEOCLAW_STATE_DIR: state, THEOCLAW_WORKSPACE: workspace, XDG_CONFIG_HOME: join(root, 'config') }
     const backup = join(root, 'backup'), restored = join(root, 'restored')
-    backupInstance(env, backup, { homeDir: root, live })
-    restoreInstance({ ...env, THEOCLAW_STATE_DIR: restored, THEOCLAW_WORKSPACE: join(root, 'restored-workspace') }, backup, { homeDir: root })
+    await backupInstance(env, backup, { homeDir: root, live })
+    await restoreInstance({ ...env, THEOCLAW_STATE_DIR: restored, THEOCLAW_WORKSPACE: join(root, 'restored-workspace') }, backup, { homeDir: root })
     const check = new DatabaseSync(join(restored, 'sessions'))
     try {
       expect(check.prepare('SELECT rowid, word FROM sessions').all()).toEqual([{ rowid: 2, word: 'surviving' }])
       expect(check.prepare('SELECT sessions.word FROM session_references JOIN sessions ON sessions.rowid = session_references.session_rowid').all())
         .toEqual([{ word: 'surviving' }])
     } finally { check.close() }
-  } finally { if (live) db.close(); lock?.release() }
+  } finally { if (live) db.close(); await lock?.release() }
 })

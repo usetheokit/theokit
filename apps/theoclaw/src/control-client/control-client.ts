@@ -1,6 +1,5 @@
-import WebSocket from 'ws'
+import { ControlConnectionError, createControlClient as openClient } from '@theokit/agents/control'
 
-import { describeError } from '../control-plane/errors.js'
 import type { TurnEvent } from '../control-plane/turn.js'
 
 let arrivalClock = 0
@@ -37,100 +36,55 @@ export interface ControlClient {
   close(): Promise<void>
 }
 
-/** The close code `ws` uses when a frame exceeds the server's `maxPayload`. */
-const MESSAGE_TOO_BIG = 1009
+const ANSWERS = new Set(['interrupt_ok', 'steer_ok', 'no_turn'])
 
-const FINAL = new Set(['done', 'interrupted', 'error'])
-
-function closedError(code: number): TheoClawControlError {
-  return new TheoClawControlError(
-    code === MESSAGE_TOO_BIG
-      ? 'the chat frame exceeds the 65,536-byte frame limit of the instance'
-      : 'connection closed before the turn ended',
-  )
-}
-
-/** Open the socket, or reject naming the address or the HTTP status; the token never appears. */
-function open(url: string, token: string): Promise<WebSocket> {
-  return new Promise((resolve, reject) => {
-    if (!/^wss?:\/\//i.test(url)) {
-      reject(new TheoClawControlError('the instance address must start with ws:// or wss://'))
-      return
-    }
-    // The owner token read from the state directory goes to the instance address the operator
-    // configured; that is the feature. Only ws and wss are accepted.
-    const socket = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } })
-    socket.once('open', () => resolve(socket))
-    socket.once('unexpected-response', (_request, response) => {
-      socket.terminate()
-      reject(new TheoClawControlError(`the instance at ${url} refused the connection: HTTP ${response.statusCode}`))
-    })
-    socket.once('error', (error) => {
-      reject(new TheoClawControlError(`cannot reach the instance at ${url}: ${describeError(error)}`))
-    })
-  })
-}
-
-/**
- * Turn the socket's frames into a pull queue: `next()` resolves with the next frame, or rejects
- * once the socket closed with no frame left.
- */
-function frameQueue(socket: WebSocket): { next(): Promise<ControlFrame> } {
-  const frames: ControlFrame[] = []
-  const waiters: { resolve(frame: ControlFrame): void; reject(error: Error): void }[] = []
-  let closed: TheoClawControlError | undefined
-  socket.on('message', (raw) => {
-    const frame = { ...(JSON.parse(String(raw)) as ControlFrame), arrivedAt: nextArrival() } as ControlFrame
-    const waiter = waiters.shift()
-    if (waiter === undefined) frames.push(frame)
-    else waiter.resolve(frame)
-  })
-  socket.on('close', (code) => {
-    closed = closedError(code)
-    for (const waiter of waiters.splice(0)) waiter.reject(closed)
-  })
-  // After the open, a socket error is followed by `close`, which is what a turn reports.
-  socket.on('error', () => undefined)
-  return {
-    next: () => {
-      const frame = frames.shift()
-      if (frame !== undefined) return Promise.resolve(frame)
-      if (closed !== undefined) return Promise.reject(closed)
-      return new Promise((resolve, reject) => waiters.push({ resolve, reject }))
-    },
+/** The framework's refusal as the app's error, which no message of ever carries the token. */
+async function guarded<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work()
+  } catch (error) {
+    if (error instanceof ControlConnectionError) throw new TheoClawControlError(error.message)
+    throw error
   }
 }
 
 /**
- * The client both surfaces use (FR-007, plan D1): a connection to the running instance's `/control`
- * socket with the owner token. It builds no agent; a turn is the instance's, on the named session.
+ * The client both surfaces use (FR-007, plan D1): the framework's `createControlClient` on the
+ * running instance's `/control` socket with the owner token. It builds no agent; a turn is the
+ * instance's, on the named session. The app adds the arrival stamp of each frame, drops the answers
+ * to an interrupt or steer sent for another turn, and keeps `interrupt` and `steer` quiet once the
+ * connection is gone.
  */
-export async function createControlClient(options: { readonly url: string; readonly token: string }): Promise<ControlClient> {
-  const socket = await open(options.url, options.token)
-  const queue = frameQueue(socket)
+export async function connectControlClient(options: { readonly url: string; readonly token: string }): Promise<ControlClient> {
+  const client = await guarded(() => openClient({ url: options.url, authorization: `Bearer ${options.token}`, stamp: nextArrival }))
   return {
     async *chat(message, session) {
-      socket.send(JSON.stringify({ type: 'chat', message, session }))
-      for (;;) {
-        const frame = await queue.next()
-        // Answers to an interrupt this client sent for another session's turn are not this turn's.
-        if (frame.type === 'interrupt_ok' || frame.type === 'steer_ok' || frame.type === 'no_turn') continue
-        if (frame.session !== undefined && frame.session !== session) continue
-        yield frame
-        if (FINAL.has(frame.type)) return
+      const frames = client.chat(message, session)[Symbol.asyncIterator]()
+      try {
+        for (;;) {
+          const next = await guarded(() => frames.next())
+          if (next.done === true) return
+          if (ANSWERS.has(next.value.type)) continue
+          yield next.value as ControlFrame
+        }
+      } finally {
+        await frames.return?.()
       }
     },
     interrupt: (session) => {
-      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'interrupt', session }))
+      try {
+        client.interrupt(session)
+      } catch {
+        // A closed connection has no turn to stop.
+      }
     },
     steer: (session, message) => {
-      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'steer', session, message }))
+      try {
+        client.steer(session, message)
+      } catch {
+        // A closed connection has no turn to steer.
+      }
     },
-    close: () =>
-      new Promise((resolve) => {
-        if (socket.readyState === WebSocket.CLOSED) return resolve()
-        socket.once('close', () => resolve())
-        socket.close()
-      }),
+    close: () => client.close(),
   }
 }

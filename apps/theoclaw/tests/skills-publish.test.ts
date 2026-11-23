@@ -53,7 +53,7 @@ describe('theoclaw skills publish', () => {
   it('409 and 401', async () => {
     const a = await registry(409)
     expect(await run(skill(), a.base)).toMatchObject({ code: 1 })
-    expect((await run(skill(), a.base)).err).toContain('demo@1.2.3 already exists')
+    expect((await run(skill(), a.base)).err).toContain('demo@1.2.3 is already published')
     server?.close()
     const b = await registry(401)
     const r = await run(skill(), b.base)
@@ -72,7 +72,7 @@ describe('theoclaw skills publish', () => {
   it('refuses a registry that is not http or https', async () => {
     const r = await run(skill(), 'file:///etc/passwd', TOKEN)
     expect(r.code).toBe(1)
-    expect(r.err).toContain('http:// or https://')
+    expect(r.err).toContain('must be https')
   })
   it('names a missing variable', async () => {
     expect((await run(skill(), 'http://127.0.0.1:1', null)).err).toContain('THEOCLAW_SKILLS_TOKEN')

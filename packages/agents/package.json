@@ -1,6 +1,6 @@
 {
   "name": "@theokit/agents",
-  "version": "17.3.0",
+  "version": "17.3.1",
   "description": "AI agents as first-class citizens of the TheoKit pipeline. The AgentBuilder.create() authoring chain compiles to the @theokit/sdk runtime.",
   "repository": {
     "type": "git",
@@ -24,6 +24,10 @@
     "./bridge": {
       "types": "./dist/bridge.d.ts",
       "import": "./dist/bridge.js"
+    },
+    "./mcp-relay": {
+      "types": "./dist/mcp-relay.d.ts",
+      "import": "./dist/mcp-relay.js"
     },
     "./control": {
       "types": "./dist/control.d.ts",
@@ -97,6 +101,10 @@
       "types": "./dist/errors.d.ts",
       "import": "./dist/errors.js"
     },
+    "./presets": {
+      "types": "./dist/presets.d.ts",
+      "import": "./dist/presets.js"
+    },
     "./evals": {
       "types": "./dist/evals.d.ts",
       "import": "./dist/evals.js"
@@ -124,6 +132,10 @@
     "./pty": {
       "types": "./dist/pty.d.ts",
       "import": "./dist/pty.js"
+    },
+    "./foreign-setup": {
+      "types": "./dist/foreign-setup.d.ts",
+      "import": "./dist/foreign-setup.js"
     },
     "./package.json": "./package.json"
   },
@@ -182,8 +194,9 @@
   },
   "dependencies": {
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": "^5.32.0",
-    "@theokit/sdk-tools": "^0.29.0"
+    "@theokit/sdk": ">=5.32.0 <10",
+    "@theokit/sdk-tools": "^0.29.0",
+    "yaml": "2.9.0"
   },
   "publishConfig": {
     "access": "public",

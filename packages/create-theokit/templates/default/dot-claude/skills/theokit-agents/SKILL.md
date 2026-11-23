@@ -134,6 +134,31 @@ export class TaskTools {
 //   new ToolboxCapability(new TaskTools(db), { namespace: 'tasks' })  → tasks.list_tasks
 ```
 
+## Coding agent — `codingAgentPreset()`
+
+A coding agent is one preset, not a hand-assembled tool list. It registers read/search/git tools
+always, write and shell tools only when the sandbox mode allows writes, withholds the SDK's built-in
+shell, gates each side-effecting tool behind an approval, and loads project MCP servers, skills and
+hooks only when the trust posture grants `projectSettings`.
+
+```ts
+import { applyCapabilities, ModelCapability } from '@theokit/agents'
+import { codingAgentPreset } from '@theokit/agents/presets'
+import { resolveTrustPosture } from '@theokit/sdk'
+
+const draft = applyCapabilities([
+  new ModelCapability('openai/gpt-5.4'),
+  codingAgentPreset({
+    cwd: process.cwd(),
+    sandboxMode: 'read-only', // 'workspace-write' adds ApplyPatch, Edit and a sandboxed Bash
+    posture: resolveTrustPosture<'projectSettings'>({
+      capabilities: ['projectSettings'],
+      isTrusted: () => false, // an untrusted directory loads no project MCP, skills or hooks
+    }),
+  }),
+])
+```
+
 ## Client — useAgent (React hook)
 
 ```typescript

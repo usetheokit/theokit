@@ -44,9 +44,16 @@ export {
   BootstrapStepError,
   defineAppBootstrap,
   projectEnvStep,
+  projectEnvStepWith,
+  SdkHomeConflictError,
+  sdkHomeStep,
+  secretRefsStep,
   type AppBootstrap,
   type BootstrapContext,
   type BootstrapStep,
+  type ProjectEnvRecord,
+  type ProjectEnvStepOptions,
+  type SdkHomeStepOptions,
 } from './config/app-bootstrap.js'
 
 export { defineLayeredConfig, type SecurityFloorSpec } from './config/define-layered-config.js'
@@ -72,6 +79,8 @@ export { expandInstructionImports, type ExpandImportsInput } from './config/inst
 export {
   blockAppliesTo,
   loadInstructionTree,
+  loadInstructionWalk,
+  type LoadInstructionWalkInput,
   type InstructionBlock,
   type InstructionTree,
   type InstructionTreeBudget,
@@ -211,6 +220,7 @@ export {
 export {
   type OperatorDefinition,
   type OperatorOrigin,
+  type OperatorInstruction,
   type OperatorRootsOptions,
   type OperatorRootsResult,
   OperatorRootUnreadableError,
@@ -258,6 +268,7 @@ export {
   CLAUDE_SETTINGS_KEYS,
   FOREIGN_KEY_DECISIONS,
   firstSettingsFile,
+  permissionRulesFromLayers,
   readSettingsFile,
   settingsCandidates,
   type ReadSettingsFileOptions,

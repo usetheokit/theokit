@@ -4,9 +4,10 @@ import { join } from 'node:path'
 import { detectBwrap } from '@theokit/agents/sandbox'
 import { PtyInteractiveBackend } from '@theokit/agents-pty'
 import { InteractiveBackend } from '@theokit/agents/interactive'
+import { probeConfinement } from '@theokit/sdk-pty'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createConfinedInteractive, shellEnv, probeInteractiveShell, withInteractiveShell } from '../src/tools/interactive-shell.js'
+import { createConfinedInteractive, withInteractiveShell } from '../src/tools/interactive-shell.js'
 import { buildTools } from '../src/tools/tool-registry.js'
 import { resolveToolSettings, toolSettingsForSession } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
@@ -61,13 +62,42 @@ describe('the interactive shell in the session sandbox', () => {
     backend.kill(sessionId)
   })
 
-  it('the shell environment leaves out TMPDIR and the XDG variables but keeps the allowlist', () => {
-    const env = shellEnv({ PATH: '/usr/bin', TMPDIR: '/tmp/x', XDG_CONFIG_HOME: '/x', XDG_DATA_HOME: '/y', MODEL_KEY: 'sekrit' })
-    expect(env.PATH).toBe('/usr/bin')
-    expect(env).not.toHaveProperty('TMPDIR')
-    expect(env).not.toHaveProperty('XDG_CONFIG_HOME')
-    expect(env).not.toHaveProperty('XDG_DATA_HOME')
-    expect(env).not.toHaveProperty('MODEL_KEY')
+  confined('the confined shell starts in the tool root with HOME there and no TMPDIR', async () => {
+    const settings = resolveToolSettings({ THEOCLAW_HOST_TOOLS: 'on' }, workspace(), quiet)
+    const backend = createConfinedInteractive(settings, { ...quiet, processEnv: { PATH: process.env.PATH, TMPDIR: '/tmp/x', XDG_DATA_HOME: '/x' } })
+    const marker = join(settings.toolRoot, 'where.txt')
+    const { sessionId } = await backend.startInteractive(`pwd > ${marker}; echo "HOME=$HOME" >> ${marker}; env >> ${marker}`, { yieldMs: 250, cwd: '/' })
+    expect(await waitUntil(() => existsSync(marker) && readFileSync(marker, 'utf8').includes('PATH='))).toBe(true)
+    const text = readFileSync(marker, 'utf8')
+    expect(text).toContain(`HOME=${settings.toolRoot}`)
+    expect(text.split('\n')[0]).toBe(settings.toolRoot)
+    expect(text).not.toContain('TMPDIR=/tmp/x')
+    expect(text).not.toContain('XDG_DATA_HOME')
+    backend.kill(sessionId)
+  })
+
+  it('the shell environment leaves out TMPDIR and the XDG variables but keeps the allowlist', async () => {
+    const settings = resolveToolSettings({ THEOCLAW_HOST_TOOLS: 'on' }, workspace(), quiet)
+    const seen: { command: string; cwd: string | undefined }[] = []
+    const backend = createConfinedInteractive(settings, {
+      ...quiet,
+      processEnv: { PATH: '/usr/bin', TMPDIR: '/tmp/x', XDG_CONFIG_HOME: '/x', XDG_DATA_HOME: '/y', MODEL_KEY: 'sekrit' },
+      createInner: () =>
+        new (class extends InteractiveBackend {
+          startInteractive = (command: string, opts?: { cwd?: string }) => {
+            seen.push({ command, cwd: opts?.cwd })
+            return Promise.resolve({ sessionId: 's', output: '' })
+          }
+          writeStdin = () => Promise.resolve({ output: '', alive: false })
+          kill = () => undefined
+        })(),
+    })
+    await backend.startInteractive('true', { cwd: '/' })
+    const { command, cwd } = seen[0]!
+    expect(cwd).toBe(settings.toolRoot)
+    expect(command).toContain('PATH=')
+    expect(command).toContain(`HOME='${settings.toolRoot}'`)
+    for (const dropped of ['TMPDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'MODEL_KEY', 'sekrit']) expect(command).not.toContain(dropped)
   })
 
   it('is registered only when the probe passed: not without host tools, not without an enforced sandbox', async () => {
@@ -86,7 +116,11 @@ describe('the interactive shell in the session sandbox', () => {
     const settings = resolveToolSettings({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX: 'danger-full-access' }, workspace(), quiet)
     // danger-full-access wraps nothing: the unconfined backend must not pass.
     const unconfined = createConfinedInteractive(settings, quiet)
-    expect(await probeInteractiveShell(settings, unconfined)).toBe(false)
+    const proof = await probeConfinement(unconfined, {
+      inside: join(settings.toolRoot, '.probe-in'),
+      outside: join(settings.workspace, '.probe-out'),
+    })
+    expect(proof.confined).toBe(false)
   })
 
   confined('registers both tools once proven, and a session of another mode does not inherit them', async () => {

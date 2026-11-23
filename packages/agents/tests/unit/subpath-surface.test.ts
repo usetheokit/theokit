@@ -53,6 +53,17 @@ const MAJOR_SCOPED_GAPS = new Set([
   // `LiveTranscriptError` — the 5.x name for `LiveSessionError`, which 5.x keeps working and
   // deprecated. The name that crosses is the one both majors have.
   'persistence: LiveTranscriptError',
+  // Added by `@theokit/sdk` 8, absent at the 5.32 floor: a re-export fails the DTS build there.
+  'persistence: atomicWriteJsonSync',
+  'persistence: ensureSecureDir',
+  'persistence: InsecureDirectoryError',
+  'persistence: listProjects',
+  'persistence: ListProjectsOptions',
+  'persistence: ProjectListing',
+  'sandbox: CredentialRule',
+  'sandbox: EgressProxy',
+  'sandbox: EgressRule',
+  'sandbox: startEgressProxy',
 ])
 
 describe('M90 — the infra subpath surface is locked', () => {

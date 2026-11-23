@@ -5,22 +5,21 @@ import { homedir } from 'node:os'
 
 import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
+import { resolveSecretRefs } from '@theokit/agents/auth'
+import { restartSelf, waitForPredecessor } from '@theokit/host/service'
 
 import { startTheoClaw } from './composition.js'
-import { resolveSecretRefs } from './secret-refs.js'
 import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
 import { teeToLogFile } from './ops/log-tee.js'
 import { watchConfiguration } from './ops/hot-reload.js'
-import { RESTART_EXIT_CODE, spawnSuccessor, supervised, waitForPredecessor } from './ops/self-restart.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
-import { resolveInstance, type TheoClawInstance } from './instance.js'
+import { claimInstance, removeOwnLockSync, resolveInstance, type TheoClawInstance } from './instance.js'
 import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
 import { applyProxyEnvironment } from './ops/proxy.js'
-import { claimInstance } from './backup/instance-lock.js'
 import { readTelemetrySettings, registerTelemetry, type RegisteredTelemetry } from './telemetry/otel.js'
 
 /**
@@ -74,17 +73,22 @@ try {
       write: (line) => process.stderr.write(`${line}\n`),
       restart: () => {
         // Under a supervisor the exit alone is the restart; otherwise this process starts its own successor.
-        if (supervised(process.env, process.platform)) restartCode = RESTART_EXIT_CODE
-        else if (!spawnSuccessor(startEnv)) return process.stderr.write('config: cannot restart; the change needs a restart by the owner\n')
-        process.kill(process.pid, 'SIGTERM')
+        void restartSelf({ startEnv, env: process.env, platform: process.platform }).then(
+          (outcome) => {
+            if (outcome.kind === 'exit') restartCode = outcome.code
+            process.kill(process.pid, 'SIGTERM')
+          },
+          () => process.stderr.write('config: cannot restart; the change needs a restart by the owner\n'),
+        )
       },
     })
   }
   instance = resolveInstance(process.env, { homeDir: homedir() })
   // The instance lock before `applyInstance` creates the targets (B-400 FR-010): a start refused
   // while a backup or a restore runs leaves both as they were. Released when the process exits.
-  const release = claimInstance(instance, process.env)
-  if (release !== undefined) process.once('exit', release)
+  const lock = await claimInstance(instance, process.env)
+  // `exit` allows no await: remove the file synchronously. A lock left by a crash is taken over by the next start.
+  if (lock !== undefined) process.once('exit', () => removeOwnLockSync(lock.path))
   // After the instance, so a profile's own state directory is the one read (FR-010, FR-011).
   const mcp = requireImportedMcp(process.env)
   const setup = readImportAtStart(process.env, (line) => process.stderr.write(`${line}\n`))

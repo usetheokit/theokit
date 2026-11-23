@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { ServiceCommandError } from './errors.js'
+import { logLines, type LogsOptions } from './logs.js'
 import { runCommand, type Runner } from './runner.js'
 import {
   assertLabel,
@@ -142,6 +143,29 @@ export function createSystemdBackend(options: ServiceBackendOptions = {}): Servi
       if (answer === 'active') state = 'running'
       else if (answer === 'inactive' || answer === 'failed') state = 'stopped'
       return state
+    },
+
+    async logs(label, logOptions?: LogsOptions) {
+      assertLabel(label)
+      const lines = logLines(logOptions)
+      const args = [
+        '--user',
+        '-u',
+        `${label}.service`,
+        '-n',
+        String(lines),
+        '--no-pager',
+        '-o',
+        'cat',
+      ]
+      const result = await runner('journalctl', args)
+      if (result.code !== 0)
+        throw new ServiceCommandError(
+          `journalctl ${args.join(' ')}`,
+          result.code,
+          result.stderr.trim(),
+        )
+      return result.stdout
     },
 
     async restart(label) {

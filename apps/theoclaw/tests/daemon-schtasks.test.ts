@@ -4,7 +4,7 @@ import { dirname } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { daemonInstall, daemonStatus, daemonUninstall } from '../src/daemon.js'
+import { daemonInstall, daemonRestart, daemonStatus, daemonUninstall } from '../src/daemon.js'
 import type { Runner } from '../src/run-command.js'
 import { type Harness, harness } from './support/daemon-harness.js'
 
@@ -38,7 +38,7 @@ function capturing(h: Harness): {
 function expectPrivateDirGone(path: string): void {
   const dir = dirname(path)
   expect(dirname(dir)).toBe(tmpdir())
-  expect(dir).toMatch(/theoclaw-task-.{6}$/)
+  expect(dir).toMatch(/theokit-task-.{6}$/)
   expect(existsSync(dir)).toBe(false)
 }
 
@@ -54,9 +54,7 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
     expect(xml).toContain('<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>')
     expect(xml).toContain('<RestartOnFailure>')
     expect(xml).toContain(`<Command>${h.io.nodePath}</Command>`)
-    expect(xml).toMatch(
-      /<Arguments>&quot;.*main\.js&quot; --config &quot;.*theoclaw-work\.env&quot; --profile work<\/Arguments>/,
-    )
+    expect(xml).toMatch(/<Arguments>.*main\.js.* --config .*theoclaw-work\.env.* --profile work<\/Arguments>/)
     expect(schtasks(h).map((line) => line.split(' ').slice(0, 3).join(' '))).toEqual([
       '/End /TN theoclaw-work',
       '/Create /TN theoclaw-work',
@@ -75,7 +73,8 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
     })
     const c = capturing(h)
     expect(await daemonInstall(h.io, c.runner)).toBe(1)
-    expect(h.stderr()).toContain('schtasks /Create failed: ERROR: Access is denied.')
+    expect(h.stderr()).toContain('schtasks /Create')
+    expect(h.stderr()).toContain('ERROR: Access is denied.')
     expect(schtasks(h).at(-1)).toBe('/Delete /TN theoclaw /F')
     expect(schtasks(h).some((line) => line.startsWith('/Run'))).toBe(false)
     expect(existsSync(c.path()!)).toBe(false)
@@ -87,27 +86,27 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
       answers: { 'schtasks /Run': [{ code: 1, stderr: 'ERROR: cannot start' }] },
     })
     expect(await daemonInstall(run.io, run.runner)).toBe(1)
-    expect(run.stderr()).toContain('schtasks /Run failed: ERROR: cannot start')
+    expect(run.stderr()).toContain('schtasks /Run')
+    expect(run.stderr()).toContain('ERROR: cannot start')
     expect(schtasks(run).at(-1)).toBe('/Delete /TN theoclaw /F')
   })
 
-  it('uninstall_stops_the_task_process_tree_read_before_end_and_warns_about_survivors', async () => {
+  it('uninstall_stops_the_task_process_tree_read_before_end_and_refuses_to_delete_with_survivors', async () => {
     const h = harness({
       platform: 'win32',
       env: { ...WINDOWS_ENV, THEOCLAW_PROFILE: 'ox' },
-      answers: { 'powershell.exe -NonInteractive': [{ stdout: '11,12\r\n' }, { stdout: '12\r\n' }] },
+      answers: { 'powershell.exe -NoProfile': [{ stdout: '11,12\r\n' }, { stdout: '12\r\n' }] },
     })
-    expect(await daemonUninstall(h.io, h.runner)).toBe(0)
+    // A task whose processes are still alive is not deleted: the package fails before `/Delete`.
+    expect(await daemonUninstall(h.io, h.runner)).toBe(1)
     const order = h.calls.map((call) => `${call.command} ${call.args[0]}`)
     expect(order).toEqual([
-      'powershell.exe -NonInteractive',
+      'powershell.exe -NoProfile',
       'schtasks /End',
-      'powershell.exe -NonInteractive',
-      'schtasks /Delete',
+      'powershell.exe -NoProfile',
     ])
     const [find, stop] = h.calls.filter((call) => call.command === 'powershell.exe').map((c) => c.args.at(-1)!)
-    expect(find).toContain(`--profile ox`)
-    expect(find).toContain('--config')
+    expect(find).toContain("Get-ScheduledTask -TaskName 'theoclaw-ox'")
     expect(stop).toContain('$ids = @(11,12)')
     expect(h.stderr()).toContain('processes 12 of theoclaw-ox')
   })
@@ -122,7 +121,7 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
       env: WINDOWS_ENV,
       answers: {
         'schtasks /Delete': [{ code: 1, stderr: 'not found' }],
-        'powershell.exe -NoProfile': [{ stdout: 'absent\r\n' }],
+        'powershell.exe -NoProfile': [{ stdout: '' }, { stdout: 'absent\r\n' }],
       },
     })
     expect(await daemonUninstall(gone.io, gone.runner)).toBe(0)
@@ -131,11 +130,12 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
       env: WINDOWS_ENV,
       answers: {
         'schtasks /Delete': [{ code: 1, stderr: 'Access is denied' }],
-        'powershell.exe -NoProfile': [{ stdout: 'present\r\n' }],
+        'powershell.exe -NoProfile': [{ stdout: '' }, { stdout: 'present\r\n' }],
       },
     })
     expect(await daemonUninstall(stuck.io, stuck.runner)).toBe(1)
-    expect(stuck.stderr()).toContain('schtasks /Delete failed: Access is denied')
+    expect(stuck.stderr()).toContain('schtasks /Delete')
+    expect(stuck.stderr()).toContain('Access is denied')
 
     const state = async (
       stdout: string,
@@ -153,10 +153,10 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
       }
     }
     const running = await state('Running\r\n')
-    expect(running).toMatchObject({ exit: 0, out: 'theoclaw: Running\n' })
+    expect(running).toMatchObject({ exit: 0, out: 'theoclaw: running\n' })
     expect(running.call).toContain("Get-ScheduledTask -TaskName 'theoclaw'")
-    expect(await state('Ready\r\n')).toMatchObject({ exit: 3, out: 'theoclaw: Ready\n' })
-    expect(await state('', 1)).toMatchObject({ exit: 3, out: 'theoclaw: not installed\n' })
+    expect(await state('Ready\r\n')).toMatchObject({ exit: 3, out: 'theoclaw: stopped\n' })
+    expect(await state('', 1)).toMatchObject({ exit: 3, out: 'theoclaw: unknown\n' })
   })
 
   it('username_unset_is_refused', async () => {
@@ -198,7 +198,8 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
       })
 
       expect(await daemonUninstall(h.io, h.runner)).toBe(1)
-      expect(h.stderr()).toContain('schtasks /Delete failed: schtasks unavailable')
+      // The package reads the task's processes first, and that failure stops the uninstall.
+      expect(h.stderr()).toContain('powershell unavailable')
       expect(h.stdout()).not.toContain('removed')
     })
 
@@ -208,12 +209,13 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
         env: WINDOWS_ENV,
         answers: {
           'schtasks /Delete': [{ code: 1, stderr: 'ERROR: Access is denied.' }],
-          'powershell.exe -NoProfile': [{ code: 1, stderr: 'query failed' }],
+          'powershell.exe -NoProfile': [{ stdout: '' }, { code: 1, stderr: 'query failed' }],
         },
       })
 
       expect(await daemonUninstall(h.io, h.runner)).toBe(1)
-      expect(h.stderr()).toContain('schtasks /Delete failed: ERROR: Access is denied.')
+      expect(h.stderr()).toContain('schtasks /Delete')
+      expect(h.stderr()).toContain('ERROR: Access is denied.')
       expect(h.stdout()).not.toContain('removed')
     })
 
@@ -225,13 +227,13 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
           'schtasks /Delete': [
             { code: 1, stderr: 'ERRO: O sistema nao pode encontrar o arquivo especificado.' },
           ],
-          'powershell.exe -NoProfile': [{ stdout: 'absent\r\n' }],
+          'powershell.exe -NoProfile': [{ stdout: '' }, { stdout: 'absent\r\n' }],
         },
       })
 
       expect(await daemonUninstall(h.io, h.runner)).toBe(0)
       const query = h.calls.find(
-        (call) => call.command === 'powershell.exe' && call.args.join(' ').includes('Get-ScheduledTask'),
+        (call) => call.command === 'powershell.exe' && call.args.join(' ').includes('if (Get-ScheduledTask'),
       )
       expect(query?.args.join(' ')).toContain("Get-ScheduledTask -TaskName 'theoclaw'")
     })
@@ -239,7 +241,13 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
     it('a_task_that_was_deleted_needs_no_second_look', async () => {
       const h = harness({ platform: 'win32', env: WINDOWS_ENV })
       expect(await daemonUninstall(h.io, h.runner)).toBe(0)
-      expect(h.calls.some((call) => call.args.join(' ').includes('Get-ScheduledTask'))).toBe(false)
+      expect(h.calls.some((call) => call.args.join(' ').includes('if (Get-ScheduledTask'))).toBe(false)
     })
+  })
+
+  it('restart_ends_and_runs_the_task', async () => {
+    const h = harness({ platform: 'win32', env: WINDOWS_ENV })
+    expect(await daemonRestart(h.io, h.runner)).toBe(0)
+    expect(schtasks(h)).toEqual(['/End /TN theoclaw', '/Run /TN theoclaw'])
   })
 })

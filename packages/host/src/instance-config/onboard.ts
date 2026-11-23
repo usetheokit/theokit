@@ -19,6 +19,8 @@ export interface OnboardOptions<K extends string> {
   readonly secretFromEnv?: Partial<Record<K, string>>
   readonly prompts?: Partial<Record<K, { question: string; default?: string }>>
   readonly validate?: (entries: Readonly<Record<K, string>>) => void
+  /** Collect only these keys; default every declared key. A key left out is neither asked for nor written. */
+  readonly only?: readonly K[]
   readonly force?: boolean
   readonly interactive: boolean
 }
@@ -129,13 +131,16 @@ export async function onboardInstanceConfig<K extends string>(
   if (options.interactive && (io.stdin.isTTY !== true || io.stdin.setRawMode === undefined))
     throw needsTerminal()
   const path = resolvePath(io.env, io.homeDir)
-  const names = Object.keys(keys) as K[]
+  const names = options.only ?? (Object.keys(keys) as K[])
   const entries = {} as Record<K, string>
   for (const key of names) {
     const given = options.answers?.[key]
     const variable = options.secretFromEnv?.[key]
     const prompt = options.prompts?.[key]
-    if (given !== undefined) {
+    const generate = keys[key].generate
+    if (generate !== undefined) {
+      entries[key] = generate()
+    } else if (given !== undefined) {
       entries[key] = given
     } else if (variable !== undefined) {
       entries[key] = fromEnv(key, variable, io.env)

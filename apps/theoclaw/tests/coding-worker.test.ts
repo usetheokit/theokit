@@ -237,6 +237,37 @@ describe('cloud worker delegation', () => {
       expect(git('diff', '--name-only', 'HEAD', branch).trim()).toBe('b.txt')
     })
 
+    it('commits the recipe result as the baseline, and skips the recipe when THEOCLAW_CLOUD_ENV_RECIPE=off', async () => {
+      const recipe = { '.devcontainer.json': '{"postCreateCommand":"echo x > artifact.txt"}' }
+      const logOf = async (off: boolean) => {
+        const { settings } = repoWith(recipe)
+        let log = ''
+        let artifact = false
+        const previous = process.env.THEOCLAW_CLOUD_ENV_RECIPE
+        if (off) process.env.THEOCLAW_CLOUD_ENV_RECIPE = 'off'
+        try {
+          const port = cloudWorkerPort(settings, () => [], async () => {
+            const root = join(settings.workspace, '.theoclaw', 'cloud-workers')
+            const checkout = join(root, readdirSync(root)[0] ?? '', 'checkout')
+            log = execFileSync('git', ['-C', checkout, 'log', '--format=%s'], { encoding: 'utf8' })
+            artifact = existsSync(join(checkout, 'artifact.txt'))
+            return { response: 'ok', toolCalls: [], cost: 0, tokens: 0 }
+          })
+          await port.run('t', {})
+        } finally {
+          if (previous === undefined) delete process.env.THEOCLAW_CLOUD_ENV_RECIPE
+          else process.env.THEOCLAW_CLOUD_ENV_RECIPE = previous
+        }
+        return { log, artifact }
+      }
+      const on = await logOf(false)
+      expect(on.log).toContain('theoclaw environment')
+      expect(on.artifact).toBe(true)
+      const off = await logOf(true)
+      expect(off.log).not.toContain('theoclaw environment')
+      expect(off.artifact).toBe(false)
+    })
+
     it('does not start the agent when postCreateCommand fails, and tears down', async () => {
       const { settings } = repoWith({ '.devcontainer.json': '{"postCreateCommand":"exit 3"}' })
       let started = false

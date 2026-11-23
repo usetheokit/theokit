@@ -9,7 +9,6 @@ import {
 import type { InteractionUpdate } from '@theokit/sdk'
 
 import { type SdkMessageLike, toSdkMessage, type TurnAgent, type TurnRun, typedEvents } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
 import { type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import { describeError } from './errors.js'
@@ -219,7 +218,7 @@ async function runWith(
       options.emit(event)
     }
   }
-  const run = await agent.send(options.message, { ...untrustedContentSendOptions(), onDelta })
+  const run = await agent.send(options.message, { onDelta })
   // Checked before any listener is added: a listener on a signal that already aborted never fires (EC-1).
   if (options.signal?.aborted === true) return cancelRun(run)
   const watch = watchAbort(options.signal)

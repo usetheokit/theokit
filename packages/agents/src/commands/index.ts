@@ -16,6 +16,8 @@
  * reads the process's launch, and that domain already has `node:util`'s `parseArgs`.
  */
 export { defineCommand, routeCommand } from './command-router.js'
+export { sessionCommands } from './session-commands.js'
+export type { SessionCommandHandlers } from './session-commands.js'
 export { createCommandRegistry, CommandRegistryError } from './command-registry.js'
 export type { CommandRegistry } from './command-registry.js'
 export type {

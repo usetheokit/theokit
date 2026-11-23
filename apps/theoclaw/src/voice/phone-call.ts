@@ -6,7 +6,6 @@ import { maskSecrets } from '../channels/channel-loop.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { describeError } from '../control-plane/errors.js'
 import type { SessionLease } from '../sessions/session-agents.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 
 /** The variables that switch on answering inbound Twilio phone calls (OC-15). */
 export const VOICE_CALL_TOKEN_VARIABLE = 'THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN'
@@ -206,7 +205,7 @@ export function createVoiceCallRoute(
     try {
       const outcome = await withChatAgent(event, async (lease) => {
         try {
-          return await runAgentText(lease.agent, heard, { sendOptions: { ...untrustedContentSendOptions() } })
+          return await runAgentText(lease.agent, heard)
         } finally {
           lease.release()
         }

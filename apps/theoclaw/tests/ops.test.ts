@@ -7,7 +7,7 @@ import { runCli } from '../src/cli.js'
 import { teeToLogFile } from '../src/ops/log-tee.js'
 import { spawn } from 'node:child_process'
 
-import { PREDECESSOR_VARIABLE, supervised, waitForPredecessor } from '../src/ops/self-restart.js'
+import { isSupervised, RESTART_AFTER_PID_VARIABLE, waitForPredecessor } from '@theokit/host/service'
 import { reloadConfiguration, watchConfiguration } from '../src/ops/hot-reload.js'
 import { credentialDefect } from '../src/ops/doctor.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
@@ -114,20 +114,20 @@ describe('self-restart on a start-only change (B-716)', () => {
   })
 
   it('leaves the restart to the service manager only where one restarts on a failed exit', () => {
-    expect(supervised({ INVOCATION_ID: 'abc' }, 'linux')).toBe(true)
-    expect(supervised({}, 'linux')).toBe(false)
-    expect(supervised({ XPC_SERVICE_NAME: 'theoclaw.default' }, 'darwin')).toBe(true)
-    expect(supervised({ XPC_SERVICE_NAME: '0' }, 'darwin')).toBe(false)
-    expect(supervised({ INVOCATION_ID: 'abc' }, 'win32')).toBe(false)
+    expect(isSupervised({ INVOCATION_ID: 'abc' }, 'linux')).toBe(true)
+    expect(isSupervised({}, 'linux')).toBe(false)
+    expect(isSupervised({ XPC_SERVICE_NAME: 'theoclaw.default' }, 'darwin')).toBe(true)
+    expect(isSupervised({ XPC_SERVICE_NAME: '0' }, 'darwin')).toBe(false)
+    expect(isSupervised({ INVOCATION_ID: 'abc' }, 'win32')).toBe(false)
   })
 
   it('a successor waits for its predecessor and clears the marker', async () => {
     const child = spawn(process.execPath, ['-e', 'setTimeout(()=>{},300)'])
-    const env: NodeJS.ProcessEnv = { [PREDECESSOR_VARIABLE]: String(child.pid) }
+    const env: NodeJS.ProcessEnv = { [RESTART_AFTER_PID_VARIABLE]: String(child.pid) }
     const started = Date.now()
     await waitForPredecessor(env)
     expect(Date.now() - started).toBeGreaterThan(100)
-    expect(env[PREDECESSOR_VARIABLE]).toBeUndefined()
+    expect(env[RESTART_AFTER_PID_VARIABLE]).toBeUndefined()
   })
 })
 

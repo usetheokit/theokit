@@ -11,9 +11,8 @@ import { binaryOnPath, bundledSkills } from '../skills/registry.js'
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
-import type { ThinkingLevel } from './failover.js'
 import { createHookApprovalGate } from './hook-approval.js'
-import { UNTRUSTED_CONTENT_NOTICE } from './untrusted-content.js'
+import { UNTRUSTED_CONTENT_NOTICE, untrustedContentSendOptions, type UntrustedContentSendOptions } from './untrusted-content.js'
 
 /**
  * The SDK's local options TheoClaw sets. `hooks` is on every agent (B-397 FR-007): the SDK reads a
@@ -40,6 +39,24 @@ export interface TheoClawSkills {
   readonly inline: InlineSkill[]
 }
 
+/** The thinking levels `THEOCLAW_THINKING` accepts (OC-48). */
+export const THINKING_LEVELS = ['off', 'low', 'medium', 'high'] as const
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number]
+
+/** The level `THEOCLAW_THINKING` names; unset or blank is `undefined`, anything else is refused. */
+export function parseThinkingLevel(value: string | undefined): ThinkingLevel | undefined {
+  const trimmed = value?.trim().toLowerCase()
+  if (trimmed === undefined || trimmed === '') return undefined
+  if ((THINKING_LEVELS as readonly string[]).includes(trimmed)) return trimmed as ThinkingLevel
+  throw new Error(`THEOCLAW_THINKING must be one of ${THINKING_LEVELS.join(', ')}`)
+}
+
+/** The secondary model `THEOCLAW_MODEL_FALLBACK` names (OC-47), or `undefined` when none is set. */
+export function parseFallbackModel(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed === undefined || trimmed === '' ? undefined : trimmed
+}
+
 /** The options every TheoClaw agent is created with, every one of them. */
 export interface TheoClawAgentOptions<Model extends string | ModelSelection = string> {
   /** The `THEOCLAW_MODEL` string in the process; a `{ id, url }` selection in the stub tests. */
@@ -57,6 +74,10 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
    * import has the import's instructions and read-only memory after it (FR-008).
    */
   readonly systemPrompt: string
+  /** The SDK reads these per send; set once here, so no send site passes them (OC-88). */
+  readonly sendDefaults: UntrustedContentSendOptions
+  /** Models the SDK reruns a turn on when the primary fails before any output (`THEOCLAW_MODEL_FALLBACK`, OC-47). */
+  readonly modelFallback?: { readonly models: string[] }
   /**
    * The SDK's `SkillsSettings`: `bundledDirs` (workspace, then user; the SDK takes the
    * first skill of a name) and `inline` (custodian, import, legacy `requires:` skills).
@@ -123,6 +144,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     withheldBuiltinTools: ['shell'] as const,
     memory: input.toolOptions?.memory ?? ({ enabled: false } as const),
     systemPrompt: UNTRUSTED_CONTENT_NOTICE,
+    sendDefaults: untrustedContentSendOptions(),
     local: {
       hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
       ...(input.pluginWorkspace === undefined ? {} : { cwd: input.pluginWorkspace }),
@@ -332,6 +354,8 @@ export async function createTheoClawAgent<Model extends string | ModelSelection>
     ...(options.tools === undefined ? {} : { tools: options.tools }),
     ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
     systemPrompt: options.systemPrompt,
+    sendDefaults: options.sendDefaults,
+    ...(options.modelFallback === undefined ? {} : { modelFallback: options.modelFallback }),
     ...(skills === undefined ? {} : { skills }),
     ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
     ...(options.telemetry === undefined ? {} : { telemetry: { ...options.telemetry } }),

@@ -7,6 +7,14 @@ import { dirname, join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
 
 import type { DockerRunner } from '@theokit/agents/sandbox'
+import {
+  SkillsRegistryError,
+  buildSkillPackage,
+  downloadSkill,
+  installSkill,
+  publishSkill,
+  searchSkills,
+} from '@theokit/skills-registry'
 import { isSea } from 'node:sea'
 import { fileURLToPath } from 'node:url'
 
@@ -27,9 +35,9 @@ import {
 } from './backup/storage.js'
 import { portState, StatePortRefusal } from './state-port.js'
 import type { DatabaseDeps } from './scheduler/postgres-job-store.js'
-import { InstanceLockedError } from './backup/instance-lock.js'
+import { InstanceLockedError } from '@theokit/sdk/persistence'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
-import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './daemon.js'
+import { daemonInstall, type DaemonIo, daemonRestart, daemonStatus, daemonUninstall } from './daemon.js'
 import { runCommand, type Runner } from './run-command.js'
 import { parseCall, parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
@@ -58,9 +66,6 @@ import { hooksCommand } from './agent/hooks-list.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { mcpRelayCommand } from './mcp-relay/command.js'
-import { installSkill } from './skills/install.js'
-import { PublishError, publishSkill } from './skills/publish.js'
-import { RegistryError, searchSkills } from './skills/registry-client.js'
 
 /**
  * The `theoclaw` command (B-374, plan D2). A second leaf entry beside `src/main.ts`: it never
@@ -107,6 +112,7 @@ const USAGE = `usage: theoclaw <command>
                             a systemd user unit, a launchd agent or a Task Scheduler task
   theoclaw daemon uninstall stop and remove that service
   theoclaw daemon status    exit 0 when the service is running, 3 otherwise
+  theoclaw daemon restart   restart the installed service
   theoclaw update [--channel stable|dev]
                             fetch and fast-forward the checkout on its channel, rebuild, restart
   theoclaw security audit [--fix]
@@ -153,6 +159,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw hooks list       the project hooks in .theokit/settings.json: event, fingerprint, approved or not approved; exit 1 when none
   theoclaw sessions list|show <id>|export <id> [--json]
                             list the chat sessions, show one's summary, or print its messages (an id prefix is enough)
+  theoclaw sessions gc [--dry-run] [--days <n>]
+                            remove chat transcripts older than the retention (THEOCLAW_TRANSCRIPT_RETENTION_DAYS, default 30); --dry-run lists them
   theoclaw sessions share <id> --to <dir> | open <id> --from <dir>
                             share a session read-only with another instance through <dir>, or open one shared with you
   theoclaw transcripts list|show <id>|export <id> [--json]
@@ -211,13 +219,14 @@ const DAEMON_VERBS: Readonly<Record<string, (io: CliIo, runner: Runner) => Promi
   install: daemonInstall,
   uninstall: daemonUninstall,
   status: daemonStatus,
+  restart: daemonRestart,
 }
 
 function daemon(args: readonly string[], io: CliIo): Promise<number> {
   const [verb, ...extra] = args
   const run = verb === undefined ? undefined : DAEMON_VERBS[verb]
   if (run === undefined || extra.length > 0)
-    throw new UsageError('theoclaw daemon: expected install, uninstall or status')
+    throw new UsageError('theoclaw daemon: expected install, uninstall, status or restart')
   return run(io, io.runner)
 }
 
@@ -255,12 +264,12 @@ function backupCommand(name: 'backup' | 'restore'): Command {
     try {
       if (location !== undefined) {
         if (name === 'backup') {
-          const { files } = backupInstance(io.env, dir, { homeDir: io.homeDir, live })
+          const { files } = await backupInstance(io.env, dir, { homeDir: io.homeDir, live })
           const archive = storeBackup(io.env, io.homeDir, location, dir)
           io.stdout.write(`theoclaw: backed up ${files.length} files to ${location} (${archive})\n`)
         } else {
           fetchBackup(io.env, io.homeDir, location, dir)
-          const { files } = restoreInstance(io.env, dir, { homeDir: io.homeDir })
+          const { files } = await restoreInstance(io.env, dir, { homeDir: io.homeDir })
           io.stdout.write(`theoclaw: restored ${files.length} files from ${location}\n`)
         }
         return 0
@@ -269,7 +278,7 @@ function backupCommand(name: 'backup' | 'restore'): Command {
       if (name === 'restore' && target)
         await downloadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
       const run = name === 'backup' ? backupInstance : restoreInstance
-      const { files } = run(io.env, dir, { homeDir: io.homeDir, live })
+      const { files } = await run(io.env, dir, { homeDir: io.homeDir, live })
       if (name === 'backup' && target) await uploadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
       io.stdout.write(
         `theoclaw: ${name === 'backup' ? 'backed up' : 'restored'} ${files.length} files ${name === 'backup' ? 'to' : 'from'} ${dir}\n`,
@@ -398,7 +407,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   daemon,
   update: (args, io) => update(parseUpdate(args), io, io.runner),
   security: securityCommand,
-  audit: (args, io) => Promise.resolve(auditCommand(args, io)),
+  audit: (args, io) => auditCommand(args, io),
   doctor: (args, io) => {
     if (args.some((arg) => arg !== '--fix'))
       throw new UsageError('theoclaw doctor: expected [--fix]')
@@ -447,7 +456,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         )
         return 0
       } catch (error) {
-        if (!(error instanceof RegistryError)) throw error
+        if (!(error instanceof SkillsRegistryError)) throw error
         io.stderr.write(`theoclaw: ${error.message}\n`)
         return 1
       }
@@ -469,11 +478,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           'THEOCLAW_WORKSPACE is not set (the workspace to install into)',
         )
       try {
-        const done = await installSkill(base, join(resolve(io.cwd, workspace), 'skills'), spec)
-        io.stdout.write(`Installed ${done.name}@${done.version} -> ${done.dir}\n`)
+        const pkg = await downloadSkill(base, spec)
+        const done = await installSkill(join(resolve(io.cwd, workspace), 'skills'), pkg, {
+          registry: base,
+        })
+        io.stdout.write(`Installed ${pkg.name}@${pkg.version} -> ${done.dir}\n`)
         return 0
       } catch (error) {
-        if (!(error instanceof RegistryError)) throw error
+        if (!(error instanceof SkillsRegistryError)) throw error
         io.stderr.write(`theoclaw: ${error.message}\n`)
         return 1
       }
@@ -483,11 +495,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       throw new UsageError(
         'theoclaw skills: expected search <term>, install <name>[@<version>] or publish <dir>',
       )
+    const registry = (io.env.THEOCLAW_SKILLS_REGISTRY ?? '').trim()
+    const token = (io.env.THEOCLAW_SKILLS_TOKEN ?? '').trim()
     try {
-      io.stdout.write(`${await publishSkill(resolve(io.cwd, dir), { env: io.env })}\n`)
+      if (registry === '') throw new TheoClawConfigError('THEOCLAW_SKILLS_REGISTRY is not set')
+      if (token === '') throw new TheoClawConfigError('THEOCLAW_SKILLS_TOKEN is not set')
+      const pkg = await buildSkillPackage(resolve(io.cwd, dir))
+      await publishSkill(registry, pkg, { token })
+      io.stdout.write(`Published ${pkg.name}@${pkg.version}\n`)
       return 0
     } catch (error) {
-      if (!(error instanceof PublishError)) throw error
+      if (!(error instanceof SkillsRegistryError)) throw error
       io.stderr.write(`theoclaw: ${error.message}\n`)
       return 1
     }

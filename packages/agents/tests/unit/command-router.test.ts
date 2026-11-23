@@ -138,3 +138,15 @@ describe('routeCommand resolves aliases', () => {
     expect(routed).toEqual({ kind: 'command', command: quit, arg: 'now' })
   })
 })
+
+describe('exact commands', () => {
+  const cmds = [defineCommand({ name: 'new', description: 'x', arg: 'none', exact: true })]
+  it('match only the whole trimmed text', () => {
+    expect(routeCommand('/new', cmds).kind).toBe('command')
+    expect(routeCommand('/new  ', cmds).kind).toBe('command')
+    expect(routeCommand('/new chat', cmds)).toMatchObject({
+      kind: 'error',
+      reason: 'unknown-command',
+    })
+  })
+})

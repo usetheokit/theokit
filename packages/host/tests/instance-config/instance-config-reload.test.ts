@@ -69,3 +69,28 @@ describe('reload', () => {
     expect(cfg.reload(join(tmpdir(), 'nope-icr', 'x.env'), env, {}).result.kind).toBe('refused')
   })
 })
+
+describe('reload validation sees the successor', () => {
+  it('passes the changed start-only keys as the successor and skips validation when nothing changed', async () => {
+    const { writeFileSync, mkdtempSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { reloadInstanceConfig } = await import('../../src/instance-config/reload.js')
+    const f = join(mkdtempSync(join(tmpdir(), 'ic-')), 'c.env')
+    writeFileSync(f, 'H="2"\nS="2"\n')
+    const calls: Array<[unknown, unknown]> = []
+    const env: NodeJS.ProcessEnv = { H: '1', S: '1' }
+    const out = reloadInstanceConfig({ H: { hot: true } }, f, env, { H: '1', S: '1' }, (c, s) => {
+      calls.push([{ ...c }, { ...s }])
+    })
+    expect(out.result).toEqual({ kind: 'applied', applied: ['H'], restartRequired: ['S'] })
+    expect(calls).toEqual([
+      [
+        { H: '2', S: '1' },
+        { H: '2', S: '2' },
+      ],
+    ])
+    reloadInstanceConfig({ H: { hot: true } }, f, env, out.accepted, () => calls.push([0, 0]))
+    expect(calls).toHaveLength(1)
+  })
+})
