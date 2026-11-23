@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The live authorization tests count a finished run once even when both the reply handler and the gateway handler wait on it, and the TUI live test matches the interruption notice regardless of case (#2876).
 - The TUI feeds `useAgentStream` from the framework's `createControlStreamSource`, replacing its own frame conversion.
 - The transcript sweep passes its generation and held-session rule to `planTranscriptGC` as `isProtected`, asked at planning and again at apply, instead of filtering the plan afterwards; a transcript with no owner is kept (#2746).
 - The `/control` and WebChat turn runs through the framework's `runAgentTurn`, the `worker` of `delegate_all` through `delegationPortFromAgentFactory`, and the stream-event validator is the framework's `isAgentStreamEvent`; the app's copies are gone. A worker's message may carry images, and an SDK run that ends as `cancelled` is still an ok turn (#2734).

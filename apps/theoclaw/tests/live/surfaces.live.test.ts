@@ -197,7 +197,7 @@ describe.skipIf(!LIVE)("the TUI and the desktop on one running instance, against
     // The marker once in the prompt, once more when the reply's text has begun streaming.
     await waitFor(() => tui.screen().split(MARKER).length > 2, 90_000, () => `streamed text after the tool; screen:\n${tui.screen()}`);
     await tui.type("\u001B");
-    await waitFor(() => tui.screen().includes("interrupted"), 10_000, () => `the turn shown interrupted; screen:\n${tui.screen()}`);
+    await waitFor(() => tui.screen().toLowerCase().includes("interrupted"), 10_000, () => `the turn shown interrupted; screen:\n${tui.screen()}`);
     await waitFor(() => !tui.running(), 10_000, "the interrupted turn to settle");
     await tui.turn(ASK_WORD, "the redirect");
     expect(tui.screen()).toContain(WORD);

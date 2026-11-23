@@ -15,6 +15,7 @@ import { createGroupActivationHook } from '../../src/channels/group-activation-h
 import { createReplyHandler } from '../../src/channels/reply-handler.js'
 import { createContainer } from '../../src/composition.js'
 import { createChannelAgentFactory } from '../../src/control-plane/agent-factory.js'
+import { finishedOnce } from './support/finished-once.js'
 import { FakeAdapter, messageEvent, turnText, waitFor } from '../fakes.js'
 
 /**
@@ -72,11 +73,7 @@ async function liveApp({ env, platforms, hooks = [] }: LiveOptions) {
           return {
             stream: () => run.stream(),
             cancel: () => run.cancel(),
-            wait: async () => {
-              const result = await run.wait()
-              if (result.status === 'finished') completedTurns += 1
-              return result
-            },
+            wait: finishedOnce(() => run.wait(), () => void (completedTurns += 1)),
           }
         },
         // The request boundary disposes the agent; this wrapper forwards it.
