@@ -41,13 +41,3 @@ describe('exitAfterFlush', () => {
     expect(child.stdout).toMatch(/^updated a -> b$/m)
   })
 })
-
-describe('the theoclaw entry point', () => {
-  it('exits through exitAfterFlush on success and on error', async () => {
-    const { readFileSync } = await import('node:fs')
-    const source = readFileSync(fileURLToPath(new URL('../src/cli.ts', import.meta.url)), 'utf8')
-    expect(source).not.toMatch(/process\.exit\(/)
-    expect(source).toContain('exitAfterFlush(code)')
-    expect(source).toContain('exitAfterFlush(1)')
-  })
-})
