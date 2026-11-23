@@ -7,8 +7,10 @@
  * EC-3: throws if toolbox instance is missing from the instances map.
  */
 import type {
+  AgentOptions,
   ContextSettings,
   MemorySettings,
+  ModelFallbackOptions,
   SkillsSettings,
   SystemPromptResolver,
   TelemetrySettings,
@@ -353,6 +355,14 @@ export interface CompiledAgentOptions {
   agents: Record<string, CompiledSubAgent>
   memory?: MemoryOptions | MemorySettings
   skills?: SkillsSettings
+  /** See {@link DefineAgentConfig.sendDefaults}. */
+  sendDefaults?: AgentOptions['sendDefaults']
+  /** See {@link DefineAgentConfig.modelFallback}. */
+  modelFallback?: ModelFallbackOptions
+  /** See {@link DefineAgentConfig.sessionDir}. */
+  sessionDir?: string
+  /** See {@link DefineAgentConfig.thinking}. */
+  thinking?: string
   context?: ContextSettings
   /**
    * B-072 — OpenTelemetry settings, projected onto `Agent.create({ telemetry })`.

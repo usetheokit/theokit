@@ -11,7 +11,7 @@
  */
 import {
   compileLoadedAgentModule,
-  resolveEnabledSkills,
+  resolveSkillsSettings,
   streamAgentUIMessages,
 } from '@theokit/agents'
 
@@ -310,8 +310,8 @@ export async function mountAgent(
   // against the M7 run-context, setting `skills.enabled` before the SDK runs. `undefined` ⇒ the
   // SDK enables every discovered skill. `compiled` is fresh per request, so mutation is safe.
   if (compiled.skillsResolver) {
-    const enabled = await resolveEnabledSkills(compiled.skillsResolver, compiled.runContext ?? {})
-    if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
+    const settings = await resolveSkillsSettings(compiled.skillsResolver, compiled.runContext ?? {})
+    if (settings !== undefined) compiled.skills = settings
   }
 
   // When the agent has @HumanInTheLoop-gated tools (M4), wire the pause: the plugin's `awaitApproval`
