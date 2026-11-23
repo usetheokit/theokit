@@ -1,9 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { type CliIo, runCli } from '../src/cli.js'
+import { definitionPath } from '../src/daemon.js'
 import type { Runner } from '../src/run-command.js'
 import { loadConfiguration } from '../src/config-file.js'
 import { cleanScratch, harness, processGroup, scratchDir, stubEntry, waitForLog } from './support/cli-harness.js'
@@ -162,12 +163,29 @@ describe('theoclaw daemon on the command line', () => {
     // No configuration file in the scratch home, so install refuses before systemctl runs.
     expect(await runCli(['daemon', 'install'], io)).toBe(1)
     expect(h.stderr()).toContain('theoclaw onboard')
+    // The backend reads a service with no unit file as not installed, so one is put in place.
+    const unit = definitionPath('linux', 'theoclaw', io.homeDir)
+    mkdirSync(dirname(unit), { recursive: true })
+    writeFileSync(unit, '')
     expect(await runCli(['daemon', 'status'], io)).toBe(0)
     expect(await runCli(['daemon', 'uninstall'], io)).toBe(0)
-    expect(seen).toContain('systemctl --user is-active theoclaw.service')
+    expect(seen).toContain('systemctl --user is-active -- theoclaw.service')
     expect(seen).toContain('systemctl --user daemon-reload')
     expect(await runCli(['daemon', 'restart-everything'], io)).toBe(2)
     expect(await runCli(['daemon'], io)).toBe(2)
+  })
+
+  it('daemon restart dispatches to the service manager and an unknown verb is a usage error', async () => {
+    const seen: string[] = []
+    const runner: Runner = (command, args) => {
+      seen.push([command, ...args].join(' '))
+      return Promise.resolve({ code: 0, stdout: '', stderr: '' })
+    }
+    const h = harness()
+    const io: CliIo = { ...h.io, runner }
+    expect(await runCli(['daemon', 'restart'], io)).toBe(0)
+    expect(seen).toEqual(['systemctl --user restart -- theoclaw.service'])
+    expect(await runCli(['daemon', 'restart', 'now'], io)).toBe(2)
   })
 
   it('backup and restore move an instance and exit 0, and a refusal exits 1 naming it', async () => {

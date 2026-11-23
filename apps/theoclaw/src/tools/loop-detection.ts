@@ -1,11 +1,16 @@
 /**
- * Why this module stays (issue #2601): `DoomLoopThresholds.window` and `windowRepeatLimit` in
- * `@theokit/sdk` 5.32.0 count the same call within a window, but `doomLoop` is a per-send option and
- * `AgentOptions.sendDefaults` accepts only `toolResultGuard`, `pruneToolResults` and
- * `perToolTimeoutMs`. Using the SDK guard would put `doomLoop` back on every send site, the thing
- * `sendDefaults` removed for the untrusted-content options. This plugin counts per agent, once.
- * SDK request: let `sendDefaults` carry `doomLoop`. Not yet filed: no authenticated issue writer was available (scope decision of #2601, tracked in #2659). Delete this
- * module when it ships.
+ * Why this stays local (#2659, follow-up of #2601). The SDK's window guard (`SendOptions.doomLoop` with
+ * `window` + `windowRepeatLimit`, `DoomLoopTracker.checkWindow`) also blocks the Nth identical call inside a
+ * sliding window, but it is not equivalent (checked against @theokit/sdk 9.0.0 source):
+ * - the SDK window is opt-in per send and both options must be set together; this plugin is a registered plugin
+ *   with its own defaults (limit 3, window 20);
+ * - the SDK records EVERY attempt, blocked ones too, so a blocked call keeps the signature in the window; here
+ *   a blocked call is not recorded;
+ * - the SDK signature uses canonical (sorted-key) JSON, so `{a,b}` and `{b,a}` match; here it is plain
+ *   `JSON.stringify(args)`, so key order matters;
+ * - unserializable input: the SDK shares one `unserializable` key per tool name, as here (`name:unserializable`);
+ * - the SDK's separate consecutive guard stops the run (`stoppedByDoomLoop`); this plugin never stops the run.
+ * SDK issue: https://github.com/usetheokit/theokit-sdk/issues/1502 (sendDefaults cannot carry doomLoop).
  */
 import type { PreToolCallContext } from '@theokit/sdk'
 
@@ -49,10 +54,7 @@ export function loopDetectionPlugin(options: LoopDetectionOptions = {}): General
         const key = signature(call.name, call.args)
         const repeats = recent.filter((entry) => entry === key).length
         if (repeats >= limit) {
-          return {
-            block: true,
-            message: `theoclaw: loop detected: ${call.name} was called with the same arguments ${repeats} times already; stopping the repeat, try something different`,
-          }
+          return { block: true, message: `theoclaw: loop detected: ${call.name} was called with the same arguments ${repeats} times already; stopping the repeat, try something different` }
         }
         recent.push(key)
         if (recent.length > window) recent.shift()

@@ -3,11 +3,11 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { daemonInstall, daemonStatus, daemonUninstall } from '../src/daemon.js'
-import { plistPath } from '../src/daemon-launchd.js'
+import { daemonInstall, daemonRestart, daemonStatus, daemonUninstall, definitionPath } from '../src/daemon.js'
 import { type Harness, harness } from './support/daemon-harness.js'
 
 const UID = 501
+const plistPath = (label: string, home: string): string => definitionPath('darwin', label, home)
 
 function launchctl(h: Harness): string[] {
   return h.calls.filter((call) => call.command === 'launchctl').map((call) => call.args.join(' '))
@@ -55,9 +55,8 @@ describe('theoclaw daemon on macOS (launchd)', () => {
       },
     })
     expect(await daemonInstall(h.io, h.runner)).toBe(1)
-    expect(h.stderr()).toContain(
-      'launchctl bootstrap failed: Bootstrap failed: 5: Input/output error',
-    )
+    expect(h.stderr()).toContain('launchctl bootstrap')
+    expect(h.stderr()).toContain('Bootstrap failed: 5: Input/output error')
     expect(existsSync(plistPath('theoclaw', h.home))).toBe(false)
   })
 
@@ -82,19 +81,19 @@ describe('theoclaw daemon on macOS (launchd)', () => {
       answers: { 'launchctl print': [{ stdout: '\tstate = waiting\n' }] },
     })
     expect(await daemonStatus(loaded.io, loaded.runner)).toBe(3)
-    expect(loaded.stdout()).toBe('theoclaw: not running\n')
+    expect(loaded.stdout()).toBe('theoclaw: stopped\n')
     const absent = harness({
       platform: 'darwin',
       uid: UID,
       answers: { 'launchctl print': [{ code: 113, stderr: 'Could not find service' }] },
     })
     expect(await daemonStatus(absent.io, absent.runner)).toBe(3)
-    expect(absent.stdout()).toBe('theoclaw: not loaded\n')
+    expect(absent.stdout()).toBe('theoclaw: not-installed\n')
   })
 
   it('darwin_without_uid_is_refused', async () => {
     const h = harness({ platform: 'darwin' })
-    for (const verb of [daemonInstall, daemonUninstall, daemonStatus])
+    for (const verb of [daemonInstall, daemonUninstall, daemonStatus, daemonRestart])
       expect(await verb(h.io, h.runner)).toBe(1)
     expect(h.stderr()).toContain('user id')
     expect(existsSync(plistPath('theoclaw', h.home))).toBe(false)
@@ -129,9 +128,8 @@ describe('theoclaw daemon on macOS (launchd)', () => {
       writeFileSync(plistPath('theoclaw', h.home), 'previous definition')
 
       expect(await daemonUninstall(h.io, h.runner)).toBe(1)
-      expect(h.stderr()).toContain(
-        'launchctl bootout failed: Boot-out failed: Operation not permitted',
-      )
+      expect(h.stderr()).toContain('launchctl bootout')
+      expect(h.stderr()).toContain('Boot-out failed: Operation not permitted')
       expect(h.stdout()).not.toContain('removed')
       expect(readFileSync(plistPath('theoclaw', h.home), 'utf8')).toBe('previous definition')
     })
@@ -168,7 +166,8 @@ describe('theoclaw daemon on macOS (launchd)', () => {
       writeFileSync(plistPath('theoclaw', h.home), 'previous definition')
 
       expect(await daemonUninstall(h.io, h.runner)).toBe(1)
-      expect(h.stderr()).toContain('launchctl bootout failed: spawn launchctl ENOENT')
+      expect(h.stderr()).toContain('launchctl bootout')
+      expect(h.stderr()).toContain('spawn launchctl ENOENT')
       expect(existsSync(plistPath('theoclaw', h.home))).toBe(true)
     })
 
@@ -177,5 +176,11 @@ describe('theoclaw daemon on macOS (launchd)', () => {
       expect(await daemonUninstall(h.io, h.runner)).toBe(0)
       expect(launchctl(h)).toEqual([`bootout gui/${UID}/theoclaw`])
     })
+  })
+
+  it('restart kickstarts the agent in the user domain', async () => {
+    const h = harness({ platform: 'darwin', uid: UID })
+    expect(await daemonRestart(h.io, h.runner)).toBe(0)
+    expect(launchctl(h)).toEqual([`kickstart -k gui/${UID}/theoclaw`])
   })
 })
