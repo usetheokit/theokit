@@ -9,6 +9,7 @@ import { stat } from 'node:fs/promises'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import {
   forkTranscript,
+  legacyTranscriptPath,
   listSessions as sdkListSessions,
   loadJsonl,
   sessionHasWriter,
@@ -158,6 +159,7 @@ export async function protectedTranscriptPaths(
   const pointer = readPointer(cwd, root)
   if (pointer !== undefined) {
     protectedBy.set(transcriptPath(root, cwd, pointer), 'resumable session pointer')
+    protectedBy.set(legacyTranscriptPath(root, cwd, pointer), 'resumable session pointer')
   }
 
   // The most recent survives even without a pointer: it is what `--continue` would find, and a GC
