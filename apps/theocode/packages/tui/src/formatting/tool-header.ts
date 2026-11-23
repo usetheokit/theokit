@@ -15,27 +15,17 @@ function refusalVerb(refusal: NonNullable<AgentToolEvent['refusal']>): 'Rejected
 }
 
 /**
- * Ours only. `defaultToolHeader` was composed in as a fallback and then REMOVED, measured.
+ * Ours only. Tools with no entry below return `undefined`, so the toolkit's own header (and, for
+ * `GitDiff`, `Grep`, `Glob` and `Read`, its `explored` grouping) applies untouched.
  *
- * The reasoning that added it was sound and the measurement killed it. This product exposes
- * `GitDiff`, `Grep`, `Glob` and `Read` with no entry below, so they rendered as raw
- * snake_case names, and the toolkit's default answers all four. What that missed is the sentence in
- * `ToolHeaderFormatter`'s own docblock: *explored grouping matches on the (possibly overridden)
- * `name`, so returning a name for a tool listed in `exploreTools` opts that call OUT of the
- * collapse*. All four are in `DEFAULT_EXPLORE_TOOLS`.
+ * `defaultToolHeader` was once composed in as a fallback and removed: it gave those four tools a verb
+ * but lost the explored block. Whether a call joins that block is decided by the event's `explore`
+ * flag (only `explore: false` opts a call out, see `messages-to-events`), not by the header's `name`;
+ * the removal is kept because every tool the default could have helped is in the explore set and this
+ * product wants the collapsed shape.
  *
- * Measured on three consecutive `Read` calls:
- *
- *     without a header   ->  explored                              (one block)
- *     with the default   ->  tool/Read | tool/Read | tool/Read     (three cards)
- *
- * So the fallback bought a verb on a card and paid for it with the grouping — and the grouping is
- * the Claude Code shape this product is chasing. Every tool the default could have helped is in the
- * explore set, which makes the trade a pure loss rather than a balance.
- *
- * A tool that is NOT explored and has no entry below still renders its raw name. That is the honest
- * cost of this decision, and the fix for it is an entry here — where the verb can carry the target
- * and the tense, which the tool-agnostic default cannot.
+ * A tool that is NOT explored and has no entry below still renders its raw name. The fix for that is
+ * an entry here, where the verb can carry the target and the tense.
  */
 export function formatToolHeader(
   event: AgentToolEvent,
@@ -60,7 +50,11 @@ export function formatToolHeader(
 }
 
 /** `Ran x` → `Rejected x` / `Blocked x`, per tool, so the noun still matches what was refused. */
-function refusedName(verb: 'Rejected' | 'Blocked', tool: string, input: Record<string, unknown>): string {
+function refusedName(
+  verb: 'Rejected' | 'Blocked',
+  tool: string,
+  input: Record<string, unknown>,
+): string {
   const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
   switch (tool) {
     case 'Bash':

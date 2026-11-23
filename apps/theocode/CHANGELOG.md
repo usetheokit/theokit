@@ -16,7 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
-- A refused tool call is recognised by the typed `refusal` on the event (`@theokit/tui` 0.83.4), not by marker text or exit code 126 in its output; `human` and `timeout` read as `Rejected`, `policy` and `hook` as `Blocked` (#2721).
+- A refused tool call is recognised by the typed `refusal` on the event (`@theokit/tui` 0.83.4), not by marker text or exit code 126 in its output; `human` and `timeout` read as `Rejected`, `policy` and `hook` as `Blocked` (#2721). A call that carries marker text or exit code 126 but no typed `refusal` now renders as an ordinary failure, and the Bash "rejected — nothing ran" body is gone (the framework's `errorText` is shown). Not verified: that the typed refusal reaches the TUI parts on the in-process presenter path; the test feeds a part carrying `refusal` to `messagesToAgentEvents`.
 - The credential source stays the framework's typed `SourceOrigin` from resolution to the TUI footer; `toLocalSource` and the regular expression in `credential-helpers.ts` that rebuilt it from a string are gone.
 - The live config takes its provider-key guard from `@theokit/agents/testing`; `tools/require-provider-key.mjs` and its test are gone (#2760).
 - Tests: the session GC suites again pin pointer protection, DEAD and undetermined projects, transcript age and live-writer rules (plan and apply), foreign files and registry entries (#2829).
