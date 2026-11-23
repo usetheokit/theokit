@@ -27,7 +27,7 @@ describe('assertSdkCompatible (M48 T3.2)', () => {
     expect((thrown as SdkIncompatibleError).code).toBe('SDK_INCOMPATIBLE')
     expect((thrown as SdkIncompatibleError).found).toBe('3.5.0')
     expect((thrown as Error).message).toContain('3.5.0')
-    expect((thrown as Error).message).toContain('^5.32.0')
+    expect((thrown as Error).message).toContain('>=5.32.0 <10')
   })
 
   it('test_throws_typed_error_on_5_0_0_below_the_peer_floor', () => {
@@ -39,7 +39,7 @@ describe('assertSdkCompatible (M48 T3.2)', () => {
     }
     expect(thrown).toBeInstanceOf(SdkIncompatibleError)
     expect((thrown as SdkIncompatibleError).found).toBe('5.0.0')
-    expect((thrown as SdkIncompatibleError).required).toBe('^5.32.0')
+    expect((thrown as SdkIncompatibleError).required).toBe('>=5.32.0 <10')
   })
 
   it('test_no_throw_when_absent_and_not_required (api-only app, optional peer)', () => {

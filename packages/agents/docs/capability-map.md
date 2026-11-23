@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1518 export(s) across 27 entry point(s).
+1524 export(s) across 27 entry point(s).
 
-Measured against `@theokit/sdk@5.32.0`.
+Measured against `@theokit/sdk@9.0.0`.
 
 ## `@theokit/agents`
 
@@ -53,6 +53,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `CapabilityPreset` | value |
 | `CapabilityRegistry` | value |
 | `CheckpointCapability` | value |
+| `CircuitBreaker` | value |
 | `codingAgentPreset` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
@@ -119,6 +120,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
 | `GenerateObjectError` | value |
+| `GenerationFileError` | value |
 | `getModelInfo` | value |
 | `GoalRunner` | value |
 | `GuardrailError` | value |
@@ -182,6 +184,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `parseModelId` | value |
 | `piiDetector` | value |
 | `Plugin` | value |
+| `PluginManifestError` | value |
 | `PluginsCapability` | value |
 | `PreCompactionHandlerError` | value |
 | `prepareWorkspace` | value |
@@ -216,6 +219,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `runWithApiErrorHandling` | value |
 | `safePathJoin` | value |
 | `Semaphore` | value |
+| `SessionPoolClosedError` | value |
 | `SessionStoreCapability` | value |
 | `setDiagnosticsSink` | value |
 | `setOnce` | value |
@@ -256,6 +260,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `translateInteractionUpdate` | value |
 | `translateSdkEvent` | value |
 | `translateTimelineEvent` | value |
+| `TrustRecordError` | value |
 | `UngatedCapabilityError` | value |
 | `unicodeNormalizer` | value |
 | `UnknownAgentError` | value |
@@ -325,6 +330,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `CatalogModel` | type |
 | `CatalogModelCost` | type |
 | `CheckpointSavedEvent` | type |
+| `CircuitBreakerOptions` | type |
 | `CodingAgentPresetOptions` | type |
 | `CompactionCallOptions` | type |
 | `CompactionStrategyConfig` | type |

@@ -134,12 +134,36 @@ export interface ToolScopeInput {
 type ToolFactory<TOptions, TTool> = (options: TOptions) => TTool
 
 /**
+ * What a factory's options must have to be bindable. The `sandbox` type is deliberately `unknown`:
+ * a factory from another installed copy of `@theokit/sdk` declares its own (nominally different)
+ * `SandboxProvider`, and a structural constraint on ours would reject it.
+ */
+interface ScopedOptions {
+  readonly projectRoot?: string
+  readonly writeRoot?: string
+  readonly sandbox?: unknown
+}
+
+/**
+ * A sandbox as a provider function. The SDK tells a backend from a provider by `instanceof` and then
+ * CALLS anything else, so a backend built by another copy of the SDK would be called and throw
+ * `provider is not a function`. A function is never mistaken for a backend.
+ */
+function asProvider(sandbox: unknown): (ctx: unknown) => unknown {
+  return typeof sandbox === 'function' ? (sandbox as (ctx: unknown) => unknown) : () => sandbox
+}
+
+/**
  * Per-tool overrides.
  *
  * The scope fields are optional here — a caller may replace them — but `undefined` is treated as
  * "not supplied", never as "unset". See {@link ToolScope.bind}.
  */
-type Overrides<TOptions> = Omit<TOptions, keyof ScopeFields> & Partial<ScopeFields>
+type Overrides<TOptions extends ScopedOptions> = Omit<TOptions, keyof ScopeFields> & {
+  readonly projectRoot?: string
+  readonly writeRoot?: string
+  readonly sandbox?: TOptions['sandbox']
+}
 
 export interface ToolScope extends ScopeFields {
   /** The write policy of `mode`, when one was supplied. */
@@ -157,7 +181,7 @@ export interface ToolScope extends ScopeFields {
    * with an undefined variable is ordinary code, and honouring it would silently unconfine a shell
    * through the one door the type system cannot close.
    */
-  bind<TOptions extends Partial<ScopeFields>, TTool>(
+  bind<TOptions extends ScopedOptions, TTool>(
     factory: ToolFactory<TOptions, TTool>,
   ): (overrides?: Overrides<TOptions>) => TTool
 }
@@ -192,7 +216,7 @@ class BoundToolScope implements ToolScope {
         : sandboxWritePolicy(input.mode, this.projectRoot)
   }
 
-  bind<TOptions extends Partial<ScopeFields>, TTool>(
+  bind<TOptions extends ScopedOptions, TTool>(
     factory: ToolFactory<TOptions, TTool>,
   ): (overrides?: Overrides<TOptions>) => TTool {
     return (overrides) => {
@@ -202,7 +226,7 @@ class BoundToolScope implements ToolScope {
         // explicit `undefined` resolves back to the scope instead of clearing it.
         projectRoot: overrides?.projectRoot ?? this.projectRoot,
         writeRoot: overrides?.writeRoot ?? this.writeRoot,
-        sandbox: overrides?.sandbox ?? this.sandbox,
+        sandbox: asProvider(overrides?.sandbox ?? this.sandbox),
       } as TOptions
       return factory(merged)
     }
