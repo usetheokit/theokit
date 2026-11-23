@@ -1,6 +1,6 @@
 {
   "name": "@theocode/shared",
-  "version": "0.1.27",
+  "version": "0.1.26",
   "private": true,
   "type": "module",
   "description": "Code both surfaces need. Neither owns it.",
