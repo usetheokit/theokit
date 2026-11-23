@@ -379,6 +379,56 @@
           "references": [],
           "internals": {}
         },
+        "AgentEventMask": {
+          "tier": "stable",
+          "declaration": "interface AgentEventMask {\n    readonly emit: (event: AgentStreamEvent) => void;\n    readonly flush: () => void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent"
+          ],
+          "internals": {
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent": "type ApprovalRequiredEvent = {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent": "type ArtifactChunkEvent = {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent": "type ArtifactStartEvent = {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent": "type CheckpointSavedEvent = {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent": "type DoneEvent = {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    finishReason?: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent": "type ErrorEvent = {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent": "type FileEditEvent = {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent": "type InputRequestedEvent = {\n    type: 'input_requested';\n    requestId: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent": "type IterationEvent = {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent": "type PartialToolCallEvent = {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent": "type RunStartedEvent = {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent": "type ShellOutputEvent = {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent": "type StateUpdateEvent = {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent": "type TaskProgressEvent = {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent": "type TextDeltaEvent = {\n    type: 'text_delta';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};"
+          }
+        },
         "AgentExecutionContext": {
           "tier": "stable",
           "declaration": "interface AgentExecutionContext extends ExecutionContext {\n    getAgent(): AgentOptions;\n    getRun(): AgentRunInfo;\n    getToolCall(): ToolOptions | null;\n    isAgentContext(): true;\n}",
@@ -4402,7 +4452,7 @@
         },
         "RunAgentTurnOptions": {
           "tier": "stable",
-          "declaration": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n}",
+          "declaration": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -7314,6 +7364,58 @@
             "dist/index.d.ts#CostGuardOptions": "interface CostGuardOptions {\n    maxTokens: number;\n}"
           }
         },
+        "createAgentEventMask": {
+          "tier": "stable",
+          "declaration": "declare function createAgentEventMask(secrets: readonly string[], emit: (event: AgentStreamEvent) => void): AgentEventMask;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
+            "dist/bridge-entry-<hash>.d.ts#AgentEventMask"
+          ],
+          "internals": {
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent": "type ApprovalRequiredEvent = {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent": "type ArtifactChunkEvent = {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent": "type ArtifactStartEvent = {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent": "type CheckpointSavedEvent = {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent": "type DoneEvent = {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    finishReason?: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent": "type ErrorEvent = {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent": "type FileEditEvent = {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent": "type InputRequestedEvent = {\n    type: 'input_requested';\n    requestId: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent": "type IterationEvent = {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent": "type PartialToolCallEvent = {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent": "type RunStartedEvent = {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent": "type ShellOutputEvent = {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent": "type StateUpdateEvent = {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent": "type TaskProgressEvent = {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent": "type TextDeltaEvent = {\n    type: 'text_delta';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
+            "dist/bridge-entry-<hash>.d.ts#AgentEventMask": "interface AgentEventMask {\n    readonly emit: (event: AgentStreamEvent) => void;\n    readonly flush: () => void;\n}"
+          }
+        },
         "createAgentExecutionContext": {
           "tier": "stable",
           "declaration": "declare function createAgentExecutionContext(base: ExecutionContext, agent: AgentOptions, run: AgentRunInfo, toolCall?: ToolOptions): AgentExecutionContext;",
@@ -9618,7 +9720,7 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
-            "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
@@ -11042,7 +11144,7 @@
         },
         "ApprovalGateOptions": {
           "tier": "stable",
-          "declaration": "interface ApprovalGateOptions {\n    store: PermissionStore;\n    key: (ctx: PreToolCallContext) => PermissionQuery | undefined;\n    waived?: (ctx: PreToolCallContext) => boolean;\n    reviewer?: (query: PermissionQuery) => Promise<'allow' | 'deny' | 'ask'>;\n    ask?: (query: PermissionQuery, ctx: PreToolCallContext) => Promise<ApprovalAnswer | {\n        answer: ApprovalAnswer;\n        by: string;\n    }>;\n    timeoutMs?: number;\n    ledger?: ApprovalLedger;\n    onError?: (error: unknown, stage: 'reviewer' | 'ask' | 'save' | 'ledger') => void;\n}",
+          "declaration": "interface ApprovalGateOptions {\n    store: PermissionStore;\n    key: (ctx: PreToolCallContext) => PermissionQuery | undefined;\n    waived?: (ctx: PreToolCallContext) => boolean;\n    reviewer?: (query: PermissionQuery) => Promise<'allow' | 'deny' | 'ask'>;\n    ask?: (query: PermissionQuery, ctx: PreToolCallContext) => Promise<ApprovalAnswer | {\n        answer: ApprovalAnswer;\n        by: string;\n    }>;\n    timeoutMs?: number;\n    ledger?: ApprovalLedger;\n    recordUngoverned?: boolean;\n    persistAlways?: boolean;\n    refusal?: (name: string, reason: string) => string;\n    onError?: (error: unknown, stage: 'reviewer' | 'ask' | 'save' | 'ledger') => void;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -11601,7 +11703,7 @@
           "internals": {
             "dist/auth.d.ts#ApprovalAnswer": "type ApprovalAnswer = 'once' | 'always' | 'deny';",
             "dist/auth.d.ts#ApprovalDecision": "interface ApprovalDecision {\n    allowed: boolean;\n    reason: string;\n    by: string;\n}",
-            "dist/auth.d.ts#ApprovalGateOptions": "interface ApprovalGateOptions {\n    store: PermissionStore;\n    key: (ctx: PreToolCallContext) => PermissionQuery | undefined;\n    waived?: (ctx: PreToolCallContext) => boolean;\n    reviewer?: (query: PermissionQuery) => Promise<'allow' | 'deny' | 'ask'>;\n    ask?: (query: PermissionQuery, ctx: PreToolCallContext) => Promise<ApprovalAnswer | {\n        answer: ApprovalAnswer;\n        by: string;\n    }>;\n    timeoutMs?: number;\n    ledger?: ApprovalLedger;\n    onError?: (error: unknown, stage: 'reviewer' | 'ask' | 'save' | 'ledger') => void;\n}",
+            "dist/auth.d.ts#ApprovalGateOptions": "interface ApprovalGateOptions {\n    store: PermissionStore;\n    key: (ctx: PreToolCallContext) => PermissionQuery | undefined;\n    waived?: (ctx: PreToolCallContext) => boolean;\n    reviewer?: (query: PermissionQuery) => Promise<'allow' | 'deny' | 'ask'>;\n    ask?: (query: PermissionQuery, ctx: PreToolCallContext) => Promise<ApprovalAnswer | {\n        answer: ApprovalAnswer;\n        by: string;\n    }>;\n    timeoutMs?: number;\n    ledger?: ApprovalLedger;\n    recordUngoverned?: boolean;\n    persistAlways?: boolean;\n    refusal?: (name: string, reason: string) => string;\n    onError?: (error: unknown, stage: 'reviewer' | 'ask' | 'save' | 'ledger') => void;\n}",
             "dist/auth.d.ts#ApprovalLedger": "interface ApprovalLedger {\n    append(record: ApprovalRecord): Promise<void>;\n}",
             "dist/auth.d.ts#ApprovalRecord": "interface ApprovalRecord {\n    readonly at: string;\n    readonly runId: string;\n    readonly agentId: string;\n    readonly tool: string;\n    readonly query?: PermissionQuery;\n    readonly allowed: boolean;\n    readonly decidedBy: string;\n    readonly reason: string;\n}",
             "dist/auth.d.ts#Grant": "interface Grant {\n    readonly tool: string;\n    readonly scope: string;\n    readonly command: string;\n    readonly grantedAt: string;\n    readonly expiresAt?: number;\n}",
@@ -12072,6 +12174,56 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "AgentEventMask": {
+          "tier": "stable",
+          "declaration": "interface AgentEventMask {\n    readonly emit: (event: AgentStreamEvent) => void;\n    readonly flush: () => void;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent"
+          ],
+          "internals": {
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent": "type ApprovalRequiredEvent = {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent": "type ArtifactChunkEvent = {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent": "type ArtifactStartEvent = {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent": "type CheckpointSavedEvent = {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent": "type DoneEvent = {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    finishReason?: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent": "type ErrorEvent = {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent": "type FileEditEvent = {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent": "type InputRequestedEvent = {\n    type: 'input_requested';\n    requestId: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent": "type IterationEvent = {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent": "type PartialToolCallEvent = {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent": "type RunStartedEvent = {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent": "type ShellOutputEvent = {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent": "type StateUpdateEvent = {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent": "type TaskProgressEvent = {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent": "type TextDeltaEvent = {\n    type: 'text_delta';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};"
+          }
         },
         "AgentExecutionContext": {
           "tier": "stable",
@@ -13503,7 +13655,7 @@
         },
         "RunAgentTurnOptions": {
           "tier": "stable",
-          "declaration": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n}",
+          "declaration": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -14749,6 +14901,58 @@
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
             "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+          }
+        },
+        "createAgentEventMask": {
+          "tier": "stable",
+          "declaration": "declare function createAgentEventMask(secrets: readonly string[], emit: (event: AgentStreamEvent) => void): AgentEventMask;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
+            "dist/bridge-entry-<hash>.d.ts#AgentEventMask"
+          ],
+          "internals": {
+            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
+            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
+            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent": "type ApprovalRequiredEvent = {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent": "type ArtifactChunkEvent = {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent": "type ArtifactStartEvent = {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent": "type CheckpointSavedEvent = {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#DoneEvent": "type DoneEvent = {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    finishReason?: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent": "type ErrorEvent = {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent": "type FileEditEvent = {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent": "type InputRequestedEvent = {\n    type: 'input_requested';\n    requestId: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#IterationEvent": "type IterationEvent = {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent": "type PartialToolCallEvent = {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent": "type RunStartedEvent = {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent": "type ShellOutputEvent = {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent": "type StateUpdateEvent = {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent": "type TaskProgressEvent = {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent": "type TextDeltaEvent = {\n    type: 'text_delta';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
+            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
+            "dist/bridge-entry-<hash>.d.ts#AgentEventMask": "interface AgentEventMask {\n    readonly emit: (event: AgentStreamEvent) => void;\n    readonly flush: () => void;\n}"
           }
         },
         "createAgentExecutionContext": {
@@ -16531,7 +16735,7 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
-            "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
@@ -18242,6 +18446,42 @@
           "references": [],
           "internals": {}
         },
+        "SessionsGcArgs": {
+          "tier": "stable",
+          "declaration": "type SessionsGcArgs = {\n    readonly ok: true;\n    readonly apply: boolean;\n    readonly json: boolean;\n    readonly keepLast?: number;\n    readonly maxAgeDays?: number;\n} | {\n    readonly ok: false;\n    readonly message: string;\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "SessionsGcOptions": {
+          "tier": "stable",
+          "declaration": "interface SessionsGcOptions {\n    readonly apply?: boolean;\n    readonly keepLast?: number;\n    readonly maxAgeDays?: number;\n    readonly cwd?: string;\n    readonly json?: boolean;\n    readonly human?: (plan: TranscriptGCPlan, result: RunTranscriptGCResult) => readonly string[];\n    readonly run?: (resolved: {\n        readonly apply: boolean;\n        readonly keepLast: number;\n        readonly maxAgeDays: number;\n        readonly cwd: string;\n    }) => Promise<{\n        plan: TranscriptGCPlan;\n        result: RunTranscriptGCResult;\n    }>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
+          ],
+          "internals": {
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+          }
+        },
+        "SessionsGcOutcome": {
+          "tier": "stable",
+          "declaration": "interface SessionsGcOutcome {\n    readonly lines: readonly string[];\n    readonly failed: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "Shutdown": {
           "tier": "stable",
           "declaration": "interface Shutdown {\n    register(task: CleanupTask): () => void;\n    run(): Promise<ShutdownOutcome>;\n}",
@@ -18339,6 +18579,56 @@
             "dist/commands.d.ts#ExitAfterDrainDeps": "interface ExitAfterDrainDeps {\n    readonly exit?: (code: number) => void;\n    readonly setExitCode?: (code: number) => void;\n    readonly capMs?: number;\n}"
           }
         },
+        "formatGcJson": {
+          "tier": "stable",
+          "declaration": "declare function formatGcJson(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
+          ],
+          "internals": {
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+          }
+        },
+        "formatGcPlan": {
+          "tier": "stable",
+          "declaration": "declare function formatGcPlan(plan: TranscriptGCPlan, result: RunTranscriptGCResult): string[];",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
+          ],
+          "internals": {
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+          }
+        },
+        "parseSessionsGcArgs": {
+          "tier": "stable",
+          "declaration": "declare function parseSessionsGcArgs(args: readonly string[], defaults?: {\n    readonly apply?: boolean;\n}): SessionsGcArgs;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/commands.d.ts#SessionsGcArgs"],
+          "internals": {
+            "dist/commands.d.ts#SessionsGcArgs": "type SessionsGcArgs = {\n    readonly ok: true;\n    readonly apply: boolean;\n    readonly json: boolean;\n    readonly keepLast?: number;\n    readonly maxAgeDays?: number;\n} | {\n    readonly ok: false;\n    readonly message: string;\n};"
+          }
+        },
         "readHeadlessPrompt": {
           "tier": "stable",
           "declaration": "declare function readHeadlessPrompt(input: {\n    prompt?: string;\n    stdin: 'ignore' | 'append' | 'required' | 'forced';\n    readStdin: () => string;\n}): string;",
@@ -18397,6 +18687,30 @@
             "dist/commands.d.ts#CommandArgument": "type CommandArgument = 'none' | 'optional' | 'required';",
             "dist/commands.d.ts#CommandDefinition": "interface CommandDefinition<Ctx = void> {\n    readonly name: string;\n    readonly description: string;\n    readonly arg: CommandArgument;\n    readonly aliases?: readonly string[];\n    readonly hidden?: boolean;\n    readonly exact?: boolean;\n    readonly run?: (arg: string, ctx: Ctx) => void | Promise<void>;\n}",
             "dist/commands.d.ts#SessionCommandHandlers": "interface SessionCommandHandlers {\n    reset?: () => void | Promise<void>;\n    stop?: () => void | Promise<void>;\n    steer?: (text: string) => void | Promise<void>;\n    compact?: () => void | Promise<void>;\n    setModel?: (model: string) => void | Promise<void>;\n    setEffort?: (effort: string) => void | Promise<void>;\n    status?: () => void | Promise<void>;\n}"
+          }
+        },
+        "sessionsGcCommand": {
+          "tier": "stable",
+          "declaration": "declare function sessionsGcCommand(options?: SessionsGcOptions): Promise<SessionsGcOutcome>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/commands.d.ts#SessionsGcOptions",
+            "dist/commands.d.ts#SessionsGcOutcome",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
+          ],
+          "internals": {
+            "dist/commands.d.ts#SessionsGcOptions": "interface SessionsGcOptions {\n    readonly apply?: boolean;\n    readonly keepLast?: number;\n    readonly maxAgeDays?: number;\n    readonly cwd?: string;\n    readonly json?: boolean;\n    readonly human?: (plan: TranscriptGCPlan, result: RunTranscriptGCResult) => readonly string[];\n    readonly run?: (resolved: {\n        readonly apply: boolean;\n        readonly keepLast: number;\n        readonly maxAgeDays: number;\n        readonly cwd: string;\n    }) => Promise<{\n        plan: TranscriptGCPlan;\n        result: RunTranscriptGCResult;\n    }>;\n}",
+            "dist/commands.d.ts#SessionsGcOutcome": "interface SessionsGcOutcome {\n    readonly lines: readonly string[];\n    readonly failed: number;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
           }
         }
       }
@@ -23378,9 +23692,9 @@
           "declaration": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/session.d.ts#GCError"],
+          "references": ["dist/transcript-gc-<hash>.d.ts#GCError"],
           "internals": {
-            "dist/session.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}"
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}"
           }
         },
         "ScheduleSessionSweepOptions": {
@@ -23480,10 +23794,13 @@
           "declaration": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/session.d.ts#GCCandidate", "dist/session.d.ts#GCKept"],
+          "references": [
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCKept"
+          ],
           "internals": {
-            "dist/session.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
-            "dist/session.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}"
           }
         },
         "TranscriptToTextOptions": {
@@ -23640,16 +23957,16 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/session.d.ts#GCCandidate",
-            "dist/session.d.ts#GCKept",
-            "dist/session.d.ts#TranscriptGCOptions",
-            "dist/session.d.ts#TranscriptGCPlan"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCOptions",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
           ],
           "internals": {
-            "dist/session.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
-            "dist/session.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
-            "dist/session.d.ts#TranscriptGCOptions": "interface TranscriptGCOptions {\n    readonly cwd: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly root?: string;\n    readonly now?: number;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n}",
-            "dist/session.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCOptions": "interface TranscriptGCOptions {\n    readonly cwd: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly root?: string;\n    readonly now?: number;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
           }
         },
         "projectDirFor": {
@@ -23744,18 +24061,18 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
-            "dist/session.d.ts#GCCandidate",
-            "dist/session.d.ts#GCError",
-            "dist/session.d.ts#GCKept",
-            "dist/session.d.ts#RunTranscriptGCResult",
-            "dist/session.d.ts#TranscriptGCPlan"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate",
+            "dist/transcript-gc-<hash>.d.ts#GCError",
+            "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
           ],
           "internals": {
-            "dist/session.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
-            "dist/session.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
-            "dist/session.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
-            "dist/session.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
-            "dist/session.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
           }
         },
         "scheduleSessionSweep": {
@@ -23858,6 +24175,50 @@
           "references": [],
           "internals": {}
         },
+        "FakeAgent": {
+          "tier": "stable",
+          "declaration": "declare class FakeAgent {\n    private readonly turn;\n    readonly sent: string[];\n    readonly signals: (AbortSignal | undefined)[];\n    readonly queueModes: (string | undefined)[];\n    cancels: number;\n    constructor(turn: FakeTurn);\n    send(text: string, options?: {\n        readonly signal?: AbortSignal;\n        readonly queueMode?: string;\n    }): Promise<{\n        stream(): AsyncGenerator<SdkFrame>;\n        events(): AsyncGenerator<FakeTimelineEvent>;\n        cancel: () => Promise<void>;\n        wait: () => Promise<{\n            readonly status: string;\n            readonly error?: {\n                readonly code?: string;\n            };\n            readonly usage?: {\n                readonly inputTokens?: number;\n                readonly outputTokens?: number;\n            };\n            readonly cost?: {\n                readonly amountUsd?: number;\n            };\n        }>;\n    }>;\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/testing.d.ts#FakeTimelineEvent",
+            "dist/testing.d.ts#FakeTurn",
+            "dist/testing.d.ts#SdkFrame"
+          ],
+          "internals": {
+            "dist/testing.d.ts#FakeTimelineEvent": "type FakeTimelineEvent = {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n} | {\n    readonly kind: 'message';\n    readonly message: SdkFrame;\n    readonly textAlreadyStreamed: boolean;\n};",
+            "dist/testing.d.ts#FakeTurn": "interface FakeTurn {\n    readonly frames: readonly SdkFrame[] | ((text: string) => readonly SdkFrame[]);\n    readonly streamError?: Error;\n    readonly result?: {\n        readonly status: string;\n        readonly error?: {\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number;\n        };\n    };\n    readonly before?: Promise<void>;\n    readonly sendGate?: Promise<void>;\n    readonly deltas?: readonly string[];\n    readonly afterDeltas?: Promise<void>;\n    readonly toolHeld?: boolean;\n    readonly toolName?: string;\n    readonly waitGate?: Promise<void>;\n    readonly teardown?: Promise<void>;\n}",
+            "dist/testing.d.ts#SdkFrame": "type SdkFrame = {\n    readonly type: string;\n} & Readonly<Record<string, unknown>>;"
+          }
+        },
+        "FakeTimelineEvent": {
+          "tier": "stable",
+          "declaration": "type FakeTimelineEvent = {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n} | {\n    readonly kind: 'message';\n    readonly message: SdkFrame;\n    readonly textAlreadyStreamed: boolean;\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/testing.d.ts#SdkFrame"],
+          "internals": {
+            "dist/testing.d.ts#SdkFrame": "type SdkFrame = {\n    readonly type: string;\n} & Readonly<Record<string, unknown>>;"
+          }
+        },
+        "FakeTurn": {
+          "tier": "stable",
+          "declaration": "interface FakeTurn {\n    readonly frames: readonly SdkFrame[] | ((text: string) => readonly SdkFrame[]);\n    readonly streamError?: Error;\n    readonly result?: {\n        readonly status: string;\n        readonly error?: {\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number;\n        };\n    };\n    readonly before?: Promise<void>;\n    readonly sendGate?: Promise<void>;\n    readonly deltas?: readonly string[];\n    readonly afterDeltas?: Promise<void>;\n    readonly toolHeld?: boolean;\n    readonly toolName?: string;\n    readonly waitGate?: Promise<void>;\n    readonly teardown?: Promise<void>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/testing.d.ts#SdkFrame"],
+          "internals": {
+            "dist/testing.d.ts#SdkFrame": "type SdkFrame = {\n    readonly type: string;\n} & Readonly<Record<string, unknown>>;"
+          }
+        },
+        "InteractionUpdate": {
+          "tier": "stable",
+          "declaration": "type InteractionUpdate = TextDeltaUpdate | ThinkingDeltaUpdate | ThinkingCompletedUpdate | ToolCallStartedUpdate | ToolCallCompletedUpdate | PartialToolCallUpdate | TokenDeltaUpdate | StepStartedUpdate | StepCompletedUpdate | TurnEndedUpdate | UserMessageAppendedUpdate | SummaryUpdate | SummaryStartedUpdate | SummaryCompletedUpdate | ShellOutputDeltaUpdate;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "LIVE_KEY_NAMES": {
           "tier": "stable",
           "declaration": "LIVE_KEY_NAMES: readonly [\n    \"OPENROUTER_API_KEY\",\n    \"ANTHROPIC_API_KEY\",\n    \"OPENAI_API_KEY\",\n    \"THEOKIT_API_KEY\"\n]",
@@ -23903,6 +24264,14 @@
         "ProviderKeyGuardOptions": {
           "tier": "stable",
           "declaration": "interface ProviderKeyGuardOptions {\n    readonly names?: readonly string[];\n    readonly requiredFlag?: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "SdkFrame": {
+          "tier": "stable",
+          "declaration": "type SdkFrame = {\n    readonly type: string;\n} & Readonly<Record<string, unknown>>;",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -24180,6 +24549,14 @@
     },
     "./tools": {
       "names": {
+        "BaseDirOutsideProjectRootError": {
+          "tier": "stable",
+          "declaration": "declare class BaseDirOutsideProjectRootError extends Error {\n    readonly baseDir: string;\n    readonly projectRoot: string;\n    constructor(tool: string, baseDir: string, projectRoot: string);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "CatastrophicCommandError": {
           "tier": "stable",
           "declaration": "declare class CatastrophicCommandError extends ConfigurationError {\n    readonly name = \"CatastrophicCommandError\";\n    constructor(reason: string);\n}",
@@ -24223,6 +24600,14 @@
         "CreateBraveWebSearchAdapterOptions": {
           "tier": "stable",
           "declaration": "interface CreateBraveWebSearchAdapterOptions {\n    apiKey?: string;\n    fetchImpl?: FetchLike$1;\n    endpoint?: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "CreateComputerToolOptions": {
+          "tier": "stable",
+          "declaration": "interface CreateComputerToolOptions {\n    display: string;\n    framebuffer: string;\n    xdotool?: string;\n    describe(png: Buffer, info: {\n        width: number;\n        height: number;\n        question?: string;\n        signal: AbortSignal;\n    }): Promise<string>;\n    describeTimeoutMs?: number;\n    run?: (file: string, argv: readonly string[], env: Record<string, string>, signal?: AbortSignal) => Promise<string>;\n    readFile?: (path: string) => Buffer;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -24470,6 +24855,14 @@
           "references": [],
           "internals": {}
         },
+        "CreateImageGenerateToolOptions": {
+          "tier": "stable",
+          "declaration": "interface CreateImageGenerateToolOptions {\n    generate: ImageGenerateCallback;\n    projectRoot: string;\n    outputDir?: string;\n    name?: string;\n    description?: string;\n    maxPromptChars?: number;\n    maxImageBytes?: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "CreateInteractiveShellToolOptions": {
           "tier": "stable",
           "declaration": "interface CreateInteractiveShellToolOptions {\n    name?: string;\n    description?: string;\n    interactive: InteractiveProvider<unknown>;\n}",
@@ -24610,9 +25003,25 @@
           "references": [],
           "internals": {}
         },
+        "DEFAULT_MAX_GENERATED_IMAGE_BYTES": {
+          "tier": "stable",
+          "declaration": "DEFAULT_MAX_GENERATED_IMAGE_BYTES: number",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "DEFAULT_MAX_IMAGE_BYTES": {
           "tier": "stable",
           "declaration": "DEFAULT_MAX_IMAGE_BYTES: number",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "DEFAULT_MAX_PROMPT_CHARS": {
+          "tier": "stable",
+          "declaration": "DEFAULT_MAX_PROMPT_CHARS = 4096",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -24755,6 +25164,30 @@
           "references": [],
           "internals": {}
         },
+        "GeneratedImageData": {
+          "tier": "stable",
+          "declaration": "interface GeneratedImageData {\n    image: Uint8Array;\n    mimeType: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ImageGenerateCallback": {
+          "tier": "stable",
+          "declaration": "type ImageGenerateCallback = (prompt: string) => Promise<GeneratedImageData>;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ImageGenerateResult": {
+          "tier": "stable",
+          "declaration": "type ImageGenerateResult = {\n    ok: true;\n    path: string;\n    mime_type: string;\n    bytes: number;\n} | ImageGenerateFailure;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "JobCopyError": {
           "tier": "stable",
           "declaration": "declare class JobCopyError extends TheokitAgentError {\n    readonly name = \"JobCopyError\";\n    readonly existing: number;\n    constructor(existing: number);\n}",
@@ -24865,6 +25298,14 @@
         "ResolveAndScreenOptions": {
           "tier": "stable",
           "declaration": "interface ResolveAndScreenOptions {\n    lookup?: LookupFn;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ResolvedWebSearch": {
+          "tier": "stable",
+          "declaration": "interface ResolvedWebSearch {\n    adapter?: WebSearchCallback;\n    provider?: WebSearchProvider;\n    secrets: string[];\n    offReason?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -25086,10 +25527,50 @@
           "references": [],
           "internals": {}
         },
+        "WebSearchProvider": {
+          "tier": "stable",
+          "declaration": "type WebSearchProvider = \"brave\" | \"searxng\" | \"tavily\" | \"generic\";",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "WebSearchResult": {
           "tier": "stable",
           "declaration": "interface WebSearchResult {\n    title: string;\n    url: string;\n    snippet: string;\n}",
           "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "XWD_LIMITS": {
+          "tier": "stable",
+          "declaration": "XWD_LIMITS: {\n    maxHeaderBytes: number;\n    maxSide: number;\n    maxPixels: number;\n    maxColors: number;\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "XwdFormatError": {
+          "tier": "stable",
+          "declaration": "declare class XwdFormatError extends Error {\n    readonly path: string;\n    readonly field: string;\n    readonly value: number;\n    constructor(path: string, field: string, value: number, detail?: string);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "XwdHeader": {
+          "tier": "stable",
+          "declaration": "interface XwdHeader {\n    width: number;\n    height: number;\n    bitsPerPixel: number;\n    bytesPerLine: number;\n    dataOffset: number;\n    lsbFirst: boolean;\n    masks: readonly [\n        number,\n        number,\n        number\n    ];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "XwdNotWrittenError": {
+          "tier": "stable",
+          "declaration": "declare class XwdNotWrittenError extends XwdFormatError {\n}",
+          "runtime": true,
           "deprecatedSince": null,
           "references": [],
           "internals": {}
@@ -25221,6 +25702,14 @@
         "createBraveWebSearchAdapter": {
           "tier": "stable",
           "declaration": "declare function createBraveWebSearchAdapter(opts?: CreateBraveWebSearchAdapterOptions): WebSearchCallback;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "createComputerTool": {
+          "tier": "stable",
+          "declaration": "declare function createComputerTool(options: CreateComputerToolOptions): CustomTool;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -25467,6 +25956,14 @@
         "createGlobTool": {
           "tier": "stable",
           "declaration": "declare function createGlobTool(opts: CreateGlobToolOptions): CustomTool;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "createImageGenerateTool": {
+          "tier": "stable",
+          "declaration": "declare function createImageGenerateTool(opts: CreateImageGenerateToolOptions): CustomTool;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -25798,6 +26295,14 @@
           "references": [],
           "internals": {}
         },
+        "readXwdHeader": {
+          "tier": "stable",
+          "declaration": "declare function readXwdHeader(bytes: Uint8Array, path: string): XwdHeader;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "renderToolList": {
           "tier": "stable",
           "declaration": "declare function renderToolList(tools: CustomTool[], options?: {\n    mode?: ToolListMode;\n}): string;",
@@ -25817,6 +26322,14 @@
         "resolveAndScreen": {
           "tier": "stable",
           "declaration": "declare function resolveAndScreen(rawHost: string, options?: ResolveAndScreenOptions): Promise<string[]>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "resolveWebSearchAdapter": {
+          "tier": "stable",
+          "declaration": "declare function resolveWebSearchAdapter(env: Env, options?: {\n    fetchImpl?: typeof fetch;\n}): ResolvedWebSearch;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -25881,6 +26394,14 @@
         "withToolResultGuidance": {
           "tier": "stable",
           "declaration": "declare function withToolResultGuidance(tool: CustomTool, guidance: ToolGuidanceMap): CustomTool;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "xwdToPng": {
+          "tier": "stable",
+          "declaration": "declare function xwdToPng(bytes: Uint8Array, path: string): {\n    png: Buffer;\n    width: number;\n    height: number;\n};",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],

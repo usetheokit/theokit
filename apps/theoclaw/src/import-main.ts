@@ -98,7 +98,7 @@ try {
   // Parsed first, so a mistyped flag creates no profile directory.
   const args = parseImportArgs(process.argv.slice(2))
   const instance = resolveInstance(process.env, { homeDir: homedir() })
-  applyInstance(instance, process.env)
+  await applyInstance(instance, process.env)
   const stateDir = requireStateDir(process.env)
   const setup = readSetup(args, homedir())
   if (args.dryRun) {

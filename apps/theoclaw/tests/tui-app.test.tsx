@@ -139,6 +139,14 @@ describe("theoclaw-tui (T4.2)", () => {
     expect(instance.agents[1]!.sent).toEqual(["second"]);
   });
 
+  it("/new chat is a message to the agent, not a new session", async () => {
+    const instance = await startInstance(() => quick);
+    const tui = await renderTui(instance);
+    await tui.type("/new chat", ENTER);
+    await waitFor(() => instance.agents.length === 1 && instance.agents[0]!.sent.length === 1, 3000, "the turn");
+    expect(instance.agents[0]!.sent).toEqual(["/new chat"]);
+  });
+
   it("/new keeps the session id within 64 characters", () => {
     const base = "x".repeat(64);
     const next = nextSessionId(base, 12);

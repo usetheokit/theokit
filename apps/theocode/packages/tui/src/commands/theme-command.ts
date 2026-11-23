@@ -35,6 +35,24 @@ import { THEME_RESOLUTION } from '../theme/theme.js'
 const CUSTOM_PREFIX = 'custom:'
 
 /**
+ * `NO_COLOR` is read the way the provider reads it (non-empty). `TheoTUIProvider` returns the
+ * no-colour theme whenever it is set, so a session override cannot win against it.
+ */
+function noColorSet(): boolean {
+  return (process.env['NO_COLOR'] ?? '') !== ''
+}
+
+/** Refuse a selection the provider would not draw, rather than report a switch nobody can see. */
+function refuseForNoColor(wanted: string, setToast: (toast: ToastPayload) => void): void {
+  setToast({
+    message:
+      `theme: ${wanted} not applied — NO_COLOR is set, so colours stay off; ` +
+      'unset NO_COLOR and relaunch to use colour (/theme no-color is still available)',
+    variant: 'error',
+  })
+}
+
+/**
  * `/theme custom:<slug>`.
  *
  * A slug with no file is REFUSED rather than falling back to a base. An operator who typed a slug is
@@ -46,6 +64,10 @@ function selectCustom(
   setToast: (toast: ToastPayload) => void,
   home: string,
 ): void {
+  if (noColorSet()) {
+    refuseForNoColor(`${CUSTOM_PREFIX}${slug}`, setToast)
+    return
+  }
   const loaded = loadCustomTheme(slug, home)
   if (loaded === null) {
     const available = listCustomThemes(home).map((t) => `${CUSTOM_PREFIX}${t.slug}`)
@@ -154,6 +176,10 @@ export function handleTheme(
       message: `"${requested}" is not a theme — expected ${THEME_BASES.join(' | ')}`,
       variant: 'error',
     })
+    return
+  }
+  if (known !== 'no-color' && noColorSet()) {
+    refuseForNoColor(known, setToast)
     return
   }
   setSessionThemeBase(known)
