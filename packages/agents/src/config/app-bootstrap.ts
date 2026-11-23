@@ -138,10 +138,7 @@ export class SdkHomeConflictError extends TheokitAgentError {
   }
 }
 
-export type SdkHomeStepOptions = (
-  | { readonly dirName: string; readonly profile?: undefined }
-  | { readonly profile: string; readonly dirName?: undefined }
-) & {
+export type SdkHomeStepOptions = ({ readonly dirName: string } | { readonly profile: string }) & {
   /** A variable already set in `ctx.env` (even empty): `'refuse'` fails, `'env-wins'` keeps it. Default `'env-wins'`. */
   readonly onConflict?: 'refuse' | 'env-wins'
 }
@@ -157,11 +154,11 @@ export function sdkHomeStep(options: SdkHomeStepOptions): BootstrapStep {
     name: 'sdk-home',
     run(ctx) {
       const dir =
-        options.profile === undefined
-          ? join(ctx.home, options.dirName)
-          : resolveProfile(options.profile, {
+        'profile' in options
+          ? resolveProfile(options.profile, {
               profilesRoot: join(ctx.home, '.theokit', 'profiles'),
             }).directory
+          : join(ctx.home, options.dirName)
       if (policy === 'refuse') {
         for (const variable of SDK_HOME_VARIABLES) {
           if (ctx.env[variable] !== undefined) throw new SdkHomeConflictError(variable)
