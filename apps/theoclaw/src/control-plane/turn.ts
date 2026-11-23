@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 
 import { type AgentStreamEvent, type AgentTurnAgent, runAgentTurn } from '@theokit/agents/bridge'
+import { maskSecrets } from '@theokit/gateway'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
-import { maskSecrets } from '../channels/channel-loop.js'
 import { type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import { describeError } from './errors.js'
 import { createEventMask } from './event-mask.js'

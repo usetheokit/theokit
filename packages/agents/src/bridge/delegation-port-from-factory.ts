@@ -41,6 +41,7 @@ async function disposeAgent(agent: DelegationFactoryAgent): Promise<void> {
   const dispose = agent[Symbol.asyncDispose]
   if (typeof dispose === 'function') await dispose.call(agent)
 }
+import { describeError, describeStreamedError } from './stream-errors.js'
 
 export interface DelegationPortFromAgentFactoryOptions {
   /** Options for every `send`. The delegating signal, when there is one, replaces `signal` here. */
@@ -48,16 +49,6 @@ export interface DelegationPortFromAgentFactoryOptions {
 }
 
 const WORKER_NAME = 'worker'
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function describeStreamedError(event: object): string {
-  const { code, message } = event as { code?: unknown; message?: unknown }
-  const text = typeof code === 'string' || typeof code === 'number' ? String(code) : 'error'
-  return typeof message === 'string' && message !== '' ? `${text}: ${message}` : text
-}
 
 /** Drain the run's stream and return a description of the first error event, if any. */
 async function streamedErrorOf(run: AgentTurnRun): Promise<string | undefined> {
