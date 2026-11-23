@@ -59,6 +59,6 @@ describe('teeOutput root export and encodings', () => {
     const { file, stream, restore } = setup(100, 1)
     stream.write('c3a9', 'hex')
     restore()
-    expect(readFileSync(file, 'utf8')).toBe('é')
+    expect(readFileSync(file, 'utf8')).toBe('\u00e9')
   })
 })
