@@ -1,5 +1,5 @@
-import { Provider } from '@theokit/sdk'
-import type { Plugin, ProviderProfile } from '@theokit/sdk'
+import { customProviderPlugin } from '@theokit/agents/auth'
+import type { Plugin } from '@theokit/sdk'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
 
@@ -48,19 +48,9 @@ export function parseCustomProviders(env: Readonly<Record<string, string | undef
   })
 }
 
-/** The providers as SDK plugins, registered on every agent through `Provider.create`. */
+/** The providers as SDK plugins, registered on every agent. */
 export function customProviderPlugins(providers: readonly CustomProvider[]): Plugin[] {
-  return providers.map((provider) => {
-    const profile: ProviderProfile = {
-      name: provider.name,
-      apiMode: 'chat_completions',
-      envVars: [provider.keyEnv],
-      authType: 'api_key',
-      baseUrl: provider.baseUrl.replace(/\/+$/, ''),
-      fallbackModels: [],
-    }
-    return Provider.create(profile)
-  })
+  return providers.map((provider) => customProviderPlugin(provider))
 }
 
 /** The provider `model` (`<name>/<id>`) is routed to, or `undefined` when it is not a custom one. */
