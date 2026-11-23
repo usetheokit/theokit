@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1509 export(s) across 27 entry point(s).
+1521 export(s) across 28 entry point(s).
 
 Measured against `@theokit/sdk@5.32.0`.
 
@@ -760,6 +760,9 @@ Measured against `@theokit/sdk@5.32.0`.
 | `SessionOutcome` | type |
 | `SessionStore` | type |
 | `SessionStoreOptions` | type |
+| `SocketOutcome` | type |
+| `SocketSessions` | type |
+| `SocketVerdict` | type |
 
 ## `@theokit/agents/testing`
 
@@ -1658,3 +1661,17 @@ Measured against `@theokit/sdk@5.32.0`.
 | `YIELD_MAX_MS` | value |
 | `YIELD_MIN_MS` | value |
 | `PtyInteractiveBackendOptions` | type |
+
+## `@theokit/agents/foreign-setup`
+
+| Symbol | Kind |
+|---|---|
+| `readForeignSetup` | value |
+| `ForeignHook` | type |
+| `ForeignMcpServer` | type |
+| `ForeignSetup` | type |
+| `ForeignSetupKind` | type |
+| `ForeignSkill` | type |
+| `ForeignTextFile` | type |
+| `ReadForeignSetupOptions` | type |
+| `UntranslatedEntry` | type |

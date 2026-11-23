@@ -645,6 +645,9 @@ importers:
       react:
         specifier: '>=18'
         version: 19.2.7
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
     devDependencies:
       '@agentclientprotocol/sdk':
         specifier: ^0.22.1

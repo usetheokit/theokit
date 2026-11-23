@@ -125,6 +125,10 @@
       "types": "./dist/pty.d.ts",
       "import": "./dist/pty.js"
     },
+    "./foreign-setup": {
+      "types": "./dist/foreign-setup.d.ts",
+      "import": "./dist/foreign-setup.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -183,7 +187,8 @@
   "dependencies": {
     "@theokit/presenter": "workspace:*",
     "@theokit/sdk": "^5.32.0",
-    "@theokit/sdk-tools": "^0.29.0"
+    "@theokit/sdk-tools": "^0.29.0",
+    "yaml": "2.9.0"
   },
   "publishConfig": {
     "access": "public",
