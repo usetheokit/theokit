@@ -24,6 +24,7 @@ import {
   statSync,
   type Dirent,
 } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
 import { splitFrontmatter } from '../config/frontmatter.js'
@@ -287,8 +288,38 @@ function afterFenceLine(raw: string, from: number): number | undefined {
   return newline >= from ? newline + 1 : undefined
 }
 
+let sdkFencesByLine: boolean | undefined
+
+/**
+ * `@theokit/sdk` 10 replaced the `---\s*\n` regexes with a line-based splitter (the closing fence may
+ * end the file) and a line parser that skips `#` comment lines and refuses a line with no key. Older
+ * SDKs keep the regexes. The version is read once; when it cannot be read the older rules apply.
+ */
+function sdkFencesByLines(): boolean {
+  if (sdkFencesByLine === undefined) {
+    try {
+      const { version } = createRequire(import.meta.url)('@theokit/sdk/package.json') as {
+        version?: string
+      }
+      sdkFencesByLine = Number.parseInt(version ?? '', 10) >= 10
+    } catch {
+      sdkFencesByLine = false
+    }
+  }
+  return sdkFencesByLine
+}
+
+/** SDK 10+: the first line is `---` (trailing blanks allowed) and a later line closes it. */
+function lineFrontmatter(raw: string): string | undefined {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n')
+  if ((lines[0] ?? '').trimEnd() !== '---') return undefined
+  const close = lines.findIndex((line, i) => i > 0 && line.trimEnd() === '---')
+  return close === -1 ? undefined : lines.slice(1, close).join('\n')
+}
+
 /** The SDK's `hasFrontmatter`: the file begins exactly with `---`, and the fence line ends. */
 function opensWithFence(raw: string): boolean {
+  if (sdkFencesByLines()) return raw.startsWith('---') && lineFrontmatter(raw) !== undefined
   return raw.startsWith('---') && afterFenceLine(raw, 3) !== undefined
 }
 
@@ -312,11 +343,13 @@ function isLoadableAgent(raw: string): boolean {
   if (!opensWithFence(raw)) return false
   const text = frontmatterOf(raw)
   if (text === undefined) return false
-  return [...parseFields(text).keys()].every((key) => SUBAGENT_FIELDS.has(key))
+  const fields = parseFields(text)
+  return fields !== undefined && [...fields.keys()].every((key) => SUBAGENT_FIELDS.has(key))
 }
 
 /** The SDK's skill pattern `^---\s*\n([\s\S]*?)\n---\s*\n`: the text between the fences. */
 function frontmatterOf(raw: string): string | undefined {
+  if (sdkFencesByLines()) return lineFrontmatter(raw)
   const start = raw.startsWith('---') ? afterFenceLine(raw, 3) : undefined
   if (start === undefined) return undefined
   for (let at = raw.indexOf('\n---', start); at !== -1; at = raw.indexOf('\n---', at + 1)) {
@@ -333,6 +366,7 @@ function isValidSkill(raw: string): boolean {
   const text = frontmatterOf(raw)
   if (text === undefined) return false
   const fields = parseFields(text)
+  if (fields === undefined) return false
   const description = fields.get('description')
   if (typeof description !== 'string' || description.trim().length === 0) return false
   return ['disable-model-invocation', 'user-invocable'].every((flag) => {
@@ -363,16 +397,22 @@ function coerce(raw: string): unknown {
 }
 
 /** The SDK's simple frontmatter reading: `key: value` lines, block lists, last key wins. */
-function parseFields(text: string): Map<string, unknown> {
+function parseFields(text: string): Map<string, unknown> | undefined {
   const fields = new Map<string, unknown>()
   const lines = text.split(/\r?\n/)
+  const byLines = sdkFencesByLines()
   let i = 0
   while (i < lines.length) {
-    const line = lines[i] ?? ''
+    const line = byLines ? (lines[i] ?? '').trim() : (lines[i] ?? '')
     i += 1
+    if (byLines && (line === '' || line.startsWith('#'))) continue
     const colon = line.indexOf(':')
     const key = colon === -1 ? '' : line.slice(0, colon).trim()
-    if (key.length === 0) continue
+    // SDK 10+ refuses a line that names no key; older SDKs skip it.
+    if (key.length === 0) {
+      if (byLines) return undefined
+      continue
+    }
     const raw = line.slice(colon + 1).trim()
     const block = raw.length === 0 ? blockListEnd(lines, i) : undefined
     if (block !== undefined && block.items > 0) {
