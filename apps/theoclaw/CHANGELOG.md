@@ -25,6 +25,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - `sessions list|show|export|share|resume` read transcripts through `readThreadHistoryFile` and `threadToUIMessages` from `@theokit/agents/session` instead of staging a copy in a temporary directory. Output is unchanged: `export` still prints text only, and the message count still counts each assistant record (#2753).
+- Web search is now chosen by `resolveWebSearchAdapter` from `@theokit/sdk-tools` (pinned to 0.34.0) instead of code of TheoClaw's own. The rules are unchanged: `THEOCLAW_SEARCH` still wins, a `TAVILY_API_KEY` alone still leaves search off, every search key is still masked, and a bad value is still a `TheoClawConfigError` naming the variable (#2698).
 
 - The per-turn usage line and `/usage` footer now format the cost with `formatUsd` from `@theokit/agents/usage`; the app's own copy is gone, and the output matches `formatUsd` (#2710).
 

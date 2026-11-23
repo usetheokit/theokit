@@ -21,7 +21,9 @@ const events = (messages: Parameters<typeof historyToThread>[0]) =>
 
 describe('#70 — a stored session becomes a drawable thread', () => {
   it('test_prose_survives_the_round_trip', () => {
-    const out = events([{ role: 'assistant', text: 'hello', parts: [{ type: 'text', text: 'hello' }] }])
+    const out = events([
+      { role: 'assistant', text: 'hello', parts: [{ type: 'text', text: 'hello' }] },
+    ])
 
     expect(out.map((e) => e.kind)).toEqual(['message'])
     expect(JSON.stringify(out)).toContain('hello')
@@ -41,7 +43,10 @@ describe('#70 — a stored session becomes a drawable thread', () => {
     ])
 
     const tool = out.find((e) => e.kind === 'tool')
-    expect(tool, 'the tool call was dropped — the exact silent loss this module prevents').toBeDefined()
+    expect(
+      tool,
+      'the tool call was dropped — the exact silent loss this module prevents',
+    ).toBeDefined()
     expect(tool).toMatchObject({ id: 'c1', status: 'success', output: 'x' })
   })
 
@@ -115,12 +120,22 @@ describe('#70 — a stored session becomes a drawable thread', () => {
 
   it('test_ids_are_stable_across_two_calls', () => {
     // The timeline keys on them. Ids minted from a counter would re-key every render.
-    const input = [{ role: 'assistant' as const, text: 'a', parts: [{ type: 'text' as const, text: 'a' }] }]
+    const input = [
+      { role: 'assistant' as const, text: 'a', parts: [{ type: 'text' as const, text: 'a' }] },
+    ]
 
     expect(historyToThread(input)).toEqual(historyToThread(input))
   })
 
   it('test_an_empty_history_is_an_empty_thread', () => {
     expect(historyToThread([])).toEqual([])
+  })
+})
+
+describe('parts: [] falls back to the stored text', () => {
+  it('test_an_empty_parts_array_keeps_the_turn', () => {
+    expect(historyToThread([{ role: 'assistant', text: 'hello', parts: [] }])).toEqual([
+      { id: 'history-0', role: 'assistant', parts: [{ type: 'text', text: 'hello' }] },
+    ])
   })
 })
