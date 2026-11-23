@@ -18,7 +18,7 @@ import type { Skill } from '@theokit/sdk/skills'
 
 import { debugLog } from '../debug-log.js'
 import type { Guardrail } from '../guardrails/index.js'
-import { resolveEnabledSkills } from '../skills-resolver.js'
+import { resolveSkillsSettings } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
@@ -1202,8 +1202,8 @@ async function withResolvedSkills(
   runContext: Record<string, unknown> | undefined,
 ): Promise<CompiledAgentOptions> {
   if (!compiled.skillsResolver) return compiled
-  const enabled = await resolveEnabledSkills(compiled.skillsResolver, runContext ?? {})
-  return enabled === undefined
+  const settings = await resolveSkillsSettings(compiled.skillsResolver, runContext ?? {})
+  return settings === undefined
     ? compiled
-    : { ...compiled, skills: { ...compiled.skills, enabled, autoInject: true } }
+    : { ...compiled, skills: { ...compiled.skills, ...settings } }
 }

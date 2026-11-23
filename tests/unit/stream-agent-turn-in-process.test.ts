@@ -42,9 +42,10 @@ vi.mock('../../packages/agents/src/bridge/agent-endpoint.js', () => ({
 }))
 
 vi.mock('../../packages/agents/src/skills-resolver.js', () => ({
-  resolveEnabledSkills: (selection: unknown, ctx: unknown) => {
+  resolveSkillsSettings: (selection: unknown, ctx: unknown) => {
     hoisted.skillsResolved.push({ selection, ctx })
-    return Promise.resolve(hoisted.resolveEnabledSkills)
+    const enabled = hoisted.resolveEnabledSkills as string[] | null
+    return Promise.resolve(enabled === null ? undefined : { enabled, autoInject: true })
   },
 }))
 
