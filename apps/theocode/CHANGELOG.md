@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- Each built-in command is declared once with its description and action, and the composer's `/` menu comes from `registry.palette()`; `BUILTIN_COMMANDS` is gone (#2725).
 - Settings reading uses the framework: `settingsCandidates` builds the own and legacy roots (`layerCandidates` keeps the per-path hook delivery), and the managed-settings paths come from `MANAGED_SETTINGS_PATHS` (#2713).
 - The write tools take `baseDir` from `@theokit/agents` (sdk-tools 0.32) instead of TheoCode rewriting relative paths itself; `anchor-relative-writes.ts` is gone.
 - The session PTY owner is `createPtyOwner` from `@theokit/agents-pty`; `createSessionPtyOwner` is gone (#2577).
