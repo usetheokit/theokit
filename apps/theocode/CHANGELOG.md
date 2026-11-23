@@ -16,6 +16,8 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- Keybinding parsing, transcript export, resumed history and backtrack come from `@theokit/tui` (`parseKeybindings`, `agentEventsToMarkdown`/`lastAssistantText`, `sessionMessagesToThread`, `backtrackReducer`, `BacktrackOverlay`); `backtrack-ladder.ts` and `backtrack-select.ts` are gone. The overlay now has the library border and no cyan; the session fork, `REBINDABLE` and the reserved sets stay (#2727).
+- The `Bash`, `Edit` and `ApplyPatch` headers come from `toolPresentation` with `aliases` (`shell_exec`, `edit_file`, `apply_patch`); TheoCode keeps the one-line command, the `file`/`files` fallbacks, the patch +/- counts, the refusal wording and the other headers. The `ToolPresentation` → `{formatToolHeader, formatToolResult}` adapter is not in `@theokit/tui` yet (theokit-tui#295), so the body and approval tables stay TheoCode's own (#2722).
 - Maintenance: the unused `join` import in `managed-settings.ts` is gone, and `createTuiSession` loads its initial config through a helper (`loadConfigOrConfined`) with the same confined fallback (#2845).
 - A refused tool call is recognised by the typed `refusal` on the event (`@theokit/tui` 0.83.4), not by marker text or exit code 126 in its output; `human` and `timeout` read as `Rejected`, `policy` and `hook` as `Blocked` (#2721). A call that carries marker text or exit code 126 but no typed `refusal` now renders as an ordinary failure, and the Bash "rejected — nothing ran" body is gone (the framework's `errorText` is shown). Not verified: that the typed refusal reaches the TUI parts on the in-process presenter path; the test feeds a part carrying `refusal` to `messagesToAgentEvents`.
 - `theocode doctor` derives the credential state with `credentialState` from `@theokit/agents/doctor`; the local `credentialState` is gone.
@@ -60,9 +62,14 @@ for `release.yml` in this repository will not find it, and should not have been 
   `gc/sweep-wiring.ts`). A backtrack index past the last turn is now the framework's error, not a
   `RangeError`. The sweep's child is now detached (own process group, so it survives the terminal
   closing) and a stamp that cannot be written is reported with the framework's wording. The
-  cross-project collector (`gc/all-sessions*`, `filesystem`, `root-claim`, `root-ownership`) stays:
-  `planProjectsGC` keeps a live project whole unless the caller declares its cwd list complete, which
-  TheoCode cannot enumerate, and the framework's ownership marker is not TheoCode's.
+  cross-project collector is now `planProjectsGC` / `runProjectsGC` (#2747): `gc/all-sessions*`,
+  `remove-tolerant`, `transcript-names` and `collection-window` are gone, and `filesystem.ts` adapts
+  the framework plan to this product's `byKind` names (`lock-file`, `tmp`). It plans with
+  `cwdCoverage: 'transcripts'`, `deadProjects: 'keep-last'` and the `<cwd>/.theokit/tui-session`
+  pointer, and recognises its own `.theocode-collector.json` marker through `existingMarker`.
+  Two behaviour changes: `--keep 0` is now refused (the framework floor for `keepLast` is 1), and a
+  project, live or dead, with a transcript whose header names no cwd of that project is now kept
+  whole instead of being collected from.
 
 ### Fixed
 

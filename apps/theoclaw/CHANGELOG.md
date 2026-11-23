@@ -12,6 +12,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - The `/control` and WebChat turn runs through the framework's `runAgentTurn`, the `worker` of `delegate_all` through `delegationPortFromAgentFactory`, and the stream-event validator is the framework's `isAgentStreamEvent`; the app's copies are gone. A worker's message may carry images, and an SDK run that ends as `cancelled` is still an ok turn (#2734).
+- Named storage locations and the offsite transfer now come from `@theokit/host/backup` (`createStorageRegistry`, `uploadDirectory`, `downloadDirectory`); `src/backup/storage.ts` is gone. The host reads the existing flat `storage.json` and `.tcb` archives (encrypted or not), so nothing needs converting; new backups are written as `.tcbk` and the registry is rewritten in the host format at the next `storage init`. Observable differences: `storage list` prints `name`, `root`, `encrypted` and `state` (no free space), and a stalled HTTPS request ends after 60 s (#2751).
+
 - `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
 
 - Telegram runs on `@theokit/gateway-telegram` 0.14.0 and its own descriptor: the adapter reads a voice note's audio lazily, after the owner and group hooks, so the local descriptor and the 0.4.0 pin are gone. TheoClaw still reads only `THEOCLAW_TELEGRAM_TOKEN`; the descriptor's `allowedUsers`, `apiBase` and `requireMention` stay unset (#2834).
@@ -22,6 +24,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - Pairing and the owner policy hook now come from `@theokit/gateway` 0.30.0 (`createFilePairingStore`, `createAccessPolicyHook` with its `messages` option, `senderKey`); `pairing-store.ts` is gone and `owner-policy-hook.ts` wraps the gateway hook with TheoClaw's reply texts. TheoClaw still answers an owner's bare `/approve` in a DM with the invalid-code text, lets an owner's `/approve` in a group go on to the agent without pairing anyone (only a DM pairs), and admits an unauthenticated-platform DM under `open`. Observable differences: pairing codes run 100000 to 999999 (no leading zeros); a failed write is no longer logged with its path (the code is still kept for a retry); an owner's DM no longer fails when the pairing store's `isPaired` throws, since the owner is known before the store is read; a pairing file that cannot be read still stops the start and names the path and `THEOCLAW_STATE_DIR` (#2704).
 - `@theokit/sdk-tools` moves from 0.29.0 to 0.34.0, so the computer tool, the XWD helpers, `resolveWebSearchAdapter` and `baseDir` on the patch and edit tools are reachable from the app (#2696).
 ### Changed
+
+- Web search is now chosen by `resolveWebSearchAdapter` from `@theokit/sdk-tools` (pinned to 0.34.0) instead of code of TheoClaw's own. The rules are unchanged: `THEOCLAW_SEARCH` still wins, a `TAVILY_API_KEY` alone still leaves search off, every search key is still masked, and a bad value is still a `TheoClawConfigError` naming the variable (#2698).
 
 - The per-turn usage line and `/usage` footer now format the cost with `formatUsd` from `@theokit/agents/usage`; the app's own copy is gone, and the output matches `formatUsd` (#2710).
 
