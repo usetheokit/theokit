@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
+
 - `THEOCLAW_LOG_FILE` is now mirrored by the host's `teeOutput`, bounded at 10 MiB with two rotated files (`.1`, `.2`); the app's own unbounded tee is removed (#2757).
 
 - Display settings `cleanup_progress` and `streaming` are removed: nothing read them, so `THEOCLAW_DISPLAY_CLEANUP_PROGRESS` is now ignored. Per-platform display tiers stay in TheoClaw as product policy; the gateway's `progressFor` keeps deciding by edit capability alone (#2756).
@@ -23,7 +25,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 - `theoclaw skills publish` now reads `THEOCLAW_SKILLS_REGISTRY` and `THEOCLAW_SKILLS_TOKEN` from the instance configuration file too, as `skills search` and `skills install` do; before, it read the process environment only (#2764).
 
-- A fact the post-turn reviewer saves now reaches the configured memory mirror through the SDK itself, and the legacy-facts import writes through the SDK's `addMemoryFact`; the app no longer mirrors by hand and imports nothing from `@theokit/sdk/internal/`. The SDK 9.0.0 does neither, so the repository carries a pnpm patch (`patches/@theokit__sdk@9.0.0.patch`) until an SDK release does (#2743).
+- A fact the post-turn reviewer saves now reaches the configured memory mirror through the SDK itself, and the legacy-facts import writes through the SDK's `addMemoryFact`; the app no longer mirrors by hand and imports nothing from `@theokit/sdk/internal/`. The SDK 11.0.0 does not mirror the reviewer's fact, so the repository carries a pnpm patch (`patches/@theokit__sdk@11.0.0.patch`) until an SDK release does (#2743).
 - `@theokit/gateway` is pinned at 0.30.0 (was 0.25.0). It brings `keys` on `scopedStrategy`, `reconnect.retryFalse` with the late-connect `failed` event, and `messages` on `createAccessPolicyHook`; the app code that these replace is left for later issues (#2703).
 - `@theokit/gateway-sms` is pinned at 0.7.0 (was 0.6.0), and the phone-call route is built with `createVoiceCallHandler`; the app no longer builds TwiML. Caller-visible differences: a silence repeats the greeting instead of "Are you still there?"; a disallowed caller is hung up on without a spoken refusal; the goodbye text is "Goodbye."; call state expires after an hour instead of an LRU of 1000 calls; a request without `CallSid` or `From` answers 400; the `<Redirect>` after `<Gather>` is gone, so a call left silent may end without posting again (#2708).
 
