@@ -18,6 +18,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 - `THEOCLAW_LOG_FILE` is now mirrored by the host's `teeOutput`, bounded at 10 MiB with two rotated files (`.1`, `.2`); the app's own unbounded tee is removed (#2757).
 
+- The channel loop passes `reconnect.retryFalse` and uses the gateway's `maskSecrets`, replacing its `watchConnect` wrapper and its own copy; a connect that fails after its timeout is now reported as `start failed` (was `abandoned start failed`) (#2706).
+
 - Display settings `cleanup_progress` and `streaming` are removed: nothing read them, so `THEOCLAW_DISPLAY_CLEANUP_PROGRESS` is now ignored. Per-platform display tiers stay in TheoClaw as product policy; the gateway's `progressFor` keeps deciding by edit capability alone (#2756).
 
 - `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`, and accepts `--json`; the generation protection and default are unchanged.
