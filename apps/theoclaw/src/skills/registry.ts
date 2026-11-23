@@ -1,6 +1,3 @@
-import { accessSync, constants } from 'node:fs'
-import { delimiter, join } from 'node:path'
-
 import { type InlineSkill, Skill } from '@theokit/sdk'
 
 /**
@@ -24,26 +21,4 @@ export function bundledSkills(): InlineSkill[] {
       instructions: 'Read the whole text, then answer with at most five bullet points that keep names and numbers.',
     }),
   ]
-}
-
-/**
- * True when `bin` is an executable file in one of the PATH directories. The same rule as the SDK's own
- * gate (which is not exported): a name with a path separator is never on PATH, and on Windows the
- * `PATHEXT` extensions count.
- */
-export function binaryOnPath(bin: string, pathValue: string = process.env.PATH ?? ''): boolean {
-  if (bin.length === 0 || /[\\/]/.test(bin)) return false
-  const extensions = process.platform === 'win32' ? ['', ...(process.env.PATHEXT ?? '.EXE;.CMD').split(';')] : ['']
-  for (const directory of pathValue.split(delimiter)) {
-    if (directory === '') continue
-    for (const extension of extensions) {
-      try {
-        accessSync(join(directory, bin + extension), constants.X_OK)
-        return true
-      } catch {
-        // Not here.
-      }
-    }
-  }
-  return false
 }

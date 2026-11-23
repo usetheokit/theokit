@@ -1,8 +1,8 @@
-import { chmodSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
-import { acquireInstanceLock } from '@theokit/sdk/persistence'
-import type { InstanceLock } from '@theokit/sdk/persistence'
+import { acquireInstanceLock, applyProfile, resolveProfile } from '@theokit/sdk/persistence'
+import type { InstanceLock, ResolvedProfile } from '@theokit/sdk/persistence'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
 
@@ -25,14 +25,8 @@ export interface TheoClawInstance {
   readonly overrides: Readonly<Record<string, string>>
 }
 
-const PROFILE_PATTERN = /^[a-z0-9][a-z0-9-]{0,15}$/
-
-/**
- * The settings a profile sets itself, so an explicit one beside it is refused (plan D3).
- * `THEOCLAW_WORKSPACE` is one (B-378): it holds the chat transcripts and `sessions.json`, so two
- * profiles given one workspace would share and overwrite each other's conversations.
- */
-const PROFILE_OWNED = ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'THEOCLAW_STATE_DIR', 'THEOCLAW_WORKSPACE'] as const
+/** The app directories a profile holds beside the SDK's two homes, relative to the profile directory. */
+const APP_DIRECTORIES = { THEOCLAW_STATE_DIR: 'state', THEOCLAW_WORKSPACE: 'workspace' } as const
 
 export const NO_PROFILE: TheoClawInstance = { label: 'theoclaw', overrides: {} }
 
@@ -53,47 +47,78 @@ type Env = Readonly<Record<string, string | undefined>>
 export function resolveInstance(env: Env, options: { readonly homeDir: string }): TheoClawInstance {
   const name = (env.THEOCLAW_PROFILE ?? '').trim()
   if (name === '') return NO_PROFILE
-  if (!PROFILE_PATTERN.test(name)) {
-    throw new TheoClawConfigError(`THEOCLAW_PROFILE must match ${PROFILE_PATTERN.source}`, { variable: 'THEOCLAW_PROFILE' })
+  let profile: ResolvedProfile
+  try {
+    profile = resolveProfile(name, {
+      profilesRoot: join(options.homeDir, '.theokit', 'profiles'),
+      appDirectories: APP_DIRECTORIES,
+    })
+  } catch (error) {
+    // Only the SDK's name refusal is the operator's name; anything else is not, and passes through.
+    if ((error as { code?: unknown }).code !== 'profile_name_invalid') throw error
+    throw new TheoClawConfigError(
+      'THEOCLAW_PROFILE must be 1 to 16 lowercase letters, digits or hyphens, starting with a letter or digit',
+      { variable: 'THEOCLAW_PROFILE' },
+    )
   }
-  const conflicts = PROFILE_OWNED.filter((variable) => (env[variable] ?? '').trim() !== '')
+  // The SDK checks a conflict when it applies the profile, after the lock; this start refuses it first.
+  const conflicts = Object.keys(profile.env).filter((variable) => (env[variable] ?? '').trim() !== '')
   if (conflicts.length > 0) {
     throw new TheoClawConfigError(`THEOCLAW_PROFILE cannot be combined with ${conflicts.join(', ')}: unset them or the profile`, {
       variable: 'THEOCLAW_PROFILE',
     })
   }
-  const directory = join(options.homeDir, '.theokit', 'profiles', name)
-  const stateDirectory = join(directory, 'state')
-  const workspace = join(directory, 'workspace')
   return {
     label: `theoclaw-${name}`,
     profile: name,
-    directory,
-    workspace,
-    stateDirectory,
-    overrides: { THEOKIT_HOME: directory, THEOKIT_AUTH_HOME: directory, THEOCLAW_STATE_DIR: stateDirectory, THEOCLAW_WORKSPACE: workspace },
+    directory: profile.directory,
+    workspace: profile.env.THEOCLAW_WORKSPACE,
+    stateDirectory: profile.env.THEOCLAW_STATE_DIR,
+    overrides: profile.env,
   }
 }
 
 /**
- * Put `instance` into effect: its three directories exist at mode 0700 (one that already existed
- * at another mode is tightened; what it holds is never read or removed), then its overrides are
- * written into `env`. The no-profile instance changes nothing. A directory that cannot be created
- * stops the start with `TheoClawConfigError` naming the path and the code, before `env` changes.
+ * Put `instance` into effect through the SDK's `applyProfile`: its three directories exist at mode
+ * 0700 (one that already existed at another mode is tightened; what it holds is never read or
+ * removed), then its overrides are written into `env`. The no-profile instance changes nothing. A
+ * directory that cannot be created stops the start with `TheoClawConfigError` naming the path and
+ * the code, before `env` changes.
  */
-export function applyInstance(instance: TheoClawInstance, env: NodeJS.ProcessEnv): void {
-  const { directory, workspace, stateDirectory } = instance
-  if (directory === undefined || workspace === undefined || stateDirectory === undefined) return
-  for (const path of [directory, workspace, stateDirectory]) {
-    try {
-      mkdirSync(path, { recursive: true, mode: 0o700 })
-      chmodSync(path, 0o700)
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code ?? 'unknown error'
-      throw new TheoClawConfigError(`THEOCLAW_PROFILE: cannot create ${path}: ${code}`, { variable: 'THEOCLAW_PROFILE' })
-    }
+export async function applyInstance(
+  instance: TheoClawInstance,
+  env: NodeJS.ProcessEnv,
+): Promise<void> {
+  const { profile, directory, workspace, stateDirectory } = instance
+  if (
+    profile === undefined ||
+    directory === undefined ||
+    workspace === undefined ||
+    stateDirectory === undefined
+  )
+    return
+  // Applied to a scratch environment, so a repeated apply is not a conflict with its own first run.
+  const scratch: NodeJS.ProcessEnv = {}
+  try {
+    await applyProfile(
+      {
+        name: profile,
+        directory,
+        directories: [directory, workspace, stateDirectory],
+        env: instance.overrides,
+      },
+      scratch,
+    )
+  } catch (error) {
+    // Only the SDK's directory failure is a directory that cannot be created; anything else passes through.
+    if ((error as { code?: unknown }).code !== 'profile_directory_failed') throw error
+    const cause = (error as { cause?: NodeJS.ErrnoException }).cause
+    throw new TheoClawConfigError(
+      `THEOCLAW_PROFILE: cannot create ${directory}: ${cause?.code ?? 'unknown error'}`,
+      { variable: 'THEOCLAW_PROFILE' },
+    )
   }
-  Object.assign(env, instance.overrides)
+  Object.assign(env, scratch)
 }
 
 /**
@@ -126,7 +151,7 @@ export async function claimInstance(
   hooks.beforeLock?.()
   const lock = stateDir === undefined ? undefined : await takeInstanceLock(stateDir)
   try {
-    applyInstance(instance, env)
+    await applyInstance(instance, env)
   } catch (error) {
     await lock?.release()
     throw error
