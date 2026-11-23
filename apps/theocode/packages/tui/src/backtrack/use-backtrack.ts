@@ -1,5 +1,5 @@
 import { backtrackReducer, CLOSED_BACKTRACK, type BacktrackState } from '@theokit/tui'
-import { useCallback, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 
 import { confirmBacktrack as confirmBacktrackCmd, primeBacktrack } from './backtrack.js'
 
@@ -44,7 +44,12 @@ function requestBacktrackWindow(
 }
 
 export function useBacktrack(deps: BacktrackDeps): BacktrackLadder {
-  const [ladder, setLadder] = useState<BacktrackState>(CLOSED_BACKTRACK)
+  const [ladder, setLadderState] = useState<BacktrackState>(CLOSED_BACKTRACK)
+  const ladderRef = useRef<BacktrackState>(CLOSED_BACKTRACK)
+  const setLadder = useCallback((update: (current: BacktrackState) => BacktrackState): void => {
+    ladderRef.current = update(ladderRef.current)
+    setLadderState(ladderRef.current)
+  }, [])
   const [rotating, setRotating] = useState(false)
   const [composerSeed, setComposerSeedState] = useState('')
 
@@ -52,19 +57,23 @@ export function useBacktrack(deps: BacktrackDeps): BacktrackLadder {
 
   const reset = useCallback((): void => {
     setLadder((current) => backtrackReducer(current, { type: 'reset' }))
-  }, [])
+  }, [setLadder])
 
   const prime = useCallback((): void => {
     requestBacktrackWindow(currentSessionId, setToast, (previews) => {
       setLadder((current) => backtrackReducer(current, { type: 'prime', previews }))
     })
-  }, [currentSessionId, setToast])
+  }, [currentSessionId, setToast, setLadder])
 
   const advance = useCallback(
-    (next: number, turnCount: number): void => {
-      setLadder((current) => backtrackReducer(current, { type: 'older' }))
+    (_next: number, turnCount: number): void => {
+      // The reducer is the one authority on the position: the toast reports where it landed, not
+      // the caller's idea of where it would.
+      const landed = backtrackReducer(ladderRef.current, { type: 'older' })
+      ladderRef.current = landed
+      setLadderState(landed)
       setToast({
-        message: `Backtrack: message ${String(next + 1)}/${String(turnCount)} — Enter to edit, Esc for older`,
+        message: `Backtrack: message ${String(landed.selected + 1)}/${String(turnCount)} — Enter to edit, Esc for older`,
         variant: 'info',
       })
     },

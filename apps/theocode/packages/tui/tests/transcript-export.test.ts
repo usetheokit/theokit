@@ -11,10 +11,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import {
-  conversationToMarkdown,
-  lastAssistantText,
-} from '../src/transcript-export.js'
+import { conversationToMarkdown, lastAssistantText } from '../src/transcript-export.js'
 
 /**
  * Built from the shape `deriveTimeline` actually PRODUCES (`AgentEvent`), not from the shape the
@@ -73,6 +70,11 @@ describe('B-075 — lastAssistantText', () => {
     // silently putting a blank on the clipboard.
     expect(lastAssistantText([msg('user', 'hello')])).toBeUndefined()
     expect(lastAssistantText([])).toBeUndefined()
+  })
+
+  it('test_skips_a_trailing_empty_assistant_turn', () => {
+    expect(lastAssistantText([msg('assistant', 'real'), msg('assistant', '')])).toBe('real')
+    expect(lastAssistantText([msg('assistant', '')])).toBeUndefined()
   })
 
   it('test_does_not_return_the_user_turn_that_follows', () => {

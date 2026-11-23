@@ -29,10 +29,20 @@ export function conversationToMarkdown(events: readonly unknown[]): string {
   })
 }
 
+function isAssistantMessage(e: unknown): boolean {
+  const o = e as { kind?: unknown; role?: unknown } | null
+  return o?.kind === 'message' && o.role === 'assistant'
+}
+
 /**
  * The most recent assistant turn, or `undefined` when it has not spoken — not `''`, so the caller
  * can report "nothing to copy" instead of putting a blank on the clipboard and claiming success.
  */
 export function lastAssistantText(events: readonly unknown[]): string | undefined {
-  return frameworkLastAssistantText(events as readonly AgentEvent[])
+  // The framework returns the last assistant message even when its text is empty; skip those so
+  // the caller gets the previous real reply (or undefined) rather than a blank to copy.
+  const spoken = events.filter(
+    (e) => !(isAssistantMessage(e) && (e as { text?: unknown }).text === ''),
+  )
+  return frameworkLastAssistantText(spoken as readonly AgentEvent[])
 }
