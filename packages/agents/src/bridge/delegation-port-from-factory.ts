@@ -46,6 +46,8 @@ import { describeError, describeStreamedError } from './stream-errors.js'
 export interface DelegationPortFromAgentFactoryOptions {
   /** Options for every `send`. The delegating signal, when there is one, replaces `signal` here. */
   readonly sendOptions?: SdkSendOptions
+  /** Throw a failure as it happened instead of wrapping it in a `DelegationError`. Default `false`. */
+  readonly rawFailures?: boolean
 }
 
 const WORKER_NAME = 'worker'
@@ -182,7 +184,9 @@ export function delegationPortFromAgentFactory(
       try {
         return await runOnce(create, message, signal, options?.sendOptions)
       } catch (error) {
-        throw passesThrough(error) ? error : new DelegationError(WORKER_NAME, error)
+        throw options?.rawFailures === true || passesThrough(error)
+          ? error
+          : new DelegationError(WORKER_NAME, error)
       }
     },
   }

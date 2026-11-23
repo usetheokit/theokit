@@ -814,3 +814,26 @@ describe('typed messages through the sessionless turn (#2317)', () => {
     expect(events.map((e) => ('content' in e ? e.content : undefined))).toEqual(['hmm', 'done'])
   })
 })
+
+describe('a run the SDK ends as cancelled', () => {
+  it('is an ok turn carrying its usage, not a failure', async () => {
+    const agent: TurnAgent = {
+      send: async () => ({
+        stream: async function* () {
+          // no message
+        },
+        wait: async () => ({ status: 'cancelled', usage: { inputTokens: 3, outputTokens: 1 } }),
+        cancel: async () => undefined,
+      }),
+      [Symbol.asyncDispose]: async () => undefined,
+    } as unknown as TurnAgent
+    const outcome = await runTheoClawTurn({
+      withAgent: (work) => work(agent),
+      message: 'hi',
+      runId: 'run-c',
+      emit: () => undefined,
+      model: 'stub/model',
+    })
+    expect(outcome).toMatchObject({ ok: true, usage: { inputTokens: 3, outputTokens: 1, model: 'stub/model' } })
+  })
+})
