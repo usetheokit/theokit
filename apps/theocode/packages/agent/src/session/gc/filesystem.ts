@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs'
+import { readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { Agent } from '@theokit/agents'
@@ -123,11 +123,15 @@ function emptyByKind(): Record<CollectableKind, number> {
 
 /** The encoded project directories under `root`. Absent root lists nothing rather than throwing. */
 function listProjectDirs(root: string): string[] {
-  return existsSync(root)
-    ? readdirSync(root, { withFileTypes: true })
-        .filter((e) => e.isDirectory())
-        .map((e) => e.name)
-    : []
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+  } catch {
+    // Only the kept-count needs this list; the framework lists the root itself and REPORTS a root
+    // it could not read, so "could not look" is never shown as "nothing to collect".
+    return []
+  }
 }
 
 function refusedPlan(root: string): AllPlan {

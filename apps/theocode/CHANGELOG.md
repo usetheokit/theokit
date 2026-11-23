@@ -47,7 +47,9 @@ for `release.yml` in this repository will not find it, and should not have been 
   the framework plan to this product's `byKind` names (`lock-file`, `tmp`). It plans with
   `cwdCoverage: 'transcripts'`, `deadProjects: 'keep-last'` and the `<cwd>/.theokit/tui-session`
   pointer, and recognises its own `.theocode-collector.json` marker through `existingMarker`.
-  `--keep 0` is now refused: the framework floor for `keepLast` is 1.
+  Two behaviour changes: `--keep 0` is now refused (the framework floor for `keepLast` is 1), and a
+  project, live or dead, with a transcript whose header names no cwd of that project is now kept
+  whole instead of being collected from.
 
 ### Fixed
 
