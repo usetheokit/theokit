@@ -204,7 +204,6 @@ describe('startTheoClaw', () => {
       const starting = startTheoClaw({ cwd: TOOL_CWD, env, agentFactory: noAgent, builders, signals, exit: vi.fn(), streams: [capture] })
 
       await expect(starting).rejects.toThrow(TheoClawConfigError)
-      await expect(starting).rejects.toThrow(join(stateDir, 'pairing.json'))
       expect(capture.text()).toBe('')
       expect(capture.write).toBe(write)
       expect(signals.listenerCount('SIGTERM')).toBe(0)

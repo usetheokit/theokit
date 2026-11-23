@@ -2,12 +2,11 @@ import { rmSync, statSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 
-import { senderKey } from '@theokit/gateway'
 import type { MessageEvent } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, Plugin } from '@theokit/sdk'
 
-import { isAuthenticatedSender } from '../authorization/policy.js'
+import { isAuthenticatedSender, senderKey } from '../authorization/policy.js'
 import { OWNER_SCOPE } from '../memory/memory-store.js'
 import { memoryBackend } from '../memory/backend.js'
 import { importLegacyFacts, legacyFactsFile } from '../memory/legacy-facts.js'

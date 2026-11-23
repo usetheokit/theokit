@@ -433,7 +433,7 @@ function execApprovalFor(given: TheoClawOptions['execApproval'], stateDir: strin
 }
 
 /** The store of `policy.stateDir`, or none without one. Throws on a state file it cannot read. */
-function pairingStoreFor(policy: AuthorizationPolicy): PairingStore | undefined {
+export function pairingStoreFor(policy: AuthorizationPolicy): PairingStore | undefined {
   if (policy.stateDir === undefined) return undefined
   const path = join(policy.stateDir, 'pairing.json')
   try {

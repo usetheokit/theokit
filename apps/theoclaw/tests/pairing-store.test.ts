@@ -5,6 +5,10 @@ import { join } from 'node:path'
 import { createFilePairingStore } from '@theokit/gateway'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { AuthorizationPolicy } from '../src/authorization/policy.js'
+import { pairingStoreFor } from '../src/composition.js'
+import { TheoClawConfigError } from '../src/control-plane/errors.js'
+
 
 // TheoClaw keeps no pairing store of its own: this is the gateway's file store, with the behaviors
 // the app relies on pinned. Differences from the store it replaced: codes run 100000 to 999999 (no
@@ -185,5 +189,38 @@ describe('createFilePairingStore', () => {
     // The stale code no longer blocks its digits: the next sender may draw them.
     expect(store.issue('telegram', 'b')).toBe(stale)
     expect(await store.approve(stale)).toEqual({ ok: true, platform: 'telegram', senderId: 'b' })
+  })
+})
+
+describe('pairingStoreFor (the composition of the gateway store)', () => {
+  const policyFor = (stateDir: string | undefined): AuthorizationPolicy => ({
+    owners: new Set(['telegram:owner']),
+    dmPolicy: 'pairing',
+    groupActivation: 'mention',
+    refusalText: 'owner only',
+    stateDir,
+    broadcastGroups: [],
+    allowed: new Set(),
+  })
+
+  it('has no store without a state directory', () => {
+    expect(pairingStoreFor(policyFor(undefined))).toBeUndefined()
+  })
+
+  it('creates a missing state directory at mode 0700', async () => {
+    const nested = join(dir, 'state')
+    const store = pairingStoreFor(policyFor(nested))
+    expect(statSync(nested).mode & 0o777).toBe(0o700)
+    expect(await store?.approve(store.issue('slack', 'U1'))).toMatchObject({ ok: true })
+  })
+
+  it('refuses to start on a corrupt pairing.json and names the path and THEOCLAW_STATE_DIR', () => {
+    const path = join(dir, 'pairing.json')
+    writeFileSync(path, '{')
+    const failure = (): unknown => pairingStoreFor(policyFor(dir))
+    expect(failure).toThrow(TheoClawConfigError)
+    expect(failure).toThrow(path)
+    expect(failure).toThrow(expect.objectContaining({ variable: 'THEOCLAW_STATE_DIR' }))
+    expect(readFileSync(path, 'utf8')).toBe('{')
   })
 })
