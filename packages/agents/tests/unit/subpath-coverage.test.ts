@@ -103,6 +103,10 @@ function installedSdkMajor(): number {
 const SINCE_8 =
   'Added by `@theokit/sdk` 8, absent at the 5.32 floor: re-exporting it fails the DTS build there. Revisit when the floor moves to 8.'
 
+/** Why a symbol of SDK 11 stays out of the layer while the floor is below it. */
+const SINCE_11 =
+  'Added by `@theokit/sdk` 11, absent at the 5.32 floor: re-exporting it fails the DTS build there. Revisit when the floor moves to 11.'
+
 const DECISIONS: Record<string, Decision> = {
   // ── Arrived with `@theokit/sdk@5.x`. Each needed a verdict, and the reason each is `out` is
   // different — which is the point of recording decisions rather than an allowlist.
@@ -224,7 +228,7 @@ const DECISIONS: Record<string, Decision> = {
   },
   './auth': { verdict: 'in', via: '../../src/auth-entry.js', coverage: 'sample', symbols: [] },
   './sandbox': {
-    gaps: { startEgressProxy: SINCE_8 },
+    gaps: { startEgressProxy: SINCE_8, SANDBOX_MODES: SINCE_11, parseSandboxMode: SINCE_11 },
     verdict: 'in',
     via: '../../src/sandbox-entry.js',
     // M90 — this was `'sample'` with an EMPTY list, which is no sample at all. This file's own

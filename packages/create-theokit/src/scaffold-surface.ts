@@ -34,7 +34,7 @@ const VALID_SURFACES = ['web', 'tui', 'desktop', 'cli'] as const
 /**
  * Web-only deps dropped for the tui/desktop surfaces (they ship no web UI). `react-router` is NOT dropped
  * — `theokit` declares it a REQUIRED peer, so removing it breaks `npm install` (ERESOLVE). `ai` is NOT
- * dropped either: although the tui's RENDER is ai-free (`@theokit/tui` + `messagesToAgentEvents`), theokit's
+ * dropped either: although the tui's RENDER is ai-free (`@theokit/tui` + `useAgentTimeline`), theokit's
  * in-process agent runtime (`streamAgentTurnInProcess` → the UIMessageStream protocol) imports `ai` at
  * RUNTIME, so every surface that runs an agent must keep it installed.
  */
@@ -64,7 +64,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     fragment: 'tui',
     // `@theokit/tui` renders the conversation via `<AgentTimeline>` (Markdown + fenced code + collapsible
     // tool cards — the Claude-Code render), projected from `useAgent().thread` by the ai-free
-    // `messagesToAgentEvents` (structural `UIMessageLike`) — so the TUI's own code + `@theokit/tui` never
+    // `useAgentTimeline` (structural `UIMessageLike`) — so the TUI's own code + `@theokit/tui` never
     // import `ai`. `ai` is still declared because theokit's in-process agent runtime
     // (`streamAgentTurnInProcess` → the UIMessageStream protocol) imports it at RUNTIME. `ink@7` is the
     // React-19 line (ink@5 crashes on React 19 with `ReactCurrentOwner`; the default template pins react@19;
@@ -72,7 +72,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     // `import 'ink'` dedupes to one React-19 ink. `figlet` (banner ASCII) + `lowlight` (code highlight) are
     // @theokit/tui PEERS the app relies on — declared so pnpm (which never auto-installs peers) resolves them.
     deps: {
-      '@theokit/tui': '^0.41.1',
+      '@theokit/tui': '^0.83.8',
       ink: '^7.1.0',
       ai: '^7.0.0',
       figlet: '^1.7.0',

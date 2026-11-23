@@ -194,7 +194,7 @@
   },
   "dependencies": {
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": ">=5.32.0 <10",
+    "@theokit/sdk": ">=5.32.0 <12",
     "@theokit/sdk-tools": "^0.29.0",
     "yaml": "2.9.0"
   },
