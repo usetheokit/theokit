@@ -40,6 +40,34 @@ const requested = wiredCapabilities({
 })
 
 describe('withCompiledWiring', () => {
+  it('keeps scopes for known names, adds none for new ones, and recomputes off', () => {
+    const base = wiredCapabilities({
+      posture: { allows: { mcp: false, skills: true, hooks: true, agentsMd: true } },
+      projectSourcesAllowed: false,
+      mcpServers: { mine: {} },
+      mcpPersonal: ['mine'],
+      mcpWithheld: ['theirs'],
+      configuredSkills: ['s1'],
+      hookEvents: [],
+      agentsMdFiles: [],
+      sandboxMode: 'workspace-write',
+    })
+    expect(base.off.map((o) => o.capability)).toEqual(['mcp'])
+    const w = withCompiledWiring(
+      base,
+      compiled({ mcpServers: ['mine', 'added'], skills: { listed: ['s1'], readable: [] } }),
+    )
+    expect(w.mcp.active).toEqual(['added', 'mine'])
+    expect(w.mcp.entities).toEqual([
+      { name: 'theirs', scope: 'project' },
+      { name: 'mine', scope: 'personal' },
+      { name: 'added', scope: undefined },
+    ])
+    expect(w.off.map((o) => o.capability)).toEqual(['mcp'])
+    const none = withCompiledWiring(requested, compiled({}))
+    expect(none.off).toEqual([])
+  })
+
   it('lists the servers and skills the created agent got, not the ones requested', () => {
     const w = withCompiledWiring(
       requested,

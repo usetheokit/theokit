@@ -59,6 +59,37 @@ describe('B-069/B-070/B-071 — wiredCapabilities', () => {
     ])
   })
 
+  it('test_a_non_trust_reason_is_reported_and_keeps_every_scope_out_of_active', () => {
+    const w = wiredCapabilities(
+      input({
+        mcpServers: { mine: {}, theirs: {} },
+        mcpPersonal: ['mine'],
+        disabled: { mcp: { reason: 'disabled-by-config', detail: 'mcp.enabled is false' } },
+      }),
+    )
+    expect(w.mcp.active).toEqual([])
+    expect(w.mcp.suppressedByTrust).toBe(false)
+    expect(w.mcp.entities).toEqual([
+      { name: 'theirs', scope: 'project' },
+      { name: 'mine', scope: 'personal' },
+    ])
+    expect(w.off).toEqual([
+      { capability: 'mcp', reason: 'disabled-by-config', detail: 'mcp.enabled is false' },
+    ])
+  })
+
+  it('test_a_personal_only_capability_that_is_disabled_still_reports_why', () => {
+    const w = wiredCapabilities(
+      input({
+        mcpServers: { mine: {} },
+        mcpPersonal: ['mine'],
+        disabled: { mcp: { reason: 'disabled-by-config' } },
+      }),
+    )
+    expect(w.mcp.active).toEqual([])
+    expect(w.off.map((o) => o.capability)).toEqual(['mcp'])
+  })
+
   it('test_trust_suppression_empties_active_and_keeps_requested', () => {
     // The whole point: `requested` is the only place a user can see what trust took away.
     const w = wiredCapabilities(input({ posture: allows(false, false, false) }))
@@ -78,7 +109,7 @@ describe('B-069/B-070/B-071 — wiredCapabilities', () => {
         mcpServers: {},
         configuredSkills: [],
         hookEvents: [],
-    agentsMdFiles: [],
+        agentsMdFiles: [],
       }),
     )
     expect(w.mcp.suppressedByTrust).toBe(false)

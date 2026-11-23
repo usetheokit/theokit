@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 
-import type { CompiledWiring } from '@theokit/agents'
+import { offCapabilities, type CompiledWiring, type WiredEntity } from '@theokit/agents'
 import { CLAUDE_HOOK_EVENT_ALIASES } from '@theokit/agents/hooks'
 import type { InlineSkill } from '@theokit/sdk'
 
@@ -196,14 +196,38 @@ export function withCompiledWiring(
   compiled: CompiledWiring,
 ): WiredCapabilities {
   const events = new Set(compiled.hooks.map((h) => h.event))
+  const mcp = withCompiledNames(record.mcp, compiled.mcpServers)
+  const skills = withCompiledNames(record.skills, compiled.skills.listed)
+  const hooks = {
+    ...record.hooks,
+    active: record.hooks.active.filter((row) => reachedAgent(row, events)),
+  }
   return {
     ...record,
-    mcp: { ...record.mcp, active: [...compiled.mcpServers].sort() },
-    skills: { ...record.skills, active: [...compiled.skills.listed].sort() },
-    hooks: {
-      ...record.hooks,
-      active: record.hooks.active.filter((row) => reachedAgent(row, events)),
-    },
+    mcp,
+    skills,
+    hooks,
+    // From the corrected entities, so the list answers for the agent that was created.
+    off: offCapabilities({ mcp, skills, hooks, agentsMd: record.agentsMd }),
+  }
+}
+
+/**
+ * What the framework compiled replaces `active`. Scopes are kept for the names the build knew; a name
+ * the framework added that the build never listed is recorded with no scope, never an invented one.
+ * `requested` stays what config asked for, and `off` stays what was recorded about it.
+ */
+function withCompiledNames(entity: WiredEntity, names: readonly string[]): WiredEntity {
+  const known = new Set(entity.entities.map((e) => e.name))
+  return {
+    ...entity,
+    active: [...names].sort(),
+    entities: [
+      ...entity.entities,
+      ...[...new Set(names)]
+        .filter((name) => !known.has(name))
+        .map((name) => ({ name, scope: undefined })),
+    ],
   }
 }
 

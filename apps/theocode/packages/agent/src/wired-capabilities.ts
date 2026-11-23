@@ -19,7 +19,12 @@
  * (the posture gates eight things, and durable memory is not a list), plus the two fields that are
  * not entities at all — whether project sources loaded, and which sandbox mode the build was given.
  */
-import { offCapabilities, recordWiring, type OffCapability, type WiredEntity } from '@theokit/agents'
+import {
+  offCapabilities,
+  recordWiring,
+  type OffCapability,
+  type WiredEntity,
+} from '@theokit/agents'
 
 export type { OffCapability, WiredEntity }
 
@@ -133,6 +138,19 @@ export function wiredCapabilities(input: {
   /** #91 — the rules load, handed in by the caller that performed it. See the field above. */
   readonly rules?: WiredCapabilities['rules']
   readonly sandboxMode: string
+  /**
+   * A non-trust reason a capability is off (for example `disabled-by-config`). The caller must have
+   * withheld it from the builder; this labels it, and keeps the operator's own servers and skills
+   * out of `active` too, since the capability as a whole is off.
+   */
+  readonly disabled?: Readonly<
+    Partial<
+      Record<
+        'mcp' | 'skills' | 'hooks' | 'agentsMd',
+        { readonly reason: string; readonly detail?: string }
+      >
+    >
+  >
 }): WiredCapabilities {
   const projectMcp = [
     ...Object.keys(input.mcpServers).filter((name) => !(input.mcpPersonal ?? []).includes(name)),
@@ -140,6 +158,7 @@ export function wiredCapabilities(input: {
   ].sort()
   const record = recordWiring({
     posture: input.posture,
+    ...(input.disabled === undefined ? {} : { disabled: input.disabled }),
     // The SDK keeps each requested entity's scope, so the report says where it came from.
     scopes: {
       mcp: projectMcp.map(() => 'project'),
@@ -159,21 +178,22 @@ export function wiredCapabilities(input: {
     },
   })
 
-  const mcpPersonal = [...new Set(input.mcpPersonal ?? [])].sort()
-  const operatorSkills = [...new Set(input.operatorSkills ?? [])].sort()
-  const mcp: WiredEntity = {
-    ...record.mcp,
-    active: [...new Set([...record.mcp.active, ...mcpPersonal])].sort(),
-    entities: [...record.mcp.entities, ...mcpPersonal.map((name) => ({ name, scope: 'personal' }))],
-  }
-  const skills: WiredEntity = {
-    ...record.skills,
-    active: [...new Set([...record.skills.active, ...operatorSkills])].sort(),
-    entities: [
-      ...record.skills.entities,
-      ...operatorSkills.map((name) => ({ name, scope: 'operator' })),
-    ],
-  }
+  // The operator's own servers and skills are not subject to the project trust gate, so they are
+  // recorded by a second call whose gate is open; the SDK then carries their scope like the rest.
+  const own = recordWiring({
+    posture: { allows: { mcp: true, skills: true } },
+    requested: {
+      mcp: [...new Set(input.mcpPersonal ?? [])].sort(),
+      skills: [...new Set(input.operatorSkills ?? [])].sort(),
+    },
+    scopes: {
+      mcp: [...new Set(input.mcpPersonal ?? [])].map(() => 'personal'),
+      skills: [...new Set(input.operatorSkills ?? [])].map(() => 'operator'),
+    },
+    disabled: { mcp: input.disabled?.mcp, skills: input.disabled?.skills },
+  })
+  const mcp = joinScopes(record.mcp, own.mcp)
+  const skills = joinScopes(record.skills, own.skills)
   return {
     ...record,
     // Both facts survive: what is running, and whether the repository's share was withheld.
@@ -184,5 +204,15 @@ export function wiredCapabilities(input: {
     ...(input.rules !== undefined ? { rules: input.rules } : {}),
     projectSources: input.projectSourcesAllowed,
     sandboxMode: input.sandboxMode,
+  }
+}
+
+/** The project's share (gated) and the operator's own (not gated) of one capability, as one entity. */
+function joinScopes(project: WiredEntity, own: WiredEntity): WiredEntity {
+  return {
+    ...project,
+    active: [...new Set([...project.active, ...own.active])].sort(),
+    entities: [...project.entities, ...own.entities],
+    off: project.off ?? own.off,
   }
 }
