@@ -16,8 +16,9 @@ import { fileURLToPath } from 'node:url'
 export const DEFAULT_REPO = 'usetheokit/theokit'
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '.git'])
 const EXTENSIONS = /\.(ts|tsx|mts|cts|js|mjs|cjs)$/
-const REASON =
-  /\b(?:until|blocked by|blocked on|waiting on|waits on|pending)\s+(?:the\s+)?(?:fix\s+(?:in|for)\s+)?((?:[\w.-]+\/[\w.-]+)?#\d+)/gi
+const PHRASE = 'until|blocked by|blocked on|waiting on|waits on|pending'
+const REF = '(?:[\\w.-]+/[\\w.-]+)?#\\d+'
+const REASON = new RegExp(`\\b(?:${PHRASE})\\s+(?:the\\s+)?(${REF})`, 'gi')
 
 /** @param {string} dir @returns {string[]} */
 function walk(dir) {
