@@ -57,7 +57,9 @@ describe('the names a .env file declares, as the bootstrap loads them', () => {
   it('test_dotenv_names_accepts_a_name_that_is_not_an_identifier', async () => {
     // Framework parser (looser than the old one): `1BAD` is loaded; no credential varName can match it.
     // Stricter name checking is follow-up #2812.
-    expect(await namesIn('1BAD=x\nGOOD=y\n')).toEqual(['1BAD', 'GOOD'])
+    const names = await namesIn('1BAD=x\nGOOD=y\n')
+    expect(names).toEqual(['1BAD', 'GOOD'])
+    expect(names, 'a valid name after an odd one was lost').toContain('GOOD')
   })
 
   it('test_dotenv_names_reads_the_declaration_after_a_quoted_value_closed_on_its_own_line', async () => {
@@ -75,7 +77,9 @@ describe('the names a .env file declares, as the bootstrap loads them', () => {
 
   it('test_dotenv_names_does_not_let_an_unterminated_quote_swallow_the_lines_below', async () => {
     // Framework parser (looser than the old one, which stopped at A): B is still loaded.
-    expect(await namesIn('A="never closed\nB=2\n')).toEqual(['A', 'B'])
+    const names = await namesIn('A="never closed\nB=2\n')
+    expect(names).toEqual(['A', 'B'])
+    expect(names, 'the line below an unterminated quote was swallowed').toContain('B')
   })
 
   it('test_dotenv_names_keeps_the_declarations_after_a_value_closed_by_a_lone_quote', async () => {

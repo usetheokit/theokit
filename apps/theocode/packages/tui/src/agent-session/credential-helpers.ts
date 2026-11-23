@@ -6,13 +6,15 @@ import type { ProjectEnvRecord } from '@theokit/agents/config'
 
 // Only the TUI sets this; the CLI and ACP surfaces show no credential label, so they never read it.
 let projectEnv: ProjectEnvRecord | undefined
+let loaded: ReadonlySet<string> = new Set()
 
 /** Called once after bootstrap; an absent record means no key was loaded from `.env`. */
 export const setProjectEnvRecord = (record: ProjectEnvRecord | undefined): void => {
   projectEnv = record
+  loaded = new Set(record?.loaded ?? [])
 }
 
-const loadedKeys = (): ReadonlySet<string> => new Set(projectEnv?.loaded ?? [])
+const loadedKeys = (): ReadonlySet<string> => loaded
 const dotenvPath = (): string => projectEnv?.file ?? '.env'
 
 export const credential = (): ResolvedCredential | { error: Error } => {
