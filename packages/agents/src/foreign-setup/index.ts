@@ -333,10 +333,9 @@ function gitRoot(project: string): string {
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 10_000,
     }).trim()
-  } catch (error) {
-    const failure = error as NodeJS.ErrnoException & { status?: number | null }
-    if (typeof failure.status === 'number' || failure.code === 'ENOENT') return project
-    throw error
+  } catch {
+    // not a repository, no git, a hung or killed git: key by the project path itself
+    return project
   }
 }
 
