@@ -24180,6 +24180,14 @@
     },
     "./tools": {
       "names": {
+        "BaseDirOutsideProjectRootError": {
+          "tier": "stable",
+          "declaration": "declare class BaseDirOutsideProjectRootError extends Error {\n    readonly baseDir: string;\n    readonly projectRoot: string;\n    constructor(tool: string, baseDir: string, projectRoot: string);\n}",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "CatastrophicCommandError": {
           "tier": "stable",
           "declaration": "declare class CatastrophicCommandError extends ConfigurationError {\n    readonly name = \"CatastrophicCommandError\";\n    constructor(reason: string);\n}",
@@ -24470,6 +24478,14 @@
           "references": [],
           "internals": {}
         },
+        "CreateImageGenerateToolOptions": {
+          "tier": "stable",
+          "declaration": "interface CreateImageGenerateToolOptions {\n    generate: ImageGenerateCallback;\n    projectRoot: string;\n    outputDir?: string;\n    name?: string;\n    description?: string;\n    maxPromptChars?: number;\n    maxImageBytes?: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "CreateInteractiveShellToolOptions": {
           "tier": "stable",
           "declaration": "interface CreateInteractiveShellToolOptions {\n    name?: string;\n    description?: string;\n    interactive: InteractiveProvider<unknown>;\n}",
@@ -24610,9 +24626,25 @@
           "references": [],
           "internals": {}
         },
+        "DEFAULT_MAX_GENERATED_IMAGE_BYTES": {
+          "tier": "stable",
+          "declaration": "DEFAULT_MAX_GENERATED_IMAGE_BYTES: number",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "DEFAULT_MAX_IMAGE_BYTES": {
           "tier": "stable",
           "declaration": "DEFAULT_MAX_IMAGE_BYTES: number",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "DEFAULT_MAX_PROMPT_CHARS": {
+          "tier": "stable",
+          "declaration": "DEFAULT_MAX_PROMPT_CHARS = 4096",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],
@@ -24750,6 +24782,30 @@
         "FireOutcome": {
           "tier": "stable",
           "declaration": "type FireOutcome = 'delivered' | 'suppressed' | 'failed' | 'skipped' | 'empty' | 'undelivered' | 'cancelled';",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "GeneratedImageData": {
+          "tier": "stable",
+          "declaration": "interface GeneratedImageData {\n    image: Uint8Array;\n    mimeType: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ImageGenerateCallback": {
+          "tier": "stable",
+          "declaration": "type ImageGenerateCallback = (prompt: string) => Promise<GeneratedImageData>;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ImageGenerateResult": {
+          "tier": "stable",
+          "declaration": "type ImageGenerateResult = {\n    ok: true;\n    path: string;\n    mime_type: string;\n    bytes: number;\n} | ImageGenerateFailure;",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -25467,6 +25523,14 @@
         "createGlobTool": {
           "tier": "stable",
           "declaration": "declare function createGlobTool(opts: CreateGlobToolOptions): CustomTool;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "createImageGenerateTool": {
+          "tier": "stable",
+          "declaration": "declare function createImageGenerateTool(opts: CreateImageGenerateToolOptions): CustomTool;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [],

@@ -120,6 +120,10 @@ describe('T1.2 — the image tool crosses the layer seam', () => {
     ).toBe('number')
   })
 
+  it('test_the_image_generation_factory_crosses_the_layer_seam', () => {
+    expect(typeof (toolsEntry as Record<string, unknown>).createImageGenerateTool).toBe('function')
+  })
+
   it('test_the_layer_forwards_every_sdk_tools_factory_it_claims_to', async () => {
     // The count in the entry's comment is a claim about reality; this asserts reality instead.
     // A symbol added upstream and not forwarded is exactly how the consumer ended up writing its

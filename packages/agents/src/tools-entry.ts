@@ -80,6 +80,10 @@ export {
   withName,
   withShellExitGuidance,
   withToolResultGuidance,
+  BaseDirOutsideProjectRootError,
+  createImageGenerateTool,
+  DEFAULT_MAX_GENERATED_IMAGE_BYTES,
+  DEFAULT_MAX_PROMPT_CHARS,
 } from '@theokit/sdk-tools'
 
 export type {
@@ -128,6 +132,10 @@ export type {
   VitestSummary,
   WebSearchCallback,
   WebSearchResult,
+  CreateImageGenerateToolOptions,
+  GeneratedImageData,
+  ImageGenerateCallback,
+  ImageGenerateResult,
 } from '@theokit/sdk-tools'
 
 // The 24th factory, and the only one implemented on this side of the seam.

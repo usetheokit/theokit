@@ -83,19 +83,27 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
    * And a connect the runner has given up on, which fails later, is written once, masked: the
    * runner drops that rejection.
    */
+  // The runner's own timeout is the only clock: when it reports `timed_out`, every connect still in flight is abandoned.
+  const lateReported = new Map<PlatformName, number>()
+  const attempts = new Map<PlatformName, Set<{ abandoned: boolean }>>()
   const watchConnect = (adapter: BasePlatformAdapter): BasePlatformAdapter => {
     const connect = adapter.connect.bind(adapter)
     adapter.connect = async () => {
-      let abandoned = false
-      const timer = setTimeout(() => (abandoned = true), timeoutMs)
-      timer.unref()
+      const attempt = { abandoned: false }
+      const inFlight = attempts.get(adapter.platform) ?? new Set<{ abandoned: boolean }>()
+      inFlight.add(attempt)
+      attempts.set(adapter.platform, inFlight)
       try {
         if (await connect()) return true
       } catch (error) {
-        if (abandoned) options.write(`${adapter.platform}: abandoned start failed: ${describeError(error)}`)
+        if (attempt.abandoned) {
+          options.write(`${adapter.platform}: abandoned start failed: ${describeError(error)}`)
+          // The runner reports this same late rejection as `failed`; that report is the duplicate.
+          lateReported.set(adapter.platform, (lateReported.get(adapter.platform) ?? 0) + 1)
+        }
         throw error
       } finally {
-        clearTimeout(timer)
+        inFlight.delete(attempt)
       }
       throw new Error(`adapter "${adapter.platform}" connect returned false`)
     }
@@ -132,8 +140,14 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
         if (index >= 0) failed.splice(index, 1)
         options.write(`${platform}: connected`)
       } else if (state === 'failed') {
+        const late = lateReported.get(platform) ?? 0
+        if (late > 0) {
+          lateReported.set(platform, late - 1)
+          return
+        }
         fail(platform, `${platform}: start failed: ${describeError(reason ?? '')}`)
       } else if (state === 'timed_out') {
+        for (const attempt of attempts.get(platform) ?? []) attempt.abandoned = true
         fail(platform, `${platform}: start timed out after ${timeoutMs} ms`)
       } else {
         const attempt = /attempt (\d+) in (\d+)ms/.exec(reason ?? '')

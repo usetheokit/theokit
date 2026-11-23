@@ -143,8 +143,13 @@ describe('M90 — the infra subpath surface is locked', () => {
     //
     // 219 since the floor moved to `@theokit/sdk` ^5.32.0 (#1959): +15, nothing removed — seven in
     // `persistence`, four values and `SandboxContainer` in `sandbox`, and three types.
+    //
+    // 227 since `@theokit/sdk-tools` ^0.32.0: +8, nothing removed, all in `tools` — the image
+    // generation tool (`createImageGenerateTool`, `DEFAULT_MAX_GENERATED_IMAGE_BYTES`,
+    // `DEFAULT_MAX_PROMPT_CHARS` and the types `CreateImageGenerateToolOptions`, `GeneratedImageData`,
+    // `ImageGenerateCallback`, `ImageGenerateResult`) and `BaseDirOutsideProjectRootError`.
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(219)
+    expect(total).toBe(227)
   })
 
   /**

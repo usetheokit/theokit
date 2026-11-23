@@ -13,6 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- An abandoned channel start that fails later is written once, masked, decided by the gateway's own timeout report instead of a second timer that could lose the race.
 - Exec approval installs the framework's `gate.plugin` and the ACP permission prompt uses the gate's own timeout, with no timer of its own. A shell call with no command is now refused as `theoclaw: exec refused: the decision failed: the command is missing`.
 
 - `theoclaw skills publish` now reads `THEOCLAW_SKILLS_REGISTRY` and `THEOCLAW_SKILLS_TOKEN` from the instance configuration file too, as `skills search` and `skills install` do; before, it read the process environment only (#2764).

@@ -201,6 +201,7 @@ describe('startChannelLoop', () => {
     held.reject(new Error('sync failed for matrix-secret-value'))
 
     await waitFor(() => lines.length === 2, 1000, 'the abandoned failure to be written')
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(lines).toEqual([
       'matrix: start timed out after 50 ms',
       'matrix: abandoned start failed: sync failed for [redacted]',
