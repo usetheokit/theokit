@@ -29,7 +29,13 @@ import {
 } from '../src/backup/backup.js'
 import { InstanceLockedError } from '@theokit/sdk/persistence'
 
-import { claimInstance, NO_PROFILE, removeOwnLockSync, takeInstanceLock } from '../src/instance.js'
+import {
+  claimInstance,
+  NO_PROFILE,
+  removeOwnLockSync,
+  resolveInstance,
+  takeInstanceLock,
+} from '../src/instance.js'
 import { waitFor } from './fakes.js'
 
 const APP_DIR = fileURLToPath(new URL('..', import.meta.url))
@@ -257,6 +263,21 @@ describe('the instance lock (FR-010)', () => {
     await expect(claimInstance(instance, {})).rejects.toThrow(InstanceLockedError)
     expect(existsSync(instance.workspace)).toBe(false)
     expect(existsSync(stateDirectory)).toBe(false)
+    await holder.end()
+  })
+
+  it('a conflicting explicit directory is refused before the instance lock is taken', async () => {
+    const stateDir = join(tempDir(), 'state')
+    const holder = lockChild(stateDir)
+    expect(await holder.answer).toBe('took')
+    const env: NodeJS.ProcessEnv = { THEOCLAW_PROFILE: 'a', THEOCLAW_STATE_DIR: stateDir }
+    // The start path of main.ts: resolve, then claim. Were the lock taken first, this would be
+    // InstanceLockedError naming the holder, not the conflict.
+    const start = async (): Promise<void> => {
+      const instance = resolveInstance(env, { homeDir: tempDir() })
+      await claimInstance(instance, env)
+    }
+    await expect(start()).rejects.toThrow('THEOCLAW_PROFILE cannot be combined with THEOCLAW_STATE_DIR')
     await holder.end()
   })
 
