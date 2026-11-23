@@ -10,7 +10,7 @@ import {
 } from '@theokit/agents/bridge'
 import { z } from 'zod'
 
-import { bearerCheck } from '../control-plane/bearer.js'
+import { bearerCheck } from '@theokit/http/guards'
 import type { PartialHandler } from '../control-plane/http-dispatch.js'
 import { runTheoClawTurn, type TurnEvent, type WithAgent } from '../control-plane/turn.js'
 import { handleMcpRequest } from '../mcp/serve-tools.js'

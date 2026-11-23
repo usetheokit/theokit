@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { type ControlPlaneHandle, listenControlPlane } from '../src/control-plane/listener.js'
-import { readTrustedProxy } from '../src/control-plane/trusted-proxy.js'
+import { readTrustedProxy, TRUSTED_IDENTITY_HEADER } from '../src/control-plane/trusted-proxy.js'
 import { createWebchatRoutes } from '../src/webchat/routes.js'
 
 const TOKEN = 'webchat-token-value-0123456789abcdef'
@@ -40,7 +40,7 @@ describe('trusted-proxy mode', () => {
     const url = await serve({ THEOCLAW_TRUSTED_PROXY_HEADER: 'X-Remote-User', THEOCLAW_TRUSTED_PROXY_ADDRESSES: '127.0.0.1' })
     expect((await post(url)).status).toBe(401)
     expect((await post(url, { 'x-remote-user': 'alice' })).status).toBe(400)
-    expect((await post(url, { 'x-theoclaw-trusted-identity': 'forged' })).status).toBe(401)
+    expect((await post(url, { [TRUSTED_IDENTITY_HEADER]: 'forged' })).status).toBe(401)
   })
 
   it('refuses the header from a peer that is not allowlisted', async () => {
