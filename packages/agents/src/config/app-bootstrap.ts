@@ -164,7 +164,10 @@ function scanDeclarations(raw: string): { names: Set<string>; text: string } {
   const names = new Set<string>()
   // Split on `\n` alone: a `\r` stays on its line, so `text` keeps the file's own line endings.
   const lines = raw.split('\n')
-  const out = [...lines]
+  // Only declarations and the lines of their values reach the parser; every other line is blank.
+  // Node 22.12's parseEnv drops every declaration after a line with no `=`, so a comment-free file
+  // with one such line loaded nothing there while a later Node loaded the rest.
+  const out = lines.map(() => '')
   let i = 0
   while (i < lines.length) {
     const at = i
@@ -172,8 +175,10 @@ function scanDeclarations(raw: string): { names: Set<string>; text: string } {
     i++
     if (decl === undefined) continue
     out[at] = `${decl.name}=${lines[at].slice(lines[at].indexOf('=') + 1)}`
-    const end = valueEnd(decl.value, lines, i)
-    if (end === undefined) return { names, text: out.join('\n') }
+    const closed = valueEnd(decl.value, lines, i)
+    const end = closed ?? lines.length
+    for (let k = i; k < end; k++) out[k] = lines[k]
+    if (closed === undefined) return { names, text: out.join('\n') }
     i = end
     if (/^[A-Za-z_]\w*$/.test(decl.name)) names.add(decl.name)
   }

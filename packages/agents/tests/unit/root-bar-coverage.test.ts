@@ -136,6 +136,8 @@ const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
   // Added by `@theokit/sdk` 11. Memory-fact helpers the layer has no consumer for yet.
   addMemoryFact: { since: '11.0.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   memoryPartitionId: { since: '11.0.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  // Added by `@theokit/sdk` 12. The delimit notice; the layer does not wrap tool output itself.
+  UNTRUSTED_TOOL_OUTPUT_NOTICE: { since: '12.0.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   checkToolName: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   diag: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   diagFailure: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
