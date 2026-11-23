@@ -160,7 +160,7 @@ function translate(
   const { tool: written, spec } = parsed
   // The rule is written for `written`; the framework's tool may carry another name. The specifier
   // argument is still looked up by the written name, so `Bash(ls:*)` keeps addressing `command`.
-  const tool = Object.hasOwn(toolAliases, written) ? toolAliases[written]! : written
+  const tool = Object.hasOwn(toolAliases, written) ? toolAliases[written] : written
   if (spec === undefined) return { tool, action }
   // Which argument the specifier addresses. `Bash(rm:*)` means the shell's `command`;
   // `Read(./secret)` means the reader's `path`. Rendering both against `command` produced a matcher
