@@ -11,6 +11,7 @@ import type { Duplex } from 'node:stream'
 import type { WebSocket, WebSocketServer } from 'ws'
 
 import type { AgentStreamEvent } from '../bridge/agent-stream-events.js'
+
 import type { DevicePairing } from './device-pairing.js'
 import { parseControlFrame, type ControlServerFrame } from './frames.js'
 
