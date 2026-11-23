@@ -116,7 +116,7 @@ async function servePage(token: string): Promise<Page> {
   let loaded = false
   const html = `<!doctype html><html><body style="margin:0;font-family:sans-serif">
 <div style="font-size:64px;padding:16px;height:100px">CODE ${token}</div>
-<textarea autofocus style="position:absolute;top:130px;left:0;right:0;bottom:0;width:100%;font-size:32px;box-sizing:border-box"
+<textarea autofocus style="position:absolute;top:130px;left:0;right:0;bottom:0;width:100%;font-size:20px;font-family:monospace;color:#06c;box-sizing:border-box"
  oninput="fetch('/typed',{method:'POST',body:this.value})"></textarea>
 <script>addEventListener('load',()=>{document.querySelector('textarea').focus();requestAnimationFrame(()=>requestAnimationFrame(()=>fetch('/ready',{method:'POST'})))})</script></body></html>`
   const server: Server = createServer((request, response) => {
@@ -232,7 +232,7 @@ describe.skipIf(!LIVE)('the computer tool against a real model', () => {
           `Now use the computer tool with action mouse_move to put the pointer onto the text box, then action type to type the word ${word}. Do both calls before you answer.`,
         )
         answer = await turn(
-          'Use the computer tool with action screenshot once more, asking it for the exact code shown after the word CODE. Then tell me that code, letter for letter.',
+          'Use the computer tool with action screenshot once more, asking it for the exact code shown after the word CODE in the large heading at the top: six capital letters and digits, not the lowercase text typed in the text box below. Then tell me that code, letter for letter.',
         )
       } finally {
         await agent[Symbol.asyncDispose]()
