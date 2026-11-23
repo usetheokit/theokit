@@ -11,7 +11,8 @@ import { Agent } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createTheoClawAgent, theoClawAgentOptions, type TheoClawAgentOptions } from '../src/agent/create-agent.js'
-import { createHookApprovalGate, hookFingerprint, parseApprovedHooks } from '../src/agent/hook-approval.js'
+import { hookFingerprint } from '@theokit/agents/hooks'
+import { createHookApprovalGate, hookIdentity, parseApprovedHooks } from '../src/agent/hook-approval.js'
 import { createAgentFactory } from '../src/control-plane/agent-factory.js'
 import { agentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
@@ -39,20 +40,34 @@ function refusal(value: string): TheoClawConfigError {
 }
 
 describe('hookFingerprint', () => {
-  it('is the hex sha256 of the source event, the command and the timeout, one per line', () => {
-    expect(hookFingerprint(STOP_HOOK)).toBe(sha256('Stop\ntouch x\n30000'))
+  it('is the framework fingerprint of the source event, command, matcher and timeout', () => {
+    expect(hookFingerprint(hookIdentity(STOP_HOOK))).toBe(
+      hookFingerprint({ command: 'touch x', event: 'Stop', timeoutMs: 30_000 }),
+    )
+  })
+
+  it('changes when only the matcher changes', () => {
+    const narrow = hookFingerprint(hookIdentity({ ...STOP_HOOK, matcher: 'Write' }))
+    expect(hookFingerprint(hookIdentity({ ...STOP_HOOK, matcher: '.*' }))).not.toBe(narrow)
+    expect(hookFingerprint(hookIdentity(STOP_HOOK))).not.toBe(narrow)
+  })
+
+  it('refuses a hook whose matcher was widened after approval', async () => {
+    const gate = createHookApprovalGate(new Set([hookFingerprint(hookIdentity({ ...STOP_HOOK, matcher: 'Write' }))]))
+    expect(await gate.approve?.({ ...STOP_HOOK, matcher: 'Write' })).toBe(true)
+    expect(await gate.approve?.({ ...STOP_HOOK, matcher: '.*' })).toBe(false)
   })
 
   it('changes when the timeout changes', () => {
-    expect(hookFingerprint({ ...STOP_HOOK, timeoutMs: 5_000 })).not.toBe(hookFingerprint(STOP_HOOK))
+    expect(hookFingerprint(hookIdentity({ ...STOP_HOOK, timeoutMs: 5_000 }))).not.toBe(hookFingerprint(hookIdentity(STOP_HOOK)))
   })
 
   it('changes when the source event changes', () => {
-    expect(hookFingerprint({ ...STOP_HOOK, sourceEvent: 'PreToolUse' })).not.toBe(hookFingerprint(STOP_HOOK))
+    expect(hookFingerprint(hookIdentity({ ...STOP_HOOK, sourceEvent: 'PreToolUse' }))).not.toBe(hookFingerprint(hookIdentity(STOP_HOOK)))
   })
 
   it('changes when the command changes', () => {
-    expect(hookFingerprint({ ...STOP_HOOK, command: 'touch y' })).not.toBe(hookFingerprint(STOP_HOOK))
+    expect(hookFingerprint(hookIdentity({ ...STOP_HOOK, command: 'touch y' }))).not.toBe(hookFingerprint(hookIdentity(STOP_HOOK)))
   })
 })
 
@@ -62,12 +77,12 @@ describe('createHookApprovalGate', () => {
   })
 
   it('refuses a hook whose fingerprint is not listed', async () => {
-    const other = hookFingerprint({ ...STOP_HOOK, command: 'touch other' })
+    const other = hookFingerprint(hookIdentity({ ...STOP_HOOK, command: 'touch other' }))
     expect(await createHookApprovalGate(new Set([other])).approve?.(STOP_HOOK)).toBe(false)
   })
 
   it('approves a hook whose fingerprint is listed', async () => {
-    expect(await createHookApprovalGate(new Set([hookFingerprint(STOP_HOOK)])).approve?.(STOP_HOOK)).toBe(true)
+    expect(await createHookApprovalGate(new Set([hookFingerprint(hookIdentity(STOP_HOOK))])).approve?.(STOP_HOOK)).toBe(true)
   })
 })
 
@@ -82,7 +97,7 @@ describe('parseApprovedHooks', () => {
   })
 
   it('trims and lower-cases each listed fingerprint', () => {
-    const fingerprint = hookFingerprint(STOP_HOOK)
+    const fingerprint = hookFingerprint(hookIdentity(STOP_HOOK))
     const listed = parseApprovedHooks({ THEOCLAW_APPROVED_HOOKS: ` ${fingerprint.toUpperCase()} , ${sha256('other')}` })
     expect(listed).toEqual(new Set([fingerprint, sha256('other')]))
   })
@@ -126,8 +141,8 @@ function hookWorkspace(): HookWorkspace {
     }),
   )
   const fingerprints = [
-    hookFingerprint({ sourceEvent: 'PreToolUse', command: preTool, timeoutMs: 30_000 }),
-    hookFingerprint({ sourceEvent: 'Stop', command: stop, timeoutMs: 30_000 }),
+    hookFingerprint(hookIdentity({ sourceEvent: 'PreToolUse', command: preTool, timeoutMs: 30_000, matcher: '*' })),
+    hookFingerprint(hookIdentity({ sourceEvent: 'Stop', command: stop, timeoutMs: 30_000 })),
   ]
   return { cwd, preToolMarker, stopMarker, fingerprints }
 }
@@ -185,7 +200,8 @@ function toolLogWorkspace(): { cwd: string; log: string; fingerprint: string } {
     join(cwd, '.theokit', 'settings.json'),
     JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'list_dir', hooks: [{ type: 'command', command }] }] } }),
   )
-  return { cwd, log, fingerprint: hookFingerprint({ sourceEvent: 'PreToolUse', command, timeoutMs: 30_000 }) }
+  return { cwd, log, fingerprint: hookFingerprint(hookIdentity({ sourceEvent: 'PreToolUse', command, timeoutMs: 30_000, matcher: 'list_dir' })),
+  }
 }
 
 /**
