@@ -19,6 +19,10 @@ import { UsageError } from '../cli-args.js'
 import { loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { resolveInstance } from '../instance.js'
+import { sessionsFile } from './chat-sessions.js'
+import { Generations } from './generations.js'
+import { readRetentionDays } from './session-settings.js'
+import { collectTranscripts } from './transcript-gc.js'
 import { readFullHistory } from './transcript-history.js'
 
 /**
@@ -39,7 +43,7 @@ interface Message {
   readonly text: string
 }
 
-const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [--json]'
+const USAGE_TEXT = 'theoclaw sessions: expected list | show <id> | export <id> [--json] | gc [--dry-run] [--days <n>]'
 
 /** The user and assistant turns of a session, read by the SDK; entries with no text are dropped. */
 async function readMessages(session: ChatSession): Promise<Message[]> {
@@ -61,8 +65,7 @@ type ChatSession = Awaited<ReturnType<typeof listSessions>>[number] & {
   workspace: string
 }
 
-async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {
-  const env: NodeJS.ProcessEnv = { ...io.env }
+function chatWorkspace(env: NodeJS.ProcessEnv, io: SessionsIo): string {
   loadConfiguration(env, io.homeDir)
   const workspace =
     env.THEOCLAW_WORKSPACE?.trim() || resolveInstance(env, { homeDir: io.homeDir }).workspace
@@ -72,6 +75,11 @@ async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {
       { variable: 'THEOCLAW_WORKSPACE' },
     )
   }
+  return workspace
+}
+
+async function listChatSessions(io: SessionsIo): Promise<ChatSession[]> {
+  const workspace = chatWorkspace({ ...io.env }, io)
   const listed = await listSessions(workspace, join(workspace, '.theoclaw'))
   return listed.flatMap((entry) =>
     entry.id === undefined ? [] : [{ ...entry, id: entry.id, workspace }],
@@ -199,8 +207,42 @@ export async function resumeCommand(args: readonly string[], io: SessionsIo): Pr
   return 0
 }
 
+/**
+ * `sessions gc`: remove transcripts older than the retention that no chat uses. The command reads
+ * the generations from `sessions.json`; it cannot see a retired generation a running daemon still
+ * holds, which the daemon's own sweep protects, but such a transcript is being written and so is not old.
+ */
+async function gcCommand(args: readonly string[], io: SessionsIo): Promise<number> {
+  const dryRun = args.includes('--dry-run')
+  const rest = args.filter((arg) => arg !== '--dry-run')
+  const at = rest.indexOf('--days')
+  const daysText = at >= 0 ? rest[at + 1] : undefined
+  const left = rest.filter((_, index) => at < 0 || (index !== at && index !== at + 1))
+  if (
+    left.length > 0 ||
+    (at >= 0 && (daysText === undefined || !/^\d+$/.test(daysText) || Number(daysText) < 1))
+  )
+    throw new UsageError(USAGE_TEXT)
+  const env: NodeJS.ProcessEnv = { ...io.env }
+  const workspace = chatWorkspace(env, io)
+  const days = daysText === undefined ? readRetentionDays(env) : Number(daysText)
+  const result = await collectTranscripts(
+    { workspace, generations: Generations.load(sessionsFile(workspace)) },
+    days,
+    !dryRun,
+  )
+  const verb = dryRun ? 'would remove' : 'removed'
+  for (const id of result.removed) io.stdout.write(`${verb} ${id}\n`)
+  for (const path of result.orphaned) io.stdout.write(`${verb} ${path} (id unreadable)\n`)
+  for (const error of result.errors) io.stderr.write(`theoclaw: ${error}\n`)
+  const total = result.removed.length + result.orphaned.length
+  io.stdout.write(`${verb} ${total} transcripts older than ${days} days\n`)
+  return result.errors.length > 0 ? 1 : 0
+}
+
 export async function sessionsCommand(args: readonly string[], io: SessionsIo): Promise<number> {
   const [verb, ...rest] = args
+  if (verb === 'gc') return gcCommand(rest, io)
   if (verb === 'share' || verb === 'open') return shareCommand(verb, rest, io)
   const json = rest.includes('--json')
   const operands = rest.filter((arg) => arg !== '--json')
