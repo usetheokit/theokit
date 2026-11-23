@@ -137,7 +137,10 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
       const refused: string[] = []
       loadProjectEnv(ctx.env, () => {
         if (!existsSync(file)) return
-        for (const [key, value] of Object.entries(parseEnv(readFileSync(file, 'utf8')))) {
+        const raw = readFileSync(file, 'utf8')
+        const declared = declaredNames(raw)
+        for (const [key, value] of Object.entries(parseEnv(raw))) {
+          if (!declared.has(key)) continue
           if (protectedKeys.has(key)) {
             refused.push(key)
           } else if (ctx.env[key] === undefined) {
@@ -149,6 +152,37 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
       ctx.projectEnv = { file, loaded, refused }
     },
   }
+}
+
+/**
+ * Names declared by `raw`, stricter than `parseEnv`: only identifiers count, and scanning stops at a
+ * quoted value that never closes (everything after it is that value's text, not declarations).
+ */
+function declaredNames(raw: string): Set<string> {
+  const names = new Set<string>()
+  const lines = raw.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim()
+    if (line === '' || line.startsWith('#')) continue
+    const eq = line.indexOf('=')
+    if (eq <= 0) continue
+    const name = line
+      .slice(0, eq)
+      .replace(/^export\s+/, '')
+      .trim()
+    const value = line.slice(eq + 1).trimStart()
+    const q = value[0]
+    if (q === '"' || q === "'" || q === '`') {
+      if (!value.slice(1).includes(q)) {
+        let j = i + 1
+        while (j < lines.length && !lines[j]!.includes(q)) j++
+        if (j >= lines.length) return names
+        i = j
+      }
+    }
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) names.add(name)
+  }
+  return names
 }
 
 /** `projectEnvStepWith()` with no extra protected keys. */

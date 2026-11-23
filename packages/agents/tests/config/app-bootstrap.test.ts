@@ -130,6 +130,23 @@ describe('app bootstrap', () => {
     expect(env[sovereign]).toBeUndefined()
   })
 
+  it('projectEnvStep takes identifier names only and stops at an unterminated quote', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-'))
+    dirs.push(dir)
+    writeFileSync(
+      join(dir, '.env'),
+      'GOOD=1\r\n# C=3\nexport EXP=2\nBAD-NAME=x\n1BAD=y\nMULTI="a\nINSIDE=no\n"\nAFTER=4\nOPEN="never\nHIDDEN=5\n',
+    )
+    const env: NodeJS.ProcessEnv = {}
+    const c = ctx(env, dir)
+    await defineAppBootstrap([projectEnvStep]).run(c)
+    expect([...(c.projectEnv?.loaded ?? [])].sort()).toEqual(['AFTER', 'EXP', 'GOOD', 'MULTI'])
+    expect(env.BAD_NAME).toBeUndefined()
+    expect(env['BAD-NAME']).toBeUndefined()
+    expect(env.OPEN).toBeUndefined()
+    expect(env.HIDDEN).toBeUndefined()
+  })
+
   it('projectEnvStepWith leaves a protected key unset and reports it refused', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bootstrap-'))
     dirs.push(dir)
