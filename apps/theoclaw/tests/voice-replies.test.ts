@@ -62,12 +62,13 @@ describe('voice note replies', () => {
       expect(adapter.sent).toEqual([])
       expect(request).toHaveBeenCalledTimes(5)
       const speech = request.mock.calls[3]?.[1]
-      expect(JSON.parse(String(speech?.body))).toEqual({ model: 'gpt-4o-mini-tts', voice: 'alloy', input: 'Hello [redacted]', response_format: 'opus' })
+      expect(JSON.parse(String(speech?.body))).toEqual({ model: 'gpt-4o-mini-tts', voice: 'alloy', input: 'Hello [redacted]', response_format: 'mp3' })
       const upload = request.mock.calls[4]?.[1]?.body as FormData
       expect(upload.get('chat_id')).toBe('42')
       expect(upload.get('reply_parameters')).toBe('{"message_id":3}')
       expect(await (upload.get('voice') as Blob).text()).toBe('OggS-reply')
       const transcription = request.mock.calls[2]?.[1]?.body as FormData
+      expect((transcription.get('file') as File).name).toBe('voice.ogg')
       expect(transcription.get('model')).toBe('gpt-4o-mini-transcribe')
       expect(await (transcription.get('file') as Blob).text()).toBe('OggS')
     } finally { await runner.stop() }

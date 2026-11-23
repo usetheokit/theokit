@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { GatewayContext, MessageEvent } from '@theokit/gateway'
 
-import { compactOf, readCompactSettings } from '../src/channels/compact-command.js'
+import { readCompactSettings } from '../src/channels/compact-command.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import type { SessionLease } from '../src/sessions/session-agents.js'
@@ -27,10 +27,16 @@ function harness(env: Record<string, string>, run: (id: string, trigger: string)
 }
 
 describe('/compact', () => {
-  it('matches the whole command only', () => {
-    expect(compactOf('/compact')).toBe('')
-    expect(compactOf('/compact keep the dates')).toBe('keep the dates')
-    expect(compactOf('/compacted')).toBeUndefined()
+  it('matches the whole command only', async () => {
+    const calls: string[] = []
+    const h = harness({}, async (id, trigger) => (calls.push(`${id}:${trigger}`), { preTokens: 2, postTokens: 1 }))
+    await h.send('/compact')
+    expect(calls).toHaveLength(1)
+    await h.send('/compact keep the dates')
+    expect(calls).toHaveLength(2)
+    await h.send('/compacted')
+    expect(calls).toHaveLength(2)
+    expect(h.replies.at(-1)).toBe('hi')
   })
 
   it('compacts the session agent and replies with a summary line', async () => {
