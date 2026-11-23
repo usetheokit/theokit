@@ -1,5 +1,6 @@
 import { parseChatCommand } from '@theokit/gateway'
 import type { ChatCommand, GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
+import { createChatApprover } from '@theokit/gateway-agent'
 
 import type { ExecApprovalOptions, PersonReply } from '../tools/exec-approval.js'
 
@@ -42,10 +43,6 @@ export interface ChatExecApproval {
   elevated(key: string): boolean
 }
 
-interface Pending {
-  readonly answer: (answer: PersonReply) => void
-}
-
 function initialElevated(env: ChatExecApprovalOptions['env']): boolean {
   return (env[ELEVATED_VARIABLE] ?? '').trim().toLowerCase() === 'on'
 }
@@ -61,67 +58,41 @@ export function createChatExecApproval(options: ChatExecApprovalOptions): ChatEx
   const timeoutMs = options.timeoutMs ?? EXEC_APPROVAL_TIMEOUT_MS
   const defaultElevated = initialElevated(options.env)
   const settings = new Map<string, boolean>()
-  const latest = new Map<string, MessageEvent>()
-  const pending = new Map<string, Pending>()
+  // Who may answer, the wait and the `/approve` / `/deny` commands are the package's.
+  const approver = createChatApprover({
+    conversationOf: keyOf,
+    isOwner,
+    send,
+    timeoutMs,
+    format: (command, ms) => `Run this command?\n${command}\nReply /approve, /approve always or /deny within ${ms / 1000} s.`,
+  })
 
   const elevated = (key: string): boolean => settings.get(key) ?? defaultElevated
 
-  const ask = async (
-    command: string,
-    call?: { readonly agentId?: string },
-  ): Promise<PersonReply> => {
+  const ask = async (command: string, call?: { readonly agentId?: string }): Promise<PersonReply> => {
     const key = AGENT_ID.exec(call?.agentId ?? '')?.[1]
-    const event = key === undefined ? undefined : latest.get(key)
-    if (key === undefined || event === undefined || pending.has(key)) return 'deny'
-    let timer: NodeJS.Timeout | undefined
-    const answered = new Promise<PersonReply>((resolve) => {
-      pending.set(key, { answer: resolve })
-      timer = setTimeout(() => resolve('deny'), timeoutMs)
-    })
-    try {
-      await send(
-        event,
-        `Run this command?\n${command}\nReply /approve, /approve always or /deny within ${timeoutMs / 1000} s.`,
-      )
-    } catch {
-      pending.delete(key)
-      clearTimeout(timer)
-      return 'deny'
-    }
-    try {
-      return await answered
-    } finally {
-      pending.delete(key)
-      clearTimeout(timer)
-    }
+    if (key === undefined) return 'deny'
+    const reply = await approver.ask(key, command)
+    return reply.by === undefined ? reply.answer : { answer: reply.answer, by: reply.by }
   }
 
   const decide = (event: MessageEvent): HookDecision | undefined => {
     const command = parseChatCommand(event.text)
+    if (command?.name !== 'elevated') return undefined
     const key = keyOf(event)
-    latest.set(key, event)
-    const approve = command?.name === 'approve' && (command.arg === '' || command.arg === 'always')
-    const deny = command?.name === 'deny' && command.arg === ''
-    const elevate = command?.name === 'elevated'
-    if (!approve && !deny && !elevate) return undefined
     if (!isOwner(event)) return { block: true, message: 'Only an owner can do that.' }
-    if (elevate) {
-      const value = command.arg.trim().toLowerCase()
-      if (value === 'on' || value === 'off') settings.set(key, value === 'on')
-      else if (value !== '') return { block: true, message: 'Use /elevated on or /elevated off.' }
-      return {
-        block: true,
-        message: `Elevated mode is ${elevated(key) ? 'on' : 'off'} for this session.`,
-      }
-    }
-    const waiting = pending.get(key)
-    if (waiting === undefined) return { block: true, message: 'Nothing is waiting for approval.' }
-    waiting.answer({ answer: deny ? 'deny' : command?.arg === 'always' ? 'always' : 'once', by: `${event.platform}:${event.sender.id}` })
-    return { block: true, message: deny ? 'Denied.' : 'Approved.' }
+    const value = command.arg.trim().toLowerCase()
+    if (value === 'on' || value === 'off') settings.set(key, value === 'on')
+    else if (value !== '') return { block: true, message: 'Use /elevated on or /elevated off.' }
+    return { block: true, message: `Elevated mode is ${elevated(key) ? 'on' : 'off'} for this session.` }
   }
 
   return {
-    hook: { name: HOOK_NAME, pre_inbound: ({ event }) => decide(event) },
+    hook: {
+      name: HOOK_NAME,
+      // The approver sees every event, so it knows each conversation's latest message to ask in.
+      pre_inbound: async (context) => (await approver.hook.pre_inbound?.(context)) ?? decide(context.event),
+    },
     options: {
       ask,
       waived: (call) => {
@@ -129,7 +100,7 @@ export function createChatExecApproval(options: ChatExecApprovalOptions): ChatEx
         return key === undefined ? defaultElevated : elevated(key)
       },
     },
-    hasPending: (event) => pending.has(keyOf(event)),
+    hasPending: (event) => approver.hasPending(event),
     elevated,
   }
 }

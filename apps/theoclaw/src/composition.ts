@@ -320,10 +320,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       goal: events.goal,
       compact: readCompactSettings(options.env, maskedWrite, options.compact),
       ...(advisor === undefined ? {} : { advisor }),
-      typing: {
-        adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
-        ...(ackReaction === undefined ? {} : { ackReaction }),
-      },
+      ...(ackReaction === undefined ? {} : { ack: { emoji: ackReaction, adapters: () => [...loop.started.values()].map((entry) => entry.adapter) } }),
     }), configuredVoiceReplies(options.env)),
     hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.workflowResume === undefined ? {} : { workflowResume: options.workflowResume }), ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook, model }) }),
     secrets,
