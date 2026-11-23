@@ -129,3 +129,13 @@ describe('a fetched page reaches the model framed on each of the four send paths
     expectFramed(stub)
   })
 })
+
+it('the system prompt the model receives explains the tag when delimiting is on', async () => {
+  const { stub, agent } = await stubbedAgent()
+
+  await runTheoClawTurn({ withAgent: (work) => work(agent), message: 'summarise the page', runId: 'run-notice', emit: () => undefined })
+
+  const messages = (stub.requests[0]?.messages ?? []) as { readonly role: string; readonly content: unknown }[]
+  const system = messages.filter((message) => message.role === 'system').map((message) => JSON.stringify(message.content)).join('\n')
+  expect(system).toContain('<untrusted-tool-output>')
+})

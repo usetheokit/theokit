@@ -125,12 +125,12 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     const agents = readPkg('packages/agents/package.json').dependencies as Record<string, string>
     expect(agents['@theokit/sdk']).toBe('>=5.32.0 <12')
     const root = readPkg('package.json') as { pnpm: { overrides: Record<string, string> } }
-    // The tree runs on SDK 11 (the matrix legs set 9 and 10); dep-check's floor leg rewrites the override to the declared floor,
+    // The tree runs on SDK 12 (the matrix legs set 9 and 10); dep-check's floor leg rewrites the override to the declared floor,
     // 5.32.0, and runs this same suite there. Any other version is neither end of the range.
     const override = root.pnpm.overrides['@theokit/sdk'] ?? ''
     expect(
-      override === '5.32.0' || /^(9|10|11)\./.test(override),
-      `the root override installs @theokit/sdk ${override}, none of the 9.x to 11.x tops nor the 5.32.0 floor`,
+      override === '5.32.0' || /^(9|10|11|12)\./.test(override),
+      `the root override installs @theokit/sdk ${override}, none of the 9.x to 12.x tops nor the 5.32.0 floor`,
     ).toBe(true)
   })
 
@@ -156,7 +156,7 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     const patched = (
       readPkg('package.json').pnpm as { patchedDependencies: Record<string, string> }
     ).patchedDependencies
-    expect(patched['@theokit/sdk@11.0.0']).toBe('patches/@theokit__sdk@11.0.0.patch')
+    expect(patched['@theokit/sdk@12.0.0']).toBe('patches/@theokit__sdk@12.0.0.patch')
   })
 
   it('test_isClosed_rejects_the_open_shapes', () => {
