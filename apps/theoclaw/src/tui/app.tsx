@@ -10,13 +10,13 @@ import {
   ToolCallCard,
   useAgentStream,
 } from '@theokit/tui'
+import { createControlStreamSource, type ControlStreamSource } from '@theokit/agents/control'
 import { createCommandRegistry, defineCommand } from '@theokit/agents/commands'
 import { Text, useInput } from 'ink'
 import { type ReactElement, useRef, useState } from 'react'
 
 import type { ControlClient } from '../control-client/control-client.js'
 import {
-  controlStream,
   createTurnInbox,
   nextSessionId,
   type TurnInbox,
@@ -108,10 +108,11 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
   const queued = useRef<string | undefined>(undefined)
 
   const interrupt = (): void => {
-    if (running.current) client.interrupt(session)
+    if (running.current) current.current?.interrupt()
   }
 
   const turns = useRef(0)
+  const current = useRef<ControlStreamSource | undefined>(undefined)
   const inbox = useRef<TurnInbox | undefined>(undefined)
   // While a turn runs a notice goes to its stream, which places it where the turn has reached, so later output stays below it.
   const notice = (n: TuiNotice): void => {
@@ -136,8 +137,12 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
       if (next !== undefined) send(next)
     }
     // A function source: the hook starts the turn when it mounts, so the stream is opened exactly once.
-    const source: AgentStreamSource = () =>
-      controlStream(client, text, session, inTurn, onEnd, mine)
+    const source = createControlStreamSource(client, session, text, {
+      inbox: mine,
+      onNotice: inTurn,
+      onEnd,
+    })
+    current.current = source
     setItems((current) => [
       ...current,
       { kind: 'user', text },
