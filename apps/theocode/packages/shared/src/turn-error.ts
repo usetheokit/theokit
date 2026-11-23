@@ -1,4 +1,13 @@
 /**
+ * NOT built on `describeTurnFailure` (`@theokit/agents/errors`), and this is what stops it (#2662):
+ * the framework helper takes a `TurnFailure` whose code is coerced to the known set, so an
+ * unrecognised provider code (`overloaded_error`, `E123`) becomes `unknown` and is no longer printed,
+ * and every text this product pins differs from the helper's `"<message> [<code>]: <hint>"` form.
+ * The helper's `hints` option replaces its wording per KNOWN code but cannot carry a hint for a
+ * message-matched failure of this product (the `/image` tool-result hint) or the diagnostics
+ * variable. What it would need: keep the original code on `TurnFailure`, and accept a caller-supplied
+ * message probe plus a trailing suffix. Until then this module owns the text.
+ *
  * What a failed turn TELLS the user.
  *
  * The framework masks by default — `presentUIMessageStream` uses `opts.onError ?? MASK_ERROR`, and

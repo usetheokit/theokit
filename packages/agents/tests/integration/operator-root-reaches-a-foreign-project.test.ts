@@ -78,3 +78,13 @@ describe('an operator root reaches a project that carries none', () => {
     expect(out.rootsRead, 'a root was walked for a consumer who asked for none').toEqual([])
   })
 })
+
+describe('an operator AGENTS.md', () => {
+  it('loads for a project that has none', () => {
+    const home = mkdtempSync(join(tmpdir(), 'b024-agents-md-'))
+    mkdirSync(join(home, '.theokit'), { recursive: true })
+    writeFileSync(join(home, '.theokit', 'AGENTS.md'), 'for every project')
+    const out = resolveOperatorRoots({ user: true, grants: [], homeDir: home })
+    expect(out.instructions.map((i) => i.path)).toEqual([join(home, '.theokit', 'AGENTS.md')])
+  })
+})

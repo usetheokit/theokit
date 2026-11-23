@@ -47,8 +47,18 @@ export interface SkippedDefinition {
   readonly reason: string
 }
 
+/** An operator's own `AGENTS.md` or a Markdown file under their `rules/` directory. */
+export interface OperatorInstruction {
+  readonly kind: 'instructions' | 'rules'
+  readonly name: string
+  readonly path: string
+  readonly origin: OperatorOrigin
+}
+
 export interface OperatorRootsResult {
   readonly definitions: readonly OperatorDefinition[]
+  /** `AGENTS.md` at the operator root (kind `instructions`) and `rules/*.md` (kind `rules`), no frontmatter required. */
+  readonly instructions: readonly OperatorInstruction[]
   /** Roots actually walked. Empty when `user` is absent — the proof of NFR-002, not a claim. */
   readonly rootsRead: readonly string[]
   /** Roots present and withheld, each NAMED. A count would tell an operator they lost something and not what. */
@@ -145,6 +155,54 @@ function readDefinitions(
   return out
 }
 
+/** `rules/*.md`: rules need no frontmatter, so they are listed by name, sorted for a stable prompt. */
+function readRules(root: string, origin: OperatorOrigin): OperatorInstruction[] {
+  let entries: string[]
+  try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- `root` is the operator's own directory, composed from literals
+    entries = readdirSync(root)
+  } catch (cause) {
+    throw new OperatorRootUnreadableError(root, cause)
+  }
+  return entries
+    .filter((entry) => entry.endsWith('.md'))
+    .sort((a, b) => a.localeCompare(b))
+    .map((entry) => ({
+      kind: 'rules' as const,
+      name: entry.slice(0, -3),
+      path: join(root, entry),
+      origin,
+    }))
+}
+
+/** The operator's own `AGENTS.md` at the root of an operator directory, under the same grant. */
+function readOperatorAgentsMd(
+  dir: string,
+  origin: OperatorOrigin,
+  dialect: string | undefined,
+  grants: ReadonlySet<string>,
+  instructions: OperatorInstruction[],
+  rootsRead: string[],
+  withheld: WithheldRoot[],
+): void {
+  const path = join(dir, 'AGENTS.md')
+  try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- `path` is join(home, <literal>, 'AGENTS.md')
+    if (!statSync(path).isFile()) return
+  } catch {
+    return
+  }
+  if (dialect !== undefined && !grants.has(dialect)) {
+    withheld.push({
+      root: path,
+      reason: `not loaded — declare the '${dialect}' dialect in compatSources to receive it`,
+    })
+    return
+  }
+  rootsRead.push(path)
+  instructions.push({ kind: 'instructions', name: 'AGENTS', path, origin })
+}
+
 /**
  * Resolve the operator's definitions for this run.
  *
@@ -154,17 +212,18 @@ function readDefinitions(
  */
 export function resolveOperatorRoots(options: OperatorRootsOptions): OperatorRootsResult {
   if (options.user !== true) {
-    return { definitions: [], rootsRead: [], withheld: [], skipped: [] }
+    return { definitions: [], instructions: [], rootsRead: [], withheld: [], skipped: [] }
   }
   const base = options.homeDir ?? homedir()
   const grants = new Set(options.grants ?? [])
   const definitions: OperatorDefinition[] = []
+  const instructions: OperatorInstruction[] = []
   const rootsRead: string[] = []
   const withheld: WithheldRoot[] = []
   const skipped: SkippedDefinition[] = []
 
   for (const { dir, origin, dialect } of ROOTS) {
-    for (const kind of ['skills', 'agents'] as const) {
+    for (const kind of ['skills', 'agents', 'rules'] as const) {
       const root = join(base, dir, kind)
       if (!exists(root)) continue
       if (dialect !== undefined && !grants.has(dialect)) {
@@ -175,8 +234,18 @@ export function resolveOperatorRoots(options: OperatorRootsOptions): OperatorRoo
         continue
       }
       rootsRead.push(root)
-      definitions.push(...readDefinitions(root, origin, skipped))
+      if (kind === 'rules') instructions.push(...readRules(root, origin))
+      else definitions.push(...readDefinitions(root, origin, skipped))
     }
+    readOperatorAgentsMd(
+      join(base, dir),
+      origin,
+      dialect,
+      grants,
+      instructions,
+      rootsRead,
+      withheld,
+    )
   }
-  return { definitions, rootsRead, withheld, skipped }
+  return { definitions, instructions, rootsRead, withheld, skipped }
 }

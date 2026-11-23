@@ -30,6 +30,11 @@ export interface InstanceConfigOptions<K extends string> {
   readonly pathVariable?: string
   /** Default `${APP}_PROFILE`. */
   readonly profileVariable?: string
+  /**
+   * `keep` makes `load` and `write` also carry keys that are not declared (a file whose variable names are
+   * not known in advance); their names must still be valid variable names. Default `ignore`.
+   */
+  readonly undeclared?: 'ignore' | 'keep'
 }
 
 export interface AuditFinding {
@@ -45,7 +50,7 @@ export interface InstanceConfig<K extends string> {
   load(env: NodeJS.ProcessEnv, homeDir: string): string | undefined
   write(
     path: string,
-    entries: Readonly<Partial<Record<K, string>>>,
+    entries: Readonly<Partial<Record<K, string>> & Record<string, string | undefined>>,
     options: { force: boolean },
   ): Promise<void>
   /**
@@ -79,6 +84,7 @@ export interface InstanceConfig<K extends string> {
     path: string,
     env: NodeJS.ProcessEnv,
     previous: Readonly<Record<string, string>>,
+    validate?: WatchOptions['validate'],
   ): { result: ReloadEvent; accepted: Readonly<Record<string, string>> }
   /** Watches the file's directory (so a rename-over is seen), debounced; the watcher is unref'd. */
   watch(path: string, env: NodeJS.ProcessEnv, options: WatchOptions): { close(): void }
@@ -92,18 +98,21 @@ export function defineInstanceConfig<K extends string>(
   const pathVariable = options.pathVariable ?? defaultVariable(app, 'CONFIG')
   const profileVariable = options.profileVariable ?? defaultVariable(app, 'PROFILE')
   const declared = new Set<string>(Object.keys(keys))
+  const keep = options.undeclared === 'keep'
   const resolve = (env: NodeJS.ProcessEnv, homeDir: string) =>
     resolveConfigPath(app, pathVariable, profileVariable, env, homeDir)
   return {
     path: (env, homeDir) => resolve(env, homeDir).path,
-    load: (env, homeDir) => loadInstanceConfig(resolve(env, homeDir), declared, env),
-    write: (path, entries, opts) => writeInstanceConfig(app, keys, path, entries, opts),
+    load: (env, homeDir) =>
+      loadInstanceConfig(resolve(env, homeDir), keep ? undefined : declared, env),
+    write: (path, entries, opts) =>
+      writeInstanceConfig(app, keys, path, entries, { ...opts, keep }),
     onboard: (io, opts) =>
       onboardInstanceConfig(
         keys,
         (env, homeDir) => resolve(env, homeDir).path,
         (path, entries, writeOptions) =>
-          writeInstanceConfig(app, keys, path, entries, writeOptions),
+          writeInstanceConfig(app, keys, path, entries, { ...writeOptions, keep }),
         io,
         opts,
       ),
@@ -138,7 +147,8 @@ export function defineInstanceConfig<K extends string>(
     },
     audit: (path) => auditInstanceConfig(app, path),
     fix: (findings) => fixInstanceConfig(findings),
-    reload: (path, env, previous) => reloadInstanceConfig(keys, path, env, previous),
+    reload: (path, env, previous, validate) =>
+      reloadInstanceConfig(keys, path, env, previous, validate),
     watch: (path, env, opts) => watchInstanceConfig(keys, path, env, opts),
   }
 }

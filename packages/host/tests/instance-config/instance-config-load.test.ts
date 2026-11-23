@@ -40,3 +40,18 @@ describe('load', () => {
   })
   it('missing default file returns undefined', () => expect(cfg.load({}, mk())).toBeUndefined())
 })
+
+describe('undeclared keys', () => {
+  it("'keep' loads and writes keys that are not declared", async () => {
+    const d = mk()
+    const f = join(d, 'c.env')
+    const open = defineInstanceConfig({ app: 'demo', keys: { DEMO_A: {} }, undeclared: 'keep' })
+    await open.write(f, { DEMO_A: 'a', DEMO_PEER_TOKEN_X: 'p' }, { force: false })
+    const env: NodeJS.ProcessEnv = { DEMO_CONFIG: f }
+    open.load(env, d)
+    expect(env).toMatchObject({ DEMO_A: 'a', DEMO_PEER_TOKEN_X: 'p' })
+    await expect(open.write(f, { 'BAD KEY': 'x' }, { force: true })).rejects.toThrow(
+      /not a declared key/,
+    )
+  })
+})
