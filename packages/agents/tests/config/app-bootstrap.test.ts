@@ -8,12 +8,21 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertBootstrapped,
   BootstrapNotRunError,
+  type BootstrapContext,
   BootstrapStepError,
   defineAppBootstrap,
   projectEnvStep,
+  projectEnvStepWith,
+  SdkHomeConflictError,
+  sdkHomeStep,
+  secretRefsStep,
 } from '../../src/config-entry.js'
 
-const ctx = (env: NodeJS.ProcessEnv = {}, cwd = '/tmp') => ({ env, cwd, home: '/home/x' })
+const ctx = (env: NodeJS.ProcessEnv = {}, cwd = '/tmp'): BootstrapContext => ({
+  env,
+  cwd,
+  home: '/home/x',
+})
 
 describe('app bootstrap', () => {
   const dirs: string[] = []
@@ -119,5 +128,95 @@ describe('app bootstrap', () => {
     await defineAppBootstrap([projectEnvStep]).run(ctx(env, dir))
     expect(env.APP_VALUE).toBe('1')
     expect(env[sovereign]).toBeUndefined()
+  })
+
+  it('projectEnvStepWith leaves a protected key unset and reports it refused', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-'))
+    dirs.push(dir)
+    writeFileSync(join(dir, '.env'), 'APP_KEY=x\nOTHER=2\nALREADY=file\n')
+    const env: NodeJS.ProcessEnv = { ALREADY: 'shell' }
+    const c = ctx(env, dir)
+    await defineAppBootstrap([projectEnvStepWith({ protectedKeys: ['APP_KEY'] })]).run(c)
+    expect(env.APP_KEY).toBeUndefined()
+    expect(env.ALREADY).toBe('shell')
+    expect(c.projectEnv).toEqual({
+      file: join(dir, '.env'),
+      loaded: ['OTHER'],
+      refused: ['APP_KEY'],
+    })
+  })
+
+  it('records an empty result when there is no .env', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-'))
+    dirs.push(dir)
+    const c = ctx({}, dir)
+    await defineAppBootstrap([projectEnvStep]).run(c)
+    expect(c.projectEnv).toEqual({ file: join(dir, '.env'), loaded: [], refused: [] })
+  })
+})
+
+describe('sdkHomeStep and secretRefsStep', () => {
+  const home = '/home/x'
+  it('points both variables inside <home>/<dirName>', async () => {
+    const env: NodeJS.ProcessEnv = {}
+    await defineAppBootstrap([sdkHomeStep({ dirName: '.myapp' })]).run({ env, cwd: '/tmp', home })
+    expect(env.THEOKIT_HOME).toBe('/home/x/.myapp')
+    expect(env.THEOKIT_AUTH_HOME).toBe('/home/x/.myapp')
+  })
+
+  it('profile form resolves under the SDK profiles root', async () => {
+    const env: NodeJS.ProcessEnv = {}
+    await defineAppBootstrap([sdkHomeStep({ profile: 'work' })]).run({ env, cwd: '/tmp', home })
+    expect(env.THEOKIT_HOME).toBe('/home/x/.theokit/profiles/work')
+    expect(env.THEOKIT_AUTH_HOME).toBe(env.THEOKIT_HOME)
+  })
+
+  it('refuse fails with a typed error naming the variable and writes nothing', async () => {
+    const env: NodeJS.ProcessEnv = { THEOKIT_AUTH_HOME: '/secret/place' }
+    const run = defineAppBootstrap([sdkHomeStep({ dirName: '.myapp', onConflict: 'refuse' })]).run({
+      env,
+      cwd: '/tmp',
+      home,
+    })
+    const err = await run.catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(BootstrapStepError)
+    const cause = (err as BootstrapStepError).cause
+    expect(cause).toBeInstanceOf(SdkHomeConflictError)
+    expect((cause as SdkHomeConflictError).variable).toBe('THEOKIT_AUTH_HOME')
+    expect((cause as Error).message).not.toContain('/secret/place')
+    expect(env.THEOKIT_HOME).toBeUndefined()
+  })
+
+  it('env-wins leaves set values and fills the other', async () => {
+    const env: NodeJS.ProcessEnv = { THEOKIT_HOME: '/elsewhere' }
+    await defineAppBootstrap([sdkHomeStep({ dirName: '.myapp', onConflict: 'env-wins' })]).run({
+      env,
+      cwd: '/tmp',
+      home,
+    })
+    expect(env.THEOKIT_HOME).toBe('/elsewhere')
+    expect(env.THEOKIT_AUTH_HOME).toBe('/home/x/.myapp')
+  })
+
+  it('a later step sees the variables set', async () => {
+    const env: NodeJS.ProcessEnv = {}
+    let seen: string | undefined
+    await defineAppBootstrap([
+      sdkHomeStep({ dirName: '.myapp' }),
+      {
+        name: 'after',
+        run: (c) => {
+          seen = c.env.THEOKIT_HOME
+        },
+      },
+    ]).run({ env, cwd: '/tmp', home })
+    expect(seen).toBe('/home/x/.myapp')
+  })
+
+  it('secretRefsStep resolves env references', async () => {
+    const env: NodeJS.ProcessEnv = { PLAIN: 'x', TOKEN: 'secretref:env:SOURCE', SOURCE: 'real' }
+    await defineAppBootstrap([secretRefsStep()]).run({ env, cwd: '/tmp', home })
+    expect(env.PLAIN).toBe('x')
+    expect(env.TOKEN).toBe('real')
   })
 })

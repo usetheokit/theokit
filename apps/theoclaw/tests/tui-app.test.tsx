@@ -9,7 +9,7 @@ import { createServer } from "node:net";
 import { render } from "ink-testing-library";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type ControlClient, type ControlFrame, createControlClient } from "../src/control-client/control-client.js";
+import { type ControlClient, type ControlFrame, connectControlClient } from "../src/control-client/control-client.js";
 import { composerReady } from "./composer-ready.js";
 import { createContainer } from "../src/composition.js";
 import { controlOptions } from "../src/control-plane/control-wiring.js";
@@ -65,7 +65,7 @@ async function startInstance(turnFor: (n: number) => FakeTurn): Promise<Instance
 }
 
 async function renderTui(instance: Instance, session = "owner") {
-  const client = await createControlClient({ url: `ws://127.0.0.1:${instance.port}/control`, token: TOKEN });
+  const client = await connectControlClient({ url: `ws://127.0.0.1:${instance.port}/control`, token: TOKEN });
   clients.push(client);
   return mount(client, session);
 }
@@ -318,7 +318,7 @@ describe("theoclaw-tui entry (T4.2)", { timeout: 40_000 }, () => {
     const refused = tuiProcess(port);
     expect(await refused.exited).toBe(1);
     const all = tui.output() + refused.output();
-    expect(refused.output()).toContain("cannot reach the instance");
+    expect(refused.output()).toContain("could not connect to the instance");
     expect(all.split(TOKEN)).toHaveLength(1);
     expect(all.split(MODEL_KEY)).toHaveLength(1);
   });

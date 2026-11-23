@@ -1,7 +1,12 @@
 import type { WireMessage as UIMessage } from '@theokit/presenter/wire'
 import { useMemo, useRef, useSyncExternalStore } from 'react'
 
-import { AgentClient, type PendingApproval, type UseAgentStatus } from './agent-client.js'
+import {
+  AgentClient,
+  type PendingApproval,
+  type TurnSettled,
+  type UseAgentStatus,
+} from './agent-client.js'
 import { type AgentHandle, isAgentHandle } from './agent-handle.js'
 import { HttpTransport } from './http-transport.js'
 import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
@@ -33,6 +38,11 @@ export interface UseAgentReturn<TInput = unknown, TToolNames extends string = st
   error: Error | undefined
   /** Send a request; opens a new stream. Typed to the agent's `input` schema. */
   send: (input: TInput) => void
+  /**
+   * Same as `send`, and resolves with how the turn settled once its stream ends — no polling. Never
+   * rejects; a superseded or aborted turn resolves `'aborted'`. Pass the hook result to `asGoalLoopAgent`.
+   */
+  sendAndWait: (input: TInput) => Promise<TurnSettled>
   /** Abort an in-flight stream. */
   abort: () => void
   /** Clear messages + error, back to idle. */
@@ -147,6 +157,7 @@ export function useAgent<TInput = unknown>(
     error: state.error,
     pendingApprovals: state.pendingApprovals,
     send: client.send,
+    sendAndWait: client.sendAndWait,
     abort: client.abort,
     reset: client.reset,
     approve: client.approve,

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createDevicePairing } from '../src/control-plane/device-pairing.js'
+import { openDevicePairing as createDevicePairing } from '../src/control-plane/control-wiring.js'
 import { loadCityLookup } from '../src/control-plane/geo-city.js'
 import { serveHandler } from '../src/control-plane/http-dispatch.js'
 import { PEER_ADDRESS_HEADER } from '../src/control-plane/trusted-proxy.js'
@@ -65,7 +65,7 @@ describe('pending_devices city', () => {
         new Request('http://x/control/pair', {
           method: 'POST',
           headers: { [PEER_ADDRESS_HEADER]: peer },
-          body: JSON.stringify({ code: devices.issueSetupCode(), name, token }),
+          body: JSON.stringify({ code: devices.issueCode(), name, token }),
         }),
       )
     expect((await post('203.0.113.9', 'phone', 'abcdefghij-token-0123456789-aaaa')).status).toBe(
@@ -75,5 +75,18 @@ describe('pending_devices city', () => {
     const pending = devices.pending()
     expect(pending.find((d) => d.name === 'phone')?.city).toBe('Paris')
     expect(pending.find((d) => d.name === 'desk')).not.toHaveProperty('city')
+  })
+
+  it('keeps `bad_token` as the pairing refusal for a weak token on the wire', async () => {
+    const devices = createDevicePairing({ dir: dir() })
+    const handler = serveHandler(() => Promise.resolve(new Response(null, { status: 404 })), undefined, devices)
+    const response = await handler(
+      new Request('http://x/control/pair', {
+        method: 'POST',
+        body: JSON.stringify({ code: devices.issueCode(), name: 'phone', token: 'short' }),
+      }),
+    )
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'bad_token' })
   })
 })

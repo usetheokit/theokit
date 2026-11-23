@@ -2,7 +2,7 @@ import { request } from "node:http";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolveBindAddress } from "../src/control-plane/bind.js";
+import { resolveControlHost } from "../src/control-plane/bind.js";
 import { TheoClawBindError } from "../src/control-plane/errors.js";
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from "../src/control-plane/listener.js";
 
@@ -39,7 +39,7 @@ function upgrade(path: string): Promise<number | undefined> {
 /** AC-002 (B-372): the listener reports the address the socket holds and answers /health. */
 describe("listenControlPlane", () => {
   it("reports 127.0.0.1 from the socket when bound with no host configured", async () => {
-    handle = await listenControlPlane({ handler: healthHandler, port: 0, host: resolveBindAddress({}), stderr });
+    handle = await listenControlPlane({ handler: healthHandler, port: 0, host: resolveControlHost({}), stderr });
 
     expect(handle.address().host).toBe("127.0.0.1");
     expect(handle.address().port).toBeGreaterThan(0);

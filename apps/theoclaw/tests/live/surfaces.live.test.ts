@@ -10,7 +10,7 @@ import { createElement } from "react";
 import { ChannelTransport, createAgentClient } from "theokit/client/core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { type ControlClient, createControlClient } from "../../src/control-client/control-client.js";
+import { type ControlClient, connectControlClient } from "../../src/control-client/control-client.js";
 import { TheoClawTui } from "../../src/tui/app.js";
 import { endRunningTurn } from "./support/end-running-turn.js";
 import { composerReady } from "../composer-ready.js";
@@ -67,7 +67,7 @@ async function waitForOutput(pattern: RegExp, what: string): Promise<RegExpMatch
 
 /** The TUI rendered against the instance on SESSION, with a way to type and to read the screen. */
 async function renderTui() {
-  const client = await createControlClient({ url: `ws://127.0.0.1:${port}/control`, token: TOKEN });
+  const client = await connectControlClient({ url: `ws://127.0.0.1:${port}/control`, token: TOKEN });
   clients.push(client);
   const view = render(createElement(TheoClawTui, { client, session: SESSION, onExit: () => undefined }));
   const screen = (): string => view.lastFrame() ?? "";
