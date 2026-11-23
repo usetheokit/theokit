@@ -16,7 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
-- The `Bash` and `Edit` headers come from `toolPresentation` with `aliases` (`shell_exec`, `edit_file`); the ApplyPatch header, refusal wording and the other headers stay TheoCode's own (#2722).
+- The `Bash`, `Edit` and `ApplyPatch` headers come from `toolPresentation` with `aliases` (`shell_exec`, `edit_file`, `apply_patch`); TheoCode keeps the one-line command, the `file`/`files` fallbacks, the patch +/- counts, the refusal wording and the other headers. The `ToolPresentation` → `{formatToolHeader, formatToolResult}` adapter is not in `@theokit/tui` yet (theokit-tui#295), so the body and approval tables stay TheoCode's own (#2722).
 - `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
 - The TUI session pointer is the framework's `last-session` (`loadOrCreateSessionId` / `persistSessionId` from `@theokit/agents/session`) instead of `<cwd>/.theokit/tui-session`; the old file is read once, when no `last-session` exists, and its id is copied across. Writes stay serialised per pointer and a failed write is still reported. `gc/pointer.ts` is gone: session delete, fork and `sessions gc` read `last-session` through `readPointerId`, which still refuses when the file cannot be read (#2754).
 - `/theme` with `NO_COLOR` set no longer claims a colour switch the provider would not draw: it refuses, says why, and persists nothing (#2731).

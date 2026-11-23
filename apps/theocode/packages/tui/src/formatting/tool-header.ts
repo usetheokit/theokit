@@ -153,7 +153,11 @@ export function formatToolHeader(
 }
 
 /** `Ran x` → `Rejected x` / `Blocked x`, per tool, so the noun still matches what was refused. */
-function refusedName(verb: 'Rejected' | 'Blocked', tool: string, input: Record<string, unknown>): string {
+function refusedName(
+  verb: 'Rejected' | 'Blocked',
+  tool: string,
+  input: Record<string, unknown>,
+): string {
   const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
   switch (tool) {
     case 'Bash':
@@ -174,11 +178,17 @@ function refusedName(verb: 'Rejected' | 'Blocked', tool: string, input: Record<s
 type Header = { name?: string; summary?: string }
 
 /**
- * Bash and Edit take their verb and target from the toolkit's presentation of the tool they alias.
- * ApplyPatch stays ours: its file list handles renames, `+N more` and the `files` fallback, which
- * the toolkit's `apply_patch` header words differently.
+ * Bash, Edit and ApplyPatch take their verb and target from the toolkit's presentation of the tool
+ * they alias. What the toolkit does not do and TheoCode keeps: flatten a multi-line command to one
+ * line (`⏎`), fall back to `file` / `files` when the target is missing, and append the +/- counts
+ * of a patch. The adapter that turns a presentation into the `formatToolHeader` /
+ * `formatToolResult` pair is still missing from `@theokit/tui` (theokit-tui#295), so this reads
+ * `header` from the map directly.
  */
-const PRESENTATION = toolPresentation({}, { aliases: { Bash: 'shell_exec', Edit: 'edit_file' } })
+const PRESENTATION = toolPresentation(
+  {},
+  { aliases: { Bash: 'shell_exec', Edit: 'edit_file', ApplyPatch: 'apply_patch' } },
+)
 
 function presented(tool: string, input: Record<string, unknown>, active: boolean): string {
   return PRESENTATION.get(tool)?.header(input, active) ?? ''
@@ -213,7 +223,7 @@ const HEADERS_BY_TOOL: ReadonlyMap<
     (input, active) => {
       const patch = typeof input.patch === 'string' ? input.patch : ''
       return {
-        name: `${active ? 'Editing' : 'Edited'} ${filesFromV4APatch(patch)}${diffCounts(patch)}`.trim(),
+        name: `${presented('ApplyPatch', { patch, path: 'files' }, active).trim()}${diffCounts(patch)}`,
       }
     },
   ],
