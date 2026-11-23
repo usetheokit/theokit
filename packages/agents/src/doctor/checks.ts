@@ -84,6 +84,7 @@ function leftovers(name: string, paths: readonly string[], hint?: string): Check
 function skillNamesIn(root: string): string[] {
   let entries: string[]
   try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- the roots are the caller's own skills directories; reading them is the check.
     entries = readdirSync(root)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
@@ -91,6 +92,7 @@ function skillNamesIn(root: string): string[] {
   }
   return entries.filter((entry) => {
     try {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- the roots are the caller's own skills directories; reading them is the check.
       return statSync(join(root, entry, 'SKILL.md')).isFile()
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
@@ -111,8 +113,8 @@ function skillsInventory(options: {
   const name = 'skills'
   const onDisk = new Set(options.roots.flatMap(skillNamesIn))
   const declared = new Set(options.declared)
-  const undeclared = [...onDisk].filter((n) => !declared.has(n)).sort()
-  const missing = [...declared].filter((n) => !onDisk.has(n)).sort()
+  const undeclared = [...onDisk].filter((n) => !declared.has(n)).sort((a, b) => a.localeCompare(b))
+  const missing = [...declared].filter((n) => !onDisk.has(n)).sort((a, b) => a.localeCompare(b))
   if (undeclared.length === 0 && missing.length === 0) {
     return { name, status: 'ok', detail: `${String(declared.size)} declared, all on disk` }
   }
