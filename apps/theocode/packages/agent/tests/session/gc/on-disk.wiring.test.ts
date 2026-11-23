@@ -46,7 +46,7 @@ function scratch(): { root: string; project: string; transcript: string } {
   return { root, project, transcript }
 }
 
-const planFor = (transcript: string) => ({
+const planFor = (root: string, transcript: string) => ({
   candidates: [
     { project: 'a-project', kind: 'transcript' as const, target: transcript, ageDays: 90 },
   ],
@@ -55,13 +55,24 @@ const planFor = (transcript: string) => ({
   liveCwds: [],
   totalByKind: {} as never,
   errors: [],
+  framework: {
+    projectsRoot: root,
+    candidates: [
+      { project: 'a-project', kind: 'transcript' as const, target: transcript, ageDays: 90 },
+    ],
+    kept: [],
+    touchedProjects: ['a-project'],
+    liveCwds: [],
+    countByKind: { transcript: 1, 'writer-lock': 0, 'lock-directory': 0, temp: 0, registry: 0 },
+    errors: [],
+  },
 })
 
 describe('the on-disk wiring of the delete path', () => {
   it('test_apply_actually_removes_the_file_from_the_filesystem', async () => {
     const { root, transcript } = scratch()
 
-    const result = await runAllProjectsOnDisk(planFor(transcript), {
+    const result = await runAllProjectsOnDisk(planFor(root, transcript), {
       apply: true,
       projectsRoot: root,
     })
@@ -78,7 +89,7 @@ describe('the on-disk wiring of the delete path', () => {
     // satisfy the case above, and this is the one that would catch it.
     const { root, transcript } = scratch()
 
-    const result = await runAllProjectsOnDisk(planFor(transcript), { projectsRoot: root })
+    const result = await runAllProjectsOnDisk(planFor(root, transcript), { projectsRoot: root })
 
     expect(existsSync(transcript), 'a DRY RUN deleted a file').toBe(true)
     expect(result.dryRun).toBe(true)
@@ -90,7 +101,7 @@ describe('the on-disk wiring of the delete path', () => {
     const { root, transcript } = scratch()
 
     const result = await runAllProjectsOnDisk(
-      planFor(join(root, 'a-project', 'never-existed.jsonl')),
+      planFor(root, join(root, 'a-project', 'never-existed.jsonl')),
       { apply: true, projectsRoot: root },
     )
 
@@ -105,7 +116,7 @@ describe('the on-disk wiring leaves foreign files alone', () => {
     const foreign = join(project, 'notes.txt')
     writeFileSync(foreign, 'mine')
 
-    const result = await runAllProjectsOnDisk(planFor(transcript), {
+    const result = await runAllProjectsOnDisk(planFor(root, transcript), {
       apply: true,
       projectsRoot: root,
     })
