@@ -20936,6 +20936,114 @@
         }
       }
     },
+    "./foreign-setup": {
+      "names": {
+        "ForeignHook": {
+          "tier": "stable",
+          "declaration": "interface ForeignHook {\n    readonly event: string;\n    readonly command: string;\n    readonly matcher?: string;\n    readonly timeoutMs?: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ForeignMcpServer": {
+          "tier": "stable",
+          "declaration": "type ForeignMcpServer = {\n    readonly command: string;\n    readonly args?: string[];\n    readonly env?: Record<string, string>;\n    readonly cwd?: string;\n} | {\n    readonly type: 'http' | 'sse';\n    readonly url: string;\n    readonly headers?: Record<string, string>;\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ForeignSetup": {
+          "tier": "stable",
+          "declaration": "interface ForeignSetup {\n    readonly kind: ForeignSetupKind;\n    readonly source: string;\n    readonly instructions: ForeignTextFile[];\n    readonly skills: ForeignSkill[];\n    readonly mcpServers: Record<string, ForeignMcpServer>;\n    readonly hooks: ForeignHook[];\n    readonly untranslated: UntranslatedEntry[];\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/foreign-setup.d.ts#ForeignHook",
+            "dist/foreign-setup.d.ts#ForeignMcpServer",
+            "dist/foreign-setup.d.ts#ForeignSetupKind",
+            "dist/foreign-setup.d.ts#ForeignSkill",
+            "dist/foreign-setup.d.ts#ForeignTextFile",
+            "dist/foreign-setup.d.ts#UntranslatedEntry"
+          ],
+          "internals": {
+            "dist/foreign-setup.d.ts#ForeignHook": "interface ForeignHook {\n    readonly event: string;\n    readonly command: string;\n    readonly matcher?: string;\n    readonly timeoutMs?: number;\n}",
+            "dist/foreign-setup.d.ts#ForeignMcpServer": "type ForeignMcpServer = {\n    readonly command: string;\n    readonly args?: string[];\n    readonly env?: Record<string, string>;\n    readonly cwd?: string;\n} | {\n    readonly type: 'http' | 'sse';\n    readonly url: string;\n    readonly headers?: Record<string, string>;\n};",
+            "dist/foreign-setup.d.ts#ForeignSetupKind": "type ForeignSetupKind = 'claude-code' | 'hermes';",
+            "dist/foreign-setup.d.ts#ForeignSkill": "interface ForeignSkill {\n    readonly name: string;\n    readonly description: string;\n    readonly body: string;\n    readonly path: string;\n}",
+            "dist/foreign-setup.d.ts#ForeignTextFile": "interface ForeignTextFile {\n    readonly path: string;\n    readonly text: string;\n}",
+            "dist/foreign-setup.d.ts#UntranslatedEntry": "interface UntranslatedEntry {\n    readonly path: string;\n    readonly reason: string;\n}"
+          }
+        },
+        "ForeignSetupKind": {
+          "tier": "stable",
+          "declaration": "type ForeignSetupKind = 'claude-code' | 'hermes';",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ForeignSkill": {
+          "tier": "stable",
+          "declaration": "interface ForeignSkill {\n    readonly name: string;\n    readonly description: string;\n    readonly body: string;\n    readonly path: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ForeignTextFile": {
+          "tier": "stable",
+          "declaration": "interface ForeignTextFile {\n    readonly path: string;\n    readonly text: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "ReadForeignSetupOptions": {
+          "tier": "stable",
+          "declaration": "interface ReadForeignSetupOptions {\n    readonly home: string;\n    readonly cwd?: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "UntranslatedEntry": {
+          "tier": "stable",
+          "declaration": "interface UntranslatedEntry {\n    readonly path: string;\n    readonly reason: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "readForeignSetup": {
+          "tier": "stable",
+          "declaration": "declare function readForeignSetup(kind: ForeignSetupKind, options: ReadForeignSetupOptions): ForeignSetup;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/foreign-setup.d.ts#ForeignHook",
+            "dist/foreign-setup.d.ts#ForeignMcpServer",
+            "dist/foreign-setup.d.ts#ForeignSetup",
+            "dist/foreign-setup.d.ts#ForeignSetupKind",
+            "dist/foreign-setup.d.ts#ForeignSkill",
+            "dist/foreign-setup.d.ts#ForeignTextFile",
+            "dist/foreign-setup.d.ts#ReadForeignSetupOptions",
+            "dist/foreign-setup.d.ts#UntranslatedEntry"
+          ],
+          "internals": {
+            "dist/foreign-setup.d.ts#ForeignHook": "interface ForeignHook {\n    readonly event: string;\n    readonly command: string;\n    readonly matcher?: string;\n    readonly timeoutMs?: number;\n}",
+            "dist/foreign-setup.d.ts#ForeignMcpServer": "type ForeignMcpServer = {\n    readonly command: string;\n    readonly args?: string[];\n    readonly env?: Record<string, string>;\n    readonly cwd?: string;\n} | {\n    readonly type: 'http' | 'sse';\n    readonly url: string;\n    readonly headers?: Record<string, string>;\n};",
+            "dist/foreign-setup.d.ts#ForeignSetup": "interface ForeignSetup {\n    readonly kind: ForeignSetupKind;\n    readonly source: string;\n    readonly instructions: ForeignTextFile[];\n    readonly skills: ForeignSkill[];\n    readonly mcpServers: Record<string, ForeignMcpServer>;\n    readonly hooks: ForeignHook[];\n    readonly untranslated: UntranslatedEntry[];\n}",
+            "dist/foreign-setup.d.ts#ForeignSetupKind": "type ForeignSetupKind = 'claude-code' | 'hermes';",
+            "dist/foreign-setup.d.ts#ForeignSkill": "interface ForeignSkill {\n    readonly name: string;\n    readonly description: string;\n    readonly body: string;\n    readonly path: string;\n}",
+            "dist/foreign-setup.d.ts#ForeignTextFile": "interface ForeignTextFile {\n    readonly path: string;\n    readonly text: string;\n}",
+            "dist/foreign-setup.d.ts#ReadForeignSetupOptions": "interface ReadForeignSetupOptions {\n    readonly home: string;\n    readonly cwd?: string;\n}",
+            "dist/foreign-setup.d.ts#UntranslatedEntry": "interface UntranslatedEntry {\n    readonly path: string;\n    readonly reason: string;\n}"
+          }
+        }
+      }
+    },
     "./handoff": {
       "names": {
         "CreateHandoffConversationOptions": {

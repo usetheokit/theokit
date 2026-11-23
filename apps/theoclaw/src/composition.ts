@@ -53,7 +53,7 @@ import { a2aLines, readA2ASettings } from './a2a/a2a-settings.js'
 import { a2aRoute } from './a2a/a2a-route.js'
 import { peerTools } from './a2a/peer-tools.js'
 import { RelayClient, RelayTurnGate, relayTools } from './relay/relay-client.js'
-import { RelayMailbox, relayRoute } from './relay/relay-server.js'
+import { relayRoute } from './relay/relay-server.js'
 import { readRelaySettings, relaySecrets } from './relay/relay-settings.js'
 import { mcpRelaySecrets, readMcpRelaySettings, startMcpRelayConnector, type McpRelayConnector } from './mcp-relay/connector.js'
 import { RelayState } from './relay/relay-state.js'
@@ -694,7 +694,7 @@ async function startComposed(given: StartOptions, shared: { browser?: SharedBrow
   const relayClient = relayState === undefined || relay.client === undefined || relay.peers.size === 0 ? undefined : new RelayClient(relay.client!.url, relay.client!.token)
   // A turn that read a peer's relay message may not send back; the owner's next turn may (OC-14).
   const relayToolsFor = (gate?: RelayTurnGate): CustomTool[] => (relayState === undefined || relayClient === undefined ? [] : relayTools(relayState, relayClient, gate))
-  const relayHandler = relay.serveToken === undefined ? undefined : relayRoute(relay.serveToken, new RelayMailbox(100, join(relayDir, 'relay-mailbox.json')))
+  const relayHandler = relay.serveToken === undefined ? undefined : relayRoute(relay.serveToken, { persistPath: join(relayDir, 'relay-mailbox-v2.json') })
   const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...(userWorkflows?.tools ?? []), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
   const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
   const memory = composed.memory
