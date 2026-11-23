@@ -150,6 +150,14 @@ describe('app bootstrap', () => {
       ])
     })
 
+    it('loads a declaration below a line with no equals sign or no name, whatever the Node', async () => {
+      // On Node 22.12, the floor in .nvmrc, util.parseEnv drops every declaration after a line with
+      // no `=`: handing it the raw file loaded nothing here, while Node 22.23 loaded GOOD.
+      const { env, record } = await load('# a comment\n\n=NO_NAME\nNO_EQUALS_SIGN\nGOOD=y\n')
+      expect([...record.loaded]).toEqual(['GOOD'])
+      expect(env.GOOD).toBe('y')
+    })
+
     it('reads a CRLF multiline quoted value as Node reads it, and export with several spaces', async () => {
       const { env, record } = await load('export   A="one\r\ntwo"\r\nB=2\r\n')
       // Node's own parser folds CRLF in a quoted value to LF; the scan must not change that either way.

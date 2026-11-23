@@ -1,8 +1,8 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { createAgentEventMask } from '@theokit/agents/bridge'
 import type { SDKAgent, SDKMessage } from '@theokit/sdk'
+import { isAgentStreamEvent } from '@theokit/agents/bridge'
 import {
-  isAgentStreamEvent,
   toSdkMessage,
   toSdkTimelineEvent,
   type TurnTimelineEvent,

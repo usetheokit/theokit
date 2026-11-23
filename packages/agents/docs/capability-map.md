@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1602 export(s) across 30 entry point(s).
+1612 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@12.0.0`.
 
@@ -308,8 +308,11 @@ Measured against `@theokit/sdk@12.0.0`.
 | `AgentsPluginOptions` | type |
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
+| `AgentTurnAgent` | type |
+| `AgentTurnMessage` | type |
 | `AgentTurnMetadata` | type |
 | `AgentTurnOutcome` | type |
+| `AgentTurnRun` | type |
 | `AgentWithNarrowedListAlias` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
@@ -352,6 +355,8 @@ Measured against `@theokit/sdk@12.0.0`.
 | `DefinitionOrThunk` | type |
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
+| `DelegationFactoryAgent` | type |
+| `DelegationMessagePort` | type |
 | `DelegationPort` | type |
 | `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
@@ -651,8 +656,11 @@ Measured against `@theokit/sdk@12.0.0`.
 | `AgentsPluginOptions` | type |
 | `AgentStopReason` | type |
 | `AgentStreamEvent` | type |
+| `AgentTurnAgent` | type |
+| `AgentTurnMessage` | type |
 | `AgentTurnMetadata` | type |
 | `AgentTurnOutcome` | type |
+| `AgentTurnRun` | type |
 | `ApiErrorContext` | type |
 | `ApiErrorDecision` | type |
 | `ApiErrorPolicy` | type |
@@ -674,6 +682,8 @@ Measured against `@theokit/sdk@12.0.0`.
 | `DefinitionOrThunk` | type |
 | `DelegateFn` | type |
 | `DelegateOptions` | type |
+| `DelegationFactoryAgent` | type |
+| `DelegationMessagePort` | type |
 | `DelegationPort` | type |
 | `DelegationPortFromAgentFactoryOptions` | type |
 | `DelegationResult` | type |
