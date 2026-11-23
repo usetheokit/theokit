@@ -13,7 +13,9 @@
  *   `roots` capability is stripped from `initialize`); the directory is removed when it exits;
  * - the server answers every action with a `- [Snapshot](<file>)` link to a file in that directory,
  *   which no tool of the agent can open; a `tools/call` answer gets the file's content in its place
- *   (a path that leaves the directory is left as it was);
+ *   (one that cannot be read, is empty or leaves the directory becomes a line saying so, and stderr names it);
+ * - the server gets one `tools/call` at a time: a model may send `browser_navigate` and `browser_snapshot`
+ *   in one turn, and a snapshot taken while the page loads is empty, so the model reports an empty page;
  * - `PLAYWRIGHT_MCP_*` variables are dropped, so the environment cannot widen the server's config.
  *
  * Exits with the server's status, 1 when it ended on a signal (SIGTERM, SIGINT and SIGHUP are
@@ -83,7 +85,10 @@ const attached = serverArgs.includes('--cdp-endpoint')
 const OPEN_PAGE_ID = 'theoclaw-open-page'
 /** `idle` until the first tool call, `opening` while the page is being made, then `ready`. */
 let pageState = attached ? 'idle' : 'ready'
-const held = []
+/** The `tools/call` requests not yet sent to the server, in the order they came. */
+const queue = []
+/** The call the server is answering now (`{ id }`), or `undefined`: the server gets one call at a time. */
+let inFlight
 
 /** The ids of the `tools/list` requests whose answers are still to be filtered. */
 const listRequests = new Set()
@@ -114,16 +119,26 @@ function fromClient(message) {
 
 const SNAPSHOT_LINK = /^[ \t]*- \[Snapshot\]\(([^)\n]+)\)[ \t]*$/gm
 
-/** The content of `link` when it names a file inside the output directory, else `undefined`. */
+/**
+ * What replaces the snapshot link `link` in a tool answer: the file's content when it names a file
+ * inside the output directory, else a line that says why there is none. A link left as it was is a
+ * path no tool of the agent can open, and an empty replacement reads as an empty page, so the model
+ * would report a page it never saw; the reason goes to stderr as well, for the run's log.
+ */
 function snapshotContent(link) {
+  const unavailable = (reason) => {
+    process.stderr.write(`browser-proxy: snapshot ${link} ${reason}\n`)
+    return `[The page snapshot could not be read (${reason}). Call browser_snapshot again.]`
+  }
   try {
     const root = realpathSync(workDir)
     const path = realpathSync(resolve(root, link))
     const rel = relative(root, path)
-    if (rel === '' || rel.startsWith('..') || resolve(rel) === rel) return undefined
-    return readFileSync(path, 'utf8').trimEnd()
-  } catch {
-    return undefined
+    if (rel === '' || rel.startsWith('..') || resolve(rel) === rel) return unavailable('is outside the output directory')
+    const content = readFileSync(path, 'utf8').trimEnd()
+    return content === '' ? unavailable('is empty') : content
+  } catch (error) {
+    return unavailable(`could not be read: ${error.message}`)
   }
 }
 
@@ -132,7 +147,7 @@ function inlineSnapshots(message) {
   if (!Array.isArray(content)) return message
   const inlined = content.map((part) =>
     part?.type === 'text' && typeof part.text === 'string'
-      ? { ...part, text: part.text.replace(SNAPSHOT_LINK, (line, link) => snapshotContent(link) ?? line) }
+      ? { ...part, text: part.text.replace(SNAPSHOT_LINK, (_line, link) => snapshotContent(link)) }
       : part,
   )
   return { ...message, result: { ...message.result, content: inlined } }
@@ -161,30 +176,52 @@ createInterface({ input: process.stdin })
       send(process.stdout, { jsonrpc: '2.0', id: message.id, error: { code: NOT_OFFERED, message: `theoclaw: the browser tool ${String(name)} is not offered` } })
       return
     }
-    if (message.method === 'tools/call' && pageState !== 'ready') {
-      held.push(message)
-      if (pageState === 'idle') {
-        pageState = 'opening'
-        send(server.stdin, {
-          jsonrpc: '2.0',
-          id: OPEN_PAGE_ID,
-          method: 'tools/call',
-          params: { name: 'browser_tabs', arguments: { action: 'new' } },
-        })
-      }
+    if (message.method === 'tools/call') {
+      queue.push(message)
+      pump()
       return
     }
     send(server.stdin, fromClient(message))
+    // A cancelled call may never be answered; the calls behind it must not wait for that.
+    if (message.method === 'notifications/cancelled' && inFlight !== undefined && message.params?.requestId === inFlight.id) {
+      inFlight = undefined
+      pump()
+    }
   })
   .on('close', () => server.stdin.end())
+
+/** Send the next queued call when none is in flight; the first call of an attached server waits for its own page. */
+function pump() {
+  if (inFlight !== undefined || pageState === 'opening' || queue.length === 0) return
+  if (pageState === 'idle') {
+    pageState = 'opening'
+    send(server.stdin, {
+      jsonrpc: '2.0',
+      id: OPEN_PAGE_ID,
+      method: 'tools/call',
+      params: { name: 'browser_tabs', arguments: { action: 'new' } },
+    })
+    return
+  }
+  const next = queue.shift()
+  if (next.id !== undefined && next.id !== null) inFlight = { id: next.id }
+  send(server.stdin, fromClient(next))
+  pump()
+}
 
 createInterface({ input: server.stdout }).on('line', (line) => {
   const message = parse(line)
   if (message?.id === OPEN_PAGE_ID) {
     pageState = 'ready'
-    for (const next of held.splice(0)) send(server.stdin, fromClient(next))
+    pump()
   } else if (message === undefined) process.stdout.write(`${line}\n`)
-  else send(process.stdout, fromServer(message))
+  else {
+    send(process.stdout, fromServer(message))
+    if (inFlight !== undefined && message.id === inFlight.id && (message.result !== undefined || message.error !== undefined)) {
+      inFlight = undefined
+      pump()
+    }
+  }
 })
 
 // The server ending its stdin read is how it learns the client left; a write after that is not an error here.

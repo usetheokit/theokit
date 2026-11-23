@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents-pty 0.3.1, @theokit/agents 17.4.0, create-theokit 3.3.0, @theokit/host 0.3.0, @theokit/http 2.10.0, theokit 0.86.0] - 2026-11-23
+
 ### Added
 
 - `@theokit/host/browser`: `browserMcpServer` and `createSharedBrowser` give an agent a Playwright MCP browser with `browser_run_code_unsafe` always denied and its files confined to `outputDir`.
