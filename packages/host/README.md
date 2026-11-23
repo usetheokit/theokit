@@ -45,9 +45,13 @@ config.fix(config.audit(config.path(process.env, homedir())))
 
 `MY_AGENT_PROFILE=work` selects `my-agent-work.env`. A missing file named by `MY_AGENT_CONFIG` throws `InstanceConfigError`; a missing default file makes `load` return `undefined`. `write` creates the file 0600 and a directory it creates 0700, replaces atomically, refuses an existing file without `force`, refuses undeclared keys and values with `"`, `\` or a line break, and runs each key's `parse` first. Errors name keys and paths, never values. `audit` reports a file or app-owned directory open beyond its owner; `fix` applies `chmod` and returns the findings it fixed.
 
+### `entryArgs` and `applyEntryArgs`
+
+A Task Scheduler task carries no environment. Put `config.entryArgs()` (`--config <resolved path>`, plus `--profile <name>` when set; optional `env` and `homeDir`) in `ServiceSpec.args`, and call `config.applyEntryArgs(process.argv.slice(2), process.env)` before `load`. It sets the path and profile variables, accepts nothing else, and throws `InstanceConfigError` on an unknown, valueless or repeated flag, leaving `env` unchanged.
+
 ### `onboard`
 
-First-run setup. Each declared key takes its value from `answers`, then from the environment variable named in `secretFromEnv` (an unset variable throws `InstanceConfigError` naming it), then from a prompt; a `secret: true` key is read with echo off. Values are checked with each key's `parse` and `validate` before anything is written; without `force` an existing file is refused by `write` itself. Interactive use without a TTY throws `onboarding needs a terminal; pass the answers instead`.
+First-run setup. Each declared key takes its value from `answers`, then from the environment variable named in `secretFromEnv` (an unset variable throws `InstanceConfigError` naming it), then from a prompt; a `secret: true` key is read with echo off. Values are checked with each key's `parse` and `validate` before anything is written; without `force` an existing file is refused by `write` itself. A key with `generate: () => string` always takes its value from `generate()`: it is never prompted for, and `answers` and `secretFromEnv` do not override it. Interactive use without a TTY throws `onboarding needs a terminal; pass the answers instead`.
 
 ```ts
 // my-agent onboard [--yes] [--model m] [--api-key-env NAME] [--force]

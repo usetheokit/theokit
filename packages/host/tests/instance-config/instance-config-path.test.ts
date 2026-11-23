@@ -75,3 +75,31 @@ describe('built subpath', () => {
     expect(typeof built.InstanceConfigError).toBe('function')
   })
 })
+
+describe('entry arguments', () => {
+  it('round-trips the path and profile', () => {
+    const args = cfg.entryArgs({ DEMO_PROFILE: 'work' }, '/home/u')
+    const env: NodeJS.ProcessEnv = {}
+    cfg.applyEntryArgs(args, env)
+    expect(env.DEMO_CONFIG).toBe('/home/u/.config/demo/demo-work.env')
+    expect(env.DEMO_PROFILE).toBe('work')
+    expect(cfg.path(env, '/elsewhere')).toBe('/home/u/.config/demo/demo-work.env')
+  })
+  it('refuses a malformed list and changes nothing', () => {
+    for (const argv of [
+      ['--x', 'y'],
+      ['--config'],
+      ['--config', 'a', '--config', 'b'],
+      ['--config', '--profile'],
+    ]) {
+      const env: NodeJS.ProcessEnv = {}
+      expect(() => cfg.applyEntryArgs(argv, env)).toThrow(InstanceConfigError)
+      expect(env).toEqual({})
+    }
+    const env: NodeJS.ProcessEnv = {}
+    expect(() => cfg.applyEntryArgs(['--config', 'a', '--bad', 'b'], env)).toThrow(
+      InstanceConfigError,
+    )
+    expect(env).toEqual({})
+  })
+})
