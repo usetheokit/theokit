@@ -214,17 +214,32 @@ async function answerTurn(options: ReplyHandlerOptions, broadcast: BroadcastGrou
   let prompt = ''
   let result: Promise<Awaited<ReturnType<TurnRun['wait']>> | undefined> | undefined
   let answer = ''
+  let streamFailed = false
   const agentFor = (forEvent: MessageEvent): Promise<AgentLease> =>
     new Promise<AgentLease>((resolve, reject) => {
       boundary = options.withAgent(forEvent, (lease) =>
         new Promise<void>((released) => {
           agentId = lease.agentId
           sessionAgent = lease.agent
+          // Counted from the lease, as before, so a `/steer` finds the turn until it is released.
+          const untrack = trackTurn(lease.agent, {})
           resolve({
             agent: lease.agent,
+            // The package releases before `onTurnEnd`, so compaction runs here, while the lease is held.
             release: async () => {
-              lease.release()
-              released()
+              try {
+                const run = await result
+                if (options.compact !== undefined && lease.agentId !== undefined && run !== undefined && run.status !== 'error' && run.status !== 'cancelled' && !streamFailed) {
+                  await compactIfNeeded(options.compact, lease.agentId, run)
+                }
+              } finally {
+                untrack()
+                try {
+                  lease.release()
+                } finally {
+                  released()
+                }
+              }
             },
           })
         }),
@@ -241,20 +256,17 @@ async function answerTurn(options: ReplyHandlerOptions, broadcast: BroadcastGrou
     errorText: ERROR_REPLY,
     secrets,
     progress: (output) => {
+      if (output.type === 'error') streamFailed = true
       const lines = gate.lines(output)
       return lines.length === 0 ? undefined : lines.join('\n')
     },
     onTurnStart: (_forEvent, turn: RunningTurn) => {
-      const untrack = trackTurn(turn.agent, turn)
       result = turn.run.wait().catch(() => undefined)
       if (options.advisor !== undefined) {
         advisor = watchTurn(options.advisor, advisorHistoryOf(options.advisor), agentId ?? event.channel.id)
         if (sessionAgent !== undefined) advisor.start(sessionAgent, prompt)
       }
-      return () => {
-        advisor?.stop()
-        untrack()
-      }
+      return () => advisor?.stop()
     },
     decorateReply: async (reply) => {
       answer = reply
@@ -269,8 +281,6 @@ async function answerTurn(options: ReplyHandlerOptions, broadcast: BroadcastGrou
     onTurnEnd: async (forEvent, outcome) => {
       if (!outcome.failed) {
         advisor?.record(answer)
-        const run = await result
-        if (options.compact !== undefined && agentId !== undefined && run !== undefined && run.status !== 'error') await compactIfNeeded(options.compact, agentId, run)
       }
       // The thread and the other members get the answer without the usage footer.
       await broadcast?.onTurnEnd(forEvent, { ...outcome, text: answer === '' ? outcome.text : answer })

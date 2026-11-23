@@ -89,13 +89,16 @@ describe('broadcast groups', () => {
     expect(app.sent('discord')).toEqual([])
   })
 
-  it('keeps at most 10 exchanges and 16384 characters of thread', async () => {
+  it('keeps at most 20 turns (10 exchanges) and 16384 characters', async () => {
     const app = setup([HOME])
     for (let n = 0; n < 12; n += 1) await app.deliver(inChannel('telegram', 'tg-chat', `question ${n}`))
     const last = app.prompts.at(-1) ?? ''
     expect(last).not.toContain('question 0\n')
     expect(last).toContain('question 1\n')
     expect(last).toContain('answer to question 10')
+    // 10 exchanges are 20 turns: 10 questions and 10 answers.
+    expect(last.match(/^User: question \d+$/gm) ?? []).toHaveLength(10)
+    expect(last.match(/^Assistant: answer to question \d+$/gm) ?? []).toHaveLength(10)
 
     const big = setup([HOME])
     for (let n = 0; n < 3; n += 1) await big.deliver(inChannel('discord', 'dc-channel', `${'q'.repeat(6000)}${n}`))
@@ -103,6 +106,9 @@ describe('broadcast groups', () => {
     const prompt = big.prompts.at(-1) ?? ''
     expect(prompt.length).toBeLessThanOrEqual(16_384 + 'Conversation so far:\n\n\nNew message:\nfinal'.length)
     expect(prompt).toContain('final')
+    // The oldest big message was dropped, the newest kept.
+    expect(prompt).not.toContain(`${'q'.repeat(6000)}0`)
+    expect(prompt).toContain(`${'q'.repeat(6000)}2`)
   })
 
   it('a failed member send leaves the other members and the transcript intact', async () => {
@@ -182,5 +188,32 @@ describe('broadcast groups', () => {
       app.deliver(inChannel('discord', 'dc-channel', 'second question')),
     ])
     expect(app.prompts[1]).toContain('answer to first question')
+  })
+
+  it('the usage footer goes to the origin only, never to the other members or the thread', async () => {
+    const telegram = new FakeAdapter('telegram')
+    const discord = new FakeAdapter('discord')
+    const prompts: string[] = []
+    const handler = createReplyHandler({
+      reset: async () => undefined,
+      withAgent: async (_event, work) =>
+        work({
+          agent: new FakeAgent({
+            frames: (text) => (prompts.push(text), [assistant('an answer'), finished()]),
+            result: { status: 'finished', usage: { inputTokens: 5, outputTokens: 2 } },
+          }) as unknown as TurnAgent,
+          release: () => undefined,
+        }),
+      usage: { modeFor: () => 'tokens', model: 'm', write: () => undefined },
+      broadcast: { groups: [HOME], adapterFor: (platform) => (platform === 'discord' ? discord : undefined), write: () => undefined },
+    })
+    const event = inChannel('telegram', 'tg-chat', 'hello')
+    const ctx: GatewayContext = { event, reply: (text, opts) => telegram.sendMessage({ channel: event.channel, text, ...opts }) }
+    await handler(event, ctx)
+    await handler(event, ctx)
+    expect(telegram.sent[0]?.text).toMatch(/an answer\n\n.+/)
+    expect(discord.sent.map((message) => message.text)).toEqual(['an answer', 'an answer'])
+    expect(prompts[1]).toContain('an answer')
+    expect(prompts[1]).toContain('Assistant: an answer\n\nNew message:')
   })
 })
