@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
-import { type AgentStreamEvent, presentUIMessageStream } from '@theokit/agents/bridge'
+import { type AgentStreamEvent, isAgentStreamEvent, presentUIMessageStream } from '@theokit/agents/bridge'
 
-import { isAgentStreamEvent } from '../agent-port.js'
 import { type ControlClient, type ControlFrame, connectControlClient } from '../control-client/control-client.js'
 import { type ControlClientSettings, readControlClientSettings } from '../control-client/settings.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'

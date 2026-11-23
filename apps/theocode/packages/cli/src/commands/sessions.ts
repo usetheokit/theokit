@@ -2,10 +2,10 @@ import { existsSync } from 'node:fs'
 import process from 'node:process'
 import { Agent } from '@theokit/agents'
 import { exitAfterDrain, sessionsGcCommand } from '@theokit/agents/commands'
-import { legacyTranscriptPath, transcriptPath } from '@theokit/agents/persistence'
 import {
   planTranscriptGC,
   runTranscriptGC,
+  type GCSession,
   type RunTranscriptGCResult,
   type TranscriptGCPlan,
 } from '@theokit/agents/session'
@@ -76,68 +76,6 @@ export interface CurrentProjectGCOptions {
   removeFromRegistry?: (id: string) => unknown
 }
 
-function ownIdentity(
-  planned: TranscriptGCPlan,
-  own: Map<string, string>,
-  c: TranscriptGCPlan['candidates'][number],
-): string | undefined {
-  const registered = own.get(c.transcript)
-  if (registered !== undefined) return registered
-  // Unregistered: the framework's id is the transcript's own only when the file is named for it. A
-  // fork's first row names its SOURCE, whose file is a different one, so it keeps no identity.
-  return c.id !== undefined && transcriptPath(planned.root, planned.cwd, c.id) === c.transcript
-    ? c.id
-    : undefined
-}
-
-/**
- * A fork copies its source's rows, so the framework reads the SOURCE's session id from the fork's
- * first row, and registry removal would then hit the source. Each candidate gets its OWN identity
- * instead: the registered session (archived or not) whose transcript file this is. A transcript no
- * registry entry owns has no identity and is collected by path, never as its source.
- */
-function assignOwnIdentities(planned: TranscriptGCPlan, registryIds: string[]): TranscriptGCPlan {
-  const own = new Map(registryIds.map((id) => [transcriptPath(planned.root, planned.cwd, id), id]))
-  const named = planned.candidates.map((c) => ({ ...c, id: ownIdentity(planned, own, c) }))
-  // A transcript no registry entry owns and whose id the framework could not read is UNREADABLE,
-  // not an orphan: "I could not read this" does not justify an unlink, so it is kept.
-  const unreadable = named.filter(
-    (c, i) =>
-      c.id === undefined && !own.has(c.transcript) && planned.candidates[i]?.id === undefined,
-  )
-  if (unreadable.length === 0) return { ...planned, candidates: named }
-  return {
-    ...planned,
-    candidates: named.filter((c) => !unreadable.includes(c)),
-    kept: [
-      ...planned.kept,
-      ...unreadable.map((c) => ({
-        id: undefined,
-        reason: `transcript id unreadable: ${c.transcript}`,
-      })),
-    ],
-  }
-}
-
-/**
- * The framework maps a protected id to its hashed transcript only, but 4.x named the file after the
- * id and an upgraded machine has both. Move out of `candidates` every transcript carrying the legacy
- * name of a protected id (registered session or TUI pointer), so a live session's old file is kept.
- */
-function withholdLegacyNamed(planned: TranscriptGCPlan, liveIds: string[]): TranscriptGCPlan {
-  const legacy = new Set(liveIds.map((id) => legacyTranscriptPath(planned.root, planned.cwd, id)))
-  const held = planned.candidates.filter((c) => legacy.has(c.transcript))
-  if (held.length === 0) return planned
-  return {
-    ...planned,
-    candidates: planned.candidates.filter((c) => !held.includes(c)),
-    kept: [
-      ...planned.kept,
-      ...held.map((c) => ({ id: c.id, reason: 'legacy-named transcript of a live session' })),
-    ],
-  }
-}
-
 /** The framework's note for a candidate with no id; here that is expected, not a failure. */
 const UNNAMEABLE = 'transcript collected without a registry removal'
 
@@ -182,18 +120,20 @@ export async function planAndRunCurrentProjectGC(
     if (pointer !== undefined) out.set(pointer, 'live-session pointer')
     return out
   }
-  const planned = await planTranscriptGC({
+  // A transcript the framework could not read is kept: "I could not read this" is no reason to unlink.
+  const isProtected = (s: GCSession): string | undefined =>
+    !s.idReadable && s.id === undefined ? `transcript id unreadable: ${s.transcript}` : undefined
+  const knownIds = (): string[] => everyone.map((a) => a.agentId)
+  const plan = await planTranscriptGC({
     cwd,
     keepLast: opts.keepLast ?? 10,
     maxAgeDays: opts.maxAgeDays ?? 30,
     protectedIds,
+    isProtected,
+    knownIds,
     ...(opts.root !== undefined ? { root: opts.root } : {}),
     ...(opts.now !== undefined ? { now: opts.now } : {}),
   })
-  const plan = assignOwnIdentities(
-    withholdLegacyNamed(planned, [...protectedIds().keys()]),
-    everyone.map((a) => a.agentId),
-  )
   const registered = new Set(everyone.map((a) => a.agentId))
   const removeById = opts.removeFromRegistry ?? ((id: string) => Agent.delete(id))
   // A transcript's own id that no registry entry carries has nothing to remove there.
@@ -201,6 +141,7 @@ export async function planAndRunCurrentProjectGC(
   const result = await runTranscriptGC(plan, {
     apply: opts.apply,
     protectedIds,
+    isProtected,
     removeFromRegistry: remove,
   })
   return {

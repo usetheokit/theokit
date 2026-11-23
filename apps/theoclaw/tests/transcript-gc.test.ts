@@ -167,6 +167,30 @@ describe('theoclaw sessions gc', () => {
   })
 })
 
+describe('collectTranscripts protection by the real file (#2746)', () => {
+  it('keeps a legacy-named, a forked and a held transcript, and collects the retired one', async () => {
+    const { workspace, paths } = setup({ ...FILES, 'newest-g0': 1 })
+    const dir = join(paths['theoclaw-c-g0']!, '..')
+    const forkFile = join(dir, 'a-fork.jsonl') // rows name its source, file name is not the id's
+    writeFileSync(
+      forkFile,
+      `${JSON.stringify({ type: 'user', sessionId: 'theoclaw-b-g1', message: { content: [] } })}\n`,
+    )
+    const old = new Date(Date.now() - 90 * DAY)
+    utimesSync(forkFile, old, old)
+    const result = await collectTranscripts(
+      { workspace, generations: await generations(), heldIds: () => ['theoclaw-b-g1'] },
+      30,
+      true,
+    )
+    expect(existsSync(forkFile)).toBe(true) // no owner: kept
+    expect(existsSync(paths['theoclaw-b-g1']!)).toBe(true) // held
+    expect(existsSync(paths['theoclaw-c-g0']!)).toBe(false) // retired, nobody holds it
+    expect(result.removed).toContain('theoclaw-c-g0')
+  })
+})
+
+
 describe('startTranscriptSweeper', () => {
   it('collects once at start and reports through write', async () => {
     const { workspace, paths } = setup({ ...FILES, 'theoclaw-d-g0': 90 })

@@ -967,6 +967,30 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};"
           }
         },
+        "AgentTurnAgent": {
+          "tier": "stable",
+          "declaration": "interface AgentTurnAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
+          ],
+          "internals": {
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
+          }
+        },
+        "AgentTurnMessage": {
+          "tier": "stable",
+          "declaration": "type AgentTurnMessage = string | SDKUserMessage;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "AgentTurnMetadata": {
           "tier": "stable",
           "declaration": "interface AgentTurnMetadata {\n    usage: DoneEvent['usage'];\n    cost?: number;\n    durationMs: number;\n    stopReason?: AgentStopReason;\n    model?: string;\n}",
@@ -983,7 +1007,15 @@
         },
         "AgentTurnOutcome": {
           "tier": "stable",
-          "declaration": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
+          "declaration": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "AgentTurnRun": {
+          "tier": "stable",
+          "declaration": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -2296,6 +2328,40 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "DelegationFactoryAgent": {
+          "tier": "stable",
+          "declaration": "interface DelegationFactoryAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n    dispose?(): Promise<void>;\n    [Symbol.asyncDispose]?(): PromiseLike<void>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
+          ],
+          "internals": {
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
+          }
+        },
+        "DelegationMessagePort": {
+          "tier": "stable",
+          "declaration": "interface DelegationMessagePort extends DelegationPort {\n    run(message: AgentTurnMessage, options?: {\n        readonly signal?: AbortSignal;\n    }): Promise<DelegationResult>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-orchestrator-<hash>.d.ts#DelegationResult",
+            "dist/agent-orchestrator-<hash>.d.ts#LoopFinishReason",
+            "dist/delegation-scoring-<hash>.d.ts#DelegationPort",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage"
+          ],
+          "internals": {
+            "dist/agent-orchestrator-<hash>.d.ts#DelegationResult": "interface DelegationResult {\n    response: string;\n    toolCalls: {\n        id: string;\n        name: string;\n        input: unknown;\n        output: string;\n    }[];\n    cost: number;\n    costUnknown?: true;\n    tokens: number;\n    tokensInput?: number;\n    tokensOutput?: number;\n    reasoningTokens?: number;\n    cacheReadTokens?: number;\n    cacheWriteTokens?: number;\n    rounds?: number;\n    finishReason?: LoopFinishReason;\n}",
+            "dist/agent-orchestrator-<hash>.d.ts#LoopFinishReason": "type LoopFinishReason = 'tool-calls' | 'stop' | 'length' | 'error' | 'step_limit' | 'no_progress';",
+            "dist/delegation-scoring-<hash>.d.ts#DelegationPort": "interface DelegationPort {\n    run(message: string, options?: {\n        readonly signal?: AbortSignal;\n    }): Promise<DelegationResult>;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;"
+          }
         },
         "DelegationPort": {
           "tier": "stable",
@@ -4452,7 +4518,7 @@
         },
         "RunAgentTurnOptions": {
           "tier": "stable",
-          "declaration": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
+          "declaration": "interface RunAgentTurnOptions {\n    agent: AgentTurnAgent;\n    message: AgentTurnMessage;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -4476,13 +4542,10 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnAgent",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -4505,13 +4568,10 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnAgent": "interface AgentTurnAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
           }
         },
         "RunContextCapability": {
@@ -8164,74 +8224,30 @@
         },
         "delegationPortFromAgentFactory": {
           "tier": "stable",
-          "declaration": "declare function delegationPortFromAgentFactory(create: () => Promise<SdkAgentHandle<SdkMessage>>, options?: DelegationPortFromAgentFactoryOptions): DelegationPort;",
+          "declaration": "declare function delegationPortFromAgentFactory(create: () => Promise<DelegationFactoryAgent>, options?: DelegationPortFromAgentFactoryOptions): DelegationMessagePort;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
             "dist/agent-orchestrator-<hash>.d.ts#DelegationResult",
             "dist/agent-orchestrator-<hash>.d.ts#LoopFinishReason",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent",
-            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent",
-            "dist/agent-stream-events-<hash>.d.ts#DoneEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent",
-            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent",
-            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent",
-            "dist/agent-stream-events-<hash>.d.ts#IterationEvent",
-            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent",
-            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent",
-            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent",
-            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent",
-            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
+            "dist/bridge-entry-<hash>.d.ts#DelegationFactoryAgent",
+            "dist/bridge-entry-<hash>.d.ts#DelegationMessagePort",
             "dist/bridge-entry-<hash>.d.ts#DelegationPortFromAgentFactoryOptions",
             "dist/delegation-scoring-<hash>.d.ts#DelegationPort",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
           ],
           "internals": {
             "dist/agent-orchestrator-<hash>.d.ts#DelegationResult": "interface DelegationResult {\n    response: string;\n    toolCalls: {\n        id: string;\n        name: string;\n        input: unknown;\n        output: string;\n    }[];\n    cost: number;\n    costUnknown?: true;\n    tokens: number;\n    tokensInput?: number;\n    tokensOutput?: number;\n    reasoningTokens?: number;\n    cacheReadTokens?: number;\n    cacheWriteTokens?: number;\n    rounds?: number;\n    finishReason?: LoopFinishReason;\n}",
             "dist/agent-orchestrator-<hash>.d.ts#LoopFinishReason": "type LoopFinishReason = 'tool-calls' | 'stop' | 'length' | 'error' | 'step_limit' | 'no_progress';",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
-            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent": "type ApprovalRequiredEvent = {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent": "type ArtifactChunkEvent = {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent": "type ArtifactStartEvent = {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent": "type CheckpointSavedEvent = {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#DoneEvent": "type DoneEvent = {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    finishReason?: string;\n    model?: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent": "type ErrorEvent = {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent": "type FileEditEvent = {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent": "type InputRequestedEvent = {\n    type: 'input_requested';\n    requestId: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#IterationEvent": "type IterationEvent = {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent": "type PartialToolCallEvent = {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent": "type RunStartedEvent = {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent": "type ShellOutputEvent = {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent": "type StateUpdateEvent = {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent": "type TaskProgressEvent = {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent": "type TextDeltaEvent = {\n    type: 'text_delta';\n    content: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
+            "dist/bridge-entry-<hash>.d.ts#DelegationFactoryAgent": "interface DelegationFactoryAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n    dispose?(): Promise<void>;\n    [Symbol.asyncDispose]?(): PromiseLike<void>;\n}",
+            "dist/bridge-entry-<hash>.d.ts#DelegationMessagePort": "interface DelegationMessagePort extends DelegationPort {\n    run(message: AgentTurnMessage, options?: {\n        readonly signal?: AbortSignal;\n    }): Promise<DelegationResult>;\n}",
             "dist/bridge-entry-<hash>.d.ts#DelegationPortFromAgentFactoryOptions": "interface DelegationPortFromAgentFactoryOptions {\n    readonly sendOptions?: SdkSendOptions;\n}",
             "dist/delegation-scoring-<hash>.d.ts#DelegationPort": "interface DelegationPort {\n    run(message: string, options?: {\n        readonly signal?: AbortSignal;\n    }): Promise<DelegationResult>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
           }
         },
         "deriveConversationId": {
@@ -9702,15 +9718,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnAgent",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
             "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -9733,15 +9746,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
-            "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnAgent": "interface AgentTurnAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions": "interface RunAgentTurnOptions {\n    agent: AgentTurnAgent;\n    message: AgentTurnMessage;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
           }
         },
         "runInputGuards": {
@@ -12523,6 +12533,30 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};"
           }
         },
+        "AgentTurnAgent": {
+          "tier": "stable",
+          "declaration": "interface AgentTurnAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
+          ],
+          "internals": {
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
+          }
+        },
+        "AgentTurnMessage": {
+          "tier": "stable",
+          "declaration": "type AgentTurnMessage = string | SDKUserMessage;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "AgentTurnMetadata": {
           "tier": "stable",
           "declaration": "interface AgentTurnMetadata {\n    usage: DoneEvent['usage'];\n    cost?: number;\n    durationMs: number;\n    stopReason?: AgentStopReason;\n    model?: string;\n}",
@@ -12539,7 +12573,15 @@
         },
         "AgentTurnOutcome": {
           "tier": "stable",
-          "declaration": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
+          "declaration": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "AgentTurnRun": {
+          "tier": "stable",
+          "declaration": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -13102,6 +13144,40 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "DelegationFactoryAgent": {
+          "tier": "stable",
+          "declaration": "interface DelegationFactoryAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n    dispose?(): Promise<void>;\n    [Symbol.asyncDispose]?(): PromiseLike<void>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
+          ],
+          "internals": {
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
+          }
+        },
+        "DelegationMessagePort": {
+          "tier": "stable",
+          "declaration": "interface DelegationMessagePort extends DelegationPort {\n    run(message: AgentTurnMessage, options?: {\n        readonly signal?: AbortSignal;\n    }): Promise<DelegationResult>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [
+            "dist/agent-orchestrator-<hash>.d.ts#DelegationResult",
+            "dist/agent-orchestrator-<hash>.d.ts#LoopFinishReason",
+            "dist/delegation-scoring-<hash>.d.ts#DelegationPort",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage"
+          ],
+          "internals": {
+            "dist/agent-orchestrator-<hash>.d.ts#DelegationResult": "interface DelegationResult {\n    response: string;\n    toolCalls: {\n        id: string;\n        name: string;\n        input: unknown;\n        output: string;\n    }[];\n    cost: number;\n    costUnknown?: true;\n    tokens: number;\n    tokensInput?: number;\n    tokensOutput?: number;\n    reasoningTokens?: number;\n    cacheReadTokens?: number;\n    cacheWriteTokens?: number;\n    rounds?: number;\n    finishReason?: LoopFinishReason;\n}",
+            "dist/agent-orchestrator-<hash>.d.ts#LoopFinishReason": "type LoopFinishReason = 'tool-calls' | 'stop' | 'length' | 'error' | 'step_limit' | 'no_progress';",
+            "dist/delegation-scoring-<hash>.d.ts#DelegationPort": "interface DelegationPort {\n    run(message: string, options?: {\n        readonly signal?: AbortSignal;\n    }): Promise<DelegationResult>;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;"
+          }
         },
         "DelegationPort": {
           "tier": "stable",
@@ -13679,7 +13755,7 @@
         },
         "RunAgentTurnOptions": {
           "tier": "stable",
-          "declaration": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
+          "declaration": "interface RunAgentTurnOptions {\n    agent: AgentTurnAgent;\n    message: AgentTurnMessage;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -13703,13 +13779,10 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnAgent",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -13732,13 +13805,10 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnAgent": "interface AgentTurnAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
           }
         },
         "RunStartedEvent": {
@@ -15575,74 +15645,30 @@
         },
         "delegationPortFromAgentFactory": {
           "tier": "stable",
-          "declaration": "declare function delegationPortFromAgentFactory(create: () => Promise<SdkAgentHandle<SdkMessage>>, options?: DelegationPortFromAgentFactoryOptions): DelegationPort;",
+          "declaration": "declare function delegationPortFromAgentFactory(create: () => Promise<DelegationFactoryAgent>, options?: DelegationPortFromAgentFactoryOptions): DelegationMessagePort;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
             "dist/agent-orchestrator-<hash>.d.ts#DelegationResult",
             "dist/agent-orchestrator-<hash>.d.ts#LoopFinishReason",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent",
-            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent",
-            "dist/agent-stream-events-<hash>.d.ts#DoneEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent",
-            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent",
-            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent",
-            "dist/agent-stream-events-<hash>.d.ts#IterationEvent",
-            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent",
-            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent",
-            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent",
-            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent",
-            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
-            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
+            "dist/bridge-entry-<hash>.d.ts#DelegationFactoryAgent",
+            "dist/bridge-entry-<hash>.d.ts#DelegationMessagePort",
             "dist/bridge-entry-<hash>.d.ts#DelegationPortFromAgentFactoryOptions",
             "dist/delegation-scoring-<hash>.d.ts#DelegationPort",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
           ],
           "internals": {
             "dist/agent-orchestrator-<hash>.d.ts#DelegationResult": "interface DelegationResult {\n    response: string;\n    toolCalls: {\n        id: string;\n        name: string;\n        input: unknown;\n        output: string;\n    }[];\n    cost: number;\n    costUnknown?: true;\n    tokens: number;\n    tokensInput?: number;\n    tokensOutput?: number;\n    reasoningTokens?: number;\n    cacheReadTokens?: number;\n    cacheWriteTokens?: number;\n    rounds?: number;\n    finishReason?: LoopFinishReason;\n}",
             "dist/agent-orchestrator-<hash>.d.ts#LoopFinishReason": "type LoopFinishReason = 'tool-calls' | 'stop' | 'length' | 'error' | 'step_limit' | 'no_progress';",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
-            "dist/agent-stream-events-<hash>.d.ts#AgentStreamEvent": "type AgentStreamEvent = RunStartedEvent | TextDeltaEvent | ToolCallEvent | PartialToolCallEvent | ToolResultEvent | ThinkingEvent | IterationEvent | ApprovalRequiredEvent | InputRequestedEvent | TaskProgressEvent | ShellOutputEvent | ArtifactStartEvent | ArtifactChunkEvent | StateUpdateEvent | CheckpointSavedEvent | FileEditEvent | ErrorEvent | DoneEvent;",
-            "dist/agent-stream-events-<hash>.d.ts#ApprovalRequiredEvent": "type ApprovalRequiredEvent = {\n    type: 'approval_required';\n    callId: string;\n    toolName: string;\n    question: string;\n    input?: unknown;\n    callbackUrl: string;\n    timeoutMs: number;\n    payloadSchema?: Record<string, unknown>;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactChunkEvent": "type ArtifactChunkEvent = {\n    type: 'artifact_chunk';\n    artifactId: string;\n    chunk: string;\n    isLast: boolean;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ArtifactStartEvent": "type ArtifactStartEvent = {\n    type: 'artifact_start';\n    artifactId: string;\n    mimeType: string;\n    filename?: string;\n    metadata?: Record<string, unknown>;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#CheckpointSavedEvent": "type CheckpointSavedEvent = {\n    type: 'checkpoint_saved';\n    checkpointId: string;\n    step: number;\n    resumeToken: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#DoneEvent": "type DoneEvent = {\n    type: 'done';\n    result: string;\n    usage: {\n        inputTokens: number;\n        outputTokens: number;\n        totalTokens: number;\n        reasoningTokens?: number;\n        cacheReadTokens?: number;\n        cacheWriteTokens?: number;\n    };\n    durationMs: number;\n    cost?: number;\n    stopReason?: AgentStopReason;\n    finishReason?: string;\n    model?: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ErrorEvent": "type ErrorEvent = {\n    type: 'error';\n    code: string;\n    message: string;\n    retryable: boolean;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#FileEditEvent": "type FileEditEvent = {\n    type: 'file_edit';\n    file: string;\n    format: 'search-replace' | 'unified-diff' | 'full-file' | 'line-range';\n    search?: string;\n    replace?: string;\n    content?: string;\n    diff?: string;\n    startLine?: number;\n    endLine?: number;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#InputRequestedEvent": "type InputRequestedEvent = {\n    type: 'input_requested';\n    requestId: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#IterationEvent": "type IterationEvent = {\n    type: 'iteration';\n    step: number;\n    totalSteps: number | null;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#PartialToolCallEvent": "type PartialToolCallEvent = {\n    type: 'partial_tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#RunStartedEvent": "type RunStartedEvent = {\n    type: 'run_started';\n    runId: string;\n    agentName: string;\n    model?: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ShellOutputEvent": "type ShellOutputEvent = {\n    type: 'shell_output';\n    event: Record<string, unknown>;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#StateUpdateEvent": "type StateUpdateEvent = {\n    type: 'state_update';\n    channel: string;\n    data: unknown;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#TaskProgressEvent": "type TaskProgressEvent = {\n    type: 'task_progress';\n    status?: string;\n    text?: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#TextDeltaEvent": "type TextDeltaEvent = {\n    type: 'text_delta';\n    content: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
-            "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
+            "dist/bridge-entry-<hash>.d.ts#DelegationFactoryAgent": "interface DelegationFactoryAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n    dispose?(): Promise<void>;\n    [Symbol.asyncDispose]?(): PromiseLike<void>;\n}",
+            "dist/bridge-entry-<hash>.d.ts#DelegationMessagePort": "interface DelegationMessagePort extends DelegationPort {\n    run(message: AgentTurnMessage, options?: {\n        readonly signal?: AbortSignal;\n    }): Promise<DelegationResult>;\n}",
             "dist/bridge-entry-<hash>.d.ts#DelegationPortFromAgentFactoryOptions": "interface DelegationPortFromAgentFactoryOptions {\n    readonly sendOptions?: SdkSendOptions;\n}",
             "dist/delegation-scoring-<hash>.d.ts#DelegationPort": "interface DelegationPort {\n    run(message: string, options?: {\n        readonly signal?: AbortSignal;\n    }): Promise<DelegationResult>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
           }
         },
         "detectWorkspaceRecipe": {
@@ -16727,15 +16753,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnAgent",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage",
             "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun",
             "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds"
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions"
           ],
           "internals": {
             "dist/agent-stream-events-<hash>.d.ts#AgentStopReason": "type AgentStopReason = 'step_limit' | 'no_progress';",
@@ -16758,15 +16781,12 @@
             "dist/agent-stream-events-<hash>.d.ts#ThinkingEvent": "type ThinkingEvent = {\n    type: 'thinking';\n    content: string;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
-            "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions": "interface RunAgentTurnOptions {\n    agent: SdkAgentHandle<SdkMessage>;\n    message: string;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTimelineEvent": "type SdkTimelineEvent = {\n    readonly kind: 'message';\n    readonly message: SDKMessage | SdkMessage;\n    readonly textAlreadyStreamed?: boolean;\n} | {\n    readonly kind: 'delta';\n    readonly update: InteractionUpdate;\n};",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnHandle": "interface SdkTurnHandle<M = AgentStreamEvent> {\n    readonly id?: string;\n    wait: () => Promise<SdkTurnOutcome>;\n    stream?: () => AsyncIterable<M>;\n    events?: () => AsyncIterable<SdkTimelineEvent>;\n    cancel?: () => unknown;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#SdkTurnOutcome": "interface SdkTurnOutcome {\n    result?: string;\n    usage?: {\n        totalTokens?: number;\n        inputTokens?: number;\n        outputTokens?: number;\n    };\n    status?: string;\n    error?: {\n        message: string;\n        code?: string;\n    };\n    cost?: CostBreakdown;\n    durationMs?: number;\n    stoppedByDoomLoop?: boolean;\n    stoppedAtIterationLimit?: boolean;\n}",
-            "dist/sdk-adapter-<hash>.d.ts#WithOptionalRunIds": "type WithOptionalRunIds<M> = M extends unknown ? Omit<M, 'agent_id' | 'run_id'> & {\n    agent_id?: string;\n    run_id?: string;\n} : never;"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnAgent": "interface AgentTurnAgent {\n    send(message: AgentTurnMessage, options?: SdkSendOptions): Promise<AgentTurnRun>;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnMessage": "type AgentTurnMessage = string | SDKUserMessage;",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnRun": "interface AgentTurnRun {\n    stream?(): AsyncIterable<{\n        readonly type: string;\n    }>;\n    wait(): Promise<{\n        readonly status?: string;\n        readonly result?: string;\n        readonly error?: {\n            readonly message?: string;\n            readonly code?: string;\n        };\n        readonly usage?: {\n            readonly inputTokens?: number;\n            readonly outputTokens?: number;\n        };\n        readonly cost?: {\n            readonly amountUsd?: number | undefined;\n        };\n    }>;\n    cancel?(): unknown;\n}",
+            "dist/run-agent-turn-<hash>.d.ts#RunAgentTurnOptions": "interface RunAgentTurnOptions {\n    agent: AgentTurnAgent;\n    message: AgentTurnMessage;\n    runId: string;\n    emit: (event: AgentStreamEvent) => void;\n    signal?: AbortSignal;\n    sendOptions?: SdkSendOptions;\n    mapEvent?: (event: AgentStreamEvent) => AgentStreamEvent | undefined;\n    secrets?: readonly string[];\n}",
+            "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;"
           }
         },
         "runWithApiErrorHandling": {
@@ -18491,7 +18511,7 @@
             "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
           ],
           "internals": {
-            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n    readonly idReadable?: boolean;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
             "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
@@ -18616,7 +18636,7 @@
             "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
           ],
           "internals": {
-            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n    readonly idReadable?: boolean;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
             "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
@@ -18636,7 +18656,7 @@
             "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
           ],
           "internals": {
-            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n    readonly idReadable?: boolean;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
             "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
@@ -18730,7 +18750,7 @@
           "internals": {
             "dist/commands.d.ts#SessionsGcOptions": "interface SessionsGcOptions {\n    readonly apply?: boolean;\n    readonly keepLast?: number;\n    readonly maxAgeDays?: number;\n    readonly cwd?: string;\n    readonly json?: boolean;\n    readonly human?: (plan: TranscriptGCPlan, result: RunTranscriptGCResult) => readonly string[];\n    readonly run?: (resolved: {\n        readonly apply: boolean;\n        readonly keepLast: number;\n        readonly maxAgeDays: number;\n        readonly cwd: string;\n    }) => Promise<{\n        plan: TranscriptGCPlan;\n        result: RunTranscriptGCResult;\n    }>;\n}",
             "dist/commands.d.ts#SessionsGcOutcome": "interface SessionsGcOutcome {\n    readonly lines: readonly string[];\n    readonly failed: number;\n}",
-            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n    readonly idReadable?: boolean;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
             "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
@@ -20122,7 +20142,7 @@
           "deprecatedSince": null,
           "references": ["dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome"],
           "internals": {
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
         "ControlClient": {
@@ -20178,7 +20198,7 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/control.d.ts#AgentTurnUsage": "type AgentTurnUsage = NonNullable<Extract<AgentTurnOutcome, {\n    ok: true;\n}>['usage']>;",
             "dist/control.d.ts#ControlServerFrame": "type ControlServerFrame = {\n    type: 'event';\n    event: AgentStreamEvent;\n    session?: string;\n} | {\n    type: 'done';\n    session?: string;\n    usage?: AgentTurnUsage;\n} | {\n    type: 'interrupted' | 'interrupt_ok' | 'steer_ok' | 'no_turn';\n    session: string;\n} | {\n    type: 'error';\n    code: string;\n    session?: string;\n};",
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
         "ControlClientFrame": {
@@ -20248,7 +20268,7 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/control.d.ts#AgentTurnUsage": "type AgentTurnUsage = NonNullable<Extract<AgentTurnOutcome, {\n    ok: true;\n}>['usage']>;",
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
         "ControlSocketOptions": {
@@ -20458,7 +20478,7 @@
           "deprecatedSince": null,
           "references": ["dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome"],
           "internals": {
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
         "SessionStore": {
@@ -20512,7 +20532,7 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/control.d.ts#SessionOutcome": "type SessionOutcome = AgentTurnOutcome | {\n    ok: false;\n    code: 'busy' | 'bad_session' | 'interrupted';\n};",
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
         "SessionStoreOptions": {
@@ -20573,7 +20593,7 @@
             "dist/agent-stream-events-<hash>.d.ts#ToolCallEvent": "type ToolCallEvent = {\n    type: 'tool_call';\n    callId: string;\n    toolName: string;\n    input: unknown;\n};",
             "dist/agent-stream-events-<hash>.d.ts#ToolResultEvent": "type ToolResultEvent = {\n    type: 'tool_result';\n    callId: string;\n    toolName: string;\n    output: string;\n    durationMs: number;\n    isError: boolean;\n    refusal?: ToolRefusal;\n};",
             "dist/control.d.ts#SessionTurnContext": "interface SessionTurnContext<A> {\n    agent: A;\n    message: string;\n    runId: string;\n    signal: AbortSignal;\n    emit: (e: AgentStreamEvent) => void;\n    onRun: (cancel: () => Promise<void>) => void;\n    onEventsEnded: () => void;\n}",
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
@@ -20770,7 +20790,7 @@
             "dist/control.d.ts#AgentTurnUsage": "type AgentTurnUsage = NonNullable<Extract<AgentTurnOutcome, {\n    ok: true;\n}>['usage']>;",
             "dist/control.d.ts#ControlClient": "interface ControlClient {\n    chat(message: string, session: string): AsyncIterable<ControlServerFrame>;\n    interrupt(session: string): void;\n    steer(session: string, message: string): void;\n    close(): Promise<void>;\n}",
             "dist/control.d.ts#ControlServerFrame": "type ControlServerFrame = {\n    type: 'event';\n    event: AgentStreamEvent;\n    session?: string;\n} | {\n    type: 'done';\n    session?: string;\n    usage?: AgentTurnUsage;\n} | {\n    type: 'interrupted' | 'interrupt_ok' | 'steer_ok' | 'no_turn';\n    session: string;\n} | {\n    type: 'error';\n    code: string;\n    session?: string;\n};",
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};"
           }
         },
         "createControlStreamSource": {
@@ -20879,7 +20899,7 @@
             "dist/control.d.ts#SessionStore": "interface SessionStore {\n    run(session: string, message: string, emit: (e: AgentStreamEvent) => void, owner: object): Promise<SessionOutcome>;\n    interrupt(session: string): 'cancelled' | 'no_turn';\n    steer(session: string, message: string): Promise<'steered' | 'no_turn'>;\n    cancelOwnedBy(owner: object): void;\n    close(): Promise<void>;\n}",
             "dist/control.d.ts#SessionStoreOptions": "interface SessionStoreOptions<A = SdkAgentHandle<SdkMessage>> {\n    build: () => Promise<A>;\n    runTurn?: (context: SessionTurnContext<A>) => Promise<AgentTurnOutcome>;\n    dispose?: (agent: A) => Promise<void>;\n    steerAgent?: (agent: A, message: string) => Promise<unknown>;\n    badSessionCode?: string;\n    closedReason?: string;\n    reportPrefix?: string;\n    max?: number;\n    drainMs?: number;\n    redirectNote?: string;\n    report?: (line: string) => void;\n    sendOptions?: SdkSendOptions;\n}",
             "dist/control.d.ts#SessionTurnContext": "interface SessionTurnContext<A> {\n    agent: A;\n    message: string;\n    runId: string;\n    signal: AbortSignal;\n    emit: (e: AgentStreamEvent) => void;\n    onRun: (cancel: () => Promise<void>) => void;\n    onEventsEnded: () => void;\n}",
-            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
+            "dist/run-agent-turn-<hash>.d.ts#AgentTurnOutcome": "type AgentTurnOutcome = {\n    ok: true;\n    cancelled?: true;\n    usage?: {\n        inputTokens: number;\n        outputTokens: number;\n        costUsd?: number;\n    };\n} | {\n    ok: false;\n    code: 'turn_failed' | 'turn_cancelled';\n    reason: string;\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkAgentHandle": "interface SdkAgentHandle<M = AgentStreamEvent> {\n    readonly agentId: string;\n    generate?: SDKAgent['generate'];\n    readonly pluginManager?: () => unknown;\n    send: (msg: string | SDKUserMessage, opts?: SdkSendOptions) => Promise<SdkTurnHandle<M>>;\n    dispose: () => Promise<void>;\n}",
             "dist/sdk-adapter-<hash>.d.ts#SdkMessage": "type SdkMessage = WithOptionalRunIds<SDKMessage> | {\n    type: 'assistant';\n    agent_id?: string;\n    run_id?: string;\n    message: {\n        role?: 'assistant';\n        content: {\n            type: 'text';\n            text: string;\n        }[];\n    };\n};",
             "dist/sdk-adapter-<hash>.d.ts#SdkSendOptions": "type SdkSendOptions = SendOptions;",
@@ -23681,7 +23701,7 @@
         },
         "GCCandidate": {
           "tier": "stable",
-          "declaration": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+          "declaration": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n    readonly idReadable?: boolean;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -23711,10 +23731,28 @@
           "references": [],
           "internals": {}
         },
+        "GCProtectionPredicate": {
+          "tier": "stable",
+          "declaration": "type GCProtectionPredicate = (session: GCSession) => string | undefined;",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/transcript-gc-<hash>.d.ts#GCSession"],
+          "internals": {
+            "dist/transcript-gc-<hash>.d.ts#GCSession": "interface GCSession {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly idReadable: boolean;\n}"
+          }
+        },
         "GCProtectionUnavailableError": {
           "tier": "stable",
           "declaration": "declare class GCProtectionUnavailableError extends TheokitAgentError {\n    readonly reason: unknown;\n    readonly name = \"GCProtectionUnavailableError\";\n    constructor(reason: unknown);\n}",
           "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "GCSession": {
+          "tier": "stable",
+          "declaration": "interface GCSession {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly idReadable: boolean;\n}",
+          "runtime": false,
           "deprecatedSince": null,
           "references": [],
           "internals": {}
@@ -23971,11 +24009,17 @@
         },
         "TranscriptGCOptions": {
           "tier": "stable",
-          "declaration": "interface TranscriptGCOptions {\n    readonly cwd: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly root?: string;\n    readonly now?: number;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n}",
+          "declaration": "interface TranscriptGCOptions {\n    readonly cwd: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly root?: string;\n    readonly now?: number;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n    readonly isProtected?: GCProtectionPredicate;\n    readonly knownIds?: () => Iterable<string>;\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": [],
-          "internals": {}
+          "references": [
+            "dist/transcript-gc-<hash>.d.ts#GCProtectionPredicate",
+            "dist/transcript-gc-<hash>.d.ts#GCSession"
+          ],
+          "internals": {
+            "dist/transcript-gc-<hash>.d.ts#GCProtectionPredicate": "type GCProtectionPredicate = (session: GCSession) => string | undefined;",
+            "dist/transcript-gc-<hash>.d.ts#GCSession": "interface GCSession {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly idReadable: boolean;\n}"
+          }
         },
         "TranscriptGCPlan": {
           "tier": "stable",
@@ -23987,7 +24031,7 @@
             "dist/transcript-gc-<hash>.d.ts#GCKept"
           ],
           "internals": {
-            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n    readonly idReadable?: boolean;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}"
           }
         },
@@ -24159,13 +24203,17 @@
           "references": [
             "dist/transcript-gc-<hash>.d.ts#GCCandidate",
             "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#GCProtectionPredicate",
+            "dist/transcript-gc-<hash>.d.ts#GCSession",
             "dist/transcript-gc-<hash>.d.ts#TranscriptGCOptions",
             "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
           ],
           "internals": {
-            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n    readonly idReadable?: boolean;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
-            "dist/transcript-gc-<hash>.d.ts#TranscriptGCOptions": "interface TranscriptGCOptions {\n    readonly cwd: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly root?: string;\n    readonly now?: number;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCProtectionPredicate": "type GCProtectionPredicate = (session: GCSession) => string | undefined;",
+            "dist/transcript-gc-<hash>.d.ts#GCSession": "interface GCSession {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly idReadable: boolean;\n}",
+            "dist/transcript-gc-<hash>.d.ts#TranscriptGCOptions": "interface TranscriptGCOptions {\n    readonly cwd: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly root?: string;\n    readonly now?: number;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n    readonly isProtected?: GCProtectionPredicate;\n    readonly knownIds?: () => Iterable<string>;\n}",
             "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
           }
         },
@@ -24277,20 +24325,24 @@
         },
         "runTranscriptGC": {
           "tier": "stable",
-          "declaration": "declare function runTranscriptGC(plan: TranscriptGCPlan, options: {\n    readonly apply: boolean;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n    readonly removeFromRegistry?: (sessionId: string) => unknown;\n    readonly registryTimeoutMs?: number;\n}): Promise<RunTranscriptGCResult>;",
+          "declaration": "declare function runTranscriptGC(plan: TranscriptGCPlan, options: {\n    readonly apply: boolean;\n    readonly protectedIds?: () => ReadonlyMap<string, string>;\n    readonly isProtected?: GCProtectionPredicate;\n    readonly removeFromRegistry?: (sessionId: string) => unknown;\n    readonly registryTimeoutMs?: number;\n}): Promise<RunTranscriptGCResult>;",
           "runtime": true,
           "deprecatedSince": null,
           "references": [
             "dist/transcript-gc-<hash>.d.ts#GCCandidate",
             "dist/transcript-gc-<hash>.d.ts#GCError",
             "dist/transcript-gc-<hash>.d.ts#GCKept",
+            "dist/transcript-gc-<hash>.d.ts#GCProtectionPredicate",
+            "dist/transcript-gc-<hash>.d.ts#GCSession",
             "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult",
             "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan"
           ],
           "internals": {
-            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCCandidate": "interface GCCandidate {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly modifiedAt: Date;\n    readonly idReadable?: boolean;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCError": "interface GCError {\n    readonly id: string | undefined;\n    readonly message: string;\n}",
             "dist/transcript-gc-<hash>.d.ts#GCKept": "interface GCKept {\n    readonly id: string | undefined;\n    readonly reason: string;\n}",
+            "dist/transcript-gc-<hash>.d.ts#GCProtectionPredicate": "type GCProtectionPredicate = (session: GCSession) => string | undefined;",
+            "dist/transcript-gc-<hash>.d.ts#GCSession": "interface GCSession {\n    readonly id: string | undefined;\n    readonly transcript: string;\n    readonly idReadable: boolean;\n}",
             "dist/transcript-gc-<hash>.d.ts#RunTranscriptGCResult": "interface RunTranscriptGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly orphaned: readonly string[];\n    readonly errors: readonly GCError[];\n}",
             "dist/transcript-gc-<hash>.d.ts#TranscriptGCPlan": "interface TranscriptGCPlan {\n    readonly cwd: string;\n    readonly root: string;\n    readonly candidates: readonly GCCandidate[];\n    readonly kept: readonly GCKept[];\n}"
           }

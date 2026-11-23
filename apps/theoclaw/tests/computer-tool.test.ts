@@ -230,8 +230,9 @@ describe('the computer tool: screenshot', () => {
     expect(describer.log.messages).toHaveLength(1)
     const message = describer.log.messages[0] as Exclude<TurnMessage, string>
     expect(message.images).toHaveLength(1)
-    expect(message.images[0]?.mimeType).toBe('image/png')
-    expect(Buffer.from(message.images[0]?.data ?? '', 'base64').subarray(1, 4).toString()).toBe('PNG')
+    const image = message.images?.[0] as { readonly data: string; readonly mimeType: string } | undefined
+    expect(image?.mimeType).toBe('image/png')
+    expect(Buffer.from(image?.data ?? '', 'base64').subarray(1, 4).toString()).toBe('PNG')
     expect(message.text).toContain('4x1')
     expect(result).toContain('a window at 10,20')
     expect(describer.log.disposed).toBe(1)

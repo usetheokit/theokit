@@ -45,6 +45,34 @@ function fake(
 }
 
 describe('delegationPortFromAgentFactory', () => {
+  it('forwards a message with images and disposes through Symbol.asyncDispose', async () => {
+    const disposed = vi.fn(async () => undefined)
+    const send = vi.fn(async () => ({
+      wait: async () => ({ result: 'done', status: 'finished' }),
+    }))
+    const agent = { send, [Symbol.asyncDispose]: disposed }
+    const message = { text: 'look', images: [{ data: 'AAAA', mimeType: 'image/png' }] }
+    await expect(
+      delegationPortFromAgentFactory(async () => agent).run(message),
+    ).resolves.toMatchObject({
+      response: 'done',
+    })
+    expect(send).toHaveBeenCalledWith(message, {})
+    expect(disposed).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failing Symbol.asyncDispose rejects the task', async () => {
+    const agent = {
+      send: async () => ({ wait: async () => ({ result: 'done', status: 'finished' }) }),
+      [Symbol.asyncDispose]: async () => {
+        throw new Error('stuck')
+      },
+    }
+    await expect(delegationPortFromAgentFactory(async () => agent).run('t')).rejects.toBeInstanceOf(
+      DelegationError,
+    )
+  })
+
   it('the worker is disposed after success, failure and cancellation', async () => {
     const ok = fake()
     await expect(

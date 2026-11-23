@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
-import { transcriptRoot } from '@theokit/sdk/persistence'
+import { legacyTranscriptPath, transcriptPath, transcriptRoot } from '@theokit/sdk/persistence'
 
 import { listSessions, protectedTranscriptPaths, transcriptOf } from '../session-lifecycle.js'
 
@@ -86,7 +86,24 @@ export interface GCCandidate {
   readonly id: string | undefined
   readonly transcript: string
   readonly modifiedAt: Date
+  /**
+   * Whether the session id could be read from inside the transcript. Absent means `id !== undefined`.
+   * An `id` of `undefined` with this `true` is a file no known session owns (a fork of nobody's).
+   */
+  readonly idReadable?: boolean
 }
+
+/** What a protection predicate is asked about: one transcript, by its real file. */
+export interface GCSession {
+  /** The session that OWNS this file (by its current or legacy name), or `undefined` when none. */
+  readonly id: string | undefined
+  readonly transcript: string
+  /** `false` when the transcript could not be read at all. */
+  readonly idReadable: boolean
+}
+
+/** Answer a protection reason when the session must stay, `undefined` when policy may collect it. */
+export type GCProtectionPredicate = (session: GCSession) => string | undefined
 
 /** A transcript the policy keeps, and why. */
 export interface GCKept {
@@ -122,6 +139,19 @@ export interface TranscriptGCOptions {
    * pointer read became "there is no live session".
    */
   readonly protectedIds?: () => ReadonlyMap<string, string>
+  /**
+   * Protection as a rule rather than a list (for example "retired generations nobody holds").
+   * Asked about every transcript by its real file, so a fork or a legacy-named file is judged as
+   * itself. Same additive, fail-closed contract as `protectedIds`: a throw refuses the run, and it
+   * is asked again when the plan is applied.
+   */
+  readonly isProtected?: GCProtectionPredicate
+  /**
+   * Every session id the caller's registry knows (archived ones included). A transcript is named
+   * by the id whose current or legacy file it is; without this a fork, whose rows name its SOURCE,
+   * is only named when the id inside it is the one its file is named for.
+   */
+  readonly knownIds?: () => Iterable<string>
 }
 
 export interface TranscriptGCPlan {
@@ -163,9 +193,53 @@ function resolveProtection(
   // transcript paths, which is the only key an unreadable transcript can still answer to. The
   // translation happens HERE, once, in the direction that has a function (usetheokit/theokit#668).
   const union = new Map<string, string>()
-  for (const [id, reason] of extra) union.set(transcriptOf(id, cwd, root), reason)
+  for (const [id, reason] of extra) {
+    union.set(transcriptOf(id, cwd, root), reason)
+    union.set(legacyTranscriptPath(root, cwd, id), reason)
+  }
   for (const [path, reason] of builtin) union.set(path, reason)
   return union
+}
+
+/** Ask a predicate, refusing the run when it cannot answer. */
+function ask(predicate: GCProtectionPredicate | undefined, session: GCSession): string | undefined {
+  if (predicate === undefined) return undefined
+  try {
+    return predicate(session)
+  } catch (cause) {
+    throw new GCProtectionUnavailableError(cause)
+  }
+}
+
+/** The id whose current or legacy file this is: a known id first, else the id the file records. */
+function ownerOf(
+  transcript: string,
+  contentId: string | undefined,
+  known: ReadonlyMap<string, string>,
+  cwd: string,
+  root: string,
+): string | undefined {
+  const registered = known.get(transcript)
+  if (registered !== undefined) return registered
+  if (contentId === undefined) return undefined
+  return transcriptPath(root, cwd, contentId) === transcript ||
+    legacyTranscriptPath(root, cwd, contentId) === transcript
+    ? contentId
+    : undefined
+}
+
+function knownPaths(
+  ids: Iterable<string> | undefined,
+  cwd: string,
+  root: string,
+): ReadonlyMap<string, string> {
+  const out = new Map<string, string>()
+  if (ids === undefined) return out
+  for (const id of ids) {
+    out.set(transcriptPath(root, cwd, id), id)
+    out.set(legacyTranscriptPath(root, cwd, id), id)
+  }
+  return out
 }
 
 export async function planTranscriptGC(options: TranscriptGCOptions): Promise<TranscriptGCPlan> {
@@ -188,11 +262,23 @@ export async function planTranscriptGC(options: TranscriptGCOptions): Promise<Tr
     root,
   )
 
+  let known: ReadonlyMap<string, string>
+  try {
+    known = knownPaths(options.knownIds?.(), options.cwd, root)
+  } catch (cause) {
+    throw new GCProtectionUnavailableError(cause)
+  }
+
   const candidates: GCCandidate[] = []
   const kept: GCKept[] = []
 
-  for (const [index, session] of sessions.entries()) {
-    const protection = protectedBy.get(session.transcript)
+  for (const [index, listed] of sessions.entries()) {
+    const idReadable = listed.id !== undefined
+    const owner = ownerOf(listed.transcript, listed.id, known, options.cwd, root)
+    const session = { ...listed, id: owner }
+    const protection =
+      protectedBy.get(session.transcript) ??
+      ask(options.isProtected, { id: owner, transcript: session.transcript, idReadable })
     if (protection !== undefined) {
       kept.push({ id: session.id, reason: protection }) // invariant 3, plus pointer/most-recent
       continue
@@ -218,6 +304,7 @@ export async function planTranscriptGC(options: TranscriptGCOptions): Promise<Tr
       id: session.id,
       transcript: session.transcript,
       modifiedAt: session.modifiedAt,
+      idReadable,
     })
   }
 
@@ -327,6 +414,8 @@ export async function runTranscriptGC(
     readonly apply: boolean
     /** Same additive, fail-closed contract as on the plan — see `TranscriptGCOptions.protectedIds`. */
     readonly protectedIds?: () => ReadonlyMap<string, string>
+    /** Same contract as on the plan — asked again here, about each candidate as it is now. */
+    readonly isProtected?: GCProtectionPredicate
     /**
      * T2.2 — remove the registry entry as well as the transcript file.
      *
@@ -365,6 +454,16 @@ export async function runTranscriptGC(
 
   for (const candidate of plan.candidates) {
     if (protectedNow.has(candidate.transcript)) continue // became live after planning — leave it
+    if (
+      options.apply &&
+      ask(options.isProtected, {
+        id: candidate.id,
+        transcript: candidate.transcript,
+        idReadable: candidate.idReadable ?? candidate.id !== undefined,
+      }) !== undefined
+    ) {
+      continue
+    }
 
     if (!options.apply) {
       if (candidate.id === undefined) orphaned.push(candidate.transcript)
