@@ -37,7 +37,7 @@ describe('toolAliases', () => {
       { allow: ['Bash(ls:*)'] },
       { toolAliases: { Bash: 'shell_exec' } },
     )
-    const engine = new PermissionEngine(rules, { defaultAction: 'deny' })
+    const engine = new PermissionEngine([...rules], { defaultAction: 'deny' })
     expect(engine.evaluate('shell_exec', { command: 'ls -la' })).toBe('allow')
     expect(engine.evaluate('Bash', { command: 'ls -la' })).toBe('deny')
   })
