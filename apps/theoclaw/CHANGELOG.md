@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Telegram runs on `@theokit/gateway-telegram` 0.14.0 and its own descriptor: the adapter reads a voice note's audio lazily, after the owner and group hooks, so the local descriptor and the 0.4.0 pin are gone (#2834).
 - A start the gateway abandoned that later fails is written once (by the runner, masked) instead of twice; the channel loop's own second timer is gone (#2777).
 
 - The `/webchat` routes are mounted by `createHostedChat` from `theokit/server/http`; `webchat/routes.ts` keeps the token check, the trusted-proxy and visitor gate and the turn adapter. No change in what a client sees (#2733).

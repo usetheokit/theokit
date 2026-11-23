@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { GatewayRunner } from '@theokit/gateway'
 import type { GatewayContext, MessageEvent } from '@theokit/gateway'
-import { parseInbound } from '@theokit/gateway-telegram'
+import { parseInbound, telegramChannel } from '@theokit/gateway-telegram'
 import { composeTheoClaw } from '../src/composition.js'
 import { fakeBuilders, noAgent, WORKSPACE } from './composition-fixtures.js'
 import { processSecrets } from '../src/secrets.js'
@@ -146,6 +146,11 @@ describe('voice note replies', () => {
     const handler = vi.fn(async (_event, ctx: GatewayContext) => { await ctx.reply('answer') })
     await withVoiceReplies(handler, configuredVoiceReplies(env, request))(event, context(event))
     expect((request.mock.calls[4]?.[1]?.body as FormData).get('message_thread_id')).toBe('7')
+  })
+
+  it('runs on the published Telegram descriptor, which defers the audio read until after the hooks', () => {
+    expect(telegramChannel.platform).toBe('telegram')
+    expect(telegramChannel.config.find((field) => field.key === 'token')).toMatchObject({ required: true, secret: true })
   })
 
   it('requires explicit audio and Telegram credentials', () => {
