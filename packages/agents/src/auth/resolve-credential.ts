@@ -75,6 +75,16 @@ export interface ProviderDescriptor {
    * recognisable prefix", and nothing is checked — never a silent pass disguised as a check.
    */
   readonly keyPrefix?: string
+  /** An operator-configured endpoint: any key shape is accepted, since it is not a known vendor's. */
+  readonly custom?: boolean
+}
+
+/** An OpenAI-compatible endpoint the operator registers; its models are `<name>/<model>`. */
+export interface CustomProviderConfig {
+  readonly name: string
+  readonly baseUrl: string
+  /** The environment variable holding the key. */
+  readonly keyEnv: string
 }
 
 /**
@@ -289,6 +299,7 @@ function assertKeyMatchesProvider(
   apiKey: string,
   where: string,
 ): void {
+  if (descriptor.custom === true) return
   // The SDK owns the prefix knowledge (`providerFromApiKeyPrefix`, whose ordering is derived from
   // prefix length). Asking it rather than restating the table is what keeps ONE owner: a second
   // hand-maintained copy is exactly what produced the longest-prefix bug fixed in 4.52.0.
@@ -581,6 +592,24 @@ export const DEFAULT_PROVIDERS: readonly ProviderDescriptor[] = DEFAULT_PROVIDER
   }),
 )
 
+function withCustomProviders(
+  base: readonly ProviderDescriptor[],
+  custom: readonly CustomProviderConfig[],
+): readonly ProviderDescriptor[] {
+  const names = new Set(custom.map((c) => c.name))
+  const after = Math.max(0, ...base.map((d) => d.priority)) + 1
+  return [
+    ...base.filter((d) => !names.has(d.name)),
+    ...custom.map((c, i) => ({
+      name: c.name,
+      envKey: c.keyEnv,
+      priority: after + i,
+      modelPrefix: `${c.name}/`,
+      custom: true,
+    })),
+  ]
+}
+
 /** Everything {@link resolveAgentCredential} needs, and nothing an app has to invent. */
 export interface AgentCredentialInput {
   readonly env: Readonly<Record<string, string | undefined>>
@@ -597,6 +626,8 @@ export interface AgentCredentialInput {
   readonly providers?: readonly ProviderDescriptor[]
   /** Variable that pins a provider. Defaults to `THEOKIT_PROVIDER`. */
   readonly declaredProviderEnvVar?: string
+  /** Configured OpenAI-compatible endpoints; they win their own `<name>/` prefix over any built-in. */
+  readonly customProviders?: readonly CustomProviderConfig[]
 }
 
 /**
@@ -613,7 +644,10 @@ export interface AgentCredentialInput {
 export function resolveAgentCredential(input: AgentCredentialInput): CredentialResolution {
   return requireCredential({
     env: input.env,
-    providers: input.providers ?? DEFAULT_PROVIDERS,
+    providers: withCustomProviders(
+      input.providers ?? DEFAULT_PROVIDERS,
+      input.customProviders ?? [],
+    ),
     declaredProviderEnvVar: input.declaredProviderEnvVar ?? 'THEOKIT_PROVIDER',
     ...(input.home === undefined ? {} : { home: input.home }),
     ...(input.model === undefined ? {} : { model: input.model }),

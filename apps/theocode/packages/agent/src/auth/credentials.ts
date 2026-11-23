@@ -13,6 +13,7 @@ import { isTransientError } from '@theokit/agents'
 import {
   CredentialNotFoundError,
   DEFAULT_PROVIDERS,
+  isSubscriptionRoute,
   providerFromApiKeyPrefix,
   resolveAgentCredential,
 } from '@theokit/agents/auth'
@@ -276,7 +277,7 @@ export async function resolveCredentialForModel(
     timeoutMs?: number
   },
 ): Promise<ResolvedCredential> {
-  if (model !== undefined && model.startsWith('openai-chatgpt/')) {
+  if (model !== undefined && isSubscriptionRoute(model)) {
     // B-034 — `env: {}` forces the FILE store by hiding the api-key environment variables. It was
     // also hiding the variable that LOCATES that store: `ENV_HOME` is the credential store's
     // `homeEnvVar` (`oauth-config.ts`), so the routed resolution looked in the default home while

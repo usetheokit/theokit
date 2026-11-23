@@ -159,7 +159,7 @@ export {
   resolveAgentCredential,
   resolveCredential,
 } from './auth/resolve-credential.js'
-export type { AgentCredentialInput } from './auth/resolve-credential.js'
+export type { AgentCredentialInput, CustomProviderConfig } from './auth/resolve-credential.js'
 export type { CredentialSourcesInput } from './auth/resolve-credential.js'
 
 /**
@@ -270,3 +270,12 @@ export {
   SecretReferenceError,
   type SecretStore,
 } from './auth/secret-refs.js'
+
+/** Model-id helpers: parse `<provider>/<model>`, spot the ChatGPT subscription route, rewrite for a credential. */
+export {
+  isSubscriptionRoute,
+  modelForCredential,
+  parseModelRef,
+  SUBSCRIPTION_PREFIX,
+  type ModelRef,
+} from './auth/model-route.js'

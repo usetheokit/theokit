@@ -6,6 +6,8 @@ import { createSandboxBackend, DockerSandbox, LinuxSandbox, resolveSandboxPostur
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 import type { InteractiveBackend } from '@theokit/agents/interactive'
 
+import { isSubscriptionRoute } from '@theokit/agents/auth'
+
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { createDockerBackend, readSandboxBackend } from '../sandbox/sandbox-backend.js'
 import type { DockerBackendDeps, SandboxBackendName } from '../sandbox/sandbox-backend.js'
@@ -250,7 +252,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     offLines.push(`tools: git_diff is off (sandbox not enforced: ${detail})`)
   }
   if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
-  if (nonBlank(env.THEOCLAW_MODEL)?.startsWith('openai-chatgpt/') === true) {
+  if (isSubscriptionRoute(nonBlank(env.THEOCLAW_MODEL) ?? '')) {
     offLines.push('tools: view_image is off (the openai-chatgpt/ route carries tool results as text only)')
   }
   if (mode === 'danger-full-access') offLines.push(SANDBOX_OFF_LINE)
@@ -266,7 +268,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     mode,
     sandboxMode,
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
-    ...(nonBlank(env.THEOCLAW_MODEL)?.startsWith('openai-chatgpt/') === true ? { imageResults: false } : {}),
+    ...(isSubscriptionRoute(nonBlank(env.THEOCLAW_MODEL) ?? '') ? { imageResults: false } : {}),
     ...(deps.lookup === undefined ? {} : { lookup: deps.lookup }),
     search,
     browser,
