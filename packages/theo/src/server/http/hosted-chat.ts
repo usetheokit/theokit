@@ -7,15 +7,16 @@ import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import {
-  BodyTooLargeError,
-  generateAgentRoutes,
-  readCappedBody,
-  type StreamEvent,
-} from '@theokit/agents/bridge'
+import type * as Bridge from '@theokit/agents/bridge'
+import type { StreamEvent } from '@theokit/agents/bridge'
+
+/** Loaded on first use: the server barrel re-exports this file, and most servers never host a chat. */
+const loadBridge = (): Promise<typeof Bridge> => import('@theokit/agents/bridge')
+/** Set once `createHostedChat` has loaded it, so a request awaits nothing extra before its body read. */
+let bridgeLoaded: typeof Bridge | undefined
 
 /** The longest chat id a hosted chat accepts. */
-export const HOSTED_CHAT_MAX_ID_LENGTH = 128
+const HOSTED_CHAT_MAX_ID_LENGTH = 128
 const CHAT_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/
 
 /** What `auth` answers for a chat post it lets in. `identity` keys the chat's sessions when set. */
@@ -180,6 +181,7 @@ async function readBody(
   request: Request,
   maxBytes: number,
 ): Promise<Uint8Array<ArrayBuffer> | null | undefined> {
+  const { readCappedBody, BodyTooLargeError } = bridgeLoaded ?? (await loadBridge())
   return readCappedBody(request, maxBytes).catch((error: unknown) => {
     if (error instanceof BodyTooLargeError) return undefined
     // A client that leaves mid-upload errors the body stream; answer instead of failing the listener.
@@ -201,6 +203,7 @@ async function chat(
   }
   if (request.signal.aborted) stopTurn()
   else request.signal.addEventListener('abort', stopTurn, { once: true })
+  const { generateAgentRoutes } = bridgeLoaded ?? (await loadBridge())
   const routes = generateAgentRoutes({
     walkResult: { route: options.route },
     createRun: (message, chatId) => options.createRun(message, `${scope}${chatId}`, turn.signal),
@@ -301,6 +304,11 @@ export function hashedSessionScope(identity: string): string {
 export function createHostedChat(
   options: HostedChatOptions,
 ): (request: Request) => Promise<Response> {
+  loadBridge()
+    .then((bridge) => {
+      bridgeLoaded = bridge
+    })
+    .catch(ignore)
   const chatPath = `${options.route}/chat`
   const sandboxPath = `${options.route}/sandbox`
   const assetsPrefix = `${options.route}/assets/`
