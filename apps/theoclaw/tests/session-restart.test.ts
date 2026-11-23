@@ -1,10 +1,10 @@
 import { EventEmitter } from 'node:events'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { Agent, jsonGenerations } from '@theokit/sdk'
+import { Agent } from '@theokit/sdk'
 import type { AgentOptions } from '@theokit/sdk'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -182,8 +182,8 @@ describe('sessions.json', () => {
 
   it('a generation whose write fails is not moved', async () => {
     const workspace = freshWorkspace()
-    const generations = Generations.load(join(workspace, '.theoclaw', 'sessions.json'))
     writeFileSync(join(workspace, '.theoclaw'), 'a file where the directory goes')
+    const generations = new Generations(join(workspace, '.theoclaw', 'sessions.json'))
 
     await expect(generations.next('k')).rejects.toThrow()
 
@@ -195,26 +195,6 @@ describe('sessions.json', () => {
     const file = join(workspace, 'sessions.json')
     writeFileSync(file, JSON.stringify({ generations: {} }))
     expect(() => Generations.load(file)).toThrow(file)
-  })
-
-  it('reads a sessions.json of the current format through jsonGenerations, with the same numbers', () => {
-    const workspace = freshWorkspace()
-    const file = join(workspace, 'sessions.json')
-    writeFileSync(file, `${JSON.stringify({ version: 1, generations: { a: 3, 'b c': 1 } })}\n`, { mode: 0o600 })
-
-    const store = jsonGenerations(file)
-    const generations = Generations.load(file)
-
-    expect([store.current('a'), store.current('b c'), store.current('z')]).toEqual([3, 1, 0])
-    expect([generations.current('a'), generations.current('b c'), generations.current('z')]).toEqual([3, 1, 0])
-  })
-
-  it('names a file that cannot be read apart from one to move aside', () => {
-    const workspace = freshWorkspace()
-    const dir = join(workspace, 'sessions.json')
-    mkdirSync(dir)
-    expect(() => Generations.load(dir)).toThrow(/cannot be read/)
-    expect(() => Generations.load(dir)).not.toThrow(/move it aside/)
   })
 
   it('two resets of one session at once move its generation by exactly 2', async () => {

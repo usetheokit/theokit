@@ -138,8 +138,8 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
       loadProjectEnv(ctx.env, () => {
         if (!existsSync(file)) return
         const raw = readFileSync(file, 'utf8')
-        const declared = declaredNames(raw)
-        for (const [key, value] of Object.entries(parseEnv(raw))) {
+        const { names: declared, text } = scanDeclarations(raw)
+        for (const [key, value] of Object.entries(parseEnv(text))) {
           if (!declared.has(key)) continue
           if (protectedKeys.has(key)) {
             refused.push(key)
@@ -157,21 +157,26 @@ export function projectEnvStepWith(options: ProjectEnvStepOptions = {}): Bootstr
 /**
  * Names declared by `raw`, stricter than `parseEnv`: only identifiers count, and scanning stops at a
  * quoted value that never closes (everything after it is that value's text, not declarations).
+ * `text` is `raw` with each declaration line's leading space and `export` prefix removed, so the
+ * parser sees the same declarations whatever its Node version does with `export  NAME=`.
  */
-function declaredNames(raw: string): Set<string> {
+function scanDeclarations(raw: string): { names: Set<string>; text: string } {
   const names = new Set<string>()
   const lines = raw.split(/\r?\n/)
+  const out = [...lines]
   let i = 0
   while (i < lines.length) {
+    const at = i
     const decl = splitDeclaration(lines[i].trim())
     i++
     if (decl === undefined) continue
+    out[at] = `${decl.name}=${lines[at].slice(lines[at].indexOf('=') + 1)}`
     const end = valueEnd(decl.value, lines, i)
-    if (end === undefined) return names
+    if (end === undefined) return { names, text: out.join('\n') }
     i = end
     if (/^[A-Za-z_]\w*$/.test(decl.name)) names.add(decl.name)
   }
-  return names
+  return { names, text: out.join('\n') }
 }
 
 function splitDeclaration(line: string): { name: string; value: string } | undefined {
