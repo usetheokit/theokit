@@ -1,19 +1,15 @@
-import { SeenIds, type BasePlatformAdapter, type PlatformName } from '@theokit/gateway'
-import { deliverText, runAgentText } from '@theokit/gateway-agent'
+import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
+import { createTrigger } from '@theokit/gateway-agent'
+import type { AgentLease } from '@theokit/gateway-agent'
 import { github } from 'theokit/server/webhook'
 import type { VerifyFn } from 'theokit/server/webhook'
 
 import type { TurnAgent } from '../agent-port.js'
-import { maskSecrets } from '../channels/channel-loop.js'
-import { describeError } from '../control-plane/errors.js'
 import type { WebhookRoute } from '../webhooks/router.js'
 import type { TriggerSettings } from './trigger-settings.js'
 
 /** The header a sender sets to have a retried delivery answered 200 instead of run twice (FR-004). */
 export const DELIVERY_HEADER = 'x-theoclaw-delivery'
-
-/** The longest delivery id kept; a longer one answers 400, so the cache cannot grow by its ids (EC-3). */
-const MAX_DELIVERY_ID_LENGTH = 256
 
 /** How many delivery ids one trigger remembers; the oldest is forgotten first. */
 const REMEMBERED_DELIVERIES = 1000
@@ -32,16 +28,6 @@ export interface TriggerRouteOptions {
   readonly secrets?: readonly string[]
 }
 
-function answer(status: number): Response {
-  return new Response(null, { status })
-}
-
-/** The prompt of one delivery: the trigger's instructions, if any, then the body as delivered. */
-function promptOf(trigger: TriggerSettings, body: string): string {
-  const parts = [trigger.instructions, `The following was delivered by trigger ${trigger.name}:`, body]
-  return parts.filter((part): part is string => part !== undefined).join('\n\n')
-}
-
 /**
  * The route of one trigger (D1, D2). A delivery whose signature fails answers 401 and nothing about
  * its body is written. A reply platform that has not started answers 503, and the id is not kept,
@@ -50,36 +36,30 @@ function promptOf(trigger: TriggerSettings, body: string): string {
  * its answer is sent once to the trigger's reply channel.
  */
 export function createTriggerRoute(options: TriggerRouteOptions): WebhookRoute {
-  const { trigger, adapterFor, withAgent, write } = options
-  const verify = options.verify ?? github({ secret: trigger.secret })
-  const seen = new SeenIds(REMEMBERED_DELIVERIES)
+  const { trigger, adapterFor, withAgent } = options
   const { platform, channelId } = trigger.replyTo
-
-  const run = async (body: string): Promise<void> => {
-    const outcome = await withAgent((agent) => runAgentText(agent, promptOf(trigger, body)))
-    if (!outcome.ok) {
-      write(`trigger ${trigger.name}: run failed (${outcome.failure})`)
-      return
-    }
-    const adapter = adapterFor(platform)
-    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, channelId, maskSecrets(outcome.text, options.secrets ?? []))
-    if (failure !== undefined) write(`trigger ${trigger.name}: the reply was not delivered (${failure})`)
-  }
-
-  return {
-    methods: ['POST'],
-    handle: async (request) => {
-      if (!(await verify(request.clone())).ok) return answer(401)
-      const id = (request.headers.get(DELIVERY_HEADER) ?? '').trim()
-      if (id.length > MAX_DELIVERY_ID_LENGTH) return answer(400)
-      if (adapterFor(platform) === undefined) return answer(503)
-      if (id !== '' && seen.has(id)) return answer(200)
-      if (id !== '') seen.add(id)
-      const body = await request.text()
-      void run(body).catch((error: unknown) => write(`trigger ${trigger.name}: run failed (${describeError(error)})`))
-      return answer(202)
-    },
-  }
+  const verify = options.verify ?? github({ secret: trigger.secret })
+  const delivery = createTrigger({
+    name: trigger.name,
+    verify: async (request) => verify(request),
+    deliverTo: () => ({ adapter: adapterFor(platform), channelId }),
+    // The agent is fresh per run and the request boundary stays open until the run releases it.
+    agent: () =>
+      new Promise<AgentLease>((resolve, reject) => {
+        withAgent(
+          (agent) =>
+            new Promise<void>((released) => {
+              resolve({ agent, release: released })
+            }),
+        ).catch(reject)
+      }),
+    instructions: [trigger.instructions, `The following was delivered by trigger ${trigger.name}:`].filter((part): part is string => part !== undefined).join('\n\n'),
+    dedupeHeader: DELIVERY_HEADER,
+    rememberDeliveries: REMEMBERED_DELIVERIES,
+    secrets: options.secrets ?? [],
+    write: options.write,
+  })
+  return { methods: ['POST'], handle: (request) => delivery.handle(request) }
 }
 
 /** One route per trigger, keyed by name, sharing the reply adapters, the agent boundary and the writer. */

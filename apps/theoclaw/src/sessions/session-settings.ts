@@ -13,6 +13,8 @@ export interface SessionSettings extends SessionKeySettings {
   readonly idleMinutes: number
   /** Agents kept open at most, 1 to 10000. */
   readonly maxOpenSessions: number
+  /** Days a transcript no live session points to is kept, 1 to 3650. */
+  readonly transcriptRetentionDays: number
 }
 
 /** What the workspace check needs of `fs.statSync`; injected so the unit tests read no file. */
@@ -116,5 +118,11 @@ export function readSessionSettings(env: BindEnvironment, stat: StatDirectory): 
     workspace,
     idleMinutes: readBound(env, 'THEOCLAW_SESSION_IDLE_MINUTES', 1440, 30),
     maxOpenSessions: readBound(env, 'THEOCLAW_MAX_OPEN_SESSIONS', 10_000, 200),
+    transcriptRetentionDays: readRetentionDays(env),
   }
+}
+
+/** `THEOCLAW_TRANSCRIPT_RETENTION_DAYS`, 1 to 3650, default 30. */
+export function readRetentionDays(env: BindEnvironment): number {
+  return readBound(env, 'THEOCLAW_TRANSCRIPT_RETENTION_DAYS', 3650, 30)
 }

@@ -198,6 +198,19 @@ await host.start() // a failure stops the started services in reverse, then reje
 
 Use `createAppHost` for a supervised service (systemd, a container), where a clean stop exits 0. For a terminal session (Ctrl-C, exit code 130) keep using `createShutdown` from `@theokit/agents/commands`. `@theokit/host` does not import `@theokit/agents`.
 
+## `applyOutboundProxy` and `validateProxy`
+
+```ts
+import { applyOutboundProxy, validateProxy } from '@theokit/host'
+
+const { installed } = applyOutboundProxy(process.env, { variable: 'APP_PROXY' })
+const check = await validateProxy(process.env.APP_PROXY!, { target: 'api.openai.com:443', timeoutMs: 5000 })
+if (!check.ok) console.error(check.reason, check.message) // 'connect_refused' | 'timeout' | 'connection_error' | 'invalid_proxy_url'
+```
+
+- `applyOutboundProxy` installs an undici `ProxyAgent` as the **process-wide** global dispatcher when the variable is set, so every `fetch` in the process goes through the proxy. With it unset or blank nothing is installed (`installed: false`).
+- `validateProxy` sends a CONNECT for `target` (`host:port`) to an `http:` or `https:` proxy and returns `{ ok: true, statusCode }` or a typed failure. `timeoutMs` defaults to 5000. Credentials in the URL are sent as basic auth and never appear in messages.
+
 ## `announceService` (`@theokit/host/discovery`)
 
 Announces a running service on the local network (DNS-SD) through a publisher you inject; the package has no multicast dependency.
@@ -218,3 +231,27 @@ await announcement.stop()
 ## License
 
 Apache-2.0
+
+## Browser (`@theokit/host/browser`)
+
+`browserMcpServer(options)` returns a stdio MCP server config for a Playwright MCP browser an agent can drive (`browser_navigate`, `browser_snapshot`, ...). The server runs behind a filtering proxy:
+
+- `browser_run_code_unsafe` (it runs model-written JavaScript in the server process) is **always** left out of `tools/list` and refused on `tools/call`; `deny: ['tool', ...]` adds more tools.
+- The server's working directory and `--output-dir` are `outputDir`, an absolute directory you own (its contents stay after exit). Without it, a fresh temporary directory is used and removed on exit. The `roots` capability and `PLAYWRIGHT_MCP_*` variables are stripped so neither widens the file root.
+- Page snapshots are inlined into tool results; JSON-RPC batches are refused; calls run one at a time.
+
+```ts
+import { browserMcpServer, createSharedBrowser } from '@theokit/host/browser'
+
+// A fresh headless Chromium per session.
+const isolated = browserMcpServer({ mode: 'isolated', outputDir: '/var/app/browser-out' })
+
+// One persistent Chromium shared by many sessions; each session works in a tab of its own.
+const shared = createSharedBrowser('/var/app/browser-profile')
+const cdpEndpoint = await shared.start()
+const attached = browserMcpServer({ mode: 'shared', cdpEndpoint })
+// ... when the app stops:
+await shared.close()
+```
+
+It needs a Chromium headless shell (`npx playwright-core install chromium-headless-shell`). This is Playwright's output-directory control plus a proxy, not an operating-system sandbox: tools such as `browser_evaluate` still run page-side JavaScript and the browser reaches the network.

@@ -392,9 +392,7 @@ describe('theoclaw backup (FR-008)', () => {
     const { symlinkSync } = await import('node:fs')
     symlinkSync('/etc/hostname', join(source.workspace, 'link'))
     const dir = join(tempDir(), 'backup')
-    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(
-      /link is a symbolic link/,
-    )
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(/link is a symbolic link/)
     expect(existsSync(dir)).toBe(false)
   })
 
@@ -403,15 +401,16 @@ describe('theoclaw backup (FR-008)', () => {
     const holder = lockChild(source.state)
     expect(await holder.answer).toBe('took')
     const dir = join(tempDir(), 'backup')
-    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(`pid ${holder.pid}`)
+    await expect(backupInstance(source.env, dir, HOME(source))).rejects.toThrow(
+      `pid ${holder.pid}`,
+    )
     expect(existsSync(dir)).toBe(false)
     await holder.end()
   })
 })
 
 describe('theoclaw restore (FR-009)', () => {
-  async function backedUp(): Promise<{ source: Instance; dir: string; manifest: Manifest }> {
-    const source = populated()
+  async function backedUp(source: Instance = populated()): Promise<{ source: Instance; dir: string; manifest: Manifest }> {
     const dir = join(tempDir(), 'backup')
     return { source, dir, manifest: await backupInstance(source.env, dir, HOME(source)) }
   }
@@ -504,33 +503,40 @@ describe('theoclaw restore (FR-009)', () => {
     )
   })
 
-  it('a restore whose workspace rename fails puts the state target back and changes neither (EC-1)', async () => {
-    const { dir } = await backedUp()
-    const target = instance()
-    const rename = (from: string, to: string) => {
-      if (to === target.workspace) throw new Error('rename refused')
-      renameSync(from, to)
+  it('a backup written before the package switch restores, re-homing its transcripts', async () => {
+    const { encodeProjectDir } = await import('@theokit/sdk/persistence')
+    const { createHash } = await import('node:crypto')
+    const source = populated()
+    const projects = join(source.workspace, '.theoclaw', 'projects', encodeProjectDir(source.workspace))
+    mkdirSync(projects, { recursive: true })
+    writeFileSync(join(projects, 'session.jsonl'), '{"turn":"old"}\n')
+    const { dir } = await backedUp(source)
+    // The manifest the app wrote before the switch: no `roots`, the workspace recorded.
+    const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as Manifest & { roots?: unknown }
+    delete manifest.roots
+    for (const entry of manifest.files) {
+      expect(createHash('sha256').update(readFileSync(join(dir, entry.path))).digest('hex')).toBe(entry.sha256)
     }
-    await expect(restoreInstance(target.env, dir, { ...HOME(target), rename })).rejects.toThrow(
-      'rename refused',
-    )
-    expect(existsSync(target.state)).toBe(false)
-    expect(existsSync(target.workspace)).toBe(false)
-    expect(readdirSync(target.root).filter((name) => name.includes('.restore-'))).toEqual([])
+    const legacy = JSON.stringify(manifest, null, 2)
+    writeFileSync(join(dir, 'manifest.json'), legacy)
+    const target = instance()
+    await restoreInstance(target.env, dir, HOME(target))
+    expect(readFileSync(join(target.state, 'pairing.json'), 'utf8')).toContain('paired')
+    expect(
+      readFileSync(join(target.workspace, '.theoclaw', 'projects', encodeProjectDir(target.workspace), 'session.jsonl'), 'utf8'),
+    ).toBe('{"turn":"old"}\n')
+    expect(readFileSync(join(dir, 'manifest.json'), 'utf8')).toBe(legacy)
   })
 
-  it('a failed workspace rename leaves a state target that existed empty still present, empty, with its mode', async () => {
+  it('a restore that cannot place the workspace leaves a state target that existed empty as it was', async () => {
     const { dir } = await backedUp()
     const target = instance()
     mkdirSync(target.state, { recursive: true })
     chmodSync(target.state, 0o750)
-    const rename = (from: string, to: string) => {
-      if (to === target.workspace) throw new Error('rename refused')
-      renameSync(from, to)
-    }
-    await expect(restoreInstance(target.env, dir, { ...HOME(target), rename })).rejects.toThrow(
-      'rename refused',
-    )
+    // The workspace's parent is a file, so the workspace cannot be staged.
+    writeFileSync(join(target.root, 'blocked'), 'x')
+    const env = { ...target.env, THEOCLAW_WORKSPACE: join(target.root, 'blocked', 'workspace') }
+    await expect(restoreInstance(env, dir, HOME(target))).rejects.toThrow()
     expect(readdirSync(target.state)).toEqual([])
     expect(statSync(target.state).mode & 0o777).toBe(0o750)
   })
@@ -546,7 +552,7 @@ describe('theoclaw restore (FR-009)', () => {
     const profile = join(home, '.theokit', 'profiles', 'restored')
     expect(readdirSync(join(profile, 'workspace', '.theoclaw', 'sessions'))).toHaveLength(3)
     expect(readFileSync(join(profile, 'state', 'pairing.json'), 'utf8')).toContain('paired')
-    expect(existsSync(`${join(profile, 'state')}.instance.lock`)).toBe(false)
+    expect(existsSync(instanceLockPath(join(profile, 'state')))).toBe(false)
   })
 
   it("restore re-homes the session transcripts under the new workspace's own name", async () => {
@@ -581,9 +587,7 @@ describe('theoclaw restore (FR-009)', () => {
     renameSync(join(dir, 'workspace'), join(elsewhere, 'workspace'))
     symlinkSync(join(elsewhere, 'workspace'), join(dir, 'workspace'))
     const target = instance()
-    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(
-      /is a symbolic link/,
-    )
+    await expect(restoreInstance(target.env, dir, HOME(target))).rejects.toThrow(/is a symbolic link/)
     expect(existsSync(target.state)).toBe(false)
   })
 
@@ -591,9 +595,7 @@ describe('theoclaw restore (FR-009)', () => {
     const source = populated()
     const env = { ...source.env, THEOCLAW_WORKSPACE: join(source.state, 'workspace') }
     await expect(backupInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(/overlap/)
-    await expect(restoreInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(
-      /overlap/,
-    )
+    await expect(restoreInstance(env, join(tempDir(), 'b'), HOME(source))).rejects.toThrow(/overlap/)
   })
 
   it('restore refuses while instance.lock names a live process', async () => {
@@ -638,8 +640,8 @@ describe('theoclaw restore (FR-009)', () => {
     child.stdout!.on('data', (chunk: Buffer) => (output += chunk.toString()))
     await waitFor(() => output.includes('copying'), 30_000, 'the backup to start copying')
 
-    await expect(claimInstance(NO_PROFILE, { THEOCLAW_STATE_DIR: source.state })).rejects.toThrow(
-      `pid ${child.pid}`,
+    expect(() => claimInstance(NO_PROFILE, { THEOCLAW_STATE_DIR: source.state })).toThrow(
+      `is held by process ${child.pid}`,
     )
     writeFileSync(gate, '')
     await waitFor(() => output.includes('done'), 30_000, 'the backup to finish')

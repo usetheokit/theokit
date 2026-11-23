@@ -4,8 +4,8 @@
  * `AgentOptions.sendDefaults` accepts only `toolResultGuard`, `pruneToolResults` and
  * `perToolTimeoutMs`. Using the SDK guard would put `doomLoop` back on every send site, the thing
  * `sendDefaults` removed for the untrusted-content options. This plugin counts per agent, once.
- * SDK request: let `sendDefaults` carry `doomLoop`. No SDK issue exists yet (the run that wrote this
- * had no issue-writing access): link it here when it is filed, and delete this module when it ships.
+ * SDK request: let `sendDefaults` carry `doomLoop`, filed as usetheokit/theokit-sdk#1502. Delete this
+ * module when it ships.
  */
 import type { PreToolCallContext } from '@theokit/sdk'
 

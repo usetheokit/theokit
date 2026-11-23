@@ -7,6 +7,14 @@ import { dirname, join, resolve } from 'node:path'
 import type { Writable } from 'node:stream'
 
 import type { DockerRunner } from '@theokit/agents/sandbox'
+import {
+  SkillsRegistryError,
+  buildSkillPackage,
+  downloadSkill,
+  installSkill,
+  publishSkill,
+  searchSkills,
+} from '@theokit/skills-registry'
 import { isSea } from 'node:sea'
 import { fileURLToPath } from 'node:url'
 
@@ -58,9 +66,6 @@ import { hooksCommand } from './agent/hooks-list.js'
 import { resumeCommand, sessionsCommand } from './sessions/sessions-command.js'
 import { serveMcpStdio } from './mcp/serve-tools.js'
 import { mcpRelayCommand } from './mcp-relay/command.js'
-import { installSkill } from './skills/install.js'
-import { PublishError, publishSkill } from './skills/publish.js'
-import { RegistryError, searchSkills } from './skills/registry-client.js'
 
 /**
  * The `theoclaw` command (B-374, plan D2). A second leaf entry beside `src/main.ts`: it never
@@ -153,6 +158,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw hooks list       the project hooks in .theokit/settings.json: event, fingerprint, approved or not approved; exit 1 when none
   theoclaw sessions list|show <id>|export <id> [--json]
                             list the chat sessions, show one's summary, or print its messages (an id prefix is enough)
+  theoclaw sessions gc [--dry-run] [--days <n>]
+                            remove chat transcripts older than the retention (THEOCLAW_TRANSCRIPT_RETENTION_DAYS, default 30); --dry-run lists them
   theoclaw sessions share <id> --to <dir> | open <id> --from <dir>
                             share a session read-only with another instance through <dir>, or open one shared with you
   theoclaw transcripts list|show <id>|export <id> [--json]
@@ -447,7 +454,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         )
         return 0
       } catch (error) {
-        if (!(error instanceof RegistryError)) throw error
+        if (!(error instanceof SkillsRegistryError)) throw error
         io.stderr.write(`theoclaw: ${error.message}\n`)
         return 1
       }
@@ -469,11 +476,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           'THEOCLAW_WORKSPACE is not set (the workspace to install into)',
         )
       try {
-        const done = await installSkill(base, join(resolve(io.cwd, workspace), 'skills'), spec)
-        io.stdout.write(`Installed ${done.name}@${done.version} -> ${done.dir}\n`)
+        const pkg = await downloadSkill(base, spec)
+        const done = await installSkill(join(resolve(io.cwd, workspace), 'skills'), pkg, {
+          registry: base,
+        })
+        io.stdout.write(`Installed ${pkg.name}@${pkg.version} -> ${done.dir}\n`)
         return 0
       } catch (error) {
-        if (!(error instanceof RegistryError)) throw error
+        if (!(error instanceof SkillsRegistryError)) throw error
         io.stderr.write(`theoclaw: ${error.message}\n`)
         return 1
       }
@@ -483,11 +493,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       throw new UsageError(
         'theoclaw skills: expected search <term>, install <name>[@<version>] or publish <dir>',
       )
+    const registry = (io.env.THEOCLAW_SKILLS_REGISTRY ?? '').trim()
+    const token = (io.env.THEOCLAW_SKILLS_TOKEN ?? '').trim()
     try {
-      io.stdout.write(`${await publishSkill(resolve(io.cwd, dir), { env: io.env })}\n`)
+      if (registry === '') throw new TheoClawConfigError('THEOCLAW_SKILLS_REGISTRY is not set')
+      if (token === '') throw new TheoClawConfigError('THEOCLAW_SKILLS_TOKEN is not set')
+      const pkg = await buildSkillPackage(resolve(io.cwd, dir))
+      await publishSkill(registry, pkg, { token })
+      io.stdout.write(`Published ${pkg.name}@${pkg.version}\n`)
       return 0
     } catch (error) {
-      if (!(error instanceof PublishError)) throw error
+      if (!(error instanceof SkillsRegistryError)) throw error
       io.stderr.write(`theoclaw: ${error.message}\n`)
       return 1
     }

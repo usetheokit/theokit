@@ -3,7 +3,7 @@ import { isSubscriptionRoute, resolveAgentCredential } from '@theokit/agents/aut
 import { parseThinkingLevel } from '../agent/create-agent.js'
 import { customProviderOf, parseCustomProviders } from '../agent/custom-providers.js'
 import { readBearerToken } from './bearer.js'
-import { type BindEnvironment, parsePort, resolveBindAddress } from './bind.js'
+import { type BindEnvironment, parsePort, resolveControlHost } from './bind.js'
 import { TheoClawConfigError } from './errors.js'
 
 /** Everything the control plane reads from its environment, read once at start. */
@@ -93,5 +93,5 @@ export function readControlPlaneSettings(env: BindEnvironment): ControlPlaneSett
   const port = parsePort(env.THEOCLAW_PORT)
   const controlToken = readBearerToken(env, 'THEOCLAW_CONTROL_TOKEN')
   const webchatToken = readBearerToken(env, 'THEOCLAW_WEBCHAT_TOKEN')
-  return { host: resolveBindAddress(env), port, model, modelKey, controlToken, webchatToken }
+  return { host: resolveControlHost(env), port, model, modelKey, controlToken, webchatToken }
 }

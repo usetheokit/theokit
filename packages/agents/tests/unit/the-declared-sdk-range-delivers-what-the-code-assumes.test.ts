@@ -250,8 +250,20 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     // declaration that refuses that version names an SDK the tree does not run. theocode's pin
     // guard fails on exactly that (LCR0202), and a published package carrying it asks npm for a
     // second copy.
+    //
+    // One case is not a refusal: dep-check's floor leg rewrites the override to the bottom of the
+    // intersection of the ranges (the highest of their floors) and runs this suite there. An app that
+    // ships one exact SDK (theoclaw, theocode) cannot admit that floor and was never meant to, so at
+    // the floor leg only the ranges are read.
     const installed = overriddenSdkVersion()
-    for (const { pkg, field, range } of everySdkDeclaration()) {
+    const declarations = everySdkDeclaration()
+    const isExact = (range: string): boolean => /^\d+\.\d+\.\d+$/.test(range)
+    const [major, minor] = installed.split('.').map(Number)
+    const atTheFloorLeg = declarations
+      .filter((d) => !isExact(d.range))
+      .some((d) => floorsOf(d.range).some((f) => f.major === major && f.minor === minor))
+    for (const { pkg, field, range } of declarations) {
+      if (atTheFloorLeg && isExact(range) && asNumber(range) > asNumber(installed)) continue
       expect(
         admits(range, installed),
         `${pkg} [${field}] declares @theokit/sdk "${range}", which does not admit ${installed}, ` +
@@ -312,6 +324,9 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     const floors = floorsOf(declaredSdkRange('packages/agents', 'dependencies'))
     expect(floors).toHaveLength(1)
     expect(floors[0]?.major).toBe(5)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '8.0.1')).toBe(true)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '9.0.0')).toBe(true)
+    expect(admits(declaredSdkRange('packages/agents', 'dependencies'), '10.0.0')).toBe(false)
     expect(
       floors[0]?.minor,
       `the agents floor admits @theokit/sdk@5.${floors[0]?.minor}.x, where an Anthropic-family ` +

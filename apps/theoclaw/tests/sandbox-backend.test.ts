@@ -5,7 +5,7 @@ import { DockerSandbox } from '@theokit/agents/sandbox'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
-import { MAIN_SESSION_KEY, readSandboxBackend } from '../src/sandbox/sandbox-mode.js'
+import { createDockerBackend, MAIN_SESSION_KEY, readSandboxBackend } from '../src/sandbox/sandbox-mode.js'
 import { resolveToolSettings, toolSettingsForSession } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { enforced } from './tool-start-fixtures.js'
@@ -82,6 +82,22 @@ describe('THEOCLAW_SANDBOX_BACKEND=docker', () => {
     const readOnly = settingsFor('read-only', runner).settings
     await readOnly.sandbox.execute('touch x')
     expect(mountOf(calls[0] ?? [])).toBe(`${readOnly.toolRoot}:/workspace:ro`)
+  })
+
+  it('pins the docker options: labels name the sandbox and its session, readOnlyWorkspace follows the mode', async () => {
+    const { runner, calls } = recorder()
+    const workspace = makeHostToolsWorkspace()
+    cleanups.push(() => workspace.remove())
+    for (const [mode, access] of [
+      ['workspace-write', 'rw'],
+      ['read-only', 'ro'],
+    ] as const) {
+      calls.length = 0
+      await createDockerBackend(mode, workspace.path, { dockerRunner: runner }, 'chat-7').execute('true')
+      const run = calls[0] ?? []
+      expect(mountOf(run)).toBe(`${workspace.path}:/workspace:${access}`)
+      expect(run).toEqual(expect.arrayContaining(['--label', 'theoclaw.sandbox=1', '--label', 'theoclaw.session=chat-7']))
+    }
   })
 
   it('refuses danger-full-access, naming it, rather than downgrading', () => {

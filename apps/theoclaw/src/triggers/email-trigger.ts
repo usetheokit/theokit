@@ -2,7 +2,7 @@ import type { BasePlatformAdapter, GatewayHook, PlatformName } from '@theokit/ga
 
 import type { TurnAgent } from '../agent-port.js'
 import { maskSecrets } from '../channels/channel-loop.js'
-import { deliverText, runAgentText } from '@theokit/gateway-agent'
+import { deliverText, frameUntrusted, runAgentText } from '@theokit/gateway-agent'
 import { describeError } from '../control-plane/errors.js'
 import type { EmailTriggerSettings } from './trigger-settings.js'
 
@@ -31,8 +31,7 @@ export interface EmailTrigger {
 
 /** The prompt of one mail; a forged closing tag in the body is defused. */
 function promptOf(settings: EmailTriggerSettings, sender: string, body: string): string {
-  const safe = body.replaceAll('</email>', '<\\/email>')
-  return [settings.instructions, FRAMING, `<email from="${sender.replaceAll('"', '')}">\n${safe}\n</email>`]
+  return [settings.instructions, FRAMING, frameUntrusted('email', body, { from: sender })]
     .filter((part): part is string => part !== undefined)
     .join('\n\n')
 }

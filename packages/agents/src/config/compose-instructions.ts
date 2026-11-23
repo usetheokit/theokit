@@ -27,6 +27,12 @@ export interface InstructionSource {
   readonly content: string
   /** How this source is cut when the budget is tight. Omitted behaves as `{ kind: 'drop' }`. */
   readonly trim?: InstructionTrim
+  /**
+   * Cut order under a tight budget: the LOWEST priority is cut first; an omitted priority counts as
+   * 0, and ties cut the later-listed source first (so with no priorities the last listed goes
+   * first, as before). The composed text keeps the listed order.
+   */
+  readonly priority?: number
 }
 
 /**
@@ -106,6 +112,15 @@ export function composeInstructions(
   // Walk from the LEAST important end — the caller ordered the list, so the last entry is the one
   // they said matters least.
   const kept: InstructionSource[] = [...sources]
+  // The index of the source to cut next: lowest priority, later-listed first on a tie. Without any
+  // priority this is the last entry — the original behaviour.
+  const victim = (): number => {
+    let at = kept.length - 1
+    for (let i = kept.length - 2; i >= 0; i -= 1) {
+      if ((kept[i]?.priority ?? 0) < (kept[at]?.priority ?? 0)) at = i
+    }
+    return at
+  }
   const dropped: string[] = []
   let trimmed: string | undefined
   const cuts: InstructionCut[] = []
@@ -117,19 +132,20 @@ export function composeInstructions(
     [base, ...list.map((source) => source.content)].join(separator).length
 
   while (kept.length > 0 && lengthOf(kept) > options.maxChars) {
-    const last = kept.at(-1)
+    const at = victim()
+    const last = kept.at(at)
     if (last === undefined) break
 
     // Before dropping it entirely, see whether trimming THIS source is enough. Half a source the
     // user wrote is worth more than none of it, and only the last one is ever cut — cutting several
     // would leave a composed prompt where nothing is complete.
-    const withoutLast = kept.slice(0, -1)
+    const withoutLast = kept.filter((_, i) => i !== at)
     const room = options.maxChars - lengthOf(withoutLast) - separator.length
     const policy = last.trim
     if (policy !== undefined && policy.kind !== 'drop') {
       const next = applyPolicy(last.content, policy, room)
       if (next !== undefined) {
-        kept[kept.length - 1] = { ...last, content: next }
+        kept[at] = { ...last, content: next }
         record(last.name, last.content.length, next.length)
         trimmed ??= last.name
         warn(
@@ -139,7 +155,7 @@ export function composeInstructions(
         break
       }
     } else if (room > 0 && trimmed === undefined) {
-      kept[kept.length - 1] = { ...last, content: last.content.slice(0, room) }
+      kept[at] = { ...last, content: last.content.slice(0, room) }
       trimmed = last.name
       record(last.name, last.content.length, room)
       warn(
@@ -149,7 +165,7 @@ export function composeInstructions(
       break
     }
 
-    kept.pop()
+    kept.splice(at, 1)
     dropped.push(last.name)
     record(last.name, last.content.length, 0)
     warn(`instruction budget: "${last.name}" was dropped to fit the ceiling.`)

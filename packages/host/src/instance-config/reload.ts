@@ -41,11 +41,14 @@ function parses(key: InstanceKey, value: string | undefined): boolean {
 }
 
 function refuses(
-  validate: ((candidate: Readonly<NodeJS.ProcessEnv>) => void) | undefined,
+  validate:
+    | ((candidate: Readonly<NodeJS.ProcessEnv>, successor: Readonly<NodeJS.ProcessEnv>) => void)
+    | undefined,
   candidate: NodeJS.ProcessEnv,
+  successor: NodeJS.ProcessEnv,
 ): boolean {
   try {
-    validate?.(candidate)
+    validate?.(candidate, successor)
     return false
   } catch {
     return true
@@ -57,7 +60,10 @@ export function reloadInstanceConfig(
   path: string,
   env: NodeJS.ProcessEnv,
   previous: Readonly<Record<string, string>>,
-  validate?: (candidate: Readonly<NodeJS.ProcessEnv>) => void,
+  validate?: (
+    candidate: Readonly<NodeJS.ProcessEnv>,
+    successor: Readonly<NodeJS.ProcessEnv>,
+  ) => void,
 ): ReloadResult {
   const refuse = (reason: string): ReloadResult => ({
     result: { kind: 'refused', reason },
@@ -73,6 +79,8 @@ export function reloadInstanceConfig(
   const applied: string[] = []
   const restartRequired: string[] = []
   const candidate: NodeJS.ProcessEnv = { ...env }
+  // What a restart would start from: the candidate plus every changed start-only key the caller did not set.
+  const successor: NodeJS.ProcessEnv = { ...env }
   const names = [...new Set([...Object.keys(previous), ...Object.keys(next)])].sort((a, b) =>
     a.localeCompare(b),
   )
@@ -81,22 +89,23 @@ export function reloadInstanceConfig(
     const key = Object.hasOwn(keys, name) ? keys[name] : undefined
     if (key?.hot !== true) {
       restartRequired.push(name)
+      if (env[name] === before[name]) setOrDelete(successor, name, next[name])
       continue
     }
     if (!parses(key, next[name])) return refuse(`${name} does not parse`)
     // the caller set this variable: leave it alone
     if (env[name] !== before[name]) continue
     setOrDelete(candidate, name, next[name])
+    setOrDelete(successor, name, next[name])
     applied.push(name)
   }
-  if (refuses(validate, candidate)) {
+  if (applied.length === 0 && restartRequired.length === 0)
+    return { result: { kind: 'unchanged' }, accepted: readonlyRecord(next) }
+  if (refuses(validate, candidate, successor)) {
     return refuse('the candidate configuration was refused by validation')
   }
   for (const name of applied) setOrDelete(env, name, candidate[name])
-  const changed = applied.length > 0 || restartRequired.length > 0
-  const result: ReloadEvent = changed
-    ? { kind: 'applied', applied, restartRequired }
-    : { kind: 'unchanged' }
+  const result: ReloadEvent = { kind: 'applied', applied, restartRequired }
   return { result, accepted: readonlyRecord(next) }
 }
 

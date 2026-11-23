@@ -85,8 +85,10 @@ export async function serveMcpToolsStdio(
   tools: readonly CustomTool[],
   name: string,
   streams: StdioStreams,
+  options?: McpToolsOptions,
 ): Promise<void> {
-  const respond = (body: unknown): Promise<Response> => handleMcpToolsJsonRpc(tools, name, body)
+  const respond = (body: unknown): Promise<Response> =>
+    handleMcpToolsJsonRpc(tools, name, body, options)
   // Validate eagerly so a duplicate fails the call, not the first request.
   await respond(null)
   for await (const line of streams.lines) {

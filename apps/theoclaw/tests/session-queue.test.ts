@@ -25,6 +25,7 @@ const SETTINGS: SessionSettings = {
   workspace: '/srv/theoclaw',
   idleMinutes: 30,
   maxOpenSessions: 200,
+  transcriptRetentionDays: 30,
 }
 
 function dm(sender: string, text = 'hi'): MessageEvent {
