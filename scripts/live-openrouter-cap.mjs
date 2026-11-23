@@ -25,11 +25,17 @@ export function capBody(body, limit = MAX_OUTPUT_TOKENS) {
   return JSON.stringify({ ...parsed, max_tokens: limit })
 }
 
+function requestUrl(input) {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.href
+  return input.url
+}
+
 /** Swap `target.fetch` for one that caps chat-completions requests. Returns the restore function. */
 export function capOpenRouterOutput(target = globalThis, limit = MAX_OUTPUT_TOKENS) {
   const original = target.fetch
   const capped = async (input, init) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    const url = requestUrl(input)
     if (url.split('?')[0].endsWith('/chat/completions') && typeof init?.body === 'string') {
       return original.call(target, input, { ...init, body: capBody(init.body, limit) })
     }
