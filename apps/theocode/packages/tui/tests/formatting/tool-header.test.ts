@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   APPROVAL_KEY_HINT,
@@ -317,5 +317,41 @@ describe('a tool call a policy refused is not reported as one that ran', () => {
     } as never
 
     expect(formatToolHeader(ran)?.name).toBe('Ran ./x')
+  })
+})
+
+describe('Bash, Edit and ApplyPatch headers come from the toolkit presentation', () => {
+  const header = (name: string, input: Record<string, unknown>, status = 'completed') =>
+    formatToolHeader({ kind: 'tool', name, status, input } as never)
+
+  it('words Bash and Edit by tense and flattens a multi-line command', () => {
+    expect(header('Bash', { command: 'ls\nx' }, 'running')?.name).toBe('Running ls⏎x')
+    expect(header('Bash', { command: 'ls' })?.name).toBe('Ran ls')
+    expect(header('Edit', { path: 'a.ts' })?.name).toBe('Edited a.ts')
+  })
+
+  it('keeps the own fallbacks for a missing target, and the patch counts', () => {
+    expect(header('Bash', {})?.name).toBe('Ran')
+    expect(header('Bash', { command: '' }, 'running')?.name).toBe('Running')
+    expect(header('Edit', {})?.name).toBe('Edited file')
+    expect(header('ApplyPatch', { patch: 'garbage' })?.name).toBe('Edited files')
+    const patch = [1, 2, 3, 4].map((n) => `*** Update File: f${n}.ts\n@@\n-a\n+b`).join('\n')
+    const wrapped = `*** Begin Patch\n${patch}\n*** End Patch`
+    expect(header('ApplyPatch', { patch: wrapped })?.name).toMatch(
+      /^Edited f1\.ts, f2\.ts, f3\.ts \+1 more/,
+    )
+    expect(header('ApplyPatch', { patch: wrapped }, 'running')?.name).toMatch(/^Editing /)
+    const counted = '*** Begin Patch\n*** Update File: a.ts\n@@\n-a\n+b\n*** End Patch'
+    expect(header('ApplyPatch', { patch: counted })?.name).toMatch(/^Edited a\.ts.*\+1/)
+  })
+
+  it('fails loudly when the installed toolkit has no entry for an aliased tool', async () => {
+    vi.resetModules()
+    vi.doMock('@theokit/tui', () => ({ toolPresentation: () => new Map() }))
+    const mod = await import('../../src/formatting/tool-header.ts')
+    expect(() =>
+      mod.formatToolHeader({ kind: 'tool', name: 'Bash', status: 'completed', input: {} } as never),
+    ).toThrow(/@theokit\/tui >= 0\.83\.4/)
+    vi.doUnmock('@theokit/tui')
   })
 })

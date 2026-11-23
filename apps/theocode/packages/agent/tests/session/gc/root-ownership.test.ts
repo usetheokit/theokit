@@ -77,7 +77,10 @@ describe('root ownership', () => {
     // Someone else's marker, or ours from a future schema. Refusing is the safe direction: the
     // alternative is deleting under a contract we do not understand.
     const root = scratchRoot()
-    writeFileSync(join(dirname(root), OWNERSHIP_MARKER), JSON.stringify({ product: 'something-else' }))
+    writeFileSync(
+      join(dirname(root), OWNERSHIP_MARKER),
+      JSON.stringify({ product: 'something-else' }),
+    )
 
     expect(rootIsOurs(root)).toBe(false)
   })
