@@ -26,6 +26,7 @@ import { createInterface } from 'node:readline'
 import { writeFileSync } from 'node:fs'
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n')
 const seen = []
+const finished = []
 createInterface({ input: process.stdin }).on('line', (line) => {
   const message = JSON.parse(line)
   if (message.method === 'tools/call') seen.push(message.params?.name + ':' + (message.params?.arguments?.action ?? ''))
@@ -34,6 +35,13 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   if (message.method === 'initialize') send({ jsonrpc: '2.0', id: message.id, result: { seen: message.params } })
   else if (message.method === 'tools/list') {
     send({ jsonrpc: '2.0', id: message.id, result: { tools: [{ name: 'browser_navigate' }, { name: 'browser_run_code_unsafe' }, { name: 'browser_snapshot' }] } })
+  } else if (message.params?.arguments?.delay !== undefined) {
+    // A slow call: what had finished when it began shows whether two calls ran at once.
+    const startedAfter = [...finished]
+    setTimeout(() => {
+      finished.push(message.params.name)
+      send({ jsonrpc: '2.0', id: message.id, result: { called: message.params.name, startedAfter } })
+    }, message.params.arguments.delay)
   } else if (message.params?.arguments?.link !== undefined) {
     if (!message.params.arguments.missing) writeFileSync(message.params.arguments.link.replace(/^\\.\\//, ''), message.params.arguments.content ?? '- generic [ref=e1]: hello page')
     writeFileSync('../theoclaw-outside.yml', 'outside')
@@ -139,6 +147,44 @@ describe('the browser server wrapper', () => {
     expect([...answers.keys()].sort()).toEqual([1, 2])
     // The new tab comes first, once, and the held calls follow in the order they came.
     expect((answers.get(2)?.result as { seen: string[] }).seen).toEqual(['browser_tabs:new', 'browser_navigate:', 'browser_snapshot:'])
+  })
+
+  it('starts a tool call only after the one before it answered, so a snapshot sent beside a navigation sees the loaded page', async () => {
+    // A model may send browser_navigate and browser_snapshot in one turn; the snapshot of a page that
+    // is still loading is empty, and the model then reports an empty page (OC-60, #2673).
+    const answers = await exchange([
+      { method: 'tools/call', params: { name: 'browser_navigate', arguments: { delay: 200 } } },
+      { method: 'tools/call', params: { name: 'browser_snapshot', arguments: { delay: 0 } } },
+    ])
+    expect((answers.get(2)?.result as { startedAfter: string[] }).startedAfter).toEqual(['browser_navigate'])
+  })
+
+  it('stops waiting on a call the client cancelled', async () => {
+    const server = browserServer({ cliPath: standInCli() }) as { command: string; args: string[] }
+    const child = spawn(server.command, server.args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    cleanups.push(() => child.kill('SIGKILL'))
+    const answered = new Promise<Answer>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('the call behind a cancelled one was never sent')), DEADLINE_MS)
+      createInterface({ input: child.stdout }).on('line', (line) => {
+        clearTimeout(timer)
+        resolve(JSON.parse(line) as Answer)
+      })
+    })
+    const write = (message: object): void => void child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`)
+    write({ id: 1, method: 'tools/call', params: { name: 'browser_navigate', arguments: { delay: 600_000 } } })
+    write({ id: 2, method: 'tools/call', params: { name: 'browser_snapshot', arguments: { delay: 0 } } })
+    write({ method: 'notifications/cancelled', params: { requestId: 1 } })
+    expect((await answered).id).toBe(2)
+  })
+
+  it('answers the calls after a refused one without waiting on it', async () => {
+    const answers = await exchange([
+      { method: 'tools/call', params: { name: 'browser_run_code_unsafe', arguments: {} } },
+      { method: 'tools/call', params: { name: 'browser_navigate', arguments: { delay: 0 } } },
+      { method: 'tools/call', params: { name: 'browser_snapshot', arguments: { delay: 0 } } },
+    ])
+    expect(answers.get(1)?.error?.code).toBe(-32602)
+    expect((answers.get(3)?.result as { startedAfter: string[] }).startedAfter).toEqual(['browser_navigate'])
   })
 
   it('opens no page for a server with its own isolated browser', async () => {
