@@ -4044,6 +4044,14 @@
           "references": [],
           "internals": {}
         },
+        "OffCapability": {
+          "tier": "stable",
+          "declaration": "interface OffCapability extends WiringOffReason {\n    readonly capability: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "OffTool": {
           "tier": "stable",
           "declaration": "interface OffTool {\n    readonly name: string;\n    readonly reason: string;\n}",
@@ -4811,6 +4819,24 @@
           "internals": {
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';"
           }
+        },
+        "ScopedWiringCapability": {
+          "tier": "stable",
+          "declaration": "interface ScopedWiringCapability {\n    readonly groups: readonly ScopedWiringGroup[];\n    readonly sort?: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup"],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}"
+          }
+        },
+        "ScopedWiringGroup": {
+          "tier": "stable",
+          "declaration": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
         },
         "ScoreVerdict": {
           "tier": "stable",
@@ -6770,7 +6796,23 @@
         },
         "WiredEntity": {
           "tier": "stable",
-          "declaration": "interface WiredEntity {\n    readonly active: readonly string[];\n    readonly requested: readonly string[];\n    readonly suppressedByTrust: boolean;\n}",
+          "declaration": "interface WiredEntity {\n    readonly active: readonly string[];\n    readonly requested: readonly string[];\n    readonly suppressedByTrust: boolean;\n    readonly entities: readonly WiredEntityScope[];\n    readonly off: WiringOffReason | undefined;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "WiredEntityScope": {
+          "tier": "stable",
+          "declaration": "interface WiredEntityScope {\n    readonly name: string;\n    readonly scope: string | undefined;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "WiringOffReason": {
+          "tier": "stable",
+          "declaration": "interface WiringOffReason {\n    readonly reason: WiringOffReasonCode;\n    readonly detail?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -9480,6 +9522,14 @@
             "dist/agent-orchestrator-<hash>.d.ts#ReflectionStrategy": "interface ReflectionStrategy {\n    readonly name: string;\n    reflect(outcome: LoopOutcome, ctx?: ReflectionContext): ReflectionResult;\n}"
           }
         },
+        "offCapabilities": {
+          "tier": "stable",
+          "declaration": "declare function offCapabilities(record: Readonly<Record<string, WiredEntity>>): OffCapability[];",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "outputModeration": {
           "tier": "stable",
           "declaration": "declare function outputModeration(options: OutputModerationOptions): Guardrail;",
@@ -9647,6 +9697,20 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "recordScopedWiring": {
+          "tier": "stable",
+          "declaration": "declare function recordScopedWiring<K extends string>(input: {\n    readonly posture: {\n        readonly allows: Readonly<Record<string, boolean>>;\n    };\n    readonly requested: Readonly<Record<K, ScopedWiringCapability>>;\n}): Readonly<Record<K, WiredEntity>>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringCapability",
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup"
+          ],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringCapability": "interface ScopedWiringCapability {\n    readonly groups: readonly ScopedWiringGroup[];\n    readonly sort?: boolean;\n}",
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}"
+          }
         },
         "recordWiring": {
           "tier": "stable",
@@ -13981,6 +14045,24 @@
             "dist/setting-sources-gate-<hash>.d.ts#CompatSurface": "type CompatSurface = 'commands' | 'context' | 'hooks' | 'plugins' | 'skills' | 'subagents';"
           }
         },
+        "ScopedWiringCapability": {
+          "tier": "stable",
+          "declaration": "interface ScopedWiringCapability {\n    readonly groups: readonly ScopedWiringGroup[];\n    readonly sort?: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup"],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}"
+          }
+        },
+        "ScopedWiringGroup": {
+          "tier": "stable",
+          "declaration": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "ScoreVerdict": {
           "tier": "stable",
           "declaration": "interface ScoreVerdict {\n    pass: boolean;\n    score?: number;\n    feedback?: string;\n}",
@@ -16802,6 +16884,20 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "recordScopedWiring": {
+          "tier": "stable",
+          "declaration": "declare function recordScopedWiring<K extends string>(input: {\n    readonly posture: {\n        readonly allows: Readonly<Record<string, boolean>>;\n    };\n    readonly requested: Readonly<Record<K, ScopedWiringCapability>>;\n}): Readonly<Record<K, WiredEntity>>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringCapability",
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup"
+          ],
+          "internals": {
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringCapability": "interface ScopedWiringCapability {\n    readonly groups: readonly ScopedWiringGroup[];\n    readonly sort?: boolean;\n}",
+            "dist/bridge-entry-<hash>.d.ts#ScopedWiringGroup": "interface ScopedWiringGroup {\n    readonly names: readonly string[];\n    readonly scope?: string;\n    readonly gated: boolean;\n}"
+          }
         },
         "renderTranscript": {
           "tier": "stable",

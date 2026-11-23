@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1624 export(s) across 30 entry point(s).
+1634 export(s) across 30 entry point(s).
 
-Measured against `@theokit/sdk@12.0.0`.
+Measured against `@theokit/sdk@13.0.0`.
 
 ## `@theokit/agents`
 
@@ -179,6 +179,7 @@ Measured against `@theokit/sdk@12.0.0`.
 | `NetworkError` | value |
 | `noopReflectionStrategy` | value |
 | `NoResultSubmittedError` | value |
+| `offCapabilities` | value |
 | `OffToolsCapability` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
@@ -198,6 +199,7 @@ Measured against `@theokit/sdk@12.0.0`.
 | `RateLimitError` | value |
 | `readCappedBody` | value |
 | `reasoningEffortOf` | value |
+| `recordScopedWiring` | value |
 | `recordWiring` | value |
 | `reflectionStrategyConfigSchema` | value |
 | `refreshModelCatalog` | value |
@@ -432,6 +434,7 @@ Measured against `@theokit/sdk@12.0.0`.
 | `ModelFallbackAttempt` | type |
 | `ModelOption` | type |
 | `NamedTool` | type |
+| `OffCapability` | type |
 | `OffTool` | type |
 | `OpenAIChatMessage` | type |
 | `OpenAIChatRequest` | type |
@@ -470,6 +473,8 @@ Measured against `@theokit/sdk@12.0.0`.
 | `RunEvent` | type |
 | `RunStartedEvent` | type |
 | `RuntimeOverrides` | type |
+| `ScopedWiringCapability` | type |
+| `ScopedWiringGroup` | type |
 | `ScoredDelegation` | type |
 | `Scorer` | type |
 | `ScoreVerdict` | type |
@@ -532,6 +537,8 @@ Measured against `@theokit/sdk@12.0.0`.
 | `WireChunk` | type |
 | `WireDataPart` | type |
 | `WiredEntity` | type |
+| `WiredEntityScope` | type |
+| `WiringOffReason` | type |
 | `WorkspaceProvider` | type |
 | `WorkspaceRecipe` | type |
 
@@ -616,6 +623,7 @@ Measured against `@theokit/sdk@12.0.0`.
 | `projectContextMetadataOnlyKnobs` | value |
 | `readCappedBody` | value |
 | `reasoningEffortOf` | value |
+| `recordScopedWiring` | value |
 | `renderTranscript` | value |
 | `resolveCompatSources` | value |
 | `resolveMcpServers` | value |
@@ -726,6 +734,8 @@ Measured against `@theokit/sdk@12.0.0`.
 | `ResultCapture` | type |
 | `RunAgentTurnOptions` | type |
 | `RunStartedEvent` | type |
+| `ScopedWiringCapability` | type |
+| `ScopedWiringGroup` | type |
 | `ScoredDelegation` | type |
 | `Scorer` | type |
 | `ScoreVerdict` | type |
