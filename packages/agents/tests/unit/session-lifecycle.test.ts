@@ -592,3 +592,13 @@ describe('deleteSession with a verifier', () => {
     expect(v.calls).toEqual([])
   })
 })
+
+describe('protectedTranscriptPaths — legacy name of the pointer (#2746)', () => {
+  it('protects the legacy-named file of the pointed session', async () => {
+    const { legacyTranscriptPath } = await import('@theokit/sdk/persistence')
+    writeTranscriptFile('other', 0)
+    await persistSessionId(CWD, 'pointed', root)
+    const got = await protectedTranscriptPaths(CWD, root)
+    expect(got.get(legacyTranscriptPath(root, CWD, 'pointed'))).toBe('resumable session pointer')
+  })
+})
