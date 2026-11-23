@@ -1,12 +1,20 @@
-import { maskSecrets } from '../channels/channel-loop.js'
 import { Security } from '@theokit/sdk'
-import type { AgentStreamEvent } from '@theokit/agents/bridge'
 
-import type { TurnEvent } from './turn.js'
+import type { AgentStreamEvent } from './agent-stream-events.js'
+
+const MASK = '[redacted]'
+
+/** Replace every occurrence of every value with `[redacted]`, longest first, so a value containing another is masked whole. */
+function maskSecrets(text: string, secrets: readonly string[]): string {
+  return [...secrets]
+    .filter((secret) => secret.length > 0)
+    .sort((a, b) => b.length - a.length)
+    .reduce((masked, secret) => masked.split(secret).join(MASK), text)
+}
 
 /** Where one turn's events go, masked; `flush` releases the text still held as a `text_delta`. */
-export interface EventMask {
-  readonly emit: (event: TurnEvent) => void
+export interface AgentEventMask {
+  readonly emit: (event: AgentStreamEvent) => void
   readonly flush: () => void
 }
 
@@ -17,15 +25,25 @@ export interface EventMask {
 function maskValue<T>(value: T, secrets: readonly string[]): T
 function maskValue(value: unknown, secrets: readonly string[]): unknown {
   if (typeof value === 'string') return maskSecrets(value, secrets)
-  if (Array.isArray(value)) return value.map((item) => maskValue(item, secrets))
+  if (Array.isArray(value)) return (value as unknown[]).map((item) => maskValue(item, secrets))
   if (typeof value === 'object' && value !== null) {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, maskValue(item, secrets)]))
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        maskValue(item, secrets),
+      ]),
+    )
   }
   return value
 }
 
-function maskRecord(value: Record<string, unknown>, secrets: readonly string[]): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, maskValue(item, secrets)]))
+function maskRecord(
+  value: Record<string, unknown>,
+  secrets: readonly string[],
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, maskValue(item, secrets)]),
+  )
 }
 
 /**
@@ -48,7 +66,12 @@ function maskEvent(event: AgentStreamEvent, secrets: readonly string[]): AgentSt
       return { ...event, content: m(event.content) }
     case 'tool_call':
     case 'partial_tool_call':
-      return { ...event, callId: m(event.callId), toolName: m(event.toolName), input: maskValue(event.input, secrets) }
+      return {
+        ...event,
+        callId: m(event.callId),
+        toolName: m(event.toolName),
+        input: maskValue(event.input, secrets),
+      }
     case 'tool_result':
       return {
         ...event,
@@ -68,7 +91,9 @@ function maskEvent(event: AgentStreamEvent, secrets: readonly string[]): AgentSt
         question: m(event.question),
         callbackUrl: m(event.callbackUrl),
         ...(event.input === undefined ? {} : { input: maskValue(event.input, secrets) }),
-        ...(event.payloadSchema === undefined ? {} : { payloadSchema: maskRecord(event.payloadSchema, secrets) }),
+        ...(event.payloadSchema === undefined
+          ? {}
+          : { payloadSchema: maskRecord(event.payloadSchema, secrets) }),
       }
     case 'input_requested':
       return { ...event, requestId: m(event.requestId) }
@@ -113,12 +138,15 @@ function maskEvent(event: AgentStreamEvent, secrets: readonly string[]): AgentSt
 }
 
 /**
- * One turn's event mask (B-398 FR-007): a `text_delta` goes through a stream mask, which holds back
+ * One turn's event mask : a `text_delta` goes through a stream mask, which holds back
  * what could still grow into a configured value; any other event first releases what is held, as
  * a `text_delta` of its own, so the client keeps the model's order (EC-2), and is then emitted with
  * every string in it masked. A value split across a tool event is two releases, each masked alone.
  */
-export function createEventMask(secrets: readonly string[], emit: (event: TurnEvent) => void): EventMask {
+export function createAgentEventMask(
+  secrets: readonly string[],
+  emit: (event: AgentStreamEvent) => void,
+): AgentEventMask {
   const stream = Security.createMask(secrets, { minLength: 1 }).stream()
   const flush = (): void => {
     const held = stream.flush()
