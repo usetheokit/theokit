@@ -153,6 +153,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw hooks list       the project hooks in .theokit/settings.json: event, fingerprint, approved or not approved; exit 1 when none
   theoclaw sessions list|show <id>|export <id> [--json]
                             list the chat sessions, show one's summary, or print its messages (an id prefix is enough)
+  theoclaw sessions gc [--dry-run] [--days <n>]
+                            remove chat transcripts older than the retention (THEOCLAW_TRANSCRIPT_RETENTION_DAYS, default 30); --dry-run lists them
   theoclaw sessions share <id> --to <dir> | open <id> --from <dir>
                             share a session read-only with another instance through <dir>, or open one shared with you
   theoclaw transcripts list|show <id>|export <id> [--json]

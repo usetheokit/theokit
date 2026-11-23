@@ -31,14 +31,19 @@ export interface DevicePairing {
   /** A one-time setup code, valid for `codeTtlMs`. */
   issueCode(): string
   /** Redeem `code` for a pending request carrying the device's own `credential`; the code is spent. */
-  request(code: string, name: string, credential: string): PairingRequestResult
-  pending(): readonly { id: string; name: string; since: number }[]
+  request(code: string, name: string, credential: string, city?: string): PairingRequestResult
+  /** The requests waiting for the owner; `city` is the coarse place the request came from, when known. */
+  pending(): readonly { id: string; name: string; since: number; city?: string }[]
   /** Approve a pending request; the credential is accepted from here on and survives a restart. */
   approve(id: string): Promise<PairingApproval>
   /** Drop a pending request. `false` when there is none with that id. */
   deny(id: string): boolean
   /** Remove every approved device named `name`. `false` when none matched or the write failed. */
   revoke(name: string): Promise<boolean>
+  /** Remove the approved device with this id. `false` when none matched or the write failed. */
+  revokeDevice(id: string): Promise<boolean>
+  /** The id of the approved device whose credential the header carries, or undefined. */
+  deviceIdFor(authorization: string | undefined): string | undefined
   /** True for an `Authorization: Bearer ...` header carrying an approved device's credential. */
   accepts(authorization: string | undefined): boolean
   /** Called with the id of each device removed by `revoke` or replaced by an approval with the same credential, after the store is written. */
@@ -55,12 +60,15 @@ export interface DevicePairingOptions {
   /** Shortest accepted credential. Default 32. */
   minCredentialLength?: number
   now?: () => number
+  /** Where a failed write of `devices.json` is reported, one line each. */
+  report?: (line: string) => void
 }
 
 interface Device {
   readonly id: string
   readonly name: string
   readonly digest: string
+  readonly city?: string
 }
 
 interface Waiting extends Device {
@@ -94,7 +102,8 @@ function load(path: string): Device[] {
         typeof entry.id === 'string' &&
         typeof entry.name === 'string' &&
         typeof entry.digest === 'string' &&
-        /^[0-9a-f]{64}$/.test(entry.digest),
+        /^[0-9a-f]{64}$/.test(entry.digest) &&
+        (entry.city === undefined || typeof entry.city === 'string'),
     )
   ) {
     throw new Error(`${path} is not a devices file ({ "devices": [...] }); fix or remove it`)
@@ -125,10 +134,31 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
     try {
       await atomicWriteJson(path, { devices: next }, { mode: FILE_MODE })
       return true
-    } catch {
+    } catch (error) {
+      options.report?.(`pairing: ${path} could not be saved: ${(error as Error).message}`)
       return false
     }
   }
+  const matching = (authorization: string | undefined): Device | undefined => {
+    const presented = BEARER.exec(authorization ?? '')?.[1]
+    if (presented === undefined) return undefined
+    const wanted = Buffer.from(digestOf(presented), 'hex')
+    // Every entry is compared, so the time does not say which device matched.
+    return approved.reduce<Device | undefined>(
+      (hit, entry) => (timingSafeEqual(Buffer.from(entry.digest, 'hex'), wanted) ? entry : hit),
+      undefined,
+    )
+  }
+  const removeWhere = (test: (device: Device) => boolean): Promise<boolean> =>
+    serialized(async () => {
+      const removed = approved.filter(test)
+      if (removed.length === 0) return false
+      const next = approved.filter((d) => !test(d))
+      if (!(await save(next))) return false
+      approved = next
+      for (const device of removed) notify(device.id)
+      return true
+    })
   const notify = (id: string): void => {
     for (const listener of [...listeners]) listener(id)
   }
@@ -145,7 +175,7 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
       codes.set(code, now())
       return code
     },
-    request(code, name, credential) {
+    request(code, name, credential, city) {
       dropExpired()
       if (!codes.has(code)) return { ok: false, reason: 'unknown_or_expired' }
       const trimmed = name.trim()
@@ -161,19 +191,35 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
       if (waiting.size >= maxPending) return { ok: false, reason: 'too_many_pending' }
       codes.delete(code)
       const id = randomBytes(8).toString('hex')
-      waiting.set(id, { id, name: trimmed, digest: digestOf(credential), since: now() })
+      waiting.set(id, {
+        id,
+        name: trimmed,
+        digest: digestOf(credential),
+        since: now(),
+        ...(city === undefined ? {} : { city }),
+      })
       return { ok: true, id }
     },
     pending() {
       dropExpired()
-      return [...waiting.values()].map(({ id, name, since }) => ({ id, name, since }))
+      return [...waiting.values()].map(({ id, name, since, city }) => ({
+        id,
+        name,
+        since,
+        ...(city === undefined ? {} : { city }),
+      }))
     },
     approve(id) {
       return serialized(async () => {
         dropExpired()
         const device = waiting.get(id)
         if (device === undefined) return { ok: false, reason: 'unknown_request' } as const
-        const entry: Device = { id: device.id, name: device.name, digest: device.digest }
+        const entry: Device = {
+          id: device.id,
+          name: device.name,
+          digest: device.digest,
+          ...(device.city === undefined ? {} : { city: device.city }),
+        }
         // Approved only once the file holds it, so a device is never approved in memory alone.
         const replaced = approved.filter((d) => d.digest === entry.digest)
         const next = [...approved.filter((d) => d.digest !== entry.digest), entry]
@@ -190,25 +236,16 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
       return waiting.delete(id)
     },
     revoke(name) {
-      return serialized(async () => {
-        const removed = approved.filter((d) => d.name === name)
-        if (removed.length === 0) return false
-        const next = approved.filter((d) => d.name !== name)
-        if (!(await save(next))) return false
-        approved = next
-        for (const device of removed) notify(device.id)
-        return true
-      })
+      return removeWhere((d) => d.name === name)
+    },
+    revokeDevice(id) {
+      return removeWhere((d) => d.id === id)
+    },
+    deviceIdFor(authorization) {
+      return matching(authorization)?.id
     },
     accepts(authorization) {
-      const presented = BEARER.exec(authorization ?? '')?.[1]
-      if (presented === undefined) return false
-      const wanted = Buffer.from(digestOf(presented), 'hex')
-      // Every entry is compared, so the time does not say which device matched.
-      return approved.reduce(
-        (hit, entry) => timingSafeEqual(Buffer.from(entry.digest, 'hex'), wanted) || hit,
-        false,
-      )
+      return matching(authorization) !== undefined
     },
     onRevoke(listener) {
       listeners.add(listener)

@@ -13,7 +13,13 @@ export {
   type PairingRequestResult,
 } from './control/device-pairing.js'
 export { pairRoute } from './control/pair-route.js'
-export { attachControlSocket, type ControlSocketOptions } from './control/control-socket.js'
+export {
+  attachControlSocket,
+  type ControlSocketOptions,
+  type SocketOutcome,
+  type SocketSessions,
+  type SocketVerdict,
+} from './control/control-socket.js'
 export {
   type AgentTurnUsage,
   type ControlClientFrame,
