@@ -101,6 +101,10 @@
       "types": "./dist/errors.d.ts",
       "import": "./dist/errors.js"
     },
+    "./presets": {
+      "types": "./dist/presets.d.ts",
+      "import": "./dist/presets.js"
+    },
     "./evals": {
       "types": "./dist/evals.d.ts",
       "import": "./dist/evals.js"

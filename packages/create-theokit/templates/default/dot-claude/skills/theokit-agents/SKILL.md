@@ -142,7 +142,8 @@ shell, gates each side-effecting tool behind an approval, and loads project MCP 
 hooks only when the trust posture grants `projectSettings`.
 
 ```ts
-import { applyCapabilities, codingAgentPreset, ModelCapability } from '@theokit/agents'
+import { applyCapabilities, ModelCapability } from '@theokit/agents'
+import { codingAgentPreset } from '@theokit/agents/presets'
 import { resolveTrustPosture } from '@theokit/sdk'
 
 const draft = applyCapabilities([

@@ -14,3 +14,4 @@ export {
   type McpRelayConnectorOptions,
   type RelayTool,
 } from './mcp-relay/connector.js'
+export type { Grant, GrantStore } from '@theokit/http/guards'
