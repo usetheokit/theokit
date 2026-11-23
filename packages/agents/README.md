@@ -29,13 +29,14 @@ you mount HTTP surfaces).
 
 ## Subpath map
 
-Twenty-four entry points. Import the one you need — the barrel is not the API.
+Twenty-five entry points. Import the one you need — the barrel is not the API.
 
 | Subpath | What lives there |
 |---|---|
 | `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals, `ERROR_CODE_DATA_PART` |
 | `./control` | `createSessionStore`: named sessions, one agent and one turn at a time each, with interrupt and steer; `createDevicePairing`, `pairRoute` and `redeemPairing`: setup-code device pairing |
+| `./mcp-relay` | `createMcpRelayServer` and `startMcpRelayConnector`: a hosted MCP client reaches a local agent's tools through a long-polling relay, with no open port, filtered by each grant's scopes |
 | `./testing` | Test seams: compiled-agent inspection, mock streams, the live-suite provider-key guard |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
 | `./persistence` | Transcript storage primitives forwarded from the SDK |
@@ -1094,3 +1095,11 @@ await client.close()
 A URL that is not `ws://` or `wss://`, a refused upgrade (`HTTP <status>`) and a closed connection reject
 with `ControlConnectionError`; its message never contains the credential. A 1009 close reports the
 frame limit.
+
+## Exposing local tools to a hosted MCP client
+
+Run `createMcpRelayServer({ instanceToken, grants })` where the client can reach it, and
+`startMcpRelayConnector({ url, token, tools, dispatch })` beside the agent. `grants` is a
+`createGrantStore(file)` from `@theokit/http/guards`; a grant's scopes are tool names, and the
+connector passes `dispatch` only the tools the grant allows, so `tools/list` and `tools/call` both
+see the filtered set.

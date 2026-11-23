@@ -25,6 +25,10 @@
       "types": "./dist/bridge.d.ts",
       "import": "./dist/bridge.js"
     },
+    "./mcp-relay": {
+      "types": "./dist/mcp-relay.d.ts",
+      "import": "./dist/mcp-relay.js"
+    },
     "./control": {
       "types": "./dist/control.d.ts",
       "import": "./dist/control.js"
