@@ -65,6 +65,12 @@ describe('resolveMentions — lenient grammar keeps the original text', () => {
     expect(r.attached).toEqual(['src/a.ts'])
   })
 
+  it('strips a closing bracket after a mention', () => {
+    const r = resolveMentions('see [@src/a.ts]', project())
+    expect(r.attached).toEqual(['src/a.ts'])
+    expect(r.message.startsWith('see [@src/a.ts]')).toBe(true)
+  })
+
   it('reports files past the total budget as skipped', () => {
     const cwd = project()
     const big = 'x'.repeat(7000)

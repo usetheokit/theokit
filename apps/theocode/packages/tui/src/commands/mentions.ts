@@ -44,7 +44,7 @@ function readOrUndefined(abs: string): string | undefined {
   }
 }
 
-const TRAILING_PUNCT_RE = /[,.;:)!?]+$/
+const TRAILING_PUNCT_RE = /[,.;:)\]!?]+$/
 
 /** `text` with the same length, where a glued `@` and trailing sentence punctuation are blanks. */
 function lenient(text: string): string {
