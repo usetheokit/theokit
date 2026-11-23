@@ -24184,7 +24184,7 @@
         },
         "CreateApplyPatchToolOptions": {
           "tier": "stable",
-          "declaration": "interface CreateApplyPatchToolOptions {\n    name?: string;\n    description?: string;\n    projectRoot: string;\n}",
+          "declaration": "interface CreateApplyPatchToolOptions {\n    name?: string;\n    description?: string;\n    projectRoot: string;\n    baseDir?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -24402,7 +24402,7 @@
         },
         "CreateEditFileToolOptions": {
           "tier": "stable",
-          "declaration": "interface CreateEditFileToolOptions {\n    name?: string;\n    description?: string;\n    projectRoot: string;\n    filesystem?: FilesystemProvider;\n}",
+          "declaration": "interface CreateEditFileToolOptions {\n    name?: string;\n    description?: string;\n    projectRoot: string;\n    baseDir?: string;\n    filesystem?: FilesystemProvider;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -24566,7 +24566,7 @@
         },
         "CreateWriteFileToolOptions": {
           "tier": "stable",
-          "declaration": "interface CreateWriteFileToolOptions {\n    name?: string;\n    description?: string;\n    projectRoot: string;\n    filesystem?: FilesystemProvider<WriteToolContext>;\n    requireReadBeforeWrite?: boolean;\n    readTracker?: ReadTracker;\n}",
+          "declaration": "interface CreateWriteFileToolOptions {\n    name?: string;\n    description?: string;\n    projectRoot: string;\n    baseDir?: string;\n    filesystem?: FilesystemProvider<WriteToolContext>;\n    requireReadBeforeWrite?: boolean;\n    readTracker?: ReadTracker;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -24754,7 +24754,7 @@
         },
         "PlanModeTool": {
           "tier": "stable",
-          "declaration": "interface PlanModeTool {\n    name: string;\n    description: string;\n    inputSchema: unknown;\n    handler: (input: {\n        action: string;\n    }) => string;\n    currentMode: () => Mode;\n}",
+          "declaration": "interface PlanModeTool extends CustomTool {\n    handler: (input: Record<string, unknown>) => string;\n    currentMode: () => Mode;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -24770,7 +24770,7 @@
         },
         "PlanModeToolWithStore": {
           "tier": "stable",
-          "declaration": "interface PlanModeToolWithStore {\n    name: string;\n    description: string;\n    inputSchema: unknown;\n    handler: (input: {\n        action: string;\n        plan?: string;\n    }) => Promise<string>;\n    currentMode: () => Mode;\n}",
+          "declaration": "interface PlanModeToolWithStore extends CustomTool {\n    handler: (input: Record<string, unknown>) => Promise<string>;\n    currentMode: () => Mode;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -24994,7 +24994,7 @@
         },
         "TodolistTool": {
           "tier": "stable",
-          "declaration": "interface TodolistTool {\n    name: string;\n    description: string;\n    inputSchema: unknown;\n    handler: (input: TodoInput, ctx?: {\n        threadId?: string;\n    }) => string;\n    getItems: (threadId?: string) => TodoItem[];\n}",
+          "declaration": "interface TodolistTool extends CustomTool {\n    handler: (input: Record<string, unknown>, ctx?: {\n        threadId?: string;\n    }) => string;\n    getItems(threadId?: string): TodoItem[];\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
