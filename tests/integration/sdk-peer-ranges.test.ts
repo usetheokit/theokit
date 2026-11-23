@@ -112,7 +112,7 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     expect(dev['@theokit/sdk']).toBe('>=5.32.0 <14')
   })
 
-  it('test_the_four_published_packages_declare_the_sdk_5_to_11_range', () => {
+  it('test_the_four_published_packages_declare_the_sdk_5_to_12_range', () => {
     const floors: Record<string, string> = {
       'packages/theo/package.json': '>=5.32.0 <14',
       'packages/host/package.json': '>=5.32.0 <14',

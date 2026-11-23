@@ -60,6 +60,8 @@ describe('satisfiesSdkRange (M48 T2.2)', () => {
     expect(satisfiesSdkRange('9.0.0', SUPPORTED_SDK_RANGE)).toBe(true)
     expect(satisfiesSdkRange('10.0.0', SUPPORTED_SDK_RANGE)).toBe(true)
     expect(satisfiesSdkRange('11.0.0', SUPPORTED_SDK_RANGE)).toBe(true)
+    expect(satisfiesSdkRange('12.0.0', SUPPORTED_SDK_RANGE)).toBe(true)
+    expect(satisfiesSdkRange('13.0.0', SUPPORTED_SDK_RANGE)).toBe(true)
     expect(satisfiesSdkRange('14.0.0', SUPPORTED_SDK_RANGE)).toBe(false)
     expect(satisfiesSdkRange('8.0.0-next.1', SUPPORTED_SDK_RANGE)).toBe(false)
   })

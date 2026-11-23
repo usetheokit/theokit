@@ -1,16 +1,11 @@
 import { lstatSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { readSessionMessages } from '@theokit/sdk'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
+import { readFullHistory } from '../src/sessions/transcript-history.js'
 import { runCli } from '../src/cli.js'
 import { harness, scratchDir } from './support/cli-harness.js'
-
-vi.mock('@theokit/sdk', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@theokit/sdk')>()
-  return { ...actual, readSessionMessages: vi.fn(actual.readSessionMessages) }
-})
 
 function projectDir(workspace: string): string {
   const dir = join(workspace, '.theoclaw', 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
@@ -118,21 +113,53 @@ describe('transcript reading', () => {
     return workspace
   }
 
-  it('goes through the SDK reader with the workspace as cwd', async () => {
-    const workspace = workspaceWithSession()
-    vi.mocked(readSessionMessages).mockClear()
-    await run(['sessions', 'export', 'matrix-dm'], workspace)
-    expect(readSessionMessages).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: workspace, sessionDir: expect.any(String) }),
+  it('skips a malformed line and keeps every turn', async () => {
+    const workspace = scratchDir()
+    writeFileSync(
+      join(projectDir(workspace), 's1-g0.jsonl'),
+      [
+        JSON.stringify({ type: 'user', sessionId: 's1-g0', message: { content: text('q') } }),
+        'not json',
+        '[1]',
+        JSON.stringify({ type: 'assistant', sessionId: 's1-g0', message: { content: text('a1') } }),
+        JSON.stringify({ type: 'assistant', sessionId: 's1-g0', message: { content: text('a2') } }),
+      ].join('\n') + '\n',
     )
+    expect((await run(['sessions', 'export', 's1'], workspace)).out).toBe(
+      'user: q\nassistant: a1\nassistant: a2\n',
+    )
+    expect((await run(['sessions', 'list'], workspace)).out).toContain('s1-g0\t3 messages')
   })
 
-  it('shows what the SDK reader returns, not what the file holds', async () => {
-    vi.mocked(readSessionMessages).mockResolvedValueOnce([
-      { role: 'user', text: 'from the reader', parts: [{ type: 'text', text: 'from the reader' }] },
+  it('reads from the real transcript path, whatever the file is called', async () => {
+    const workspace = write('odd name.jsonl', [
+      { type: 'user', sessionId: 'odd-g0', message: { content: text('hi') } },
     ])
-    const { out } = await run(['sessions', 'export', 'matrix-dm'], workspaceWithSession())
-    expect(out).toBe('user: from the reader\n')
+    expect((await run(['sessions', 'export', 'odd'], workspace)).out).toBe('user: hi\n')
+  })
+
+  it('reads string content as text and drops a row that only holds tool results', () => {
+    const workspace = scratchDir()
+    const file = join(projectDir(workspace), 'str-g0.jsonl')
+    writeFileSync(
+      file,
+      [
+        { type: 'user', message: { content: 'plain string' } },
+        { type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'x', input: {} }] } },
+        { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'r' }] } },
+      ]
+        .map((r) => JSON.stringify(r))
+        .join('\n'),
+    )
+    const messages = readFullHistory({ transcript: file })
+    expect(messages.map((m) => [m.role, m.parts.map((p) => p.type)])).toEqual([
+      ['user', ['text']],
+      ['assistant', ['dynamic-tool']],
+    ])
+  })
+
+  it('throws when the transcript exists and cannot be read', () => {
+    expect(() => readFullHistory({ transcript: scratchDir() })).toThrow()
   })
 
   it('keeps the messages before a compact boundary', async () => {
