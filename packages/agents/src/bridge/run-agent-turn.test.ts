@@ -68,10 +68,24 @@ describe('runAgentTurn', () => {
     }
   })
 
-  it('a run that waits as cancelled is a cancelled turn, not a success', async () => {
+  it('a run that waits as cancelled is a cancelled outcome, not a failure', async () => {
     const { agent } = fakeAgent({ status: 'cancelled' })
     const outcome = await runAgentTurn({ agent, message: 'hi', runId: 'r', emit: () => {} })
-    expect(outcome).toMatchObject({ ok: false, code: 'turn_cancelled' })
+    expect(outcome).toEqual({ ok: true, cancelled: true })
+  })
+
+  it('takes a message with images and an agent that only sends', async () => {
+    const seen: unknown[] = []
+    const agent = {
+      send: async (message: unknown) => {
+        seen.push(message)
+        return { wait: async () => ({ status: 'finished' }) }
+      },
+    }
+    const message = { text: 'look', images: [{ data: 'AAAA', mimeType: 'image/png' }] }
+    const outcome = await runAgentTurn({ agent, message, runId: 'r', emit: () => {} })
+    expect(outcome).toEqual({ ok: true })
+    expect(seen).toEqual([message])
   })
 
   it('an aborted signal cancels the run and the iterator without waiting on a hung cancel', async () => {
