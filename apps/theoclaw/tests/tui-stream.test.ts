@@ -168,6 +168,20 @@ describe('controlStream: the end of a turn', () => {
     expect(ended).toBe(1)
   })
 
+  it('interrupted cancels only the tool still running; a settled one keeps its status', async () => {
+    const { entries } = await run([
+      event({ type: 'tool_call', callId: 'c1', toolName: 'ReadFile' }),
+      event({ type: 'tool_call', callId: 'c2', toolName: 'Grep' }),
+      event({ type: 'tool_result', callId: 'c1', isError: false }),
+      { type: 'interrupted', session: SESSION },
+    ])
+    expect(entries).toMatchObject([
+      { kind: 'tool', name: 'ReadFile', status: 'success' },
+      { kind: 'tool', name: 'Grep', status: 'cancelled' },
+      { kind: 'notice', text: 'Interrupted by user' },
+    ])
+  })
+
   it('an error frame ends the turn with an error line naming its code', async () => {
     const { entries } = await run([{ type: 'error', code: 'busy', session: SESSION }])
     expect(entries).toMatchObject([{ kind: 'notice', variant: 'error', text: 'the turn ended: busy' }])
