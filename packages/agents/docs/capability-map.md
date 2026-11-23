@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1561 export(s) across 30 entry point(s).
+1590 export(s) across 30 entry point(s).
 
-Measured against `@theokit/sdk@9.0.0`.
+Measured against `@theokit/sdk@11.0.0`.
 
 ## `@theokit/agents`
 
@@ -74,6 +74,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `costAmountUsd` | value |
 | `CostBudgetExceededError` | value |
 | `costGuard` | value |
+| `createAgentEventMask` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
 | `createDraft` | value |
@@ -209,6 +210,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `resolveMcpServers` | value |
 | `resolveModelCapabilities` | value |
 | `resolveSettingSources` | value |
+| `resolveSkillsSettings` | value |
 | `resolveTrustPosture` | value |
 | `Retry` | value |
 | `runAgentTurn` | value |
@@ -289,6 +291,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `AgentCard` | type |
 | `AgentConfig` | type |
 | `AgentDefinition` | type |
+| `AgentEventMask` | type |
 | `AgentExecutionContext` | type |
 | `AgentManifest` | type |
 | `AgentManifestEntry` | type |
@@ -548,6 +551,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `compileTools` | value |
 | `completeFromTurn` | value |
 | `ContextualTool` | value |
+| `createAgentEventMask` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
 | `createOpenAICompatibleRoutes` | value |
@@ -634,6 +638,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `WRITE_SCOPED_TOOLS` | value |
 | `AfterToolCallContext` | type |
 | `AgentDefinition` | type |
+| `AgentEventMask` | type |
 | `AgentExecutionContext` | type |
 | `AgentManifest` | type |
 | `AgentManifestEntry` | type |
@@ -802,6 +807,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `createMockAgentStream` | value |
 | `createMockOutputEvents` | value |
 | `createMockWireStream` | value |
+| `FakeAgent` | value |
 | `inspectCompiled` | value |
 | `LIVE_KEY_NAMES` | value |
 | `MissingProviderKeyError` | value |
@@ -809,10 +815,14 @@ Measured against `@theokit/sdk@9.0.0`.
 | `wireChunk` | value |
 | `AgentOutputEvent` | type |
 | `CompiledInspection` | type |
+| `FakeTimelineEvent` | type |
+| `FakeTurn` | type |
+| `InteractionUpdate` | type |
 | `MockAgentStreamOptions` | type |
 | `MockResponse` | type |
 | `MockStreamEvent` | type |
 | `ProviderKeyGuardOptions` | type |
+| `SdkFrame` | type |
 
 ## `@theokit/agents/sandbox`
 
@@ -963,6 +973,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `credentialHome` | value |
 | `CredentialNotFoundError` | value |
 | `credentialSources` | value |
+| `customProviderPlugin` | value |
 | `DeclaredProviderError` | value |
 | `DEFAULT_PROVIDERS` | value |
 | `deviceLogin` | value |
@@ -1180,6 +1191,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | Symbol | Kind |
 |---|---|
 | `agentRunPort` | value |
+| `BaseDirOutsideProjectRootError` | value |
 | `buildEnvContext` | value |
 | `buildRepoMap` | value |
 | `CatastrophicCommandError` | value |
@@ -1189,6 +1201,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `copyJobs` | value |
 | `createApplyPatchTool` | value |
 | `createBraveWebSearchAdapter` | value |
+| `createComputerTool` | value |
 | `createCurrentTimeTool` | value |
 | `createDelegateAllTool` | value |
 | `createDelegateTool` | value |
@@ -1197,6 +1210,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `createGitDiffTool` | value |
 | `createGitStatusTool` | value |
 | `createGlobTool` | value |
+| `createImageGenerateTool` | value |
 | `createInteractiveShellTool` | value |
 | `createJobStore` | value |
 | `createListDirTool` | value |
@@ -1221,7 +1235,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `createWriteFileTool` | value |
 | `createWriteStdinTool` | value |
 | `DEFAULT_MAX_AUDIO_BYTES` | value |
+| `DEFAULT_MAX_GENERATED_IMAGE_BYTES` | value |
 | `DEFAULT_MAX_IMAGE_BYTES` | value |
+| `DEFAULT_MAX_PROMPT_CHARS` | value |
 | `DEFAULT_MAX_TEXT_CHARS` | value |
 | `DEFAULT_TOOL_GUIDANCE` | value |
 | `DelegateToolConfigError` | value |
@@ -1237,11 +1253,13 @@ Measured against `@theokit/sdk@9.0.0`.
 | `JobCopyError` | value |
 | `JobCopyUnsupportedError` | value |
 | `ReadTracker` | value |
+| `readXwdHeader` | value |
 | `ReasoningTools` | value |
 | `RedirectBlockedError` | value |
 | `renderToolList` | value |
 | `replaceUnique` | value |
 | `resolveAndScreen` | value |
+| `resolveWebSearchAdapter` | value |
 | `ScheduleStoreError` | value |
 | `screenedFetch` | value |
 | `SsrfBlockedError` | value |
@@ -1252,10 +1270,15 @@ Measured against `@theokit/sdk@9.0.0`.
 | `withName` | value |
 | `withShellExitGuidance` | value |
 | `withToolResultGuidance` | value |
+| `XWD_LIMITS` | value |
+| `XwdFormatError` | value |
+| `XwdNotWrittenError` | value |
+| `xwdToPng` | value |
 | `CommandPolicy` | type |
 | `ContextMatchReason` | type |
 | `CreateApplyPatchToolOptions` | type |
 | `CreateBraveWebSearchAdapterOptions` | type |
+| `CreateComputerToolOptions` | type |
 | `CreateCurrentTimeToolOptions` | type |
 | `CreateDelegateAllToolOptions` | type |
 | `CreateDelegateToolOptions` | type |
@@ -1264,6 +1287,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `CreateGitDiffToolOptions` | type |
 | `CreateGitStatusToolOptions` | type |
 | `CreateGlobToolOptions` | type |
+| `CreateImageGenerateToolOptions` | type |
 | `CreateInteractiveShellToolOptions` | type |
 | `CreateListDirToolOptions` | type |
 | `CreateReadFileToolOptions` | type |
@@ -1282,6 +1306,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `DeliveryResult` | type |
 | `EnvContextOptions` | type |
 | `FireOutcome` | type |
+| `GeneratedImageData` | type |
+| `ImageGenerateCallback` | type |
+| `ImageGenerateResult` | type |
 | `JobStore` | type |
 | `PlanModeTool` | type |
 | `PlanModeToolOptions` | type |
@@ -1291,6 +1318,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `QuestionToolOptions` | type |
 | `RepoMapOptions` | type |
 | `ResolveAndScreenOptions` | type |
+| `ResolvedWebSearch` | type |
 | `RunPort` | type |
 | `RunResult` | type |
 | `ScheduledJob` | type |
@@ -1314,7 +1342,9 @@ Measured against `@theokit/sdk@9.0.0`.
 | `TruncationResult` | type |
 | `VitestSummary` | type |
 | `WebSearchCallback` | type |
+| `WebSearchProvider` | type |
 | `WebSearchResult` | type |
+| `XwdHeader` | type |
 
 ## `@theokit/agents/code-mode`
 
