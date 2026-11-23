@@ -19,7 +19,8 @@ import {
   parseAuthorizationPolicy,
 } from './authorization/policy.js'
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
-import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
+import { maskSecrets } from '@theokit/gateway'
+import { startChannelLoop } from './channels/channel-loop.js'
 import type { RetryPolicy } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
