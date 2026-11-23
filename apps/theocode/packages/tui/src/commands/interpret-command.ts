@@ -227,9 +227,9 @@ const HANDLERS: CommandHandlers = {
   memoryInfo: (action, _text, cap: InspectionCapabilities) => {
     handleMemoryInfo(action.arg, cap.setToast, cap.setPanel, cap.SESSION.cfg().memory)
   },
-  showStatus: (_action, _text, cap: InspectionCapabilities) => {
+  showStatus: async (_action, _text, cap: InspectionCapabilities) => {
     cap.setPanel(
-      statusPanel(
+      await statusPanel(
         cap.SESSION,
         cap.approvalMode,
         cap.currentSessionId,

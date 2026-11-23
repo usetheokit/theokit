@@ -496,8 +496,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       throw new UsageError(
         'theoclaw skills: expected search <term>, install <name>[@<version>] or publish <dir>',
       )
-    const registry = (io.env.THEOCLAW_SKILLS_REGISTRY ?? '').trim()
-    const token = (io.env.THEOCLAW_SKILLS_TOKEN ?? '').trim()
+    const env = { ...io.env }
+    loadConfiguration(env, io.homeDir)
+    const registry = (env.THEOCLAW_SKILLS_REGISTRY ?? '').trim()
+    const token = (env.THEOCLAW_SKILLS_TOKEN ?? '').trim()
     try {
       if (registry === '') throw new TheoClawConfigError('THEOCLAW_SKILLS_REGISTRY is not set')
       if (token === '') throw new TheoClawConfigError('THEOCLAW_SKILLS_TOKEN is not set')

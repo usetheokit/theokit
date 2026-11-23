@@ -26,6 +26,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 import { transcriptPath } from '@theokit/agents/persistence'
+import { sessionPointerPath } from '@theokit/agents/session'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -69,8 +70,8 @@ afterEach(() => {
 describe('B-003 — protectedSessions covers what the caller can see', () => {
   it('test_the_live_pointer_is_protected', async () => {
     const pointed = writeTranscript('tui-pointed', 10)
-    mkdirSync(join(cwd, '.theokit'), { recursive: true })
-    writeFileSync(join(cwd, '.theokit', 'tui-session'), 'tui-pointed\n')
+    mkdirSync(dirname(sessionPointerPath(cwd, base)), { recursive: true })
+    writeFileSync(sessionPointerPath(cwd, base), 'tui-pointed\n')
 
     expect(await protectedSessions(cwd, base)).toContain(pointed)
   })
@@ -126,8 +127,8 @@ describe('B-003 — protectedSessions covers what the caller can see', () => {
 
   it('test_the_pointer_and_the_most_recent_are_not_duplicated', async () => {
     writeTranscript('only-one', 5)
-    mkdirSync(join(cwd, '.theokit'), { recursive: true })
-    writeFileSync(join(cwd, '.theokit', 'tui-session'), 'only-one\n')
+    mkdirSync(dirname(sessionPointerPath(cwd, base)), { recursive: true })
+    writeFileSync(sessionPointerPath(cwd, base), 'only-one\n')
 
     expect(await protectedSessions(cwd, base)).toHaveLength(1)
   })
@@ -293,8 +294,8 @@ describe("deleteSession — the transcript mechanics are the framework's", () =>
 
 describe('#1905 — the TUI pointer protects an idle, older session', () => {
   function point(id: string): void {
-    mkdirSync(join(cwd, '.theokit'), { recursive: true })
-    writeFileSync(join(cwd, '.theokit', 'tui-session'), `${id}\n`)
+    mkdirSync(dirname(sessionPointerPath(cwd, base)), { recursive: true })
+    writeFileSync(sessionPointerPath(cwd, base), `${id}\n`)
   }
 
   it('test_deleteSession_refuses_the_pointed_session_that_is_not_newest', async () => {
