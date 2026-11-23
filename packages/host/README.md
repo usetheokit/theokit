@@ -192,6 +192,19 @@ await host.start() // a failure stops the started services in reverse, then reje
 
 Use `createAppHost` for a supervised service (systemd, a container), where a clean stop exits 0. For a terminal session (Ctrl-C, exit code 130) keep using `createShutdown` from `@theokit/agents/commands`. `@theokit/host` does not import `@theokit/agents`.
 
+## `applyOutboundProxy` and `validateProxy`
+
+```ts
+import { applyOutboundProxy, validateProxy } from '@theokit/host'
+
+const { installed } = applyOutboundProxy(process.env, { variable: 'APP_PROXY' })
+const check = await validateProxy(process.env.APP_PROXY!, { target: 'api.openai.com:443', timeoutMs: 5000 })
+if (!check.ok) console.error(check.reason, check.message) // 'connect_refused' | 'timeout' | 'connection_error' | 'invalid_proxy_url'
+```
+
+- `applyOutboundProxy` installs an undici `ProxyAgent` as the **process-wide** global dispatcher when the variable is set, so every `fetch` in the process goes through the proxy. With it unset or blank nothing is installed (`installed: false`).
+- `validateProxy` sends a CONNECT for `target` (`host:port`) to an `http:` or `https:` proxy and returns `{ ok: true, statusCode }` or a typed failure. `timeoutMs` defaults to 5000. Credentials in the URL are sent as basic auth and never appear in messages.
+
 ## License
 
 Apache-2.0
