@@ -125,7 +125,7 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     const agents = readPkg('packages/agents/package.json').dependencies as Record<string, string>
     expect(agents['@theokit/sdk']).toBe('>=5.32.0 <13')
     const root = readPkg('package.json') as { pnpm: { overrides: Record<string, string> } }
-    // The tree runs on SDK 12 (the matrix legs set 9 to 11); dep-check's floor leg rewrites the override to the declared floor,
+    // The tree runs on SDK 12 (the matrix legs set 9 and 10); dep-check's floor leg rewrites the override to the declared floor,
     // 5.32.0, and runs this same suite there. Any other version is neither end of the range.
     const override = root.pnpm.overrides['@theokit/sdk'] ?? ''
     expect(

@@ -32,6 +32,13 @@ const source = readFileSync(new URL('./build-cli.mjs', import.meta.url), 'utf8')
 
 const options = bundleOptions('/repo')
 
+describe('shared bundle settings', () => {
+  it('test_build_cli_delegates_to_the_create_theokit_helper', () => {
+    expect(source).toContain('create-theokit/tools/build-ink-cli.mjs')
+    expect(source).not.toContain("name: 'ink-devtools-stub'")
+  })
+})
+
 describe('bundleOptions', () => {
   it('test_the_bundle_is_esm', () => {
     // A CJS bundle breaks `import.meta.url`, and the SDK resolves its persistence paths from it —
@@ -128,7 +135,7 @@ describe('bundleOptions', () => {
     // Anti-vacuity FIRST: both assertions below are absences, and an absence over an empty string
     // passes while proving nothing. If the comment stripping ever over-reaches, this says so.
     expect(source).toContain('export async function buildCli')
-    expect(source.length).toBeGreaterThan(1000)
+    expect(source.length).toBeGreaterThan(400)
 
     expect(source, 'the build copies a file out of the SDK dist again').not.toContain('copyFileSync')
     expect(source, 'a data-asset list is back, and its reason expired').not.toContain('DATA_ASSETS')

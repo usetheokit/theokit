@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
 import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
-import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
 import { createAgentFactory, createChannelAgentFactory } from '../src/control-plane/agent-factory.js'
 import type { TurnAgent } from '../src/control-plane/turn.js'
 import { type ImportedSetup, readImport, writeImport } from '../src/migration/import-store.js'
@@ -142,7 +141,7 @@ describe('an import reaching the agents', () => {
 
     expect({ ...withImport.options[0], tools: undefined, skillsRefresh: undefined }).toEqual({ ...without.options[0], tools: undefined, skillsRefresh: undefined })
     expect({ ...withImport.options[0], tools: undefined, skills: undefined, skillsRefresh: undefined }).toEqual({ ...theoClawAgentOptions({ model: 'openrouter/m', apiKey: 'router-key' }), tools: undefined, skills: undefined, skillsRefresh: undefined })
-    expect(withImport.options[0]?.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
+    expect(withImport.options[0]?.systemPrompt).toBe('')
     expect(withImport.options[0]?.skills?.inline.map((skill) => skill.name).sort()).toEqual(['git-helper', 'summarize-text'])
     expect(withImport.options[0]).not.toHaveProperty('mcpServers')
   })
