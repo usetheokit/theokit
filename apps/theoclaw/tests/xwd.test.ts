@@ -1,8 +1,8 @@
 import { inflateSync } from 'node:zlib'
 
+import { readXwdHeader, XwdFormatError, XwdNotWrittenError, xwdToPng } from '@theokit/sdk-tools'
 import { describe, expect, it } from 'vitest'
 
-import { readXwdHeader, XwdFormatError, XwdNotWrittenError, xwdToPng } from '../src/tools/xwd.js'
 import { buildXwd } from './xwd-fixtures.js'
 
 const FILE = '/tmp/x/Xvfb_screen0'
@@ -58,7 +58,7 @@ describe('xwd', () => {
     ['pixmap_format', 1, buildXwd({ width: 4, height: 1, pixmapFormat: 1 })],
     ['bits_per_pixel', 16, buildXwd({ width: 4, height: 1, bitsPerPixel: 16 })],
     ['width', 0, buildXwd({ width: 0, height: 1 })],
-    ['file length', 3, buildXwd({ width: 4, height: 1, truncateBy: 3 })],
+    ['data_size', 116, buildXwd({ width: 4, height: 1, truncateBy: 3 })],
   ])('refuses a %s it does not support', (field, value, bytes) => {
     const attempt = (): unknown => xwdToPng(bytes, FILE)
     expect(attempt).toThrow(XwdFormatError)
@@ -73,7 +73,7 @@ describe('xwd', () => {
   ] as const)('refuses a %s of %j with a typed error naming the field', (field, options, value) => {
     const attempt = () => readXwdHeader(buildXwd({ width: 2, height: 2, ...options }), FILE)
     expect(attempt).toThrow(XwdFormatError)
-    expect(attempt).toThrow(`${field} is ${value}`)
+    expect(attempt).toThrow(`${field} ${value} is outside`)
   })
 
   it('refuses an area past the pixel cap before allocating, naming width x height', () => {
@@ -81,7 +81,7 @@ describe('xwd', () => {
     bytes.writeUInt32BE(16384, 16)
     bytes.writeUInt32BE(16384, 20)
     bytes.writeUInt32BE(16384 * 4, 48)
-    expect(() => readXwdHeader(bytes, FILE)).toThrow(`width x height is ${16384 * 16384}`)
+    expect(() => readXwdHeader(bytes, FILE)).toThrow(`pixels ${16384 * 16384} exceeds`)
     expect(() => xwdToPng(bytes, FILE)).toThrow(XwdFormatError)
   })
 
@@ -99,7 +99,7 @@ describe('xwd', () => {
   it('says a file shorter than its header is not written yet', () => {
     const bytes = buildXwd({ width: 2, height: 1, headerSize: 160 }).subarray(0, 120)
     expect(() => readXwdHeader(bytes, FILE)).toThrow(XwdNotWrittenError)
-    expect(() => readXwdHeader(bytes, FILE)).toThrow('not written yet')
+    expect(() => readXwdHeader(bytes, FILE)).toThrow('exceeds the 120 bytes read')
   })
 
   it('refuses bytes too short to hold a header', () => {
