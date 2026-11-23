@@ -16,6 +16,10 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+### Changed
+
+- The runtime theme switch (`/theme`) is driven by a `createThemeController` held by `ThemedSurface`, and `theme-session.tsx` no longer keeps its own `useSyncExternalStore` slot. `@theokit/tui` 0.83.4 has no controller, so a local pnpm patch (`patches/@theokit__tui@0.83.4.patch`, root and standalone) backports one that accepts any theme prop — a built-in name, an override, or `{base, override}` — and `<TheoTUIProvider controller>`. Drop the patch when `theokit-tui` ships a controller that takes theme objects.
+
 - The doctor's `settings` and `credential-strays` rows come from `checks.settingsReport` and `checks.leftovers` in `@theokit/agents/doctor`; their wording changes (`not implemented` for `not implemented here`, `permissions not supported` for `permission entries not honoured`, `path (…)` for `path — …`, `, ` separators, and `… no longer read; remove if you no longer need it` for the stray row).
 - `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
 - The TUI session pointer is the framework's `last-session` (`loadOrCreateSessionId` / `persistSessionId` from `@theokit/agents/session`) instead of `<cwd>/.theokit/tui-session`; the old file is read once, when no `last-session` exists, and its id is copied across. Writes stay serialised per pointer and a failed write is still reported. `gc/pointer.ts` is gone: session delete, fork and `sessions gc` read `last-session` through `readPointerId`, which still refuses when the file cannot be read (#2754).
