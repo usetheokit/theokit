@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
 - `theoclaw skills publish` now reads `THEOCLAW_SKILLS_REGISTRY` and `THEOCLAW_SKILLS_TOKEN` from the instance configuration file too, as `skills search` and `skills install` do; before, it read the process environment only (#2764).
 - `@theokit/gateway` is pinned at 0.30.0 (was 0.25.0). It brings `keys` on `scopedStrategy`, `reconnect.retryFalse` with the late-connect `failed` event, and `messages` on `createAccessPolicyHook`; the app code that these replace is left for later issues (#2703).
 - `@theokit/gateway-sms` is pinned at 0.7.0 (was 0.6.0), and the phone-call route is built with `createVoiceCallHandler`; the app no longer builds TwiML. Caller-visible differences: a silence repeats the greeting instead of "Are you still there?"; a disallowed caller is hung up on without a spoken refusal; the goodbye text is "Goodbye."; call state expires after an hour instead of an LRU of 1000 calls; a request without `CallSid` or `From` answers 400; the `<Redirect>` after `<Gather>` is gone, so a call left silent may end without posting again (#2708).
