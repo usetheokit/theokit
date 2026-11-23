@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The live browser test (OC-60) now tells the model to read the browser's snapshot (and to ask for a fresh one when the first looks empty), and a failure prints the tool events; the assertion on the page's token is unchanged (#2673).
 - Task worktrees, cloud-worker environment setup and per-turn usage now come from the framework (`worktreeProvider`, `prepareWorkspace`, `usageFromRun`). Worktrees also copy `.worktreeinclude` files; a malformed devcontainer lifecycle command now fails the recipe instead of being ignored; an unsafe task id reads `invalid task id`. The external tools file reads its `mcpServers` with `loadMcpServersFile`; the app keeps only the `acpAgents` key, the TheoClaw server names, an http(s)-only `url` and the OAuth `auth` shape, listed at the top of `external-tools.ts`. A warning of the loader (a server the operator policy does not admit, or a `${VAR}` reference to an unset variable) now fails the start instead of being dropped; `${VAR}` in a header or env value is now expanded from the environment (#2599, gap: #2657).
 - The interactive shell is `createConfinedPtyBackend` and `probeConfinement` from `@theokit/sdk-pty` 0.4.0; the hand-written `env -i` backend and probe are gone (#2577).
 - The untrusted tool-output framing and pruning now travel as the agent's SDK `sendDefaults` (set once in `theoClawAgentOptions`); no send site passes `untrustedContentSendOptions()` any more (#2601).
