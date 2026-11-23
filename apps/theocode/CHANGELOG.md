@@ -25,7 +25,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Changed
 
-- The standalone consumer pins `@theokit/sdk` 9.0.0 (`standalone/released.json`, the three manifests and the lockfile), so the registry-consumer check passes against the current SDK.
+- The standalone consumer pins `@theokit/sdk` 11.0.0 (`standalone/released.json`, the three manifests and the lockfile), so the registry-consumer check passes against the current SDK.
 - `resolveConfig` declares its keys, defaults, environment knobs, floors and profiles once and delegates the merge to `defineLayeredConfig` from `@theokit/agents/config` (#2604). Resolved values are unchanged. The helper merges fields inside a same-named profile and ignores profile tables in the `cli` layer, so the whole-profile replacement and `-c`-defined profiles are settled here before the call.
 - Turn-failure classification uses `classifyTurnFailure` from `@theokit/agents/errors` (#1845, part of #1930); the retry wording and the message-text fallback stay here. A typed `metadata.statusCode` is now also recognised as transient.
 - The standalone consumer has `standalone/released.json` and `tools/sync-standalone.mjs` (`--check` / `--write`); `pnpm check:standalone` (drift check, frozen install, `standalone/auth.test.mjs`) now runs before `pnpm release` and `pnpm version-packages` (#2334).

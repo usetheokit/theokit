@@ -137,7 +137,10 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
   it('test_the_apps_pin_sdk_11_or_newer', () => {
     for (const manifest of ['apps/theocode/package.json', 'apps/theoclaw/package.json']) {
       const pkg = readPkg(manifest)
-      const deps = { ...pkg.dependencies, ...pkg.devDependencies } as Record<string, string>
+      const deps = {
+        ...(pkg.dependencies as object),
+        ...(pkg.devDependencies as object),
+      } as Record<string, string>
       const major = Number((deps['@theokit/sdk'] ?? '').split('.')[0])
       expect(major, `${manifest} pins @theokit/sdk ${deps['@theokit/sdk']}`).toBeGreaterThanOrEqual(
         11,
