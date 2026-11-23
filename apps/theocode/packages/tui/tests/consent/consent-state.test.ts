@@ -152,4 +152,34 @@ describe('the consent state model', () => {
     expect(before).toEqual(snapshot)
     expect([...before.declined]).toEqual([])
   })
+
+  it('test_refusing_the_same_fingerprint_twice_keeps_one_entry', () => {
+    const after = refuseHook(refuseHook(initialState(true), 'aa'), 'aa')
+
+    expect([...after.declined]).toEqual(['aa'])
+  })
+
+  it('test_a_refusal_survives_trust_distrust_and_an_approval', () => {
+    const after = persistedApproval(distrust(trust(refuseHook(initialState(false), 'aa'))))
+
+    expect([...after.declined]).toEqual(['aa'])
+    expect(after.trusted).toBe(false)
+    expect(after.epoch).toBe(2)
+  })
+
+  it('test_trust_then_failed_persist_rolls_back_to_the_starting_posture_but_keeps_the_bump', () => {
+    const start = initialState(false)
+    const after = distrust(trust(start))
+
+    expect(after.trusted).toBe(start.trusted)
+    // The re-read already happened under the optimistic trust; the counter does not rewind.
+    expect(after.epoch).toBe(1)
+  })
+
+  it('test_trust_leaves_the_review_state_alone', () => {
+    const after = trust(markReviewed(refuseHook(initialState(false), 'aa')))
+
+    expect(after.hooksReviewed).toBe(true)
+    expect([...after.declined]).toEqual(['aa'])
+  })
 })

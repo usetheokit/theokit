@@ -115,7 +115,7 @@ describe('B-040 — the consent gate closes only when the approval landed', () =
     const d = deps({ approve })
 
     const done = applyHookDecision('yes', head, 1, d)
-    await Promise.resolve()
+    await new Promise((r) => setTimeout(r, 20))
     expect(d.markReviewed, 'closed while the approval was still in flight').not.toHaveBeenCalled()
     release()
     await done
