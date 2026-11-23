@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { ServiceCommandError, ServiceDefinitionError } from './errors.js'
+import { logLines, tailFile, type LogsOptions } from './logs.js'
 import { runCommand, type Runner, type RunResult } from './runner.js'
 import {
   assertLabel,
@@ -201,6 +202,18 @@ export function createSchtasksBackend(options: ServiceBackendOptions = {}): Serv
       else if (state === 'Running') result = 'running'
       else if (state === 'Ready' || state === 'Disabled' || state === 'Queued') result = 'stopped'
       return result
+    },
+
+    async logs(label, logOptions?: LogsOptions) {
+      assertLabel(label)
+      const lines = logLines(logOptions)
+      if (options.logFile === undefined) {
+        throw new ServiceDefinitionError(
+          'logFile',
+          'is required: a scheduled task writes no log of its own; have the app use teeOutput with this file',
+        )
+      }
+      return await tailFile(options.logFile, lines)
     },
 
     async restart(label) {
