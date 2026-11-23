@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The default model key resolves through the framework's `resolveAgentCredential` (`THEOKIT_API_KEY`, then `OPENROUTER_API_KEY`; still no credentials file), and custom-provider plugins come from `customProviderPlugin` in `@theokit/agents/auth`.
+
 - Display settings `cleanup_progress` and `streaming` are removed: nothing read them, so `THEOCLAW_DISPLAY_CLEANUP_PROGRESS` is now ignored. Per-platform display tiers stay in TheoClaw as product policy; the gateway's `progressFor` keeps deciding by edit capability alone (#2756).
 
 - `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`, and accepts `--json`; the generation protection and default are unchanged.
