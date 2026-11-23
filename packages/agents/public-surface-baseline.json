@@ -21922,6 +21922,129 @@
         }
       }
     },
+    "./mcp-relay": {
+      "names": {
+        "Grant": {
+          "tier": "stable",
+          "declaration": "interface Grant {\n    readonly id: string;\n    readonly name: string;\n    readonly scopes: readonly string[];\n    readonly createdAt: string;\n    readonly revokedAt?: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "GrantStore": {
+          "tier": "stable",
+          "declaration": "interface GrantStore {\n    create(name: string, scopes: readonly string[]): Promise<{\n        readonly grant: Grant;\n        readonly credential: string;\n    }>;\n    revoke(name: string): Promise<boolean>;\n    authenticate(credential: string): Promise<Grant | undefined>;\n    list(): Promise<readonly Grant[]>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "MCP_PATH": {
+          "tier": "stable",
+          "declaration": "MCP_PATH = \"/mcp\"",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "McpRelayConnector": {
+          "tier": "stable",
+          "declaration": "interface McpRelayConnector {\n    readonly stop: () => Promise<void>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "McpRelayConnectorOptions": {
+          "tier": "stable",
+          "declaration": "interface McpRelayConnectorOptions<T extends RelayTool> {\n    readonly url: string;\n    readonly token: string;\n    readonly tools: () => readonly T[];\n    readonly dispatch: (tools: readonly T[], body: unknown) => Promise<unknown>;\n    readonly log?: (line: string) => void;\n    readonly signal?: AbortSignal;\n    readonly fetch?: typeof fetch;\n    readonly backoffMs?: {\n        readonly min: number;\n        readonly max: number;\n    };\n    readonly requestTimeoutMs?: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/mcp-relay.d.ts#RelayTool"],
+          "internals": {
+            "dist/mcp-relay.d.ts#RelayTool": "interface RelayTool {\n    readonly name: string;\n}"
+          }
+        },
+        "McpRelayServerOptions": {
+          "tier": "stable",
+          "declaration": "interface McpRelayServerOptions {\n    readonly instanceToken: string;\n    readonly grants: Pick<GrantStore, 'authenticate'>;\n    readonly timeoutMs?: number;\n    readonly pollMs?: number;\n    readonly maxBodyBytes?: number;\n    readonly maxQueued?: number;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "POLL_PATH": {
+          "tier": "stable",
+          "declaration": "POLL_PATH = \"/instance/poll\"",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "RESPOND_PATH": {
+          "tier": "stable",
+          "declaration": "RESPOND_PATH = \"/instance/respond\"",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "RelayJob": {
+          "tier": "stable",
+          "declaration": "interface RelayJob {\n    readonly id: string;\n    readonly client: string;\n    readonly scopes: readonly string[];\n    readonly body: unknown;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "RelayTool": {
+          "tier": "stable",
+          "declaration": "interface RelayTool {\n    readonly name: string;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
+        "answerRelayJob": {
+          "tier": "stable",
+          "declaration": "declare function answerRelayJob<T extends RelayTool>(job: Pick<RelayJob, 'scopes' | 'body'>, tools: readonly T[], dispatch: (tools: readonly T[], body: unknown) => Promise<unknown>): Promise<unknown>;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/mcp-relay.d.ts#RelayJob", "dist/mcp-relay.d.ts#RelayTool"],
+          "internals": {
+            "dist/mcp-relay.d.ts#RelayJob": "interface RelayJob {\n    readonly id: string;\n    readonly client: string;\n    readonly scopes: readonly string[];\n    readonly body: unknown;\n}",
+            "dist/mcp-relay.d.ts#RelayTool": "interface RelayTool {\n    readonly name: string;\n}"
+          }
+        },
+        "createMcpRelayServer": {
+          "tier": "stable",
+          "declaration": "declare function createMcpRelayServer(options: McpRelayServerOptions): http.Server;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/mcp-relay.d.ts#McpRelayServerOptions"],
+          "internals": {
+            "dist/mcp-relay.d.ts#McpRelayServerOptions": "interface McpRelayServerOptions {\n    readonly instanceToken: string;\n    readonly grants: Pick<GrantStore, 'authenticate'>;\n    readonly timeoutMs?: number;\n    readonly pollMs?: number;\n    readonly maxBodyBytes?: number;\n    readonly maxQueued?: number;\n}"
+          }
+        },
+        "startMcpRelayConnector": {
+          "tier": "stable",
+          "declaration": "declare function startMcpRelayConnector<T extends RelayTool>(options: McpRelayConnectorOptions<T>): McpRelayConnector;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/mcp-relay.d.ts#McpRelayConnector",
+            "dist/mcp-relay.d.ts#McpRelayConnectorOptions",
+            "dist/mcp-relay.d.ts#RelayTool"
+          ],
+          "internals": {
+            "dist/mcp-relay.d.ts#McpRelayConnector": "interface McpRelayConnector {\n    readonly stop: () => Promise<void>;\n}",
+            "dist/mcp-relay.d.ts#McpRelayConnectorOptions": "interface McpRelayConnectorOptions<T extends RelayTool> {\n    readonly url: string;\n    readonly token: string;\n    readonly tools: () => readonly T[];\n    readonly dispatch: (tools: readonly T[], body: unknown) => Promise<unknown>;\n    readonly log?: (line: string) => void;\n    readonly signal?: AbortSignal;\n    readonly fetch?: typeof fetch;\n    readonly backoffMs?: {\n        readonly min: number;\n        readonly max: number;\n    };\n    readonly requestTimeoutMs?: number;\n}",
+            "dist/mcp-relay.d.ts#RelayTool": "interface RelayTool {\n    readonly name: string;\n}"
+          }
+        }
+      }
+    },
     "./persistence": {
       "names": {
         "AtomicWriteJsonOptions": {
