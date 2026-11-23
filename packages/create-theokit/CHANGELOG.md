@@ -1,5 +1,12 @@
 # create-theo
 
+## 3.3.2
+
+### Patch Changes
+
+- eb5ac75: The esbuild settings that bundle an Ink CLI ship as `create-theokit/tools/build-ink-cli.mjs`; the scaffolded TUI's `build:bin` calls it instead of carrying its own copy.
+- 8198202: An offsite download validates the manifest and each file's size and checksum before writing it, and `mountAgent` answers a failed credential resolution with a fixed message and code instead of the resolver's text.
+
 ## 3.3.1
 
 ### Patch Changes
