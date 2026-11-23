@@ -11,7 +11,6 @@ import { createDelegateAllTool, createDelegateTool } from '@theokit/agents/tools
 import type { CustomTool } from '@theokit/sdk'
 
 import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from '../control-plane/errors.js'
 import { describeStreamedError } from '../control-plane/turn.js'
 import { vetoToolCall } from './path-veto.js'
@@ -209,7 +208,7 @@ export async function runWorker(
   let outcome: DelegationResult
   try {
     // The signal reaches the send too: the SDK composes it into its dispatch signal, where cancelling the run only moves its local status.
-    const run = await agent.send(task, { ...untrustedContentSendOptions(), ...(signal === undefined ? {} : { signal }) })
+    const run = await agent.send(task, signal === undefined ? {} : { signal })
     const { streamed, ...result } = await untilSettled(run, signal)
     if (streamed !== undefined) throw new Error(`the worker's run streamed an error (${streamed})`)
     if (result.status !== 'finished') throw new Error(`the worker's run ended with status ${result.status}`)

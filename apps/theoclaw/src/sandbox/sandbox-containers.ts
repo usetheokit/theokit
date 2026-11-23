@@ -1,6 +1,6 @@
 import type { DockerRunner } from '@theokit/agents/sandbox'
 
-import { SANDBOX_LABEL, SESSION_LABEL } from './sandbox-backend.js'
+import { SANDBOX_LABEL, SESSION_LABEL } from './sandbox-mode.js'
 
 /** One sandbox container theoclaw made. */
 export interface SandboxContainer {

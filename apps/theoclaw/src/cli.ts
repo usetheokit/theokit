@@ -35,9 +35,9 @@ import {
 } from './backup/storage.js'
 import { portState, StatePortRefusal } from './state-port.js'
 import type { DatabaseDeps } from './scheduler/postgres-job-store.js'
-import { InstanceLockedError } from './backup/instance-lock.js'
+import { InstanceLockedError } from '@theokit/sdk/persistence'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
-import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './daemon.js'
+import { daemonInstall, type DaemonIo, daemonRestart, daemonStatus, daemonUninstall } from './daemon.js'
 import { runCommand, type Runner } from './run-command.js'
 import { parseCall, parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
@@ -112,6 +112,7 @@ const USAGE = `usage: theoclaw <command>
                             a systemd user unit, a launchd agent or a Task Scheduler task
   theoclaw daemon uninstall stop and remove that service
   theoclaw daemon status    exit 0 when the service is running, 3 otherwise
+  theoclaw daemon restart   restart the installed service
   theoclaw update [--channel stable|dev]
                             fetch and fast-forward the checkout on its channel, rebuild, restart
   theoclaw security audit [--fix]
@@ -218,13 +219,14 @@ const DAEMON_VERBS: Readonly<Record<string, (io: CliIo, runner: Runner) => Promi
   install: daemonInstall,
   uninstall: daemonUninstall,
   status: daemonStatus,
+  restart: daemonRestart,
 }
 
 function daemon(args: readonly string[], io: CliIo): Promise<number> {
   const [verb, ...extra] = args
   const run = verb === undefined ? undefined : DAEMON_VERBS[verb]
   if (run === undefined || extra.length > 0)
-    throw new UsageError('theoclaw daemon: expected install, uninstall or status')
+    throw new UsageError('theoclaw daemon: expected install, uninstall, status or restart')
   return run(io, io.runner)
 }
 

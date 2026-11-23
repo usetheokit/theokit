@@ -11,7 +11,7 @@ import { afterAll } from 'vitest'
 import { computeLineSignature } from '@theokit/gateway-line'
 
 import type { PlatformBuild } from '../src/channels/channel-loop.js'
-import type { MaskableStream } from '../src/channels/output-mask.js'
+import type { MaskableStream } from '../src/control-client/masked-entry.js'
 import { adapterBuilders } from '../src/channels/adapter-factory.js'
 import { resolvePlatforms } from '../src/channels/platforms.js'
 import type { ConfiguredPlatform } from '../src/channels/platforms.js'

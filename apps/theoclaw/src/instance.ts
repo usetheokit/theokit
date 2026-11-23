@@ -1,5 +1,8 @@
-import { chmodSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { chmodSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+
+import { acquireInstanceLock } from '@theokit/sdk/persistence'
+import type { InstanceLock } from '@theokit/sdk/persistence'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
 
@@ -91,4 +94,55 @@ export function applyInstance(instance: TheoClawInstance, env: NodeJS.ProcessEnv
     }
   }
   Object.assign(env, instance.overrides)
+}
+
+/**
+ * Take `<stateDir>.instance.lock` through the SDK's `acquireInstanceLock` (FR-010), the lock a start,
+ * a backup and a restore share. Creates only the lock's parent directory, at 0700, as before.
+ */
+export async function takeInstanceLock(stateDir: string): Promise<InstanceLock> {
+  mkdirSync(dirname(resolve(stateDir)), { recursive: true, mode: 0o700 })
+  return acquireInstanceLock(stateDir)
+}
+
+/** Where the start's lock goes: the instance's state directory, or `undefined` with none (no lock). */
+function stateDirOf(instance: TheoClawInstance, env: NodeJS.ProcessEnv): string | undefined {
+  const dir = instance.stateDirectory ?? env.THEOCLAW_STATE_DIR?.trim()
+  return dir === undefined || dir === '' ? undefined : dir
+}
+
+/**
+ * The start's half of FR-010: take the instance lock, then put the instance into effect. The lock
+ * comes BEFORE `applyInstance` creates the targets, so a start refused by a restore's lock leaves an
+ * absent target absent. An instance with no state directory has nothing to protect and takes none.
+ * Returns the lock, or `undefined` when none was taken.
+ */
+export async function claimInstance(
+  instance: TheoClawInstance,
+  env: NodeJS.ProcessEnv,
+  hooks: { readonly beforeLock?: () => void } = {},
+): Promise<InstanceLock | undefined> {
+  const stateDir = stateDirOf(instance, env)
+  hooks.beforeLock?.()
+  const lock = stateDir === undefined ? undefined : await takeInstanceLock(stateDir)
+  try {
+    applyInstance(instance, env)
+  } catch (error) {
+    await lock?.release()
+    throw error
+  }
+  return lock
+}
+
+/**
+ * Remove the lock file synchronously, for the `exit` event (which allows no await), but only while
+ * the claim still names this process: a file the SDK's takeover gave to another process stays.
+ */
+export function removeOwnLockSync(lockPath: string): void {
+  try {
+    const claim = JSON.parse(readFileSync(lockPath, 'utf8')) as { pid?: unknown }
+    if (claim.pid === process.pid) rmSync(lockPath, { force: true })
+  } catch {
+    // Absent or unreadable: nothing of this process's to remove.
+  }
 }

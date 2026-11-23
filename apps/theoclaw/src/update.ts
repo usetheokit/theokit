@@ -3,8 +3,7 @@ import { dirname, join } from 'node:path'
 
 import { loadConfiguration } from './config-file.js'
 import { TheoClawConfigError } from './control-plane/errors.js'
-import { type DaemonIo, unitPath } from './daemon.js'
-import { plistPath } from './daemon-launchd.js'
+import { definitionPath, type DaemonIo } from './daemon.js'
 import type { Runner } from './run-command.js'
 import { resolveInstance } from './instance.js'
 
@@ -89,8 +88,7 @@ function position(dist: string, before: string, head: string, restartedMarker: s
 
 /** Whether the platform's login service for this instance is installed: a systemd unit or a LaunchAgent. */
 function serviceInstalled(io: UpdateIo, label: string): boolean {
-  if (io.platform === 'darwin') return existsSync(plistPath(label, io.homeDir))
-  return existsSync(unitPath(label, io.homeDir))
+  return existsSync(definitionPath(io.platform, label, io.homeDir))
 }
 
 /** The command that restarts the installed service onto the new build. */

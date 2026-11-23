@@ -1,7 +1,6 @@
 import { createSessionStore, type SessionStore } from '@theokit/agents/control'
 
 import type { TurnAgent } from '../agent-port.js'
-import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { runSessionTurn } from './session-turn.js'
 
 /** The most `/control` sessions kept open at once (FR-006). */
@@ -58,7 +57,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     badSessionCode: 'bad_frame',
     closedReason: 'the control plane is closing',
     dispose,
-    steerAgent: (agent, message) => agent.send(message, { ...untrustedContentSendOptions(), queueMode: 'steer' }),
+    steerAgent: (agent, message) => agent.send(message, { queueMode: 'steer' }),
     runTurn: (context) =>
       runSessionTurn(context.agent, {
         message: context.message,

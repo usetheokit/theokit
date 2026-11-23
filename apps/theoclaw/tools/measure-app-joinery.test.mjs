@@ -47,11 +47,11 @@ describe('measure-app-joinery', () => {
     const run = spawnSync(process.execPath, [CLI], { encoding: 'utf8' })
     expect(run.status).toBe(1)
     expect(run.stderr).toMatch(/joined: \d+ {2}total: \d+ {2}gap: 0 {2}presenter: 0/)
-    for (const name of ['readBearerToken', 'waitForPredecessor', 'parsePort']) {
+    for (const name of ['readBearerToken', 'parsePort']) {
       expect(run.stderr).toContain(`duplicate ${name} `)
     }
     // #2597, #2598 and #2608 moved these to the framework; the app imports them.
-    for (const name of ['createControlClient', 'createDevicePairing', 'attachControlSocket']) {
+    for (const name of ['createControlClient', 'createDevicePairing', 'attachControlSocket', 'waitForPredecessor']) {
       expect(run.stderr).not.toContain(`duplicate ${name} `)
     }
     expect(run.stderr).not.toContain('duplicate resolveSecretRefs ')

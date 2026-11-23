@@ -1,5 +1,5 @@
 import { commandHook, helpText } from '@theokit/gateway'
-import { THINKING_LEVELS } from '../agent/failover.js'
+import { THINKING_LEVELS } from '../agent/create-agent.js'
 import { ACP_DESCRIPTION } from './acp-command.js'
 import { CHAT_COMMANDS } from './info-commands.js'
 import { EXEC_DESCRIPTIONS } from './exec-approval-chat.js'

@@ -1,6 +1,6 @@
 
 import { commandOf, CHAT_COMMANDS, infoReply } from '../channels/info-commands.js'
-import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
+import { THINKING_LEVELS, type ThinkingLevel } from '../agent/create-agent.js'
 import { STEER_USAGE_REPLY } from '../channels/reply-handler.js'
 import type { TurnRunner } from '../control-plane/turn.js'
 
