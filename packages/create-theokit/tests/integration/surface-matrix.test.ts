@@ -94,10 +94,10 @@ describe('M45 surface matrix — full scaffold per surface', () => {
       'useAgent',
       'InProcessTransport',
       'streamAgentTurnInProcess',
-      // Claude-Code render: <AgentTimeline> (Markdown + tool cards) fed by the ai-free `messagesToAgentEvents`
+      // Claude-Code render: <AgentTimeline> (Markdown + tool cards) fed by the `useAgentTimeline` hook
       "from '@theokit/tui'",
       'AgentTimeline',
-      'messagesToAgentEvents',
+      'useAgentTimeline',
     ]) {
       expect(app).toContain(s)
     }

@@ -1,12 +1,12 @@
 /**
  * A tiny visual reference — `npm run demo:tools` — showing every way the timeline renders a tool, so you
  * can see the states (and your `tui/theme.ts` colors/glyphs) without driving a real agent. It feeds a
- * synthetic conversation through the SAME `messagesToAgentEvents` → `<AgentTimeline>` path the real app
+ * synthetic conversation through the SAME `useAgentTimeline` → `<AgentTimeline>` path the real app
  * uses, so what you see here is exactly what a live turn renders. Delete this file if you don't want it.
  */
 import { Box, render, Text } from 'ink'
-import { type ReactElement } from 'react'
-import { AgentTimeline, messagesToAgentEvents, TheoTUIProvider, type UIMessageLike } from '@theokit/tui'
+import { type ReactElement, useMemo } from 'react'
+import { AgentTimeline, TheoTUIProvider, type UIMessageLike, useAgentTimeline } from '@theokit/tui'
 
 import { THEME } from './theme.js'
 
@@ -32,14 +32,20 @@ const THREAD: UIMessageLike[] = [
   tool('deploy', 'approval-requested', { approval: { id: 'c-deploy' } }), // approval-requested → pending
 ]
 
+/** The hook reads `agent.thread`; the demo's synthetic thread stands in for a live agent. */
+const SOURCE = { thread: THREAD }
+
 function Demo(): ReactElement {
+  const timeline = useAgentTimeline(SOURCE)
+  // `<AgentTimeline events>` takes a mutable array; the hook's is readonly.
+  const events = useMemo(() => [...timeline.events], [timeline.events])
   return (
     <TheoTUIProvider theme={THEME}>
       <Box flexDirection="column" paddingX={1}>
         <Text bold>Tool render variations — exactly how the timeline renders each state</Text>
         <Text dimColor>pending · running · success · shell · failed · approval  —  Ctrl+C to exit</Text>
         <Box marginTop={1}>
-          <AgentTimeline events={messagesToAgentEvents(THREAD)} />
+          <AgentTimeline events={events} />
         </Box>
       </Box>
     </TheoTUIProvider>

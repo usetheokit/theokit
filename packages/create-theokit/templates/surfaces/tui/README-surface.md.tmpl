@@ -57,7 +57,7 @@ tui/main.tsx                       render(<App/>, { exitOnCtrlC: false })
 you type ─▶ App.handleSubmit ─▶ agent.send() ─▶ InProcessTransport ─▶ streamAgentTurnInProcess (theokit)
                                                                               │  UIMessageStream
 useAgent().thread ◀───────────────────────────────────────────────────────────┘
-   │  messagesToAgentEvents (ai-free projection, M46)          readTurnUsage
+   │  useAgentTimeline (ai-free projection, M46)                readTurnUsage
    ▼                                                                │
 <AgentTimeline/>                                            lastUsage ─▶ footer + <UsagePanel/>
 ```
