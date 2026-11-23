@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The transcript sweeper's timer now comes from `startInProcessSweeper` in `@theokit/agents/session`; the schedule and reports are unchanged.
+
 - `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`, and accepts `--json`; the generation protection and default are unchanged.
 
 - Exec approval installs the framework's `gate.plugin` and the ACP permission prompt uses the gate's own timeout, with no timer of its own. A shell call with no command is now refused as `theoclaw: exec refused: the decision failed: the command is missing`.

@@ -1030,6 +1030,11 @@ app's call: claim the default root, and a custom one only if it holds no project
 
 ### Scheduling the sweep
 
+A long-running process can sweep on a timer inside itself: `startInProcessSweeper(intervalMs, run)` calls `run` at
+once and then every `intervalMs`, skips a tick while a run is still going, unrefs its timer, and returns
+`{ stop() }`; `stop()` resolves after a run in flight settles. A throw from `run` is swallowed, so report inside it.
+The rest of this section is the detached-child scheduler.
+
 `scheduleSessionSweep({ enabled, stampFile, command, onReport, intervalHours?, timeoutMs? })` runs the cross-project GC
 in a detached child, at most once per `intervalHours` (default 24). It reads `stampFile` (an unparseable or missing
 stamp counts as a first run), writes it BEFORE spawning, and never blocks or throws: a failure goes to `onReport`.
