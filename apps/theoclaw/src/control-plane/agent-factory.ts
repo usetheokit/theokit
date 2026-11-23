@@ -7,9 +7,8 @@ import { loadInstructionTree } from '@theokit/agents/config'
 
 import { customProviderPlugins, parseCustomProviders } from '../agent/custom-providers.js'
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
-import type { ThinkingLevel } from '../agent/failover.js'
-import type { AgentImport, TheoClawAgentOptions, TheoClawLocalOptions } from '../agent/create-agent.js'
-import { parseFallbackModel, parseThinkingLevel, withFailover } from '../agent/failover.js'
+import type { AgentImport, TheoClawAgentOptions, TheoClawLocalOptions, ThinkingLevel } from '../agent/create-agent.js'
+import { parseFallbackModel, parseThinkingLevel } from '../agent/create-agent.js'
 import { parseApprovedHooks } from '../agent/hook-approval.js'
 import { agentTelemetry, readTelemetrySettings } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
@@ -115,15 +114,13 @@ function thinkingOf(env: BindEnvironment): { thinking?: ThinkingLevel } {
 }
 
 /**
- * `create(options)` on the primary model; with `THEOCLAW_MODEL_FALLBACK` set, the agent falls over
- * to a secondary built lazily from the same options with the fallback model (OC-47). The fallback
- * runs on the same key; a secondary on another provider's key is not supported.
+ * `options` with the SDK's `modelFallback` when `THEOCLAW_MODEL_FALLBACK` names a model other than the
+ * primary (OC-47): the SDK reruns a turn that failed before any output on that model, on the same
+ * agent and key; a secondary on another provider's key is not supported.
  */
-function createWithFailover(env: BindEnvironment, create: CreateAgent, options: TheoClawAgentOptions): Promise<TurnAgent> {
+function withModelFallback(env: BindEnvironment, options: TheoClawAgentOptions): TheoClawAgentOptions {
   const fallback = parseFallbackModel(env.THEOCLAW_MODEL_FALLBACK)
-  return create(options).then((primary) =>
-    fallback === undefined || fallback === options.model ? primary : withFailover(primary, () => create({ ...options, model: fallback })),
-  )
+  return fallback === undefined || fallback === options.model ? options : { ...options, modelFallback: { models: [fallback] } }
 }
 
 /**
@@ -180,7 +177,7 @@ export function createAgentFactory(
         ...(env.THEOCLAW_PLUGIN_WORKSPACE === undefined || env.THEOCLAW_PLUGIN_WORKSPACE === '' ? {} : { pluginWorkspace: env.THEOCLAW_PLUGIN_WORKSPACE }),
         ...(imported === undefined ? {} : { imported }),
       })
-    const agent = await createWithFailover(env, create, dir === undefined ? options : { ...options, local: { ...options.local, sessionDir: dir } })
+    const agent = await create(withModelFallback(env, dir === undefined ? options : { ...options, local: { ...options.local, sessionDir: dir } }))
     return dir === undefined ? agent : removingOnDispose(agent, dir)
   }
 }
@@ -202,7 +199,7 @@ export function createChannelAgentFactory<A>(
 
 /** The chat path's factory over the SDK, for a caller given no `create` of its own: a trigger run's default (B-397). */
 export function createSdkChannelAgentFactory(env: BindEnvironment): () => Promise<TurnAgent> {
-  return async () => createWithFailover(env, createTheoClawAgent, withSessionHome(env, agentOptionsFor(env)))
+  return async () => createTheoClawAgent(withModelFallback(env, withSessionHome(env, agentOptionsFor(env))))
 }
 
 /**
@@ -214,7 +211,7 @@ export function webchatAgentFactory(
   env: BindEnvironment,
   create: CreateAgent = createTheoClawAgent,
 ): () => Promise<TurnAgent> {
-  return async () => createWithFailover(env, create, withSessionHome(env, agentOptionsFor(env)))
+  return async () => create(withModelFallback(env, withSessionHome(env, agentOptionsFor(env))))
 }
 
 /** `agent` with its private transcript directory removed once it is disposed (the agent itself, not a wrapper). */

@@ -4,7 +4,6 @@ import type { DockerRunner } from '@theokit/agents/sandbox'
 import { describe, expect, it } from 'vitest'
 
 import { UsageError } from '../src/cli-args.js'
-import { labelDockerRuns } from '../src/sandbox/sandbox-backend.js'
 import { parseSandbox, sandboxCommand } from '../src/sandbox/sandbox-command.js'
 
 const ROWS = [
@@ -113,29 +112,5 @@ describe('sandbox recreate', () => {
     const { runner, calls } = stub()
     expect((await run(['recreate', '--all', '--force'], runner, {})).code).toBe(0)
     expect(calls).toHaveLength(0)
-  })
-})
-
-describe('labelDockerRuns', () => {
-  it('labels a run, drops --rm, and removes the session\'s older exited containers', async () => {
-    const calls: string[][] = []
-    const base: DockerRunner = (args) => {
-      calls.push([...args])
-      const stdout = args[0] === 'ps' && args.includes('-aq') ? (args.includes('status=exited') ? 'old\nnew\n' : 'new\n') : ''
-      return Promise.resolve({ stdout, stderr: '', code: 0, timedOut: false })
-    }
-    await labelDockerRuns(base, 's1')(['run', '--rm', '--name', 'n1', 'alpine:3'], { timeoutMs: 1, maxOutputBytes: 1 })
-    expect(calls[0]).toEqual(['run', '--label', 'theoclaw.sandbox=1', '--label', 'theoclaw.session=s1', '--name', 'n1', 'alpine:3'])
-    expect(calls.at(-1)).toEqual(['rm', 'old'])
-  })
-
-  it('passes other docker calls through', async () => {
-    const calls: string[][] = []
-    const base: DockerRunner = (args) => {
-      calls.push([...args])
-      return Promise.resolve({ stdout: '', stderr: '', code: 0, timedOut: false })
-    }
-    await labelDockerRuns(base, 's1')(['info'], { timeoutMs: 1, maxOutputBytes: 1 })
-    expect(calls).toEqual([['info']])
   })
 })

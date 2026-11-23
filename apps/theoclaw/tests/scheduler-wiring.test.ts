@@ -309,7 +309,7 @@ describe('wireScheduler', () => {
     expect(lines[0]).toBe('scheduler: 0 jobs, heartbeat off')
   })
 
-  it('sends the run with its abort signal and leaves the untrusted content options to the agent sendDefaults (OC-88)', async () => {
+  it('sends the run with its abort signal and no per-send untrusted content options, which the agent sendDefaults carries (OC-88)', async () => {
     connect(new FakeAdapter('telegram'))
     const agent = new AnsweringAgent('ok')
     const { scheduler } = await start(agent)

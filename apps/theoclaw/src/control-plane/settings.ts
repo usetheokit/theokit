@@ -1,6 +1,6 @@
 import { isSubscriptionRoute, resolveAgentCredential } from '@theokit/agents/auth'
 
-import { parseThinkingLevel } from '../agent/failover.js'
+import { parseThinkingLevel } from '../agent/create-agent.js'
 import { customProviderOf, parseCustomProviders } from '../agent/custom-providers.js'
 import { readBearerToken } from './bearer.js'
 import { type BindEnvironment, parsePort, resolveBindAddress } from './bind.js'

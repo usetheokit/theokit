@@ -2,11 +2,10 @@ import { channelRendering } from '@theokit/gateway'
 import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@theokit/gateway'
 import { ChatPresenter, fromSdkMessage } from '@theokit/presenter'
 import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
+import { Security } from '@theokit/sdk'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { maskSecrets } from './channel-loop.js'
-import { createStreamMask } from './stream-mask.js'
-import type { StreamMask } from './stream-mask.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import { type DisplayConfig, resolveDisplay } from './display-config.js'
 import { createProgressGate, type ProgressGate } from './progress.js'
@@ -16,7 +15,7 @@ import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-com
 import type { SessionLease } from '../sessions/session-agents.js'
 import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import type { UsageMode } from './usage-hook.js'
-import { THINKING_LEVELS, type ThinkingLevel } from '../agent/failover.js'
+import { THINKING_LEVELS, type ThinkingLevel } from '../agent/create-agent.js'
 import { type CompactSettings, compactOf, runCompact } from './compact-command.js'
 import { AdvisorHistory, reviewQuietly, steerNote, type AdvisorSettings } from './advisor.js'
 import { ackInbound, showTyping, type TypingOptions } from './typing.js'
@@ -225,6 +224,9 @@ type TurnOutcome =
  * What a turn's stream left behind: its plain answer and the error code it streamed, if any; and
  * the mask its text crosses before the presenter renders it.
  */
+/** The SDK's per-stream masker: `push` returns what is safe to release, `flush` the rest. */
+type StreamMask = ReturnType<ReturnType<typeof Security.createMask>['stream']>
+
 interface StreamedTurn {
   answer: string
   error: string | undefined
@@ -273,7 +275,7 @@ async function streamTurn(
   advisor?: AdvisorWatch,
 ): Promise<TurnOutcome> {
   // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
-  const streamed: StreamedTurn = { answer: '', error: undefined, mask: createStreamMask(secrets), progress: [], gate }
+  const streamed: StreamedTurn = { answer: '', error: undefined, mask: Security.createMask(secrets, { minLength: 1 }).stream(), progress: [], gate }
   try {
     const run = await agent.send(prompt)
     advisor?.start(agent, prompt)

@@ -25,7 +25,7 @@ import { assertSupportedRuntime } from '../runtime.js'
 
 import { loadConfiguration } from '../config-file.js'
 import { resolveInstance } from '../instance.js'
-import { takeInstanceLock } from './instance-lock.js'
+import { takeInstanceLock } from '../instance.js'
 
 /** A backup or a restore that was refused: the reason and the path, never a file's content. */
 export class BackupRefusal extends Error {
@@ -183,7 +183,7 @@ function snapshotSQLite(from: string, to: string): void {
  * Refuses nonempty targets, targets inside either source, and symbolic links. Directories are written 0700 and files 0600 (NFR-003); the migration import is
  * left out (NFR-002). A copy that fails removes what it wrote.
  */
-export function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Manifest {
+export async function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Promise<Manifest> {
   assertSupportedRuntime()
   const targets = resolveTargets(env, options.homeDir)
   requireSource(targets.state, 'THEOCLAW_STATE_DIR')
@@ -195,7 +195,7 @@ export function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: Bac
     if (within(real, source)) throw new BackupRefusal(`the backup directory ${target} is inside ${targets[root]}, which it copies`, target)
   }
   if (!isEmptyOrAbsent(target)) throw new BackupRefusal(`the backup directory ${target} is not empty`, target)
-  const lock = options.live ? undefined : takeInstanceLock(targets.state)
+  const lock = options.live ? undefined : await takeInstanceLock(targets.state)
   const created = !existsSync(target)
   try {
     mkdirPrivate(target)
@@ -222,7 +222,7 @@ export function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: Bac
     else for (const name of [...ROOTS, MANIFEST]) rmSync(join(target, name), { recursive: true, force: true })
     throw error
   } finally {
-    lock?.release()
+    await lock?.release()
   }
 }
 
@@ -372,12 +372,12 @@ function placeBoth(staging: Record<Root, string>, targets: Targets, before: Reco
  * checking each copy's bytes again, and rename it into place only once every file landed (EC-1). If
  * the second rename fails, the first target is put back as it was, so neither target changed.
  */
-export function restoreInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Manifest {
+export async function restoreInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Promise<Manifest> {
   const targets = resolveTargets(env, options.homeDir)
   const source = resolve(dir)
   const manifest = readManifest(source)
   const files = verifyBackup(source, manifest)
-  const lock = takeInstanceLock(targets.state)
+  const lock = await takeInstanceLock(targets.state)
   const staging: Partial<Record<Root, string>> = {}
   try {
     const before = { state: recordTarget(targets.state), workspace: recordTarget(targets.workspace) }
@@ -390,7 +390,7 @@ export function restoreInstance(env: NodeJS.ProcessEnv, dir: string, options: Ba
     return manifest
   } finally {
     for (const root of ROOTS) if (staging[root] !== undefined) rmSync(staging[root], { recursive: true, force: true })
-    lock.release()
+    await lock.release()
   }
 }
 

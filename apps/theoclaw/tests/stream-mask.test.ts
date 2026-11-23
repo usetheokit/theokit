@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { maskSecrets } from '../src/channels/channel-loop.js'
-import { createStreamMask } from '../src/channels/stream-mask.js'
+import { Security } from '@theokit/sdk'
+
+const createStreamMask = (secrets: readonly string[]) => Security.createMask(secrets, { minLength: 1 }).stream()
 
 /** A 40-character configured value, and a shorter one that is its start. */
 const SECRET = 'sk-live-0123456789abcdefghijABCDEFGHIJ-z'

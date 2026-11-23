@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from '../agent/failover.js'
+import type { ThinkingLevel } from '../agent/create-agent.js'
 import { type CompactSettings, runCompact } from '../channels/compact-command.js'
 import { STEER_IDLE_REPLY, STEERED_REPLY } from '../channels/reply-handler.js'
 import type { TurnRunner } from '../control-plane/turn.js'

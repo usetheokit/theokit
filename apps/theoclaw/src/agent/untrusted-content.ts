@@ -3,8 +3,9 @@
  *
  * The SDK wraps a tool result's text in `<untrusted-tool-output>` tags, escaping a forged closing
  * tag, only when a send passes `toolResultGuard`; it reads the option per send, so
- * `theoClawAgentOptions` sets it once as the agent's `sendDefaults` and no send site passes it. The SDK adds no instruction about the tag, so every
- * agent's system prompt opens with the notice (`theoClawAgentOptions`).
+ * `theoClawAgentOptions` sets it once as the agent's `sendDefaults` and no send site passes it.
+ * The SDK adds no instruction about the tag, so every agent's system prompt opens with the notice
+ * (`theoClawAgentOptions`).
  */
 
 /** The first sentence of every TheoClaw system prompt (brief FR-002), exactly. */

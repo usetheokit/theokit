@@ -1,11 +1,12 @@
 import { createInterface } from 'node:readline/promises'
 import type { Readable, Writable } from 'node:stream'
 
+import { defaultDockerRunner } from '@theokit/agents/sandbox'
 import type { DockerRunner } from '@theokit/agents/sandbox'
 
 import { UsageError } from '../cli-args.js'
 import { describeError } from '../control-plane/errors.js'
-import { dockerProcess, readSandboxBackend } from './sandbox-backend.js'
+import { readSandboxBackend } from './sandbox-mode.js'
 import { listSandboxContainers, recreateSandboxContainers } from './sandbox-containers.js'
 
 const USAGE = 'theoclaw sandbox: expected list | recreate (--all | --session <id>) [--force]'
@@ -50,7 +51,7 @@ export async function sandboxCommand(args: readonly string[], io: SandboxIo): Pr
     io.stdout.write('theoclaw sandbox: THEOCLAW_SANDBOX_BACKEND is bwrap; there are no containers to manage\n')
     return 0
   }
-  const runner = io.docker ?? dockerProcess
+  const runner = io.docker ?? defaultDockerRunner()
   try {
     if (action.verb === 'list') {
       const containers = await listSandboxContainers(runner)
