@@ -70,6 +70,17 @@ describe('the external tools file at start', () => {
     expect(result.builds()).toBe(0)
   })
 
+  it('refuses a header that references an unset variable instead of sending it as written', () => {
+    const error = refusalOf({ mcpServers: { docs: { url: 'https://x.example/mcp', headers: { Authorization: '${THEOCLAW_TEST_UNSET_TOKEN}' } } } })
+    expect(error.message).toContain('THEOCLAW_TEST_UNSET_TOKEN')
+  })
+
+  it('expands a header that references a set variable', () => {
+    const path = toolsFile({ mcpServers: { docs: { url: 'https://x.example/mcp', headers: { Authorization: '${TOKEN_VAR}' } } } })
+    const read = resolveExternalTools({ [VARIABLE]: path, TOKEN_VAR: 'Bearer abc-0123456789' })
+    expect(read.mcpServers.docs).toMatchObject({ headers: { Authorization: 'Bearer abc-0123456789' } })
+  })
+
   it('refuses a file that is not JSON, naming the path', () => {
     expect(refusalOf('{').message).toContain('is not JSON')
   })

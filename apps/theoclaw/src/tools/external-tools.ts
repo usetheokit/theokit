@@ -174,13 +174,17 @@ export function resolveExternalTools(env: Env, readFile: ReadFile = readFileSync
   const cached: ReadFile = (target, encoding) => (text ??= readFile(target, encoding))
   const document = readJson(path, cached) as { mcpServers?: Record<string, unknown> }
   const parsed = parseWith(file, document, path, [])
+  // The loader reports a server the operator policy does not admit, and an unset `${VAR}` it leaves as
+  // written, only as warnings. Either would start without a tool or with a placeholder as credential: refuse.
+  const warnings: string[] = []
   let mcpServers: Record<string, McpServerConfig>
   try {
-    mcpServers = { ...loadMcpServersFile(path, { readFile: cached, env: env as Record<string, string | undefined>, onWarn: () => undefined }) } as Record<string, McpServerConfig>
+    mcpServers = { ...loadMcpServersFile(path, { readFile: cached, env: env as Record<string, string | undefined>, onWarn: (warning) => warnings.push(warning) }) } as Record<string, McpServerConfig>
   } catch (error) {
     if (error instanceof McpFileError) return refuse(path, error.message)
     throw error
   }
+  if (warnings[0] !== undefined) refuse(path, warnings[0])
   for (const name of Object.keys(mcpServers)) checkServer(name, document.mcpServers?.[name], path)
   const acpAgents: AcpAgentConfig[] = parsed.acpAgents ?? []
   checkAcpNames(acpAgents, path)
