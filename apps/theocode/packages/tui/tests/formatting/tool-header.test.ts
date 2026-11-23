@@ -348,7 +348,7 @@ describe('Bash, Edit and ApplyPatch headers come from the toolkit presentation',
   it('fails loudly when the installed toolkit has no entry for an aliased tool', async () => {
     vi.resetModules()
     vi.doMock('@theokit/tui', () => ({ toolPresentation: () => new Map() }))
-    const mod = await import('../../src/formatting/tool-header.ts')
+    const mod = await import('../../src/formatting/tool-header.js')
     expect(() =>
       mod.formatToolHeader({ kind: 'tool', name: 'Bash', status: 'completed', input: {} } as never),
     ).toThrow(/@theokit\/tui >= 0\.83\.4/)
