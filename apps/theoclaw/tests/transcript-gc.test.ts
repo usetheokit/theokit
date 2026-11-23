@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { Generations } from '../src/sessions/generations.js'
-import { collectTranscripts } from '../src/sessions/transcript-gc.js'
+import { collectTranscripts, startTranscriptSweeper } from '../src/sessions/transcript-gc.js'
 import { sessionsCommand } from '../src/sessions/sessions-command.js'
 import { scratchDir } from './support/cli-harness.js'
 import { Writable } from 'node:stream'
@@ -187,5 +187,22 @@ describe('collectTranscripts protection by the real file (#2746)', () => {
     expect(existsSync(paths['theoclaw-b-g1']!)).toBe(true) // held
     expect(existsSync(paths['theoclaw-c-g0']!)).toBe(false) // retired, nobody holds it
     expect(result.removed).toContain('theoclaw-c-g0')
+  })
+})
+
+
+describe('startTranscriptSweeper', () => {
+  it('collects once at start and reports through write', async () => {
+    const { workspace, paths } = setup({ ...FILES, 'theoclaw-d-g0': 90 })
+    const lines: string[] = []
+    const sweeper = startTranscriptSweeper({
+      workspace,
+      generations: await generations(),
+      retentionDays: 30,
+      write: (line) => lines.push(line),
+    })
+    await sweeper.stop()
+    expect(existsSync(paths['theoclaw-b-g0']!)).toBe(false)
+    expect(lines.join('\n')).toContain('old chat transcripts')
   })
 })

@@ -17,6 +17,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 ## [Unreleased]
 
 - `sessions gc` leaves identity and legacy-name protection to `planTranscriptGC` (`knownIds`, `isProtected`); `assignOwnIdentities` and `withholdLegacyNamed` are gone (#2746).
+- A refused tool call is recognised by the typed `refusal` on the event (`@theokit/tui` 0.83.4), not by marker text or exit code 126 in its output; `human` and `timeout` read as `Rejected`, `policy` and `hook` as `Blocked` (#2721). A call that carries marker text or exit code 126 but no typed `refusal` now renders as an ordinary failure, and the Bash "rejected — nothing ran" body is gone (the framework's `errorText` is shown). Not verified: that the typed refusal reaches the TUI parts on the in-process presenter path; the test feeds a part carrying `refusal` to `messagesToAgentEvents`.
 - `theocode doctor` derives the credential state with `credentialState` from `@theokit/agents/doctor`; the local `credentialState` is gone.
 - The directory trust and hook review gates render `WorkspaceTrustPrompt` and `HookReviewPrompt` over `useWorkspaceConsent` from `@theokit/tui`; the consent state and hook-decision modules are gone, and a hook command is shown with control characters escaped (#2724).
 - Each built-in command is declared once with its description and action, and the composer's `/` menu comes from `registry.palette()`; `BUILTIN_COMMANDS` is gone (#2725).
@@ -42,6 +43,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Changed
 
+- The runtime theme switch (`/theme`) is driven by a `createThemeController` held by `ThemedSurface`, and `theme-session.tsx` no longer keeps its own `useSyncExternalStore` slot. `@theokit/tui` 0.83.4 has no controller, so a local pnpm patch (`patches/@theokit__tui@0.83.4.patch`, root and standalone) backports one that accepts any theme prop — a built-in name, an override, or `{base, override}` — and `<TheoTUIProvider controller>`. Drop the patch when `theokit-tui` ships a controller that takes theme objects (usetheokit/theokit-tui#294); it must be removed once that release lands.
 - The standalone consumer pins `@theokit/sdk` 11.0.0 (`standalone/released.json`, the three manifests and the lockfile), so the registry-consumer check passes against the current SDK.
 - `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`; the registry and live-session protections and the output are unchanged.
 
