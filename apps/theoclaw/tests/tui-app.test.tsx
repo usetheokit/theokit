@@ -122,7 +122,23 @@ describe("theoclaw-tui (T4.2)", () => {
     await tui.type(ESC);
     await waitFor(() => instance.agents[0]!.cancels === 1, 2000, "the instance to cancel the turn");
     expect(instance.agents[0]!.signals[0]!.aborted).toBe(true);
-    await tui.until((f) => f.includes("interrupted"), "the turn shown interrupted");
+    await tui.until((f) => f.includes("Interrupted by user"), "the turn shown interrupted");
+  });
+
+  it("Esc while a tool runs shows the tool as cancelled, not running", async () => {
+    const instance = await startInstance(() => ({ frames: [], toolHeld: true, toolName: "lookup_ledger" }));
+    const tui = await renderTui(instance);
+    await tui.type("go", ENTER);
+    await tui.until((f) => f.includes("LookupLedger"), "the tool card");
+    const running = tui.screen();
+    await tui.type(ESC);
+    await tui.until((f) => f.includes("Interrupted by user"), "the turn shown interrupted");
+    const screen = tui.screen();
+    expect(screen).toContain("LookupLedger");
+    expect(screen).not.toBe(running);
+    // The card's cancelled glyph replaces the running one.
+    expect(screen).toContain("⊘");
+    expect(running).not.toContain("⊘");
   });
 
   it("/new switches to a fresh session id", async () => {
@@ -157,7 +173,7 @@ describe("theoclaw-tui (T4.2)", () => {
     await waitFor(() => instance.agents[0]?.signals.length === 1, 3000, "the turn to start");
     await tui.type(ESC, ESC);
     teardown.resolve();
-    await tui.until((f) => f.includes("interrupted"), "the turn shown interrupted");
+    await tui.until((f) => f.includes("Interrupted by user"), "the turn shown interrupted");
     await tui.type("again", ENTER);
     await waitFor(() => instance.agents[0]!.sent.length === 2, 3000, "the redirect to reach the instance");
   });
