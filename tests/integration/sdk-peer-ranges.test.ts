@@ -105,32 +105,32 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     // installs, so this assertion was pinning the resolution that made the whole suite green
     // against an SDK the packages could not use.
     //
-    // The devDep now spans the range the packages declare, `>=5.32.0 <12`: dep-check's floor leg
+    // The devDep now spans the range the packages declare, `>=5.32.0 <14`: dep-check's floor leg
     // overrides the tree to 5.32.0 and runs this suite there, and a `^9` devDep refused that floor.
     const root = readPkg('package.json')
     const dev = root.devDependencies as Record<string, string>
-    expect(dev['@theokit/sdk']).toBe('>=5.32.0 <12')
+    expect(dev['@theokit/sdk']).toBe('>=5.32.0 <14')
   })
 
   it('test_the_four_published_packages_declare_the_sdk_5_to_11_range', () => {
     const floors: Record<string, string> = {
-      'packages/theo/package.json': '>=5.32.0 <12',
-      'packages/host/package.json': '>=5.32.0 <12',
-      'packages/presenter/package.json': '>=5.3.0 <12',
+      'packages/theo/package.json': '>=5.32.0 <14',
+      'packages/host/package.json': '>=5.32.0 <14',
+      'packages/presenter/package.json': '>=5.3.0 <14',
     }
     for (const [manifest, expected] of Object.entries(floors)) {
       const peers = readPkg(manifest).peerDependencies as Record<string, string>
       expect(peers['@theokit/sdk'], manifest).toBe(expected)
     }
     const agents = readPkg('packages/agents/package.json').dependencies as Record<string, string>
-    expect(agents['@theokit/sdk']).toBe('>=5.32.0 <12')
+    expect(agents['@theokit/sdk']).toBe('>=5.32.0 <14')
     const root = readPkg('package.json') as { pnpm: { overrides: Record<string, string> } }
     // The tree runs on SDK 12 (the matrix legs set 9 and 10); dep-check's floor leg rewrites the override to the declared floor,
     // 5.32.0, and runs this same suite there. Any other version is neither end of the range.
     const override = root.pnpm.overrides['@theokit/sdk'] ?? ''
     expect(
-      override === '5.32.0' || /^(9|10|11|12)\./.test(override),
-      `the root override installs @theokit/sdk ${override}, none of the 9.x to 12.x tops nor the 5.32.0 floor`,
+      override === '5.32.0' || /^(9|10|11|12|13)\./.test(override),
+      `the root override installs @theokit/sdk ${override}, none of the 9.x to 13.x tops nor the 5.32.0 floor`,
     ).toBe(true)
   })
 
