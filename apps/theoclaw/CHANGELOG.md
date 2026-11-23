@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Task worktrees, cloud-worker environment setup and per-turn usage now come from the framework (`worktreeProvider`, `prepareWorkspace`, `usageFromRun`). Worktrees also copy `.worktreeinclude` files; a malformed devcontainer lifecycle command now fails the recipe instead of being ignored; an unsafe task id reads `invalid task id`. The external tools file keeps its own loader, with the missing `loadMcpServersFile` capabilities written at the top of `external-tools.ts` (#2599).
 - Hook approval: a hook's fingerprint now comes from `hookFingerprint` in `@theokit/agents/hooks` and covers the matcher, so widening a matcher asks for approval again. **Hooks approved before this change must be approved again**: run `theoclaw hooks list` and put the new fingerprints in `THEOCLAW_APPROVED_HOOKS` (#2598).
 - Model credentials: custom-provider keys now resolve through the framework chain (`resolveAgentCredential`), and the `openai-chatgpt/` route is detected with `isSubscriptionRoute` (#2576).
 
