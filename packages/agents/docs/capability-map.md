@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1554 export(s) across 30 entry point(s).
+1557 export(s) across 30 entry point(s).
 
 Measured against `@theokit/sdk@9.0.0`.
 
@@ -1421,6 +1421,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `projectsRoot` | value |
 | `protectedTranscriptPaths` | value |
 | `readThreadHistory` | value |
+| `readThreadHistoryFile` | value |
 | `recordProjectDir` | value |
 | `resolveProjectDir` | value |
 | `runProjectsGC` | value |
@@ -1451,6 +1452,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `ProjectsGCKind` | type |
 | `ProjectsGCPlan` | type |
 | `ProjectsGCRegistryEntry` | type |
+| `ReadThreadHistoryFileOptions` | type |
 | `ReadThreadHistoryOptions` | type |
 | `RegistryOutcome` | type |
 | `RunProjectsGCOptions` | type |
@@ -1463,6 +1465,7 @@ Measured against `@theokit/sdk@9.0.0`.
 | `SweepScheduleResult` | type |
 | `ThreadHistory` | type |
 | `ThreadHistoryState` | type |
+| `ThreadToUIMessagesOptions` | type |
 | `TranscriptFormat` | type |
 | `TranscriptGCOptions` | type |
 | `TranscriptGCPlan` | type |

@@ -13,6 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `sessions list|show|export|share|resume` read transcripts through `readThreadHistoryFile` and `threadToUIMessages` from `@theokit/agents/session` instead of staging a copy in a temporary directory. Output is unchanged: `export` still prints text only, and the message count still counts each assistant record (#2753).
 - Exec approval installs the framework's `gate.plugin` and the ACP permission prompt uses the gate's own timeout, with no timer of its own. A shell call with no command is now refused as `theoclaw: exec refused: the decision failed: the command is missing`.
 
 - `theoclaw skills publish` now reads `THEOCLAW_SKILLS_REGISTRY` and `THEOCLAW_SKILLS_TOKEN` from the instance configuration file too, as `skills search` and `skills install` do; before, it read the process environment only (#2764).

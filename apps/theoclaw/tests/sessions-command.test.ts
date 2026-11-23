@@ -1,16 +1,10 @@
 import { lstatSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { readSessionMessages } from '@theokit/sdk'
 import { describe, expect, it, vi } from 'vitest'
 
 import { runCli } from '../src/cli.js'
 import { harness, scratchDir } from './support/cli-harness.js'
-
-vi.mock('@theokit/sdk', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@theokit/sdk')>()
-  return { ...actual, readSessionMessages: vi.fn(actual.readSessionMessages) }
-})
 
 function projectDir(workspace: string): string {
   const dir = join(workspace, '.theoclaw', 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
@@ -118,21 +112,22 @@ describe('transcript reading', () => {
     return workspace
   }
 
-  it('goes through the SDK reader with the workspace as cwd', async () => {
-    const workspace = workspaceWithSession()
-    vi.mocked(readSessionMessages).mockClear()
-    await run(['sessions', 'export', 'matrix-dm'], workspace)
-    expect(readSessionMessages).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: workspace, sessionDir: expect.any(String) }),
+  it('skips a malformed line and keeps every turn', async () => {
+    const workspace = scratchDir()
+    writeFileSync(
+      join(projectDir(workspace), 's1-g0.jsonl'),
+      [
+        JSON.stringify({ type: 'user', sessionId: 's1-g0', message: { content: text('q') } }),
+        'not json',
+        '[1]',
+        JSON.stringify({ type: 'assistant', sessionId: 's1-g0', message: { content: text('a1') } }),
+        JSON.stringify({ type: 'assistant', sessionId: 's1-g0', message: { content: text('a2') } }),
+      ].join('\n') + '\n',
     )
-  })
-
-  it('shows what the SDK reader returns, not what the file holds', async () => {
-    vi.mocked(readSessionMessages).mockResolvedValueOnce([
-      { role: 'user', text: 'from the reader', parts: [{ type: 'text', text: 'from the reader' }] },
-    ])
-    const { out } = await run(['sessions', 'export', 'matrix-dm'], workspaceWithSession())
-    expect(out).toBe('user: from the reader\n')
+    expect((await run(['sessions', 'export', 's1'], workspace)).out).toBe(
+      'user: q\nassistant: a1\nassistant: a2\n',
+    )
+    expect((await run(['sessions', 'list'], workspace)).out).toContain('s1-g0\t3 messages')
   })
 
   it('keeps the messages before a compact boundary', async () => {
