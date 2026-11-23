@@ -19,7 +19,7 @@
  * (the posture gates eight things, and durable memory is not a list), plus the two fields that are
  * not entities at all — whether project sources loaded, and which sandbox mode the build was given.
  */
-import { recordWiring, type WiredEntity } from '@theokit/agents'
+import { recordWiring, type WiredEntity, type WiringOffReason } from '@theokit/agents'
 
 export type { WiredEntity }
 
@@ -127,45 +127,69 @@ export function wiredCapabilities(input: {
   /** #91 — the rules load, handed in by the caller that performed it. See the field above. */
   readonly rules?: WiredCapabilities['rules']
   readonly sandboxMode: string
+  /** A non-trust reason a capability is off; the caller must also have withheld it from the builder. */
+  readonly disabled?: Readonly<
+    Partial<Record<'mcp' | 'skills' | 'hooks' | 'agentsMd', WiringOffReason>>
+  >
 }): WiredCapabilities {
-  const record = recordWiring({
+  const personalMcp = new Set(input.mcpPersonal ?? [])
+  // Names are listed once per scope, so a name in both scopes keeps both rows and both scopes.
+  const projectMcp = [
+    ...Object.keys(input.mcpServers).filter((name) => !personalMcp.has(name)),
+    ...(input.mcpWithheld ?? []),
+  ].sort()
+  const disabled = input.disabled
+  // The posture gates a whole capability, so the project's share goes through it and the operator's
+  // own share through an open gate: the second is not subject to project trust (#72, #65).
+  const gated = recordWiring({
     posture: input.posture,
     requested: {
       // Sorted because the map's key order is insertion order from a JSON file, and a listing whose
       // order changes when someone reorders `.mcp.json` looks like something moved.
-      // Only the project's. The personal ones are added back below, outside the gate they are not
-      // subject to.
-      mcp: [
-        ...Object.keys(input.mcpServers).filter(
-          (name) => !(input.mcpPersonal ?? []).includes(name),
-        ),
-        ...(input.mcpWithheld ?? []),
-      ].sort(),
+      mcp: projectMcp,
       skills: input.configuredSkills,
       hooks: input.hookEvents,
       // NOT sorted: the walk's order is root-most first, which is the order they are composed into
       // the prompt. Sorting would present a precedence that is not the one in effect.
       agentsMd: input.agentsMdFiles,
     },
+    scopes: {
+      mcp: projectMcp.map(() => 'project'),
+      skills: input.configuredSkills.map(() => 'project'),
+    },
+    ...(disabled !== undefined ? { disabled } : {}),
+  })
+  const own = recordWiring({
+    posture: { allows: { mcp: true, skills: true } },
+    requested: {
+      mcp: [...personalMcp].sort(),
+      skills: [...new Set(input.operatorSkills ?? [])].sort(),
+    },
+    scopes: {
+      mcp: [...personalMcp].map(() => 'personal'),
+      skills: [...new Set(input.operatorSkills ?? [])].map(() => 'operator'),
+    },
   })
 
   return {
-    ...record,
+    ...gated,
     // Both facts survive: what is running, and whether the repository's share was withheld.
-    // Collapsing them would leave an operator unable to tell "my server" from "their server got in".
-    mcp: {
-      ...record.mcp,
-      active: [...new Set([...record.mcp.active, ...(input.mcpPersonal ?? [])])].sort(),
-    },
-    // #65 — same shape as `mcp` above, and for the same reason: what is running, without erasing
-    // whose it is. Sorted, because the two sources are read from different directories and an
-    // operator should not see the order change with an unrelated edit.
-    skills: {
-      ...record.skills,
-      active: [...new Set([...record.skills.active, ...(input.operatorSkills ?? [])])].sort(),
-    },
+    mcp: join(gated.mcp, own.mcp),
+    skills: join(gated.skills, own.skills),
     ...(input.rules !== undefined ? { rules: input.rules } : {}),
     projectSources: input.projectSourcesAllowed,
     sandboxMode: input.sandboxMode,
+  }
+}
+
+/** The gated share and the operator's share of one capability, as a single record. */
+function join(gated: WiredEntity, own: WiredEntity): WiredEntity {
+  const active = [...new Set([...gated.active, ...own.active])].sort()
+  return {
+    ...gated,
+    active,
+    // Off means nothing of it runs: the operator's own share still running makes it on.
+    off: active.length === 0 ? gated.off : undefined,
+    entities: [...gated.entities, ...own.entities],
   }
 }

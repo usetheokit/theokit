@@ -11,9 +11,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1610 export(s) across 30 entry point(s).
+1614 export(s) across 30 entry point(s).
 
-Measured against `@theokit/sdk@12.0.0`.
+Measured against `@theokit/sdk@13.0.0`.
 
 ## `@theokit/agents`
 
@@ -179,6 +179,7 @@ Measured against `@theokit/sdk@12.0.0`.
 | `NetworkError` | value |
 | `noopReflectionStrategy` | value |
 | `NoResultSubmittedError` | value |
+| `offCapabilities` | value |
 | `outputModeration` | value |
 | `parseConversationId` | value |
 | `parseModelId` | value |
@@ -431,6 +432,7 @@ Measured against `@theokit/sdk@12.0.0`.
 | `ModelFallbackAttempt` | type |
 | `ModelOption` | type |
 | `NamedTool` | type |
+| `OffCapability` | type |
 | `OpenAIChatMessage` | type |
 | `OpenAIChatRequest` | type |
 | `OpenAICompatibleRoutesOptions` | type |
@@ -530,6 +532,8 @@ Measured against `@theokit/sdk@12.0.0`.
 | `WireChunk` | type |
 | `WireDataPart` | type |
 | `WiredEntity` | type |
+| `WiredEntityScope` | type |
+| `WiringOffReason` | type |
 | `WorkspaceProvider` | type |
 | `WorkspaceRecipe` | type |
 

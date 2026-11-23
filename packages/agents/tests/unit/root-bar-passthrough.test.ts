@@ -41,6 +41,7 @@ const VALUES = [
   'resolveTrustPosture',
   'auditEnvReachability',
   'recordWiring',
+  'offCapabilities',
 ] as const
 
 describe('M67 T3 — the config/trust/wiring family crosses the barrel', () => {
