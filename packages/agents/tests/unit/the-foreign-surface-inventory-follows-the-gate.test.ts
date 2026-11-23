@@ -7,6 +7,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -22,6 +23,12 @@ import {
   surfaceOfFolder,
 } from '../../src/bridge/setting-sources-gate.js'
 import { reportUnloadedSurfaces } from '../../src/bridge/unloaded-surfaces.js'
+
+const sdkSkipsCommentLines =
+  Number.parseInt(
+    (createRequire(import.meta.url)('@theokit/sdk/package.json') as { version: string }).version,
+    10,
+  ) >= 10
 
 function project(): string {
   return mkdtempSync(join(tmpdir(), 'foreign-inventory-'))
@@ -240,7 +247,8 @@ describe('the foreign surface inventory follows the gate', () => {
     for (const name of ['plain', 'colon']) {
       const dir = project()
       put(dir, 'agents/a.md', readFileSync(join(cwd, '.claude', 'agents', `${name}.md`), 'utf8'))
-      // The SDK keeps a `# note: x` line as a field named `# note` and refuses the agent.
+      // SDK 9 and below keep a `# note: x` line as a field named `# note` and refuse the agent;
+      // SDK 10 skips every comment line. The inventory must agree with whichever SDK is installed.
       const found = await discoverSubagents(dir, {
         settingSources: ['project'],
         compatSources: ['claude-code'],
@@ -250,7 +258,7 @@ describe('the foreign surface inventory follows the gate', () => {
       )
       if (found === 1) loaded.push(`${name}.md`)
     }
-    expect(loaded).toEqual(['plain.md'])
+    expect(loaded).toEqual(sdkSkipsCommentLines ? ['plain.md', 'colon.md'] : ['plain.md'])
     expect(entry(cwd, 'agents').count).toBe(loaded.length)
   })
 })

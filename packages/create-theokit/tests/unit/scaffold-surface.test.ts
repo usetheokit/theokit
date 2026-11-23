@@ -77,11 +77,13 @@ describe('applySurface (M45)', () => {
     expect(existsSync(join(targetDir, 'tui/main.tsx'))).toBe(true)
     expect(existsSync(join(targetDir, 'tui/App.tsx'))).toBe(true)
     // `npm run demo:tools` — a visual reference of every tool render state (renders AgentTimeline via the
-    // same messagesToAgentEvents path, using tui/theme.ts). No agent/LLM needed.
+    // same useAgentTimeline path, using tui/theme.ts). No agent/LLM needed.
     expect(existsSync(join(targetDir, 'tui/tool-variations.tsx'))).toBe(true)
     const demo = read('tui/tool-variations.tsx')
     expect(demo).toContain('AgentTimeline')
-    expect(demo).toContain('messagesToAgentEvents')
+    expect(demo).toContain('useAgentTimeline')
+    expect(demo).not.toContain('messagesToAgentEvents')
+    expect(demo).toContain('[...timeline.events]') // AgentTimeline wants a mutable array
     expect(demo).toContain("from './theme.js'")
     expect(demo).toContain('output-error') // the failed-tool state is exercised
 
@@ -91,11 +93,16 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('useAgent')
     expect(app).toContain('streamAgentTurnInProcess')
     expect(read('tui/components/Banner.tsx')).toContain('my-tui') // {{name}} substituted (name lives in Banner)
-    // Claude-Code render + AI-FREE: `<AgentTimeline>` (Markdown + tool cards) fed by `messagesToAgentEvents`
+    // Claude-Code render + AI-FREE: `<AgentTimeline>` (Markdown + tool cards) fed by `useAgentTimeline`
     // (the ai-free projection from `@theokit/tui`), NOT `<ChatThread>`/`@theokit/tui/ai-sdk`/`ai`.
     expect(app).toContain("from '@theokit/tui'")
     expect(app).toContain('AgentTimeline')
-    expect(app).toContain('messagesToAgentEvents')
+    expect(app).toContain('useAgentTimeline')
+    expect(app).toContain('prefix: PREFIX')
+    expect(app).not.toContain('messagesToAgentEvents')
+    expect(app).toContain("'../src/server/agents/chat.js'") // agents live under src/server
+    expect(app).toContain("'../src/shared/agent.js'")
+    expect(app).toContain('[...timeline.events]') // AgentTimeline wants a mutable array
     // Footer telemetry: the two-line StatusFooter shows real context usage from the last turn's usage
     // (readTurnUsage over `agent.thread`), against the app-declared context window.
     expect(app).toContain('readTurnUsage')
@@ -211,7 +218,7 @@ describe('applySurface (M45)', () => {
       dependencies: Record<string, string>
       scripts: Record<string, string>
     }
-    expect(pkg.dependencies['@theokit/tui']).toBe('^0.41.1') // M46 renders the conversation; #50 gap prop; 0.41.1 smaller ○/● checkbox
+    expect(pkg.dependencies['@theokit/tui']).toBe('^0.83.8') // M46 renders the conversation; #50 gap prop; 0.41.1 smaller ○/● checkbox
     expect(pkg.dependencies.ink).toBeDefined()
     // ink MUST be the React-19 line (^7) — ink@5 crashes on React 19 with `ReactCurrentOwner`, and the
     // default template pins react@19. Never regress below ^7 (found by dogfooding the TUI end-to-end).

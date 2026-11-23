@@ -133,6 +133,9 @@ const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
   // does not export it until 5.8.0. Nothing here is 5.9.0, which is what guessing would have
   // produced from the bump that prompted the work.
   // ── Arrived by 8.0.1 (the SDK the workspace now installs); each decided `out`, none has a consumer here.
+  // Added by `@theokit/sdk` 11. Memory-fact helpers the layer has no consumer for yet.
+  addMemoryFact: { since: '11.0.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  memoryPartitionId: { since: '11.0.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   checkToolName: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   diag: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   diagFailure: { since: '8.0.1', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
