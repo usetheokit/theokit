@@ -1,95 +1,110 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
+import {
+  generateA2AIdentity,
+  jsonSequenceStore,
+  sealedTransport,
+  type A2AIdentity,
+  type A2ATransport,
+  type SequenceStore,
+  type TrustedPeers,
+} from '@theokit/sdk/a2a'
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { serializedPerFile } from '../serial-queue.js'
-import {
-  generateIdentity,
-  open,
-  seal,
-  type Envelope,
-  type RelayIdentity,
-  type TrustedPeers,
-} from './relay-crypto.js'
 
 /**
- * B-694 (OC-14) — one instance's relay state: its identity, the peers it trusts (named by the
- * operator, name -> public key), a send counter per peer and the highest counter accepted from
- * each peer. The file holds the private key and is written 0600; counters are saved before an
- * envelope leaves or a plaintext is returned, so a restart never reuses or re-accepts one.
- * Replay: `receive` accepts a sender's `seq` only if it is above the last accepted one.
+ * B-694 (OC-14) — one instance's relay state: its identity and the peers it trusts (named by the
+ * operator, name -> public key). The cryptography, the send counters and the replay check are the
+ * SDK's `sealedTransport` and `jsonSequenceStore`; this file only keeps the identity (0600) and
+ * points the SDK at a counter file beside it. A turn gate hook marks a message as read as soon as
+ * the SDK accepts its sequence, before the counter write is waited for.
  */
+export const RELAY_MESSAGE_TYPE = 'theoclaw.relay'
+
 interface Persisted {
-  identity: RelayIdentity
-  sent: Record<string, number>
-  received: Record<string, number>
+  identity: A2AIdentity
+  /** Counters of the version that kept them here; moved to the SDK counter file on load. */
+  sent?: Record<string, number>
+  received?: Record<string, number>
+}
+
+/** The counter file that sits beside the identity file. */
+function sequencesFile(file: string): string {
+  return file.replace(/\.json$/, '') + '-sequences.json'
 }
 
 export class RelayState {
-  private writes: Promise<void> = Promise.resolve()
-
   private constructor(
-    private readonly file: string,
-    private readonly data: Persisted,
+    private readonly identity: A2AIdentity,
+    private readonly sequences: SequenceStore,
     readonly trusted: TrustedPeers,
   ) {}
 
-  /** Loads the file or creates an identity on first use. */
+  /** Loads the identity file or creates an identity on first use. */
   static async load(file: string, trusted: TrustedPeers): Promise<RelayState> {
     // Queued per file: two first loads of a missing file must not each make an identity.
     return serializedPerFile(file, async () => {
-      let data: Persisted
-      if (existsSync(file)) {
-        data = JSON.parse(readFileSync(file, 'utf8')) as Persisted
-      } else {
-        data = { identity: generateIdentity(), sent: {}, received: {} }
+      mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+      const data: Persisted = existsSync(file)
+        ? (JSON.parse(readFileSync(file, 'utf8')) as Persisted)
+        : { identity: generateA2AIdentity() }
+      const counters = sequencesFile(file)
+      // Counters written by the earlier relay format carry over, so no counter is reused or re-accepted.
+      if (!existsSync(counters) && (data.sent !== undefined || data.received !== undefined)) {
+        await replaceFileAtomic(
+          counters,
+          JSON.stringify({ sent: data.sent ?? {}, received: data.received ?? {} }),
+          { mode: 0o600 },
+        )
       }
-      const state = new RelayState(file, data, trusted)
-      await state.save()
-      return state
+      await replaceFileAtomic(file, JSON.stringify({ identity: data.identity }), { mode: 0o600 })
+      return new RelayState(data.identity, jsonSequenceStore(counters), trusted)
     })
   }
 
   get publicKey(): string {
-    return this.data.identity.publicKey
+    return this.identity.publicKey
   }
 
-  /** Snapshots now and writes in call order, so a slow earlier write never lands over a later one. */
-  private save(): Promise<void> {
-    mkdirSync(dirname(this.file), { recursive: true, mode: 0o700 })
-    const text = JSON.stringify(this.data)
-    const run = this.writes.then(() => replaceFileAtomic(this.file, text, { mode: 0o600 }))
-    this.writes = run.catch(() => undefined)
-    return run
+  private sealed(inner: A2ATransport, sequences: SequenceStore = this.sequences): A2ATransport {
+    return sealedTransport(inner, {
+      identity: this.identity,
+      trustedPeers: this.trusted,
+      sequences,
+    })
   }
 
-  /** Seals `text` for the trusted peer `peerName`. */
-  async seal(peerName: string, text: string): Promise<Envelope> {
-    const key = this.trusted.get(peerName)
-    if (key === undefined) throw new Error(`relay: peer "${peerName}" is not trusted`)
-    const seq = (this.data.sent[key] ?? 0) + 1
-    this.data.sent[key] = seq
-    await this.save()
-    return seal(this.data.identity, this.trusted, peerName, text, seq)
+  /** Seals `text` for the trusted peer `peerName` and hands it to `inner`. */
+  async send(inner: A2ATransport, peerName: string, text: string): Promise<void> {
+    await this.sealed(inner).send({
+      type: RELAY_MESSAGE_TYPE,
+      payload: text,
+      from: this.publicKey,
+      to: peerName,
+      timestamp: Date.now(),
+    })
   }
 
-  /** Opens an envelope; refuses an untrusted sender, a forgery and a replayed or older `seq`. */
+  /**
+   * Fetches and opens what waits. The SDK drops an untrusted sender, a forgery and a replay.
+   * `onAccepted` runs when a message authenticated and its sequence is about to be recorded.
+   */
   async receive(
-    envelope: Envelope,
+    inner: A2ATransport,
     onAccepted?: () => void,
-  ): Promise<{ readonly from: string; readonly plaintext: string }> {
-    const opened = open(this.data.identity, this.trusted, envelope)
-    if (
-      !Number.isSafeInteger(envelope.seq) ||
-      envelope.seq <= (this.data.received[envelope.from] ?? 0)
-    ) {
-      throw new Error('relay: the envelope is a replay or out of order')
+  ): Promise<{ readonly from: string; readonly plaintext: string }[]> {
+    const sequences: SequenceStore = {
+      nextSent: (peer) => this.sequences.nextSent(peer),
+      acceptReceived: (peer, seq) => {
+        onAccepted?.()
+        return this.sequences.acceptReceived(peer, seq)
+      },
     }
-    this.data.received[envelope.from] = envelope.seq
-    // The envelope counts as read from here on, before the disk write is waited for.
-    onAccepted?.()
-    await this.save()
-    return opened
+    const messages = await this.sealed(inner, sequences).poll(this.publicKey)
+    return messages
+      .filter((m) => m.type === RELAY_MESSAGE_TYPE && typeof m.payload === 'string')
+      .map((m) => ({ from: m.from, plaintext: m.payload as string }))
   }
 }
