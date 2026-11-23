@@ -1,60 +1,79 @@
 /**
- * B-040 — a failed hook approval leaves the gate open and says so.
+ * B-040 — a failed hook approval leaves the gate open and says so. Formerly tested the app-local
+ * `applyHookDecision`; now exercises the same behaviour through `useWorkspaceConsent`.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { render } from 'ink-testing-library'
+import { act, createElement } from 'react'
 
-import { applyHookDecision } from '../../src/consent/hook-decision.js'
+const m = vi.hoisted(() => ({
+  trustDir: vi.fn(),
+  approveHook: vi.fn(),
+  level: 'untrusted',
+  hooks: [] as Array<Record<string, unknown>>,
+}))
 
-const head = { spec: { command: 'echo hi' }, fingerprint: 'sha256:abc' }
+vi.mock('@theocode/agent/config', () => ({
+  resolveEffectiveConfig: () => ({ hooks: [] }),
+  resolveTrustPosture: () => ({ level: m.level }),
+  trustDir: m.trustDir,
+}))
+vi.mock('@theocode/agent/hooks', () => ({
+  parseHooks: () => [],
+  classifyHooks: () => m.hooks,
+  approveHook: m.approveHook,
+}))
 
-function deps(over: Partial<Parameters<typeof applyHookDecision>[3]> = {}) {
-  return {
-    approve: vi.fn(() => Promise.resolve()),
-    refuse: vi.fn(),
-    markReviewed: vi.fn(),
-    toast: vi.fn(),
-    ...over,
+import { useConsent, type Consent } from '../../src/consent/use-consent.js'
+
+const spec = { event: 'PreToolUse', command: 'echo hi' }
+const classified = { spec, fingerprint: 'fp1', status: 'new' }
+
+function mount(): { get: () => Consent } {
+  let current!: Consent
+  function Probe(): null {
+    current = useConsent('/proj')
+    return null
   }
+  render(createElement(Probe))
+  return { get: () => current }
 }
 
-describe('B-040 — the consent gate closes only when the approval landed', () => {
-  it('test_a_successful_approval_of_the_last_hook_closes_the_gate', async () => {
-    // Anti-vacuity floor: never closing would satisfy the assertion below and break the product.
-    const d = deps()
-    await applyHookDecision('yes', head, 1, d)
+beforeEach(() => {
+  m.trustDir.mockReset().mockResolvedValue(undefined)
+  m.approveHook.mockReset().mockResolvedValue(undefined)
+  m.level = 'untrusted'
+  m.hooks = [classified]
+})
 
-    expect(d.markReviewed).toHaveBeenCalled()
-    expect(d.toast).not.toHaveBeenCalled()
+describe('hook decisions through the framework consent adapter', () => {
+  it('approves a fingerprint by persisting the matching spec', async () => {
+    const c = mount()
+    await act(() => c.get().approveHook('fp1'))
+    expect(m.approveHook).toHaveBeenCalledWith('/proj', spec)
   })
 
-  it('test_a_failed_approval_of_the_last_hook_leaves_the_gate_open', async () => {
-    const d = deps({ approve: vi.fn(() => Promise.reject(new Error('EROFS'))) })
-
-    await applyHookDecision('yes', head, 1, d)
-
-    expect(
-      d.markReviewed,
-      'the gate closed as if the approval had succeeded, so the user is never asked again this ' +
-        'session and the hook is not approved',
-    ).not.toHaveBeenCalled()
-    expect(d.toast, 'the failure was reported only to a log file').toHaveBeenCalled()
-  })
-
-  it('test_a_failed_approval_is_not_the_last_word_when_more_are_pending', async () => {
-    const d = deps({ approve: vi.fn(() => Promise.reject(new Error('EROFS'))) })
-
-    await applyHookDecision('yes', head, 3, d)
-
-    expect(d.markReviewed).not.toHaveBeenCalled()
-    expect(d.toast).toHaveBeenCalled()
-  })
-
-  it('test_declining_the_last_hook_still_closes_the_gate', () => {
-    // Declining is a local state change with nothing to persist, so it cannot fail.
-    const d = deps()
-    return applyHookDecision('no', head, 1, d).then(() => {
-      expect(d.refuse).toHaveBeenCalledWith('sha256:abc')
-      expect(d.markReviewed).toHaveBeenCalled()
+  it('keeps the hook pending and rejects when the persist fails (B-040)', async () => {
+    m.approveHook.mockRejectedValue(new Error('disk full'))
+    const c = mount()
+    await act(async () => {
+      await expect(c.get().approveHook('fp1')).rejects.toThrow('disk full')
     })
+    expect(c.get().pendingHooks.map((h) => h.fingerprint)).toEqual(['fp1'])
+  })
+
+  it('rejects a fingerprint that is no longer pending without persisting', async () => {
+    const c = mount()
+    await act(async () => {
+      await expect(c.get().approveHook('gone')).rejects.toThrow(/no longer pending/)
+    })
+    expect(m.approveHook).not.toHaveBeenCalled()
+  })
+
+  it('refusing a hook persists nothing and drops it from the pending list', async () => {
+    const c = mount()
+    act(() => c.get().refuseHook('fp1'))
+    expect(m.approveHook).not.toHaveBeenCalled()
+    expect(c.get().pendingHooks).toEqual([])
   })
 })
