@@ -70,6 +70,22 @@ describe('run and goal end through the framework drain', () => {
     expect(exit).toHaveBeenCalledWith(1)
   })
 
+  it('test_forced_stdin_stays_required_so_an_argument_is_no_fallback_when_stdin_is_empty', async () => {
+    vi.doMock('node:fs', async (orig) => ({
+      ...(await orig<typeof import('node:fs')>()),
+      readFileSync: () => '',
+    }))
+    const { runCommand } = await import('../../src/commands/run.js')
+    vi.useFakeTimers()
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    await runCommand({ stdinBehavior: 'forced', prompt: 'from the argument', overrides: [] } as never, shutdown as never)
+    expect(process.exitCode).toBe(1)
+    expect(exit).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(3_000)
+    expect(exit).toHaveBeenCalledWith(1)
+  })
+
   it('test_goal_failure_records_1_and_exits_after_the_drain_cap', async () => {
     vi.doMock('../../src/run-composition.js', () => ({
       resolveCompositionContext: () => ({
