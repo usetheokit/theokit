@@ -128,7 +128,7 @@ export function defineInstanceConfig<K extends string>(
             `unexpected argument ${flag}; expected --config <path> or --profile <name>`,
           )
         const value = argv[index + 1]
-        if (value === undefined || Object.hasOwn(flags, value))
+        if (index + 1 >= argv.length || Object.hasOwn(flags, value))
           throw new InstanceConfigError('instance_config_bad_entry_args', `${flag} needs a value`)
         if (found.has(variable))
           throw new InstanceConfigError('instance_config_bad_entry_args', `${flag} was given twice`)

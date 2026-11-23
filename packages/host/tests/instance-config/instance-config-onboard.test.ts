@@ -156,7 +156,7 @@ describe('generated key', () => {
     const t = fakeTty()
     feed(t, 'm1\r')
     const result = await config.onboard(
-      { ...t, env: { MY_AGENT_CONFIG: file }, homeDir: dir },
+      { stdin: t.stdin, stdout: t.stdout as never, env: { MY_AGENT_CONFIG: file }, homeDir: dir },
       { interactive: true, answers: { TOKEN: 'ignored' } },
     )
     expect(t.stdin.setRawMode.mock.calls.filter(([m]) => m === true)).toHaveLength(1)
