@@ -42,6 +42,10 @@
       "types": "./dist/discovery/index.d.ts",
       "import": "./dist/discovery/index.js"
     },
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "import": "./dist/browser/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -62,6 +66,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@playwright/mcp": "0.0.83",
     "undici": "7.30.1"
   },
   "peerDependencies": {
