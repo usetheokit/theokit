@@ -13,6 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Voice notes are transcribed and answered through `@theokit/plugin-voice` instead of hand-written OpenAI speech requests. Spoken replies are now MP3 (sent as `reply.mp3`) because the plugin requests MP3 from OpenAI; the 60-second timeout and the no-redirect policy are kept.
 - Display settings `cleanup_progress` and `streaming` are removed: nothing read them, so `THEOCLAW_DISPLAY_CLEANUP_PROGRESS` is now ignored. Per-platform display tiers stay in TheoClaw as product policy; the gateway's `progressFor` keeps deciding by edit capability alone (#2756).
 
 - `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`, and accepts `--json`; the generation protection and default are unchanged.
@@ -52,6 +53,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Voice notes are transcribed and answered through `@theokit/plugin-voice` instead of hand-written OpenAI speech requests. Spoken replies are now MP3 (sent as `reply.mp3`) because the plugin requests MP3 from OpenAI; the 60-second timeout and the no-redirect policy are kept.
+
 - The channel reply turn runs on `createAgentHandler`, the owner's `/approve` and `/deny` on `createChatApprover`, signed webhook triggers on `createTrigger`, and e-mail and MCP event bodies are framed with `frameUntrusted`, all from `@theokit/gateway-agent` 0.3.2; TheoClaw's own typing loop and stream loop are gone (the runner shows typing). What a user can see: (1) a turn that fails after streaming some text now answers with the error sentence only, not the partial text; (2) a failed turn throws the package's `AgentTurnError` (code only) and a refused reply is `reply_refused`; (3) a turn's progress lines for one event (a reasoning line and the tool call after it) are sent as one message joined by a newline, where they were sent separately (theokit-gateways#712); (4) a trigger's failure and undelivered-reply lines use the package's wording and codes (`unknown` for a code it does not know), and its body is framed in `<payload>`. `createStreamMasker` and `ackReaction` are not exported by the published 0.3.2, so the app's `createStreamMask` (`channels/stream-mask.ts`) stays: the reply path no longer uses it (the package handler masks the stream itself), but `channels/output-mask.ts` (process output) and `control-plane/event-mask.ts` (control-plane events) still do, and move to the package masker once a release exports it; its removal and the end-of-turn hooks (usage, compaction, advisor, broadcast, here done by wrapping the agent) wait on theokit-gateways#711, #712 and #713 (#2600).
 - The live computer-tool test (OC-62) drives the real model one step per turn (screenshot, pointer and typing, then a second screenshot asked for the code), so a model that stops early or a screenshot description that omits the code no longer fails the promotion's `Live model` check (#2551).
 - Teams verifier injection is infeasible after the move to `@theokit/gateway-teams`: `teamsChannel.webhook.handle` builds `teamsActivityVerifier` from the client id inside the package and the descriptor takes no verifier option. Mitigation: the Teams webhook tests drive refusals (401, 405, 413, 503, 404) through the real descriptor, and delivery and acknowledgement (200, non-message ack, `handler_threw` 500, `no_handler` 503) through a stand-in `handle` over the real Teams adapter using `statusForDeliver` (#2546).
@@ -69,6 +72,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - The CI live and container checks route `THEOCLAW_MODEL` through OpenRouter (`openrouter/` prefix) instead of sending the OpenRouter key to Google's own endpoint (#2482).
 
 ### Changed
+
+- Voice notes are transcribed and answered through `@theokit/plugin-voice` instead of hand-written OpenAI speech requests. Spoken replies are now MP3 (sent as `reply.mp3`) because the plugin requests MP3 from OpenAI; the 60-second timeout and the no-redirect policy are kept.
 
 - `theoclaw doctor` is a list of checks run by `@theokit/agents/doctor`'s `diagnose` and `renderDiagnosis`, so its report uses the framework's layout; the exit codes stay 0 and 3 (#1779).
 
@@ -113,6 +118,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - `theoclaw call <number> --message <text>` places an outbound phone call through Twilio and prints the call SID (OC-15, #1628). It needs `THEOCLAW_VOICE_CALL_TWILIO_ACCOUNT_SID`, `THEOCLAW_VOICE_CALL_TWILIO_AUTH_TOKEN` and `THEOCLAW_VOICE_CALL_FROM_NUMBER`, and refuses any number not in `THEOCLAW_VOICE_CALL_ALLOWED_NUMBERS`.
 
 ### Changed
+
+- Voice notes are transcribed and answered through `@theokit/plugin-voice` instead of hand-written OpenAI speech requests. Spoken replies are now MP3 (sent as `reply.mp3`) because the plugin requests MP3 from OpenAI; the 60-second timeout and the no-redirect policy are kept.
 
 - WebChat has a language switch in its settings (English or Svenska), using the `@theokit/ui` 1.13.0 i18n layer, so switching to Svenska shows "Inställningar". (#1547)
 - `theoclaw skills install <name>[@<version>]` downloads a skill from the registry, checks its sha256 and installs it into `<THEOCLAW_WORKSPACE>/skills/<name>/`. (#1631)
