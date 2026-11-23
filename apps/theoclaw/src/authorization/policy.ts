@@ -1,3 +1,4 @@
+import { senderKey } from '@theokit/gateway'
 import type { PlatformName } from '@theokit/gateway'
 
 import type { SupportedPlatform } from '../channels/platforms.js'
@@ -133,11 +134,6 @@ export function isPolicyOwner(policy: Pick<AuthorizationPolicy, 'owners'>, platf
 function requireAuthenticated(platform: SupportedPlatform, variable: string, refusal: string, risk: string): void {
   const doubt = UNAUTHENTICATED_BECAUSE[platform]
   if (doubt !== null) throw new TheoClawConfigError(`${variable} ${refusal}: ${doubt} is not authenticated, so ${risk}`, { variable })
-}
-
-/** The key an owner or a sender is compared by. E-mail addresses compare case-insensitively (EC-4). */
-export function senderKey(platform: string, senderId: string): string {
-  return `${platform}:${platform === 'email' ? senderId.toLowerCase() : senderId}`
 }
 
 function list(value: string | undefined, separator: string): string[] {

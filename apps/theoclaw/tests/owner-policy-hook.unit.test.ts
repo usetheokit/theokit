@@ -1,9 +1,10 @@
-import type { MessageEvent, PlatformName } from '@theokit/gateway'
+import type { MessageEvent, PairingStore, PlatformName } from '@theokit/gateway'
 import { describe, expect, it } from 'vitest'
 
 import { createOwnerPolicyHook } from '../src/authorization/owner-policy-hook.js'
-import type { ApprovalResult, PairingStore } from '../src/authorization/pairing-store.js'
 import type { AuthorizationPolicy, DmPolicy } from '../src/authorization/policy.js'
+
+type ApprovalResult = Awaited<ReturnType<PairingStore['approve']>>
 
 // No I/O: the clock, the log sink and the pairing store are all in-memory fakes.
 
@@ -120,7 +121,7 @@ describe('createOwnerPolicyHook (no I/O)', () => {
     const store: PairingStore = { issue: () => { throw new Error('disk full') }, approve: async () => ({ ok: false, reason: 'write_failed' }), isPaired: () => false }
     const { run } = build('pairing', store, { t: 0 }, (l) => void lines.push(l))
     expect(await run(event('hi'))).toEqual({ block: true })
-    expect(lines).toEqual(['theoclaw-owner-policy: telegram: Error: disk full'])
+    expect(lines).toEqual(['access-policy: hook failed: Error: disk full'])
   })
 
   it('does not admit a paired sender on an unauthenticated platform, and admits one in a group', async () => {
