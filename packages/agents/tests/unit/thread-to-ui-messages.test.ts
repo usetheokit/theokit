@@ -68,3 +68,13 @@ describe('threadToUIMessages mergeAssistant', () => {
     expect(threadToUIMessages([row('a'), row('b')], { mergeAssistant: false })).toHaveLength(2)
   })
 })
+
+describe('threadToUIMessages role', () => {
+  it('takes the role from the row type when the message has none', () => {
+    const rows = [
+      { type: 'user', message: { content: 'q' } },
+      { type: 'assistant', message: { content: 'a' } },
+    ]
+    expect(threadToUIMessages(rows).map((m) => m.role)).toEqual(['user', 'assistant'])
+  })
+})

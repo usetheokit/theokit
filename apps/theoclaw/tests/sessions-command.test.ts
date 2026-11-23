@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { readFullHistory } from '../src/sessions/transcript-history.js'
 import { runCli } from '../src/cli.js'
 import { harness, scratchDir } from './support/cli-harness.js'
 
@@ -128,6 +129,37 @@ describe('transcript reading', () => {
       'user: q\nassistant: a1\nassistant: a2\n',
     )
     expect((await run(['sessions', 'list'], workspace)).out).toContain('s1-g0\t3 messages')
+  })
+
+  it('reads from the real transcript path, whatever the file is called', async () => {
+    const workspace = write('odd name.jsonl', [
+      { type: 'user', sessionId: 'odd-g0', message: { content: text('hi') } },
+    ])
+    expect((await run(['sessions', 'export', 'odd'], workspace)).out).toBe('user: hi\n')
+  })
+
+  it('reads string content as text and drops a row that only holds tool results', () => {
+    const workspace = scratchDir()
+    const file = join(projectDir(workspace), 'str-g0.jsonl')
+    writeFileSync(
+      file,
+      [
+        { type: 'user', message: { content: 'plain string' } },
+        { type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'x', input: {} }] } },
+        { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'r' }] } },
+      ]
+        .map((r) => JSON.stringify(r))
+        .join('\n'),
+    )
+    const messages = readFullHistory({ transcript: file })
+    expect(messages.map((m) => [m.role, m.parts.map((p) => p.type)])).toEqual([
+      ['user', ['text']],
+      ['assistant', ['dynamic-tool']],
+    ])
+  })
+
+  it('throws when the transcript exists and cannot be read', () => {
+    expect(() => readFullHistory({ transcript: scratchDir() })).toThrow()
   })
 
   it('keeps the messages before a compact boundary', async () => {
