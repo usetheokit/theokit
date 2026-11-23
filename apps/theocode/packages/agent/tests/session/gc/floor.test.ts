@@ -7,9 +7,10 @@
  *
  * Per rules/testing.md § 3, business rules on a deletion path get tests. These are those rules.
  */
+import { GCFloorError } from '@theokit/agents/session'
 import { describe, expect, it } from 'vitest'
 
-import { planSessionGCAllProjects } from '../../../src/session/gc/all-sessions.js'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 
 const DAY = 86_400_000
 const NOW = 1_000 * DAY
@@ -122,21 +123,21 @@ describe('the retention floor is a refusal, not a normalisation', () => {
 
   it('test_a_window_below_the_floor_is_refused', async () => {
     await expect(planSessionGCAllProjects({ ...base, maxAgeDays: 0 } as never)).rejects.toThrow(
-      RangeError,
+      GCFloorError,
     )
   })
 
   it('test_a_negative_window_is_refused', async () => {
     await expect(planSessionGCAllProjects({ ...base, maxAgeDays: -30 } as never)).rejects.toThrow(
-      RangeError,
+      GCFloorError,
     )
   })
 
   it('test_the_refusal_says_what_the_floor_is_and_why_it_exists', async () => {
     // A guard that refuses without saying why gets removed by the next person who hits it.
-    await expect(
-      planSessionGCAllProjects({ ...base, maxAgeDays: 0 } as never),
-    ).rejects.toThrow(/floor of 1 day/)
+    await expect(planSessionGCAllProjects({ ...base, maxAgeDays: 0 } as never)).rejects.toThrow(
+      /must be at least 1/,
+    )
   })
 
   it('test_the_floor_itself_is_accepted', async () => {

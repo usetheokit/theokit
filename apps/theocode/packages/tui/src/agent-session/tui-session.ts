@@ -49,6 +49,21 @@ export interface SessionOptions {
   readonly loadConfig?: typeof resolveEffectiveConfig
 }
 
+/** The initial config load: a file that cannot be read yields the confined posture (#827). */
+function loadConfigOrConfined(
+  loadConfig: typeof resolveEffectiveConfig,
+  cwd: string,
+): ReturnType<typeof resolveEffectiveConfig> {
+  try {
+    return loadConfig({ cwd })
+  } catch {
+    // Through the `cli` layer, in its `key=value` form: that is the layer `security-floor.ts`
+    // designates as the operator's override, and this only ever HARDENS.
+    const posture = Object.entries(fallbackConfigPosture()).map(([k, v]) => `${k}=${v}`)
+    return loadConfig({ cwd: tmpdir(), cli: posture })
+  }
+}
+
 export function createTuiSession(opts: SessionOptions): TuiSession {
   const loadConfig = opts.loadConfig ?? resolveEffectiveConfig
   const loadSession = opts.loadSession ?? loadOrCreateSessionId
@@ -67,16 +82,7 @@ export function createTuiSession(opts: SessionOptions): TuiSession {
   // that could not be read, and granting write authority on the strength of a file we just failed
   // to parse is the opposite of what the failure warrants. `configHealthNotice` puts the reason on
   // screen so the narrow posture is explained rather than mysterious.
-  let cfg = ((): ReturnType<typeof loadConfig> => {
-    try {
-      return loadConfig({ cwd })
-    } catch {
-      // Through the `cli` layer, in its `key=value` form: that is the layer `security-floor.ts`
-      // designates as the operator's override, and this only ever HARDENS.
-      const posture = Object.entries(fallbackConfigPosture()).map(([k, v]) => `${k}=${v}`)
-      return loadConfig({ cwd: tmpdir(), cli: posture })
-    }
-  })()
+  let cfg = loadConfigOrConfined(loadConfig, cwd)
   let effort: ReasoningEffort = cfg.reasoning_effort
   // READING the pointer is what makes this launch inherit a conversation; WRITING it is what makes
   // the NEXT launch able to. Only the first is gated by `resume`.

@@ -148,6 +148,17 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     }
   })
 
+  it('test_floor_installs_tolerate_the_version_specific_sdk_patch', () => {
+    // dep-check installs other @theokit/sdk versions; an unused patch must not abort them
+    // (ERR_PNPM_UNUSED_PATCH) while the normal pin keeps its patch.
+    const ws = readFileSync(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')
+    expect(ws).toMatch(/^allowUnusedPatches:\s*true\s*$/m)
+    const patched = (
+      readPkg('package.json').pnpm as { patchedDependencies: Record<string, string> }
+    ).patchedDependencies
+    expect(patched['@theokit/sdk@11.0.0']).toBe('patches/@theokit__sdk@11.0.0.patch')
+  })
+
   it('test_isClosed_rejects_the_open_shapes', () => {
     // Negative lens over the oracle: if `isClosed` accepted everything, the first two tests would go
     // green without proving a thing.
