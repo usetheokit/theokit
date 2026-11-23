@@ -338,6 +338,9 @@ importers:
       '@theokit/gateway-zalo':
         specifier: 0.3.0
         version: 0.3.0(@theokit/gateway@0.25.0(@theokit/sdk@5.32.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
+      '@theokit/host':
+        specifier: workspace:*
+        version: link:../../packages/host
       '@theokit/http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -703,6 +706,10 @@ importers:
         version: 7.0.6
 
   packages/host:
+    dependencies:
+      undici:
+        specifier: 7.30.1
+        version: 7.30.1
     devDependencies:
       '@theokit/sdk':
         specifier: 5.32.0
