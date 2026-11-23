@@ -1,5 +1,66 @@
 # theo
 
+## 0.87.0
+
+### Minor Changes
+
+- f42eca2: `theokit/server/http` adds `createHostedChat`, which mounts a hosted chat page from `{route, createRun, auth, assetsDir, maxBodyBytes, sessionScope}`: the shell with a CSP, named assets, a sandboxed widget frame, an auth gate, a body cap, chat id validation, identity scoping and a relay that stops the run on cancel. TheoClaw's WebChat routes now call it.
+
+### Patch Changes
+
+- 0c21fb4: The declared `@theokit/sdk` range now admits 12.x, which adds log export to `registerTelemetry`.
+- e600f00: Widen the declared `@theokit/sdk` range to `<14`, so SDK 12 and 13 are admitted (#2861).
+- 71e1ff0: `hashedSessionScope` from `theokit/server/http` hashes with Web Crypto and returns a promise, and `createHostedChat` awaits a `sessionScope` that returns one, so `theokit/server` no longer imports `node:crypto`.
+- 3cf41ee: The `@theokit/sdk` peer range is widened to `<13`, so `@theokit/sdk@12.0.0` is supported. The capability map is measured against it, and TheoClaw flushes its output mask through the `flush` of the `wrapStreams` handle that 12.0.0 adds.
+- 8198202: An offsite download validates the manifest and each file's size and checksum before writing it, and `mountAgent` answers a failed credential resolution with a fixed message and code instead of the resolver's text.
+- a5df6cd: `@theokit/agents/commands` exports `sessionsGcCommand`, `parseSessionsGcArgs`, `formatGcPlan` and `formatGcJson`: the `sessions gc` command with a dry-run default, `--apply`, age and keep bounds, and a JSON or human report. `theokit agent sessions gc` now uses it.
+- b219263: The served agent routes resolve a `skills` resolver through `resolveSkillsSettings`, so a resolver that returns an SDK `SkillsSettings` object no longer throws.
+- Updated dependencies [174ffe1]
+- Updated dependencies [4240677]
+- Updated dependencies [aee048d]
+- Updated dependencies [3da4848]
+- Updated dependencies [a27c849]
+- Updated dependencies [14c8455]
+- Updated dependencies [4b6d720]
+- Updated dependencies [ceea125]
+- Updated dependencies [6b96f5b]
+- Updated dependencies [0c21fb4]
+- Updated dependencies [e600f00]
+- Updated dependencies [62fccae]
+- Updated dependencies [b219263]
+- Updated dependencies [8dc87ef]
+- Updated dependencies [eb5ac75]
+- Updated dependencies [f38afcb]
+- Updated dependencies [e446a52]
+- Updated dependencies [60fc3f6]
+- Updated dependencies [f28828e]
+- Updated dependencies [a39c1b8]
+- Updated dependencies [9634360]
+- Updated dependencies [2a43faa]
+- Updated dependencies [ec8af29]
+- Updated dependencies [a4e3120]
+- Updated dependencies [a8a868b]
+- Updated dependencies [ea092d6]
+- Updated dependencies [3d82459]
+- Updated dependencies [4cc5b0e]
+- Updated dependencies [638e3aa]
+- Updated dependencies [71e1ff0]
+- Updated dependencies [1077038]
+- Updated dependencies [299d837]
+- Updated dependencies [3cf41ee]
+- Updated dependencies [0a85dfa]
+- Updated dependencies [999c6cc]
+- Updated dependencies [3d21f1d]
+- Updated dependencies [6cf27f7]
+- Updated dependencies [a5df6cd]
+- Updated dependencies [eac2131]
+- Updated dependencies [6d9bc5a]
+- Updated dependencies [894aa62]
+- Updated dependencies [049512b]
+- Updated dependencies [f95f007]
+  - @theokit/agents@17.5.0
+  - @theokit/presenter@0.18.2
+
 ## 0.86.1
 
 ### Patch Changes
@@ -718,8 +779,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                                                      [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                                                      were found and every /api/agents/* route will 404.
+                                                                        [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                                                        were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
