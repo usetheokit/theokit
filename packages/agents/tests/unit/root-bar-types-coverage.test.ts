@@ -91,7 +91,9 @@ const TYPE_VERDICTS: Record<string, Verdict> = {
   TrustPosture: { verdict: 'in', via: NAMED },
   TrustPostureInput: { verdict: 'in', via: NAMED },
   TrustSource: { verdict: 'in', via: NAMED },
+  OffCapability: { verdict: 'in', via: NAMED },
   WiredEntity: { verdict: 'in', via: NAMED },
+  WiredEntityScope: { verdict: 'in', via: NAMED },
 
   // ── The fourteen a star brought. Each is `in` because it demonstrably crosses; the `via` records
   // that nobody wrote it, which is the difference between a decision and an accident.

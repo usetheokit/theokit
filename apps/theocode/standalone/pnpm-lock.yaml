@@ -16,10 +16,10 @@ importers:
         version: 17.0.0(@theokit/http@2.6.0(react@19.3.1)(reflect-metadata@0.2.2)(zod@4.6.7))(react@19.3.1)(vitest@4.1.12)(ws@8.23.0)(zod@4.6.7)
       '@theokit/agents-pty':
         specifier: 0.2.1
-        version: 0.2.1(@theokit/sdk@12.0.0(ws@8.23.0))
+        version: 0.2.1(@theokit/sdk@13.0.0(ws@8.23.0))
       '@theokit/sdk':
-        specifier: 12.0.0
-        version: 12.0.0(ws@8.23.0)
+        specifier: 13.0.0
+        version: 13.0.0(ws@8.23.0)
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.5
@@ -980,8 +980,8 @@ packages:
       ws:
         optional: true
 
-  '@theokit/sdk@12.0.0':
-    resolution: {integrity: sha512-N1Xs/1lLlpIjB86/UthhHC05NS78AjaeXBK8FY1ZhLWPEBkZ+Jf7N0DTZ/7qBaABOfXpkXUzZCH1lnnK+cbDlQ==}
+  '@theokit/sdk@13.0.0':
+    resolution: {integrity: sha512-/t1ZQfirQ3uAdVI8gbg9B+8F7UA1IX5ZntCGZxTJMuznCRYtX4XDjsq/McTlFuwA0jL6N1zh29vAFX4daeqDHw==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@lancedb/lancedb': ^0.30.0
@@ -2823,9 +2823,9 @@ snapshots:
     transitivePeerDependencies:
       - '@theokit/sdk'
 
-  '@theokit/agents-pty@0.2.1(@theokit/sdk@12.0.0(ws@8.23.0))':
+  '@theokit/agents-pty@0.2.1(@theokit/sdk@13.0.0(ws@8.23.0))':
     dependencies:
-      '@theokit/sdk-pty': 0.3.6(@theokit/sdk@12.0.0(ws@8.23.0))
+      '@theokit/sdk-pty': 0.3.6(@theokit/sdk@13.0.0(ws@8.23.0))
     transitivePeerDependencies:
       - '@theokit/sdk'
 
@@ -2881,9 +2881,9 @@ snapshots:
     optionalDependencies:
       node-pty: 1.1.0
 
-  '@theokit/sdk-pty@0.3.6(@theokit/sdk@12.0.0(ws@8.23.0))':
+  '@theokit/sdk-pty@0.3.6(@theokit/sdk@13.0.0(ws@8.23.0))':
     dependencies:
-      '@theokit/sdk': 12.0.0(ws@8.23.0)
+      '@theokit/sdk': 13.0.0(ws@8.23.0)
     optionalDependencies:
       node-pty: 1.1.0
 
@@ -2902,7 +2902,7 @@ snapshots:
     optionalDependencies:
       ws: 8.23.0
 
-  '@theokit/sdk@12.0.0(ws@8.23.0)':
+  '@theokit/sdk@13.0.0(ws@8.23.0)':
     dependencies:
       croner: 9.1.0
       jsonrepair: 3.15.0

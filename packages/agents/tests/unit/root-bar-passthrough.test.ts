@@ -40,6 +40,7 @@ const VALUES = [
   'applySecurityFloor',
   'resolveTrustPosture',
   'auditEnvReachability',
+  'offCapabilities',
   'recordWiring',
 ] as const
 

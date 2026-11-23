@@ -33,6 +33,32 @@ describe('B-069/B-070/B-071 — wiredCapabilities', () => {
     expect(w.hooks.active).toEqual(['PreToolUse'])
   })
 
+  it('test_scopes_and_off_reasons_come_with_the_record', () => {
+    const w = wiredCapabilities(
+      input({
+        posture: allows(false, false, true),
+        mcpServers: { mine: {} },
+        mcpPersonal: ['mine'],
+        mcpWithheld: ['theirs'],
+        operatorSkills: ['ops'],
+        configuredSkills: ['repo-skill'],
+      }),
+    )
+    expect(w.mcp.active).toEqual(['mine'])
+    expect(w.mcp.entities).toEqual([
+      { name: 'theirs', scope: 'project' },
+      { name: 'mine', scope: 'personal' },
+    ])
+    expect(w.skills.entities).toEqual([
+      { name: 'repo-skill', scope: 'project' },
+      { name: 'ops', scope: 'operator' },
+    ])
+    expect(w.off.map((o) => [o.capability, o.reason])).toEqual([
+      ['mcp', 'suppressed-by-trust'],
+      ['skills', 'suppressed-by-trust'],
+    ])
+  })
+
   it('test_trust_suppression_empties_active_and_keeps_requested', () => {
     // The whole point: `requested` is the only place a user can see what trust took away.
     const w = wiredCapabilities(input({ posture: allows(false, false, false) }))

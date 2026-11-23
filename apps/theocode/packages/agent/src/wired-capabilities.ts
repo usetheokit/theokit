@@ -19,14 +19,20 @@
  * (the posture gates eight things, and durable memory is not a list), plus the two fields that are
  * not entities at all — whether project sources loaded, and which sandbox mode the build was given.
  */
-import { recordWiring, type WiredEntity } from '@theokit/agents'
+import { offCapabilities, recordWiring, type OffCapability, type WiredEntity } from '@theokit/agents'
 
-export type { WiredEntity }
+export type { OffCapability, WiredEntity }
 
 export interface WiredCapabilities {
   readonly mcp: WiredEntity
   readonly skills: WiredEntity
   readonly hooks: WiredEntity
+  /**
+   * Every capability that is off, with the SDK's reason (`suppressed-by-trust`, `disabled-by-config`
+   * or a caller-defined one). A capability whose project share was withheld while the operator's own
+   * servers or skills still run is listed too: `active` says what runs, this says what was withheld.
+   */
+  readonly off: readonly OffCapability[]
   /**
    * The `AGENTS.md` chain, gated by the same posture as the other three.
    *
@@ -128,19 +134,23 @@ export function wiredCapabilities(input: {
   readonly rules?: WiredCapabilities['rules']
   readonly sandboxMode: string
 }): WiredCapabilities {
+  const projectMcp = [
+    ...Object.keys(input.mcpServers).filter((name) => !(input.mcpPersonal ?? []).includes(name)),
+    ...(input.mcpWithheld ?? []),
+  ].sort()
   const record = recordWiring({
     posture: input.posture,
+    // The SDK keeps each requested entity's scope, so the report says where it came from.
+    scopes: {
+      mcp: projectMcp.map(() => 'project'),
+      skills: input.configuredSkills.map(() => 'project'),
+    },
     requested: {
       // Sorted because the map's key order is insertion order from a JSON file, and a listing whose
       // order changes when someone reorders `.mcp.json` looks like something moved.
       // Only the project's. The personal ones are added back below, outside the gate they are not
       // subject to.
-      mcp: [
-        ...Object.keys(input.mcpServers).filter(
-          (name) => !(input.mcpPersonal ?? []).includes(name),
-        ),
-        ...(input.mcpWithheld ?? []),
-      ].sort(),
+      mcp: projectMcp,
       skills: input.configuredSkills,
       hooks: input.hookEvents,
       // NOT sorted: the walk's order is root-most first, which is the order they are composed into
@@ -149,21 +159,28 @@ export function wiredCapabilities(input: {
     },
   })
 
+  const mcpPersonal = [...new Set(input.mcpPersonal ?? [])].sort()
+  const operatorSkills = [...new Set(input.operatorSkills ?? [])].sort()
+  const mcp: WiredEntity = {
+    ...record.mcp,
+    active: [...new Set([...record.mcp.active, ...mcpPersonal])].sort(),
+    entities: [...record.mcp.entities, ...mcpPersonal.map((name) => ({ name, scope: 'personal' }))],
+  }
+  const skills: WiredEntity = {
+    ...record.skills,
+    active: [...new Set([...record.skills.active, ...operatorSkills])].sort(),
+    entities: [
+      ...record.skills.entities,
+      ...operatorSkills.map((name) => ({ name, scope: 'operator' })),
+    ],
+  }
   return {
     ...record,
     // Both facts survive: what is running, and whether the repository's share was withheld.
     // Collapsing them would leave an operator unable to tell "my server" from "their server got in".
-    mcp: {
-      ...record.mcp,
-      active: [...new Set([...record.mcp.active, ...(input.mcpPersonal ?? [])])].sort(),
-    },
-    // #65 — same shape as `mcp` above, and for the same reason: what is running, without erasing
-    // whose it is. Sorted, because the two sources are read from different directories and an
-    // operator should not see the order change with an unrelated edit.
-    skills: {
-      ...record.skills,
-      active: [...new Set([...record.skills.active, ...(input.operatorSkills ?? [])])].sort(),
-    },
+    mcp,
+    skills,
+    off: offCapabilities({ ...record, mcp, skills }),
     ...(input.rules !== undefined ? { rules: input.rules } : {}),
     projectSources: input.projectSourcesAllowed,
     sandboxMode: input.sandboxMode,
