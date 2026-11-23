@@ -167,3 +167,21 @@ describe('the capability is reachable, and the docblock no longer describes a ga
     )
   })
 })
+
+describe('operator instructions and rules', () => {
+  it('reads AGENTS.md and rules/*.md, and withholds the foreign root without a grant', () => {
+    const h = home()
+    mkdirSync(join(h, '.theokit', 'rules'), { recursive: true })
+    writeFileSync(join(h, '.theokit', 'AGENTS.md'), 'mine')
+    writeFileSync(join(h, '.theokit', 'rules', 'style.md'), 'no frontmatter')
+    mkdirSync(join(h, '.claude'), { recursive: true })
+    writeFileSync(join(h, '.claude', 'AGENTS.md'), 'foreign')
+
+    const out = resolveOperatorRoots({ user: true, grants: [], homeDir: h })
+    expect(out.instructions.map((i) => `${i.kind}:${i.name}`)).toEqual([
+      'rules:style',
+      'instructions:AGENTS',
+    ])
+    expect(out.withheld.map((w) => w.root)).toContain(join(h, '.claude', 'AGENTS.md'))
+  })
+})
