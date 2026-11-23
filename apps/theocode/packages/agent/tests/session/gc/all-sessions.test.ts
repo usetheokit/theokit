@@ -1,66 +1,85 @@
 /**
- * The plan consults the writer lease and collects only the SDK’s own temp files.
+ * B-003 — a transcript with a live writer is never planned for deletion.
+ *
+ * `hasLiveWriter` is a REQUIRED field of the plan options and is wired to the SDK's
+ * `sessionHasWriter`, a cross-process filesystem lease. It was never called in the plan phase: its
+ * only two uses sat inside `backstopRefusal`, behind a guard that returns early for everything that
+ * is not a lock. So transcript deletion consulted the lease in neither phase.
+ *
+ * What protected a live transcript instead was the `ageDays > maxAgeDays` filter — a live writer
+ * keeps the file's mtime fresh by appending. That is a real mitigation, and it is why this was rated
+ * HIGH rather than BLOCKER; it is also an mtime heuristic standing in for an explicit lease the SDK
+ * already provides and the caller already wired.
+ *
+ * A guard that is declared, wired and never invoked is worse than an absent one: it reads as
+ * protection.
  */
-import { existsSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
 
-import { encodeProjectDir } from '@theokit/agents/persistence'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 
-import { age, opts, put, setup, targets, teardown, tree } from './all-projects-fixture.js'
-import { state } from './all-projects-state.js'
+const DAY = 86_400_000
+const NOW = 1_000 * DAY
 
-vi.mock('../../../src/session/agent-list.js', async (original) => {
-  const { state } = await import('./all-projects-state.js')
+/** One project holding one transcript old enough to be collectable. */
+function options(overrides: Partial<Parameters<typeof planSessionGCAllProjects>[0]> = {}) {
   return {
-    ...(await original<typeof import('../../../src/session/agent-list.js')>()),
-    listAgents: (cwd: string) => {
-      if (state.failRegistry.has(cwd)) return Promise.reject(new Error('registry down'))
-      return Promise.resolve(state.registry.get(cwd) ?? [])
-    },
-  }
-})
-vi.mock('@theokit/agents/persistence', async (original) => {
-  const { state } = await import('./all-projects-state.js')
-  return {
-    ...(await original<typeof import('@theokit/agents/persistence')>()),
-    sessionHasWriter: (path: string) => state.writers.has(path),
-  }
-})
+    now: () => NOW,
+    keepLast: 0,
+    maxAgeDays: 30,
+    listProjects: () => ['proj'],
+    listProject: () => [{ name: 'sess-old.jsonl', isDirectory: false, mtimeMs: NOW - 60 * DAY }],
+    classify: () => ({ state: 'DEAD' as const, cwd: '/proj' }),
+    listRegistry: async () => [],
+    hasLiveWriter: () => false,
+    readPointer: () => undefined,
+    ...overrides,
+  } as Parameters<typeof planSessionGCAllProjects>[0]
+}
 
-import { planAllProjectsOnDisk, runAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
-import { claimRoot } from '../../../src/session/gc/root-ownership.js'
+describe('B-003 — the plan phase consults the writer lease', () => {
+  it('test_a_stale_transcript_with_no_live_writer_is_collectable', async () => {
+    // Anti-vacuity floor: if nothing were ever planned, the test below would pass for free.
+    const plan = await planSessionGCAllProjects(options())
 
-beforeEach(() => {
-  setup(claimRoot)
-})
-afterEach(teardown)
-
-describe('what the plan collects', () => {
-  it('a transcript with a live writer is not planned, at plan time and at apply time', async () => {
-    put(tree.live, 'newest.jsonl', 1)
-    const writing = put(tree.live, 'writing.jsonl', 100)
-    const idle = put(tree.live, 'idle.jsonl', 100)
-    state.writers.add(writing)
-    const plan = await planAllProjectsOnDisk(opts())
-    expect(targets(plan)).toEqual([idle])
-    state.writers.add(idle) // gained a writer after the plan
-    const result = await runAllProjectsOnDisk(plan, opts({ apply: true }))
-    expect(existsSync(idle)).toBe(true)
-    expect(result.removed).not.toContain(idle)
-    expect(result.errors.join('\n')).toMatch(/refused/)
+    expect(
+      plan.candidates.some((c) => c.target.endsWith('sess-old.jsonl')),
+      'the fixture stopped producing a collectable transcript, so the guard test below proves nothing',
+    ).toBe(true)
   })
 
-  it('only the SDK’s own temp files are collectable', async () => {
-    put(tree.live, 'newest.jsonl', 1)
-    const dir = join(tree.root, encodeProjectDir(tree.live))
-    const foreign = join(dir, 'notes.txt.tmp')
-    const sdk = join(dir, 'state.json.1234.0123456789abcdef.tmp')
-    for (const f of [foreign, sdk]) {
-      writeFileSync(f, '')
-      age(f, 100)
-    }
-    const plan = await planAllProjectsOnDisk(opts())
-    expect(targets(plan)).toEqual([sdk])
+  it('test_a_transcript_with_a_live_writer_is_NOT_planned_for_deletion', async () => {
+    const hasLiveWriter = vi.fn(() => true)
+
+    const plan = await planSessionGCAllProjects(options({ hasLiveWriter }))
+
+    expect(
+      hasLiveWriter,
+      '`hasLiveWriter` is a required option wired to the SDK lease and was never called in the plan ' +
+        'phase — transcript deletion consulted the lease in neither phase',
+    ).toHaveBeenCalled()
+    expect(
+      plan.candidates.filter((c) => c.kind === 'transcript'),
+      'a transcript being written to right now was planned for deletion. Only its mtime freshness ' +
+        'stood between a live session and unlink.',
+    ).toEqual([])
+  })
+})
+
+describe('#1911 — only the SDK’s own temp files are collectable', () => {
+  it('test_a_foreign_old_tmp_file_is_not_a_candidate_but_an_sdk_temp_file_is', async () => {
+    const old = NOW - 60 * DAY
+    const sdkTmp = 'abc.jsonl.1234.0123456789abcdef.tmp'
+    const plan = await planSessionGCAllProjects(
+      options({
+        listProject: () => [
+          { name: 'notes.tmp', isDirectory: false, mtimeMs: old },
+          { name: sdkTmp, isDirectory: false, mtimeMs: old },
+        ],
+      }),
+    )
+
+    expect(plan.candidates.some((c) => c.target.endsWith(sdkTmp))).toBe(true)
+    expect(plan.candidates.some((c) => c.target.endsWith('notes.tmp'))).toBe(false)
   })
 })

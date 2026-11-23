@@ -1,58 +1,82 @@
 /**
- * The guards name the read that failed, and a project that cannot be classified is kept.
+ * The guard half of the all-projects sweep, at the boundary the framework planner now owns.
+ *
+ * Most guard behavior is exercised end-to-end through the planner (keep-last-quota,
+ * pointer-namespace, resume-protection, fail-open). What these tests add is the contract the
+ * B-143 fix named and no test asserted directly: a failed read reports WHICH read failed, because
+ * `registry unavailable` for a pointer problem sends the operator to the wrong file.
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
 
-import { encodeProjectDir } from '@theokit/agents/persistence'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 
-import { age, opts, put, setup, targets, teardown, tree } from './all-projects-fixture.js'
-import { state } from './all-projects-state.js'
+const DAY = 86_400_000
+const NOW = 1_000 * DAY
 
-vi.mock('../../../src/session/agent-list.js', async (original) => {
-  const { state } = await import('./all-projects-state.js')
+function options(overrides: Record<string, unknown> = {}) {
   return {
-    ...(await original<typeof import('../../../src/session/agent-list.js')>()),
-    listAgents: (cwd: string) => {
-      if (state.failRegistry.has(cwd)) return Promise.reject(new Error('registry down'))
-      return Promise.resolve(state.registry.get(cwd) ?? [])
-    },
-  }
-})
-vi.mock('@theokit/agents/persistence', async (original) => {
-  const { state } = await import('./all-projects-state.js')
-  return {
-    ...(await original<typeof import('@theokit/agents/persistence')>()),
-    sessionHasWriter: (path: string) => state.writers.has(path),
-  }
-})
+    now: () => NOW,
+    keepLast: 1,
+    maxAgeDays: 30,
+    listProjects: () => ['proj'],
+    listProject: () => [
+      { name: 'new.jsonl', isDirectory: false, mtimeMs: NOW - 2 * DAY },
+      { name: 'old.jsonl', isDirectory: false, mtimeMs: NOW - 90 * DAY },
+    ],
+    classify: () => ({ state: 'ALIVE' as const, cwd: '/some/project' }),
+    listRegistry: async () => [],
+    hasLiveWriter: () => false,
+    readPointer: () => undefined,
+    ...overrides,
+  } as Parameters<typeof planSessionGCAllProjects>[0]
+}
 
-import { planAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
-import { claimRoot } from '../../../src/session/gc/root-ownership.js'
+describe('the guards of one project', () => {
+  it('a_pointer_read_failure_is_named_as_the_pointer', async () => {
+    const plan = await planSessionGCAllProjects(
+      options({
+        readPointer: () => {
+          throw new Error('EACCES')
+        },
+      }),
+    )
 
-beforeEach(() => {
-  setup(claimRoot)
-})
-afterEach(teardown)
-
-describe('the guards', () => {
-  it('a registry that cannot be read is named as the registry', async () => {
-    put(tree.live, 'newest.jsonl', 1)
-    const old = put(tree.live, 'old.jsonl', 100)
-    state.failRegistry.add(tree.live)
-    const plan = await planAllProjectsOnDisk(opts())
-    expect(targets(plan)).not.toContain(old)
-    expect(plan.errors.join('\n')).toMatch(/registry read failed/)
+    expect(plan.candidates).toEqual([])
+    expect(plan.errors).toHaveLength(1)
+    expect(plan.errors[0]).toMatch(/pointer read failed/)
+    expect(plan.errors[0]).not.toMatch(/registry/)
   })
 
-  it('a project that cannot be classified is kept whole', async () => {
-    const dir = join(tree.root, 'mystery')
-    mkdirSync(dir)
-    writeFileSync(join(dir, 'x.jsonl'), '{}\n')
-    age(join(dir, 'x.jsonl'), 100)
-    const plan = await planAllProjectsOnDisk(opts())
+  it('a_registry_read_failure_is_named_as_the_registry', async () => {
+    const plan = await planSessionGCAllProjects(
+      options({
+        listRegistry: async () => {
+          throw new Error('registry gone')
+        },
+      }),
+    )
+
     expect(plan.candidates).toEqual([])
-    expect(plan.kept).toContain('mystery')
+    expect(plan.errors).toHaveLength(1)
+    expect(plan.errors[0]).toMatch(/registry read failed/)
+    expect(plan.errors[0]).not.toMatch(/pointer/)
+  })
+
+  it('an_undetermined_project_gets_empty_guards_not_a_throw', async () => {
+    const plan = await planSessionGCAllProjects(
+      options({
+        classify: () => ({ state: 'UNDETERMINED' as const, reason: 'no cwd' }),
+        readPointer: () => {
+          throw new Error('must not be consulted')
+        },
+        listRegistry: async () => {
+          throw new Error('must not be consulted')
+        },
+      }),
+    )
+
+    expect(plan.candidates).toEqual([])
+    expect(plan.errors).toEqual([])
+    expect(plan.kept).toContain('proj')
   })
 })

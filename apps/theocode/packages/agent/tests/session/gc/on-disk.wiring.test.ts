@@ -1,51 +1,102 @@
 /**
- * The on-disk wiring of the delete path: apply removes, a dry run leaves the file.
+ * Pillar (b) of the wiring triad for the delete path: the boundary the unit tests mock.
+ *
+ * Every test in this directory injects its own `unlink`, which proves the PLANNER calls the seam and
+ * says nothing about what the seam is bound to. `runAllProjectsOnDisk` is where the real bindings
+ * live — `fsp.unlink`, `fsp.rmdir`, `Agent.delete`, `sessionHasWriter`, `readPointerId` — and it had
+ * NO test at all. Measured 2026-09-03 by mutation: replacing `unlink: (path) => fsp.unlink(path)`
+ * with a no-op left every case in this directory green.
+ *
+ * The failure that hides there is the quiet one. A collector wired to a no-op reports a finished
+ * sweep, lists what it "removed", and removes nothing — the same shape as B-138, at the last hop
+ * before the filesystem.
+ *
+ * SCOPE, stated because this test deletes real files: every path it touches is created under
+ * `mkdtempSync` in this run, and the plan is hand-built so the only candidate is that file. Nothing
+ * discovers paths, and `projectsRoot` is overridden so no real projects tree is reachable.
  */
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { encodeProjectDir } from '@theokit/agents/persistence'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
-import { opts, put, setup, teardown, tree } from './all-projects-fixture.js'
+import { runAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
 
-vi.mock('../../../src/session/agent-list.js', async (original) => {
-  const { state } = await import('./all-projects-state.js')
-  return {
-    ...(await original<typeof import('../../../src/session/agent-list.js')>()),
-    listAgents: (cwd: string) => {
-      if (state.failRegistry.has(cwd)) return Promise.reject(new Error('registry down'))
-      return Promise.resolve(state.registry.get(cwd) ?? [])
-    },
-  }
-})
-vi.mock('@theokit/agents/persistence', async (original) => {
-  const { state } = await import('./all-projects-state.js')
-  return {
-    ...(await original<typeof import('@theokit/agents/persistence')>()),
-    sessionHasWriter: (path: string) => state.writers.has(path),
-  }
+/**
+ * Scratch roots, removed when the file finishes.
+ *
+ * MEASURED 2026-09-03: /tmp held 2 773 leaked `theocode-*` directories from suites that create one
+ * per case and never remove it — 1 546 from one file alone. Sixteen other test files here already
+ * clean up, so this follows the convention rather than inventing one, and the cost of not doing it
+ * is paid once per test on every machine that ever runs the suite.
+ */
+const roots: string[] = []
+afterAll(() => {
+  for (const r of roots) rmSync(r, { recursive: true, force: true })
 })
 
-import { planAllProjectsOnDisk, runAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
-import { claimRoot } from '../../../src/session/gc/root-ownership.js'
+function scratch(): { root: string; project: string; transcript: string } {
+  const root = mkdtempSync(join(tmpdir(), 'theocode-gc-wiring-'))
+  roots.push(root)
+  const project = join(root, 'a-project')
+  mkdirSync(project, { recursive: true })
+  const transcript = join(project, 'sess-old.jsonl')
+  writeFileSync(transcript, '{}\n')
+  return { root, project, transcript }
+}
 
-beforeEach(() => {
-  setup(claimRoot)
+const planFor = (root: string, transcript: string) => ({
+  candidates: [{ project: 'a-project', kind: 'transcript' as const, target: transcript, ageDays: 90 }],
+  kept: [],
+  touchedProjects: [],
+  liveCwds: [],
+  totalByKind: {} as never,
+  errors: [],
+  framework: {
+    projectsRoot: root,
+    candidates: [{ project: 'a-project', kind: 'transcript' as const, target: transcript, ageDays: 90 }],
+    kept: [],
+    touchedProjects: ['a-project'],
+    liveCwds: [],
+    countByKind: { transcript: 1, 'writer-lock': 0, 'lock-directory': 0, temp: 0, registry: 0 },
+    errors: [],
+  },
 })
-afterEach(teardown)
 
 describe('the on-disk wiring of the delete path', () => {
-  it('apply removes the file from the filesystem, a dry run does not', async () => {
-    put(tree.live, 'newest.jsonl', 1)
-    const old = put(tree.live, 'old.jsonl', 100)
-    const plan = await planAllProjectsOnDisk(opts())
-    const dry = await runAllProjectsOnDisk(plan, opts())
-    expect(dry.dryRun).toBe(true)
-    expect(existsSync(old)).toBe(true)
-    const done = await runAllProjectsOnDisk(plan, opts({ apply: true }))
-    expect(existsSync(old), 'the collector reported a removal it did not perform').toBe(false)
-    expect(done.removed).toContain(old)
-    expect(done.errors).toEqual([])
+  it('test_apply_actually_removes_the_file_from_the_filesystem', async () => {
+    const { root, transcript } = scratch()
+
+    const result = await runAllProjectsOnDisk(planFor(root, transcript), { apply: true, projectsRoot: root })
+
+    expect(existsSync(transcript), 'the collector reported a removal it did not perform').toBe(false)
+    expect(result.removed).toContain(transcript)
+    expect(result.errors).toEqual([])
+  })
+
+  it('test_a_dry_run_leaves_the_file_where_it_is', async () => {
+    // Anti-vacuity in the direction that matters most: a wiring that deleted unconditionally would
+    // satisfy the case above, and this is the one that would catch it.
+    const { root, transcript } = scratch()
+
+    const result = await runAllProjectsOnDisk(planFor(root, transcript), { projectsRoot: root })
+
+    expect(existsSync(transcript), 'a DRY RUN deleted a file').toBe(true)
+    expect(result.dryRun).toBe(true)
+  })
+
+  it('test_a_file_that_vanished_between_plan_and_apply_is_not_an_error', async () => {
+    // ENOENT means somebody else already removed it, which is the outcome this path wanted. Treating
+    // it as a failure would fill the report with errors about work that succeeded.
+    const { root, transcript } = scratch()
+
+    const result = await runAllProjectsOnDisk(
+      planFor(root, join(root, 'a-project', 'never-existed.jsonl')),
+      { apply: true, projectsRoot: root },
+    )
+
+    expect(result.errors).toEqual([])
+    expect(existsSync(transcript), 'an unrelated file was removed').toBe(true)
   })
 })

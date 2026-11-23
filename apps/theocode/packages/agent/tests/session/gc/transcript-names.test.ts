@@ -1,53 +1,62 @@
 /**
- * How a lock maps to the transcript it guards.
+ * The naming vocabulary the plan and apply phases share.
+ *
+ * B-020's argument for one definition: both phases strip these suffixes, and a divergence between
+ * them would let the apply phase delete a lock whose transcript the plan phase believed was still
+ * on disk. The vocabulary now lives in the framework; these tests pin it through the planner.
  */
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
 
-import { encodeProjectDir } from '@theokit/agents/persistence'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 
-import { age, opts, put, setup, targets, teardown, tree } from './all-projects-fixture.js'
+const DAY = 86_400_000
+const NOW = 1_000 * DAY
 
-vi.mock('../../../src/session/agent-list.js', async (original) => {
-  const { state } = await import('./all-projects-state.js')
-  return {
-    ...(await original<typeof import('../../../src/session/agent-list.js')>()),
-    listAgents: (cwd: string) => {
-      if (state.failRegistry.has(cwd)) return Promise.reject(new Error('registry down'))
-      return Promise.resolve(state.registry.get(cwd) ?? [])
-    },
-  }
-})
-vi.mock('@theokit/agents/persistence', async (original) => {
-  const { state } = await import('./all-projects-state.js')
-  return {
-    ...(await original<typeof import('@theokit/agents/persistence')>()),
-    sessionHasWriter: (path: string) => state.writers.has(path),
-  }
-})
+async function plan(names: string[]) {
+  return planSessionGCAllProjects({
+    now: () => NOW,
+    keepLast: 0,
+    maxAgeDays: 30,
+    listProjects: () => ['proj'],
+    listProject: () => // `<id>.jsonl.lock` is the directory shape of the lock, `<id>.jsonl.writer.lock` the file one.
+    names.map((name) => ({ name, isDirectory: name.endsWith('.jsonl.lock'), mtimeMs: NOW - 90 * DAY })),
+    classify: () => ({ state: 'DEAD', cwd: '/proj' }),
+    listRegistry: async () => [],
+    hasLiveWriter: () => false,
+    readPointer: () => undefined,
+  } as never)
+}
 
-import { planAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
-import { claimRoot } from '../../../src/session/gc/root-ownership.js'
+const base = (p: { candidates: { target: string }[] }): string[] =>
+  p.candidates.map((c) => c.target.split('/').pop() ?? '')
 
-beforeEach(() => {
-  setup(claimRoot)
-})
-afterEach(teardown)
+describe('transcript names', () => {
+  it('transcriptId_strips_exactly_the_jsonl_suffix', async () => {
+    // The lock of `80a43d49-abc` is judged against `80a43d49-abc.jsonl` and nothing else.
+    const withSibling = await plan(['80a43d49-abc.jsonl.lock', '80a43d49-abc.jsonl'])
+    const other = await plan(['80a43d49-abc.jsonl.lock', '80a43d49-abc.txt'])
 
-describe('lock and transcript names', () => {
-  it('a lock beside a live transcript is kept, an orphan one is collected', async () => {
-    put(tree.live, 'newest.jsonl', 1)
-    put(tree.live, 'sibling.jsonl', 100)
-    const dir = join(tree.root, encodeProjectDir(tree.live))
-    const kept = join(dir, 'sibling.jsonl.writer.lock')
-    const orphan = join(dir, 'gone.jsonl.writer.lock')
-    for (const f of [kept, orphan]) {
-      writeFileSync(f, '')
-      age(f, 100)
-    }
-    const plan = await planAllProjectsOnDisk(opts({ keepLast: 2 }))
-    expect(targets(plan)).toContain(orphan)
-    expect(targets(plan)).not.toContain(kept)
+    expect(base(withSibling)).not.toContain('80a43d49-abc.jsonl.lock')
+    expect(base(other)).toContain('80a43d49-abc.jsonl.lock')
+  })
+
+  it('lockId_maps_both_lock_shapes_to_the_transcript_they_guard', async () => {
+    const guarded = await plan([
+      '80a43d49-abc.jsonl',
+      '80a43d49-abc.jsonl.lock',
+      '80a43d49-abc.jsonl.writer.lock',
+    ])
+    const orphans = await plan(['80a43d49-abc.jsonl.lock', '80a43d49-abc.jsonl.writer.lock'])
+
+    expect(base(guarded)).not.toContain('80a43d49-abc.jsonl.lock')
+    expect(base(guarded)).not.toContain('80a43d49-abc.jsonl.writer.lock')
+    expect(base(orphans).sort()).toEqual(['80a43d49-abc.jsonl.lock', '80a43d49-abc.jsonl.writer.lock'])
+  })
+
+  it('lock_suffix_and_lockId_agree_on_what_is_a_lock', async () => {
+    // A name that is not a lock is never collected as one, however stale.
+    const result = await plan(['a.jsonl.writer.lock', 'a.jsonl.lock', 'a.jsonl.locked', 'a.lock'])
+
+    expect(base(result).sort()).toEqual(['a.jsonl.lock', 'a.jsonl.writer.lock'])
   })
 })

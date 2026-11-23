@@ -1,48 +1,63 @@
 /**
- * The collection window is refused below the floor, not normalised (all-projects path).
+ * The collection floor belongs to the COMMAND, not to whichever planner happens to run.
+ *
+ * `sessions gc --max-age-days 0` reaches one of two implementations depending on `--all-projects`.
+ * `planSessionGCAllProjects` refuses it with a stated reason — *"silently normalising would delete
+ * yesterday's session"* — and `planSessionGC`, the DEFAULT form reached without the flag, had no
+ * floor at all: `maxAgeDays ?? 30` took the value verbatim and `ageDays > maxAgeDays` then planned
+ * every transcript in the project outside the protected set.
+ *
+ * The argument for the floor does not depend on how many projects are being swept, so a user typing
+ * the same number got a refusal or a mass deletion according to a flag that has nothing to do with
+ * it. One rule, enforced on both paths.
  */
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { GCFloorError } from '@theokit/agents/session'
+import { describe, expect, it } from 'vitest'
 
-import { encodeProjectDir } from '@theokit/agents/persistence'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { planAndRunCurrentProjectGC } from '../../../../cli/src/commands/sessions.js'
+import { planSessionGCAllProjects } from './legacy-plan.js'
 
-import { opts, put, setup, targets, teardown, tree } from './all-projects-fixture.js'
+const allProjectsSeams = {
+  projectsRoot: '/projects',
+  listProjects: () => [],
+  listProject: () => [],
+  classify: () => ({ state: 'DEAD' as const }),
+  listRegistry: async () => [] as never,
+  hasLiveWriter: () => false,
+  readPointer: () => undefined,
+}
 
-vi.mock('../../../src/session/agent-list.js', async (original) => {
-  const { state } = await import('./all-projects-state.js')
-  return {
-    ...(await original<typeof import('../../../src/session/agent-list.js')>()),
-    listAgents: (cwd: string) => {
-      if (state.failRegistry.has(cwd)) return Promise.reject(new Error('registry down'))
-      return Promise.resolve(state.registry.get(cwd) ?? [])
-    },
-  }
-})
-vi.mock('@theokit/agents/persistence', async (original) => {
-  const { state } = await import('./all-projects-state.js')
-  return {
-    ...(await original<typeof import('@theokit/agents/persistence')>()),
-    sessionHasWriter: (path: string) => state.writers.has(path),
-  }
-})
-
-import { planAllProjectsOnDisk } from '../../../src/session/gc/filesystem.js'
-import { claimRoot } from '../../../src/session/gc/root-ownership.js'
-
-beforeEach(() => {
-  setup(claimRoot)
-})
-afterEach(teardown)
+const perSessionSeams = {
+  cwd: '/home/operator/a-project',
+  root: '/nonexistent-theocode-root',
+  apply: false,
+  listRegistry: async () => [],
+}
 
 describe('the collection floor', () => {
-  it('refuses a window below the floor, and says it was refused', async () => {
-    for (const maxAgeDays of [0, -1]) {
-      await expect(planAllProjectsOnDisk(opts({ maxAgeDays }))).rejects.toThrow(/maxAgeDays/)
-    }
+  it('test_the_single_project_plan_refuses_a_window_below_the_floor', async () => {
+    // The framework's floor error is a GCFloorError, not a RangeError.
+    await expect(
+      planAndRunCurrentProjectGC({ ...perSessionSeams, maxAgeDays: 0 }),
+    ).rejects.toThrow(GCFloorError)
   })
 
-  it('accepts the floor itself', async () => {
-    await expect(planAllProjectsOnDisk(opts({ maxAgeDays: 1 }))).resolves.toBeDefined()
+  it('test_the_all_projects_plan_refuses_the_same_window', async () => {
+    // The arm that already held. Present so a regression that removes the floor from EITHER path
+    // is caught, rather than the two drifting again.
+    await expect(
+      planSessionGCAllProjects({ ...allProjectsSeams, maxAgeDays: 0 }),
+    ).rejects.toThrow(GCFloorError)
+  })
+
+  it('test_both_plans_accept_the_floor_itself', async () => {
+    // Anti-vacuity. A guard written as `<= FLOOR` rather than `< FLOOR` would pass both cases above
+    // and reject the smallest window a user is allowed to ask for.
+    await expect(
+      planAndRunCurrentProjectGC({ ...perSessionSeams, maxAgeDays: 1 }),
+    ).resolves.toBeDefined()
+    await expect(
+      planSessionGCAllProjects({ ...allProjectsSeams, maxAgeDays: 1 }),
+    ).resolves.toBeDefined()
   })
 })
