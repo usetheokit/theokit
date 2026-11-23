@@ -11778,6 +11778,16 @@
             "dist/auth.d.ts#ProviderDescriptor": "interface ProviderDescriptor {\n    readonly name: string;\n    readonly envKey: string;\n    readonly priority: number;\n    readonly modelPrefix?: string;\n    readonly keyPrefix?: string;\n    readonly custom?: boolean;\n}"
           }
         },
+        "customProviderPlugin": {
+          "tier": "stable",
+          "declaration": "declare function customProviderPlugin(config: CustomProviderConfig): Plugin;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/auth.d.ts#CustomProviderConfig"],
+          "internals": {
+            "dist/auth.d.ts#CustomProviderConfig": "interface CustomProviderConfig {\n    readonly name: string;\n    readonly baseUrl: string;\n    readonly keyEnv: string;\n}"
+          }
+        },
         "deviceLogin": {
           "tier": "stable",
           "declaration": "export declare function deviceLogin(config: DeviceOAuthConfig, deps: DeviceDeps, hooks: {\n    onPrompt: (p: {\n        userCode: string;\n        verificationUri: string;\n        expiresIn: number;\n    }) => void;\n}): Promise<OAuthTokens>;",
@@ -20849,6 +20859,14 @@
             "dist/doctor.d.ts#SecretPresence": "type SecretPresence = 'present' | 'absent' | 'unreadable';"
           }
         },
+        "CredentialStateOptions": {
+          "tier": "stable",
+          "declaration": "interface CredentialStateOptions {\n    now?: number;\n    fromEnvironment?: () => boolean;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "Diagnosis": {
           "tier": "stable",
           "declaration": "interface Diagnosis {\n    readonly checks: readonly Check[];\n    readonly failed: number;\n    readonly exitCode: number;\n    readonly repairs?: readonly string[];\n}",
@@ -20943,6 +20961,22 @@
           "references": ["dist/doctor.d.ts#CredentialDefect"],
           "internals": {
             "dist/doctor.d.ts#CredentialDefect": "type CredentialDefect = 'edge_whitespace' | 'inner_whitespace' | 'quote_or_backslash' | 'control_character' | 'placeholder' | 'too_short';"
+          }
+        },
+        "credentialState": {
+          "tier": "stable",
+          "declaration": "declare function credentialState(path: string, options?: CredentialStateOptions): CredentialState;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": [
+            "dist/doctor.d.ts#CredentialState",
+            "dist/doctor.d.ts#CredentialStateOptions",
+            "dist/doctor.d.ts#SecretPresence"
+          ],
+          "internals": {
+            "dist/doctor.d.ts#CredentialState": "type CredentialState = SecretPresence | 'expired';",
+            "dist/doctor.d.ts#CredentialStateOptions": "interface CredentialStateOptions {\n    now?: number;\n    fromEnvironment?: () => boolean;\n}",
+            "dist/doctor.d.ts#SecretPresence": "type SecretPresence = 'present' | 'absent' | 'unreadable';"
           }
         },
         "describeCredentialDefect": {
@@ -21314,7 +21348,7 @@
         },
         "ForeignSetup": {
           "tier": "stable",
-          "declaration": "interface ForeignSetup {\n    readonly kind: ForeignSetupKind;\n    readonly source: string;\n    readonly instructions: ForeignTextFile[];\n    readonly skills: ForeignSkill[];\n    readonly mcpServers: Record<string, ForeignMcpServer>;\n    readonly hooks: ForeignHook[];\n    readonly untranslated: UntranslatedEntry[];\n}",
+          "declaration": "interface ForeignSetup {\n    readonly kind: ForeignSetupKind;\n    readonly source: string;\n    readonly instructions: ForeignTextFile[];\n    readonly skills: ForeignSkill[];\n    readonly memories: ForeignTextFile[];\n    readonly mcpServers: Record<string, ForeignMcpServer>;\n    readonly hooks: ForeignHook[];\n    readonly untranslated: UntranslatedEntry[];\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -21329,7 +21363,7 @@
             "dist/foreign-setup.d.ts#ForeignHook": "interface ForeignHook {\n    readonly event: string;\n    readonly command: string;\n    readonly matcher?: string;\n    readonly timeoutMs?: number;\n}",
             "dist/foreign-setup.d.ts#ForeignMcpServer": "type ForeignMcpServer = {\n    readonly command: string;\n    readonly args?: string[];\n    readonly env?: Record<string, string>;\n    readonly cwd?: string;\n} | {\n    readonly type: 'http' | 'sse';\n    readonly url: string;\n    readonly headers?: Record<string, string>;\n};",
             "dist/foreign-setup.d.ts#ForeignSetupKind": "type ForeignSetupKind = 'claude-code' | 'hermes';",
-            "dist/foreign-setup.d.ts#ForeignSkill": "interface ForeignSkill {\n    readonly name: string;\n    readonly description: string;\n    readonly body: string;\n    readonly path: string;\n}",
+            "dist/foreign-setup.d.ts#ForeignSkill": "interface ForeignSkill {\n    readonly name: string;\n    readonly description: string;\n    readonly body: string;\n    readonly requiresBins: readonly string[];\n    readonly path: string;\n}",
             "dist/foreign-setup.d.ts#ForeignTextFile": "interface ForeignTextFile {\n    readonly path: string;\n    readonly text: string;\n}",
             "dist/foreign-setup.d.ts#UntranslatedEntry": "interface UntranslatedEntry {\n    readonly path: string;\n    readonly reason: string;\n}"
           }
@@ -21344,7 +21378,7 @@
         },
         "ForeignSkill": {
           "tier": "stable",
-          "declaration": "interface ForeignSkill {\n    readonly name: string;\n    readonly description: string;\n    readonly body: string;\n    readonly path: string;\n}",
+          "declaration": "interface ForeignSkill {\n    readonly name: string;\n    readonly description: string;\n    readonly body: string;\n    readonly requiresBins: readonly string[];\n    readonly path: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -21360,7 +21394,7 @@
         },
         "ReadForeignSetupOptions": {
           "tier": "stable",
-          "declaration": "interface ReadForeignSetupOptions {\n    readonly home: string;\n    readonly cwd?: string;\n}",
+          "declaration": "interface ReadForeignSetupOptions {\n    readonly home: string;\n    readonly cwd?: string;\n    readonly configDir?: string;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [],
@@ -21392,11 +21426,11 @@
           "internals": {
             "dist/foreign-setup.d.ts#ForeignHook": "interface ForeignHook {\n    readonly event: string;\n    readonly command: string;\n    readonly matcher?: string;\n    readonly timeoutMs?: number;\n}",
             "dist/foreign-setup.d.ts#ForeignMcpServer": "type ForeignMcpServer = {\n    readonly command: string;\n    readonly args?: string[];\n    readonly env?: Record<string, string>;\n    readonly cwd?: string;\n} | {\n    readonly type: 'http' | 'sse';\n    readonly url: string;\n    readonly headers?: Record<string, string>;\n};",
-            "dist/foreign-setup.d.ts#ForeignSetup": "interface ForeignSetup {\n    readonly kind: ForeignSetupKind;\n    readonly source: string;\n    readonly instructions: ForeignTextFile[];\n    readonly skills: ForeignSkill[];\n    readonly mcpServers: Record<string, ForeignMcpServer>;\n    readonly hooks: ForeignHook[];\n    readonly untranslated: UntranslatedEntry[];\n}",
+            "dist/foreign-setup.d.ts#ForeignSetup": "interface ForeignSetup {\n    readonly kind: ForeignSetupKind;\n    readonly source: string;\n    readonly instructions: ForeignTextFile[];\n    readonly skills: ForeignSkill[];\n    readonly memories: ForeignTextFile[];\n    readonly mcpServers: Record<string, ForeignMcpServer>;\n    readonly hooks: ForeignHook[];\n    readonly untranslated: UntranslatedEntry[];\n}",
             "dist/foreign-setup.d.ts#ForeignSetupKind": "type ForeignSetupKind = 'claude-code' | 'hermes';",
-            "dist/foreign-setup.d.ts#ForeignSkill": "interface ForeignSkill {\n    readonly name: string;\n    readonly description: string;\n    readonly body: string;\n    readonly path: string;\n}",
+            "dist/foreign-setup.d.ts#ForeignSkill": "interface ForeignSkill {\n    readonly name: string;\n    readonly description: string;\n    readonly body: string;\n    readonly requiresBins: readonly string[];\n    readonly path: string;\n}",
             "dist/foreign-setup.d.ts#ForeignTextFile": "interface ForeignTextFile {\n    readonly path: string;\n    readonly text: string;\n}",
-            "dist/foreign-setup.d.ts#ReadForeignSetupOptions": "interface ReadForeignSetupOptions {\n    readonly home: string;\n    readonly cwd?: string;\n}",
+            "dist/foreign-setup.d.ts#ReadForeignSetupOptions": "interface ReadForeignSetupOptions {\n    readonly home: string;\n    readonly cwd?: string;\n    readonly configDir?: string;\n}",
             "dist/foreign-setup.d.ts#UntranslatedEntry": "interface UntranslatedEntry {\n    readonly path: string;\n    readonly reason: string;\n}"
           }
         }
@@ -23575,6 +23609,14 @@
           "references": [],
           "internals": {}
         },
+        "InProcessSweeper": {
+          "tier": "stable",
+          "declaration": "interface InProcessSweeper {\n    stop(): Promise<void>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "Liveness": {
           "tier": "stable",
           "declaration": "type Liveness = 'alive' | 'dead' | 'undetermined';",
@@ -24110,6 +24152,16 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "startInProcessSweeper": {
+          "tier": "stable",
+          "declaration": "declare function startInProcessSweeper(intervalMs: number, run: () => void | Promise<void>): InProcessSweeper;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/session.d.ts#InProcessSweeper"],
+          "internals": {
+            "dist/session.d.ts#InProcessSweeper": "interface InProcessSweeper {\n    stop(): Promise<void>;\n}"
+          }
         },
         "streamTurnForkingIfBusy": {
           "tier": "stable",

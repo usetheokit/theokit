@@ -11,6 +11,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
+
 - Telegram runs on `@theokit/gateway-telegram` 0.14.0 and its own descriptor: the adapter reads a voice note's audio lazily, after the owner and group hooks, so the local descriptor and the 0.4.0 pin are gone. TheoClaw still reads only `THEOCLAW_TELEGRAM_TOKEN`; the descriptor's `allowedUsers`, `apiBase` and `requireMention` stay unset (#2834).
 - A start the gateway abandoned that later fails is written once (by the runner, masked) instead of twice; the channel loop's own second timer is gone (#2777).
 
@@ -21,6 +23,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - The `computer` tool is `createComputerTool` and the framebuffer reader is `readXwdHeader` from `@theokit/sdk-tools` 0.34.0; the app's own `xwd.ts` is gone and only the screenshot describer stays. Behaviour that changes: `left_click` needs both `x` and `y` (a click at the pointer is no longer offered), failures are plain `Error`s reading `computer <action>: ...`, and a pointer action answers `<action> done; pointer at ...` (#2697).
+- Removed the unwired `media/understanding.ts` (and its tests): nothing called it, and the pinned `gateway-telegram` adapter does not produce `event.audio`, so it could not be wired (#2763).
+- The transcript sweeper's timer now comes from `startInProcessSweeper` in `@theokit/agents/session`; the schedule and reports are unchanged.
+- `@theokit/tui` is pinned at 0.83.8 (was 0.83.4) and the TUI drops its own stream reducer for an interrupted turn: the framework's `interrupted` and `notice` events now fold it. Visible differences: a tool still running when the owner presses Esc is shown as cancelled (it stayed running), and the line reads "Interrupted by user" (was "interrupted"); a notice posted after the interruption is drawn below the turn (#2728).
+
 - The profile of `THEOCLAW_PROFILE` is now resolved and applied by the SDK's `resolveProfile` and `applyProfile` (`@theokit/sdk/persistence`); the app keeps the name message, the conflict refusal before the instance lock and `TheoClawConfigError` (#2715).
 
 - Session generations (`sessions.json`) are read and written by the SDK's `jsonGenerations`; the app no longer defines the file format. The file is the same, and an unreadable or foreign file is still refused with a `TheoClawConfigError` naming it (#2709).
@@ -34,6 +40,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - `THEOCLAW_LOG_FILE` is now mirrored by the host's `teeOutput`, bounded at 10 MiB with two rotated files (`.1`, `.2`); the app's own unbounded tee is removed (#2757).
 
 - The channel loop passes `reconnect.retryFalse` and uses the gateway's `maskSecrets`, replacing its `watchConnect` wrapper and its own copy; a connect that fails after its timeout is now reported as `start failed` (was `abandoned start failed`) (#2706).
+
+- The default model key resolves through the framework's `resolveAgentCredential` (`THEOKIT_API_KEY`, then `OPENROUTER_API_KEY`; still no credentials file), and custom-provider plugins come from `customProviderPlugin` in `@theokit/agents/auth`.
 
 - `tests/fakes.ts` re-exports `FakeAgent` from `@theokit/agents/testing` and no longer defines it. The gateway's `FakeAdapter` and `messageEvent` stay local: `@theokit/gateway` 0.30.0 has no `testing` subpath yet (#2759).
 
