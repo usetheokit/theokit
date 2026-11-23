@@ -2,6 +2,7 @@ import 'reflect-metadata'
 
 import { describe, expect, it } from 'vitest'
 
+import { GatewayRunner } from '@theokit/gateway'
 import type { GatewayContext, MessageEvent, PlatformName, SendResult } from '@theokit/gateway'
 
 import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
@@ -11,13 +12,68 @@ import { CHAT_COMMANDS } from '../src/channels/info-commands.js'
 import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { readAckReaction } from '../src/channels/typing.js'
-import { FakeAdapter, FakeAgent, assistant, finished, messageEvent } from './fakes.js'
+import { readGoalSettings } from '../src/channels/goal-command.js'
+import type { TurnAgent } from '../src/agent-port.js'
+import { FakeAdapter, FakeAgent, assistant, finished, messageEvent, waitFor } from './fakes.js'
 
-class TypingAdapter extends FakeAdapter {}
+class TypingAdapter extends FakeAdapter {
+  readonly calls: string[] = []
+  override async startTyping(id: string): Promise<void> {
+    this.calls.push(`start:${id}`)
+  }
+  override async stopTyping(id: string): Promise<void> {
+    this.calls.push(`stop:${id}`)
+  }
+}
 
 function ctxFor(event: MessageEvent, log: string[]): GatewayContext {
   return { event, reply: async (text) => (log.push(`reply:${text}`), { ok: true, messageId: 'm' }) }
 }
+
+/** Typing is the runner's: the app's own loop is gone, so a turn and a `/goal` are checked through it. */
+describe('typing indicator through GatewayRunner (OC-106)', () => {
+  async function runThrough(text: string, agent: TurnAgent) {
+    const adapter = new TypingAdapter('telegram')
+    const event = messageEvent('telegram', text)
+    const replies: string[] = []
+    const handler = createReplyHandler({
+      withAgent: async (_e, work) => work({ agent, agentId: 'a-1', release: () => undefined }),
+      reset: async () => undefined,
+      goal: readGoalSettings({ THEOCLAW_MODEL: 'openrouter/chat-model', OPENROUTER_API_KEY: 'router-key' }),
+    })
+    const runner = new GatewayRunner({
+      adapters: [adapter],
+      handler: async (inbound, ctx) => {
+        await handler(inbound, { ...ctx, reply: async (reply, options) => (replies.push(reply), ctx.reply(reply, options)) })
+      },
+    })
+    await runner.start()
+    await adapter.deliver(event)
+    await waitFor(() => adapter.calls.includes(`stop:${event.channel.id}`), 2000, 'typing to stop')
+    await runner.stop()
+    return { calls: adapter.calls, replies, channel: event.channel.id }
+  }
+
+  it('starts typing before a turn replies and stops it after', async () => {
+    const { calls, replies, channel } = await runThrough('hello', new FakeAgent({ frames: [assistant('Hi!'), finished()] }) as unknown as TurnAgent)
+    expect(replies).toEqual(['Hi!'])
+    expect(calls[0]).toBe(`start:${channel}`)
+    expect(calls.at(-1)).toBe(`stop:${channel}`)
+  })
+
+  it('starts typing around a /goal run and stops it after', async () => {
+    const agent = Object.assign(new FakeAgent({ frames: [] }) as unknown as TurnAgent, {
+      runUntil: async function* () {
+        yield { type: 'turn_started' }
+        return { status: 'achieved', finalResponse: 'done' }
+      },
+    })
+    const { calls, replies, channel } = await runThrough('/goal tidy the notes', agent)
+    expect(replies).toEqual(['achieved: done'])
+    expect(calls[0]).toBe(`start:${channel}`)
+    expect(calls.at(-1)).toBe(`stop:${channel}`)
+  })
+})
 
 describe('/help (OC-105)', () => {
   it('answers with the command list and blocks the message from the model', async () => {

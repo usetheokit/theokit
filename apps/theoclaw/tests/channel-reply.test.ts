@@ -129,9 +129,11 @@ describe('createReplyHandler', () => {
     const event = messageEvent('discord', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBeInstanceOf(AgentTurnError)
+    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toMatchObject({ name: 'AgentTurnError', platform: 'discord', code: 'unexpected_error' })
 
+    // The package's error carries a code only: the provider's message never reaches on_error.
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
+    expect(JSON.stringify(replies)).not.toContain(failure.message)
   })
 
   it.each([
@@ -152,9 +154,11 @@ describe('createReplyHandler', () => {
     const event = messageEvent('slack', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBeInstanceOf(AgentTurnError)
+    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toMatchObject({ platform: 'slack', code: 'unexpected_error' })
 
+    expect(replies).toHaveLength(1)
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
+    expect(replies.map((reply) => reply.text).join('')).not.toContain('Half an ans')
   })
 
   it('replies once with the fallback for a reasoning-only turn', async () => {
@@ -199,9 +203,11 @@ describe('createReplyHandler', () => {
 
     await expect(
       createReplyHandler({ reset: noReset, withAgent: () => Promise.reject(failure) })(event, ctx),
-    ).rejects.toBeInstanceOf(AgentTurnError)
+    ).rejects.toMatchObject({ platform: 'line', code: 'unexpected_error' })
 
+    expect(replies).toHaveLength(1)
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
+    expect(JSON.stringify(replies)).not.toContain(failure.message)
   })
 
   it('a failed send throws a typed error naming the platform', async () => {
@@ -216,6 +222,7 @@ describe('createReplyHandler', () => {
 
     await expect(turn).rejects.toBeInstanceOf(AgentTurnError)
     await expect(turn).rejects.toThrow(/telegram.*reply_refused/)
+    await expect(turn).rejects.not.toThrow(/slow down/)
   })
 
   it("replies in the platform's rendering", async () => {
@@ -275,7 +282,8 @@ describe('createReplyHandler', () => {
     const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     // The package handler's error reply is best effort: the turn's own failure is what is thrown.
-    await expect(turn).rejects.toBeInstanceOf(AgentTurnError)
+    await expect(turn).rejects.toMatchObject({ platform: 'telegram', code: 'unexpected_error' })
+    await expect(turn).rejects.not.toHaveProperty('cause')
   })
 
   it('a reply that throws after a failed turn still throws the turn failure', async () => {
@@ -292,7 +300,8 @@ describe('createReplyHandler', () => {
 
     const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
-    await expect(turn).rejects.toBeInstanceOf(AgentTurnError)
+    await expect(turn).rejects.toMatchObject({ platform: 'telegram', code: 'unexpected_error' })
+    await expect(turn).rejects.not.toBeInstanceOf(AggregateError)
   })
 
   it('a refused reply after the factory failed keeps the factory error as its cause', async () => {
@@ -394,6 +403,7 @@ describe('createReplyHandler in a GatewayRunner', () => {
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toBeInstanceOf(AgentTurnError)
+    expect(errors[0]).toMatchObject({ platform: 'telegram', code: 'reply_refused' })
     expect(errors[0]?.message).toBe('agent turn failed on telegram: reply_refused')
     expect(adapter.sent.map((message) => message.text)).toEqual(['hi'])
   })
@@ -405,7 +415,9 @@ describe('createReplyHandler in a GatewayRunner', () => {
 
     const errors = await runOne(adapter, createReplyHandler({ reset: noReset, withAgent: withOne(agent) }), 'hello')
 
+    expect(errors).toHaveLength(1)
     expect(errors[0]).toBeInstanceOf(AgentTurnError)
+    expect(errors[0]?.message).not.toContain(failure.message)
     expect(adapter.sent.map((message) => message.text)).toEqual([ERROR_SENTENCE])
   })
 })
