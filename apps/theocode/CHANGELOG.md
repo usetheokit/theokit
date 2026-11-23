@@ -16,6 +16,11 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `foreign-keys.ts` is gone: the settings keys recognised from a `.claude` file are `CLAUDE_SETTINGS_KEYS` from `@theokit/agents/config` (#2712).
+- The doctor's `settings` and `credential-strays` rows come from `checks.settingsReport` and `checks.leftovers` in `@theokit/agents/doctor`; their wording changes (`not implemented` for `not implemented here`, `permissions not supported` for `permission entries not honoured`, `path (…)` for `path — …`, `, ` separators, and `… no longer read; remove if you no longer need it` for the stray row).
+- `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
+- The TUI session pointer is the framework's `last-session` (`loadOrCreateSessionId` / `persistSessionId` from `@theokit/agents/session`) instead of `<cwd>/.theokit/tui-session`; the old file is read once, when no `last-session` exists, and its id is copied across. Writes stay serialised per pointer and a failed write is still reported. `gc/pointer.ts` is gone: session delete, fork and `sessions gc` read `last-session` through `readPointerId`, which still refuses when the file cannot be read (#2754).
+- `/theme` with `NO_COLOR` set no longer claims a colour switch the provider would not draw: it refuses, says why, and persists nothing (#2731).
 - The upward instruction walk is `loadInstructionWalk` from `@theokit/agents/config`; `agents-md.ts` defines no directory walk. `loadAgentsMd` and `agentsMdChain` are async, the chain is read once per build, and files come out root-most first with base before local at each level (#2739).
 - `run` passes `format` to `runHeadlessTurn` and uses its result (final text, usage, stop reason) instead of tapping a muted turn; `readPrompt`, `finalMessage`, `toContentChunk` and the failed-call set are gone in favour of `readHeadlessPrompt`, `finalMessageOf`, `contentChunkFromEvent` and the fold's `isError` (#2723).
 - Settings reading uses the framework: `settingsCandidates` builds the own and legacy roots (`layerCandidates` keeps the per-path hook delivery), and the managed-settings paths come from `MANAGED_SETTINGS_PATHS` (#2713).
@@ -28,7 +33,9 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ### Changed
 
-- The standalone consumer pins `@theokit/sdk` 9.0.0 (`standalone/released.json`, the three manifests and the lockfile), so the registry-consumer check passes against the current SDK.
+- The standalone consumer pins `@theokit/sdk` 11.0.0 (`standalone/released.json`, the three manifests and the lockfile), so the registry-consumer check passes against the current SDK.
+- `sessions gc` now runs through the shared `sessionsGcCommand` from `@theokit/agents/commands`; the registry and live-session protections and the output are unchanged.
+
 - `resolveConfig` declares its keys, defaults, environment knobs, floors and profiles once and delegates the merge to `defineLayeredConfig` from `@theokit/agents/config` (#2604). Resolved values are unchanged. The helper merges fields inside a same-named profile and ignores profile tables in the `cli` layer, so the whole-profile replacement and `-c`-defined profiles are settled here before the call.
 - Turn-failure classification uses `classifyTurnFailure` from `@theokit/agents/errors` (#1845, part of #1930); the retry wording and the message-text fallback stay here. A typed `metadata.statusCode` is now also recognised as transient.
 - The standalone consumer has `standalone/released.json` and `tools/sync-standalone.mjs` (`--check` / `--write`); `pnpm check:standalone` (drift check, frozen install, `standalone/auth.test.mjs`) now runs before `pnpm release` and `pnpm version-packages` (#2334).
