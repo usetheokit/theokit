@@ -11,6 +11,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- `theoclaw import` now reads the Claude Code and Hermes setups with `readForeignSetup` from `@theokit/agents/foreign-setup`; the four reader files under `src/migration/` are gone. Visible difference: a URL server with a transport other than `http` or `sse` is dropped at read time (`transport is not http or sse`) instead of being staged for the import to refuse (#2717).
+
+- Telegram runs on `@theokit/gateway-telegram` 0.14.0 and its own descriptor: the adapter reads a voice note's audio lazily, after the owner and group hooks, so the local descriptor and the 0.4.0 pin are gone. TheoClaw still reads only `THEOCLAW_TELEGRAM_TOKEN`; the descriptor's `allowedUsers`, `apiBase` and `requireMention` stay unset (#2834).
 - A start the gateway abandoned that later fails is written once (by the runner, masked) instead of twice; the channel loop's own second timer is gone (#2777).
 
 - The `/webchat` routes are mounted by `createHostedChat` from `theokit/server/http`; `webchat/routes.ts` keeps the token check, the trusted-proxy and visitor gate and the turn adapter. No change in what a client sees (#2733).
@@ -20,6 +23,13 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Web search is now chosen by `resolveWebSearchAdapter` from `@theokit/sdk-tools` (pinned to 0.34.0) instead of code of TheoClaw's own. The rules are unchanged: `THEOCLAW_SEARCH` still wins, a `TAVILY_API_KEY` alone still leaves search off, every search key is still masked, and a bad value is still a `TheoClawConfigError` naming the variable (#2698).
+
+- The profile of `THEOCLAW_PROFILE` is now resolved and applied by the SDK's `resolveProfile` and `applyProfile` (`@theokit/sdk/persistence`); the app keeps the name message, the conflict refusal before the instance lock and `TheoClawConfigError` (#2715).
+
+- Session generations (`sessions.json`) are read and written by the SDK's `jsonGenerations`; the app no longer defines the file format. The file is the same, and an unreadable or foreign file is still refused with a `TheoClawConfigError` naming it (#2709).
+
+- `@theokit/gateway` is pinned at 0.30.0 (was 0.25.0). It brings `keys` on `scopedStrategy`, `reconnect.retryFalse` with the late-connect `failed` event, and `messages` on `createAccessPolicyHook`; the app code that these replace is left for later issues (#2703).
+
 - Voice notes are transcribed and answered through `@theokit/plugin-voice` instead of hand-written OpenAI speech requests. Spoken replies are now MP3 (sent as `reply.mp3`) because the plugin requests MP3 from OpenAI; the 60-second timeout and the no-redirect policy are kept.
 
 - `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
@@ -39,6 +49,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - The turn event mask moved into `@theokit/agents/bridge` as `createAgentEventMask`, and `runAgentTurn` takes the same masking as `secrets`; `control-plane/event-mask.ts` is gone (#2735).
 - `theoclaw skills publish` now reads `THEOCLAW_SKILLS_REGISTRY` and `THEOCLAW_SKILLS_TOKEN` from the instance configuration file too, as `skills search` and `skills install` do; before, it read the process environment only (#2764).
 
+
+- `theoclaw worker pair` redeems its setup code with `redeemPairing` from `@theokit/agents/control` instead of a hand-written POST. A control URL whose scheme is not `http(s)` or `ws(s)` is now refused with exit code 1 (#2711).
 - A fact the post-turn reviewer saves now reaches the configured memory mirror through the SDK itself, and the legacy-facts import writes through the SDK's `addMemoryFact`; the app no longer mirrors by hand and imports nothing from `@theokit/sdk/internal/`. The SDK 11.0.0 does not mirror the reviewer's fact, so the repository carries a pnpm patch (`patches/@theokit__sdk@11.0.0.patch`) until an SDK release does (#2743).
 - `@theokit/gateway` is pinned at 0.30.0 (was 0.25.0). It brings `keys` on `scopedStrategy`, `reconnect.retryFalse` with the late-connect `failed` event, and `messages` on `createAccessPolicyHook`; the app code that these replace is left for later issues (#2703).
 - `@theokit/gateway-sms` is pinned at 0.7.0 (was 0.6.0), and the phone-call route is built with `createVoiceCallHandler`; the app no longer builds TwiML. Caller-visible differences: a silence repeats the greeting instead of "Are you still there?"; a disallowed caller is hung up on without a spoken refusal; the goodbye text is "Goodbye."; call state expires after an hour instead of an LRU of 1000 calls; a request without `CallSid` or `From` answers 400; the `<Redirect>` after `<Gather>` is gone, so a call left silent may end without posting again (#2708).
