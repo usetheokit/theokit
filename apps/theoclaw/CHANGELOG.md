@@ -11,7 +11,19 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The `/webchat` routes are mounted by `createHostedChat` from `theokit/server/http`; `webchat/routes.ts` keeps the token check, the trusted-proxy and visitor gate and the turn adapter. No change in what a client sees (#2733).
+- Channels, WebChat and the terminal UI route their slash commands through one `createCommandRegistry` each, in place of regular expressions, a `switch` and `if` chains. `/new` and `/reset` are `exact`, so `/new chat` is a message to the agent. `/think` with extra words (`/think a b`) now answers the usage line instead of going to the model (#2726).
+- Pairing and the owner policy hook now come from `@theokit/gateway` 0.30.0 (`createFilePairingStore`, `createAccessPolicyHook` with its `messages` option, `senderKey`); `pairing-store.ts` is gone and `owner-policy-hook.ts` wraps the gateway hook with TheoClaw's reply texts. TheoClaw still answers an owner's bare `/approve` in a DM with the invalid-code text, lets an owner's `/approve` in a group go on to the agent without pairing anyone (only a DM pairs), and admits an unauthenticated-platform DM under `open`. Observable differences: pairing codes run 100000 to 999999 (no leading zeros); a failed write is no longer logged with its path (the code is still kept for a retry); an owner's DM no longer fails when the pairing store's `isPaired` throws, since the owner is known before the store is read; a pairing file that cannot be read still stops the start and names the path and `THEOCLAW_STATE_DIR` (#2704).
+- `@theokit/sdk-tools` moves from 0.29.0 to 0.34.0, so the computer tool, the XWD helpers, `resolveWebSearchAdapter` and `baseDir` on the patch and edit tools are reachable from the app (#2696).
 ### Changed
+
+- Voice notes are transcribed and answered through `@theokit/plugin-voice` instead of hand-written OpenAI speech requests. Spoken replies are now MP3 (sent as `reply.mp3`) because the plugin requests MP3 from OpenAI; the 60-second timeout and the no-redirect policy are kept.
+
+- `@theokit/sdk` is pinned at 11.0.0 (was 9.0.0), so `binaryOnPath`, `resolveSkillRoots`, `explainSkills` and `userDir` from `@theokit/sdk/skills` and `sendDefaults.doomLoop` are reachable (#2700).
+
+- `THEOCLAW_LOG_FILE` is now mirrored by the host's `teeOutput`, bounded at 10 MiB with two rotated files (`.1`, `.2`); the app's own unbounded tee is removed (#2757).
+
+- The channel loop passes `reconnect.retryFalse` and uses the gateway's `maskSecrets`, replacing its `watchConnect` wrapper and its own copy; a connect that fails after its timeout is now reported as `start failed` (was `abandoned start failed`) (#2706).
 
 - Display settings `cleanup_progress` and `streaming` are removed: nothing read them, so `THEOCLAW_DISPLAY_CLEANUP_PROGRESS` is now ignored. Per-platform display tiers stay in TheoClaw as product policy; the gateway's `progressFor` keeps deciding by edit capability alone (#2756).
 
@@ -19,14 +31,20 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 - Exec approval installs the framework's `gate.plugin` and the ACP permission prompt uses the gate's own timeout, with no timer of its own. A shell call with no command is now refused as `theoclaw: exec refused: the decision failed: the command is missing`.
 
+- The turn event mask moved into `@theokit/agents/bridge` as `createAgentEventMask`, and `runAgentTurn` takes the same masking as `secrets`; `control-plane/event-mask.ts` is gone (#2735).
 - `theoclaw skills publish` now reads `THEOCLAW_SKILLS_REGISTRY` and `THEOCLAW_SKILLS_TOKEN` from the instance configuration file too, as `skills search` and `skills install` do; before, it read the process environment only (#2764).
 
-- A fact the post-turn reviewer saves now reaches the configured memory mirror through the SDK itself, and the legacy-facts import writes through the SDK's `addMemoryFact`; the app no longer mirrors by hand and imports nothing from `@theokit/sdk/internal/`. The SDK 9.0.0 does neither, so the repository carries a pnpm patch (`patches/@theokit__sdk@9.0.0.patch`) until an SDK release does (#2743).
+- A fact the post-turn reviewer saves now reaches the configured memory mirror through the SDK itself, and the legacy-facts import writes through the SDK's `addMemoryFact`; the app no longer mirrors by hand and imports nothing from `@theokit/sdk/internal/`. The SDK 11.0.0 does not mirror the reviewer's fact, so the repository carries a pnpm patch (`patches/@theokit__sdk@11.0.0.patch`) until an SDK release does (#2743).
 - `@theokit/gateway` is pinned at 0.30.0 (was 0.25.0). It brings `keys` on `scopedStrategy`, `reconnect.retryFalse` with the late-connect `failed` event, and `messages` on `createAccessPolicyHook`; the app code that these replace is left for later issues (#2703).
 - `@theokit/gateway-sms` is pinned at 0.7.0 (was 0.6.0), and the phone-call route is built with `createVoiceCallHandler`; the app no longer builds TwiML. Caller-visible differences: a silence repeats the greeting instead of "Are you still there?"; a disallowed caller is hung up on without a spoken refusal; the goodbye text is "Goodbye."; call state expires after an hour instead of an LRU of 1000 calls; a request without `CallSid` or `From` answers 400; the `<Redirect>` after `<Gather>` is gone, so a call left silent may end without posting again (#2708).
 
 - `@theokit/gateway-agent` is pinned at 0.5.0 (was 0.3.2). The reply handler now uses its `onTurnStart`, `decorateReply`, `onTurnEnd` and `createBroadcastGroups` in place of its own stream wrapper, running-turn count and fan-out. Visible differences: a broadcast thread is kept as 10 exchanges (it was 20 turns), its prompt reads `Conversation so far:` and `New message:` and no longer names each platform, and a cancelled run now answers with the error sentence and fails the turn, as the package does. The thread still holds masked text, and a member that could not be reached is still written (#2707).
 
+- Session keys are now built by the gateway `scopedStrategy` (gateway `keys` option, pinned at 0.30.0). The `main`, `peer-<name>` and raw platform segments (`google_chat`, `tlon_urbit`) are kept, so stored sessions are still found (#2705).
+
+### Changed
+
+- Skill roots come from `resolveSkillRoots` and the binary gate from `binaryOnPath`, both in `@theokit/sdk/skills` (SDK pinned at 11.0.0), instead of local mirrors.
 - The `theoclaw` command line (`dist/cli.js`) now exits once stdout and stderr are flushed, on success and on error. It called `process.exit` at once, so a pipe reader (`docker exec`) lost the `updated <from> -> <to>` line after a long update output (#2681).
 - The browser wrapper now sends the browser server one tool call at a time. A model that sent `browser_navigate` and `browser_snapshot` in one turn got the snapshot of a page still loading, and reported that the page was empty (the OC-60 live failure, #2673). It also no longer hands the model an empty answer or a dead link when a snapshot file cannot be read: the answer says why and tells the model to call `browser_snapshot` again.
 - `theoclaw update` now starts its `updated <from> -> <to>` line on a line of its own when the build's output ends without a newline; before, the line ran on to the build's last line and a reader of the output did not find it.
