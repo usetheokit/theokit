@@ -5,6 +5,8 @@ import { TheoClawConfigError } from '../control-plane/errors.js'
 /**
  * Per-platform display resolver (B-370, PIECE-1; after Hermes `gateway/display_config.py`).
  * One property picks the tier: whether the platform can edit a message it already sent.
+ * Per-platform tiers are TheoClaw product policy and stay here: `progressFor` in gateway-agent decides by
+ * edit capability alone, so the gateway does not own a `resolveDisplay`.
  * Lookup order: `platforms[platform][key]` -> `global[key]` -> platform default -> tier default.
  */
 export type DisplayTier = 'high' | 'medium' | 'low' | 'minimal'
@@ -15,11 +17,8 @@ export type ReasoningStyle = 'subtext' | 'plain'
 export interface DisplaySettings {
   readonly tool_progress: ToolProgress
   readonly live_status: LiveStatus
-  /** Delete progress bubbles after a successful reply; failed runs keep them. */
-  readonly cleanup_progress: boolean
   readonly show_reasoning: boolean
   readonly reasoning_style: ReasoningStyle
-  readonly streaming: boolean
   readonly tool_preview_length: number
 }
 
@@ -31,10 +30,10 @@ export interface DisplayConfig {
 }
 
 const TIER_DEFAULTS: Readonly<Record<DisplayTier, DisplaySettings>> = {
-  high: { tool_progress: 'all', live_status: 'full', cleanup_progress: true, show_reasoning: false, reasoning_style: 'plain', streaming: true, tool_preview_length: 40 },
-  medium: { tool_progress: 'new', live_status: 'verb', cleanup_progress: true, show_reasoning: false, reasoning_style: 'plain', streaming: true, tool_preview_length: 40 },
-  low: { tool_progress: 'off', live_status: 'off', cleanup_progress: false, show_reasoning: false, reasoning_style: 'plain', streaming: false, tool_preview_length: 0 },
-  minimal: { tool_progress: 'off', live_status: 'off', cleanup_progress: false, show_reasoning: false, reasoning_style: 'plain', streaming: false, tool_preview_length: 0 },
+  high: { tool_progress: 'all', live_status: 'full', show_reasoning: false, reasoning_style: 'plain', tool_preview_length: 40 },
+  medium: { tool_progress: 'new', live_status: 'verb', show_reasoning: false, reasoning_style: 'plain', tool_preview_length: 40 },
+  low: { tool_progress: 'off', live_status: 'off', show_reasoning: false, reasoning_style: 'plain', tool_preview_length: 0 },
+  minimal: { tool_progress: 'off', live_status: 'off', show_reasoning: false, reasoning_style: 'plain', tool_preview_length: 0 },
 }
 
 /** Tier of each platform. LINE and Teams are not in Hermes' table: chosen by whether they edit. */
@@ -87,7 +86,7 @@ export function resolveDisplay(platform: PlatformName | string, config: DisplayC
 
 type Env = Readonly<Record<string, string | undefined>>
 
-const OVERRIDE_KEYS = ['TOOL_PROGRESS', 'LIVE_STATUS', 'CLEANUP_PROGRESS', 'SHOW_REASONING'] as const
+const OVERRIDE_KEYS = ['TOOL_PROGRESS', 'LIVE_STATUS', 'SHOW_REASONING'] as const
 
 function overrideFrom(env: Env, prefix: string): DisplayOverrides {
   const out: { -readonly [K in keyof DisplaySettings]?: DisplaySettings[K] } = {}
@@ -100,11 +99,7 @@ function overrideFrom(env: Env, prefix: string): DisplayOverrides {
     }
     if (key === 'TOOL_PROGRESS') out.tool_progress = raw === 'all' || raw === 'new' || raw === 'off' ? raw : bad()
     else if (key === 'LIVE_STATUS') out.live_status = raw === 'full' || raw === 'verb' || raw === 'off' ? raw : bad()
-    else {
-      const flag = raw === 'true' || raw === 'on' ? true : raw === 'false' || raw === 'off' ? false : bad()
-      if (key === 'CLEANUP_PROGRESS') out.cleanup_progress = flag
-      else out.show_reasoning = flag
-    }
+    else out.show_reasoning = raw === 'true' || raw === 'on' ? true : raw === 'false' || raw === 'off' ? false : bad()
   }
   return out
 }
@@ -112,7 +107,7 @@ function overrideFrom(env: Env, prefix: string): DisplayOverrides {
 /**
  * Overrides from the environment: `THEOCLAW_DISPLAY_<KEY>` for every platform and
  * `THEOCLAW_DISPLAY_<PLATFORM>_<KEY>` for one, with KEY one of TOOL_PROGRESS (all|new|off),
- * LIVE_STATUS (full|verb|off), CLEANUP_PROGRESS and SHOW_REASONING (true|false). A bad value throws
+ * LIVE_STATUS (full|verb|off), SHOW_REASONING (true|false). A bad value throws
  * `TheoClawConfigError` naming the variable. Only known platforms are read, so a variable for a
  * misspelled platform changes nothing.
  */

@@ -28,11 +28,10 @@
  * A CUSTOM theme is the exception and is genuinely session-only: `storeThemeBase` takes a
  * `ThemeBase`, and there is nowhere for a slug to go.
  *
- * The override outranks `NO_COLOR`, which is the one ordering worth defending. `NO_COLOR` wins the
- * ENVIRONMENT race because it is the more specific of two ambient signals; an override is not
- * ambient at all — it was typed, just now, by the person watching the screen, and refusing it would
- * make the accessibility signal a trap rather than a default. What the environment resolved stays
- * visible in the same line, so nothing about that decision is hidden.
+ * `NO_COLOR` outranks the override. `TheoTUIProvider` returns the no-colour theme whenever the
+ * variable is non-empty, whatever this slot holds, so `handleTheme` refuses colour selections while
+ * it is set and says why (`/theme no-color` is still accepted) instead of reporting a switch the
+ * frame would never show.
  */
 import { useSyncExternalStore } from 'react'
 import type { ReactElement, ReactNode } from 'react'

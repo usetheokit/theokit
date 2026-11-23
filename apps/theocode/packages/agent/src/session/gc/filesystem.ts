@@ -14,6 +14,7 @@ import { sessionHasWriter } from '@theokit/agents/persistence'
 import { classifyProjects, projectsRoot, type FsSeam } from '@theokit/agents/session'
 
 import { listAgents } from '../agent-list.js'
+import { readPointerId } from '../session-ops.js'
 import { runSessionGCAllProjects } from './all-sessions-apply.js'
 import {
   planSessionGCAllProjects,
@@ -23,7 +24,6 @@ import {
   type AllPlan,
   type AllResult,
 } from './all-sessions.js'
-import { readPointerId } from './pointer.js'
 import { claimDefaultRoot } from './root-claim.js'
 import { OWNERSHIP_MARKER, rootIsOurs } from './root-ownership.js'
 
@@ -143,7 +143,7 @@ export async function planAllProjectsOnDisk(opts: CliOptions = {}): Promise<AllP
     classify: sweepClassifier(root, projects),
     listRegistry: (cwd) => listProjectRegistry(cwd),
     hasLiveWriter: (transcript) => sessionHasWriter(transcript),
-    readPointer: (cwd) => readPointerId(cwd),
+    readPointer: (cwd) => readPointerId(cwd, root),
   })
 }
 
@@ -208,7 +208,7 @@ export async function runAllProjectsOnDisk(
     rmdir: (path) => fsp.rmdir(path),
     deleteAgent: (id) => Agent.delete(id),
     hasLiveWriter: (transcript) => sessionHasWriter(transcript),
-    readPointer: (cwd) => readPointerId(cwd),
+    readPointer: (cwd) => readPointerId(cwd, root),
     listProject: (p) => {
       try {
         return listRealProject(root, p)
