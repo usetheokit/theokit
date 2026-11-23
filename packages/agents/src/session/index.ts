@@ -123,3 +123,6 @@ export {
   streamTurnForkingIfBusy,
   type ForkIfBusyOptions,
 } from './fork-if-busy.js'
+
+// "Start a new conversation under the same key" — a persistent counter per key.
+export { createSessionGenerations, type SessionGenerations } from './session-generations.js'

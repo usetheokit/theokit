@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1482 export(s) across 27 entry point(s).
+1486 export(s) across 27 entry point(s).
 
 Measured against `@theokit/sdk@5.32.0`.
 
@@ -1345,6 +1345,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `CollectorRootError` | value |
 | `CollectorRootNotOwnedError` | value |
 | `collectorRootOwner` | value |
+| `createSessionGenerations` | value |
 | `deleteSession` | value |
 | `forkBeforeUserTurn` | value |
 | `ForkedSessionBusyError` | value |
@@ -1396,6 +1397,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `RunProjectsGCResult` | type |
 | `RunTranscriptGCResult` | type |
 | `ScheduleSessionSweepOptions` | type |
+| `SessionGenerations` | type |
 | `SessionSummary` | type |
 | `SweepDecision` | type |
 | `SweepScheduleResult` | type |
@@ -1564,6 +1566,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `readHeadlessPrompt` | value |
 | `routeCommand` | value |
 | `runHeadlessTurn` | value |
+| `sessionCommands` | value |
 | `SHUTDOWN_EXIT_CODES` | value |
 | `CleanupTask` | type |
 | `CommandArgument` | type |
@@ -1576,6 +1579,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `HeadlessTurnResult` | type |
 | `RoutedInput` | type |
 | `RouteFailure` | type |
+| `SessionCommandHandlers` | type |
 | `Shutdown` | type |
 | `ShutdownDeps` | type |
 | `ShutdownOutcome` | type |
