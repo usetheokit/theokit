@@ -1467,6 +1467,8 @@ Measured against `@theokit/sdk@11.0.0`.
 | `transcriptRootHint` | value |
 | `transcriptToText` | value |
 | `ClassifyProjectsOptions` | type |
+| `CollectorRootMarkerFormat` | type |
+| `CollectorRootOptions` | type |
 | `DeleteSessionOptions` | type |
 | `DeleteSessionResult` | type |
 | `ForkIfBusyOptions` | type |

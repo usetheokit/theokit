@@ -12,6 +12,7 @@ import {
   type ProjectsGCCandidate,
   type ProjectsGCPlan,
 } from '../../src/session/index.js'
+import { sessionPointerPath } from '../../src/session/session-pointer.js'
 
 let home: string
 let projects: string
@@ -157,5 +158,32 @@ describe('runProjectsGC', () => {
     expect(typed.message).toContain('intruder')
     expect(typed.message).toContain('theocode')
     expect(existsSync(a)).toBe(true)
+  })
+
+  it('applies under a legacy marker, and refuses a transcript the pointer now names', async () => {
+    rmSync(join(home, '.theokit-collector.json'))
+    writeFileSync(join(home, '.legacy.json'), JSON.stringify({ product: 'theocode' }))
+    const existingMarker = {
+      fileName: '.legacy.json',
+      ownerOf: (p: unknown) => (p as { product?: string }).product,
+    }
+    const a = file('a.jsonl')
+    const b = file('b.jsonl')
+    writeFileSync(sessionPointerPath(CWD, home), 'b\n')
+    const result = await runProjectsGC(
+      planOf([
+        { kind: 'transcript', target: a },
+        { kind: 'transcript', target: b, sessionId: undefined },
+      ]),
+      {
+        apply: true,
+        owner: OWNER,
+        existingMarker,
+        ...noWriter,
+      },
+    )
+    expect(existsSync(a)).toBe(false)
+    expect(existsSync(b)).toBe(true)
+    expect(result.refused).toHaveLength(1)
   })
 })

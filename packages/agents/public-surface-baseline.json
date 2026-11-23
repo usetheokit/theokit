@@ -23519,6 +23519,14 @@
           "references": [],
           "internals": {}
         },
+        "CollectorRootMarkerFormat": {
+          "tier": "stable",
+          "declaration": "interface CollectorRootMarkerFormat {\n    readonly fileName: string;\n    readonly ownerOf: (parsed: unknown) => string | undefined;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "CollectorRootNotOwnedError": {
           "tier": "stable",
           "declaration": "declare class CollectorRootNotOwnedError extends TheokitAgentError {\n    readonly projectsRoot: string;\n    readonly expected: string;\n    readonly actual: string | undefined;\n    readonly name = \"CollectorRootNotOwnedError\";\n    constructor(projectsRoot: string, expected: string, actual: string | undefined);\n}",
@@ -23526,6 +23534,16 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "CollectorRootOptions": {
+          "tier": "stable",
+          "declaration": "interface CollectorRootOptions {\n    readonly existingMarker?: CollectorRootMarkerFormat;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": ["dist/session.d.ts#CollectorRootMarkerFormat"],
+          "internals": {
+            "dist/session.d.ts#CollectorRootMarkerFormat": "interface CollectorRootMarkerFormat {\n    readonly fileName: string;\n    readonly ownerOf: (parsed: unknown) => string | undefined;\n}"
+          }
         },
         "DeleteSessionOptions": {
           "tier": "stable",
@@ -23663,7 +23681,7 @@
         },
         "PlanProjectsGCOptions": {
           "tier": "stable",
-          "declaration": "interface PlanProjectsGCOptions {\n    readonly projectsRoot: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly now?: number;\n    readonly listRegistry?: (cwd: string) => Promise<readonly ProjectsGCRegistryEntry[]>;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly classify?: (projects: readonly string[], fs: ProjectsGCFs) => ReadonlyMap<string, LivenessVerdict>;\n    readonly candidateCwds?: () => readonly string[];\n    readonly candidateCwdsComplete?: boolean;\n    readonly fs?: ProjectsGCFs;\n}",
+          "declaration": "interface PlanProjectsGCOptions {\n    readonly projectsRoot: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly now?: number;\n    readonly listRegistry?: (cwd: string) => Promise<readonly ProjectsGCRegistryEntry[]>;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly classify?: (projects: readonly string[], fs: ProjectsGCFs) => ReadonlyMap<string, LivenessVerdict>;\n    readonly candidateCwds?: () => readonly string[];\n    readonly candidateCwdsComplete?: boolean;\n    readonly cwdCoverage?: 'declared' | 'transcripts';\n    readonly deadProjects?: 'inspect' | 'keep-last';\n    readonly fs?: ProjectsGCFs;\n}",
           "runtime": false,
           "deprecatedSince": null,
           "references": [
@@ -23745,11 +23763,17 @@
         },
         "RunProjectsGCOptions": {
           "tier": "stable",
-          "declaration": "interface RunProjectsGCOptions {\n    readonly apply: boolean;\n    readonly owner?: {\n        readonly app: string;\n    };\n    readonly removeFromRegistry?: (sessionId: string) => unknown;\n    readonly registryTimeoutMs?: number;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>;\n}",
+          "declaration": "interface RunProjectsGCOptions {\n    readonly apply: boolean;\n    readonly owner?: {\n        readonly app: string;\n    };\n    readonly removeFromRegistry?: (sessionId: string) => unknown;\n    readonly registryTimeoutMs?: number;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly existingMarker?: CollectorRootOptions['existingMarker'];\n    readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>;\n}",
           "runtime": false,
           "deprecatedSince": null,
-          "references": ["dist/session.d.ts#ProjectsGCFs"],
+          "references": [
+            "dist/session.d.ts#CollectorRootMarkerFormat",
+            "dist/session.d.ts#CollectorRootOptions",
+            "dist/session.d.ts#ProjectsGCFs"
+          ],
           "internals": {
+            "dist/session.d.ts#CollectorRootMarkerFormat": "interface CollectorRootMarkerFormat {\n    readonly fileName: string;\n    readonly ownerOf: (parsed: unknown) => string | undefined;\n}",
+            "dist/session.d.ts#CollectorRootOptions": "interface CollectorRootOptions {\n    readonly existingMarker?: CollectorRootMarkerFormat;\n}",
             "dist/session.d.ts#ProjectsGCFs": "interface ProjectsGCFs {\n    readdir: (dir: string) => readonly string[];\n    stat: (path: string) => {\n        readonly isDirectory: boolean;\n        readonly mtimeMs?: number;\n    };\n    readFile: (path: string) => string;\n    hasLiveWriter: (transcript: string) => boolean;\n}"
           }
         },
@@ -23903,11 +23927,17 @@
         },
         "claimCollectorRoot": {
           "tier": "stable",
-          "declaration": "declare function claimCollectorRoot(projectsRoot: string, owner: {\n    app: string;\n}): void;",
+          "declaration": "declare function claimCollectorRoot(projectsRoot: string, owner: {\n    app: string;\n}, options?: CollectorRootOptions): void;",
           "runtime": true,
           "deprecatedSince": null,
-          "references": [],
-          "internals": {}
+          "references": [
+            "dist/session.d.ts#CollectorRootMarkerFormat",
+            "dist/session.d.ts#CollectorRootOptions"
+          ],
+          "internals": {
+            "dist/session.d.ts#CollectorRootMarkerFormat": "interface CollectorRootMarkerFormat {\n    readonly fileName: string;\n    readonly ownerOf: (parsed: unknown) => string | undefined;\n}",
+            "dist/session.d.ts#CollectorRootOptions": "interface CollectorRootOptions {\n    readonly existingMarker?: CollectorRootMarkerFormat;\n}"
+          }
         },
         "classifyProjects": {
           "tier": "stable",
@@ -23929,11 +23959,17 @@
         },
         "collectorRootOwner": {
           "tier": "stable",
-          "declaration": "declare function collectorRootOwner(projectsRoot: string): {\n    app: string;\n} | undefined;",
+          "declaration": "declare function collectorRootOwner(projectsRoot: string, options?: CollectorRootOptions): {\n    app: string;\n} | undefined;",
           "runtime": true,
           "deprecatedSince": null,
-          "references": [],
-          "internals": {}
+          "references": [
+            "dist/session.d.ts#CollectorRootMarkerFormat",
+            "dist/session.d.ts#CollectorRootOptions"
+          ],
+          "internals": {
+            "dist/session.d.ts#CollectorRootMarkerFormat": "interface CollectorRootMarkerFormat {\n    readonly fileName: string;\n    readonly ownerOf: (parsed: unknown) => string | undefined;\n}",
+            "dist/session.d.ts#CollectorRootOptions": "interface CollectorRootOptions {\n    readonly existingMarker?: CollectorRootMarkerFormat;\n}"
+          }
         },
         "createSessionGenerations": {
           "tier": "stable",
@@ -24023,7 +24059,7 @@
           "internals": {
             "dist/session.d.ts#Liveness": "type Liveness = 'alive' | 'dead' | 'undetermined';",
             "dist/session.d.ts#LivenessVerdict": "interface LivenessVerdict {\n    readonly liveness: Liveness;\n    readonly reason: string;\n    readonly cwd?: string;\n}",
-            "dist/session.d.ts#PlanProjectsGCOptions": "interface PlanProjectsGCOptions {\n    readonly projectsRoot: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly now?: number;\n    readonly listRegistry?: (cwd: string) => Promise<readonly ProjectsGCRegistryEntry[]>;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly classify?: (projects: readonly string[], fs: ProjectsGCFs) => ReadonlyMap<string, LivenessVerdict>;\n    readonly candidateCwds?: () => readonly string[];\n    readonly candidateCwdsComplete?: boolean;\n    readonly fs?: ProjectsGCFs;\n}",
+            "dist/session.d.ts#PlanProjectsGCOptions": "interface PlanProjectsGCOptions {\n    readonly projectsRoot: string;\n    readonly keepLast: number;\n    readonly maxAgeDays: number;\n    readonly now?: number;\n    readonly listRegistry?: (cwd: string) => Promise<readonly ProjectsGCRegistryEntry[]>;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly classify?: (projects: readonly string[], fs: ProjectsGCFs) => ReadonlyMap<string, LivenessVerdict>;\n    readonly candidateCwds?: () => readonly string[];\n    readonly candidateCwdsComplete?: boolean;\n    readonly cwdCoverage?: 'declared' | 'transcripts';\n    readonly deadProjects?: 'inspect' | 'keep-last';\n    readonly fs?: ProjectsGCFs;\n}",
             "dist/session.d.ts#ProjectsGCCandidate": "interface ProjectsGCCandidate {\n    readonly project: string;\n    readonly kind: ProjectsGCKind;\n    readonly target: string;\n    readonly sessionId?: string;\n    readonly ageDays: number;\n}",
             "dist/session.d.ts#ProjectsGCFs": "interface ProjectsGCFs {\n    readdir: (dir: string) => readonly string[];\n    stat: (path: string) => {\n        readonly isDirectory: boolean;\n        readonly mtimeMs?: number;\n    };\n    readFile: (path: string) => string;\n    hasLiveWriter: (transcript: string) => boolean;\n}",
             "dist/session.d.ts#ProjectsGCKind": "type ProjectsGCKind = 'transcript' | 'writer-lock' | 'lock-directory' | 'temp' | 'registry';",
@@ -24123,6 +24159,8 @@
           "runtime": true,
           "deprecatedSince": null,
           "references": [
+            "dist/session.d.ts#CollectorRootMarkerFormat",
+            "dist/session.d.ts#CollectorRootOptions",
             "dist/session.d.ts#ProjectsGCCandidate",
             "dist/session.d.ts#ProjectsGCFs",
             "dist/session.d.ts#ProjectsGCKind",
@@ -24131,11 +24169,13 @@
             "dist/session.d.ts#RunProjectsGCResult"
           ],
           "internals": {
+            "dist/session.d.ts#CollectorRootMarkerFormat": "interface CollectorRootMarkerFormat {\n    readonly fileName: string;\n    readonly ownerOf: (parsed: unknown) => string | undefined;\n}",
+            "dist/session.d.ts#CollectorRootOptions": "interface CollectorRootOptions {\n    readonly existingMarker?: CollectorRootMarkerFormat;\n}",
             "dist/session.d.ts#ProjectsGCCandidate": "interface ProjectsGCCandidate {\n    readonly project: string;\n    readonly kind: ProjectsGCKind;\n    readonly target: string;\n    readonly sessionId?: string;\n    readonly ageDays: number;\n}",
             "dist/session.d.ts#ProjectsGCFs": "interface ProjectsGCFs {\n    readdir: (dir: string) => readonly string[];\n    stat: (path: string) => {\n        readonly isDirectory: boolean;\n        readonly mtimeMs?: number;\n    };\n    readFile: (path: string) => string;\n    hasLiveWriter: (transcript: string) => boolean;\n}",
             "dist/session.d.ts#ProjectsGCKind": "type ProjectsGCKind = 'transcript' | 'writer-lock' | 'lock-directory' | 'temp' | 'registry';",
             "dist/session.d.ts#ProjectsGCPlan": "interface ProjectsGCPlan {\n    readonly projectsRoot: string;\n    readonly candidates: readonly ProjectsGCCandidate[];\n    readonly kept: readonly {\n        project: string;\n        reason: string;\n    }[];\n    readonly touchedProjects: readonly string[];\n    readonly liveCwds: readonly string[];\n    readonly countByKind: Readonly<Record<ProjectsGCKind, number>>;\n    readonly errors: readonly {\n        project: string;\n        message: string;\n    }[];\n}",
-            "dist/session.d.ts#RunProjectsGCOptions": "interface RunProjectsGCOptions {\n    readonly apply: boolean;\n    readonly owner?: {\n        readonly app: string;\n    };\n    readonly removeFromRegistry?: (sessionId: string) => unknown;\n    readonly registryTimeoutMs?: number;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>;\n}",
+            "dist/session.d.ts#RunProjectsGCOptions": "interface RunProjectsGCOptions {\n    readonly apply: boolean;\n    readonly owner?: {\n        readonly app: string;\n    };\n    readonly removeFromRegistry?: (sessionId: string) => unknown;\n    readonly registryTimeoutMs?: number;\n    readonly protectedIds?: (cwd: string) => ReadonlyMap<string, string>;\n    readonly existingMarker?: CollectorRootOptions['existingMarker'];\n    readonly fs?: Pick<ProjectsGCFs, 'readFile' | 'hasLiveWriter'>;\n}",
             "dist/session.d.ts#RunProjectsGCResult": "interface RunProjectsGCResult {\n    readonly dryRun: boolean;\n    readonly removed: readonly string[];\n    readonly refused: readonly {\n        target: string;\n        reason: string;\n    }[];\n    readonly errors: readonly {\n        target: string;\n        message: string;\n    }[];\n}"
           }
         },
