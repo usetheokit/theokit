@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- The TUI session pointer is the framework's `last-session` (`loadOrCreateSessionId` / `persistSessionId` from `@theokit/agents/session`) instead of `<cwd>/.theokit/tui-session`; the old file is read once, when no `last-session` exists, and its id is copied across. Writes stay serialised per pointer and a failed write is still reported. `gc/pointer.ts` is gone: session delete, fork and `sessions gc` read `last-session` through `readPointerId`, which still refuses when the file cannot be read (#2754).
 - `/theme` with `NO_COLOR` set no longer claims a colour switch the provider would not draw: it refuses, says why, and persists nothing (#2731).
 - The upward instruction walk is `loadInstructionWalk` from `@theokit/agents/config`; `agents-md.ts` defines no directory walk. `loadAgentsMd` and `agentsMdChain` are async, the chain is read once per build, and files come out root-most first with base before local at each level (#2739).
 - `run` passes `format` to `runHeadlessTurn` and uses its result (final text, usage, stop reason) instead of tapping a muted turn; `readPrompt`, `finalMessage`, `toContentChunk` and the failed-call set are gone in favour of `readHeadlessPrompt`, `finalMessageOf`, `contentChunkFromEvent` and the fold's `isError` (#2723).
