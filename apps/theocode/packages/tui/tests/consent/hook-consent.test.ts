@@ -17,6 +17,7 @@ import { computePendingHooks } from '../../src/consent/hook-consent.js'
 function deps(over: Partial<Parameters<typeof computePendingHooks>[0]> = {}) {
   return {
     cwd: '/proj',
+    declined: new Set<string>(),
     resolveEffectiveConfig: () => ({ hooks: [] }),
     parseHooks: (() => []) as never,
     classifyHooks: (() => []) as never,

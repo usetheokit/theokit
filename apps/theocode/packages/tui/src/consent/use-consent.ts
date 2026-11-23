@@ -22,6 +22,7 @@ export function useConsent(cwd: string = workingDirectory()): Consent {
   const listPendingHooks = useCallback((): readonly ReviewableHook[] => {
     classified.current = computePendingHooks({
       cwd,
+      declined: new Set(),
       resolveEffectiveConfig,
       parseHooks,
       classifyHooks,
