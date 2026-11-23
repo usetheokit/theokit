@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parseEnv } from 'node:util'
 
 import { SOVEREIGN_ENV_KEYS } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -147,6 +148,13 @@ describe('app bootstrap', () => {
         'Mixed_Case1',
         'Other_2',
       ])
+    })
+
+    it('reads a CRLF multiline quoted value as Node reads it, and export with several spaces', async () => {
+      const { env, record } = await load('export   A="one\r\ntwo"\r\nB=2\r\n')
+      // Node's own parser folds CRLF in a quoted value to LF; the scan must not change that either way.
+      expect(env.A).toBe(parseEnv('A="one\r\ntwo"').A)
+      expect([...record.loaded].sort((a, b) => a.localeCompare(b))).toEqual(['A', 'B'])
     })
 
     it('ignores names that are not identifiers', async () => {
