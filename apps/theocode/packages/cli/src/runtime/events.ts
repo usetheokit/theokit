@@ -1,13 +1,10 @@
 import {
-  createWireReader,
+  contentChunkFromEvent,
+  finalMessageOf,
   foldTurnLifecycle,
   type AgentOutputEvent,
-  type TurnLifecycle,
 } from '@theokit/presenter'
 import type { AgentTurnMetadata } from '@theokit/agents/bridge'
-import { readTurnMetadata, type WireChunk, type WireTurnMetadata } from '@theokit/presenter/wire'
-
-type TurnFold = TurnLifecycle<unknown>
 
 export interface ExecIo {
   out: (line: string) => void
@@ -61,14 +58,6 @@ function jsonlOutcome(
   return { status: 'ok' as const, usage }
 }
 
-/** The finish chunk's validated metadata; usage keys are the wire's camelCase ones. */
-function readFinish(chunk: WireChunk): {
-  usage?: WireTurnMetadata['usage']
-  stopReason?: AgentTurnMetadata['stopReason']
-} {
-  return readTurnMetadata(chunk) ?? {}
-}
-
 const USAGE_ALIASES: readonly (readonly [output: string, camel: string, snake: string])[] = [
   ['input_tokens', 'inputTokens', 'input_tokens'],
   ['cached_input_tokens', 'cacheReadTokens', 'cached_input_tokens'],
@@ -116,55 +105,28 @@ import type { ToolChunk } from './tool-line.js'
 import { changedPaths } from './changed-paths.js'
 import { turnDiff } from './turn-diff.js'
 
+/**
+ * What the framework's turn result hands the processor at the end: the final message, the usage and
+ * the stop reason, none of which a per-event `format` callback sees.
+ */
+export interface ExecFinish {
+  usage?: Readonly<Record<string, number | undefined>>
+  error?: string
+  stopReason?: AgentTurnMetadata['stopReason']
+  finalText?: string
+}
+
 export interface ExecProcessor {
-  process(chunk: WireChunk): void
-  finish(
-    status: 'finished' | 'error',
-    extra?: { usage?: Readonly<Record<string, number | undefined>>; error?: string },
-  ): ProcessorResult
+  /** One canonical event, as `runHeadlessTurn`'s `format` receives it. */
+  event(event: AgentOutputEvent): void
+  finish(status: 'finished' | 'error', extra?: ExecFinish): ProcessorResult
 }
 
 /**
- * The assistant's FINAL message, kept apart from the preambles that precede its tool calls.
- *
- * A turn emits text more than once. The instructions ask for a preamble before a burst of tool
- * calls ("Next, I'll patch the config and update the related tests.") and for a closing recap after
- * the last one — all of it arrives as `text-delta`, with nothing in the stream marking where one
- * message ends and the next begins.
- *
- * Concatenating them was wrong twice over, and `--help` states the contract it broke: "Stdout
- * carries ONLY the final message". Measured 2026-08-25 on a two-step task, stdout read:
- *
- *     I'll read `duration.mjs` and report its contents briefly.`duration.mjs:2` defines …
- *
- * — the preamble and the answer with no separator between them, because nothing was ever meant to
- * join them. `-o/--output-last-message` wrote the same run-on string to a file a script then reads.
- * Codex, on the same task, prints the closing message alone.
- *
- * The boundary is the tool call: text buffered when one STARTS was a preamble by definition, since
- * the answer cannot precede the tool that establishes it (the instructions say so in as many
- * words). Whatever is left when the turn ends is the answer. A turn with no tool call has one
- * message and it is the answer, which falls out of the same rule rather than needing a branch.
+ * The assistant's FINAL message is the text after the last tool call (`finalMessageOf`); text
+ * buffered when a call starts was a preamble, which the human surface prints before the call.
+ * Stdout carries ONLY the final message, so preambles never join it.
  */
-function finalMessage(): {
-  delta: (d: string) => void
-  /** Close the current message: returns it if it said anything, and starts the next. */
-  cut: () => string | undefined
-  done: () => string
-} {
-  let buffer = ''
-  return {
-    delta: (d) => {
-      buffer += d
-    },
-    cut: () => {
-      const said = buffer.trim()
-      buffer = ''
-      return said.length > 0 ? said : undefined
-    },
-    done: () => buffer.trim(),
-  }
-}
 
 export function createHumanProcessor(
   io: ExecIo,
@@ -176,23 +138,19 @@ export function createHumanProcessor(
    */
   git?: (args: string[]) => { ok: boolean; stdout: string },
 ): ExecProcessor {
-  const message = finalMessage()
+  const events: AgentOutputEvent[] = []
   let errorSeen = false
-  let usage: WireTurnMetadata['usage']
-  let stopReason: AgentTurnMetadata['stopReason']
   // #105 — collected as they go past, so the diff at the end is scoped to what THIS turn wrote
   // rather than to whatever the working tree happens to hold.
   const writes: ToolChunk[] = []
-  const reader = createWireReader()
-  // Per-event handling as a table, mirroring the JSONL twin's `toContentChunk` extraction. An event
-  // type without a row carries nothing for this surface.
+  // Per-event handling as a table. An event type without a row carries nothing for this surface.
   const onEvent: Record<string, (event: AgentOutputEvent) => void> = {
     'tool-call': (event) => {
       if (event.type !== 'tool-call') return
       // The preamble goes out BEFORE the call it announces, which is the order it was written
       // to be read in — and to stderr, where the rest of the progress already goes.
-      const preamble = message.cut()
-      if (preamble !== undefined) io.err(preamble)
+      const preamble = finalMessageOf(events)
+      if (preamble.length > 0) io.err(preamble)
       const call = { toolName: event.name, input: event.input }
       io.err(toolLine(call))
       writes.push(call)
@@ -200,9 +158,6 @@ export function createHumanProcessor(
     'tool-result': (event) => {
       if (event.type !== 'tool-result') return
       io.err(event.isError === true ? `  failed: ${String(event.result)}` : `  done`)
-    },
-    text: (event) => {
-      if (event.type === 'text') message.delta(event.text)
     },
     error: (event) => {
       if (event.type !== 'error') return
@@ -212,21 +167,16 @@ export function createHumanProcessor(
   }
 
   return {
-    process(chunk) {
-      if (chunk.type === 'finish') {
-        const meta = readFinish(chunk)
-        usage = meta.usage
-        stopReason = meta.stopReason
-        return
-      }
-      for (const event of reader.read(chunk)) onEvent[event.type]?.(event)
+    event(event) {
+      onEvent[event.type]?.(event)
+      events.push(event)
     },
-    finish(status, extra) {
+    finish(status, extra = {}) {
       if (status === 'error') {
         errorSeen = true
-        if (extra?.error !== undefined) io.err(`ERROR: ${extra.error}`)
+        if (extra.error !== undefined) io.err(`ERROR: ${extra.error}`)
       }
-      const finalText = message.done()
+      const finalText = extra.finalText ?? finalMessageOf(events)
       if (finalText.length > 0) io.out(finalText)
       // #105 — after the answer, before the accounting line: what the tree now holds, from git.
       // The prose above is the agent's claim; this is the artifact. Silent when nothing changed.
@@ -234,7 +184,8 @@ export function createHumanProcessor(
         const diff = turnDiff(git, changedPaths(writes))
         if (diff !== undefined) io.err(diff)
       }
-      const u = toCodexUsage(extra?.usage ?? usage)
+      const u = toCodexUsage(extra.usage)
+      const { stopReason } = extra
       io.err(execLine(sessionId, errorSeen ? 'error' : status, stopReason, blendedTotal(u)))
       return withStopReason({ finalText, errorSeen, usage: u }, stopReason)
     },
@@ -253,29 +204,8 @@ function commandEvent(
   }
 }
 
-/**
- * Translate one canonical event into the fold's vocabulary, or `null` when it carries no lifecycle.
- * Part of the Codex JSONL projection — the B-123 rationale lives on `createJsonlProcessor`.
- */
-function toContentChunk(event: AgentOutputEvent): Parameters<TurnFold['observe']>[0] | null {
-  switch (event.type) {
-    case 'text':
-      return { kind: 'text', delta: event.text }
-    case 'tool-call':
-      return { kind: 'tool-call', id: event.callId, name: event.name }
-    case 'tool-result':
-      return { kind: 'tool-result', id: event.callId, name: event.name }
-    case 'error':
-      return { kind: 'error', message: event.message }
-    default:
-      return null
-  }
-}
-
 /** The Codex dialect, as constructors the fold calls. This product's words, and only its words. */
-function codexDialect(
-  failed: ReadonlySet<string>,
-): Parameters<typeof foldTurnLifecycle<unknown>>[0] {
+function codexDialect(): Parameters<typeof foldTurnLifecycle<unknown>>[0] {
   return {
     threadStarted: (id) => ({ type: 'thread.started', thread_id: id }),
     turnStarted: () => ({ type: 'turn.started' }),
@@ -290,7 +220,7 @@ function codexDialect(
             'item.completed',
             item.id,
             item.kind,
-            failed.has(item.id) ? 'failed' : 'completed',
+            item.isError === true ? 'failed' : 'completed',
           ),
     turnCompleted: (u) => ({
       type: 'turn.completed',
@@ -320,50 +250,35 @@ export function createJsonlProcessor(io: ExecIo, threadId: string): ExecProcesso
     }
   }
 
-  let usage: WireTurnMetadata['usage']
-  let stopReason: AgentTurnMetadata['stopReason']
-  // The same rule as the human processor. The JSONL events themselves already arrive separated by
-  // `turn.observe`; it is `finalText` — what `-o/--output-last-message` writes — that ran them
-  // together, so a script reading that file got the preambles glued to the answer.
-  const message = finalMessage()
+  // The same rule as the human processor: `finalText` — what `-o/--output-last-message` writes —
+  // is the text after the last tool call, never the preambles run together.
+  const events: AgentOutputEvent[] = []
   let errorSeen = false
 
-  // The fold has no failed-result flag yet (#1852), so failed call ids are kept here.
-  const failedCalls = new Set<string>()
-  const reader = createWireReader()
-  const turn = foldTurnLifecycle<unknown>(codexDialect(failedCalls), threadId)
+  const turn = foldTurnLifecycle<unknown>(codexDialect(), threadId)
   for (const event of turn.opened) emit(event)
 
-  const track = (event: AgentOutputEvent): boolean => {
-    if (event.type === 'text') message.delta(event.text)
-    if (event.type === 'tool-call') message.cut()
-    if (event.type === 'tool-result' && event.isError === true) failedCalls.add(event.callId)
-    return event.type === 'error'
-  }
-
   return {
-    process(chunk) {
-      if (chunk.type === 'finish') {
-        const meta = readFinish(chunk)
-        usage = meta.usage
-        stopReason = meta.stopReason
-        return
-      }
-      for (const event of reader.read(chunk)) {
-        if (track(event)) errorSeen = true
-        const mapped = toContentChunk(event)
-        if (mapped === null) continue
-        for (const out of turn.observe(mapped)) emit(out)
-      }
+    event(event) {
+      events.push(event)
+      if (event.type === 'error') errorSeen = true
+      const mapped = contentChunkFromEvent(event)
+      if (mapped === null) return
+      for (const out of turn.observe(mapped)) emit(out)
     },
     finish(status, extra) {
-      const raw = extra?.usage ?? usage
+      const raw = extra?.usage
+      const stopReason = extra?.stopReason
       const failed = status === 'error' || errorSeen
       const outcome = jsonlOutcome(failed, extra?.error, stopReason, raw)
 
       for (const event of turn.finish(outcome)) emit(event)
       return withStopReason(
-        { finalText: message.done(), errorSeen: failed, usage: toCodexUsage(raw) },
+        {
+          finalText: extra?.finalText ?? finalMessageOf(events),
+          errorSeen: failed,
+          usage: toCodexUsage(raw),
+        },
         stopReason,
       )
     },
