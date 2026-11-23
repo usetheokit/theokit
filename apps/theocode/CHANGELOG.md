@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- The credential source stays the framework's typed `SourceOrigin` from resolution to the TUI footer; `toLocalSource` and the regular expression in `credential-helpers.ts` that rebuilt it from a string are gone.
 - The write tools take `baseDir` from `@theokit/agents` (sdk-tools 0.32) instead of TheoCode rewriting relative paths itself; `anchor-relative-writes.ts` is gone.
 - The session PTY owner is `createPtyOwner` from `@theokit/agents-pty`; `createSessionPtyOwner` is gone (#2577).
 - Framework helpers (#2605): the `update_goal` tool and judge come from `createGoalSignal`, one per goal run; `resolveMentions` delegates to `resolveFileMentions`; agent shapes go through `declareAgentShape` and `shapeToolsAsCustomTools`; the session PTY owner wraps `createPtyOwner`. `turnErrorText` keeps its own text, with the gap named in `turn-error.ts`.
