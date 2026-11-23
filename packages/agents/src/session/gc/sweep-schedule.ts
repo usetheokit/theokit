@@ -131,3 +131,45 @@ export function scheduleSessionSweep(options: ScheduleSessionSweepOptions): Swee
     return { started: false, reason: 'spawn-failed' }
   }
 }
+
+export interface InProcessSweeper {
+  /** Stops future runs and resolves once a run in flight has settled. */
+  stop(): Promise<void>
+}
+
+/**
+ * Runs `run` now and then every `intervalMs` inside this process. A tick that arrives while a run is
+ * still going is skipped. The timer is unreferenced, so it never keeps the process alive. `run` is
+ * the caller's: a rejection or throw is swallowed here, so report inside it.
+ */
+export function startInProcessSweeper(
+  intervalMs: number,
+  run: () => void | Promise<void>,
+): InProcessSweeper {
+  let running: Promise<void> = Promise.resolve()
+  let busy = false
+  let stopped = false
+  const tick = (): void => {
+    if (busy || stopped) return
+    busy = true
+    running = (async () => {
+      try {
+        await run()
+      } catch {
+        // the caller reports its own failures
+      } finally {
+        busy = false
+      }
+    })()
+  }
+  tick()
+  const timer = setInterval(tick, intervalMs)
+  timer.unref()
+  return {
+    stop: async () => {
+      stopped = true
+      clearInterval(timer)
+      await running
+    },
+  }
+}
