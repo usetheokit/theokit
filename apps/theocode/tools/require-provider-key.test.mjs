@@ -8,7 +8,9 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { MissingProviderKeyError, assertProviderKeyWhenRequired } from './require-provider-key.mjs'
+import * as shared from '@theokit/agents/testing'
+
+import setup, { MissingProviderKeyError, assertProviderKeyWhenRequired } from './require-provider-key.mjs'
 
 const ABSENT_MESSAGE =
   'provider key absent: THEOKIT_LIVE_REQUIRED=1 and none of OPENROUTER_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, THEOKIT_API_KEY is set'
@@ -51,5 +53,13 @@ describe('assertProviderKeyWhenRequired', () => {
     }
     expect(message).toBe(ABSENT_MESSAGE)
     expect(message).not.toContain('sk-or-v1-fff')
+  })
+})
+
+describe('the setup', () => {
+  it('is the guard @theokit/agents/testing publishes, not a copy', () => {
+    expect(MissingProviderKeyError).toBe(shared.MissingProviderKeyError)
+    expect(assertProviderKeyWhenRequired).toBe(shared.assertProviderKeyWhenRequired)
+    expect(typeof setup).toBe('function')
   })
 })

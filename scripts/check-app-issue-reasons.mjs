@@ -1,12 +1,10 @@
 #!/usr/bin/env node
 /**
  * Fail when a comment under `apps/` gives an open issue as the reason for local code and that
- * issue is closed. A reason comment says so in one of these forms, with the issue next to it:
+ * issue is closed. A reason is a reference (`#123`, `repo#123`, `owner/repo#123`, backticks allowed)
+ * in a comment, in the same sentence as a cue of dependence ("until", "gap", "not yet", "copy",
+ * "refused", ...). Comment lines that follow each other are read as one comment.
  *
- *     until #123            blocked by #123      waiting on #123      pending #123
- *     until owner/repo#123  (an issue in a sibling repository)
- *
- * Bare `#123` mentions that record history (a fix, a measurement) are not reasons and are ignored.
  * A lookup that cannot be answered fails the check: a silent pass is the weakness this guards.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -16,9 +14,21 @@ import { fileURLToPath } from 'node:url'
 export const DEFAULT_REPO = 'usetheokit/theokit'
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '.git'])
 const EXTENSIONS = /\.(ts|tsx|mts|cts|js|mjs|cjs)$/
-const PHRASE = 'until|blocked by|blocked on|waiting on|waits on|pending'
-const REF = '(?:[\\w.-]+/[\\w.-]+)?#\\d+'
-const REASON = new RegExp(`\\b(?:${PHRASE})\\s+(?:the\\s+)?(${REF})`, 'gi')
+// A reason names what the code waits for or works around. The cue must come before the reference,
+// in the same comment, within one sentence-sized window.
+const CUE_WORDS =
+  "until|blocked|waiting|waits|pending|gaps?|not yet|lacks?|missing|cannot|can't|refused|restated|mirrors?|copy|workaround"
+const CUE = new RegExp(`\\b(?:${CUE_WORDS})\\b|\\bno\\b.{0,40}\\byet\\b`, 'i')
+// `#N`, `repo#N` or `owner/repo#N`, with or without a backtick around it.
+const REF = /(?:([\w.-]+)\/)?([\w.-]*)#(\d+)\b/g // eslint-disable-line sonarjs/slow-regex -- bounded by one comment
+const WINDOW = 160
+
+/** @param {string} owner @param {string} name */
+function repoOf(owner, name) {
+  if (owner && name) return `${owner}/${name}`
+  if (name) return `usetheokit/${name}`
+  return DEFAULT_REPO
+}
 
 /** @param {string} dir @returns {string[]} */
 function walk(dir) {
@@ -33,24 +43,48 @@ function walk(dir) {
   return out
 }
 
-/** Every reason reference in the comment lines of `text`. */
-export function findReasons(text, file = '') {
-  const found = []
+/** Comment blocks of `text`: runs of consecutive comment lines, with the line each starts on. */
+function commentBlocks(text) {
+  const blocks = []
+  let current = null
   text.split('\n').forEach((line, index) => {
     const trimmed = line.trim()
-    const isComment = /^(\/\/|\/\*|\*)/.test(trimmed) || /\s\/\/\s/.test(line)
-    if (!isComment) return
-    for (const match of line.matchAll(REASON)) {
-      const ref = match[1]
-      const hash = ref.indexOf('#')
-      found.push({
-        file,
-        line: index + 1,
-        repo: hash > 0 ? ref.slice(0, hash) : DEFAULT_REPO,
-        issue: Number(ref.slice(hash + 1)),
-      })
+    const whole = /^(\/\/|\/\*|\*)/.test(trimmed)
+    const tail = whole ? -1 : line.search(/\s\/\/\s/)
+    if (!whole && tail < 0) {
+      current = null
+      return
     }
+    const body = whole ? trimmed : line.slice(tail)
+    if (current && whole) {
+      current.lines.push({ body, line: index + 1 })
+      return
+    }
+    current = { lines: [{ body, line: index + 1 }] }
+    blocks.push(current)
+    if (!whole) current = null
   })
+  return blocks
+}
+
+/** Every reference in a comment that follows a cue of dependence, within one sentence-sized window. */
+export function findReasons(text, file = '') {
+  const found = []
+  for (const block of commentBlocks(text)) {
+    let joined = ''
+    const starts = []
+    for (const { body, line } of block.lines) {
+      starts.push([joined.length, line])
+      joined += `${body} `
+    }
+    for (const m of joined.matchAll(REF)) {
+      const before = joined.slice(Math.max(0, m.index - WINDOW), m.index)
+      const sentence = before.slice(before.lastIndexOf('. ') + 1)
+      if (!CUE.test(sentence)) continue
+      const line = starts.filter(([at]) => at <= m.index).pop()[1]
+      found.push({ file, line, repo: repoOf(m[1], m[2]), issue: Number(m[3]) })
+    }
+  }
   return found
 }
 

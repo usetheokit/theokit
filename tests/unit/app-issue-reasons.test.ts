@@ -1,7 +1,12 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 // @ts-expect-error plain .mjs script without declarations
-import { checkReasons, findReasons } from '../../scripts/check-app-issue-reasons.mjs'
+import {
+  checkReasons,
+  collectReasons,
+  findReasons,
+} from '../../scripts/check-app-issue-reasons.mjs'
 
 describe('findReasons', () => {
   it('finds a reason in a comment, with a sibling repository', () => {
@@ -19,6 +24,31 @@ describe('findReasons', () => {
 
   it('ignores code and history mentions', () => {
     expect(findReasons('const until = "until #3"\n// measured in #9', 'a.ts')).toEqual([])
+  })
+})
+
+describe('findReasons on the forms the apps use', () => {
+  const one = (text: string) =>
+    findReasons(text, 'a.ts').map((f: { repo: string; issue: number }) => `${f.repo}#${f.issue}`)
+
+  it('reads a backticked sibling-repo reference', () => {
+    expect(
+      one('  // so the key is refused until `theokit-sdk#631` lets a consumer declare'),
+    ).toEqual(['usetheokit/theokit-sdk#631'])
+  })
+  it('reads a reference on the line after the cue', () => {
+    expect(one('/**\n * Its gaps, usetheokit/theokit#2657,\n * stay.\n */')).toEqual([
+      'usetheokit/theokit#2657',
+    ])
+  })
+  it('ignores a reference with no cue', () => {
+    expect(one('// measured in #9')).toEqual([])
+  })
+})
+
+describe('the apps tree', () => {
+  it('has reason comments, so the check is not vacuous', () => {
+    expect(collectReasons(join(__dirname, '..', '..')).length).toBeGreaterThan(0)
   })
 })
 
