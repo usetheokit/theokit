@@ -40,6 +40,7 @@
  * `.mcp.json` is a **project** file, which can be committed by accident.
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { isAbsolute, join } from 'node:path'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
@@ -197,11 +198,15 @@ export function loadMcpJson(cwd: string, opts: LoadMcpJsonOptions = {}): McpServ
 }
 
 /** Read and JSON-parse `path`. `quiet` keeps V8's parse message (it quotes file text) out of the error. */
-function readJsonFile(path: string, quiet: boolean): unknown {
+function readJsonFile(
+  path: string,
+  quiet: boolean,
+  readFile?: (path: string, encoding: 'utf8') => string,
+): unknown {
   let text: string
   try {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- the caller's own path
-    text = readFileSync(path, 'utf8')
+    text = (readFile ?? readFileSync)(path, 'utf8')
   } catch (err) {
     throw new McpFileError(`failed to read ${path}: ${describeIt(err)}`)
   }
@@ -239,13 +244,14 @@ interface ResolvedPolicy {
   maxTimeoutMs: number
   serverName: RegExp
   refuseUnknownKeys: boolean
+  sdkAcceptsAuth: boolean
 }
 
 const MAX_TIMEOUT_MS = 2_147_483_647
 // eslint-disable-next-line security/detect-unsafe-regex -- bounded quantifier on a fixed pattern
 const SAFE_SERVER_NAME = /^[a-z](?:[a-z0-9-]{0,62}[a-z0-9])?$/
 
-function resolvePolicy(policy: McpServersPolicy = {}): ResolvedPolicy {
+function resolvePolicy(policy: McpServersPolicy = {}, sdkAcceptsAuth = false): ResolvedPolicy {
   return {
     requireAbsoluteCommandPaths: policy.requireAbsoluteCommandPaths ?? true,
     requireAbsoluteCwd: policy.requireAbsoluteCwd ?? true,
@@ -258,6 +264,7 @@ function resolvePolicy(policy: McpServersPolicy = {}): ResolvedPolicy {
       (policy.serverName ?? SAFE_SERVER_NAME).flags.replace(/[gy]/g, ''),
     ),
     refuseUnknownKeys: policy.refuseUnknownKeys ?? true,
+    sdkAcceptsAuth,
   }
 }
 
@@ -270,15 +277,37 @@ function resolvePolicy(policy: McpServersPolicy = {}): ResolvedPolicy {
  */
 export function loadMcpServersFile(
   path: string,
-  options: { policy?: McpServersPolicy } & LoadMcpJsonOptions = {},
+  options: {
+    policy?: McpServersPolicy
+    /** Replaces the disk read; same contract as `readFileSync(path, 'utf8')` (throws when absent). */
+    readFile?: (path: string, encoding: 'utf8') => string
+    /** The installed `@theokit/sdk` version, when it cannot be read from the package. */
+    sdkVersion?: string
+  } & LoadMcpJsonOptions = {},
 ): McpServersMap {
   return parseMcpJson(
-    readJsonFile(path, true),
+    readJsonFile(path, true, options.readFile),
     path,
     warningChannel(options),
     options.env ?? process.env,
-    resolvePolicy(options.policy),
+    resolvePolicy(options.policy, sdkSupportsMcpAuth(options.sdkVersion)),
   )
+}
+
+/** `@theokit/sdk` 9 is the first major whose remote MCP servers accept OAuth `auth`. Unknown → false. */
+function sdkSupportsMcpAuth(override?: string): boolean {
+  let version = override
+  if (version === undefined) {
+    try {
+      version = (
+        createRequire(import.meta.url)('@theokit/sdk/package.json') as { version?: string }
+      ).version
+    } catch {
+      return false
+    }
+  }
+  const major = Number.parseInt(version ?? '', 10)
+  return Number.isInteger(major) && major >= 9
 }
 
 /**
@@ -346,11 +375,6 @@ function parseMcpJson(
 ): McpServersMap {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new McpFileError(`${source}: root must be a JSON object with an "mcpServers" key.`)
-  }
-  if (strict?.refuseUnknownKeys === true) {
-    for (const key of Object.keys(raw)) {
-      if (key !== 'mcpServers') throw new McpFileError(`${source}: ${key}: unknown key.`)
-    }
   }
   const serversRaw = (raw as Record<string, unknown>).mcpServers
   if (serversRaw === undefined) return {}
@@ -430,7 +454,7 @@ function strictViolation(
   }
   const entry = entryRaw as Record<string, unknown>
   const remote = entry.url !== undefined
-  if (entry.auth !== undefined) {
+  if (entry.auth !== undefined && !policy.sdkAcceptsAuth) {
     return `${at}.auth: refused — the installed SDK ignores "auth", so it would not take effect.`
   }
   if (policy.refuseUnknownKeys) {
