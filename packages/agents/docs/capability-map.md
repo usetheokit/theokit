@@ -1459,6 +1459,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `SessionInUseError` | value |
 | `sessionPointerPath` | value |
 | `SessionRegistryRemoverError` | value |
+| `startInProcessSweeper` | value |
 | `streamTurnForkingIfBusy` | value |
 | `sweepDecision` | value |
 | `threadToUIMessages` | value |
@@ -1473,6 +1474,7 @@ Measured against `@theokit/sdk@11.0.0`.
 | `GCCandidate` | type |
 | `GCError` | type |
 | `GCKept` | type |
+| `InProcessSweeper` | type |
 | `Liveness` | type |
 | `LivenessVerdict` | type |
 | `PlanProjectsGCOptions` | type |

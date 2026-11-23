@@ -23609,6 +23609,14 @@
           "references": [],
           "internals": {}
         },
+        "InProcessSweeper": {
+          "tier": "stable",
+          "declaration": "interface InProcessSweeper {\n    stop(): Promise<void>;\n}",
+          "runtime": false,
+          "deprecatedSince": null,
+          "references": [],
+          "internals": {}
+        },
         "Liveness": {
           "tier": "stable",
           "declaration": "type Liveness = 'alive' | 'dead' | 'undetermined';",
@@ -24144,6 +24152,16 @@
           "deprecatedSince": null,
           "references": [],
           "internals": {}
+        },
+        "startInProcessSweeper": {
+          "tier": "stable",
+          "declaration": "declare function startInProcessSweeper(intervalMs: number, run: () => void | Promise<void>): InProcessSweeper;",
+          "runtime": true,
+          "deprecatedSince": null,
+          "references": ["dist/session.d.ts#InProcessSweeper"],
+          "internals": {
+            "dist/session.d.ts#InProcessSweeper": "interface InProcessSweeper {\n    stop(): Promise<void>;\n}"
+          }
         },
         "streamTurnForkingIfBusy": {
           "tier": "stable",
