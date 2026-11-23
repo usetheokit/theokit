@@ -3,8 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
-import type { AgentOptions } from '@theokit/sdk'
-import { readFacts } from '@theokit/sdk/internal/memory-store'
+import { listMemoryFacts, type AgentOptions } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
@@ -243,7 +242,7 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
       write: () => undefined,
       getOrCreate: async (_id, options) => {
         const memory = memoryOf(options)
-        atOpen.push((await readFacts(memory.directory, memory)).map((fact) => fact.text))
+        atOpen.push((await listMemoryFacts(memory.directory, options.memory)).map((fact) => fact.text))
         return scripted(options, 'ok') as never
       },
     })
