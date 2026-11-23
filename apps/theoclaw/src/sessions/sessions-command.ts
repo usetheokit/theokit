@@ -216,11 +216,15 @@ export async function resumeCommand(args: readonly string[], io: SessionsIo): Pr
 async function gcCommand(args: readonly string[], io: SessionsIo): Promise<number> {
   // TheoClaw applies by default (`--dry-run` previews); `--days` is the retention in days.
   const parsed = parseSessionsGcArgs(args, { apply: true })
-  if (!parsed.ok) throw new UsageError(USAGE_TEXT)
+  if (!parsed.ok) throw new UsageError(`${USAGE_TEXT} (${parsed.message})`)
+  // The retention is the age alone: the newest transcript always survives, so a keep bound has no meaning here.
+  if (parsed.keepLast !== undefined)
+    throw new UsageError(`${USAGE_TEXT} (--keep-last is not supported)`)
   const env: NodeJS.ProcessEnv = { ...io.env }
   const workspace = chatWorkspace(env, io)
   const days = parsed.maxAgeDays ?? readRetentionDays(env)
   const generations = Generations.load(sessionsFile(workspace))
+  let errors: readonly string[] = []
   const outcome = await sessionsGcCommand({
     cwd: workspace,
     apply: parsed.apply,
@@ -231,24 +235,31 @@ async function gcCommand(args: readonly string[], io: SessionsIo): Promise<numbe
       return [
         ...result.removed.map((id) => `${verb} ${id}`),
         ...result.orphaned.map((path) => `${verb} ${path} (id unreadable)`),
-        ...result.errors.map((error) => `theoclaw: ${error.message}`),
         `${verb} ${result.removed.length + result.orphaned.length} transcripts older than ${days} days`,
       ]
     },
     run: async ({ apply }) => {
       const swept = await collectTranscripts({ workspace, generations }, days, apply)
+      errors = swept.errors
       return {
         plan: { cwd: workspace, root: join(workspace, '.theoclaw'), candidates: [], kept: [] },
         result: {
           dryRun: swept.dryRun,
           removed: [...swept.removed],
           orphaned: [...swept.orphaned],
-          errors: swept.errors.map((message) => ({ id: undefined, message })),
+          errors: swept.errors.map((text) => {
+            const at = text.indexOf(': ')
+            return at < 0
+              ? { id: undefined, message: text }
+              : { id: text.slice(0, at), message: text.slice(at + 2) }
+          }),
         },
       }
     },
   })
   for (const line of outcome.lines) io.stdout.write(`${line}\n`)
+  // Errors stay on stderr, so stdout is only the report (or the one JSON line).
+  for (const error of errors) io.stderr.write(`theoclaw: ${error}\n`)
   return outcome.failed > 0 ? 1 : 0
 }
 
