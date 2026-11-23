@@ -16,6 +16,7 @@ for `release.yml` in this repository will not find it, and should not have been 
 
 ## [Unreleased]
 
+- `@theokit/tui` is `^0.83.4`: the approval ledger is the toolkit's `createApprovalLedger` (immutable, pruned on backtrack), the clipboard copy is the toolkit's `copyToClipboard` with this app's `/export` guidance on top, and the terminal title is `sanitizeTitle` and `pushTerminalTitle`; `consent/pending-approvals.ts`, `consent/approvals.ts` and the three `clipboard-*` helpers are deleted (#2607).
 - Slash commands: `commands/registry.ts` builds its routing table with `createCommandRegistry`; `/exit` is declared as an alias of `/quit` and Codex-only names as hidden, so alias and hidden-name resolution come from `@theokit/agents/commands` (#2606).
 - Model routing: `routeToCredential` and the subscription-route check use the shared `modelForCredential` / `isSubscriptionRoute` helpers from `@theokit/agents/auth` (#2576).
 

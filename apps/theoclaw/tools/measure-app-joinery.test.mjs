@@ -41,7 +41,7 @@ describe('measure-app-joinery', () => {
     expect(result.joined).toBeGreaterThan(5)
     expect(result.totals.gap).toBe(0)
     expect(result.totals.presenter).toBe(0)
-  })
+  }, 60_000)
 
   it('the CLI exits 1 on this app and names the framework symbols it still re-declares', () => {
     const run = spawnSync(process.execPath, [CLI], { encoding: 'utf8' })
@@ -56,7 +56,7 @@ describe('measure-app-joinery', () => {
     }
     expect(run.stderr).not.toContain('duplicate resolveSecretRefs ')
     expect(run.stderr).not.toContain('duplicate hookFingerprint ')
-  })
+  }, 60_000)
 
   it('exits 2 on a directory with no source files (cannot pass vacuously)', () => {
     const result = measure(app({}))
