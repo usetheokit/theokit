@@ -22,6 +22,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - `@theokit/sdk-tools` moves from 0.29.0 to 0.34.0, so the computer tool, the XWD helpers, `resolveWebSearchAdapter` and `baseDir` on the patch and edit tools are reachable from the app (#2696).
 ### Changed
 
+- The per-turn usage line and `/usage` footer now format the cost with `formatUsd` from `@theokit/agents/usage`; the app's own copy is gone, and the output matches `formatUsd` (#2710).
+
 - Removed the unwired `media/understanding.ts` (and its tests): nothing called it, and the pinned `gateway-telegram` adapter does not produce `event.audio`, so it could not be wired (#2763).
 - The transcript sweeper's timer now comes from `startInProcessSweeper` in `@theokit/agents/session`; the schedule and reports are unchanged.
 - `@theokit/tui` is pinned at 0.83.8 (was 0.83.4) and the TUI drops its own stream reducer for an interrupted turn: the framework's `interrupted` and `notice` events now fold it. Visible differences: a tool still running when the owner presses Esc is shown as cancelled (it stayed running), and the line reads "Interrupted by user" (was "interrupted"); a notice posted after the interruption is drawn below the turn (#2728).
