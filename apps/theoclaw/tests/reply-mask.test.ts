@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { createAgentEventMask } from '@theokit/agents/bridge'
 import type { BasePlatformAdapter, GatewayContext, MessageEvent, PlatformName } from '@theokit/gateway'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
@@ -10,7 +11,6 @@ import { createReplyHandler } from '../src/channels/reply-handler.js'
 import type { TurnAgent } from '../src/channels/reply-handler.js'
 import { startTheoClaw } from '../src/composition.js'
 import { createControlSessions } from '../src/control-plane/control-sessions.js'
-import { createEventMask } from '../src/control-plane/event-mask.js'
 import type { ControlPlaneHandle } from '../src/control-plane/listener.js'
 import { runTheoClawTurn, type TurnEvent } from '../src/control-plane/turn.js'
 import { capturingStream, fakeBuilders, OPEN_DMS } from './composition-fixtures.js'
@@ -213,7 +213,7 @@ describe('the /control and session event mask', () => {
 
   it('held text is released before a tool_call event, in order (EC-2)', () => {
     const events: TurnEvent[] = []
-    const mask = createEventMask(VALUES, (event) => void events.push(event))
+    const mask = createAgentEventMask(VALUES, (event) => void events.push(event))
 
     mask.emit({ type: 'text_delta', content: `reading ${SECRET.slice(0, HALF)}` })
     mask.emit({ type: 'tool_call', callId: 'c1', toolName: 'read_file', input: { path: 'a.txt' } })
@@ -225,7 +225,7 @@ describe('the /control and session event mask', () => {
 
   it('a value split across a delta, a tool_call and a delta is released as two fragments in order, and a value whole inside either text block holds 0 occurrences (EC-3)', () => {
     const events: TurnEvent[] = []
-    const mask = createEventMask(VALUES, (event) => void events.push(event))
+    const mask = createAgentEventMask(VALUES, (event) => void events.push(event))
 
     mask.emit({ type: 'text_delta', content: `${SECRET} then ${SECRET.slice(0, HALF)}` })
     mask.emit({ type: 'tool_call', callId: 'c1', toolName: 'read_file', input: {} })
@@ -241,7 +241,7 @@ describe('the /control and session event mask', () => {
 
   it('a value nested two levels deep in a tool_call input is masked and the shape kept (EC-5)', () => {
     const events: TurnEvent[] = []
-    const mask = createEventMask(VALUES, (event) => void events.push(event))
+    const mask = createAgentEventMask(VALUES, (event) => void events.push(event))
 
     mask.emit({ type: 'tool_call', callId: 'c1', toolName: 'http', input: { headers: { authorization: `Bearer ${VALUES[0]}` }, list: [VALUES[2], 3, true] } })
 
