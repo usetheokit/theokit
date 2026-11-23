@@ -3,6 +3,7 @@ import 'reflect-metadata'
 
 import { homedir } from 'node:os'
 
+import { resolveSecretRefs } from '@theokit/agents/auth'
 import { serveAcp } from '@theokit/acp'
 import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
@@ -14,7 +15,6 @@ import type { CreateAgent } from './control-plane/agent-factory.js'
 import { describeError } from './control-plane/errors.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { applyInstance, resolveInstance } from './instance.js'
-import { resolveSecretRefs } from './secret-refs.js'
 
 /**
  * `theoclaw acp` (OC-68): the `/control` agent served over the Agent Client Protocol on stdin/stdout, so an ACP

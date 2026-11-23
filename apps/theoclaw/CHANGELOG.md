@@ -12,6 +12,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - The joinery gate (`tools/measure-app-joinery.mjs`) now reports, and fails on, every app file that declares a function or class named like an export of a `@theokit/*` dependency, unless `ALLOWED` lists it with a reason (#2610).
+- Secret references and the exec approval gate now run on `resolveSecretRefs`, `createApprovalGate` and `createJsonlLedger` from `@theokit/agents/auth`; TheoClaw's own copies are gone and `secretStores` takes the framework's `SecretStore[]`. **Standing exec approvals saved before this change (`exec-approvals.json`) are no longer read and must be granted again** (`/approve always`); new ones are kept in `.theokit/tool-permissions.json` under the state directory and still match the exact command. The activity ledger (`activity.jsonl`) keeps its file; `theoclaw audit` still shows old receipts, and now fails on a damaged line instead of skipping it (#2597).
 - Hook approval: a hook's fingerprint now comes from `hookFingerprint` in `@theokit/agents/hooks` and covers the matcher, so widening a matcher asks for approval again. **Hooks approved before this change must be approved again**: run `theoclaw hooks list` and put the new fingerprints in `THEOCLAW_APPROVED_HOOKS` (#2598).
 - Model credentials: custom-provider keys now resolve through the framework chain (`resolveAgentCredential`), and the `openai-chatgpt/` route is detected with `isSubscriptionRoute` (#2576).
 

@@ -1,62 +1,57 @@
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync } from 'node:fs'
 
+import { createApprovalGate, PermissionStore, type ApprovalLedger } from '@theokit/agents/auth'
 import type { PreToolCallContext } from '@theokit/sdk'
-import { atomicWriteJson } from '@theokit/sdk/persistence'
 
 import { describeError } from '../control-plane/errors.js'
 import type { GeneralPlugin } from './general-plugin.js'
 
-const FILE_NAME = 'exec-approvals.json'
 /** The tools that start a command: `interactive_shell` is held to the same decision as `shell_exec`. */
 const EXEC_TOOLS: readonly string[] = ['shell_exec', 'interactive_shell']
+/** The one tool name a saved approval is keyed on, so it holds for every exec tool. */
+const APPROVAL_TOOL = 'exec'
 
 /** The commands the person approved to run again without being asked, kept in the state directory. */
 export interface ExecApprovalStore {
-  /** True only for a command spelled exactly as one the person saved; the approval holds wherever that command runs. */
+  /** The framework's standing-grant store the gate reads and writes. */
+  readonly permissions: PermissionStore
+  /** The directory the grants are keyed on; the approval holds wherever the command runs. */
+  readonly scope: string
+  /** True only for a command spelled exactly as one the person saved. */
   has(command: string): boolean
-  /** Saved on disk before it counts; rejects when the file cannot be written. */
-  add(command: string): Promise<void>
 }
 
-function load(path: string): Set<string> {
-  let text: string
+/**
+ * The store compares commands after collapsing whitespace; the key is percent-encoded so two commands
+ * that differ only in spacing stay two approvals.
+ */
+const encodeCommand = (command: string): string => encodeURIComponent(command)
+/** The command of a receipt's query; a receipt written before the framework ledger carries it plain. */
+export function commandOfReceipt(record: { readonly query?: { readonly command: string }; readonly command?: string }): string {
+  if (record.query === undefined) return record.command ?? ''
   try {
-    text = readFileSync(path, 'utf8')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return new Set()
-    throw new Error(`${path} cannot be read: ${describeError(error)}`)
+    return decodeURIComponent(record.query.command)
+  } catch {
+    return record.query.command
   }
-  let parsed: { approved?: unknown }
-  try {
-    parsed = JSON.parse(text) as { approved?: unknown }
-  } catch (error) {
-    throw new Error(`${path} is not valid JSON (${describeError(error)}); fix or remove it`)
-  }
-  const list = parsed?.approved
-  if (!Array.isArray(list) || !list.every((entry) => typeof entry === 'string')) {
-    throw new Error(`${path} is not an exec approvals file ({ "approved": [...] }); fix or remove it`)
-  }
-  return new Set(list as string[])
 }
 
-/** Load synchronously (an unreadable file stops the start), write through a 0600 temporary file. */
+/**
+ * Standing approvals live in `<dir>/.theokit/tool-permissions.json` (the framework store). An
+ * unreadable file stops the start. Approvals saved by earlier releases in `exec-approvals.json` are
+ * not read: they must be granted again (see the changelog).
+ */
 export function createExecApprovalStore(dir: string): ExecApprovalStore {
-  const path = join(dir, FILE_NAME)
   mkdirSync(dir, { recursive: true, mode: 0o700 })
-  const approved = load(path)
-  let writes: Promise<unknown> = Promise.resolve()
-  const save = async (command: string): Promise<void> => {
-    await atomicWriteJson(path, { approved: [...new Set([...approved, command])] }, { mode: 0o600 })
-    approved.add(command)
+  const permissions = new PermissionStore({ home: dir })
+  permissions.list()
+  if (permissions.lastReadError !== undefined) {
+    throw new Error(`${permissions.path} cannot be read: ${describeError(permissions.lastReadError)}; fix or remove it`)
   }
   return {
-    has: (command) => approved.has(command),
-    add(command) {
-      const next = writes.then(() => save(command))
-      writes = next.catch(() => undefined)
-      return next
-    },
+    permissions,
+    scope: dir,
+    has: (command) => permissions.isGranted({ tool: APPROVAL_TOOL, scope: dir, command: encodeCommand(command) }),
   }
 }
 
@@ -80,8 +75,8 @@ export interface ExecApprovalOptions {
   readonly ask?: (command: string, call?: ExecCall) => Promise<PersonReply>
   /** True when the call's session waived the question (`/elevated on`): the command runs unasked. */
   readonly waived?: (call?: ExecCall) => boolean
-  /** Where each decision is recorded; absent: nothing is recorded. */
-  readonly ledger?: ActivityLedger
+  /** Where each decision is recorded (the framework's `createJsonlLedger`); absent: nothing is recorded. */
+  readonly ledger?: ApprovalLedger
 }
 
 export interface ExecDecision {
@@ -91,95 +86,26 @@ export interface ExecDecision {
   readonly by?: string
 }
 
-const LEDGER_FILE = 'activity.jsonl'
-
-/** One decision receipt: a command, the run that asked for it, who decided and when. */
-export interface ActivityRecord {
-  readonly at: string
-  readonly runId: string
-  readonly agentId?: string
-  readonly tool: string
-  readonly command: string
-  readonly allowed: boolean
-  readonly decidedBy: string
-  readonly reason: string
-}
-
-/** An append-only JSON-lines file of decision receipts in the state directory. */
-export interface ActivityLedger {
-  append(record: ActivityRecord): void
-}
-
-export function createActivityLedger(dir: string): ActivityLedger {
-  const path = join(dir, LEDGER_FILE)
-  return {
-    append(record) {
-      try {
-        mkdirSync(dir, { recursive: true, mode: 0o700 })
-        appendFileSync(path, `${JSON.stringify(record)}\n`, { mode: 0o600 })
-      } catch {
-        // A ledger that cannot be written must not stop the gate.
-      }
-    },
-  }
-}
-
-/** The receipts in `dir`, oldest first; a missing file is none and a damaged line is skipped. */
-export function readActivityLedger(dir: string): ActivityRecord[] {
-  let text: string
-  try {
-    text = readFileSync(join(dir, LEDGER_FILE), 'utf8')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw error
-  }
-  const records: ActivityRecord[] = []
-  for (const line of text.split('\n')) {
-    if (line.trim() === '') continue
-    try {
-      records.push(JSON.parse(line) as ActivityRecord)
-    } catch {
-      // skip
-    }
-  }
-  return records
-}
+/** Words for who decided, as the app has always shown them. */
+const BY: Readonly<Record<string, string>> = { waiver: 'elevated mode', saved: 'saved approval' }
 
 /** Standing approval first, then the reviewer, then the person. Never throws. */
-export function createExecApproval(options: ExecApprovalOptions): (command: string, call?: ExecCall) => Promise<ExecDecision> {
+export function createExecApproval(options: ExecApprovalOptions): (command: string, call?: ExecCall & { readonly name?: string; readonly runId?: string }) => Promise<ExecDecision> {
   const { store, reviewer, ask, waived } = options
+  const gate = createApprovalGate({
+    ledger: options.ledger,
+    store: store.permissions,
+    key: (ctx) => ({ tool: APPROVAL_TOOL, scope: store.scope, command: encodeCommand(String(ctx.args.command)) }),
+    waived: waived === undefined ? undefined : (ctx) => waived({ agentId: ctx.agentId }),
+    reviewer: reviewer === undefined ? undefined : (query) => reviewer(decodeURIComponent(query.command)),
+    ask:
+      ask === undefined
+        ? undefined
+        : (query, ctx) => ask(decodeURIComponent(query.command), { agentId: ctx.agentId }),
+  })
   return async (command, call) => {
-    if (waived?.(call) === true) return { allowed: true, reason: 'elevated mode waives the approval', by: 'elevated mode' }
-    if (store.has(command)) return { allowed: true, reason: 'a saved approval matches', by: 'saved approval' }
-    if (reviewer !== undefined) {
-      let verdict: ReviewerVerdict = 'ask'
-      try {
-        verdict = await reviewer(command)
-      } catch {
-        verdict = 'ask' // A reviewer failure falls back to the person.
-      }
-      if (verdict === 'deny') return { allowed: false, reason: 'the reviewer denied it', by: 'reviewer' }
-      if (verdict === 'allow') return { allowed: true, reason: 'the reviewer allowed it', by: 'reviewer' }
-    }
-    if (ask === undefined) return { allowed: false, reason: 'nobody can approve it' }
-    let answer: PersonAnswer
-    let by = 'person'
-    try {
-      const reply = await ask(command, call)
-      answer = typeof reply === 'string' ? reply : reply.answer
-      if (typeof reply !== 'string') by = `person:${reply.by}`
-    } catch {
-      return { allowed: false, reason: 'the question could not be asked' }
-    }
-    if (answer === 'deny') return { allowed: false, reason: 'the person refused it', by }
-    if (answer === 'always') {
-      try {
-        await store.add(command)
-      } catch {
-        // Run this once; the approval is simply not remembered.
-      }
-    }
-    return { allowed: true, reason: 'the person approved it', by }
+    const decision = await gate.decide({ name: call?.name ?? 'shell_exec', args: { command }, agentId: call?.agentId ?? '', runId: call?.runId ?? 'unknown' } as Parameters<typeof gate.decide>[0])
+    return { allowed: decision.allowed, reason: decision.reason, by: BY[decision.by] ?? decision.by }
   }
 }
 
@@ -196,17 +122,7 @@ export function execApprovalPlugin(options: ExecApprovalOptions): GeneralPlugin 
         if (call.name === undefined || !EXEC_TOOLS.includes(call.name)) return undefined
         const command = (call.args as { command?: unknown } | undefined)?.command
         if (typeof command !== 'string' || command === '') return { block: true, message: 'theoclaw: the command is missing' }
-        const decision = await decide(command, { agentId: call.agentId })
-        options.ledger?.append({
-          at: new Date().toISOString(),
-          runId: typeof call.runId === 'string' ? call.runId : 'unknown',
-          ...(call.agentId === undefined ? {} : { agentId: call.agentId }),
-          tool: call.name,
-          command,
-          allowed: decision.allowed,
-          decidedBy: decision.by ?? 'none',
-          reason: decision.reason,
-        })
+        const decision = await decide(command, { agentId: call.agentId, name: call.name, runId: typeof call.runId === 'string' ? call.runId : undefined })
         return decision.allowed ? undefined : { block: true, message: `theoclaw: exec refused: ${decision.reason}` }
       })
     },

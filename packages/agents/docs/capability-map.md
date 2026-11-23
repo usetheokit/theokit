@@ -11,7 +11,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1500 export(s) across 27 entry point(s).
+1509 export(s) across 27 entry point(s).
 
 Measured against `@theokit/sdk@5.32.0`.
 
@@ -38,6 +38,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `applyPosture` | value |
 | `applySecurityFloor` | value |
 | `APPROVAL_MODES` | value |
+| `approvalPostureFor` | value |
 | `assertNoSymlinkEscape` | value |
 | `assistantText` | value |
 | `auditEnvReachability` | value |
@@ -307,6 +308,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `ApiErrorPolicy` | type |
 | `ApprovalMode` | type |
 | `ApprovalOptions` | type |
+| `ApprovalPolicy` | type |
 | `ApprovalPosture` | type |
 | `ApprovalRequest` | type |
 | `ApprovalRequiredEvent` | type |
@@ -526,6 +528,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `agentsPlugin` | value |
 | `applyPosture` | value |
 | `APPROVAL_MODES` | value |
+| `approvalPostureFor` | value |
 | `BodyTooLargeError` | value |
 | `BudgetExceededError` | value |
 | `buildModelSelection` | value |
@@ -642,6 +645,7 @@ Measured against `@theokit/sdk@5.32.0`.
 | `ApiErrorDecision` | type |
 | `ApiErrorPolicy` | type |
 | `ApprovalMode` | type |
+| `ApprovalPolicy` | type |
 | `ApprovalPosture` | type |
 | `ApprovalRequiredEvent` | type |
 | `ArtifactChunkEvent` | type |
@@ -1048,8 +1052,10 @@ Measured against `@theokit/sdk@5.32.0`.
 | `OperatorRootUnreadableError` | value |
 | `OutputStyleError` | value |
 | `parseDottedOverrides` | value |
+| `permissionRulesFromLayers` | value |
 | `permissionRulesFromSettings` | value |
 | `projectEnvStep` | value |
+| `projectEnvStepWith` | value |
 | `readSettingsFile` | value |
 | `resolveAgentMemory` | value |
 | `resolveFileMentions` | value |
@@ -1110,6 +1116,8 @@ Measured against `@theokit/sdk@5.32.0`.
 | `PermissionsBlock` | type |
 | `PermissionTranslation` | type |
 | `PrecedenceReport` | type |
+| `ProjectEnvRecord` | type |
+| `ProjectEnvStepOptions` | type |
 | `ProvenancePerKey` | type |
 | `ReadSettingsFileOptions` | type |
 | `ResolveAgentMemoryInput` | type |
@@ -1275,6 +1283,7 @@ Measured against `@theokit/sdk@5.32.0`.
 |---|---|
 | `CodeModeInvalidArgumentsError` | value |
 | `CodeModePermissionDeniedError` | value |
+| `CodeModeResultTooLongError` | value |
 | `createCodeMode` | value |
 | `CodeModeApi` | type |
 | `CodeModeCallOptions` | type |

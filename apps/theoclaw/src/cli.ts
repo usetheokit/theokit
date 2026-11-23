@@ -398,7 +398,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   daemon,
   update: (args, io) => update(parseUpdate(args), io, io.runner),
   security: securityCommand,
-  audit: (args, io) => Promise.resolve(auditCommand(args, io)),
+  audit: (args, io) => auditCommand(args, io),
   doctor: (args, io) => {
     if (args.some((arg) => arg !== '--fix'))
       throw new UsageError('theoclaw doctor: expected [--fix]')

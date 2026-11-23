@@ -44,12 +44,15 @@ export {
   BootstrapStepError,
   defineAppBootstrap,
   projectEnvStep,
+  projectEnvStepWith,
   SdkHomeConflictError,
   sdkHomeStep,
   secretRefsStep,
   type AppBootstrap,
   type BootstrapContext,
   type BootstrapStep,
+  type ProjectEnvRecord,
+  type ProjectEnvStepOptions,
   type SdkHomeStepOptions,
 } from './config/app-bootstrap.js'
 
