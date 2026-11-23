@@ -1,11 +1,6 @@
 import { readFileSync } from 'node:fs'
 
-export type SourceOrigin =
-  | { kind: 'env'; varName: string }
-  | { kind: 'file'; path: string }
-  // M37 — an OAuth session. Carries the provider name only (never a token), so the footer can say
-  // "oauth (anthropic)" and the user can tell an account login apart from a pasted API key or a .env value.
-  | { kind: 'oauth'; provider: string }
+import type { SourceOrigin } from '@theokit/agents/auth'
 
 /**
  * Does the value OPEN and CLOSE on its own line?

@@ -37,12 +37,12 @@ export interface RehomeTranscriptsOptions {
   readonly to: string
 }
 
-function trimSlashes(path: string): string {
+function trimSlashes(value: string): string {
   let start = 0
-  let end = path.length
-  while (start < end && path[start] === '/') start++
-  while (end > start && path[end - 1] === '/') end--
-  return path.slice(start, end)
+  let end = value.length
+  while (start < end && value[start] === '/') start++
+  while (end > start && value[end - 1] === '/') end--
+  return value.slice(start, end)
 }
 
 /**
