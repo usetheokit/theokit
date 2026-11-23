@@ -38,6 +38,7 @@ import type { DatabaseDeps } from './scheduler/postgres-job-store.js'
 import { InstanceLockedError } from '@theokit/sdk/persistence'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonRestart, daemonStatus, daemonUninstall } from './daemon.js'
+import { exitAfterFlush } from './exit-after-flush.js'
 import { runCommand, type Runner } from './run-command.js'
 import { parseCall, parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
@@ -665,10 +666,10 @@ if (isMain()) {
     runner: runCommand,
   }
   runCli(process.argv.slice(2), io).then(
-    (code) => process.exit(code),
+    (code) => exitAfterFlush(code),
     (error: unknown) => {
       process.stderr.write(`theoclaw: ${describeError(error)}\n`)
-      process.exit(1)
+      return exitAfterFlush(1)
     },
   )
 }
