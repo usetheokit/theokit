@@ -46,13 +46,13 @@ describe('announceService', () => {
 
   it('trims a long name on a character boundary', () => {
     const publisher = fake()
-    const name = 'é'.repeat(40) + '😀'.repeat(10) // 80 + 40 bytes
+    const name = '\u00e9'.repeat(40) + '\u{1f600}'.repeat(10) // 80 + 40 bytes
     const result = announceService({ type: 'x', name, port: 1, host: '10.0.0.1', publisher })
     expect(result.name).toBeDefined()
     expect(Buffer.byteLength(result.name!)).toBeLessThanOrEqual(63)
     expect(name.startsWith(result.name!)).toBe(true)
     expect(result.name).not.toContain('�')
-    expect(Array.from(result.name!).every((c) => c === 'é' || c === '😀')).toBe(true)
+    expect(Array.from(result.name!).every((c) => c === '\u00e9' || c === '\u{1f600}')).toBe(true)
   })
 
   it('stop resolves within its bound when the publisher never answers', async () => {

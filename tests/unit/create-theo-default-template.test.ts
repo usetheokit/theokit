@@ -92,9 +92,13 @@ describe('create-theokit default template — package.json.tmpl SDK dep (EC-7)',
         peerDependencies: Record<string, string>
       }
     ).peerDependencies['@theokit/sdk']
+    // A clause is a caret (`^5.32.0`) or a bounded range (`>=5.32.0 <10`); either way its floor is
+    // the version it names first, and that floor is what the template may not sit below.
     const asTuple = (pin: string): [number, number, number] => {
-      const m = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(pin)
-      expect(m, `not a caret pin: ${pin}`).toBeTruthy()
+      const [floor = '', ceiling, ...rest] = pin.split(' ')
+      const bounded = floor.startsWith('>=') && /^<\d+$/.test(ceiling ?? '') && rest.length === 0
+      const m = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(bounded ? `^${floor.slice(2)}` : pin)
+      expect(m, `neither a caret nor a bounded range: ${pin}`).toBeTruthy()
       return [Number(m![1]), Number(m![2]), Number(m![3])]
     }
     // The peer may name several majors (`^4.52.1 || ^5.0.0`). The floor it declares is the LOWEST

@@ -30,15 +30,16 @@ function ensureDirectory(dir: string, app: string): void {
 function renderEntries(
   keys: Readonly<Record<string, InstanceKey>>,
   entries: Readonly<Record<string, string | undefined>>,
+  keep: boolean,
 ): string {
   const lines: string[] = []
   for (const [key, value] of Object.entries(entries)) {
     if (value === undefined) continue
-    if (!Object.hasOwn(keys, key) || !KEY.test(key) || key === '__proto__') {
+    if ((!keep && !Object.hasOwn(keys, key)) || !KEY.test(key) || key === '__proto__') {
       throw new InstanceConfigError('instance_config_unknown_key', `${key} is not a declared key`)
     }
     assertWritable(key, value)
-    runParse(key, keys[key].parse, value)
+    if (Object.hasOwn(keys, key)) runParse(key, keys[key].parse, value)
     lines.push(`${key}="${value}"`)
   }
   return `${lines.join('\n')}\n`
@@ -84,9 +85,9 @@ export async function writeInstanceConfig(
   keys: Readonly<Record<string, InstanceKey>>,
   path: string,
   entries: Readonly<Record<string, string | undefined>>,
-  options: { force: boolean },
+  options: { force: boolean; keep?: boolean },
 ): Promise<void> {
-  const content = renderEntries(keys, entries)
+  const content = renderEntries(keys, entries, options.keep === true)
   if (!options.force && existsSync(path)) throw existsError(path)
   const dir = dirname(path)
   ensureDirectory(dir, app)

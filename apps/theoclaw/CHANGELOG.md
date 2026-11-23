@@ -11,6 +11,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The configuration file, hot reload, `theoclaw onboard` and `theoclaw security audit` run on `defineInstanceConfig` from `@theokit/host/instance-config`; `config-file.ts` declares TheoClaw's keys once and the other modules keep only its wording and its settings checks (#2596).
 - `@theokit/tui` is pinned at 0.83.4 (was 0.80.0) (#2607).
 - The joinery gate (`tools/measure-app-joinery.mjs`) now reports, and fails on, every app file that declares a function or class named like an export of a `@theokit/*` dependency, unless `ALLOWED` lists it with a reason; `resolveSecretRefs` and `hookFingerprint` are no longer listed because #2597 and #2598 already moved them to the framework (#2610). The gate is red on purpose today: it lists 14 same-named declarations (`parsePort`, `senderKey`, `assistantText`, `maskSecrets` and others) still to be moved to the framework or put in `ALLOWED` with a reason.
 - `theoclaw backup` and `theoclaw restore` now run on `backup` and `restore` from `@theokit/host/backup`; TheoClaw keeps its instance lock, exclusions, workspace re-homing, named storage and HTTPS transfer. Backups written before the change still restore, and new ones still record the workspace (#2603).
