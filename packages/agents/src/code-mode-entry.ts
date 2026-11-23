@@ -4,6 +4,7 @@
 export {
   CodeModeInvalidArgumentsError,
   CodeModePermissionDeniedError,
+  CodeModeResultTooLongError,
   createCodeMode,
   type CodeModeApi,
   type CodeModeCallOptions,

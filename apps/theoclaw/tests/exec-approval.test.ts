@@ -1,6 +1,6 @@
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { enforced } from './tool-start-fixtures.js'
-import { mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -9,6 +9,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { controlAgentToolOptions } from '../src/tools/tool-registry.js'
 import { handlerOf as hookOf } from './support/plugin-host.js'
+import { createJsonlLedger } from '@theokit/agents/auth'
+
 import { createExecApproval, createExecApprovalStore, execApprovalPlugin } from '../src/tools/exec-approval.js'
 
 const dir = (): string => mkdtempSync(join(tmpdir(), 'exec-approval-'))
@@ -16,13 +18,34 @@ const dir = (): string => mkdtempSync(join(tmpdir(), 'exec-approval-'))
 describe('exec approval', () => {
   it('saves the approvals in a file only its owner can read, with concurrent saves intact', async () => {
     const state = dir()
-    const store = createExecApprovalStore(state)
-    await Promise.all(['ls', 'pwd', 'date'].map((command) => store.add(command)))
-    const file = join(state, 'exec-approvals.json')
-    expect(statSync(file).mode & 0o777).toBe(0o600)
-    expect(readdirSync(state)).toEqual(['exec-approvals.json'])
+    const decide = createExecApproval({ store: createExecApprovalStore(state), ask: async () => 'always' })
+    await Promise.all(['ls', 'pwd', 'date'].map((command) => decide(command)))
+    expect(statSync(join(state, '.theokit', 'tool-permissions.json')).mode & 0o777).toBe(0o600)
     const reloaded = createExecApprovalStore(state)
     expect(['ls', 'pwd', 'date'].map((command) => reloaded.has(command))).toEqual([true, true, true])
+  })
+
+  it('matches a command exactly, whitespace included', async () => {
+    const state = dir()
+    await createExecApproval({ store: createExecApprovalStore(state), ask: async () => 'always' })('echo "a b"')
+    const store = createExecApprovalStore(state)
+    expect(store.has('echo "a b"')).toBe(true)
+    expect(store.has('echo "a  b"')).toBe(false)
+  })
+
+  it('does not honour an approval saved by an earlier release: it must be granted again', () => {
+    const state = dir()
+    writeFileSync(join(state, 'exec-approvals.json'), JSON.stringify({ approved: ['ls -la'] }))
+    expect(createExecApprovalStore(state).has('ls -la')).toBe(false)
+  })
+
+  it('records each decision in the framework ledger and refuses when asking fails', async () => {
+    const state = dir()
+    const ledger = createJsonlLedger(state)
+    const decide = createExecApproval({ store: createExecApprovalStore(state), ledger, ask: async () => { throw new Error('chat down') } })
+    expect(await decide('make', { agentId: 'a', runId: 'r1' })).toMatchObject({ allowed: false })
+    const [record] = await ledger.read()
+    expect(record).toMatchObject({ runId: 'r1', allowed: false, tool: 'shell_exec' })
   })
 
   it('runs a saved command after a restart without a prompt, and still asks about another', async () => {
@@ -98,8 +121,9 @@ describe('exec approval plugin', () => {
 describe('exec approval store', () => {
   it('names the file when it is corrupt', () => {
     const state = dir()
-    writeFileSync(join(state, 'exec-approvals.json'), '{nope')
-    expect(() => createExecApprovalStore(state)).toThrow(/exec-approvals\.json is not valid JSON/)
+    mkdirSync(join(state, '.theokit'))
+    writeFileSync(join(state, '.theokit', 'tool-permissions.json'), '{nope')
+    expect(() => createExecApprovalStore(state)).toThrow(/tool-permissions\.json cannot be read/)
   })
 })
 

@@ -44,12 +44,15 @@ export {
   BootstrapStepError,
   defineAppBootstrap,
   projectEnvStep,
+  projectEnvStepWith,
   SdkHomeConflictError,
   sdkHomeStep,
   secretRefsStep,
   type AppBootstrap,
   type BootstrapContext,
   type BootstrapStep,
+  type ProjectEnvRecord,
+  type ProjectEnvStepOptions,
   type SdkHomeStepOptions,
 } from './config/app-bootstrap.js'
 
@@ -262,6 +265,7 @@ export {
   CLAUDE_SETTINGS_KEYS,
   FOREIGN_KEY_DECISIONS,
   firstSettingsFile,
+  permissionRulesFromLayers,
   readSettingsFile,
   settingsCandidates,
   type ReadSettingsFileOptions,

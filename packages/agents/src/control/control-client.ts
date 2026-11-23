@@ -52,6 +52,8 @@ function isFinal(frame: ControlServerFrame): boolean {
 export async function createControlClient(options: {
   url: string
   authorization: string
+  /** Stamps each frame's `arrivedAt` as it comes off the socket, so a caller can order frames against its own events. */
+  stamp?: () => number
 }): Promise<ControlClient> {
   let url: URL
   try {
@@ -105,7 +107,8 @@ export async function createControlClient(options: {
       else text = Buffer.from(data).toString('utf8')
       const frame = JSON.parse(text) as Partial<ControlServerFrame> | null
       if (typeof frame === 'object' && frame !== null && typeof frame.type === 'string') {
-        queue.push(frame as ControlServerFrame)
+        const arrived = options.stamp === undefined ? {} : { arrivedAt: options.stamp() }
+        queue.push({ ...frame, ...arrived } as ControlServerFrame)
         notify()
       }
     } catch {

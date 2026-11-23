@@ -93,4 +93,24 @@ describe('pairRoute', () => {
     expect(res.status).toBe(405)
     expect(res.headers.get('allow')).toBe('POST')
   })
+
+  it('renames a refusal reason and passes the request to cityOf', async () => {
+    const { pairing } = setup()
+    const route = pairRoute(pairing, {
+      errorNames: { bad_credential: 'bad_token' },
+      cityOf: (request) => request.headers.get('x-city') ?? undefined,
+    })
+    const refused = await route(
+      post(JSON.stringify({ code: pairing.issueCode(), name: 'p', token: 'short' })),
+    )
+    expect(refused.status).toBe(400)
+    expect(await refused.json()).toEqual({ error: 'bad_token' })
+    const accepted = await route(
+      post(JSON.stringify({ code: pairing.issueCode(), name: 'p', token: CRED }), {
+        'x-city': 'Oslo',
+      }),
+    )
+    expect(accepted.status).toBe(202)
+    expect(pairing.pending()[0]?.city).toBe('Oslo')
+  })
 })

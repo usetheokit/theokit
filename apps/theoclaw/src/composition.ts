@@ -48,7 +48,7 @@ import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
 import { readControlPlaneSettings, type ControlPlaneSettings } from './control-plane/settings.js'
 import { processSecrets } from './secrets.js'
-import { resolveSecretRefs, secretRefKind, type SecretStores } from './secret-refs.js'
+import { builtinSecretStores, createJsonlLedger, resolveSecretRefs, type SecretStore } from '@theokit/agents/auth'
 import { a2aLines, readA2ASettings } from './a2a/a2a-settings.js'
 import { a2aRoute } from './a2a/a2a-route.js'
 import { peerTools } from './a2a/peer-tools.js'
@@ -80,7 +80,7 @@ import { withFailedStatusLog } from './channels/whatsapp-status-log.js'
 import { describeError } from './control-plane/errors.js'
 import { createWebhookRouter, type WebhookRoute, webhookPlatformOf } from './webhooks/router.js'
 import { theoClawApiFor } from './http-api/api-routes.js'
-import { createActivityLedger, createExecApprovalStore, execApprovalPlugin, type ExecApprovalOptions } from './tools/exec-approval.js'
+import { createExecApprovalStore, execApprovalPlugin, type ExecApprovalOptions } from './tools/exec-approval.js'
 import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { createEmailTrigger } from './triggers/email-trigger.js'
 import { type McpEvents, startMcpEvents } from './triggers/mcp-events.js'
@@ -155,7 +155,7 @@ export interface TheoClawOptions {
   /** Every value a reply must not carry (`processSecrets`); the channel credentials when absent. */
   readonly secrets?: readonly string[]
   /** Stand-ins for the stores a secret reference names (tests); the process uses the real ones. */
-  readonly secretStores?: SecretStores
+  readonly secretStores?: readonly SecretStore[]
   /** The triggers and approved hooks `startTheoClaw` already read; read here when absent (B-397). */
   readonly events?: EventSettings
   /** Builds one trigger run's agent, fresh per run: no tool, like a chat agent. Default: the channel factory. */
@@ -321,10 +321,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       goal: events.goal,
       compact: readCompactSettings(options.env, maskedWrite, options.compact),
       ...(advisor === undefined ? {} : { advisor }),
-      typing: {
-        adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
-        ...(ackReaction === undefined ? {} : { ackReaction }),
-      },
+      ...(ackReaction === undefined ? {} : { ack: { emoji: ackReaction, adapters: () => [...loop.started.values()].map((entry) => entry.adapter) } }),
     }), configuredVoiceReplies(options.env)),
     hooks: channelHooks({ policy, ...(emailTrigger === undefined ? {} : { emailTrigger: emailTrigger.hook }), ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.workflowResume === undefined ? {} : { workflowResume: options.workflowResume }), ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook, model }) }),
     secrets,
@@ -433,7 +430,7 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
  */
 function execApprovalFor(given: TheoClawOptions['execApproval'], stateDir: string | undefined): ExecApprovalOptions | undefined {
   if (stateDir === undefined) return undefined
-  return { ...given, store: createExecApprovalStore(stateDir), ledger: createActivityLedger(stateDir) }
+  return { ...given, store: createExecApprovalStore(stateDir), ledger: createJsonlLedger(stateDir) }
 }
 
 /** The store of `policy.stateDir`, or none without one. Throws on a state file it cannot read. */
@@ -551,8 +548,9 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
 async function startComposed(given: StartOptions, shared: { browser?: SharedBrowser }): Promise<RunningTheoClaw> {
   // Secret references are resolved once, first, so every reader and the masks see the values (B-711).
   // No await when nothing is a reference: the start stays as synchronous as it was up to its first real await.
-  const hasRefs = Object.values(given.env).some((value) => value !== undefined && secretRefKind(value.trim()) !== undefined)
-  const resolved = hasRefs ? await resolveSecretRefs(given.env, given.secretStores) : { env: given.env, values: [] as string[] }
+  const stores = given.secretStores ?? builtinSecretStores
+  const hasRefs = Object.values(given.env).some((value) => value !== undefined && stores.some((store) => store.matches(value.trim())))
+  const resolved = hasRefs ? await resolveSecretRefs(given.env, stores) : { env: given.env, values: [] as string[] }
   const options: StartOptions = resolved.values.length === 0 ? given : { ...given, env: resolved.env, importedSecrets: [...(given.importedSecrets ?? []), ...resolved.values] }
   const settings = readControlPlaneSettings(options.env)
   const trustedProxy = readTrustedProxy(options.env)

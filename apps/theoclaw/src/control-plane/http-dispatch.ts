@@ -1,10 +1,14 @@
+import { type DevicePairing, pairRoute } from '@theokit/agents/control'
+import { peerAddress } from '@theokit/http/runtime/node'
+
 import { isA2APath } from '../a2a/a2a-route.js'
 import { isRelayPath } from '../relay/relay-server.js'
 import { isWebchatPath } from '../webchat/paths.js'
-import type { DevicePairing } from './device-pairing.js'
 import type { CityLookup } from './geo-city.js'
 import { healthHandler } from './listener.js'
-import { PAIR_PATH, pairRoute } from './pair-route.js'
+
+/** The path a new device posts its setup code to (OC-91). */
+const PAIR_PATH = '/control/pair'
 
 /** What the one listener serves a request with. */
 export type HttpHandler = (request: Request) => Promise<Response>
@@ -30,10 +34,11 @@ export function serveHandler(
   relay?: HttpHandler,
   cityOf?: CityLookup,
 ): HttpHandler {
+  const pair = devices === undefined ? undefined : pairRoute(devices, { errorNames: { bad_credential: 'bad_token' }, cityOf: (request) => cityOf?.(peerAddress(request)) })
   return async (request) => {
     const { pathname } = new URL(request.url)
     if (pathname === '/health') return healthHandler(request)
-    if (pathname === PAIR_PATH && devices !== undefined) return pairRoute(devices, request, cityOf)
+    if (pathname === PAIR_PATH && pair !== undefined) return pair(request)
     if (isA2APath(pathname)) return a2a === undefined ? new Response(null, { status: 404 }) : a2a(request)
     if (isRelayPath(pathname)) return relay === undefined ? new Response(null, { status: 404 }) : relay(request)
     if (isWebchatPath(pathname)) return webchat === undefined ? new Response(null, { status: 404 }) : webchat(request)
