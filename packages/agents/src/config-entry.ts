@@ -44,9 +44,13 @@ export {
   BootstrapStepError,
   defineAppBootstrap,
   projectEnvStep,
+  SdkHomeConflictError,
+  sdkHomeStep,
+  secretRefsStep,
   type AppBootstrap,
   type BootstrapContext,
   type BootstrapStep,
+  type SdkHomeStepOptions,
 } from './config/app-bootstrap.js'
 
 export { defineLayeredConfig, type SecurityFloorSpec } from './config/define-layered-config.js'
@@ -258,6 +262,7 @@ export {
   CLAUDE_SETTINGS_KEYS,
   FOREIGN_KEY_DECISIONS,
   firstSettingsFile,
+  permissionRulesFromLayers,
   readSettingsFile,
   settingsCandidates,
   type ReadSettingsFileOptions,

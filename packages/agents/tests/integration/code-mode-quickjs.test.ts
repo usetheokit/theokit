@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { createReadFileTool } from '@theokit/sdk-tools'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CodeModePermissionDeniedError, createCodeMode } from '../../src/code-mode-entry.js'
 import { CodeModeSandboxError, createQuickJsSandbox } from '../../src/code-mode-quickjs-entry.js'
@@ -69,5 +69,20 @@ describe('code mode over QuickJS and a real read_file', () => {
     await expect(tool.handler({ code: 'throw new Error("no")' })).rejects.toBeInstanceOf(
       CodeModeSandboxError,
     )
+  })
+
+  it('refuses a real script that calls a tool outside allowedTools', async () => {
+    const read = createReadFileTool({ projectRoot: root })
+    const handler = vi.spyOn(read, 'handler')
+    const { tool } = createCodeMode({
+      tools: [read],
+      allowedTools: [],
+      sandbox: createQuickJsSandbox(),
+      onPermissionRequest: () => ({ granted: true }),
+    })
+    await expect(
+      tool.handler({ code: 'return await api.read_file({ path: "a.txt" })' }),
+    ).rejects.toThrow()
+    expect(handler).not.toHaveBeenCalled()
   })
 })

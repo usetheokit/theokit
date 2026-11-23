@@ -39,6 +39,11 @@ export interface Check {
   readonly status: 'ok' | 'warn' | 'fail'
   /** One line a human can act on. Never a secret — see {@link secretPresence}. */
   readonly detail: string
+  /**
+   * Repair for this check. Run by `diagnose(checks, { fix: true })` only when the check is `fail`.
+   * Returns a line describing what changed, or `undefined` when nothing did.
+   */
+  readonly fix?: () => Promise<string | undefined>
 }
 
 export interface Diagnosis {
@@ -47,6 +52,13 @@ export interface Diagnosis {
   readonly failed: number
   /** `0` when the installation is usable. See the note on the empty case. */
   readonly exitCode: number
+  /** Lines returned by the fixes that ran, in check order. Present only after a `fix` run. */
+  readonly repairs?: readonly string[]
+}
+
+export interface DiagnoseOptions {
+  /** Run the `fix` of each failing check. */
+  readonly fix?: boolean
 }
 
 /**
@@ -57,10 +69,34 @@ export interface Diagnosis {
  * ran" is a different fact from "everything passed", which is the distinction this whole module is
  * about.
  */
-export function diagnose(checks: readonly Check[]): Diagnosis {
+export function diagnose(checks: readonly Check[]): Diagnosis
+export function diagnose(
+  checks: readonly Check[],
+  options: DiagnoseOptions & { readonly fix: true },
+): Promise<Diagnosis>
+export function diagnose(
+  checks: readonly Check[],
+  options?: DiagnoseOptions,
+): Diagnosis | Promise<Diagnosis>
+export function diagnose(
+  checks: readonly Check[],
+  options: DiagnoseOptions = {},
+): Diagnosis | Promise<Diagnosis> {
   const failed = checks.filter((check) => check.status === 'fail').length
   const exitCode = checks.length === 0 || failed > 0 ? 1 : 0
-  return { checks, failed, exitCode }
+  const base: Diagnosis = { checks, failed, exitCode }
+  if (options.fix !== true) return base
+  return (async () => {
+    // A returned line does not prove the repair worked, so the verdict stays that of the examined
+    // state; re-run `diagnose` to see the result. A rejected fix propagates.
+    const repairs: string[] = []
+    for (const check of checks) {
+      if (check.status !== 'fail' || check.fix === undefined) continue
+      const line = await check.fix()
+      if (line !== undefined) repairs.push(line)
+    }
+    return { ...base, repairs }
+  })()
 }
 
 const SYMBOL: Readonly<Record<Check['status'], string>> = {
@@ -83,7 +119,9 @@ export function renderDiagnosis(diagnosis: Diagnosis): string {
     diagnosis.checks.length === 0
       ? 'no checks ran — that is not the same as everything passing'
       : `${String(diagnosis.failed)} failed of ${String(diagnosis.checks.length)}`
-  return [...lines, '', summary].join('\n')
+  const repairs = diagnosis.repairs ?? []
+  const fixed = repairs.length === 0 ? [] : ['', ...repairs.map((line) => `fixed: ${line}`)]
+  return [...lines, '', summary, ...fixed].join('\n')
 }
 
 /** What a credential looks like from the outside, with the value never leaving. */

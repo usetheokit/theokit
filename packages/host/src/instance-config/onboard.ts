@@ -135,7 +135,10 @@ export async function onboardInstanceConfig<K extends string>(
     const given = options.answers?.[key]
     const variable = options.secretFromEnv?.[key]
     const prompt = options.prompts?.[key]
-    if (given !== undefined) {
+    const generate = keys[key].generate
+    if (generate !== undefined) {
+      entries[key] = generate()
+    } else if (given !== undefined) {
       entries[key] = given
     } else if (variable !== undefined) {
       entries[key] = fromEnv(key, variable, io.env)

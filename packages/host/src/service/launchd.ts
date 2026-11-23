@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { replaceFileAtomic } from '@theokit/sdk/persistence'
 
 import { ServiceCommandError, ServiceDefinitionError } from './errors.js'
+import { logLines, tailFile, type LogsOptions } from './logs.js'
 import { runCommand, type Runner } from './runner.js'
 import {
   assertLabel,
@@ -134,6 +135,12 @@ export function createLaunchdBackend(options: ServiceBackendOptions = {}): Servi
       if (result.code !== 0) return 'not-installed'
       const state: ServiceState = /\bstate = running\b/.test(result.stdout) ? 'running' : 'stopped'
       return state
+    },
+
+    async logs(label, logOptions?: LogsOptions) {
+      assertLabel(label)
+      const lines = logLines(logOptions)
+      return await tailFile(options.logFile ?? join(home, 'Library', 'Logs', `${label}.log`), lines)
     },
 
     async restart(label) {
