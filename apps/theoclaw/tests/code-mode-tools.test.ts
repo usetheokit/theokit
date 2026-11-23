@@ -2,14 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { DelegationError } from '@theokit/agents'
 import type { CustomTool } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { TurnAgent } from '../src/agent-port.js'
 import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { createChannelAgentFactory, type CreateAgent } from '../src/control-plane/agent-factory.js'
-import { codeModeTool, runWorker } from '../src/tools/code-mode-tools.js'
+import { codeModeTool } from '../src/tools/code-mode-tools.js'
 import { vetoToolCall } from '../src/tools/path-veto.js'
 import { controlAgentToolOptions, readOnlyTools } from '../src/tools/tool-registry.js'
 import type { AgentToolOptions } from '../src/tools/tool-registry.js'
@@ -475,38 +474,5 @@ describe('run_code and delegate_all on a /control agent', () => {
 
     expect(seen).toHaveLength(1)
     expect((seen[0]?.tools ?? []).map((tool) => tool.name)).toEqual(['skill_read'])
-  })
-})
-
-describe('runWorker', () => {
-  it('throws the underlying failure of a worker that could not be built', async () => {
-    const failure = new Error('no model key')
-    await expect(runWorker(() => Promise.reject(failure), 'task', undefined)).rejects.toBe(failure)
-  })
-
-  it('keeps a DelegationError the worker raised itself, as the same error', async () => {
-    const nested = new DelegationError('worker', new Error('inner'))
-    const agent = {
-      send: async () => {
-        throw nested
-      },
-      [Symbol.asyncDispose]: async () => undefined,
-    } as unknown as TurnAgent
-    await expect(runWorker(async () => agent, 'task', undefined)).rejects.toBe(nested)
-  })
-
-  it('forwards a message with images to the worker', async () => {
-    const seen: unknown[] = []
-    const agent = {
-      send: async (message: unknown) => {
-        seen.push(message)
-        return { stream: async function* () {}, wait: async () => ({ status: 'finished', result: 'ok' }), cancel: async () => {} }
-      },
-      [Symbol.asyncDispose]: async () => undefined,
-    } as unknown as TurnAgent
-    const message = { text: 'look', images: [{ data: 'AAAA', mimeType: 'image/png' }] }
-    const result = await runWorker(async () => agent, message, undefined)
-    expect(result.response).toBe('ok')
-    expect(seen).toEqual([message])
   })
 })

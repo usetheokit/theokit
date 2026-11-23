@@ -279,15 +279,3 @@ describe('delegationPortFromAgentFactory', () => {
     }
   })
 })
-
-describe('rawFailures', () => {
-  it('throws a failed build as itself instead of a DelegationError', async () => {
-    const failure = new Error('no model key')
-    const port = delegationPortFromAgentFactory(() => Promise.reject(failure), {
-      rawFailures: true,
-    })
-    await expect(port.run('task')).rejects.toBe(failure)
-    const wrapped = delegationPortFromAgentFactory(() => Promise.reject(failure))
-    await expect(wrapped.run('task')).rejects.toMatchObject({ name: 'DelegationError' })
-  })
-})

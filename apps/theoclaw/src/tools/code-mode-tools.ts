@@ -1,3 +1,4 @@
+import { DelegationError } from '@theokit/agents'
 import type { DelegationPort, DelegationResult } from '@theokit/agents'
 import { delegationPortFromAgentFactory } from '@theokit/agents/bridge'
 import { createCodeMode } from '@theokit/agents/code-mode'
@@ -102,14 +103,19 @@ function workerPort(createWorker: CreateWorker): DelegationPort {
 /**
  * One worker turn: built, run and disposed. A build that fails, a run that does not finish and a
  * disposal that throws all reject: a worker whose disposal failed is in a state nobody knows, as a
- * `/control` turn's is (`runTheoClawTurn`). Every failure is thrown as it happened (`rawFailures`).
+ * `/control` turn's is (`runTheoClawTurn`). The framework port wraps an ordinary failure in a
+ * `DelegationError`; the caller here reads the underlying error.
  */
 export async function runWorker(
   createWorker: CreateWorker,
   task: TurnMessage,
   signal: AbortSignal | undefined,
 ): Promise<DelegationResult> {
-  return delegationPortFromAgentFactory(createWorker, { rawFailures: true }).run(task, signal === undefined ? {} : { signal })
+  try {
+    return await delegationPortFromAgentFactory(createWorker).run(task, signal === undefined ? {} : { signal })
+  } catch (error) {
+    throw error instanceof DelegationError && error.agentName === 'worker' ? error.cause : error
+  }
 }
 
 /** The `worker` entry, and a `coder` entry (a coding task in its own git worktree, OC-83) where one is available. */
