@@ -205,7 +205,6 @@ function readJsonFile(
 ): unknown {
   let text: string
   try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- the caller's own path
     text = (readFile ?? readFileSync)(path, 'utf8')
   } catch (err) {
     throw new McpFileError(`failed to read ${path}: ${describeIt(err)}`)
