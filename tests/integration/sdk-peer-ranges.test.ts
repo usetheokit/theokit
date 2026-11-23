@@ -105,25 +105,25 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     // installs, so this assertion was pinning the resolution that made the whole suite green
     // against an SDK the packages could not use.
     //
-    // The devDep now spans the range the packages declare, `>=5.32.0 <10`: dep-check's floor leg
+    // The devDep now spans the range the packages declare, `>=5.32.0 <12`: dep-check's floor leg
     // overrides the tree to 5.32.0 and runs this suite there, and a `^9` devDep refused that floor.
     const root = readPkg('package.json')
     const dev = root.devDependencies as Record<string, string>
-    expect(dev['@theokit/sdk']).toBe('>=5.32.0 <10')
+    expect(dev['@theokit/sdk']).toBe('>=5.32.0 <12')
   })
 
-  it('test_the_four_published_packages_admit_sdk_9_and_refuse_sdk_10', () => {
+  it('test_the_four_published_packages_admit_sdk_9_to_11_and_refuse_sdk_12', () => {
     const floors: Record<string, string> = {
-      'packages/theo/package.json': '>=5.32.0 <10',
-      'packages/host/package.json': '>=5.32.0 <10',
-      'packages/presenter/package.json': '>=5.3.0 <10',
+      'packages/theo/package.json': '>=5.32.0 <12',
+      'packages/host/package.json': '>=5.32.0 <12',
+      'packages/presenter/package.json': '>=5.3.0 <12',
     }
     for (const [manifest, expected] of Object.entries(floors)) {
       const peers = readPkg(manifest).peerDependencies as Record<string, string>
       expect(peers['@theokit/sdk'], manifest).toBe(expected)
     }
     const agents = readPkg('packages/agents/package.json').dependencies as Record<string, string>
-    expect(agents['@theokit/sdk']).toBe('>=5.32.0 <10')
+    expect(agents['@theokit/sdk']).toBe('>=5.32.0 <12')
     const root = readPkg('package.json') as { pnpm: { overrides: Record<string, string> } }
     // The tree runs on SDK 9; dep-check's floor leg rewrites the override to the declared floor,
     // 5.32.0, and runs this same suite there. Any other version is neither end of the range.
