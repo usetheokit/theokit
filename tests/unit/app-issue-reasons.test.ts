@@ -1,7 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-// @ts-expect-error plain .mjs script without declarations
 import {
   checkReasons,
   collectReasons,
@@ -16,7 +15,7 @@ describe('findReasons', () => {
       'x(); // fixed in #5',
     ].join('\n')
     const found = findReasons(text, 'a.ts')
-    expect(found.map((f: { repo: string; issue: number }) => [f.repo, f.issue])).toEqual([
+    expect(found.map((f) => [f.repo, f.issue])).toEqual([
       ['usetheokit/theokit', 12],
       ['o/r', 7],
     ])
@@ -28,8 +27,7 @@ describe('findReasons', () => {
 })
 
 describe('findReasons on the forms the apps use', () => {
-  const one = (text: string) =>
-    findReasons(text, 'a.ts').map((f: { repo: string; issue: number }) => `${f.repo}#${f.issue}`)
+  const one = (text: string) => findReasons(text, 'a.ts').map((f) => `${f.repo}#${f.issue}`)
 
   it('reads a backticked sibling-repo reference', () => {
     expect(
