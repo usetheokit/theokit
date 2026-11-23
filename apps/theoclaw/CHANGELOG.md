@@ -11,8 +11,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- The per-turn usage line and `/usage` footer now format the cost with `formatUsd` from `@theokit/agents/usage`; the app's own copy is gone. Output is the same for every finite amount that was tested (#2710).
 ### Changed
+
+- The per-turn usage line and `/usage` footer now format the cost with `formatUsd` from `@theokit/agents/usage`; the app's own copy is gone. Output matches `formatUsd` (#2710).
 
 - `THEOCLAW_LOG_FILE` is now mirrored by the host's `teeOutput`, bounded at 10 MiB with two rotated files (`.1`, `.2`); the app's own unbounded tee is removed (#2757).
 
